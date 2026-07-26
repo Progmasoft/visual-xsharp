@@ -586,7 +586,13 @@ static bool check_project_sources(const char *root, const char *const *direct, s
     }
   }
   if(success && run_tests)
-    success = xs_driver_run_compiler_core_tests(program_session) == 0;
+  {
+    XsSpan span = {.start = units[0].tree.root->span.start_offset, .end = units[0].tree.root->span.end_offset};
+    if(xs_driver_append_compiler_core_diagnostics(program_session, &units[0].diagnostics, span))
+      success = false;
+    else
+      success = xs_driver_run_compiler_core_tests(program_session) == 0;
+  }
   xslang_compiler_core_session_free(merged);
   for(size_t i = 0; i < unit_count; ++i)
     xs_diagnostics_print(&units[i].diagnostics, &units[i].source, stderr);
