@@ -26,22 +26,56 @@
 // Memory model
 // ============================================================
 
-// XGC is a precise, generational, moving garbage collector.
+// XGC is a precise, mostly concurrent collector with three physically separate
+// managed heaps.
 //
 // - The heap is divided into fixed-size regions.
-// - Region roles (Eden, Survivor, Old, Humongous, Free) are assigned dynamically.
-// - The young generation uses semi-space copying collection.
-// - The old generation uses concurrent SATB marking followed by region
-//   evacuation (moving collection).
-// - Humongous objects occupy dedicated regions and are collected with a
-//   non-moving mark-sweep collector.
+// - The Main Heap contains Young and Old regions. Eden and Survivor are Young
+//   roles; promoted regions become Old.
+// - The Young collector performs concurrent marking and concurrent copying.
+//   Mutator reads use a read/load barrier while forwarding is active, and
+//   mutator writes use both SATB and remembered-set write barriers.
+// - The Old collector performs concurrent SATB marking followed by concurrent
+//   relocation through selected-region evacuation. This operation is called
+//   relocation, not reallocation: object identity stays stable while its
+//   physical location may change.
+// - The Large Object Heap (LOH) is a physically separate heap for objects at
+//   or above the runtime large-object threshold. It minimizes fragmentation
+//   through concurrent marking and selective concurrent compaction. The
+//   read/load barrier resolves forwarded LOH references during compaction.
+//   Low fragmentation is a required post-condition, not an optional heuristic:
+//   a successful LOH cycle leaves at most five percent fragmented free space.
+//   Failure to meet the bound enters the recovery chain below.
+// - The Pinned Object Heap (POH) is a physically separate, non-moving heap for
+//   runtime/ABI allocations that require stable storage. It uses concurrent
+//   marking, concurrent sweeping, and coalescing free lists.
+// - Main Heap, LOH, and POH regions are never exchanged with each other.
 // - Compiler-produced stack maps identify precise roots.
 // - Safepoints delimit locations where collection may occur.
 // - Type metadata provides precise object traversal.
-// - Write barriers preserve SATB and remembered-set invariants.
+// - Read and write barriers preserve relocation, SATB, and remembered-set
+//   invariants while mutator threads continue to run.
 // - Card tables and remembered sets avoid scanning the entire old generation
 //   during young collections.
 // - Global, static, thread-local, stack, and live register roots are scanned.
+//
+// "Concurrent" does not mean pause-free. Root publication, final mark
+// reconciliation, and collector-state transitions use bounded safepoint
+// handshakes. Tracing, copying, relocation, compaction, and sweeping perform
+// their bulk work concurrently with mutator threads.
+//
+// Collection failure uses one ordered fallback chain:
+//
+// 1. The ordinary concurrent collection attempt.
+// 2. One emergency concurrent retry with a larger reserve and a more
+//    aggressive collection set.
+// 3. A stop-the-world recovery collection if the emergency retry also fails.
+//
+// Allocation pressure, exhausted evacuation reserve, relocation conflicts,
+// mark-queue exhaustion, or failure to finish within the collector deadline
+// may trigger this chain. A successful attempt resets the next collection to
+// ordinary concurrent mode. XGC never skips directly from the first
+// concurrent failure to stop-the-world recovery.
 //
 // Collection timing is not observable language behavior. Programs must not
 // depend on a collection happening at a particular allocation or time.
@@ -52,8 +86,14 @@
 // No pinning
 // ============================================================
 
-// XGC has no object-pinning operation, pinned reference type, pinning
-// attribute, or stable-address escape hatch.
+// XGC has no user-visible object-pinning operation, pinned reference type,
+// pinning attribute, or operation that moves an existing Main Heap or LOH
+// object into POH.
+//
+// POH is an internal allocation class selected by runtime metadata for ABI
+// objects whose address must be stable from allocation onward. Its existence
+// does not expose a language pinning facility and does not make an ordinary
+// managed reference safe to retain as a native pointer.
 //
 // A GC-managed object may move at every safepoint. Its address is not a stable
 // identity and cannot be retained in a raw pointer across a safepoint, function
@@ -61,7 +101,10 @@
 //
 // Compiler-tracked references and roots are updated after movement. Code that
 // requires a stable native address must copy the value or use explicitly
-// unmanaged/RAII storage outside the XGC heap. CFFI cannot pin an XGC object.
+// unmanaged/RAII storage outside the XGC heap. CFFI cannot pin or reclassify an
+// existing XGC object. Runtime components may allocate predefined ABI objects
+// directly in POH, but cannot expose their managed payload address as a general
+// raw-pointer escape hatch.
 //
 
 // ============================================================

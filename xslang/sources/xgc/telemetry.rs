@@ -8,12 +8,16 @@ pub struct TelemetrySnapshot
 {
   pub minor_collections: u64,
   pub major_collections: u64,
+  pub loh_collections: u64,
+  pub poh_collections: u64,
   pub allocated_bytes: u64,
   pub promoted_bytes: u64,
   pub evacuated_bytes: u64,
   pub evacuation_failures: u64,
   pub published_satb_entries: u64,
   pub dirty_cards: u64,
+  pub compacted_bytes: u64,
+  pub swept_bytes: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -32,6 +36,16 @@ impl Telemetry
   pub fn record_major_collection(&mut self)
   {
     self.snapshot.major_collections = self.snapshot.major_collections.saturating_add(1);
+  }
+
+  pub fn record_loh_collection(&mut self)
+  {
+    self.snapshot.loh_collections = self.snapshot.loh_collections.saturating_add(1);
+  }
+
+  pub fn record_poh_collection(&mut self)
+  {
+    self.snapshot.poh_collections = self.snapshot.poh_collections.saturating_add(1);
   }
 
   pub fn record_allocation(&mut self, bytes: u64)
@@ -62,6 +76,16 @@ impl Telemetry
   pub fn record_dirty_card(&mut self)
   {
     self.snapshot.dirty_cards = self.snapshot.dirty_cards.saturating_add(1);
+  }
+
+  pub fn record_compaction(&mut self, bytes: u64)
+  {
+    self.snapshot.compacted_bytes = self.snapshot.compacted_bytes.saturating_add(bytes);
+  }
+
+  pub fn record_sweep(&mut self, bytes: u64)
+  {
+    self.snapshot.swept_bytes = self.snapshot.swept_bytes.saturating_add(bytes);
   }
 
   #[must_use]

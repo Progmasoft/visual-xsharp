@@ -4,7 +4,7 @@
  */
 
 use super::{
-  CardTable, GenerationId, HUMONGOUS_OBJECT_THRESHOLD_BYTES, MarkBitmap, REGION_SIZE_BYTES, RegionId, RegionMetadata,
+  CardTable, GenerationId, LARGE_OBJECT_THRESHOLD_BYTES, MarkBitmap, REGION_SIZE_BYTES, RegionId, RegionMetadata,
   RegionModelError, RegionState, RememberedSet,
 };
 
@@ -15,7 +15,7 @@ pub enum RegionDirectoryError
   RegionCountOverflow,
   NoFreeRegion,
   NoContiguousRegions,
-  NotHumongous,
+  NotLargeObject,
   InvalidRegion,
   RegionModel(RegionModelError),
 }
@@ -56,7 +56,7 @@ impl RegionRecord
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct HumongousAllocation
+pub struct LargeObjectAllocation
 {
   pub first_region: RegionId,
   pub region_count: u32,
@@ -117,14 +117,14 @@ impl RegionDirectory
     Ok(record.metadata.id)
   }
 
-  pub fn acquire_humongous(&mut self,
-                           object_size: usize,
-                           generation: GenerationId)
-                           -> Result<HumongousAllocation, RegionDirectoryError>
+  pub fn acquire_large_object(&mut self,
+                              object_size: usize,
+                              generation: GenerationId)
+                              -> Result<LargeObjectAllocation, RegionDirectoryError>
   {
-    if object_size < HUMONGOUS_OBJECT_THRESHOLD_BYTES
+    if object_size < LARGE_OBJECT_THRESHOLD_BYTES
     {
-      return Err(RegionDirectoryError::NotHumongous);
+      return Err(RegionDirectoryError::NotLargeObject);
     }
     let region_count = object_size.div_ceil(REGION_SIZE_BYTES);
     let start = self.regions
@@ -133,16 +133,27 @@ impl RegionDirectory
                     .ok_or(RegionDirectoryError::NoContiguousRegions)?;
     for record in &mut self.regions[start..start + region_count]
     {
-      record.metadata.transition(RegionState::Humongous, generation)?;
+      record.metadata.transition(RegionState::LargeObject, generation)?;
       record.reset_auxiliary_metadata();
     }
-    Ok(HumongousAllocation { first_region: RegionId(u32::try_from(start).map_err(|_| {
+    Ok(LargeObjectAllocation { first_region: RegionId(u32::try_from(start).map_err(|_| {
+                                                                            RegionDirectoryError::RegionCountOverflow
+                                                                          })?),
+                               region_count: u32::try_from(region_count).map_err(|_| {
                                                                           RegionDirectoryError::RegionCountOverflow
-                                                                        })?),
-                             region_count: u32::try_from(region_count).map_err(|_| {
-                                                                        RegionDirectoryError::RegionCountOverflow
-                                                                      })?,
-                             object_size })
+                                                                        })?,
+                               object_size })
+  }
+
+  pub fn acquire_pinned_object_region(&mut self, generation: GenerationId) -> Result<RegionId, RegionDirectoryError>
+  {
+    let record = self.regions
+                     .iter_mut()
+                     .find(|record| record.metadata.state == RegionState::Free)
+                     .ok_or(RegionDirectoryError::NoFreeRegion)?;
+    record.metadata.transition(RegionState::PinnedObject, generation)?;
+    record.reset_auxiliary_metadata();
+    Ok(record.metadata.id)
   }
 
   pub fn transition(&mut self,
@@ -176,16 +187,17 @@ mod tests
   use super::*;
 
   #[test]
-  fn directory_claims_eden_and_contiguous_humongous_regions()
+  fn directory_claims_eden_and_contiguous_large_object_regions()
   {
     let mut directory = RegionDirectory::new(5).unwrap();
     assert_eq!(directory.acquire_eden(GenerationId(1)), Ok(RegionId(0)));
-    let allocation = directory.acquire_humongous(REGION_SIZE_BYTES + 1, GenerationId(2))
+    let allocation = directory.acquire_large_object(REGION_SIZE_BYTES + 1, GenerationId(2))
                               .unwrap();
     assert_eq!(allocation.first_region, RegionId(1));
     assert_eq!(allocation.region_count, 2);
     assert_eq!(directory.free_region_count(), 2);
-    assert_eq!(directory.acquire_humongous(64, GenerationId(3)),
-               Err(RegionDirectoryError::NotHumongous));
+    assert_eq!(directory.acquire_large_object(64, GenerationId(3)),
+               Err(RegionDirectoryError::NotLargeObject));
+    assert_eq!(directory.acquire_pinned_object_region(GenerationId(3)), Ok(RegionId(3)));
   }
 }

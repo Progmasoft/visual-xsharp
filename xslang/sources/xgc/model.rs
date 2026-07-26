@@ -6,8 +6,42 @@
 /// XGC regions have one fixed size in runtime ABI version 0.
 pub const REGION_SIZE_BYTES: usize = 2 * 1024 * 1024;
 
-/// Objects at or above half a region use the humongous-object path.
-pub const HUMONGOUS_OBJECT_THRESHOLD_BYTES: usize = REGION_SIZE_BYTES / 2;
+/// Objects at or above half a region use the large-object heap.
+pub const LARGE_OBJECT_THRESHOLD_BYTES: usize = REGION_SIZE_BYTES / 2;
+
+/// Runtime-selected allocation class.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AllocationClass
+{
+  #[default]
+  Young,
+  Large,
+  Pinned,
+}
+
+/// Physically separate managed heap containing an allocation class.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HeapKind
+{
+  Main,
+  LargeObject,
+  PinnedObject,
+}
+
+impl HeapKind
+{
+  #[must_use]
+  pub const fn accepts(self, state: RegionState) -> bool
+  {
+    match self
+    {
+      Self::Main => matches!(state,
+                             RegionState::Free | RegionState::Eden | RegionState::Survivor | RegionState::Old),
+      Self::LargeObject => matches!(state, RegionState::Free | RegionState::LargeObject),
+      Self::PinnedObject => matches!(state, RegionState::Free | RegionState::PinnedObject),
+    }
+  }
+}
 
 /// The role currently assigned to one region.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -18,7 +52,8 @@ pub enum RegionState
   Eden,
   Survivor,
   Old,
-  Humongous,
+  LargeObject,
+  PinnedObject,
 }
 
 impl RegionState
@@ -26,11 +61,12 @@ impl RegionState
   const fn can_transition_to(self, next: Self) -> bool
   {
     matches!((self, next),
-             (Self::Free, Self::Eden | Self::Humongous) |
+             (Self::Free, Self::Eden | Self::LargeObject | Self::PinnedObject) |
              (Self::Eden, Self::Survivor | Self::Old | Self::Free) |
              (Self::Survivor, Self::Survivor | Self::Old | Self::Free) |
              (Self::Old, Self::Old | Self::Free) |
-             (Self::Humongous, Self::Free))
+             (Self::LargeObject, Self::Free) |
+             (Self::PinnedObject, Self::Free))
   }
 }
 
@@ -129,9 +165,10 @@ impl XgcConfiguration
     Self { enabled: true }
   }
 
-  pub const fn is_humongous(object_size: usize) -> bool
+  #[must_use]
+  pub const fn is_large(object_size: usize) -> bool
   {
-    object_size >= HUMONGOUS_OBJECT_THRESHOLD_BYTES
+    object_size >= LARGE_OBJECT_THRESHOLD_BYTES
   }
 }
 
@@ -147,11 +184,11 @@ mod tests
   }
 
   #[test]
-  fn region_and_humongous_boundaries_are_stable()
+  fn region_and_large_object_boundaries_are_stable()
   {
     assert_eq!(REGION_SIZE_BYTES, 2_097_152);
-    assert!(!XgcConfiguration::is_humongous(HUMONGOUS_OBJECT_THRESHOLD_BYTES - 1));
-    assert!(XgcConfiguration::is_humongous(HUMONGOUS_OBJECT_THRESHOLD_BYTES));
+    assert!(!XgcConfiguration::is_large(LARGE_OBJECT_THRESHOLD_BYTES - 1));
+    assert!(XgcConfiguration::is_large(LARGE_OBJECT_THRESHOLD_BYTES));
   }
 
   #[test]
@@ -161,7 +198,7 @@ mod tests
     assert_eq!(region.transition(RegionState::Eden, GenerationId(11)), Ok(()));
     assert_eq!(region.update_usage(512, 128, 640), Ok(()));
     assert_eq!(region.live_bytes, 512);
-    assert_eq!(region.transition(RegionState::Humongous, GenerationId(12)),
+    assert_eq!(region.transition(RegionState::LargeObject, GenerationId(12)),
                Err(RegionModelError::InvalidStateTransition));
     assert_eq!(region.update_usage(REGION_SIZE_BYTES, 1, REGION_SIZE_BYTES),
                Err(RegionModelError::UsageExceedsRegion));

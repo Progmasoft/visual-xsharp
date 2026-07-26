@@ -12,6 +12,18 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+## 0.2.2 - 2026-07-26
+
+- Defined XGC as three physically separate managed heaps: Young and Old share the Main Heap, while LOH and POH have
+  independent region directories and allocation paths.
+- Added concurrent collection plans for Young copying, Old relocation/evacuation, fragmentation-oriented LOH
+  compaction, and non-moving POH mark-sweep with coalescing free lists.
+- Added XGC read/load forwarding barriers, SATB and card-table write barriers, cross-region remembered edges, and
+  selection policy for fragmented LOH regions.
+- Added the ordered XGC failure path: ordinary concurrent collection, one emergency concurrent retry, and bounded
+  stop-the-world recovery.
+- Added runtime allocation-class selection, separate heap routing, POH allocation/reuse, and expanded XGC telemetry.
+
 - Added the buildable `xsrt` runtime with ABI version 0 and explicit boxed ownership for immutable UTF-16
   `Optional<Str>` values.
 - Added the public C23 `.xspkg.tar.zst` writer/verifier boundary with deterministic tar metadata, path and resource

@@ -687,18 +687,27 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
 ### XGC foundation
 
 - XGC is an optional, disabled-by-default whole-program policy represented inside the existing `xslang` crate.
-- Its target-independent model uses logical heap offsets and fixed 2 MiB regions, including contiguous humongous-region
-  claims for objects at or above half a region.
+- Its target-independent model uses logical heap offsets and fixed 2 MiB regions across three physically separate
+  spaces. Young and Old share the Main Heap; the Large Object Heap (LOH) and Pinned Object Heap (POH) own independent
+  region directories and never exchange regions with the Main Heap or each other.
+- Young has a concurrent mark/copy plan, Old has concurrent SATB mark and selected-region relocation, LOH selects
+  fragmentation-heavy regions for concurrent compaction, and non-moving POH uses concurrent mark-sweep with coalescing
+  free lists. LOH's successful-cycle post-condition limits remaining fragmentation to five percent; failure to meet it
+  enters collector recovery. Moving plans require both read/load and write barriers.
 - Region metadata includes an object-start mark bitmap, a 512-byte-granularity card table, adaptive remembered sets,
   live/garbage/allocation accounting, age, and validated lifecycle transitions.
-- Precise stack-map roots, thread-local SATB publication buffers, collection-set scoring, and saturating telemetry have
-  independent models and tests.
+- Precise stack-map roots, thread-local SATB publication buffers, forwarding-table read barriers, card/remembered-set
+  write barriers, Old and LOH collection-set scoring, POH allocation/reuse, and saturating telemetry have independent
+  models and tests.
+- Failure recovery is ordered: an ordinary concurrent attempt is followed by one emergency concurrent retry, then by
+  stop-the-world recovery. A successful attempt resets the next cycle to ordinary concurrent mode.
 - The public Rust surface is `xslang::xgc::*`. XGC remains X#-first: an executable collector context requires an explicit
   `XgcRuntimeBinding` that supplies target object layouts, precise reference tracing, and root rewriting. Third-party
   runtimes may provide that binding; the model is not exposed as a standalone, metadata-free collector.
-- These structures do not yet allocate managed objects or run a collector. Compiler barriers, safepoint insertion,
-  collector threads, root scanning, evacuation, and runtime/LLVM integration are later steps. Native `.xse` compilation
-  continues to use the existing ownership-oriented pipeline unless XGC is eventually connected end to end.
+- These structures allocate logical POH spans and define collection/barrier policy, but do not yet reserve native heap
+  pages or run collector threads. Compiler barrier and safepoint insertion, root scanning, physical copying/relocation,
+  and runtime/backend integration are later steps. Native `.xse` compilation continues to use the existing
+  ownership-oriented pipeline until XGC is connected end to end.
 
 ### LLVM backend infrastructure
 

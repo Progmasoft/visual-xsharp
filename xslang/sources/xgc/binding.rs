@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-use super::{ObjectReference, RootLocation, XgcConfiguration};
+use super::{AllocationClass, ObjectReference, RootLocation, XgcConfiguration};
 
 /// Stable identity assigned to X# runtime type metadata.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -65,6 +65,12 @@ impl ObjectLayout
 pub trait XgcRuntimeBinding
 {
   fn object_layout(&self, metadata: TypeMetadataId) -> Option<ObjectLayout>;
+
+  /// Selects a runtime allocation class. Ordinary metadata starts in young.
+  fn allocation_class(&self, _: TypeMetadataId) -> AllocationClass
+  {
+    AllocationClass::Young
+  }
 
   fn trace_references(&self,
                       metadata: TypeMetadataId,
