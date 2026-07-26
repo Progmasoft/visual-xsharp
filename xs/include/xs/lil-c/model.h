@@ -7,9 +7,15 @@
 #define XS_LIL_C_MODEL_H
 
 #include "xs/int128.h"
+#include "xs/lil-c/api.h"
 
 #include <stddef.h>
 #include <stdint.h>
+
+#define XS_LIL_TEXT_VERSION 0U
+#define XS_LIL_INVALID_VALUE_ID UINT32_MAX
+#define XS_LIL_INVALID_BLOCK_ID UINT32_MAX
+#define XS_LIL_INVALID_SLOT_ID UINT32_MAX
 
 typedef enum
 {
@@ -205,5 +211,16 @@ typedef enum
 typedef struct XsLilBlock XsLilBlock;
 typedef struct XsLilFunction XsLilFunction;
 typedef struct XsLilModule XsLilModule;
+
+XS_LIL_API const char *xs_lil_status_name(XsLilStatus status);
+XS_LIL_API XsLilError *xs_lil_error_create(void);
+XS_LIL_API void xs_lil_error_destroy(XsLilError *error);
+XS_LIL_API void xs_lil_error_reset(XsLilError *error);
+XS_LIL_API XsLilStatus xs_lil_error_status(const XsLilError *error);
+XS_LIL_API const char *xs_lil_error_message(const XsLilError *error);
+XS_LIL_API XsLilType xs_lil_scalar_type(XsLilTypeKind kind);
+XS_LIL_API bool xs_lil_type_is_scalar(XsLilType type);
+XS_LIL_API XsLilTypeKind xs_lil_type_kind(XsLilType type);
+XS_LIL_API uint32_t xs_lil_type_registry_id(XsLilType type);
 
 #endif

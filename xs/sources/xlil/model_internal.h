@@ -76,6 +76,7 @@ struct XsLilBlock
 
 struct XsLilFunction
 {
+  XsLilModule *owner;
   char *name;
   XsLilType return_type;
   XsLilType *parameters;
@@ -101,7 +102,7 @@ struct XsLilModule
   XsLilArrayType *array_types;
   size_t array_type_count;
   size_t array_type_capacity;
-  XsLilFunction *functions;
+  XsLilFunction **functions;
   size_t function_count;
   size_t function_capacity;
 };

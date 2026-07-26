@@ -98,7 +98,10 @@ void xs_lil_module_destroy(XsLilModule *module)
   if(module == nullptr)
     return;
   for(size_t i = 0; i < module->function_count; ++i)
-    function_free(&module->functions[i]);
+  {
+    function_free(module->functions[i]);
+    free(module->functions[i]);
+  }
   for(size_t i = 0; i < module->aggregate_type_count; ++i)
   {
     free(module->aggregate_types[i].fields);
@@ -116,12 +119,12 @@ const char *xs_lil_module_name(const XsLilModule *module)
   return module == nullptr ? nullptr : module->name;
 }
 
-static XsLilStatus append_function(XsLilModule *module, XsLilFunction function, XsLilError *error)
+static XsLilStatus append_function(XsLilModule *module, XsLilFunction *function, XsLilError *error)
 {
   if(module->function_count == module->function_capacity)
   {
     size_t capacity = module->function_capacity == 0 ? 8 : module->function_capacity * 2;
-    XsLilFunction *functions = realloc(module->functions, capacity * sizeof(*functions));
+    XsLilFunction **functions = realloc(module->functions, capacity * sizeof(*functions));
     if(functions == nullptr)
       return xs_lil_set_error(error, XS_LIL_ALLOCATION_FAILED, "out of memory while adding XLIL function");
     module->functions = functions;
@@ -156,45 +159,53 @@ static XsLilStatus add_function(XsLilModule *module, const char *name, XsLilType
     *out_function = nullptr;
   if(module == nullptr || name == nullptr || name[0] == '\0' || (parameter_count != 0 && parameters == nullptr))
     return xs_lil_set_error(error, XS_LIL_INVALID_ARGUMENT, "valid XLIL module and function signature are required");
-  XsLilFunction function = {
+  XsLilFunction *function = calloc(1, sizeof(*function));
+  if(function == nullptr)
+    return xs_lil_set_error(error, XS_LIL_ALLOCATION_FAILED, "out of memory while creating XLIL function");
+  *function = (XsLilFunction){
+      .owner = module,
       .name = xs_lil_copy_text(name),
       .return_type = return_type,
       .parameter_count = parameter_count,
       .is_definition = is_definition,
   };
-  if(function.name == nullptr)
+  if(function->name == nullptr)
   {
-    function_free(&function);
+    free(function);
     return xs_lil_set_error(error, XS_LIL_ALLOCATION_FAILED, "out of memory while naming XLIL function");
   }
   if(parameter_count != 0)
   {
-    function.parameters = malloc(parameter_count * sizeof(*function.parameters));
-    if(function.parameters == nullptr)
+    function->parameters = malloc(parameter_count * sizeof(*function->parameters));
+    if(function->parameters == nullptr)
     {
-      function_free(&function);
+      function_free(function);
+      free(function);
       return xs_lil_set_error(error, XS_LIL_ALLOCATION_FAILED, "out of memory while copying XLIL parameters");
     }
-    memcpy(function.parameters, parameters, parameter_count * sizeof(*function.parameters));
+    memcpy(function->parameters, parameters, parameter_count * sizeof(*function->parameters));
     for(size_t parameter = 0; parameter < parameter_count; ++parameter)
     {
       XsLilValueId value = 0;
-      XsLilStatus status = xs_lil_add_value(&function, parameters[parameter], &value, error);
+      XsLilStatus status = xs_lil_add_value(function, parameters[parameter], &value, error);
       if(status != XS_LIL_OK)
       {
-        function_free(&function);
+        function_free(function);
+        free(function);
         return status;
       }
     }
   }
   XsLilStatus status = append_function(module, function, error);
   if(status != XS_LIL_OK)
-    function_free(&function);
+  {
+    function_free(function);
+    free(function);
+  }
   else if(out_function != nullptr)
-    *out_function = &module->functions[module->function_count - 1];
+    *out_function = module->functions[module->function_count - 1];
   return status;
 }
-
 XsLilStatus xs_lil_module_add_function(XsLilModule *module, const char *name, XsLilType return_type,
                                        const XsLilType *parameters, size_t parameter_count, XsLilError *error)
 {
@@ -217,7 +228,7 @@ const XsLilFunction *xs_lil_module_function_at(const XsLilModule *module, size_t
 {
   if(module == nullptr || index >= module->function_count)
     return nullptr;
-  return &module->functions[index];
+  return module->functions[index];
 }
 
 const char *xs_lil_function_name(const XsLilFunction *function)
@@ -980,8 +991,8 @@ XsLilBlockId xs_lil_block_terminator_else_block(const XsLilBlock *block)
 const char *xs_lil_type_name(XsLilType type)
 {
   static const char *const names[] = {
-      "void", "bool", "u8",   "i8",  "u16", "i16", "u32",  "i32", "u64",
-      "i64",  "u128", "i128", "f16", "f32", "f64", "f128", "str", "aggregate", "array",
+      "void", "bool", "u8",  "i8",  "u16", "i16",  "u32", "i32",       "u64",   "i64",
+      "u128", "i128", "f16", "f32", "f64", "f128", "str", "aggregate", "array",
   };
   if((size_t)type.kind >= sizeof(names) / sizeof(names[0]))
     return "unknown";

@@ -13,7 +13,7 @@ static const XsLilFunction *find_function(const XsLilModule *module, const char 
   *duplicate = false;
   for(size_t index = 0; index < module->function_count; ++index)
   {
-    const XsLilFunction *function = &module->functions[index];
+    const XsLilFunction *function = module->functions[index];
     if(strcmp(function->name, name) != 0)
       continue;
     if(result != nullptr)
@@ -326,7 +326,7 @@ XsLilStatus xs_lil_module_verify(const XsLilModule *module, XsLilError *error)
       return xs_lil_set_error(error, XS_LIL_INVALID_ARGUMENT, "XLIL array registry entry is invalid");
   for(size_t index = 0; index < module->function_count; ++index)
   {
-    const XsLilFunction *function = &module->functions[index];
+    const XsLilFunction *function = module->functions[index];
     if(!valid_type(module, function->return_type))
       return xs_lil_set_error(error, XS_LIL_INVALID_ARGUMENT, "XLIL function return type is not in the registry");
     for(size_t parameter = 0; parameter < function->parameter_count; ++parameter)

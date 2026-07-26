@@ -164,7 +164,7 @@ the correct XLIL grammar as the format evolves. It is not a bytecode VM version 
 
 ## Public API
 
-XLIL will expose a stable C23 API through:
+XLIL exposes its C23 producer and consumer API through:
 
 ```c
 #include <xs/lil.h>
@@ -179,13 +179,72 @@ The API is intended to let:
 - alternative frontends exist,
 - every XLIL-producing compiler reuse the same backend infrastructure.
 
-The C23 API currently includes module construction, verification, text writing, v0 text parsing, and read-only
-function/body inspection, aggregate and fixed-array type registries, composite construction, and element extraction. Direct
-`xs build --xlil -file <input.xlil>` uses this parser API before emitting verified and
-optimized LLVM IR, an object file, and a native `.xse` executable for the supported local-target subset.
+The C23 API can construct every record in the currently implemented XLIL v0 model: scalar and registry types, external
+and defined function signatures, parameter values, stack slots, blocks, constants, calls, integer and floating-point
+operations, strings, aggregates, arrays, memory operations, branches, returns, and panic terminators. It also provides
+module verification, canonical owned-text emission, bounded v0 text parsing, mutable producer lookup, and read-only
+inspection of every instruction payload. Direct `xs build --xlil -file <input.xlil>` uses the same parser and verifier
+before emitting optimized LLVM IR, an object file, and a native `.xse` executable for the supported local-target subset.
 
-`<xs/lil.h>` is the stable umbrella include for C23 producers. Code that wants a smaller dependency surface may include
-the standalone headers under `<xs/lil-c/>`: `model.h`, `module.h`, `function.h`, `instruction.h`, and `text.h`.
+The model API is the precise layer; `XsLilBuilder` is the convenience layer. A builder keeps an insertion block, infers
+operand, field, array-element, and call-result types from the registry, resolves call signatures by name, accepts block
+handles for branches, and reports invalid construction immediately:
+
+```c
+XsLilBuilder *builder = nullptr;
+XsLilFunction *main_function = nullptr;
+XsLilValueId value = XS_LIL_INVALID_VALUE_ID;
+
+xs_lil_module_add_function_definition(
+    module, "main", xs_lil_scalar_type(XS_LIL_TYPE_I32), nullptr, 0, &main_function, &error);
+xs_lil_builder_create(module, &builder, &error);
+xs_lil_builder_append_block(builder, main_function, "entry", nullptr, &error);
+xs_lil_builder_const_i32(builder, 0, &value, &error);
+xs_lil_builder_return_value(builder, value, &error);
+xs_lil_builder_destroy(builder);
+```
+
+The producer-owned text path does not expose a C `FILE *` across an FFI boundary:
+
+```c
+#include <xs/lil.h>
+
+XsLilError error = {0};
+XsLilModule *module = nullptr;
+XsLilText text = {0};
+
+if(xs_lil_module_create("Example", &module, &error) != XS_LIL_OK)
+  return 1;
+
+// Add types, signatures, blocks, instructions, and terminators here.
+
+if(xs_lil_module_emit_text(module, &text, &error) != XS_LIL_OK)
+{
+  xs_lil_module_destroy(module);
+  return 1;
+}
+
+// text.data is NUL-terminated; text.length excludes the terminator.
+xs_lil_text_destroy(&text);
+xs_lil_module_destroy(module);
+```
+
+`xs_lil_module_emit_text` verifies the complete module before allocating canonical v0 text. The returned bytes belong to
+the caller until `xs_lil_text_destroy`. `XS_LIL_TEXT_VERSION` names the current format version, and explicit invalid
+value/block/slot ID constants are available to bindings that cannot conveniently use C designated initializers.
+
+`lil-c` is also the stable FFI boundary for official language bindings. Modules, functions, blocks, and builders are
+opaque handles. Their addresses remain stable while their owning module lives, even when the registry grows. Strings
+returned by inspection functions are borrowed and remain valid for the same lifetime. `XsLilText` is the explicit
+owned-buffer exception. Every public symbol uses `XS_LIL_API`; `xs_lil_c_api_version()` returns the packed
+`XS_LIL_C_API_VERSION` value so a binding can reject an incompatible library before constructing a module. The installed
+runtime library is `libxs_lil` on Unix-family targets and the corresponding `xs_lil` DLL on Windows. Bindings that do not
+want to reproduce the error and text structure layouts can allocate those objects with `xs_lil_error_create` and
+`xs_lil_text_create`, inspect them through accessors, and release them with the matching destroy/delete function.
+
+`<xs/lil.h>` is the umbrella include for C23 producers. Code that wants a smaller dependency surface may include
+the standalone headers under `<xs/lil-c/>`: `api.h`, `model.h`, `module.h`, `function.h`, `instruction.h`, `builder.h`,
+and `text.h`.
 The Rust producer API is exposed directly under `xslang::xlil::*`; its public model, parser, verifier, and writer can build
 and round-trip the same XLIL v0 registry without going through the C ABI.
 

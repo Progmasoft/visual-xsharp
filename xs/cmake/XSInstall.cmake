@@ -19,8 +19,9 @@ install(TARGETS xs
 )
 
 install(TARGETS xs_lil xs_package
-  ARCHIVE DESTINATION "lib"
-  COMPONENT compiler
+  ARCHIVE DESTINATION "lib" COMPONENT compiler
+  LIBRARY DESTINATION "lib" COMPONENT compiler NAMELINK_COMPONENT compiler
+  RUNTIME DESTINATION "${XS_INSTALL_BINDIR}" COMPONENT compiler
 )
 
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/xs/"

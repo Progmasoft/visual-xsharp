@@ -480,7 +480,7 @@ XsLilStatus xs_lil_module_write_text(const XsLilModule *module, FILE *stream, Xs
   }
   for(size_t i = 0; i < module->function_count; ++i)
   {
-    const XsLilFunction *function = &module->functions[i];
+    const XsLilFunction *function = module->functions[i];
     if(xs_lil_write_checked(stream, error, function->is_definition ? ".func " : ".extern ") != XS_LIL_OK)
       return error == nullptr ? XS_LIL_IO_ERROR : error->status;
     if(write_signature(stream, error, function) != XS_LIL_OK)

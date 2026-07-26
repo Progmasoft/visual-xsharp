@@ -86,8 +86,9 @@ add_library(xs_compiler
   sources/token.c
 )
 
-add_library(xs_lil
+add_library(xs_lil SHARED
   sources/int128.c
+  sources/xlil/builder.c
   sources/xlil/memory.c
   sources/xlil/model.c
   sources/xlil/model_aggregate.c
@@ -104,9 +105,12 @@ add_library(xs_lil
   sources/xlil/parser_signature.c
   sources/xlil/parser_integer_operation.c
   sources/xlil/parser_string.c
+  sources/xlil/producer.c
+  sources/xlil/text_emit.c
   sources/xlil/verify.c
   sources/xlil/writer.c
 )
+set_target_properties(xs_lil PROPERTIES VERSION "${PROJECT_VERSION}" SOVERSION 1)
 
 add_library(xs_package
   sources/package/archive_common.c
@@ -117,6 +121,11 @@ add_library(xs_package
 target_include_directories(xs_compiler PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
 target_include_directories(xs_lil PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
 target_include_directories(xs_package PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
+target_compile_definitions(xs_lil PRIVATE XS_LIL_BUILDING_LIBRARY)
+get_target_property(XS_LIL_LIBRARY_TYPE xs_lil TYPE)
+if(XS_LIL_LIBRARY_TYPE STREQUAL "SHARED_LIBRARY")
+  target_compile_definitions(xs_lil PUBLIC XS_LIL_SHARED)
+endif()
 target_link_libraries(xs_compiler PUBLIC xs_lil PRIVATE xslang_compiler_core)
 target_link_libraries(xs_package PRIVATE LibArchive::LibArchive OpenSSL::Crypto)
 target_compile_definitions(xs_package PUBLIC _POSIX_C_SOURCE=200809L)
@@ -134,6 +143,11 @@ target_compile_options(xs_package PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
 
 add_executable(xs sources/main.c)
 set_target_properties(xs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+if(APPLE)
+  set_target_properties(xs PROPERTIES INSTALL_RPATH "@loader_path/../lib")
+elseif(UNIX)
+  set_target_properties(xs PROPERTIES INSTALL_RPATH "\$ORIGIN/../lib")
+endif()
 target_link_libraries(xs PRIVATE xs_compiler)
 
 add_library(xs_backend_llvm

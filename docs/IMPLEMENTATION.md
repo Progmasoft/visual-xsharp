@@ -717,6 +717,11 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
 - Documented numeric primitive types map to LLVM types.
 - Body-less function declarations and function signature lowering are supported.
 - XLIL function declaration signatures lower through the XLIL type vocabulary rather than through HIR primitive types.
+- The public `xs/lil.h` producer surface can build every implemented XLIL v0 registry/body record, verify the completed
+  opaque model, emit caller-owned canonical text without exposing `FILE *` across an FFI boundary, parse it back, and
+  inspect typed instruction payloads. Its optional insertion-point builder infers common operand and registry types, while
+  stable opaque handles, an API-version query, exported-symbol annotations, and the installed shared `xs_lil` library
+  form the FFI boundary for official bindings.
 - LLVM optimization pipelines from `default<O0>` through `default<O3>` can be configured.
 - LLVM module verification, LLVM IR text emission, and object file emission work.
 - `xs build --xlil -file <input.xlil>` parses and verifies XLIL v0 text through `xs_lil_module_parse_text`, then lowers to

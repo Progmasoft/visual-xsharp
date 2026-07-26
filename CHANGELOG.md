@@ -12,6 +12,12 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Completed the public C23 XLIL v0 producer surface behind `<xs/lil.h>`. Third-party frontends can construct every
+  implemented type, function, block, instruction, and terminator record; verify it; emit owned canonical text; parse it
+  back; and inspect typed payloads without exchanging a C `FILE *` across their FFI boundary.
+- Added the `XsLilBuilder` convenience layer, stable opaque function handles, packed C API version negotiation, public
+  symbol visibility annotations, and an installed shared `xs_lil` library as the foundation for official FFI bindings.
+
 ## 0.2.2 - 2026-07-26
 
 - Defined XGC as three physically separate managed heaps: Young and Old share the Main Heap, while LOH and POH have
