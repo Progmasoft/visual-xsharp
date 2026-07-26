@@ -10,7 +10,8 @@ and MIR do not depend on LLVM, but they may use the target-independent XLIL type
 as target triples and data layouts exist only in the backend layer. Real function body generation will be added after typed,
 borrow-checked, monomorphized MIR nodes are lowered to XLIL.
 
-LLVM is the primary backend focus today, but the HIR/MIR/XLIL design must remain portable to other backends. Target-specific
+LLVM is the only implemented and supported backend today, but the HIR/MIR/XLIL design must remain portable to future
+backends. Target-specific
 assembly, if needed, is isolated in backend/runtime layers. NASM `.asm`/`.inc` files may be used only without locking the
 design to x86-64; ARM64 compatibility must be preserved.
 
@@ -35,7 +36,7 @@ design to x86-64; ARM64 compatibility must be preserved.
 - Object file emission per codegen unit
 - Linker invocation layer that does not use a shell and receives arguments from the caller
 
-Object file emission and linker invocation are wired into direct `.xlil` native builds and the supported `.xs`/`.xsproj`
+Object file emission and linker invocation are wired into direct `.xlil` native builds and the supported `.xs`
 compiler-core slice. Unsupported source constructs are diagnosed or remain outside that incremental slice; they are not
 lowered by inventing LLVM-only semantics.
 

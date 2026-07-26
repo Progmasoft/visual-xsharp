@@ -37,22 +37,40 @@ jobs:
           unzip -q "$RUNNER_TEMP/kotlin-compiler.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/kotlinc/bin" >> "$GITHUB_PATH"
       - name: Install native toolchain
-        run: sudo apt-get update && sudo apt-get install --yes clang lld llvm llvm-dev ninja-build
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            clang \
+            libarchive-dev \
+            libssl-dev \
+            lld \
+            llvm \
+            llvm-dev \
+            ninja-build
       - name: Configure C23 debug build
         run: cmake --preset clang-debug
+      - name: Build bundled project runtime
+        run: cmake --build --preset clang-debug --target xs_project_runtime
       - name: Test C23 debug build
-        run: ulimit -v 2097152; cmake --build --preset clang-debug && ctest --preset clang-debug --output-on-failure -LE jvm
+        run: |
+          ulimit -v 2097152
+          cmake --build --preset clang-debug
+          ctest --preset clang-debug --output-on-failure -LE jvm -FA kotlin_project_resolver
       - name: Test Kotlin project builds
         run: ctest --preset clang-debug --output-on-failure -L jvm
       - name: Configure sanitizer build
         run: cmake --preset clang-sanitize
       - name: Test sanitizer build
-        run: cmake --build --preset clang-sanitize && ctest --preset clang-sanitize --output-on-failure -LE jvm
+        run: |
+          cmake --build --preset clang-sanitize
+          ctest --preset clang-sanitize --output-on-failure -LE jvm -FA kotlin_project_resolver
       - name: Test Kotlin projects with sanitizer compiler
         run: ctest --preset clang-sanitize --output-on-failure -L jvm
       - name: Check Rust formatting
         run: cargo +nightly-2026-07-10 fmt --manifest-path xslang/Cargo.toml --check
       - name: Test Rust compiler core
         run: ulimit -v 2097152; cargo +nightly-2026-07-10 test --manifest-path xslang/Cargo.toml
+      - name: Check Rust lints
+        run: ulimit -v 2097152; cargo +nightly-2026-07-10 clippy --manifest-path xslang/Cargo.toml -- -D warnings
       - name: Check patch hygiene
         run: git diff --check

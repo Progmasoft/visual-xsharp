@@ -18,12 +18,11 @@ typedef struct
   char **test_paths;
   size_t test_path_count;
   XsCompilerSettings settings;
-} XsResolvedKotlinProject;
+} XsResolvedProject;
 
-bool xs_driver_resolve_kotlin_project(const char *module_path, XsResolvedKotlinProject *project);
-bool xs_driver_resolve_kotlin_tests(const char *module_path, XsResolvedKotlinProject *project);
-bool xs_driver_resolve_kotlin_modules(const char *project_root, const char *module_path,
-                                      XsResolvedKotlinProject *project);
-void xs_driver_free_kotlin_project(XsResolvedKotlinProject *project);
+bool xs_driver_resolve_project(const char *module_path, XsResolvedProject *project);
+bool xs_driver_resolve_project_tests(const char *module_path, XsResolvedProject *project);
+bool xs_driver_refresh_lock(void);
+void xs_driver_free_project(XsResolvedProject *project);
 
 #endif

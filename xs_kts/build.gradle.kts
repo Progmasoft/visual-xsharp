@@ -38,7 +38,7 @@ java {
 
 application {
   mainClass = "org.xsslang.project.MainKt"
-  applicationName = "xs-project"
+  applicationName = "xs-project-runtime"
 }
 
 sourceSets {

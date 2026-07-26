@@ -35,11 +35,12 @@ implementation notes and internal design logs are not part of the public documen
 - Extend XLIL-to-LLVM lowering from declarations and the initial body subset to full function bodies.
 - Emit object files and link project targets into native `.xse` executables, targeting ELF first and PE after ELF.
 - Complete `xs build`, `xs check`, and `xs run` artifact handling and diagnostics.
+- Keep LLVM as the only advertised implementation until each planned backend satisfies the support gates in
+  `docs/BACKENDS.md`.
+- Specify the C23, JavaScript, and WebAssembly artifact and ABI contracts before registering their selectors as supported.
 
 ## Public APIs
 
-- Preserve the feature-frozen `.xsproj` C23 parser API as permanent, buildable legacy compatibility without adding new
-  format features or active compiler/project tests.
 - Grow the XLIL C23 API under `#include <xs/lil.h>` for external frontends and language implementations.
 - Add AOT/JIT-facing APIs only when their behavior is implemented and testable.
 

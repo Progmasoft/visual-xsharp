@@ -21,6 +21,8 @@ toolchain.
   - `llvm-objdump`
   - `llvm-strip`
 - `ld.lld`
+- libarchive development headers and library
+- OpenSSL development headers and Crypto library
 - `rustup` and `cargo`; the pinned `xslang/rust-toolchain.toml` toolchain must be installed
 - JRE 25, Gradle 9.6.1 or newer, and the Kotlin 2.4.0 `kotlin` script runner for the `jvm` project-test label
 
@@ -56,8 +58,7 @@ likewise split by direct XLIL, source values/control flow/calls, Kotlin projects
 `cmake/XSTests*.cmake`.
 
 The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` static library, then links its compiler-core
-session API into the C23 driver. The same CMake configuration builds the `xs-proj` parser/validator executable. Building
-`xsproj` alone remains C23-only and does not require Rust or LLVM.
+session API into the C23 driver.
 
 ## Compiler installation layout
 
@@ -67,20 +68,21 @@ Install the compiler component into a staging prefix with:
 cmake --install build/clang-debug --prefix /tmp/xs-root --component compiler
 ```
 
-With the normal system prefix `/usr`, this component installs the JVM-free compiler as `/usr/bin/xs`, merges the common
+With the normal system prefix `/usr`, this component installs the native compiler command as `/usr/bin/xs`, merges the common
 `include/xs/` and compiler-owned `xs/include/xs/` public C23 headers under `/usr/include/xs/`, and installs
 `LICENSE.txt` plus `NOTICE.txt` under `/usr/share/licenses/xs/`. Source-tree ownership remains separate even though the
 installed include surface is unified. CMake fails rather than silently replacing an identically named header from the two
 source trees.
 
-The modern `xs-project` Kotlin resolver is built separately with Gradle:
+The mandatory Kotlin project runtime included in the `xs` package is built with Gradle:
 
 ```text
-gradle -p xs_kts --no-daemon test installDist
+./xs_kts/gradlew --daemon --build-cache -p xs_kts test installDist
 ```
 
-It targets JVM 25 and runs on JRE 25 or newer. Runtime project evaluation also requires an external `kotlin` command with scripting
-support; neither is embedded. The compiler command itself remains JVM-free.
+It targets JVM 25 and runs on JRE 25 or newer. Runtime project evaluation also requires an external `kotlin` command with
+scripting support; neither is embedded. The native executable does not link a JVM, but JRE 25 and Kotlin are mandatory
+runtime dependencies of the unified `xs` package.
 
 ## OOM-safe workflow
 
@@ -88,9 +90,10 @@ Parser/compiler tests have previously triggered OOM conditions. Use a 2GB virtua
 the JVM-labelled Kotlin project integration tests:
 
 ```text
+cmake --build --preset clang-debug --target xs_project_runtime
 ulimit -v 2097152
 cmake --build --preset clang-debug
-ctest --preset clang-debug --output-on-failure -LE jvm
+ctest --preset clang-debug --output-on-failure -LE jvm -FA kotlin_project_resolver
 ```
 
 Then run the real `xs.project.kts` integration tests outside that virtual-address-space limit. A JVM reserves more virtual
@@ -122,18 +125,16 @@ Stable projects:
 
 ```text
 cmake --preset clang-debug -DXS_ENABLE_PROJECTS=xs
-cmake --preset clang-debug -DXS_ENABLE_PROJECTS=xsproj
 cmake --preset clang-debug -DXS_ENABLE_PROJECTS=all
 ```
 
-`xsproj` must not require the LLVM package when built by itself. Future projects (`xsfmt`, `xstidy`, and `xs-analyzer`)
-intentionally produce CMake errors for now.
+Future projects (`xsfmt`, `xstidy`, and `xs-analyzer`) intentionally produce CMake errors for now.
 
 ## Useful checks
 
 ```text
 git diff --check
-rg -n "\bNULL\b|#include <stdbool\.h>" xs xsproj tests include
+rg -n "\bNULL\b|#include <stdbool\.h>" xs xsrt tests include
 busybox wc -l <file.c> <file.h>
 ```
 

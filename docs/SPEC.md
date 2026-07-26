@@ -34,7 +34,8 @@ syntax takes priority over ad-hoc implementation shortcuts.
 - `::` separates modules, namespaces, types, associated items, and
   constructors; `.` is reserved for value member access and method calls. Generic arguments in expression paths use
   turbofish, for example `Some::<Str>("value")`.
-- `.xs` has no `module` keyword. `xs-project` evaluates `xs.project.kts` plus optional `xs.module.kts` metadata and passes
+- `.xs` has no `module` keyword. The project runtime bundled with `xs` evaluates `xs.project.kts` plus optional
+  `xs.module.kts` metadata and passes
   logical module membership to the native compiler. Module names are case-sensitive: `name("Math")` is imported as
   `import Math;`, not `import math;`. `add(...)` accepts concrete paths or globs, and `submodule` creates a qualified
   child module. `PascalCase` source directories and `snake_case.xs` files are canonical but not mandatory.

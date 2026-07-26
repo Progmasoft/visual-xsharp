@@ -3,4 +3,9 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-rootProject.name = "xs-project-runtime"
+#ifndef XS_PACKAGE_H
+#define XS_PACKAGE_H
+
+#include <xs/package/archive.h>
+
+#endif

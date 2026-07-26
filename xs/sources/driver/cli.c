@@ -23,7 +23,6 @@
 #include "xs/hir/symbol_table.h"
 #include "xs/hir/type_resolution.h"
 #include "xs/macro.h"
-#include "xs/project.h"
 #include "xs/source_include.h"
 #include "xs/syntax_ast.h"
 #include "xs/syntax_parser.h"
@@ -198,7 +197,7 @@ static bool validate_direct_ir_version(XsBuildOutput output, const char *path, c
   return true;
 }
 
-static char *project_path(const char *manifest_path, const char *source_path)
+static char *rooted_path(const char *root, const char *source_path)
 {
   if(source_path[0] == '/')
   {
@@ -208,39 +207,25 @@ static char *project_path(const char *manifest_path, const char *source_path)
       memcpy(result, source_path, length + 1);
     return result;
   }
-  const char *slash = strrchr(manifest_path, '/');
-  size_t directory_length = slash == nullptr ? 0 : (size_t)(slash - manifest_path + 1);
+  size_t root_length = strlen(root);
+  bool needs_separator = root_length != 0U && root[root_length - 1U] != '/';
   size_t source_length = strlen(source_path);
-  char *result = malloc(directory_length + source_length + 1);
+  char *result = malloc(root_length + (needs_separator ? 1U : 0U) + source_length + 1U);
   if(result == nullptr)
     return nullptr;
-  memcpy(result, manifest_path, directory_length);
-  memcpy(result + directory_length, source_path, source_length + 1);
+  memcpy(result, root, root_length);
+  size_t offset = root_length;
+  if(needs_separator)
+    result[offset++] = '/';
+  memcpy(result + offset, source_path, source_length + 1U);
   return result;
-}
-
-static char *project_root(const char *manifest_path)
-{
-  const char *slash = strrchr(manifest_path, '/');
-  if(slash == nullptr)
-    return copy_text(".");
-  size_t length = slash == manifest_path ? 1 : (size_t)(slash - manifest_path);
-  char *root = malloc(length + 1);
-  if(root != nullptr)
-  {
-    memcpy(root, manifest_path, length);
-    root[length] = '\0';
-  }
-  return root;
 }
 
 static char *build_output_path(const char *input_path, XsBuildOutput output)
 {
   const char *extension = xs_cli_output_extension(output);
   size_t base_length = strlen(input_path);
-  if(base_length >= 7 && strcmp(input_path + base_length - 7, ".xsproj") == 0)
-    base_length -= 7;
-  else if(base_length >= 3 && strcmp(input_path + base_length - 3, ".xs") == 0)
+  if(base_length >= 3 && strcmp(input_path + base_length - 3, ".xs") == 0)
     base_length -= 3;
   size_t extension_length = strlen(extension);
   char *path = malloc(base_length + extension_length + 1);
@@ -507,38 +492,15 @@ static XsCompilerCoreSession *merge_compiler_core_sessions(CompilationUnit *unit
   return status == XS_COMPILER_CORE_FFI_OK ? merged : nullptr;
 }
 
-static bool check_project_sources(const char *manifest_path, const XsProject *project, XsBuildOutput output,
-                                  bool build_native, bool run_tests, const XsCompilerSettings *settings,
-                                  char *const *assigned_modules)
+static bool check_project_sources(const char *root, const char *const *direct, size_t direct_count,
+                                  XsBuildOutput output, bool build_native, bool run_tests,
+                                  const XsCompilerSettings *settings, char *const *assigned_modules)
 {
-  if(project->xs_version.is_nil || xs_project_selected_entry(project) == nullptr)
+  if(build_native && direct_count == 0U)
   {
-    if(build_native)
-      fprintf(stderr, "xs: project native build requires compilerOptions.xsVersion and a selected entry source\n");
-    return !build_native;
-  }
-
-  size_t direct_count = project->additional_file_count;
-  if(!project->entry.is_nil && project->entry.text != nullptr)
-    ++direct_count;
-  const char **direct = calloc(direct_count, sizeof(*direct));
-  char *root = project_root(manifest_path);
-  if(direct == nullptr || root == nullptr)
-  {
-    free(direct);
-    free(root);
-    fprintf(stderr, "xs: out of memory while preparing the project graph\n");
+    fprintf(stderr, "xs: project native build requires at least one selected source\n");
     return false;
   }
-  size_t direct_index = 0;
-  if(!project->entry.is_nil && project->entry.text != nullptr)
-    direct[direct_index++] = project->entry.text;
-  for(size_t i = 0; i < project->additional_file_count; ++i)
-  {
-    if(!project->additional_files[i].is_nil && project->additional_files[i].text != nullptr)
-      direct[direct_index++] = project->additional_files[i].text;
-  }
-  direct_count = direct_index;
 
   XsModuleRegistry registry;
   XsModuleGraph graph;
@@ -556,7 +518,7 @@ static bool check_project_sources(const char *manifest_path, const XsProject *pr
   size_t unit_capacity = 0;
   for(size_t i = 0; i < direct_count; ++i)
   {
-    char *path = direct[i][0] == '/' ? copy_text(direct[i]) : project_path(manifest_path, direct[i]);
+    char *path = direct[i][0] == '/' ? copy_text(direct[i]) : rooted_path(root, direct[i]);
     const char *module_name = assigned_modules == nullptr ? nullptr : assigned_modules[i];
     if(path == nullptr || !append_compilation_unit(&units, &unit_count, &unit_capacity, path, module_name))
       success = false;
@@ -636,181 +598,60 @@ static bool check_project_sources(const char *manifest_path, const XsProject *pr
   xs_module_issues_free(&issues);
   xs_module_graph_free(&graph);
   xs_module_registry_free(&registry);
-  free(direct);
-  free(root);
   return success;
 }
 
 static int run_project_command(const XsCliOptions *options)
 {
-  XsCompilerSettings settings = xs_cli_default_compiler_settings();
-  xs_cli_apply_compiler_overrides(options, &settings);
-  print_verbose_settings(options, &settings, options->manifest_path);
-  if(strcmp(options->command, "test") == 0)
-  {
-    fprintf(stderr, "xs: legacy .xsproj files do not provide a test registry; use xs.project.kts\n");
-    return 2;
-  }
-  if(!has_suffix(options->manifest_path, ".xsproj"))
-  {
-    fprintf(stderr, "xs: -proj must be used with a .xsproj file path\n");
-    return 2;
-  }
-  size_t length = 0;
-  char *text = read_file(options->manifest_path, &length);
-  if(text == nullptr)
-  {
-    fprintf(stderr, "xs: project file '%s' could not be read\n", options->manifest_path);
-    return 2;
-  }
-
-  XsSource source = {.path = options->manifest_path, .text = text, .length = length};
-  XsDiagnostics diagnostics;
-  XsProject project;
-  xs_diagnostics_init(&diagnostics);
-  xs_diagnostics_set_warning_policy(&diagnostics, settings.warning_level, settings.warnings_as_errors);
-  xs_project_init(&project);
-  int native_exit_code = 0;
-  bool ran_native = false;
-  bool success = xs_project_parse(&source, &diagnostics, &project);
-  xs_diagnostics_print(&diagnostics, &source, stderr);
-  if(success)
-  {
-    XsResolvedKotlinProject modules = {0};
-    XsProject combined = project;
-    XsProjectValue *additional = nullptr;
-    char **assigned = nullptr;
-    char *root = nullptr;
-    if(options->module_path != nullptr)
-    {
-      root = project_root(options->manifest_path);
-      success = root != nullptr && xs_driver_resolve_kotlin_modules(root, options->module_path, &modules);
-      size_t combined_count = project.additional_file_count + modules.path_count;
-      additional = calloc(combined_count, sizeof(*additional));
-      size_t direct_count = combined_count + (project.entry.is_nil ? 0U : 1U);
-      assigned = calloc(direct_count, sizeof(*assigned));
-      if(additional == nullptr || assigned == nullptr)
-        success = false;
-      if(success)
-      {
-        for(size_t i = 0; i < project.additional_file_count; ++i)
-          additional[i] = project.additional_files[i];
-        size_t module_offset = project.additional_file_count;
-        size_t assigned_offset = module_offset + (project.entry.is_nil ? 0U : 1U);
-        for(size_t i = 0; i < modules.path_count; ++i)
-        {
-          additional[module_offset + i] = (XsProjectValue){.text = modules.paths[i]};
-          assigned[assigned_offset + i] = modules.module_names[i];
-        }
-        combined.additional_files = additional;
-        combined.additional_file_count = combined_count;
-      }
-    }
-    if(success)
-      success = check_project_sources(options->manifest_path, &combined, options->output,
-                                      strcmp(options->command, "check") != 0 && options->output == XS_BUILD_OUTPUT_NONE,
-                                      false, &settings, assigned);
-    if(success && strcmp(options->command, "run") == 0)
-    {
-      const XsProjectValue *entry = xs_project_selected_entry(&combined);
-      const char *entry_text = entry == nullptr ? nullptr : entry->text;
-      char *entry_path = entry_text == nullptr  ? nullptr
-                         : entry_text[0] == '/' ? copy_text(entry_text)
-                                                : project_path(options->manifest_path, entry_text);
-      if(entry_path == nullptr)
-      {
-        fprintf(stderr, "xs: could not resolve the project entry executable path\n");
-        success = false;
-      }
-      else
-      {
-        native_exit_code = xs_driver_run_native_artifact(entry_path);
-        ran_native = true;
-        free(entry_path);
-      }
-    }
-    free(root);
-    free(assigned);
-    free(additional);
-    xs_driver_free_kotlin_project(&modules);
-  }
-
-  xs_project_free(&project);
-  xs_diagnostics_free(&diagnostics);
-  free(text);
-  if(!success)
-    return 1;
-  return ran_native ? native_exit_code : 0;
-}
-
-static int run_kotlin_project_command(const XsCliOptions *options)
-{
-  XsResolvedKotlinProject resolved;
+  XsResolvedProject resolved;
   bool testing = strcmp(options->command, "test") == 0;
-  bool resolved_ok = testing ? xs_driver_resolve_kotlin_tests(options->module_path, &resolved)
-                             : xs_driver_resolve_kotlin_project(options->module_path, &resolved);
+  bool resolved_ok = testing ? xs_driver_resolve_project_tests(options->module_path, &resolved)
+                             : xs_driver_resolve_project(options->module_path, &resolved);
   if(!resolved_ok)
     return 1;
   xs_cli_apply_compiler_overrides(options, &resolved.settings);
   print_verbose_settings(options, &resolved.settings, "Kotlin project");
   size_t selected_count = resolved.path_count + (testing ? resolved.test_path_count : 0U);
-  XsProjectValue *additional = nullptr;
+  const char **direct = selected_count == 0U ? nullptr : calloc(selected_count, sizeof(*direct));
   char **assigned = selected_count == 0U ? nullptr : calloc(selected_count, sizeof(*assigned));
-  if(selected_count > 1U)
+  if(selected_count != 0U && (direct == nullptr || assigned == nullptr))
   {
-    additional = calloc(selected_count - 1U, sizeof(*additional));
-    if(additional == nullptr)
-    {
-      xs_driver_free_kotlin_project(&resolved);
-      return 1;
-    }
-  }
-  if(selected_count != 0U && assigned == nullptr)
-  {
-    free(additional);
-    xs_driver_free_kotlin_project(&resolved);
+    free(direct);
+    free(assigned);
+    xs_driver_free_project(&resolved);
     return 1;
   }
-  char *entry = selected_count == 0U ? nullptr : resolved.path_count != 0U ? resolved.paths[0] : resolved.test_paths[0];
   size_t selected = 0;
   for(size_t i = 0; i < resolved.path_count; ++i)
   {
-    if(selected != 0U)
-      additional[selected - 1U] = (XsProjectValue){.text = resolved.paths[i]};
+    direct[selected] = resolved.paths[i];
     assigned[selected++] = resolved.module_names[i];
   }
   if(testing)
   {
     for(size_t i = 0; i < resolved.test_path_count; ++i)
     {
-      if(selected != 0U)
-        additional[selected - 1U] = (XsProjectValue){.text = resolved.test_paths[i]};
+      direct[selected] = resolved.test_paths[i];
       ++selected;
     }
   }
-  XsProject project = {
-      .xs_version = {.text = "kotlin-project"},
-      .entry = entry == nullptr ? (XsProjectValue){.is_nil = true} : (XsProjectValue){.text = entry},
-      .additional_files = additional,
-      .additional_file_count = selected_count == 0U ? 0U : selected_count - 1U,
-  };
   bool build_native = (strcmp(options->command, "build") == 0 || strcmp(options->command, "run") == 0) &&
                       options->output == XS_BUILD_OUTPUT_NONE;
-  bool success = selected_count == 0U || check_project_sources(".", &project, options->output, build_native, testing,
-                                                               &resolved.settings, assigned);
+  bool success = check_project_sources(".", direct, selected_count, options->output, build_native, testing,
+                                       &resolved.settings, assigned);
   if(success && testing && selected_count == 0U)
     fprintf(stderr, "xs: test result: ok. 0 passed; 0 failed; 0 ignored\n");
   if(success && strcmp(options->command, "run") == 0)
   {
     int exit_code = xs_driver_run_native_artifact(resolved.paths[0]);
     free(assigned);
-    free(additional);
-    xs_driver_free_kotlin_project(&resolved);
+    free(direct);
+    xs_driver_free_project(&resolved);
     return exit_code;
   }
   free(assigned);
-  free(additional);
-  xs_driver_free_kotlin_project(&resolved);
+  free(direct);
+  xs_driver_free_project(&resolved);
   return success ? 0 : 1;
 }
 
@@ -879,9 +720,9 @@ int xs_driver_main(int argc, char **argv)
     xs_cli_print_usage(stderr);
     return 2;
   }
+  if(strcmp(options.command, "resolve") == 0)
+    return xs_driver_refresh_lock() ? 0 : 1;
   if(options.file_path != nullptr)
     return run_file_command(&options);
-  if(options.manifest_path == nullptr)
-    return run_kotlin_project_command(&options);
   return run_project_command(&options);
 }

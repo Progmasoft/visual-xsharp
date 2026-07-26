@@ -5,9 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # Project files and packages
 
-The modern X# project resolver is `/usr/bin/xs-project`. It requires JRE 25 or newer and an external `kotlin` command with
-the Kotlin scripting runtime. The JRE and Kotlin runtime are not embedded. Project scripts are trusted build code, not
-sandboxed input, and execution is delegated to the real Kotlin command; xs-project has no Kotlin interpreter.
+The modern X# project resolver is part of `/usr/bin/xs`. The unified package requires JRE 25 or newer and an external
+`kotlin` command with the Kotlin scripting runtime. The JRE and Kotlin runtime are not embedded. Project scripts are trusted
+build code, not sandboxed input, and execution is delegated to the real Kotlin command; `xs` has no Kotlin interpreter.
 
 A project may use one combined `xs.project.kts` file:
 
@@ -117,10 +117,10 @@ println(get("PROJECT"))
 Example, BETA, 0.1.0
 ```
 
-The compiler policy is transferred with the resolved source registry to the JVM-free `xs` process. Command-line
+The compiler policy is transferred with the resolved source registry to the native `xs` process. Command-line
 `--warning`, `--werror`, `--verbose`, and `--xgc-enabled` values are one-shot overrides applied after KTS evaluation;
 they never rewrite the project script. The defaults are `warnings("medium")`, `werror(false)`, `verbose(true)`, and
-`set("XGC_ENABLED", false)`. XSPROJ intentionally has no persistent equivalent.
+`set("XGC_ENABLED", false)`.
 
 `PUBLISH` is a reserved single-boolean project variable and defaults to `false`. Use `set("PUBLISH", true)` only to
 express publication intent in the generated project plan. Package upload is not implemented yet, so evaluation never
@@ -150,10 +150,11 @@ root. A requested `bin` without `main.<XS_EXTENSION>` requires `BINARY`; a reque
 
 ## External module lock
 
-Each successful modern KTS project evaluation writes `xs.lock.sqlite3` in the project root. This is a real SQLite lock
+Each successful KTS project evaluation writes `xs.lock.sqlite3` in the project root. `xs resolve` performs the same
+dependency resolution explicitly and atomically refreshes that lock without compiling X# sources. This is a real SQLite lock
 file with format version `0`; its `modules` table stores the exact case-sensitive `name`, `stability`, and `version`
 declared by `addModule`. Records are sorted and the database contains no timestamps, so lock updates are reproducible.
-The file is intended to be committed with the project. Repeating an identical coordinate is harmless, while declaring
+Repeating an identical coordinate is harmless, while declaring
 the same module name with different stability or version values is an error.
 
 The current resolver records and validates coordinates but does not download packages. Registry source identity,
@@ -195,11 +196,12 @@ CREATE TABLE modules (
 ) WITHOUT ROWID;
 ```
 
-`xs.lock.sqlite3` is binary SQLite data and should be inspected with SQLite tooling rather than edited as text.
+`xs.lock.sqlite3` is always binary SQLite data. Neither normal evaluation nor `xs resolve` emits a readable stand-in,
+SQL script, or text serialization. The dump and schema above are documentation only.
 
 ## Source registries
 
-`source` defines one or more directory roots for the exact source registry passed to the JVM-free compiler:
+`source` defines one or more directory roots for the exact source registry passed to the native compiler:
 
 ```kotlin
 source {
@@ -285,11 +287,10 @@ module { filter(listOf("Sources", "Tests")) }
 ```
 
 The project normally declares the module root with `module { include("Modules") }`. If it does not, the compiler
-invocation must provide it explicitly with `xs build --module ./Modules`. The same explicit option enables a legacy
-`.xsproj` build to consume the sibling `xs.module.kts`; `.xsproj` never enables module discovery implicitly.
+invocation must provide it explicitly with `xs build --module ./Modules`.
 
-`xs.module.kts` requires `xs-project`; `xs-compiler` does not execute Kotlin scripts. Argument-free `xs build`/`xs check`
-ask `xs-project` for a resolved registry containing physical paths and logical module names. A direct `-file` invocation
+`xs.module.kts` requires the Kotlin project runtime bundled with `xs`. Argument-free `xs build`/`xs check` ask that runtime
+for a resolved registry containing physical paths and logical module names. A direct `-file` invocation
 does not load module project metadata.
 
 For `.xs` sources, `PascalCase` directories and `snake_case.xs` file names are canonical but not mandatory.
@@ -360,24 +361,15 @@ they do not satisfy `FAMILY == BSD`.
 Windows and ReactOS satisfy `FAMILY == WINDOWS`. ReactOS intentionally has no public `OS == REACTOS` DSL value and does
 not satisfy `OS == WINDOWS`; family checks are the portable way to select both hosts.
 
-Argument-free `xs build`, `xs check`, and `xs run` search the current directory and its parents through `xs-project`.
+Argument-free `xs build`, `xs check`, and `xs run` search the current directory and its parents through the bundled project runtime.
 The resolver evaluates Kotlin, expands source metadata, and returns an exact source registry; it never parses or compiles
-`.xs` contents. The JVM-free
-`xs` process owns source parsing, semantic analysis, code generation, and artifacts. `XS_KOTLIN` may select the required
-Kotlin command, while `XS_PROJECT_DRIVER` may select the resolver executable used by `xs`.
-
-## Legacy XSPROJ
-
-The C23 `.xsproj` parser API and `/usr/bin/xs-proj` parser/validator remain available, but the format is
-feature-frozen. Dependency declarations are no longer part of XSPROJ. New programmable configuration and dependency
-features are exclusive to the Kotlin project system. Legacy builds use `xs build -proj App.xsproj`; the `-proj` flag is
-never used for Kotlin project files. XSPROJ is permanent legacy compatibility: it will not receive new features, it is
-not used by compiler conformance/project build tests, and it will never be removed.
+`.xs` contents. The native `xs` process owns source parsing, semantic analysis, code generation, and artifacts.
+`XS_KOTLIN` may select the required Kotlin command. `XS_PROJECT_RUNTIME` is an internal testing/deployment override for the
+bundled runtime launcher.
 
 ## Distribution packages
 
-- `xs-compiler` installs `/usr/bin/xs` and does not require a JVM.
-- `xs-project` installs `/usr/bin/xs-project` and requires JRE 25 or newer plus the `kotlin` scripting command.
-- `xs-proj` installs the JVM-free `/usr/bin/xs-proj` manifest parser/validator.
-- `xs-meta` is a metapackage depending on those packages and, when available, `xsfmt` and `xstidy`; it owns no compiler
-  executable.
+- `xs` installs `/usr/bin/xs`, the bundled project runtime, and the public headers and libraries.
+- The package requires JRE 25 or newer plus the `kotlin` scripting command; there is no JVM-free compiler package and no
+  separately installed `xs-project` command.
+- Future `xsfmt` and `xstidy` packages remain independently installable tools.

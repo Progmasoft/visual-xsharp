@@ -5,6 +5,7 @@
 
 #include "project_driver.h"
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,27 +18,87 @@ extern char **environ;
 
 static const char *const REGISTRY_VERSION = "xs-project-sources-v4";
 
+#ifndef XS_PROJECT_RUNTIME_DEFAULT
+#define XS_PROJECT_RUNTIME_DEFAULT "xs-project-runtime"
+#endif
+
+static const char *installed_project_runtime(void)
+{
+  static char path[PATH_MAX];
+  ssize_t length = readlink("/proc/self/exe", path, sizeof(path) - 1U);
+  if(length <= 0 || (size_t)length >= sizeof(path))
+    return nullptr;
+  path[length] = '\0';
+  char *separator = strrchr(path, '/');
+  if(separator == nullptr)
+    return nullptr;
+  *separator = '\0';
+  const char *suffix = "/../libexec/xs/project-runtime/bin/xs-project-runtime";
+  size_t directory_length = strlen(path);
+  size_t suffix_length = strlen(suffix);
+  if(directory_length > sizeof(path) - suffix_length - 1U)
+    return nullptr;
+  memcpy(path + directory_length, suffix, suffix_length + 1U);
+  return access(path, X_OK) == 0 ? path : nullptr;
+}
+
+static const char *project_runtime_program(void)
+{
+  const char *program = getenv("XS_PROJECT_RUNTIME");
+  if(program != nullptr && program[0] != '\0')
+    return program;
+#ifdef XS_PROJECT_RUNTIME_BUILD
+  if(access(XS_PROJECT_RUNTIME_BUILD, X_OK) == 0)
+    return XS_PROJECT_RUNTIME_BUILD;
+#endif
+  program = installed_project_runtime();
+  if(program != nullptr)
+    return program;
+  return XS_PROJECT_RUNTIME_DEFAULT;
+}
+
 static bool run_resolver(const char *mode, const char *project_root, const char *output_path, const char *module_path)
 {
-  const char *program = getenv("XS_PROJECT_DRIVER");
-  if(program == nullptr || program[0] == '\0')
-    program = "xs-project";
+  const char *program = project_runtime_program();
   char *arguments[] = {(char *)program,     (char *)mode,        (char *)project_root,
                        (char *)output_path, (char *)module_path, nullptr};
   pid_t process = 0;
   int status = posix_spawnp(&process, program, nullptr, nullptr, arguments, environ);
   if(status != 0)
   {
-    fprintf(stderr, "xs: could not start Kotlin project resolver '%s': error %d\n", program, status);
+    fprintf(stderr, "xs: could not start the bundled project runtime '%s': error %d\n", program, status);
     return false;
   }
   int result = 0;
   if(waitpid(process, &result, 0) < 0 || !WIFEXITED(result))
   {
-    fprintf(stderr, "xs: Kotlin project resolver terminated abnormally\n");
+    fprintf(stderr, "xs: bundled project runtime terminated abnormally\n");
     return false;
   }
   return WEXITSTATUS(result) == 0;
+}
+
+bool xs_driver_refresh_lock(void)
+{
+  const char *program = project_runtime_program();
+  char *arguments[] = {(char *)program, "resolve", ".", nullptr};
+  pid_t process = 0;
+  int status = posix_spawnp(&process, program, nullptr, nullptr, arguments, environ);
+  if(status != 0)
+  {
+    fprintf(stderr, "xs: could not start the bundled project runtime '%s': error %d\n", program, status);
+    return false;
+  }
+  int result = 0;
+  if(waitpid(process, &result, 0) < 0 || !WIFEXITED(result))
+  {
+    fprintf(stderr, "xs: bundled project runtime terminated abnormally\n");
+    return false;
+  }
+  if(WEXITSTATUS(result) != 0)
+    return false;
+  fprintf(stderr, "xs: refreshed binary lock file 'xs.lock.sqlite3'\n");
+  return true;
 }
 
 static char *read_registry(const char *path, size_t *length)
@@ -64,7 +125,7 @@ failure:
   return nullptr;
 }
 
-void xs_driver_free_kotlin_project(XsResolvedKotlinProject *project)
+void xs_driver_free_project(XsResolvedProject *project)
 {
   if(project == nullptr)
     return;
@@ -78,7 +139,7 @@ void xs_driver_free_kotlin_project(XsResolvedKotlinProject *project)
   for(size_t i = 0; i < project->test_path_count; ++i)
     free(project->test_paths[i]);
   free(project->test_paths);
-  *project = (XsResolvedKotlinProject){0};
+  *project = (XsResolvedProject){0};
 }
 
 static bool parse_bool_record(const char *text, bool *value)
@@ -154,12 +215,12 @@ static bool parse_header(char *data, size_t record_count, size_t *source_count, 
   return record_count == 8U + *source_count + (*module_count * 2U) + *test_count;
 }
 
-static bool resolve_kotlin_registry(const char *mode, const char *project_root, const char *module_path,
-                                    bool require_sources, XsResolvedKotlinProject *project)
+static bool resolve_project_registry(const char *mode, const char *project_root, const char *module_path,
+                                     bool require_sources, XsResolvedProject *project)
 {
   if(project == nullptr)
     return false;
-  *project = (XsResolvedKotlinProject){0};
+  *project = (XsResolvedProject){0};
   char registry_path[] = "/tmp/xs-project-sources-XXXXXX";
   int registry = mkstemp(registry_path);
   if(registry < 0)
@@ -176,7 +237,7 @@ static bool resolve_kotlin_registry(const char *mode, const char *project_root, 
   {
     free(data);
     if(success)
-      fprintf(stderr, "xs: Kotlin project resolver produced an invalid source registry\n");
+      fprintf(stderr, "xs: bundled project runtime produced an invalid source registry\n");
     return false;
   }
   size_t count = 0;
@@ -189,7 +250,7 @@ static bool resolve_kotlin_registry(const char *mode, const char *project_root, 
      (require_sources && source_count == 0U))
   {
     free(data);
-    fprintf(stderr, "xs: Kotlin project resolver returned an invalid compiler/source registry\n");
+    fprintf(stderr, "xs: bundled project runtime returned an invalid compiler/source registry\n");
     return false;
   }
   size_t path_count = source_count + module_count;
@@ -201,7 +262,7 @@ static bool resolve_kotlin_registry(const char *mode, const char *project_root, 
      (test_count != 0U && project->test_paths == nullptr))
   {
     free(data);
-    xs_driver_free_kotlin_project(project);
+    xs_driver_free_project(project);
     return false;
   }
   project->path_count = path_count;
@@ -214,7 +275,7 @@ static bool resolve_kotlin_registry(const char *mode, const char *project_root, 
     if(project->paths[i] == nullptr)
     {
       free(data);
-      xs_driver_free_kotlin_project(project);
+      xs_driver_free_project(project);
       return false;
     }
     record = next_record(record);
@@ -229,7 +290,7 @@ static bool resolve_kotlin_registry(const char *mode, const char *project_root, 
     if(project->module_names[index] == nullptr || project->paths[index] == nullptr)
     {
       free(data);
-      xs_driver_free_kotlin_project(project);
+      xs_driver_free_project(project);
       return false;
     }
   }
@@ -240,7 +301,7 @@ static bool resolve_kotlin_registry(const char *mode, const char *project_root, 
     if(project->test_paths[i] == nullptr)
     {
       free(data);
-      xs_driver_free_kotlin_project(project);
+      xs_driver_free_project(project);
       return false;
     }
   }
@@ -248,20 +309,12 @@ static bool resolve_kotlin_registry(const char *mode, const char *project_root, 
   return true;
 }
 
-bool xs_driver_resolve_kotlin_project(const char *module_path, XsResolvedKotlinProject *project)
+bool xs_driver_resolve_project(const char *module_path, XsResolvedProject *project)
 {
-  return resolve_kotlin_registry("sources0", ".", module_path, true, project);
+  return resolve_project_registry("sources0", ".", module_path, true, project);
 }
 
-bool xs_driver_resolve_kotlin_tests(const char *module_path, XsResolvedKotlinProject *project)
+bool xs_driver_resolve_project_tests(const char *module_path, XsResolvedProject *project)
 {
-  return resolve_kotlin_registry("sources0", ".", module_path, false, project);
-}
-
-bool xs_driver_resolve_kotlin_modules(const char *project_root, const char *module_path,
-                                      XsResolvedKotlinProject *project)
-{
-  if(project_root == nullptr || module_path == nullptr)
-    return false;
-  return resolve_kotlin_registry("modules0", project_root, module_path, false, project);
+  return resolve_project_registry("sources0", ".", module_path, false, project);
 }

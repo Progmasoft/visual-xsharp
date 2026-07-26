@@ -116,8 +116,5 @@
 // remains native and does not require a JVM.
 //
 // Direct `xs build -file main.xs` does not load xs.module.kts and therefore
-// cannot resolve project module imports. `xs build` with no -proj flag invokes
+// cannot resolve project module imports. Argument-free `xs build` invokes
 // xs-project in the current project tree.
-//
-// Legacy .xsproj remains supported by xs-proj/xs build -proj but is frozen and
-// does not gain xs.module.kts module membership features.

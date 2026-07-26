@@ -18,6 +18,7 @@ endif()
 
 set(required_files
   bin/xs
+  libexec/xs/project-runtime/bin/xs-project-runtime
   include/xs/compiler_check.h
   include/xs/int128.h
   include/xs/compiler_core.h

@@ -5,8 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # CLI contract
 
-The command surface is split by responsibility. `/usr/bin/xs` is the JVM-free compiler, `/usr/bin/xs-project` evaluates
-modern Kotlin project files on JRE 25 or newer, and `/usr/bin/xs-proj` parses and validates feature-frozen `.xsproj` files.
+`/usr/bin/xs` is the single user-facing command. It owns native X# compilation and invokes its bundled project runtime to
+evaluate Kotlin project files on JRE 25 or newer.
 
 ## Supported forms
 
@@ -15,10 +15,7 @@ xs check
 xs build
 xs run
 xs test
-xs check -proj MyApp.xsproj
-xs build -proj MyApp.xsproj
-xs run -proj MyApp.xsproj
-xs-proj MyApp.xsproj
+xs resolve
 xs build -file Main.xs
 xs run -file Main.xs
 xs build --output hir -file Main.xs
@@ -30,23 +27,20 @@ xs build --xlil -file Main.xs
 xs build --warning all --werror true --verbose true
 xs build --xgc-enabled true
 xs build --module ./Modules
-xs build -proj Example.xsproj --module ./Modules
 xs --version
 ```
 
-The `-proj` flag is accepted only by `xs` and only for `.xsproj` input. Kotlin projects never use `-proj`; argument-free
-`xs check`, `xs build`, `xs run`, and `xs test` ask `xs-project` to discover and evaluate `xs.project.kts` or the
-`xs.settings.kts` + `xs.build.kts` pair. `xs-project` returns source metadata and never parses or compiles `.xs` files.
-`xs-proj` accepts a manifest path directly and performs parser/model validation only.
+Argument-free `xs check`, `xs build`, `xs run`, and `xs test` use the bundled project runtime to discover and evaluate
+`xs.project.kts` or the `xs.settings.kts` + `xs.build.kts` pair. The runtime returns source metadata and never parses or
+compiles `.xs` files.
 
 `--module <directory>` supplies a recursive module source root when the KTS project does not declare
-`module { include(...) }`. It is mandatory when a legacy `.xsproj` build is combined with a sibling `xs.module.kts`;
-that combination is never discovered implicitly.
+`module { include(...) }`.
 
 ## One-shot compiler policy
 
 The following options override compiler policy for one invocation and may be combined with an argument-free Kotlin
-project build, `-proj`, or `-file`:
+project build or `-file`:
 
 - `--warning all|medium|low|none` selects warning volume. A warning declares the minimum volume at which it is active;
   `all` enables every warning, `medium` is the default, `low` keeps only the most important warnings, and `none` disables
@@ -66,12 +60,6 @@ For Kotlin projects these values override the evaluated `compiler {}` block with
 xs build --warning low --werror false --verbose true
 ```
 
-XSPROJ has no persistent compiler-policy section. A legacy build uses the same options only as one-shot values:
-
-```text
-xs build -proj MyApp.xsproj --warning all --werror true
-```
-
 The compiler usage is:
 
 ```text
@@ -79,7 +67,7 @@ usage: xs <build|run> -file <Main.xs>
 usage: xs <check|build|run|test>
        [--warning all|medium|low|none] [--werror true|false] [--verbose true|false]
        [--xgc-enabled true|false]
-usage: xs <check|build|run> -proj <project.xsproj>
+usage: xs resolve
 usage: xs test [-file <Test.xs>]
 usage: xs build [--output hir|mir|xlil] -file <input>
 usage: xs build [--hir|--mir|--xlil] -file <input>
@@ -89,6 +77,12 @@ usage: xs --version
 ## `xs --version`
 
 `xs --version` prints the compiler version, such as `xs 0.2.1`.
+
+## `xs resolve`
+
+`xs resolve` discovers the current Kotlin project, reevaluates its dependency declarations, and atomically refreshes
+`xs.lock.sqlite3`. The artifact is always a binary SQLite database; the command does not produce a readable lock-file
+variant. The current format records exact declared coordinates. Remote package selection and download are not active yet.
 
 ## `xs check`
 
@@ -103,7 +97,7 @@ usage: xs --version
 ## `xs build`
 
 `xs build` will eventually run the full check, MIR, borrow checker, monomorphization, XLIL, backend, object, and link flow.
-Today, plain `xs build -file <main.xs>`, argument-free `xs build`, and `xs build -proj <App.xsproj>` can produce a native
+Today, plain `xs build -file <main.xs>` and argument-free `xs build` can produce a native
 `.xse` only for the first
 supported source slice:
 
@@ -144,8 +138,7 @@ including `==`, `!=`, `<`, `<=`, `>`, and `>=`. Local storage passes through MIR
 stack operations before normal LLVM optimization. The compiler lowers that source `Long` slice to the direct native
 process `i32` entry ABI. General source-level function body lowering is still incomplete.
 
-For legacy manifests, `-proj` selects only `.xsproj`; it is not a Kotlin project flag. The `--output hir|mir|xlil`
-spelling and the short `--hir`, `--mir`, and
+The `--output hir|mir|xlil` spelling and the short `--hir`, `--mir`, and
 `--xlil` spelling select the same intermediate output kind. The short spelling is currently valid only with `-file`.
 
 ## `xs test`
@@ -157,13 +150,11 @@ when it exits successfully; `#[ShouldPanic]` reverses that expectation, and `#[I
 artifacts are removed after each case. A syntax, semantic, harness-compilation, or unexpected runtime failure makes the
 command fail. `xs test -file <Test.xs>` uses the same path for one source file.
 
-Test functions currently must be top-level, have a body, take no parameters, and use the default unit return type. Legacy
-`.xsproj` files have no test registry and are rejected by `xs test`; they remain available through their feature-frozen
-check/build/run paths.
+Test functions currently must be top-level, have a body, take no parameters, and use the default unit return type.
 
 ## `xs run`
 
-For the supported native source subset, `xs run`, `xs run -file <main.xs>`, and `xs run -proj <App.xsproj>` perform the
+For the supported native source subset, `xs run` and `xs run -file <main.xs>` perform the
 same checked build as `xs build`, write `.ll`, `.o`, and `.xse`, then execute the generated `.xse`. The CLI returns the
 native program's exit code unchanged. A compilation, linking, spawn, or wait failure returns a non-zero compiler error
 instead. Program arguments and direct XHIR/XMIR/XLIL execution are not part of this first run slice.

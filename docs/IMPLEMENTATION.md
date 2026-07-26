@@ -35,14 +35,13 @@ The documented compilation order is preserved:
 - The repository has moved to an LLVM-project-like monorepo selection model.
 - The monorepo root is `xs-project`; the top-level CMake project name is `xs_project`.
 - Top-level CMake recognizes `XS_ENABLE_PROJECTS`; the default stable project is `xs`.
-- `XS_ENABLE_RUNTIMES` was added in parallel with LLVM’s `LLVM_ENABLE_RUNTIMES`; there is no buildable runtime today.
+- `XS_ENABLE_RUNTIMES` was added in parallel with LLVM’s `LLVM_ENABLE_RUNTIMES`; `xsrt` is buildable.
 - `XS_ENABLE_PROJECTS=all` selects all stable projects.
-- `xs` and `xsproj` are stable buildable projects.
-- The root `include/` directory is reserved for shared public C headers across projects; `xs/include/` is for `xs` only, and
-  `xsproj/include/` is for `xsproj` only.
+- `xs` is the stable buildable compiler project.
+- The root `include/` directory is reserved for shared public C headers across projects; `xs/include/` is for `xs` only.
 - `xsfmt` and `xstidy` are future Rust nightly + Serde projects; `xs-analyzer` is a future Rust language server and
   TypeScript VS Code extension project. `xslang` is the active Rust compiler-core static library linked into `xs`;
-  `xsrt` is a future runtime project.
+  `xsrt` provides the initial runtime ABI boundary.
 
 ### HIR model boundary
 
@@ -63,7 +62,7 @@ The documented compilation order is preserved:
 - Backend consumers lower typed, borrow-checked, monomorphized MIR to XLIL and then to their own target IR.
 - Planned public API surfaces are `#include <xs/hir/jit.h>` for the HIR baseline JIT, `#include <xs/mir/jit.h>` for the MIR
   performance JIT, and `#include <xs/lil/aot.h>` for XLIL AOT. These APIs must not make HIR/MIR depend on the LLVM C API.
-- LLVM is the current primary backend focus, but the architecture remains open to Cranelift, a C backend, an interpreter, or
+- LLVM is the only currently implemented backend, but the architecture remains open to Cranelift, a C backend, an interpreter, or
   other targets.
 - Target-specific assembly, if needed, belongs in a separate backend/runtime layer. NASM `.asm`/`.inc` use is allowed, but it
   must not lock the design to x86-64; ARM64 compatibility must be preserved.
@@ -78,25 +77,13 @@ The documented compilation order is preserved:
 
 ### Project system
 
-- `.xsproj` files are parsed with the X# project manifest syntax.
-- The `.xsproj` lexer, parser, and project model implementation live under `xsproj/sources/`.
-- `.xsproj` lexer/parser code is not shared with the `.xs` lexer/parser. It supports only `//` and `///` line comments.
-  Each comment ends at its physical newline; multiline comments are excluded so comments cannot split or hide manifest
-  line boundaries.
-- The `.xsproj` parser is not just an internal compiler detail. A public C23 API surface under `#include <xs/project.h>` lets
-  third-party tools read `.xsproj` files in a JSON-like model.
-- XSPROJ is permanent legacy compatibility: it is feature-frozen, receives no new features, is excluded from compiler
-  conformance/project tests, and will never be removed. Its application/source/target model remains public and buildable.
-- Required fields, duplicate fields, unknown fields, and `appRelease` values are validated.
-- When `entry: None`, the documented first additional source selection rule is applied.
-- Project-relative paths are resolved from the directory containing the `.xsproj` file.
-- `xs check -proj <project.xsproj>` works. The `-proj` flag is exclusive to `.xsproj`; `xs-proj <project.xsproj>` only
-  parses and validates the manifest.
-- Kotlin `xs.project.kts` or split `xs.settings.kts` + `xs.build.kts` projects are evaluated by `/usr/bin/xs-project` on
-  JRE 25 or newer through an external `kotlin` scripting command. Argument-free `xs` starts this resolver and
-  retains all `.xs` compilation work itself.
+- Kotlin `xs.project.kts` or split `xs.settings.kts` + `xs.build.kts` projects are evaluated by the project runtime bundled
+  with `xs`, on JRE 25 or newer through an external `kotlin` scripting command. Argument-free `xs` starts this internal
+  runtime and retains all `.xs` compilation work itself.
 - Kotlin source, test, and module includes name directory roots; the resolver recursively selects the configured source
   extension while excludes retain glob support. `XS_EXTENSION` defaults to `xs` and may select another extension.
+- `xs resolve` reevaluates declared module coordinates and atomically replaces `xs.lock.sqlite3` through the Kotlin
+  resolver. The artifact is binary SQLite; text/SQL forms exist only as documentation examples.
 - The version-4 Kotlin resolver protocol transfers source, module, and test registries separately. `xs test` combines
   those registries for frontend and semantic validation, discovers top-level unit-returning `#[Test]` functions from the
   expanded structural AST, and creates one synthetic `main` per test in the Rust compiler core. Every non-ignored harness
@@ -104,11 +91,20 @@ The documented compilation order is preserved:
 - Standard `panic!` statement calls remain compiler-recognized nodes when no user `macro_rules!` replacement exists.
   They lower to HIR panic, the MIR/XLIL panic terminator, and the LLVM trap path. Formatted panic payload transport is not
   implemented yet.
+
+### Runtime and package boundary
+
+- `xsrt` is a selectable CMake runtime and exports ABI version 0 through `<xs/runtime.h>`.
+- The first runtime-owned model is boxed `Optional<Str>`: `None` is a null opaque box, while `Some` owns an immutable
+  copied sequence of UTF-16 code units. Clone, borrow, and drop have explicit C23 APIs and tests.
+- `<xs/package.h>` exposes deterministic `.xspkg.tar.zst` writing and verification. The current container requires
+  `xspkg.json`, rejects unsafe/non-regular/duplicate entries, enforces resource limits, and reports SHA-256 identity.
+- Package manifest schema validation, registry downloads, publication, and compiler-to-runtime owned-string lowering
+  remain outside this first boundary.
 - `include!` is the built-in source-inclusion macro. It runs after the enclosing source first has a structural AST, then
   reparses the included local source at the call site; it is not a lexer/preprocessor step or a `macro_rules!` declaration.
 - `xs build --output hir|mir|xlil -file <source.xs>` and `--hir`/`--mir`/`--xlil` write real compiler-core program output
   beside the source. Kotlin project output uses the merged source session and the selected entry source as its artifact base.
-- Legacy `-proj <project.xsproj>` follows the same merged-session output path but remains feature-frozen.
 - Direct `.xhir` inputs use the Rust program reader, type checker, HIR → MIR lowering, MIR verification/borrow checking,
   optimization, and MIR → XLIL lowering before entering the existing C23 XLIL/LLVM native backend.
 - Direct `.xmir` inputs begin at the Rust XMIR program reader and run structural verification, borrow checking,
@@ -302,7 +298,6 @@ The documented compilation order is preserved:
   roots come from `module.include` or the explicit `--module` option.
 - `xs.module.kts` assigns every selected module source to one case-sensitive logical module name; file paths never infer
   module identity. Direct and `members` entries belong to the named module, while `submodule` appends one path segment.
-- A legacy `.xsproj` build may consume a sibling `xs.module.kts` only with an explicit `--module <directory>` option.
 - `import` and `using` dependencies are resolved against project-assigned module names. Source-level `module` declarations
   have been removed; Kotlin projects transfer exact source paths and optional logical module names through the v2 project
   registry. The C23 symbol collector and Rust compiler-core session boundary both accept that external assignment.
@@ -724,7 +719,7 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
   `add.i32`, `sub.i32`, `mul.i32`, `div.i32`, `rem.i32`, `and.i32`, `or.i32`, `shl.i32`, `shr.i32`, `eq.i32`,
   `ne.i32`, `lt.i32`, `le.i32`, `gt.i32`, `ge.i32`, `not.bool`, signed i64 arithmetic/bitwise/shift/comparison
   instructions, typed `.slot`/`load`/`store`, `call`, `br`, `br_if`, `panic`, `ret`, and `ret %rN`.
-- `xs build -file <input.xs>`, argument-free `xs build`, and legacy `xs build -proj <input.xsproj>` use the same native path for supported compiler-core
+- `xs build -file <input.xs>` and argument-free `xs build` use the same native path for supported compiler-core
   sessions. Context-typed literals, parameters, locals, direct calls, and returns preserve every fixed integer width;
   `main` remains `Long`. The broader expression slice includes `Long`/`Bool` mutable locals,
   unary `+`/`-`,

@@ -3,12 +3,12 @@ SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# xs-project
+# xs project runtime
 
-`xs-project` is the Kotlin/JVM 25 resolver for programmable project files. It invokes the required external
-`kotlin` command and emits a deterministic versioned project plan or exact source registry for the X# command-line
-driver. It never reads or compiles `.xs` files. The compiler and
-JRE are not embedded: JRE 25 or newer and an executable `kotlin` scripting command are runtime requirements.
+This directory contains the mandatory Kotlin/JVM 25 project runtime bundled with the `xs` package. It invokes the required
+external `kotlin` command and emits a deterministic versioned project plan or exact source registry for the native `xs`
+driver. It never reads or compiles `.xs` files. JRE 25 or newer and an executable `kotlin` scripting command are runtime
+requirements of the unified package.
 
 Projects use one `xs.project.kts` file or the `xs.settings.kts` + `xs.build.kts` pair. Only
 `project(name, channel, version)` is required. `source.include` names recursive directory
@@ -63,19 +63,19 @@ Include roots do not accept globs. Discovery is recursive relative to the projec
 to compiler inputs. The deterministic result places a case-sensitive `main.xs` first when one exists. The resolver emits exact paths and does not
 pass unresolved patterns to the compiler.
 The internal registry also carries the evaluated `compiler {}` warning, warnings-as-errors, and verbose policy. The
-JVM-free compiler may replace those values for one invocation through its corresponding command-line overrides.
+The native compiler may replace those values for one invocation through its corresponding command-line overrides.
 
 ```text
 ./xs_kts/gradlew --daemon --build-cache -p xs_kts test
 ./xs_kts/gradlew --daemon --build-cache -p xs_kts run --args="evaluate xs_kts"
 ```
 
-Project files are build programs and must be trusted. They are executed by the external `kotlin` script runner; xs-project
-does not maintain or embed a substitute Kotlin interpreter. Kotlin scripting is not presented as a security sandbox.
+Project files are build programs and must be trusted. They are executed by the external `kotlin` script runner; `xs` does
+not maintain or embed a substitute Kotlin interpreter. Kotlin scripting is not presented as a security sandbox.
 
-Users build from the project directory with `xs build`. The JVM-free compiler asks `xs-project` for source metadata and
-then keeps all X# frontend/backend work inside `xs`. The `xs-project sources0` form is an internal compiler/resolver
-protocol, not an alternative X# build command.
+Users build from the project directory with `xs build`. The native compiler invokes this bundled runtime for source
+metadata and keeps all X# frontend/backend work inside `xs`. The runtime's `sources0` form is an internal protocol, not an
+alternative X# build command or a separately installed user command.
 
 `xs test` requests the separately resolved test registry and validates it together with project and module sources. The
 compiler generates an isolated native `.xse` harness for each supported top-level `#[Test]` function; `Ignore` and

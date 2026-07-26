@@ -15,7 +15,7 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "XS_ENABLE_PROJECTS": "xs",
-        "XS_ENABLE_RUNTIMES": ""
+        "XS_ENABLE_RUNTIMES": "xsrt"
       }
     },
     {
@@ -27,7 +27,7 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "XS_ENABLE_PROJECTS": "xs",
-        "XS_ENABLE_RUNTIMES": "",
+        "XS_ENABLE_RUNTIMES": "xsrt",
         "XS_ENABLE_SANITIZERS": "ON"
       }
     }

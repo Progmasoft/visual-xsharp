@@ -53,8 +53,7 @@
 // after the complete settings/build pair.
 //
 // A project may omit module { include("Modules") } only when each compiler
-// invocation supplies --module ./Modules. Legacy .xsproj projects may use a
-// sibling xs.module.kts through the same explicit flag; it is never implicit.
+// invocation supplies --module ./Modules.
 
 
 // ============================================================
@@ -174,28 +173,13 @@
 // xs check
 // xs run
 //
-// With no -file/-proj input these commands search for Kotlin project metadata
+// With no -file input these commands search for Kotlin project metadata
 // and invoke xs-project. xs.module.kts cannot be used when xs-project is not
 // installed or cannot execute Kotlin.
 //
 // xs build -file Sources/main.xs
 //
 // Direct source compilation does not load project module metadata.
-
-
-// ============================================================
-// Legacy XSPROJ
-// ============================================================
-
-// .xsproj is permanent legacy compatibility. It is parsed by xs-proj or the
-// public C23 project API and built with:
-//
-// xs build -proj Example.xsproj
-//
-// -proj is only for .xsproj. XSPROJ is feature-frozen, receives no dependency
-// or xs.module.kts features, is not used by modern project conformance tests,
-// and will never be removed.
-
 
 // ============================================================
 // Canonical layout

@@ -21,6 +21,7 @@ object ProjectOutput {
     writeModuleLock(plan.modules)
     when (System.getProperty("xs.project.output", "plan")) {
       "plan" -> println(PlanWriter.write(effectivePlan))
+      "resolve" -> Unit
       "sources0" -> writeSources(resolved, plan.compiler, effectivePlan.variables)
       else -> throw ProjectConfigurationException("unknown project output mode")
     }

@@ -5,9 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # xs-project
 
-`xs-project` is the LLVM-project-style monorepo root for the X# language and compiler family. The current focus is the X#
-compiler (`xs`), the programmable Kotlin project resolver (`xs-project`), and the feature-frozen public `.xsproj`
-lexer/parser/model API (`xsproj`) that third-party tools can use.
+`xs-project` is the LLVM-project-style monorepo root for the X# language and compiler family. The current focus is the
+single `xs` tool, which owns both X# compilation and programmable Kotlin project resolution.
 
 This repository is experimental, but it is treated as serious compiler infrastructure: every step must remain buildable and
 testable, the HIR/MIR layers must not depend on LLVM, and the documented compilation flow must be preserved.
@@ -21,7 +20,7 @@ Required core tools:
 - Clang / LLVM tools
 - LLD
 - Rustup and Cargo; `xslang/rust-toolchain.toml` selects the pinned nightly compiler core toolchain
-- JRE 25 or newer plus the `kotlin` scripting command when resolving Kotlin project files
+- JRE 25 or newer plus the `kotlin` scripting command
 - Optional helper tools such as `fd`, `rg`, `bat -p`, `sd`, and `busybox wc` are useful for development
 
 Default debug build:
@@ -35,16 +34,18 @@ ctest --preset clang-debug --output-on-failure
 On machines with prior OOM issues, use a 2GB virtual memory limit for build/test runs:
 
 ```text
+cmake --build --preset clang-debug --target xs_project_runtime
 ulimit -v 2097152
 cmake --build --preset clang-debug
-ctest --preset clang-debug --output-on-failure
+ctest --preset clang-debug --output-on-failure -LE jvm -FA kotlin_project_resolver
 ```
 
-Check the example project:
+Run the JVM-labelled project tests separately without a virtual-memory limit.
+
+Check a source file:
 
 ```text
-./build/clang-debug/xs check -proj tests/fixtures/example_project/MyApp.xsproj
-./build/clang-debug/xs-proj tests/fixtures/example_project/MyApp.xsproj
+./build/clang-debug/xs check -file tests/fixtures/example_project/source/Main.xs
 ```
 
 Validate the test registry of a modern Kotlin project from its project directory:
@@ -62,8 +63,8 @@ temporary `.xse` harnesses. `#[Ignore]` and `#[ShouldPanic]` are honored.
 | --- | --- | --- |
 | `include/` | active | Shared public C headers across projects |
 | `xs/` | active | X# compiler, CLI, lexer/parser, AST, macro, HIR, MIR, XLIL, LLVM backend infrastructure |
-| `xsproj/` | active | Public C23 `.xsproj` parser/lexer/model API |
-| `xs_kts/` | active | Kotlin/JVM 25 `xs-project` resolver and programmable project DSL |
+| `xs_kts/` | active | Mandatory Kotlin/JVM 25 project runtime bundled with `xs` and its programmable project DSL |
+| `xsrt/` | active | C23 runtime ABI boundary and boxed optional UTF-16 string support |
 | `xslang/` | active | Rust semantic compiler core linked into the C23 driver through a versioned bulk AST boundary |
 | `Spec/` | active source documentation | X# syntax and language behavior examples/spec files |
 | `docs/` | active documentation | Architecture, build, CLI, backend, roadmap, and implementation status |
@@ -104,7 +105,6 @@ the backend. HIR and MIR do not depend on the LLVM API; the backend entry langua
 - Shared public C23 feature headers under `<xs/c23/*.h>`, with `<xs/c23_features.h>` as the umbrella and an initial
   object-safe trait/implementation binding facility
 - Clang/LLVM-oriented CMake/toolchain checks
-- `.xsproj` manifest parser/lexer/model public C API
 - X# lexer and structural AST parser
 - Synthetic reparse and expanded-view infrastructure for declaration/statement macro expansion
 - HIR symbol table plus import/name/type resolution bootstrap
@@ -160,34 +160,27 @@ source-level temporary.
 
 ## CLI summary
 
-The compiler, Kotlin project resolver, and legacy manifest parser are separate commands:
+Compilation and project resolution share one command:
 
 ```text
 xs check
 xs build
 xs run
-xs check -proj MyApp.xsproj
-xs build -proj MyApp.xsproj
-xs-proj MyApp.xsproj
+xs resolve
 xs build --output hir -file Main.xs
 xs build --output mir -file Main.xs
 xs build --output xlil -file Main.xs
 xs build --hir -file Main.xs
 xs build --mir -file Main.xs
 xs build --xlil -file Main.xs
-xs run -proj MyApp.xsproj
 ```
 
-The argument-free `xs` project forms use `xs-project` to discover and evaluate `xs.project.kts` or the
-`xs.settings.kts` + `xs.build.kts` pair, then compile the returned `.xs` source registry inside `xs` itself. The
-`xs -proj` forms compile a legacy manifest. `xs-proj MyApp.xsproj` only parses and validates that manifest. The `xs -file`
-forms are direct single-file/intermediate input flows. Checked `.xs` input can emit real `.xhir`, `.xmir`, or `.xlil`
+The argument-free `xs` project forms use the bundled project runtime to discover and evaluate `xs.project.kts` or the
+`xs.settings.kts` + `xs.build.kts` pair, then compile the returned `.xs` source registry. The `xs -file`
+forms are direct single-file/intermediate input flows. `xs resolve` refreshes the binary SQLite dependency lock without
+compiling sources. Checked `.xs` input can emit real `.xhir`, `.xmir`, or `.xlil`
 program text. Supported `.xhir`, `.xmir`, `.xlil`, and source programs can continue through verified XLIL and LLVM to
 native `.xse` output.
-The public C23 `.xsproj` parser and existing compiler path remain buildable, but the format is feature-frozen and excluded
-from the active compiler/project test suites. It is permanent legacy compatibility and will never be removed.
-Programmable project features belong to the Kotlin project system. `.xsproj` dependencies have been removed; existing
-application/source/target fields keep their current C23 API without receiving new project-language features.
 Intermediate output extensions:
 
 - `.xhir`: human-readable XHIR text, intended for direct semantic inspection and review
@@ -226,6 +219,7 @@ For broader contribution and workflow rules, see [docs/CONTRIBUTING.md](docs/CON
 - [docs/TODO.md](docs/TODO.md): public roadmap
 - [docs/MONOREPO.md](docs/MONOREPO.md): monorepo selection model
 - [docs/LLVM_BACKEND.md](docs/LLVM_BACKEND.md): LLVM backend infrastructure
+- [docs/BACKENDS.md](docs/BACKENDS.md): implemented and planned backend architecture
 - [docs/XLIL.md](docs/XLIL.md): XLIL text registry and public API direction
 
 ## License

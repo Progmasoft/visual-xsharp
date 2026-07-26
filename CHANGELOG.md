@@ -12,13 +12,24 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Added the buildable `xsrt` runtime with ABI version 0 and explicit boxed ownership for immutable UTF-16
+  `Optional<Str>` values.
+- Added the public C23 `.xspkg.tar.zst` writer/verifier boundary with deterministic tar metadata, path and resource
+  validation, and SHA-256 artifact identity.
+- Added `xs resolve`; it reevaluates KTS dependency coordinates and atomically refreshes a real binary
+  `xs.lock.sqlite3` without compiling sources.
+- Unified compiler and Kotlin project resolution in the `xs` package. `/usr/bin/xs` is the only user command; the
+  mandatory JRE 25 project runtime is bundled under `libexec` and still delegates script execution to `kotlin`.
+- Documented the planned C23, JavaScript, and WebAssembly backend contracts while keeping LLVM as the only implemented
+  backend.
+- Removed the discontinued legacy manifest subsystem and its compiler flag.
 - Added the first bounded `xsfmt` pass for newline and trailing-whitespace normalization, plus `--check` mode.
 - Added the first `xstidy` diagnostic rule for legacy constructor syntax with human and JSON output.
 - Added the initial `xs-analyzer` LSP lifecycle and full-document UTF-16 synchronization capability.
 - MIR optimization now removes terminal boolean negations by reversing branch targets and collapses branches whose
   successors are identical.
 - Added `xs test` for modern Kotlin projects and `xs test -file` for one source. The resolver transfers its disjoint test
-  registry to the JVM-free compiler; each valid top-level `#[Test] fn name()` receives an isolated native harness and is
+  registry to the native compiler; each valid top-level `#[Test] fn name()` receives an isolated native harness and is
   compiled through HIR, MIR, XLIL, LLVM, object emission, linking, and `.xse` execution. `Ignore` and `ShouldPanic` are
   honored, and unexpected native failure makes the command fail.
 - `panic!` statement calls now survive expanded-AST materialization and lower to the existing MIR/XLIL panic terminator
@@ -38,7 +49,7 @@ source-to-native executable pipeline.
 
 ### Added
 
-- `xs run`, `xs run -file`, and legacy `xs run -proj` now execute the native `.xse` produced by the supported compiler
+- `xs run` and `xs run -file` now execute the native `.xse` produced by the supported compiler
   pipeline and propagate the program exit code. Compiler installation now has an explicit component that installs the
   `xs` command, both public C23 header trees under one `include/xs` hierarchy, and project license notices.
 - Tuple destructuring declarations now cross the structural AST into typed HIR as explicit tuple storage and projection
@@ -75,8 +86,8 @@ source-to-native executable pipeline.
 - Rust static analysis now has a warning-free `clippy::all` baseline with explicit legacy public-module documentation
   boundaries, and the C artifact-path helper is clean under the configured Clang-Tidy correctness checks.
 - Project-file documentation now includes the concrete version-0 `xs.lock.sqlite3` schema and example query results.
-- CMake ownership now follows monorepo component boundaries: shared policy is in the root `CMakeLists.txt`, compiler modules
-  are under `xs/cmake`, and legacy project-parser target modules are under `xsproj/cmake`.
+- CMake ownership now follows monorepo component boundaries: shared policy is in the root `CMakeLists.txt` and compiler
+  modules are under `xs/cmake`.
 - Semantic compiler-core lowering failures now cross the C23/Rust boundary as session diagnostics; malformed FFI packets
   remain a distinct ABI error.
 
@@ -263,7 +274,7 @@ source-to-native executable pipeline.
 - Kotlin `sources` includes now expand `*`, `**`, and `?` globs, apply excludes, require exactly one resolved `main.xs`,
   and emit a deterministic main-first source registry.
 - `--warning all|medium|low|none`, `--werror true|false`, and `--verbose true|false` provide one-shot compiler-policy
-  overrides for KTS, legacy XSPROJ, and direct source invocations. The KTS resolver now transfers its evaluated
+  overrides for KTS and direct source invocations. The KTS resolver now transfers its evaluated
   `compiler {}` policy with the source registry. Defaults are medium warnings, warnings-as-errors disabled, and verbose
   progress enabled.
 - The Kotlin project DSL exposes strict `get(name)` and lossless `getAll(name)` lookup. `set(name, value, ...)` supports
@@ -272,17 +283,11 @@ source-to-native executable pipeline.
 - The Kotlin/JVM 25 `xs-project` resolver evaluates combined `xs.project.kts` files or split `xs.settings.kts` and
   `xs.build.kts` files through the required external `kotlin` script runner. Explicit source registries require one
   case-sensitive `main.xs` entry and are compiled by the JVM-free `/usr/bin/xs` process.
-- `/usr/bin/xs-proj` is the dedicated parser/validator for `.xsproj`; legacy builds remain
-  `xs build -proj App.xsproj`. The documented `xs-meta` package is a metapackage for compiler, project tools, and future
-  formatter/linter packages.
 
 ### Changed
 
 - The Kotlin project resolver now accepts JRE 25 and newer releases; 25 is the minimum runtime version rather than an
   exact-version requirement.
-- The XSPROJ format and public C23 model are permanent legacy compatibility. They are feature-frozen, receive no new
-  features, are excluded from compiler conformance/project tests, and will never be removed. Dependency records were
-  removed; programmable dependencies and conditional configuration belong to the Kotlin project DSL.
 - Kotlin project host matching treats BSD systems as members of both the BSD and UNIX families.
 - The compiler flag is spelled `--werror`; the former misspelling is rejected. ReactOS is a distinct internal host OS,
   has no public OS constant, and satisfies `FAMILY == WINDOWS` without satisfying `OS == WINDOWS`.
@@ -351,8 +356,7 @@ source-to-native executable pipeline.
 
 - Legacy exception declarations and control-flow syntax were removed. Recoverable failures use `Result<T, E>` and postfix
   `@`; panic remains a separate explicit termination mechanism.
-- The cancelled XS Backend project and the unused `.xsproj` `compilerOptions.xsBackend` forward-compatibility field were
-  removed. LLVM is the compiler's native backend.
+- The cancelled XS Backend project was removed. LLVM is the compiler's native backend.
 
 ### Fixed
 
@@ -639,7 +643,7 @@ source-to-native executable pipeline.
 
 - Native executable artifacts now use the `.xse` extension; the first implemented container target is Linux ELF, with PE
   planned after ELF support.
-- `xs build -file <Main.xs>` and `xs build -proj <App.xsproj>` can now produce `.ll`, `.o`, and `.xse` artifacts for the
+- `xs build -file <Main.xs>` can now produce `.ll`, `.o`, and `.xse` artifacts for the
   first supported source-native entry slice: top-level `main` returning `Long` with i32-range literals, `+`, `-`, `*`, and
   one top-level `if` expression over i32 comparisons.
 - XLIL, MIR, LLVM lowering, and source-native `if` conditions now support signed `ne.i32` inequality.
@@ -698,7 +702,7 @@ source-to-native executable pipeline.
 ### Added
 
 - LLVM-project-style monorepo layout.
-- `xs` compiler project and `xsproj` public `.xsproj` manifest parser/model API.
+- `xs` compiler project and public C23 compiler APIs.
 - X# lexer, structural AST parser, and base diagnostic system.
 - Macro validation, token expansion, statement/declaration reparsing, and expanded-view infrastructure.
 - Initial HIR symbol table, import resolution, name resolution, and type resolution infrastructure.
@@ -708,7 +712,6 @@ source-to-native executable pipeline.
 - XLIL model, assembly-like text writer/parser/verifier, and limited MIR-to-XLIL body lowering.
 - LLVM backend infrastructure for context/module/target/data layout management, signature lowering, LLVM IR text emission,
   object emission, and linker abstraction.
-- CLI paths for `xs check -proj ...` and `xs build --output hir|mir|xlil -proj ...`.
 - CLI recognition for direct file forms: `xs build --output hir|mir|xlil -file ...` and
   `xs build --hir|--mir|--xlil -file ...`.
 - Direct `.xlil` inputs with supported version/module headers and top-level `.extern`/`.func` signatures can produce LLVM IR

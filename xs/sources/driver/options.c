@@ -127,6 +127,13 @@ bool xs_cli_parse(int argc, char **argv, XsCliOptions *options)
 {
   if(argc < 2)
     return false;
+  if(strcmp(argv[1], "resolve") == 0)
+  {
+    if(argc != 2)
+      return false;
+    *options = (XsCliOptions){.command = argv[1], .compiler = xs_cli_default_compiler_settings()};
+    return true;
+  }
   if(strcmp(argv[1], "check") != 0 && strcmp(argv[1], "build") != 0 && strcmp(argv[1], "run") != 0 &&
      strcmp(argv[1], "test") != 0)
     return false;
@@ -135,15 +142,9 @@ bool xs_cli_parse(int argc, char **argv, XsCliOptions *options)
     return true;
   for(int i = 2; i < argc; ++i)
   {
-    if(strcmp(argv[i], "-proj") == 0)
+    if(strcmp(argv[i], "-file") == 0)
     {
-      if(++i >= argc || options->manifest_path != nullptr || options->file_path != nullptr)
-        return false;
-      options->manifest_path = argv[i];
-    }
-    else if(strcmp(argv[i], "-file") == 0)
-    {
-      if(++i >= argc || options->file_path != nullptr || options->manifest_path != nullptr)
+      if(++i >= argc || options->file_path != nullptr)
         return false;
       options->file_path = argv[i];
     }
@@ -189,7 +190,7 @@ bool xs_cli_parse(int argc, char **argv, XsCliOptions *options)
       return false;
     }
   }
-  if(options->manifest_path == nullptr && options->file_path == nullptr)
+  if(options->file_path == nullptr)
     return options->output == XS_BUILD_OUTPUT_NONE || strcmp(options->command, "build") == 0;
   if(options->file_path != nullptr)
   {
@@ -201,20 +202,18 @@ bool xs_cli_parse(int argc, char **argv, XsCliOptions *options)
       return options->output == XS_BUILD_OUTPUT_NONE;
     return strcmp(options->command, "build") == 0;
   }
-  return strcmp(options->command, "build") == 0 || strcmp(options->command, "test") == 0 ||
-         options->output == XS_BUILD_OUTPUT_NONE;
+  return false;
 }
 
 void xs_cli_print_usage(FILE *stream)
 {
   fprintf(stream, "usage: xs --version\n");
+  fprintf(stream, "usage: xs resolve\n");
   fprintf(stream, "usage: xs <check|build|run|test> [--output hir|mir|xlil] [--module <directory>]\n");
   fprintf(stream, "       [--warning all|medium|low|none] [--werror true|false] [--verbose true|false]\n");
   fprintf(stream, "       [--xgc-enabled true|false]\n");
-  fprintf(stream, "usage: xs <check|run> -proj <project.xsproj> [--module <directory>]\n");
   fprintf(stream, "usage: xs <build|run> -file <Main.xs>\n");
   fprintf(stream, "usage: xs test [-file <Test.xs>]\n");
-  fprintf(stream, "usage: xs build [--output hir|mir|xlil] -proj <project.xsproj>\n");
   fprintf(stream, "usage: xs build [--output hir|mir|xlil] -file <input>\n");
   fprintf(stream, "usage: xs build [--hir|--mir|--xlil] -file <input>\n");
 }

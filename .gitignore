@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: MPL-2.0
 
 build/
-XS/
+xide_api/
+xide/
 .codex/
 target/
 .gradle/
 .kotlin/
 Cargo.lock
+*.sqlite3
 node_modules/
 dist/
 out/

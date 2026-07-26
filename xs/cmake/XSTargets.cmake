@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 
 find_package(LLVM REQUIRED CONFIG)
+find_package(LibArchive REQUIRED)
+find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 find_library(XS_LLVM_LIBRARY NAMES LLVM-${LLVM_VERSION_MAJOR} LLVM HINTS ${LLVM_LIBRARY_DIRS} REQUIRED)
 find_package(Threads REQUIRED)
 find_program(XS_CARGO_EXECUTABLE NAMES cargo REQUIRED)
@@ -29,6 +31,7 @@ add_library(xs_compiler
   sources/ast.c
   sources/codegen/units.c
   sources/compiler_core/syntax_packet.c
+  sources/diagnostic.c
   sources/driver/cli.c
   sources/driver/compiler_core_native.c
   sources/driver/direct_xhir.c
@@ -105,9 +108,18 @@ add_library(xs_lil
   sources/xlil/writer.c
 )
 
-target_include_directories(xs_compiler PUBLIC "${PROJECT_SOURCE_DIR}/include" include "${PROJECT_SOURCE_DIR}/xsproj/include")
+add_library(xs_package
+  sources/package/archive_common.c
+  sources/package/archive_reader.c
+  sources/package/archive_writer.c
+)
+
+target_include_directories(xs_compiler PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
 target_include_directories(xs_lil PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
-target_link_libraries(xs_compiler PUBLIC xsproj xs_lil PRIVATE xslang_compiler_core)
+target_include_directories(xs_package PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
+target_link_libraries(xs_compiler PUBLIC xs_lil PRIVATE xslang_compiler_core)
+target_link_libraries(xs_package PRIVATE LibArchive::LibArchive OpenSSL::Crypto)
+target_compile_definitions(xs_package PUBLIC _POSIX_C_SOURCE=200809L)
 target_compile_definitions(xs_compiler PRIVATE _POSIX_C_SOURCE=200809L XS_PROJECT_VERSION="${PROJECT_VERSION}"
                                             XS_CLANG_EXECUTABLE="${CMAKE_C_COMPILER}")
 if(CMAKE_C_COMPILER_TARGET)
@@ -115,8 +127,10 @@ if(CMAKE_C_COMPILER_TARGET)
 endif()
 target_compile_options(xs_compiler PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 target_compile_options(xs_lil PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+target_compile_options(xs_package PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 target_compile_options(xs_compiler PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
 target_compile_options(xs_lil PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
+target_compile_options(xs_package PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
 
 add_executable(xs sources/main.c)
 set_target_properties(xs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")

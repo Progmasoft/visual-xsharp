@@ -18,6 +18,11 @@ install(TARGETS xs
   COMPONENT compiler
 )
 
+install(TARGETS xs_lil xs_package
+  ARCHIVE DESTINATION "lib"
+  COMPONENT compiler
+)
+
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/xs/"
   DESTINATION "${XS_INSTALL_INCLUDEDIR}/xs"
   COMPONENT compiler

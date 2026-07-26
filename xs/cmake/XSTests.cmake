@@ -28,10 +28,11 @@ set_tests_properties(compiler_install_layout PROPERTIES TIMEOUT 15)
 xs_add_c_test(lexer tests/lexer_tests.c xs_compiler)
 xs_add_c_test(parser tests/parser_tests.c xs_compiler)
 xs_add_c_test(diagnostic tests/diagnostic_tests.c xs_compiler)
+xs_add_c_test(package_archive tests/package_archive_tests.c xs_package)
 
 set(XS_GRADLE_EXECUTABLE "${CMAKE_SOURCE_DIR}/xs_kts/gradlew")
 set(XS_PROJECT_TEST_DRIVER
-    "${CMAKE_SOURCE_DIR}/xs_kts/build/install/xs-project/bin/xs-project")
+    "${CMAKE_SOURCE_DIR}/xs_kts/build/install/xs-project-runtime/bin/xs-project-runtime")
 add_test(NAME kotlin_project_resolver_build COMMAND "${XS_GRADLE_EXECUTABLE}" --daemon --build-cache
   -p "${CMAKE_SOURCE_DIR}/xs_kts" installDist)
 set_tests_properties(kotlin_project_resolver_build PROPERTIES TIMEOUT 180

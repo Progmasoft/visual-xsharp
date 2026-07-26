@@ -22,9 +22,10 @@ private data class ProjectFiles(
 )
 
 private fun usage() =
-  "usage: xs-project evaluate [project-root]\n" +
-    "       xs-project sources0 <project-root> <output-file> [module-root]\n" +
-    "       xs-project modules0 <project-root> <output-file> <module-root>"
+  "internal xs project runtime usage: evaluate [project-root]\n" +
+    "       resolve [project-root]\n" +
+    "       sources0 <project-root> <output-file> [module-root]\n" +
+    "       modules0 <project-root> <output-file> <module-root>"
 
 internal fun isSupportedJavaFeature(actual: Int) = actual >= MINIMUM_JAVA
 
@@ -169,19 +170,20 @@ internal fun evaluateModulesWithKotlin(
 
 fun main(args: Array<String>) {
   val validEvaluate = args.size in 1..2 && args[0] == "evaluate"
+  val validResolve = args.size in 1..2 && args[0] == "resolve"
   val validSources = args.size in 3..4 && args[0] == "sources0"
   val validModules = args.size == 4 && args[0] == "modules0"
-  if (!validEvaluate && !validSources && !validModules) {
+  if (!validEvaluate && !validResolve && !validSources && !validModules) {
     System.err.println(usage())
     exitProcess(2)
   }
   val input = File(args.getOrElse(1) { "." })
   try {
     val status =
-      if (args[0] ==
-        "evaluate"
-      ) {
+      if (args[0] == "evaluate") {
         evaluateWithKotlin(input)
+      } else if (args[0] == "resolve") {
+        evaluateWithKotlin(input, "resolve")
       } else if (args[0] == "sources0") {
         evaluateWithKotlin(input, "sources0", Path.of(args[2]), args.getOrNull(3))
       } else {
@@ -189,7 +191,7 @@ fun main(args: Array<String>) {
       }
     exitProcess(status)
   } catch (error: ProjectConfigurationException) {
-    System.err.println("xs-project: ${error.message}")
+    System.err.println("xs: project runtime: ${error.message}")
     exitProcess(1)
   }
 }
