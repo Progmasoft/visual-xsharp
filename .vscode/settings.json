@@ -51,9 +51,19 @@
     "xstidy/Cargo.toml",
     "xs-analyzer/Cargo.toml"
   ],
+  "rust-analyzer.cachePriming.enable": false,
+  "rust-analyzer.cachePriming.numThreads": 1,
+  "rust-analyzer.checkOnSave": false,
   "FSharp.suggestGitignore": false,
   "r.lsp.promptToInstall": false,
+  "gradle.allowParallelRun": false,
+  "gradle.autoDetect": "off",
+  "gradle.nestedProjects": ["xs_kts", "xlil-java"],
+  "gradle.reuseTerminals": "all",
+  "java.autobuild.enabled": false,
   "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.gradle.arguments": "--max-workers=1",
+  "java.import.gradle.jvmArguments": "-Xms64m -Xmx384m -XX:+UseG1GC -XX:ActiveProcessorCount=1",
   "java.import.exclusions": [
     "**/.codex/**",
     "**/.gradle/**",
@@ -65,5 +75,7 @@
     "**/services/**",
     "**/target/**"
   ],
+  "java.jdt.ls.vmargs": "-Xms64m -Xmx768m -XX:+UseG1GC -XX:ActiveProcessorCount=2 -XX:+UseStringDeduplication -Dsun.zip.disableMemoryMapping=true -Xlog:disable",
+  "java.maxConcurrentBuilds": 1,
   "C_Cpp.codeAnalysis.clangTidy.checks.disabled": ["clang-diagnostic-error"]
 }
