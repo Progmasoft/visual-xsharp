@@ -17,6 +17,11 @@ source-to-native executable pipeline.
   back; and inspect typed payloads without exchanging a C `FILE *` across their FFI boundary.
 - Added the `XsLilBuilder` convenience layer, stable opaque function handles, packed C API version negotiation, public
   symbol visibility annotations, and an installed shared `xs_lil` library as the foundation for official FFI bindings.
+- Added the official Java 25 FFM binding with XLIL writer and reader packages plus the reusable
+  `org.xsslang.ffi.c.CString` helper. The binding delegates parsing, verification, construction, and canonical text
+  emission to the stable `lil-c` ABI.
+- Published `org.xsslang:xlil:2026.1` through the independent Maven-compatible repository at
+  `java.xsharp-lang.xyz`.
 
 ## 0.2.2 - 2026-07-26
 

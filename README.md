@@ -66,6 +66,7 @@ temporary `.xse` harnesses. `#[Ignore]` and `#[ShouldPanic]` are honored.
 | `xs_kts/` | active | Mandatory Kotlin/JVM 25 project runtime bundled with `xs` and its programmable project DSL |
 | `xsrt/` | active | C23 runtime ABI boundary and boxed optional UTF-16 string support |
 | `xslang/` | active | Rust semantic compiler core linked into the C23 driver through a versioned bulk AST boundary |
+| `xlil-java/` | active | Official Java 25 FFM reader/writer binding for the stable XLIL C ABI |
 | `Spec/` | active source documentation | X# syntax and language behavior examples/spec files |
 | `docs/` | active documentation | Architecture, build, CLI, backend, roadmap, and implementation status |
 | `tests/` | active | C-based unit and integration tests |

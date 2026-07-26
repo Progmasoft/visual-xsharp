@@ -26,6 +26,8 @@ The default value is `xs`. The value `all` selects all stable projects.
 - `xs_kts`: the mandatory Kotlin/JVM 25 project runtime bundled in the `xs` package.
 - `xslang`: the Rust semantic compiler core. It is built as an internal static library of `xs`, not selected as a separate
   top-level CMake project.
+- `xlil-java`: the official Java 25 FFM reader/writer binding for `libxs_lil`. It uses Gradle because it publishes a JPMS
+  and Maven-compatible Java artifact rather than a CMake project.
 
 Shared public C headers live under root `include/`. `xs` C sources live under `xs/sources/`, `xs`-specific headers under
 `xs/include/`.

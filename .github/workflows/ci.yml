@@ -58,6 +58,8 @@ jobs:
           ctest --preset clang-debug --output-on-failure -LE jvm -FA kotlin_project_resolver
       - name: Test Kotlin project builds
         run: ctest --preset clang-debug --output-on-failure -L jvm
+      - name: Test Java XLIL FFM binding
+        run: gradle -p xlil-java test
       - name: Configure sanitizer build
         run: cmake --preset clang-sanitize
       - name: Test sanitizer build

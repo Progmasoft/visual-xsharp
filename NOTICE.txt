@@ -10,3 +10,6 @@ Third-party notices
 The Gradle wrapper launcher files `xs_kts/gradlew` and
 `xs_kts/gradlew.bat` retain their original copyright notices and remain
 licensed under the Apache License, version 2.0.
+
+JUnit Jupiter and the JUnit Platform are used to test the Java XLIL binding.
+They are licensed under the Eclipse Public License, version 2.0.

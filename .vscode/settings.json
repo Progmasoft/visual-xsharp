@@ -12,6 +12,12 @@
     "*.asm": "asm-intel-x86-generic"
   },
   "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.gradle/**": true,
+    "**/.kotlin/**": true,
+    "**/.codex/**": true,
+    "**/CMakeFiles/**": true,
+    "**/bin/**": true,
     "**/build/**": true,
     "**/target/**": true,
     "**/node_modules/**": true,
@@ -19,13 +25,26 @@
     "**/dist/**": true
   },
   "search.exclude": {
+    "**/.gradle": true,
+    "**/.kotlin": true,
+    "**/.codex": true,
+    "**/CMakeFiles": true,
+    "**/bin": true,
+    "**/services": true,
     "**/build": true,
     "**/target": true,
     "**/node_modules": true,
     "**/out": true,
     "**/dist": true
   },
-  "rust-analyzer.files.excludeDirs": ["build", "node_modules", "out", "dist"],
+  "rust-analyzer.files.excludeDirs": [
+    ".gradle",
+    ".kotlin",
+    "build",
+    "node_modules",
+    "out",
+    "dist"
+  ],
   "rust-analyzer.linkedProjects": [
     "xslang/Cargo.toml",
     "xsfmt/Cargo.toml",
@@ -35,5 +54,16 @@
   "FSharp.suggestGitignore": false,
   "r.lsp.promptToInstall": false,
   "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.exclusions": [
+    "**/.codex/**",
+    "**/.gradle/**",
+    "**/.kotlin/**",
+    "**/build/**",
+    "**/bin/**",
+    "**/node_modules/**",
+    "**/out/**",
+    "**/services/**",
+    "**/target/**"
+  ],
   "C_Cpp.codeAnalysis.clangTidy.checks.disabled": ["clang-diagnostic-error"]
 }

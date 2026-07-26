@@ -247,6 +247,8 @@ the standalone headers under `<xs/lil-c/>`: `api.h`, `model.h`, `module.h`, `fun
 and `text.h`.
 The Rust producer API is exposed directly under `xslang::xlil::*`; its public model, parser, verifier, and writer can build
 and round-trip the same XLIL v0 registry without going through the C ABI.
+Java 25 applications use the official `org.xsslang:xlil` module. Its reader and writer call this same stable ABI through
+the Foreign Function and Memory API; see [XLIL_JAVA.md](XLIL_JAVA.md).
 
 The public [integer support header](../include/xs/int128.h) defines `XsUInt128` and `XsInt128` as explicit high/low
 64-bit words. XLIL uses those project-owned C23 types for u128/i128 constants; compiler-specific native 128-bit
