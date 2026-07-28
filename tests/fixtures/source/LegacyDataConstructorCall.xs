@@ -3,7 +3,6 @@
 
 data Point {
     x: Long;
-    y: Long;
 
     Point(x: Long) {
         self.x = x;
@@ -11,6 +10,6 @@ data Point {
 }
 
 fn main() -> Long {
-    point: Point = new Point(1);
+    point: Point = Point(7);
     return point.x;
 }

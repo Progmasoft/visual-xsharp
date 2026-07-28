@@ -3,7 +3,7 @@
 
 set(XS_SOURCE_NATIVE_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/source")
 file(MAKE_DIRECTORY "${XS_SOURCE_NATIVE_FIXTURE_DIR}")
-foreach(source_fixture MainReturn0 MainReturn7 MainArithmetic MainDivision MainRemainder MainOperatorCall MainFunctionOverloads MainIntOperators MainFloatConstants MainFloatOperators MainStringLiteral MainStringFlow MainStringCompare MainCharFlow MainIntegerWidths MainIntegerOperators MainDataFields MainNestedDataFields MainDataInheritance MainDataConstructors MainDataMethods MainDataValueProjection MainDataReturn MainNestedDataReturn MainNegative MainPositive
+foreach(source_fixture MainReturn0 MainReturn7 MainArithmetic MainDivision MainRemainder MainOperatorCall MainFunctionOverloads MainIntOperators MainFloatConstants MainFloatOperators MainStringLiteral MainStringFlow MainStringCompare MainCharFlow MainIntegerWidths MainIntegerOperators MainDataFields MainNestedDataFields MainDataInheritance MainDataConstructors MainDataConstructorFlow MainDataMethods MainDataValueProjection MainDataReturn MainNestedDataReturn MainNegative MainPositive
                        MainBitwise MainXor MainLocal MainLocalArithmetic MainLocalIf MainInferredLocal MainIf MainIfValue
                        MainIfNot
                        MainIfFalse MainIfNotEqual MainBoolLocal MainBoolNotLocal MainInferredBoolLocal
@@ -29,7 +29,7 @@ foreach(source_fixture MainReturn0 MainReturn7 MainArithmetic MainDivision MainR
                        WrongCallArityMain BoolParameterCallMain NonLongReturnCallMain
                        BoolCallAsLongMain UnitCallAsLongMain InvalidLogicalOperands MatchMissingElse
                        MatchPatternTypeMismatch RecursiveDataParameter
-                       AmbiguousInheritedDataField IncompleteDataConstructor DuplicateDataMethod ForEachNonArray ForEachBindingMismatch
+                       AmbiguousInheritedDataField IncompleteDataConstructor LegacyDataConstructorCall DuplicateDataMethod ForEachNonArray ForEachBindingMismatch
                        UnknownGenericCall WrongGenericArity GenericTypeMismatch ExpandingGenericRecursion
                        UnsatisfiedGenericConstraint NonInterfaceGenericConstraint)
   configure_file(tests/fixtures/source/${source_fixture}.xs "${XS_SOURCE_NATIVE_FIXTURE_DIR}/${source_fixture}.xs"
@@ -319,6 +319,22 @@ add_test(NAME source_native_data_constructors_artifacts COMMAND xs_xse_artifact_
                                                          "call %Point @\"xs\$ctor\$Point\$2\"")
 set_tests_properties(source_native_data_constructors_artifacts PROPERTIES
                      DEPENDS source_native_data_constructors_build TIMEOUT 5)
+
+add_test(NAME source_native_data_constructor_flow_build COMMAND xs build -file
+                                                       ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDataConstructorFlow.xs)
+set_tests_properties(source_native_data_constructor_flow_build PROPERTIES TIMEOUT 5
+                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
+add_test(NAME source_native_data_constructor_flow_artifacts COMMAND xs_xse_artifact_tests
+                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDataConstructorFlow.ll
+                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDataConstructorFlow.o
+                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDataConstructorFlow.xse 9
+                                                            "call %Point @\"xs\$ctor\$Point\$0\""
+                                                            "call %Point @\"xs\$ctor\$Point\$1\""
+                                                            "call i32 @total"
+                                                            "call %Point @make_point"
+                                                            "extractvalue %Point")
+set_tests_properties(source_native_data_constructor_flow_artifacts PROPERTIES
+                     DEPENDS source_native_data_constructor_flow_build TIMEOUT 5)
 
 add_test(NAME source_native_data_methods_build COMMAND xs build -file
                                                ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDataMethods.xs)

@@ -28,7 +28,7 @@ data Point {
 }
 
 fn main() -> Long {
-    point: Point = Point(2, 3);
+    point: Point = new Point(2, 3);
     delta: Long = 4;
     return point.total() + point.add(delta) + point.add(5) + Point::identity(1);
 }

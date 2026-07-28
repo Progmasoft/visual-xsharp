@@ -34,6 +34,7 @@ pub(super) fn expression_type(tree: &SyntaxTree,
                                                              })
     }
     EXPR_TUPLE => tuple::tuple_expression_type(tree, value, context, locals),
+    EXPR_NEW => constructor::new_expression_type(tree, value, context, locals),
     EXPR_CALL =>
     {
       let callee = tree.nodes.get(*value.children.first()?)?;
@@ -44,10 +45,7 @@ pub(super) fn expression_type(tree: &SyntaxTree,
       else
       {
         let name = path_text(tree, callee);
-        call::resolve_function(tree, value, &name, context, locals, None).or_else(|| {
-                                                                           constructor::resolve(tree, value, &name,
-                                                                                                context, locals, None)
-                                                                         })
+        call::resolve_function(tree, value, &name, context, locals, None)
       }?;
       Some(signature.return_type.clone())
     }

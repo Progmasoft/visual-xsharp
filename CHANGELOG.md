@@ -22,6 +22,9 @@ source-to-native executable pipeline.
   emission to the stable `lil-c` ABI.
 - Published `org.xsslang:xlil:2026.1` through the independent Maven-compatible repository at
   `java.xsharp-lang.xyz`.
+- Connected canonical `new Type(...)` data-constructor expressions to typed HIR, MIR aggregate values, XLIL, and LLVM.
+  Constructor results can now be returned, projected, and passed directly through the scalarized native data-call ABI;
+  the former constructor-shaped `Type(...)` call is rejected.
 
 ## 0.2.2 - 2026-07-26
 

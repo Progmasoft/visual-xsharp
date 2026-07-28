@@ -22,6 +22,8 @@ configure_file(tests/fixtures/source/MainDataInheritance.xs
                "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataInheritance.xs" COPYONLY)
 configure_file(tests/fixtures/source/MainDataConstructors.xs
                "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataConstructors.xs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataConstructorFlow.xs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataConstructorFlow.xs" COPYONLY)
 configure_file(tests/fixtures/source/MainDataMethods.xs
                "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataMethods.xs" COPYONLY)
 configure_file(tests/fixtures/source/MainDataValueProjection.xs
@@ -107,7 +109,7 @@ add_test(NAME direct_xhir_function_overloads_artifacts COMMAND xs_xse_artifact_t
 set_tests_properties(direct_xhir_function_overloads_artifacts PROPERTIES TIMEOUT 5
   DEPENDS direct_xhir_function_overloads_roundtrip)
 
-foreach(fixture MainDataFields MainNestedDataFields MainDataInheritance MainDataConstructors MainDataMethods
+foreach(fixture MainDataFields MainNestedDataFields MainDataInheritance MainDataConstructors MainDataConstructorFlow MainDataMethods
                 MainDataValueProjection)
   if(fixture STREQUAL "MainDataFields")
     set(expected_exit 9)
@@ -115,6 +117,8 @@ foreach(fixture MainDataFields MainNestedDataFields MainDataInheritance MainData
     set(expected_exit 25)
   elseif(fixture STREQUAL "MainDataConstructors")
     set(expected_exit 16)
+  elseif(fixture STREQUAL "MainDataConstructorFlow")
+    set(expected_exit 9)
   elseif(fixture STREQUAL "MainDataMethods")
     set(expected_exit 15)
   elseif(fixture STREQUAL "MainDataValueProjection")

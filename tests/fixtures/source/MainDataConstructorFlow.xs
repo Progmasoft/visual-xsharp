@@ -14,11 +14,10 @@ data Point {
         self.x = value;
         self.y = value;
     }
+}
 
-    Point(value: Int) {
-        self.x = 1;
-        self.y = 2;
-    }
+fn make_point(value: Long) -> Point {
+    return new Point(value);
 }
 
 fn total(point: Point) -> Long {
@@ -26,10 +25,5 @@ fn total(point: Point) -> Long {
 }
 
 fn main() -> Long {
-    first: Point = new Point(2, 3);
-    second_value: Long = 4;
-    second: Point = new Point(second_value);
-    wide_value: Int = 0;
-    third: Point = new Point(wide_value);
-    return total(first) + total(second) + total(third);
+    return total(new Point(2, 3)) + make_point(4).x;
 }

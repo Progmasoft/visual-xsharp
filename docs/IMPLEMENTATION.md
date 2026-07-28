@@ -486,10 +486,13 @@ then lower through XLIL stack slots to LLVM. Non-recursive `data` parameters are
 primitive leaves at the MIR/XLIL function boundary; calls accept either initialized places or object literals. Non-recursive
 `data` return values use deterministic nominal aggregate registry entries and real MIR `aggregate`/`extract` statements.
 Aggregate-returning calls can initialize local places, including nested `data` layouts. Overloaded constructors enforce
-definite primitive-leaf initialization on every continuing path and return the completed aggregate. Non-mutating instance
-methods receive the scalarized value, while static methods use the ordinary call ABI. Recursive by-value parameters and
-returns require a future indirect ABI and are rejected explicitly. Escaping objects, receiver mutation/reference ABI,
-class allocation, operator dispatch, and a stable cross-module layout remain deferred.
+definite primitive-leaf initialization on every continuing path and return the completed aggregate. Constructor expressions
+use the canonical `new Type(...)` form; the former `Type(...)` spelling is not treated as construction. Completed constructor
+values may cross a `data` return boundary, be flattened directly into another function's scalar call ABI, or serve as the
+receiver of a member projection without first being stored in a named source local. Non-mutating instance methods receive
+the scalarized value, while static methods use the ordinary call ABI. Recursive by-value parameters and returns require a
+future indirect ABI and are rejected explicitly. Escaping class objects, receiver mutation/reference ABI, class allocation,
+operator dispatch, and a stable cross-module layout remain deferred.
 Nominal member reads are not restricted to named local places. XHIR records an explicit owner, field name, result type,
 and receiver expression for projections such as `make_point().position.x`. MIR resolves the inherited field order from the
 nominal registry and emits target-independent aggregate extraction; XLIL and LLVM preserve the same nested value projection.

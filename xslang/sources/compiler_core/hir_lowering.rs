@@ -82,6 +82,7 @@ const EXPR_ASSIGNMENT: u32 = 60;
 const EXPR_CALL: u32 = 61;
 const EXPR_METHOD_CALL: u32 = 62;
 const EXPR_MEMBER_ACCESS: u32 = 63;
+const EXPR_NEW: u32 = 69;
 const EXPR_OBJECT_LITERAL: u32 = 77;
 const OBJECT_FIELD: u32 = 78;
 const EXPR_IF: u32 = 81;
@@ -335,6 +336,10 @@ fn lower_expression(tree: &SyntaxTree,
     {
       nominal::lower_object_expression(tree, value, context, locals, expected_type, source_span)
     }
+    EXPR_NEW if !value.children.is_empty() =>
+    {
+      constructor::lower_new_expression(tree, value, context, locals, expected_type, source_span)
+    }
     EXPR_UNARY if value.children.len() == 1 =>
     {
       unary::lower_unary_expression(tree, value, context, locals, expected_type, source_span)
@@ -481,7 +486,6 @@ fn lower_expression(tree: &SyntaxTree,
       else
       {
         call::resolve_function(tree, value, &function, context, locals, expected_type)
-          .or_else(|| constructor::resolve(tree, value, &function, context, locals, expected_type))
       }?;
       if value.children.len() - 1 != signature.parameters.len()
       {

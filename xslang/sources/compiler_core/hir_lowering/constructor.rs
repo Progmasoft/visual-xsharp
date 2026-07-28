@@ -182,3 +182,53 @@ pub(super) fn resolve<'a>(tree: &SyntaxTree,
   matching.retain(|candidate| candidate.parameters == argument_types);
   (matching.len() == 1).then(|| matching[0])
 }
+
+fn constructed_type(tree: &SyntaxTree, call: &SyntaxNode) -> Option<Type>
+{
+  let ty = tree.nodes.get(*call.children.first()?)?;
+  checked_type(&lower_type(tree, ty))
+}
+
+pub(super) fn new_expression_type(tree: &SyntaxTree,
+                                  call: &SyntaxNode,
+                                  context: &LoweringContext,
+                                  locals: &HashMap<String, Type>)
+                                  -> Option<Type>
+{
+  let Type::Named(name) = constructed_type(tree, call)?
+  else
+  {
+    return None;
+  };
+  let signature = resolve(tree, call, &name, context, locals, Some(&Type::Named(name.clone())))?;
+  Some(signature.return_type.clone())
+}
+
+pub(super) fn lower_new_expression(tree: &SyntaxTree,
+                                   call: &SyntaxNode,
+                                   context: &LoweringContext,
+                                   locals: &HashMap<String, Type>,
+                                   expected_type: Option<&Type>,
+                                   source_span: Span)
+                                   -> Option<Expression>
+{
+  let Type::Named(name) = constructed_type(tree, call)?
+  else
+  {
+    return None;
+  };
+  let constructed = Type::Named(name.clone());
+  let expected_type = expected_type.or(Some(&constructed));
+  let signature = resolve(tree, call, &name, context, locals, expected_type)?;
+  let arguments = call.children[1..].iter()
+                                    .zip(&signature.parameters)
+                                    .map(|(index, parameter)| {
+                                      lower_expression(tree, tree.nodes.get(*index)?, context, locals, Some(parameter))
+                                    })
+                                    .collect::<Option<Vec<_>>>()?;
+  Some(Expression::Call { function: signature.symbol.clone(),
+                          arguments,
+                          parameter_types: signature.parameters.clone(),
+                          return_type: Box::new(signature.return_type.clone()),
+                          span: source_span })
+}

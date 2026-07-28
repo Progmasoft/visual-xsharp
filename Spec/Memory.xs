@@ -253,7 +253,7 @@ if (enabled) {
 
 // stack allocation
 
-point: Point = Point(10, 20);
+point: Point = new Point(10, 20);
 
 // compiler may keep this value on the stack
 
@@ -261,7 +261,7 @@ point: Point = Point(10, 20);
 // escape analysis
 
 fn create_point() -> Point {
-    point: Point = Point(10, 20);
+    point: Point = new Point(10, 20);
 
     return point;
 }

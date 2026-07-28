@@ -5,8 +5,6 @@
   "C_Cpp.errorSquiggles": "disabled",
 
   "files.associations": {
-    "CmakeLists.txt": "cmake",
-    "CMakeCache.txt": "cmake",
     "*.xs": "xs",
     "*.ll": "llvm",
     "*.asm": "asm-intel-x86-generic"
@@ -37,14 +35,7 @@
     "**/out": true,
     "**/dist": true
   },
-  "rust-analyzer.files.excludeDirs": [
-    ".gradle",
-    ".kotlin",
-    "build",
-    "node_modules",
-    "out",
-    "dist"
-  ],
+  "rust-analyzer.files.excludeDirs": [".gradle", ".kotlin", "build", "node_modules", "out", "dist"],
   "rust-analyzer.linkedProjects": [
     "xslang/Cargo.toml",
     "xsfmt/Cargo.toml",

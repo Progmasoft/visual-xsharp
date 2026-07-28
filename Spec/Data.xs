@@ -64,6 +64,9 @@ data Point {
     }
 }
 
+first: Point = new Point(10, 20);
+second: Point = new Point(10);
+
 
 // initialization
 

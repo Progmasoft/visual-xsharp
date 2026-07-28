@@ -567,14 +567,68 @@ impl HirToMirLowerer
       }
       _ =>
       {
-        self.report(DiagnosticCode::UnsupportedExpression,
-                    "data argument must be an initialized place or object literal before aggregate values are \
-                     available",
-                    expression_span(expression));
-        return None;
+        let span = expression_span(expression);
+        let value_type = *self.aggregate_types.get(type_name)?;
+        let aggregate = self.lower_expression_to_local(expression, value_type, lowered)?;
+        self.append_nominal_aggregate_arguments(&definition,
+                                                aggregate,
+                                                span,
+                                                lowered,
+                                                &mut arguments,
+                                                &mut vec![definition.name.clone()])?;
       }
     }
     Some(arguments)
+  }
+
+  fn append_nominal_aggregate_arguments(&mut self,
+                                        definition: &crate::hir::declarations::NominalType,
+                                        aggregate: mir::LocalId,
+                                        span: Span,
+                                        lowered: &mut mir::Function,
+                                        arguments: &mut Vec<mir::LocalId>,
+                                        visiting: &mut Vec<String>)
+                                        -> Option<()>
+  {
+    for (index, field) in self.resolved_nominal_fields(definition)?.iter().enumerate()
+    {
+      let field_type = crate::hir::declarations::type_ref_to_checked(&field.ty)?;
+      let value_type = self.lower_value_type(&field_type, span)?;
+      let value = self.declare_temp(value_type, span, lowered)?;
+      self.current_block_mut(lowered)
+          .statements
+          .push(mir::Statement::Extract { result: value,
+                                          aggregate,
+                                          field: u32::try_from(index).ok()?,
+                                          field_type: value_type,
+                                          span });
+      match field_type
+      {
+        Type::Primitive(_) => arguments.push(value),
+        Type::Named(ref nested_type) =>
+        {
+          if visiting.contains(nested_type)
+          {
+            self.report(DiagnosticCode::UnsupportedType,
+                        "recursive data aggregate argument requires an indirect ABI",
+                        span);
+            return None;
+          }
+          let nested = self.nominal_types.get(nested_type)?.clone();
+          visiting.push(nested_type.clone());
+          self.append_nominal_aggregate_arguments(&nested, value, span, lowered, arguments, visiting)?;
+          visiting.pop();
+        }
+        _ =>
+        {
+          self.report(DiagnosticCode::UnsupportedType,
+                      "data aggregate field has no scalar native call ABI",
+                      span);
+          return None;
+        }
+      }
+    }
+    Some(())
   }
 
   fn append_nominal_parameters(&mut self,
