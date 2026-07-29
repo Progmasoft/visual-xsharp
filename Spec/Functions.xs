@@ -4,12 +4,13 @@
 // function and file structure:
 
 //
-// Semicolons are required.
+// Statements that require a terminator use semicolons. A block's final
+// expression omits the semicolon and becomes the block value.
 // Top-level execution is not supported.
 // Top-level functions are allowed.
 //
 
-import stdio, result;
+import stdio;
 
 fn add(a: Int, b: Int) -> Int {
   return a + b;
@@ -60,11 +61,11 @@ fn clamp(value: Int, minimum: Int, maximum: Int) -> Int {
   return value;
 }
 
-fn describe_user(name: Str, age: Int) -> Str {
+fn describe_user(name: &Str, age: Int) -> String {
   return format!("{} ({})", name, age);
 }
 
-fn try_parse_id(text: Str) -> Result<Int, Error> {
+fn try_parse_id(text: &Str) -> Result<Int, Error> {
   parsed: Int = Int::parse(text);
   return Ok(parsed);
 }

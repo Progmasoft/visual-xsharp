@@ -35,7 +35,7 @@
 // simple data
 
 data User {
-    name: Str
+    name: String
     age: Int
 }
 
@@ -71,7 +71,7 @@ second: Point = new Point(10);
 // initialization
 
 user: User = {
-    name: "Alpha",
+    name: new String("Alpha"),
     age: 26
 };
 
@@ -88,7 +88,7 @@ println!("{}", user.age);
 class Program {
 
     data User {
-        name: Str
+        name: String
         age: Int
     }
 
@@ -105,7 +105,7 @@ data Pair<T, U> {
 // multiple value-type bases
 
 data Named {
-    label: Str
+    label: String
 }
 
 data Tagged {
@@ -113,14 +113,14 @@ data Tagged {
 }
 
 data NamedPair<T, U> : Named, Pair<T, U>, Tagged {
-    label: Str
+    label: String
 }
 
 
 // generic data initialization
 
-pair: Pair<Str, Int> = {
-    first: "Alpha",
+pair: Pair<String, Int> = {
+    first: new String("Alpha"),
     second: 26
 };
 
@@ -154,7 +154,7 @@ println!("{}", point.y);
 // VALID
 
 data User {
-    name: Str
+    name: String
     age: Int
 }
 
@@ -172,7 +172,7 @@ data Pair<T, U> {
 class Program {
 
     data User {
-        name: Str
+        name: String
     }
 
 }
@@ -181,7 +181,7 @@ class Program {
 // VALID
 
 user: User = {
-    name: "Alpha",
+    name: new String("Alpha"),
     age: 26
 };
 

@@ -10,7 +10,7 @@
 // std::fs::write does not format text and does not add a newline.
 //
 
-import fs, stdio, result;
+import fs, stdio;
 
 
 // raw writes
@@ -33,7 +33,7 @@ fn write_text() -> Result<()> {
 // raw reads
 
 fn read_text() -> Result<()> {
-    content: Str = std::fs::read_to_str("log.txt");
+    content: String = std::fs::read_to_str("log.txt");
     println!("{}", content);
 }
 
@@ -42,8 +42,9 @@ fn read_bytes() -> Result<()> {
     println!("file size: {}", bytes.count);
 }
 
-// std::fs::read_to_str(path-or-stream) reads UTF-16 text into Str. The compiler/runtime selects UTF-16LE or UTF-16BE
-// automatically for the target situation.
+// std::fs::read_to_str(path-or-stream) decodes text into an owned UTF-32 String.
+// Invalid input encoding is reported through Error; the byte decoder is selected
+// explicitly by the filesystem API or by its documented default.
 // std::fs::read(path-or-stream) reads raw bytes into ArrayList<Byte>.
 
 
@@ -85,29 +86,29 @@ fn move_copy_remove() -> Result<()> {
 // list directory
 
 fn list_directory() -> Result<()> {
-    for (entry: Str in std::fs::list_dir(".")) {
+    for (entry: String in std::fs::list_dir(".")) {
         println!("{}", entry.trim());
     }
 }
 
-// std::fs::list_dir(path) returns ArrayList<Str>.
+// std::fs::list_dir(path) returns ArrayList<String>.
 // Entries are returned in deterministic lexicographic order.
 
 
 // metadata and path helpers
 
-fn inspect_path(path: Str) -> Result<()> {
+fn inspect_path(path: &Str) -> Result<()> {
     if (std::fs::exists(path) && std::fs::is_dir(path)) {
-        for (entry: Str in std::fs::walk_dir(path)) {
-            relative: Str = std::fs::relative_path(path, entry);
+        for (entry: String in std::fs::walk_dir(path)) {
+            relative: String = std::fs::relative_path(path, &entry);
             println!("{} {}", relative, std::fs::size(entry));
         }
     }
 }
 
-fn build_path(root: Str, name: Str) -> Str {
-    path: Str = std::fs::join_path(root, name);
-    return std::fs::parent_dir(path);
+fn build_path(root: &Str, name: &Str) -> String {
+    path: String = std::fs::join_path(root, name);
+    return std::fs::parent_dir(&path);
 }
 
 // std::fs::exists(path) returns false instead of throwing for a missing path.

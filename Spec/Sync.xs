@@ -29,7 +29,7 @@
 // Mutex
 // ============================================================
 
-import mutex, result;
+import mutex;
 
 
 // mutex creation
@@ -505,10 +505,10 @@ import WeakControl;
 fn weak_creation() {
     strong: Arc<Str> = new Arc<Str>("Alpha");
 
-    weak: Weak<Str> = Arc.downgrade(&strong);
+    weak: Weak<Str> = Arc::downgrade(&strong);
 }
 
-// Arc.downgrade(&strong):
+// Arc::downgrade(&strong):
 //
 // - Creates a Weak<T>.
 // - Atomically increments the weak reference counter.
@@ -520,16 +520,16 @@ fn weak_creation() {
 
 fn weak_cloning() {
     strong: Arc<Str> = new Arc<Str>("Alpha");
-    weak: Weak<Str> = Arc.downgrade(&strong);
+    weak: Weak<Str> = Arc::downgrade(&strong);
 
     other_weak: Weak<Str> =
-        WeakControl.clone(&weak);
+        WeakControl::clone(&weak);
 }
 
-// WeakControl.clone(&weak):
+// WeakControl::clone(&weak):
 //
 // - Atomically increments the same weak reference counter
-//   used by Arc.downgrade().
+//   used by Arc::downgrade().
 // - Does not increment the strong reference counter.
 
 
@@ -537,13 +537,13 @@ fn weak_cloning() {
 
 fn weak_upgrade() {
     strong: Arc<Str> = new Arc<Str>("Alpha");
-    weak: Weak<Str> = Arc.downgrade(&strong);
+    weak: Weak<Str> = Arc::downgrade(&strong);
 
     strong_again: Arc<Str> =
-        WeakControl.upgrade(&weak);
+        WeakControl::upgrade(&weak);
 }
 
-// WeakControl.upgrade(&weak):
+// WeakControl::upgrade(&weak):
 //
 // - Atomically increments the strong counter when successful.
 // - Returns Result<Arc<T>, Error>.
@@ -1020,10 +1020,10 @@ fn channel_example() {
 // sending
 
 fn channel_send_moves_value() {
-    (tx, rx): std::thread::Channel<Str> =
+    (tx, rx): std::thread::Channel<String> =
         std::thread::channel();
 
-    message: Str = "Alpha";
+    message: String = new String("Alpha");
 
     tx.send(message);
 

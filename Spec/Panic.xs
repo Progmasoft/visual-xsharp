@@ -93,7 +93,7 @@ fn stop_now() {
 }
 
 
-fn stop_with_message(name: Str) {
+fn stop_with_message(name: &Str) {
     panic!("invalid name: {}", name);
 }
 

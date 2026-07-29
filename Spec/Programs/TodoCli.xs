@@ -9,7 +9,7 @@
 import stdio, fs, process;
 
 enum data Command {
-    Add: Str,
+    Add: String,
     Done: Int,
     List,
     Help,
@@ -17,28 +17,28 @@ enum data Command {
 
 data TodoItem {
     id: Int;
-    title: Str;
+    title: String;
     done: Bool;
 }
 
 class TodoStore {
-    path: Str;
+    path: String;
     next_id: Int;
     items: ArrayList<TodoItem>;
 
-    TodoStore(path: Str) {
-        self.path = path;
+    TodoStore(path: &Str) {
+        self.path = new String(path);
         self.next_id = 1;
         self.items = [];
     }
 
-    static fn open(path: Str) -> Result<TodoStore, Error> {
+    static fn open(path: &Str) -> Result<TodoStore, Error> {
         store: TodoStore = new TodoStore(path);
         store.load()@;
         return Ok(store);
     }
 
-    fn add(title: Str) -> Result<()> {
+    fn add(title: String) -> Result<()> {
         item: TodoItem = TodoItem {
             id: self.next_id,
             title: title,
@@ -82,13 +82,13 @@ class TodoStore {
     }
 
     fn load() -> Result<()> {
-        if (!std::fs::exists(self.path)) {
+        if (!std::fs::exists(&self.path)) {
             return Ok();
         }
 
-        content: Str = std::fs::read_to_str(self.path);
+        content: String = std::fs::read_to_str(&self.path);
 
-        for (line: Str in content.lines()) {
+        for (line: &Str in content.lines()) {
             if (line.length() == 0) {
                 continue;
             }
@@ -104,13 +104,13 @@ class TodoStore {
     }
 
     fn save() -> Result<()> {
-        if (!std::fs::exists(self.path)) {
-            std::fs::create_file(self.path);
+        if (!std::fs::exists(&self.path)) {
+            std::fs::create_file(&self.path);
         }
 
         opened: std::fs::File = new std::fs::OpenOptions()
             .truncate(true)
-            .open(self.path);
+            .open(&self.path);
 
         for (item: TodoItem in self.items) {
             std::fs::write(opened, format!("{}\n", TodoCodec::format(item)));
@@ -120,20 +120,20 @@ class TodoStore {
 }
 
 class TodoCodec {
-    static fn parse(line: Str) -> Result<TodoItem, Error> {
-        parts: ArrayList<Str> = line.split("|");
+    static fn parse(line: &Str) -> Result<TodoItem, Error> {
+        parts: ArrayList<&Str> = line.split("|");
         if (parts.count != 3) {
             return Error(new Error("invalid todo record"));
         }
 
         return Ok(TodoItem {
             id: Int::parse(parts[0]),
-            title: parts[2],
+            title: new String(parts[2]),
             done: parts[1] == "done",
         });
     }
 
-    static fn format(item: TodoItem) -> Str {
+    static fn format(item: TodoItem) -> String {
         state: &Str = if (item.done) {
             "done"
         }
@@ -144,12 +144,12 @@ class TodoCodec {
     }
 }
 
-fn parse_command(args: ArrayList<Str>) -> Result<Command, Error> {
+fn parse_command(args: ArrayList<String>) -> Result<Command, Error> {
     if (args.count < 2) {
         return Ok(Command::Help);
     }
 
-    return match (args[1]) {
+    return match (&args[1]) {
         "add" -> {
             if (args.count < 3) {
                 return Error(new Error("todo add <title>"));
@@ -160,7 +160,7 @@ fn parse_command(args: ArrayList<Str>) -> Result<Command, Error> {
             if (args.count != 3) {
                 return Error(new Error("todo done <id>"));
             }
-            Ok(Command::Done(Int::parse(args[2])));
+            Ok(Command::Done(Int::parse(&args[2])));
         },
         "list" -> {
             Ok(Command::List);
@@ -181,7 +181,7 @@ fn print_help() -> Result<()> {
     return Ok();
 }
 
-fn main(args: ArrayList<Str>) -> Result<Int, Error> {
+fn main(args: ArrayList<String>) -> Result<Int, Error> {
     store: TodoStore = TodoStore::open("todo.db")@;
     command: Command = parse_command(args)@;
 

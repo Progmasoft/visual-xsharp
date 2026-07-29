@@ -285,7 +285,7 @@ users: ArrayList<User> = [];
 
 // INVALID DESIGN
 
-result: Str = a + b;
+result: String = a + b;
 
 // if allocation occurs here,
 // it must be visible or warned by the compiler

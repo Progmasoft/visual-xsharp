@@ -50,13 +50,13 @@ color: Color = Color::Red;
 
 // data enum
 enum data Token {
-    Identifier: Str,
+    Identifier: String,
     Integer: Int,
     Plus,
 }
 
 // data enum usage
-token: Token = Token::Identifier("hello");
+token: Token = Token::Identifier(new String("hello"));
 number: Token = Token::Integer(42);
 plus: Token = Token::Plus;
 
@@ -66,7 +66,7 @@ class User {
 }
 
 enum data Value {
-    Text: Str,
+    Text: String,
     Number: Int,
     Number: Long,
     User: User,
@@ -78,7 +78,7 @@ enum data TaggedValue {
 }
 
 enum data ValueMetadata {
-    Source: Str,
+    Source: String,
 }
 
 enum data RichValue : TaggedValue, ValueMetadata, Value {
@@ -86,7 +86,7 @@ enum data RichValue : TaggedValue, ValueMetadata, Value {
 }
 
 enum data Option : Optional {
-    Deferred: Str,
+    Deferred: String,
 }
 
 option: Optional<Str> = Option::Some("cached");
@@ -121,13 +121,13 @@ internal enum Color {
 }
 
 public enum data Token {
-    Identifier: Str,
+    Identifier: String,
     Integer: Int,
     Plus,
 }
 
 internal enum data Token {
-    Identifier: Str,
+    Identifier: String,
     Integer: Int,
     Plus,
 }
@@ -184,13 +184,13 @@ enum Empty {
 
 // VALID
 enum data Token {
-    Identifier: Str,
+    Identifier: String,
 }
 
 
 // VALID
 enum data Token {
-    Identifier: Str,
+    Identifier: String,
     Integer: Int,
     Plus,
     Minus,

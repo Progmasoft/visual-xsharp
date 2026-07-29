@@ -16,7 +16,8 @@ import fs, stdio;
 // The compiler provides the Result<T, E> enum data family with `Ok: T` and
 // `Error: E` variants. The variant representation is class-backed. User source
 // does not redeclare that standard enum data type.
-// std::result::Error is the standard root error class and accepts a Str message.
+// std::result::Error is the standard root error class and accepts a borrowed
+// &Str message or an owned String message.
 // Application error classes may derive from it nominally.
 
 class ParseError : Error {
@@ -63,13 +64,13 @@ fn do_work() -> Result<()> {
 
 // explicit match without @
 
-fn read_file_explicit(path: Str) -> Result<Optional<Str>, Error> {
+fn read_file_explicit(path: &Str) -> Result<String, Error> {
     file = match (std::fs::File::open(path)) {
         Ok(value) -> value,
         Error(error) -> return Error(error),
     };
 
-    content: Optional<Str> = Some("");
+    content: String = new String("");
 
     match (file.read_to_string(&mut content)) {
         Ok(else) -> {},
@@ -82,9 +83,9 @@ fn read_file_explicit(path: Str) -> Result<Optional<Str>, Error> {
 
 // propagation with @
 
-fn read_file(path: Str) -> Result<Optional<Str>, Error> {
+fn read_file(path: &Str) -> Result<String, Error> {
     file = std::fs::File::open(path)@;
-    content: Optional<Str> = Some("");
+    content: String = new String("");
     file.read_to_string(&mut content)@;
     return Ok(content);
 }
@@ -92,14 +93,14 @@ fn read_file(path: Str) -> Result<Optional<Str>, Error> {
 
 // expect and unwrap
 
-fn read_required_line() -> Str {
-    line: Optional<Str> = Some("");
+fn read_required_line() -> String {
+    line: String = new String("");
 
     std::stdin()
         .read_line(&mut line)
         .expect("input could not be read");
 
-    return line.unwrap();
+    return line;
 }
 
 // expect(message) unwraps the success value or panics with message.

@@ -71,7 +71,7 @@ fn write_newline_only_to_stream() {
 // formatting
 
 fn format_values() {
-    user: Str = "Alpha";
+    user: &Str = "Alpha";
     age: Int = 26;
 
     println!("{} is {}", user, age);
@@ -133,7 +133,7 @@ fn format_values() {
 //
 // format_args_nl! is the compiler-special newline variant of format_args!. std::_print
 // and std::_eprint are internal output boundaries. std::fmt::format
-// materializes the formatted UTF-16 Str and belongs to the imported Stdio
+// materializes an owned UTF-32 String and belongs to the imported Stdio
 // surface.
 //
 // A destination expression is evaluated exactly once. Format arguments are
@@ -142,24 +142,24 @@ fn format_values() {
 // A macro invocation must still match exactly one rule.
 
 
-// format! returns Str and does not write to a stream.
+// format! returns String and does not write to a stream.
 // Built-in format_args! returns the formatting argument value used by output
 // and writer macros and does not write to a stream. format_args_nl! returns the
 // same value with one trailing newline. Built-in write! and writeln! accept any
 // compatible destination without importing Stdio.
 
 fn build_message() {
-    user1: Str = "Alpha";
-    user2: Str = "Leitwolf";
+    user1: &Str = "Alpha";
+    user2: &Str = "Leitwolf";
 
-    users: Str = format!("{} {}", user1, user2);
+    users: String = format!("{} {}", user1, user2);
     format_args!("{} {}", user1, user2);
     debug_users := format_args!("{:#?}", users);
-    aligned: Str = format!("{:^16}", user1);
-    hex_age: Str = format!("{:#x}", 26);
+    aligned: String = format!("{:^16}", user1);
+    hex_age: String = format!("{:#x}", 26);
 }
 
-fn write_report_line(name: Str, score: Int) {
+fn write_report_line(name: &Str, score: Int) {
     writeln!(std::stdout(), "{:<16} {:>4}", name, score);
 }
 
@@ -175,7 +175,7 @@ fn standard_handles() {
     std::fs::write(std::stdout(), "stdout text\n");
     std::fs::write(std::stderr(), "stderr text\n");
 
-    text: Str = std::fs::read_to_str(std::stdin());
+    text: String = std::fs::read_to_str(std::stdin());
     println!("{}", text);
 }
 
@@ -188,7 +188,7 @@ fn standard_handles() {
 // line input
 
 fn read_line() {
-    input: Optional<Str> = Some("");
+    input: Optional<String> = Some(new String(""));
 
     std::stdin()
         .read_line(&mut input)
@@ -198,7 +198,7 @@ fn read_line() {
 }
 
 fn read_number() {
-    input: Optional<Str> = Some("");
+    input: Optional<String> = Some(new String(""));
 
     std::stdin()
         .read_line(&mut input)
@@ -209,7 +209,7 @@ fn read_number() {
 }
 
 fn read_many_numbers() {
-    input: Optional<Str> = Some("");
+    input: Optional<String> = Some(new String(""));
 
     std::stdin()
         .read_line(&mut input)

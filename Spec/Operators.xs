@@ -102,16 +102,16 @@ fn main() {
 
     // optional conditional access
     maybe_user: Optional<User> = None;
-    maybe_name: Optional<Str> = maybe_user?.Name;
+    maybe_name: Optional<&Str> = maybe_user?.Name;
 
     // optional coalescing
-    display_name: Str = maybe_name ?? "guest";
+    display_name: &Str = maybe_name ?? "guest";
 
     // optional coalescing assignment
     maybe_name ??= Some("guest");
 
     // optional-forgiving unboxing
-    forced_name: Str = maybe_name!;
+    forced_name: &Str = maybe_name!;
 
     // prefix and postfix update values
     counter: Int = 5;
@@ -172,8 +172,8 @@ value: Int = (7 << 1) >> 1;
 
 
 // VALID
-name: Optional<Str> = None;
-display: Str = name ?? "fallback";
+name: Optional<&Str> = None;
+display: &Str = name ?? "fallback";
 
 
 // VALID
@@ -181,7 +181,7 @@ name ??= Some("fallback");
 
 
 // VALID
-forced: Str = name!;
+forced: &Str = name!;
 
 
 // VALID

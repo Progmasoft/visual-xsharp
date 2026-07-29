@@ -9,13 +9,13 @@
 import thread, sync, stdio;
 
 data Product {
-    sku: Str;
-    name: Str;
+    sku: String;
+    name: String;
     stock: Int;
 }
 
 data OrderLine {
-    sku: Str;
+    sku: String;
     quantity: Int;
 }
 
@@ -27,7 +27,7 @@ data Order {
 data Receipt {
     order_id: Int;
     accepted: Bool;
-    message: Str;
+    message: String;
 }
 
 interface Repository<K, V> {
@@ -35,22 +35,22 @@ interface Repository<K, V> {
     fn put(key: K, value: V);
 }
 
-class InventoryRepository : Repository<Str, Product> {
+class InventoryRepository : Repository<String, Product> {
 
-    products: [Str: Product];
+    products: [String: Product];
 
     InventoryRepository() {
         self.products = [];
     }
 
-    fn get(key: Str) -> Result<&Product, Error> {
+    fn get(key: String) -> Result<&Product, Error> {
         if (!self.products.contains(key)) {
             return Error(new Error("unknown product"));
         }
         return Ok(&self.products[key]);
     }
 
-    fn put(key: Str, value: Product) {
+    fn put(key: String, value: Product) {
         self.products[key] = value;
     }
 
@@ -93,7 +93,7 @@ class OrderWorker {
         return Receipt {
             order_id: order.id,
             accepted: true,
-            message: "accepted",
+            message: new String("accepted"),
         };
     }
 }
@@ -101,22 +101,22 @@ class OrderWorker {
 fn seed_inventory() -> Arc<Mutex<InventoryRepository>> {
     repository: InventoryRepository = new InventoryRepository();
 
-    repository.put("book", Product {
-        sku: "book",
-        name: "X# Handbook",
+    repository.put(new String("book"), Product {
+        sku: new String("book"),
+        name: new String("X# Handbook"),
         stock: 10,
     });
 
-    repository.put("mug", Product {
-        sku: "mug",
-        name: "Compiler Mug",
+    repository.put(new String("mug"), Product {
+        sku: new String("mug"),
+        name: new String("Compiler Mug"),
         stock: 5,
     });
 
     return new Arc<Mutex<InventoryRepository>>(new Mutex<InventoryRepository>(repository));
 }
 
-fn make_order(id: Int, sku: Str, quantity: Int) -> Order {
+fn make_order(id: Int, sku: String, quantity: Int) -> Order {
     lines: ArrayList<OrderLine> = [];
     lines.append(OrderLine {
         sku: sku,
@@ -150,8 +150,8 @@ fn main() -> Result<()> {
         }
     });
 
-    orders.send(make_order(1, "book", 2))@;
-    orders.send(make_order(2, "mug", 8))@;
+    orders.send(make_order(1, new String("book"), 2))@;
+    orders.send(make_order(2, new String("mug"), 8))@;
     orders.close();
 
     while (true) {

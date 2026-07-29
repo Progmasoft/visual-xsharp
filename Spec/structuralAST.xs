@@ -231,7 +231,7 @@ data VisibilityNode {
 // ============================================================
 
 data IdentifierNode {
-    text: Str
+    text: String
     span: SourceSpan
 }
 
@@ -495,13 +495,13 @@ data EnumVariant {
 // Example:
 //
 // enum data Token {
-//     Identifier: Str,
+//     Identifier: String,
 //     Integer: Int,
 //     Plus,
 // }
 
 // EnumDeclaration
-// ├── Identifier -> Str
+// ├── Identifier -> String
 // ├── Integer    -> Int
 // └── Plus       -> None
 
@@ -939,7 +939,7 @@ enum LiteralKind {
 
 data LiteralExpression {
     kind: LiteralKind
-    source_text: Str
+    source_text: String
     span: SourceSpan
 }
 
@@ -1359,7 +1359,7 @@ enum data MacroMatcherElement {
 
 
 data MacroTokenMatcher {
-    token_text: Str
+    token_text: String
     span: SourceSpan
 }
 
@@ -1429,7 +1429,7 @@ enum data MacroExpansionElement {
 
 
 data MacroExpansionToken {
-    token_text: Str
+    token_text: String
     span: SourceSpan
 }
 
@@ -1479,7 +1479,7 @@ data MacroArgument {
 
 data TokenNode {
     kind: TokenKind
-    source_text: Str
+    source_text: String
     span: SourceSpan
 }
 

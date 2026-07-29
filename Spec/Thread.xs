@@ -21,7 +21,7 @@
 // move and Send rules.
 //
 
-import thread, result;
+import thread;
 
 
 // ============================================================
@@ -78,11 +78,11 @@ fn resultless_thread_handle() {
 // ============================================================
 
 fn move_value_to_thread() {
-    value: Str = "Alpha";
+    value: &Str = "Alpha";
 
     thread: Thread::handle<()> =
         std::thread::spawn(move fn() {
-            local_value: Str = value;
+            local_value: &Str = value;
         });
 
     thread.join();
@@ -308,10 +308,10 @@ fn channel_example() {
 // sending
 
 fn send_channel_value() {
-    (tx, rx): std::thread::Channel<Str> =
+    (tx, rx): std::thread::Channel<String> =
         std::thread::channel();
 
-    message: Str = "Alpha";
+    message: String = new String("Alpha");
 
     tx.send(message);
 

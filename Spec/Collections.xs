@@ -88,7 +88,7 @@ last: Int = numbers.last;
 
 fn set_examples()
 {
-users: [Str] = {"Leitwolf", "Helmut"};
+users: [&Str] = {"Leitwolf", "Helmut"};
 
 users.append("Bob");
 users.remove("Helmut");
@@ -112,7 +112,7 @@ users.remove_all();
 
 fn map_examples()
 {
-ages: [Str: Optional<Int>] = [
+ages: [&Str: Optional<Int>] = [
     "Leitwolf": Some(26),
     "Helmut": Some(20),
 ];
@@ -139,7 +139,7 @@ ages.remove("Helmut");
 
 fn array_list_examples()
 {
-fruits: ArrayList<Str> = ["Apple", "Banana"];
+fruits: ArrayList<&Str> = ["Apple", "Banana"];
 
 fruits.append("Orange");
 fruits += ["Mango"];
@@ -205,7 +205,7 @@ without_last_two: [Int] = values.drop_last(2);
 small_prefix: [Int] = values.prefix_while(fn(value) { value < 30 });
 after_small_prefix: [Int] = values.drop_while(fn(value) { value < 30 });
 
-joined: Str = values.reduce_into("", fn(result, value) {
+joined: String = values.reduce_into(new String(""), fn(result, value) {
     result += format!("{}", value);
 });
 

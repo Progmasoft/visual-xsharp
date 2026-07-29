@@ -12,7 +12,7 @@
 // explicitly enabled with .shell(true).
 //
 
-import process, result;
+import process;
 
 
 // process execution
@@ -25,7 +25,7 @@ fn pull_repository() -> Result<()> {
 
 // process execution with arguments
 
-fn install_package(name: Str) -> Result<()> {
+fn install_package(name: &Str) -> Result<()> {
     std::process::execute("pacman", ["-S", name])@;
     return Ok();
 }
@@ -75,7 +75,7 @@ fn run_formatter() -> Result<()> {
 
 // custom error model
 
-fn login(user: Str) -> Result<()> {
+fn login(user: &Str) -> Result<()> {
     if (user.length() == 0) {
         return Error(new Error("invalid user"));
     }
@@ -90,8 +90,8 @@ fn login(user: Str) -> Result<()> {
 
 // built-in error-style values
 
-fn read_required_line() -> Result<Str, Error> {
-    input: Optional<Str> = Some("");
+fn read_required_line() -> Result<String, Error> {
+    input: Optional<String> = None;
 
     std::stdin()
         .read_line(&mut input)@;

@@ -12,7 +12,7 @@
 fn main() {
     // mutable variables
     x: Int = 5;
-    name: Str = "Alpha";
+    name: &Str = "Alpha";
     enabled: Bool = true;
     letter: Char = 'A';
     data: Byte = 255;
@@ -48,7 +48,7 @@ fn main() {
     // It does not make the referenced object deeply immutable.
     // Object, field, element and interior mutation are controlled by the
     // value's type, ownership and mutability rules.
-    val version: Str = "1.0";
+    val version: &Str = "1.0";
     val max_players: Int = 100;
     val is_ready: Bool = true;
     val inferred_version := "1.0";
@@ -60,7 +60,7 @@ fn main() {
     // to runtime evaluation.
     // After initialization, const is truly immutable.
     const BuildNumber: Int = 42;
-    const AppName: Str = "Example";
+    const AppName: &Str = "Example";
     const DebugMode: Bool = false;
     const inferred_build_number := 42;
 
@@ -69,7 +69,7 @@ fn main() {
     // A static value must be compile-time evaluated and has static lifetime.
     // Static initialization never falls back to runtime evaluation.
     static CacheSize: Int = 1024;
-    static ProductName: Str = "Example";
+    static ProductName: &Str = "Example";
     static IsProduction: Bool = true;
 }
 

@@ -9,15 +9,15 @@
 import http, thread, sync, stdio;
 
 data Endpoint {
-    name: Str;
-    url: Str;
+    name: String;
+    url: String;
 }
 
 data HealthResult {
     endpoint: Endpoint;
     ok: Bool;
     status_code: Int;
-    body_preview: Str;
+    body_preview: String;
 }
 
 interface HealthReporter {
@@ -53,18 +53,18 @@ class HealthClient {
 
     async fn check(endpoint: Endpoint) -> Task<Result<HealthResult, Error>> {
         request: std::http::Request = std::http::Request::builder()
-            .uri(std::http::Uri::create(endpoint.url))
+            .uri(std::http::Uri::create(&endpoint.url))
             .header("Accept", "text/plain")
             .build();
 
-        response: std::http::Response<Str> =
+        response: std::http::Response<String> =
             await self.client.send_async(
                 request,
                 std::http::BodyHandlers::of_str()
             );
 
-        body: Str = response.body();
-        preview: Str = if (body.length() > 80) {
+        body: String = response.body();
+        preview: String = if (body.length() > 80) {
             body.substring(0, 80)
         }
         else {
@@ -108,18 +108,18 @@ fn default_endpoints() -> ArrayList<Endpoint> {
     endpoints: ArrayList<Endpoint> = [];
 
     endpoints.append(Endpoint {
-        name: "example",
-        url: "https://example.com",
+        name: new String("example"),
+        url: new String("https://example.com"),
     });
 
     endpoints.append(Endpoint {
-        name: "httpbin",
-        url: "https://httpbin.org/get",
+        name: new String("httpbin"),
+        url: new String("https://httpbin.org/get"),
     });
 
     endpoints.append(Endpoint {
-        name: "iana",
-        url: "https://www.iana.org/domains/reserved",
+        name: new String("iana"),
+        url: new String("https://www.iana.org/domains/reserved"),
     });
 
     return endpoints;

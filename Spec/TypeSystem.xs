@@ -77,14 +77,14 @@ empty_canonical: Optional<&Str> = None;
 canonical_name: Optional<&Str> = Some("Leitwolf");
 short_name: Optional<&Str> = canonical_name;
 
-display: Str = name ?? "guest";
-name ??= Some("guest");
+display: &Str = borrowed_name ?? "guest";
+borrowed_name ??= Some("guest");
 
 // Automatic unboxing from Optional<T> to T may fail. New code models that as
 // Error values through Result.
 
-unboxed_name: Str = name;
-forced_name: Str = name!;
+unboxed_name: &Str = borrowed_name;
+forced_name: &Str = borrowed_name!;
 
 user: Optional<User> = None;
 city: Optional<Str> = user?.Address?.City;

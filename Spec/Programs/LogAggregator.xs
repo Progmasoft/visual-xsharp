@@ -9,27 +9,27 @@
 import fs, stdio, process;
 
 data LogEntry {
-    level: Str;
-    message: Str;
+    level: String;
+    message: String;
 }
 
 class LogParser {
-    static fn parse(line: Str) -> Result<LogEntry, Error> {
-        parts: ArrayList<Str> = line.split(" ", 2);
+    static fn parse(line: &Str) -> Result<LogEntry, Error> {
+        parts: ArrayList<&Str> = line.split(" ", 2);
         if (parts.count != 2) {
             return Error(new Error("invalid log line"));
         }
 
         return Ok(LogEntry {
-            level: parts[0].trim(),
-            message: parts[1].trim(),
+            level: new String(parts[0].trim()),
+            message: new String(parts[1].trim()),
         });
     }
 }
 
 class Report {
-    counts: [Str: Optional<Int>];
-    newest_error: Optional<Str>;
+    counts: [String: Optional<Int>];
+    newest_error: Optional<String>;
 
     Report() {
         self.counts = [];
@@ -46,7 +46,7 @@ class Report {
     }
 
     fn print() -> Result<()> {
-        for ((level, count): (Str, Optional<Int>) in self.counts) {
+        for ((level, count): (String, Optional<Int>) in self.counts) {
             println!("{:<8} {}", level, count!);
         }
 
@@ -65,9 +65,9 @@ fn main(args: std::process::Args) -> Result<Int, Error> {
     }
 
     report: Report = new Report();
-    content: Str = std::fs::read_to_str(args[1]);
+    content: String = std::fs::read_to_str(&args[1]);
 
-    for (line: Str in content.lines()) {
+    for (line: &Str in content.lines()) {
         if (line.trim().length() == 0) {
             continue;
         }

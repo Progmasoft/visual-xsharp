@@ -132,7 +132,7 @@ fn test_if_expression(x: Int) -> Int {
 
 // match expression
 
-fn http_status_text(status: Int) -> Str {
+fn http_status_text(status: Int) -> &Str {
     return match (status) {
         200 -> {
             "ok"
@@ -167,7 +167,7 @@ fn select_port(debug: Bool) -> Int {
 // explicit discard for initialization-like side effects
 
 fn warm_cache(cache: Cache) {
-    for (key: Str in cache.keys()) {
+    for (key: String in cache.keys()) {
         else: cache.load(key);
     }
 }

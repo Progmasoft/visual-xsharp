@@ -10,7 +10,7 @@ import process, sync, stdio;
 
 data Job {
     id: Int;
-    command: Str;
+    command: String;
     retries: Int;
 }
 
@@ -52,7 +52,7 @@ class Worker {
     }
 
     static async fn execute(job: Job) -> Result<()> {
-        status: Int = await std::process::run(job.command);
+        status: Int = await std::process::run(&job.command);
         if (status != 0) {
             return Error(new Error("job failed"));
         }
@@ -63,8 +63,8 @@ class Worker {
 
 fn main() -> Result<Int, Error> {
     queue: Queue = new Queue();
-    queue.push(Job { id: 1, command: "compile", retries: 0 });
-    queue.push(Job { id: 2, command: "test", retries: 0 });
+    queue.push(Job { id: 1, command: new String("compile"), retries: 0 });
+    queue.push(Job { id: 2, command: new String("test"), retries: 0 });
 
     completed: Int = await Worker::run(&mut queue)@;
     println!("completed {} jobs", completed);

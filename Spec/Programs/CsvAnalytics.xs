@@ -9,28 +9,28 @@
 import stdio, fs, process;
 
 data Sale {
-    region: Str;
-    product: Str;
+    region: String;
+    product: String;
     quantity: Int;
     revenue: Float;
 }
 
 data RegionTotal {
-    region: Str;
+    region: String;
     quantity: Int;
     revenue: Float;
 }
 
 class CsvParser {
-    static fn parse_line(line: Str) -> Result<Sale, Error> {
-        fields: ArrayList<Str> = line.split(",");
+    static fn parse_line(line: &Str) -> Result<Sale, Error> {
+        fields: ArrayList<&Str> = line.split(",");
         if (fields.count != 4) {
             return Error(new Error("bad CSV row"));
         }
 
         return Ok(Sale {
-            region: fields[0],
-            product: fields[1],
+            region: new String(fields[0]),
+            product: new String(fields[1]),
             quantity: Int::parse(fields[2]),
             revenue: Float::parse(fields[3]),
         });
@@ -38,7 +38,7 @@ class CsvParser {
 }
 
 class Analytics {
-    totals: [Str: RegionTotal];
+    totals: [String: RegionTotal];
 
     Analytics() {
         self.totals = [];
@@ -58,7 +58,7 @@ class Analytics {
     }
 
     fn print() -> Result<()> {
-        for ((else, total): (Str, RegionTotal) in self.totals) {
+        for ((else, total): (String, RegionTotal) in self.totals) {
             println!(
                 "{}: units={} revenue={}",
                 total.region,
@@ -70,11 +70,11 @@ class Analytics {
     }
 }
 
-fn load_sales(path: Str) -> Result<ArrayList<Sale>, Error> {
+fn load_sales(path: &Str) -> Result<ArrayList<Sale>, Error> {
     rows: ArrayList<Sale> = [];
-    content: Str = std::fs::read_to_str(path);
+    content: String = std::fs::read_to_str(path);
 
-    for (line: Str in content.lines().skip(1)) {
+    for (line: &Str in content.lines().skip(1)) {
         if (line.length() == 0) {
             continue;
         }
@@ -84,9 +84,9 @@ fn load_sales(path: Str) -> Result<ArrayList<Sale>, Error> {
     return Ok(rows);
 }
 
-fn main(args: ArrayList<Str>) -> Result<Int, Error> {
+fn main(args: ArrayList<String>) -> Result<Int, Error> {
     path: &Str = if (args.count > 1) {
-        args[1]
+        &args[1]
     }
     else {
         "sales.csv"

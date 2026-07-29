@@ -64,7 +64,7 @@ class User {
 
 // fields
 class User {
-    name: Str;
+    name: String;
     age: Int;
 
     enabled: Bool = true;
@@ -72,7 +72,7 @@ class User {
 
 // properties
 public class Person {
-    public Name: Str {
+    public Name: String {
         getter;
         setter;
     }
@@ -86,7 +86,7 @@ public class Person {
 class User {
     private _age: Int;
 
-    name: Str {
+    name: String {
         getter;
         setter;
     }
@@ -104,9 +104,9 @@ class User {
 
 // constructor
 class User {
-    name: Str;
+    name: String;
 
-    User(name: Str) {
+    User(name: String) {
         self.name = name;
     }
 }
@@ -123,7 +123,7 @@ fn main() {
 
 // methods
 class User {
-    fn get_name() -> Str {
+    fn get_name() -> &Str {
         return "Alpha";
     }
 }
@@ -194,11 +194,11 @@ class Program : Runnable, Closeable {
 
 // visibility
 class User {
-    public name: Str;
+    public name: String;
 
-    private password: Str;
+    private password: String;
 
-    protected token: Str;
+    protected token: String;
 
     internal id: Int;
 }
@@ -228,19 +228,19 @@ class User {
 
 // VALID
 class User {
-    name: Str;
+    name: String;
 }
 
 
 // VALID
 class User {
-    name: Str = "Alpha";
+    name: String = new String("Alpha");
 }
 
 
 // VALID
 class User {
-    User(name: Str) {
+    User(name: String) {
     }
 }
 
@@ -250,7 +250,7 @@ class User {
     User() {
     }
 
-    User(name: Str) {
+    User(name: String) {
     }
 }
 // Constructors may be overloaded by parameter type list.

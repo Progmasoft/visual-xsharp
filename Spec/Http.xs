@@ -22,7 +22,7 @@
 // No additional HTTP API is defined in this file.
 //
 
-import http, result;
+import http;
 
 
 // ============================================================
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         )
         .build();
 
-    response: std::http::Response<Str> =
+    response: std::http::Response<String> =
         client.send(
             request,
             std::http::BodyHandlers::of_str()
@@ -116,13 +116,13 @@ fn send_request() -> Result<()> {
         .uri(std::http::Uri::create("https://example.com"))
         .build();
 
-    response: std::http::Response<Str> =
+    response: std::http::Response<String> =
         client.send(
             request,
             std::http::BodyHandlers::of_str()
         )@;
 
-    body: Str = response.body();
+    body: String = response.body();
     return Ok();
 }
 
@@ -131,7 +131,7 @@ fn send_request() -> Result<()> {
 //
 // - Sends the request synchronously.
 // - Blocks until a response is available.
-// - Returns std::http::Response<Str> when used with of_str().
+// - Returns std::http::Response<String> when used with of_str().
 // - Returns the standard Error payload on network failure.
 
 
@@ -146,7 +146,7 @@ async fn send_request_async() -> Task<()> {
         .uri(std::http::Uri::create("https://example.com"))
         .build();
 
-    response: std::http::Response<Str> =
+    response: std::http::Response<String> =
         await client.send_async(
             request,
             std::http::BodyHandlers::of_str()
@@ -159,7 +159,7 @@ async fn send_request_async() -> Task<()> {
 // client.send_async(...):
 //
 // - Sends the request asynchronously.
-// - Returns Task<std::http::Response<Str>> when used with of_str().
+// - Returns Task<std::http::Response<String>> when used with of_str().
 // - Must be awaited according to Task<T> rules.
 // - A network failure is represented as the standard Error payload.
 
@@ -169,8 +169,8 @@ async fn send_request_async() -> Task<()> {
 // ============================================================
 
 fn read_response_body(
-    response: std::http::Response<Str>
-) -> Str {
+    response: std::http::Response<String>
+) -> String {
     return response.body();
 }
 
@@ -204,7 +204,7 @@ fn handle_network_error() -> Result<()> {
         .uri(std::http::Uri::create("https://example.com"))
         .build();
 
-    result: Result<std::http::Response<Str>, Error> =
+    result: Result<std::http::Response<String>, Error> =
         client.send(
             request,
             std::http::BodyHandlers::of_str()
@@ -238,6 +238,6 @@ fn handle_network_error() -> Result<()> {
 // std::http::Client
 // std::http::Request
 // std::http::Response<T>
-// Task<std::http::Response<Str>>
+// Task<std::http::Response<String>>
 // Network failure
 //

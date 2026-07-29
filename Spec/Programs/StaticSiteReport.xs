@@ -9,23 +9,23 @@
 import fs, stdio, process;
 
 data PageInfo {
-    path: Str;
-    title: Str;
+    path: String;
+    title: String;
     word_count: Int;
 }
 
 class Markdown {
-    static fn title(path: Str, text: Str) -> Result<Str, Error> {
-        for (line: Str in text.lines()) {
+    static fn title(path: &Str, text: &Str) -> Result<String, Error> {
+        for (line: &Str in text.lines()) {
             if (line.starts_with("# ")) {
-                return Ok(line.trim_start("# ").trim());
+                return Ok(new String(line.trim_start("# ").trim()));
             }
         }
 
         return Error(new Error("missing page title"));
     }
 
-    static fn count_words(text: Str) -> Int {
+    static fn count_words(text: &Str) -> Int {
         return text.split_whitespace().count;
     }
 }
@@ -37,12 +37,14 @@ class SiteReport {
         self.pages = [];
     }
 
-    fn add_markdown(path: Str) -> Result<()> {
-        text: Str = std::fs::read_to_str(path);
+    fn add_markdown(path: String) -> Result<()> {
+        text: String = std::fs::read_to_str(&path);
+        title: String = Markdown::title(&path, &text)@;
+        word_count: Int = Markdown::count_words(&text);
         self.pages.append(PageInfo {
             path: path,
-            title: Markdown::title(path, text)@,
-            word_count: Markdown::count_words(text),
+            title: title,
+            word_count: word_count,
         });
         return Ok();
     }
@@ -59,14 +61,14 @@ class SiteReport {
 
 fn main(args: std::process::Args) -> Result<Int, Error> {
     root: &Str = if (args.length() == 2) {
-        args[1]
+        &args[1]
     }
     else {
         "."
     };
 
     report: SiteReport = new SiteReport();
-    for (path: Str in std::fs::walk(root)) {
+    for (path: String in std::fs::walk(root)) {
         if (path.ends_with(".md")) {
             report.add_markdown(path)@;
         }

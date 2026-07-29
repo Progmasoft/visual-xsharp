@@ -48,7 +48,7 @@ class Pair<T, U> {
 }
 
 
-pair: Pair<Str, Int>;
+pair: Pair<String, Int>;
 
 
 // generic function
@@ -61,7 +61,7 @@ fn print<T>(value: T) {
 
 Print<Int>(42);
 
-Print<Str>("Hello");
+Print<&Str>("Hello");
 
 
 // generic class constraint
@@ -135,7 +135,7 @@ str_box: Box<Str>;
 
 // generic collections
 
-users: ArrayList<Str>;
+users: ArrayList<String>;
 
 scores: [Str: Int];
 

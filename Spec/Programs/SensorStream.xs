@@ -9,28 +9,28 @@
 import hardware, thread, sync, stdio;
 
 data Reading {
-    sensor_id: Str;
+    sensor_id: String;
     value: Float;
-    unit: Str;
+    unit: String;
 }
 
 data Average {
-    sensor_id: Str;
+    sensor_id: String;
     count: Int;
     value: Float;
 }
 
 class Sensor {
-    id: Str;
-    unit: Str;
+    id: String;
+    unit: String;
 
-    Sensor(id: Str, unit: Str) {
-        self.id = id;
-        self.unit = unit;
+    Sensor(id: &Str, unit: &Str) {
+        self.id = new String(id);
+        self.unit = new String(unit);
     }
 
     async fn read() -> Task<Result<Optional<Reading>, Error>> {
-        sample: Optional<Float> = await hardware::read_float(self.id);
+        sample: Optional<Float> = await hardware::read_float(&self.id);
 
         return Ok(sample?.map(fn(value) {
             Reading {
@@ -43,8 +43,8 @@ class Sensor {
 }
 
 class Aggregator {
-    totals: [Str: Optional<Float>];
-    counts: [Str: Optional<Int>];
+    totals: [String: Optional<Float>];
+    counts: [String: Optional<Int>];
 
     Aggregator() {
         self.totals = [];
@@ -59,7 +59,7 @@ class Aggregator {
     fn averages() -> ArrayList<Average> {
         result: ArrayList<Average> = [];
 
-        for ((sensor_id, total): (Str, Optional<Float>) in self.totals) {
+        for ((sensor_id, total): (String, Optional<Float>) in self.totals) {
             count: Int = self.counts[sensor_id]!;
             result.append(Average {
                 sensor_id: sensor_id,

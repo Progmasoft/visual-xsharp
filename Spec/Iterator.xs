@@ -48,7 +48,7 @@ for (num in nums) {
 
 // resizable array iteration
 
-users: ArrayList<Str> = [
+users: ArrayList<&Str> = [
     "Leitwolf",
     "Alpha",
 ];
@@ -61,7 +61,7 @@ for (user in users) {
 
 // empty collection iteration
 
-users: ArrayList<Str> = [];
+users: ArrayList<&Str> = [];
 
 for (user in users) {
 
@@ -73,7 +73,7 @@ for (user in users) {
 
 // indexed iteration
 
-users: ArrayList<Str> = [
+users: ArrayList<&Str> = [
     "Leitwolf",
     "Alpha",
 ];

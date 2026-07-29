@@ -146,7 +146,7 @@ _x2
 // Invalid examples:
 
 fn: Int = 1;
-class: Str = "A";
+class: &Str = "A";
 module: Bool = true;
 import: Int = 2;
 if: Int = 3;
@@ -221,9 +221,9 @@ None: Int = 8;
 
 // Such values may be represented as strings when needed:
 
-hex_value: Str = "FF";
-binary_value: Str = "1010";
-octal_value: Str = "77";
+hex_value: &Str = "FF";
+binary_value: &Str = "1010";
+octal_value: &Str = "77";
 
 
 // ============================================================

@@ -12,7 +12,7 @@ import stdio;
 fn positional_person() -> (Str, Int, Bool)
 {
   person: (Str, Int, Bool) = ("Leitwolf", 29, true);
-  name: Str = person.0;
+  name: &Str = person.0;
   age: Int = person.1;
   person.2 = false;
   return person;
@@ -24,7 +24,7 @@ fn positional_person() -> (Str, Int, Bool)
 
 // Named tuple
 
-fn named_person() -> (name: Str, age: Int, is_admin: Bool)
+fn named_person() -> (name: &Str, age: Int, is_admin: Bool)
 {
   person := (name: "Leitwolf", age: 29, is_admin: true);
   println!("{} {} {}", person.name, person.age, person.is_admin);

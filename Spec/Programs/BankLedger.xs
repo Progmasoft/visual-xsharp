@@ -10,24 +10,24 @@ import stdio, process;
 
 data Money {
     cents: Int;
-    currency: Str;
+    currency: String;
 }
 
 data Account {
-    id: Str;
-    owner: Str;
+    id: String;
+    owner: String;
     balance: Money;
 }
 
 data Transfer {
-    source_account: Str;
-    target_account: Str;
+    source_account: String;
+    target_account: String;
     amount: Money;
-    memo: Optional<Str>;
+    memo: Optional<String>;
 }
 
 class Ledger {
-    accounts: [Str: Account];
+    accounts: [String: Account];
     audit: ArrayList<Transfer>;
 
     Ledger() {
@@ -35,7 +35,7 @@ class Ledger {
         self.audit = [];
     }
 
-    fn open(id: Str, owner: Str, balance: Money) {
+    fn open(id: String, owner: String, balance: Money) {
         self.accounts[id] = Account {
             id: id,
             owner: owner,
@@ -48,8 +48,8 @@ class Ledger {
             return Error(new Error("invalid transfer amount"));
         }
 
-        from_account: &mut Account = self.account_mut(transfer.source_account)@;
-        to_account: &mut Account = self.account_mut(transfer.target_account)@;
+        from_account: &mut Account = self.account_mut(&transfer.source_account)@;
+        to_account: &mut Account = self.account_mut(&transfer.target_account)@;
 
         if (from_account.balance.cents < transfer.amount.cents) {
             return Error(new Error("insufficient funds"));
@@ -61,7 +61,7 @@ class Ledger {
         return Ok();
     }
 
-    fn account_mut(id: Str) -> Result<&mut Account, Error> {
+    fn account_mut(id: &Str) -> Result<&mut Account, Error> {
         if (!self.accounts.contains(id)) {
             return Error(new Error("unknown account"));
         }
@@ -69,7 +69,7 @@ class Ledger {
     }
 
     fn print() -> Result<()> {
-        for ((id, account): (Str, Account) in self.accounts) {
+        for ((id, account): (String, Account) in self.accounts) {
             println!("{} {} {}", id, account.owner, account.balance.cents);
         }
         return Ok();
@@ -79,23 +79,23 @@ class Ledger {
 fn main() -> Result<Int, Error> {
     ledger := new Ledger();
 
-    ledger.open("checking", "Ada", Money {
+    ledger.open(new String("checking"), new String("Ada"), Money {
         cents: 50'000,
-        currency: "USD",
+        currency: new String("USD"),
     });
-    ledger.open("savings", "Ada", Money {
+    ledger.open(new String("savings"), new String("Ada"), Money {
         cents: 0,
-        currency: "USD",
+        currency: new String("USD"),
     });
 
     ledger.apply(Transfer {
-        source_account: "checking",
-        target_account: "savings",
+        source_account: new String("checking"),
+        target_account: new String("savings"),
         amount: Money {
             cents: 12'500,
-            currency: "USD",
+            currency: new String("USD"),
         },
-        memo: Some("monthly savings"),
+        memo: Some(new String("monthly savings")),
     })@;
 
     ledger.print()@;

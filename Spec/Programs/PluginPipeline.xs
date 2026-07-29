@@ -10,7 +10,7 @@ import stdio, process;
 
 interface TextPlugin {
     fn name() -> &Str;
-    fn run(input: Str) -> Result<Str, Error>;
+    fn run(input: &Str) -> Result<String, Error>;
 }
 
 class TrimPlugin : TextPlugin {
@@ -19,8 +19,8 @@ class TrimPlugin : TextPlugin {
         return "trim";
     }
 
-    fn run(input: Str) -> Result<Str, Error> {
-        return Ok(input.trim());
+    fn run(input: &Str) -> Result<String, Error> {
+        return Ok(new String(input.trim()));
     }
 }
 
@@ -30,27 +30,27 @@ class UppercasePlugin : TextPlugin {
         return "upper";
     }
 
-    fn run(input: Str) -> Result<Str, Error> {
+    fn run(input: &Str) -> Result<String, Error> {
         return Ok(input.uppercase());
     }
 }
 
 class ReplacePlugin : TextPlugin {
 
-    from_text: Str;
-    to_text: Str;
+    from_text: String;
+    to_text: String;
 
-    ReplacePlugin(from_text: Str, to_text: Str) {
-        self.from_text = from_text;
-        self.to_text = to_text;
+    ReplacePlugin(from_text: &Str, to_text: &Str) {
+        self.from_text = new String(from_text);
+        self.to_text = new String(to_text);
     }
 
     fn name() -> &Str {
         return "replace";
     }
 
-    fn run(input: Str) -> Result<Str, Error> {
-        return Ok(input.replace(self.from_text, self.to_text));
+    fn run(input: &Str) -> Result<String, Error> {
+        return Ok(input.replace(&self.from_text, &self.to_text));
     }
 }
 
@@ -65,20 +65,20 @@ class Pipeline {
         self.stages.append(stage);
     }
 
-    fn run(input: Str) -> Result<Str, Error> {
-        output: Str = input;
+    fn run(input: &Str) -> Result<String, Error> {
+        output: String = new String(input);
 
         for (stage: TextPlugin in self.stages) {
-            output = stage.run(output)@;
+            output = stage.run(&output)@;
         }
 
         return Ok(output);
     }
 }
 
-fn main(args: ArrayList<Str>) -> Result<Int, Error> {
+fn main(args: ArrayList<String>) -> Result<Int, Error> {
     input: &Str = if (args.count > 1) {
-        args[1]
+        &args[1]
     }
     else {
         "  hello x#  "

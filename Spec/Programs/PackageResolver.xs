@@ -15,14 +15,14 @@ enum VisitState {
 }
 
 data Package {
-    name: Str;
-    version: Str;
-    dependencies: ArrayList<Str>;
+    name: String;
+    version: String;
+    dependencies: ArrayList<String>;
 }
 
 class PackageGraph {
-    packages: [Str: Package];
-    states: [Str: VisitState];
+    packages: [String: Package];
+    states: [String: VisitState];
     ordered: ArrayList<Package>;
 
     PackageGraph() {
@@ -36,12 +36,12 @@ class PackageGraph {
         self.states[package.name] = VisitState::White;
     }
 
-    fn resolve(root: Str) -> Result<ArrayList<Package>, Error> {
+    fn resolve(root: &Str) -> Result<ArrayList<Package>, Error> {
         self.visit(root)@;
         return Ok(self.ordered);
     }
 
-    fn visit(name: Str) -> Result<()> {
+    fn visit(name: &Str) -> Result<()> {
         if (!self.packages.contains(name)) {
             return Error(new Error("unknown package"));
         }
@@ -61,8 +61,8 @@ class PackageGraph {
         self.states[name] = VisitState::Gray;
         package: Package = self.packages[name];
 
-        for (dependency: Str in package.dependencies) {
-            self.visit(dependency)@;
+        for (dependency: String in package.dependencies) {
+            self.visit(&dependency)@;
         }
 
         self.states[name] = VisitState::Black;
@@ -71,11 +71,11 @@ class PackageGraph {
     }
 }
 
-fn package_of(name: Str, version: Str, dependencies: ArrayList<Str>) -> Package {
+fn package_of(name: &Str, version: &Str, dependencies: ArrayList<&Str>) -> Package {
     return Package {
-        name: name,
-        version: version,
-        dependencies: dependencies,
+        name: new String(name),
+        version: new String(version),
+        dependencies: dependencies.map(fn(dependency) { new String(dependency) }),
     };
 }
 
