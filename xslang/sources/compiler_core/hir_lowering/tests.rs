@@ -53,6 +53,30 @@ fn lowers_module_and_function_signature()
 }
 
 #[test]
+fn preserves_enum_data_identity_and_variant_payloads()
+{
+  let mut nodes = vec![syntax(FILE, "", None, vec![1]),
+                       syntax(DECL_ENUM, "enum data Value", Some(0), vec![2, 3, 6]),
+                       syntax(IDENTIFIER, "Value", Some(1), vec![]),
+                       syntax(ENUM_VARIANT, "Number: Long", Some(1), vec![4, 5]),
+                       syntax(IDENTIFIER, "Number", Some(3), vec![]),
+                       syntax(TYPE_NAMED, "Long", Some(3), vec![7]),
+                       syntax(ENUM_VARIANT, "Empty", Some(1), vec![8]),
+                       syntax(PATH, "Long", Some(5), vec![9]),
+                       syntax(IDENTIFIER, "Empty", Some(6), vec![]),
+                       syntax(IDENTIFIER, "Long", Some(7), vec![])];
+  nodes[1].flags = DATA_ENUM;
+  let module = lower_declarations(&SyntaxTree { root: 0,
+                                                nodes }).expect("enum data declaration");
+  let declaration = &module.nominal_types[0];
+  assert_eq!(declaration.kind, declarations::NominalKind::EnumData);
+  assert_eq!(declaration.variants[0].name, "Number");
+  assert_eq!(declaration.variants[0].payload,
+             Some(declarations::TypeRef::Primitive(PrimitiveType::Long)));
+  assert_eq!(declaration.variants[1].payload, None);
+}
+
+#[test]
 fn canonicalizes_explicit_string_without_changing_literal_inference()
 {
   let mut nodes = vec![syntax(FILE, "", None, vec![1]),

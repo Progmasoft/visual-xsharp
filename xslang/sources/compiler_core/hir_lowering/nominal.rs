@@ -13,7 +13,7 @@ fn enum_variant<'a>(tree: &SyntaxTree,
   let path = path_text(tree, value);
   let (enum_name, variant_name) = path.rsplit_once("::")?;
   let declaration = context.nominal_types.get(enum_name)?;
-  (declaration.kind == declarations::NominalKind::Enum).then_some(())?;
+  matches!(declaration.kind, declarations::NominalKind::Enum).then_some(())?;
   let variant = declaration.variants
                            .iter()
                            .find(|variant| variant.name == variant_name)?;
@@ -94,7 +94,13 @@ pub(super) fn lower_nominal_type(tree: &SyntaxTree,
          .enumerate()
          .map(|(tag, variant)| {
            let name = first_child_kind(tree, variant, IDENTIFIER).ok_or(LoweringError::MissingIdentifier)?;
+           let payload = variant.children
+                                .iter()
+                                .filter_map(|index| tree.nodes.get(*index))
+                                .find(|child| (TYPE_NAMED..=TYPE_UNIT).contains(&child.kind) || child.kind == TYPE_MAP)
+                                .map(|child| lower_type(tree, child));
            Ok(declarations::EnumVariant { name: name.text.clone(),
+                                          payload,
                                           tag: u32::try_from(tag).map_err(|_| LoweringError::InvalidRoot)?,
                                           span: variant.span.clone() })
          })
@@ -104,6 +110,7 @@ pub(super) fn lower_nominal_type(tree: &SyntaxTree,
                                  {
                                    DECL_CLASS => declarations::NominalKind::Class,
                                    DECL_INTERFACE => declarations::NominalKind::Interface,
+                                   DECL_ENUM if value.flags & DATA_ENUM != 0 => declarations::NominalKind::EnumData,
                                    DECL_ENUM => declarations::NominalKind::Enum,
                                    _ => declarations::NominalKind::Data,
                                  },

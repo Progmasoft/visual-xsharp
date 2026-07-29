@@ -103,6 +103,7 @@ pub enum NominalKind
   Interface,
   Data,
   Enum,
+  EnumData,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -136,6 +137,7 @@ pub struct Field
 pub struct EnumVariant
 {
   pub name: String,
+  pub payload: Option<TypeRef>,
   pub tag: u32,
   pub span: SourceSpan,
 }

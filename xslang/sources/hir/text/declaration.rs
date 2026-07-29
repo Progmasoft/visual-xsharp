@@ -29,6 +29,7 @@ pub(super) fn write_declarations(output: &mut String, declarations: &[NominalTyp
       NominalKind::Interface => "interface",
       NominalKind::Data => "data",
       NominalKind::Enum => "enum",
+      NominalKind::EnumData => "enum data",
     };
     let _ = writeln!(output, "  {kind} {}", declaration.name);
     for base in &declaration.bases
@@ -60,7 +61,14 @@ pub(super) fn write_declarations(output: &mut String, declarations: &[NominalTyp
     }
     for variant in &declaration.variants
     {
-      let _ = writeln!(output, "    variant {}", variant.name);
+      if let Some(payload) = &variant.payload
+      {
+        let _ = writeln!(output, "    variant {}: {}", variant.name, type_ref_text(payload));
+      }
+      else
+      {
+        let _ = writeln!(output, "    variant {}", variant.name);
+      }
     }
     output.push_str("  .end\n");
   }
@@ -90,6 +98,10 @@ pub(super) fn parse_declarations(lines: &[&str],
     let (kind, name) = if let Some(name) = line.strip_prefix("data ")
     {
       (NominalKind::Data, name)
+    }
+    else if let Some(name) = line.strip_prefix("enum data ")
+    {
+      (NominalKind::EnumData, name)
     }
     else if let Some(name) = line.strip_prefix("class ")
     {
@@ -150,8 +162,21 @@ fn parse_members(lines: &[&str],
       }
       continue;
     }
-    if let Some(name) = line.strip_prefix("variant ")
+    if let Some(record) = line.strip_prefix("variant ")
     {
+      let (name, payload) = match record.split_once(": ")
+      {
+        Some((name, ty)) => match parse_type_text(ty).and_then(checked_to_ref)
+        {
+          Some(ty) => (name, Some(ty)),
+          None =>
+          {
+            diagnostics.push(error(line_number, "invalid enum data payload type".to_string()));
+            continue;
+          }
+        },
+        None => (record, None),
+      };
       if name.is_empty()
       {
         diagnostics.push(error(line_number, "enum variant name cannot be empty".to_string()));
@@ -159,6 +184,7 @@ fn parse_members(lines: &[&str],
       else if let Ok(tag) = u32::try_from(variants.len())
       {
         variants.push(EnumVariant { name: name.to_string(),
+                                    payload,
                                     tag,
                                     span: source_span(line_number) });
       }

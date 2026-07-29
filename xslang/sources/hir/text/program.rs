@@ -274,16 +274,28 @@ mod tests
                                        bases: Vec::new(),
                                        fields: Vec::new(),
                                        variants: vec![EnumVariant { name: "Red".to_string(),
+                                                                    payload: None,
                                                                     tag: 0,
                                                                     span: source_span.clone() },
                                                       EnumVariant { name: "Green".to_string(),
+                                                                    payload: None,
                                                                     tag: 1,
+                                                                    span: source_span.clone() }],
+                                       span: source_span.clone() },
+                         NominalType { name: "Value".to_string(),
+                                       kind: NominalKind::EnumData,
+                                       bases: Vec::new(),
+                                       fields: Vec::new(),
+                                       variants: vec![EnumVariant { name: "Number".to_string(),
+                                                                    payload:
+                                                                      Some(TypeRef::Primitive(PrimitiveType::Long)),
+                                                                    tag: 0,
                                                                     span: source_span.clone() }],
                                        span: source_span }];
     let text = program_to_xhir_with_declarations("root", &nominal_types, &functions, &[0, 1]);
     let parsed = parse_xhir_program(&text).expect("program should parse");
     assert_eq!(parsed.name, "root");
-    assert_eq!(parsed.nominal_types.len(), 4);
+    assert_eq!(parsed.nominal_types.len(), 5);
     assert_eq!(parsed.nominal_types[0].kind, NominalKind::Interface);
     assert_eq!(parsed.nominal_types[2].name, "Point");
     assert_eq!(parsed.nominal_types[2].kind, NominalKind::Data);
@@ -297,6 +309,9 @@ mod tests
     assert_eq!(parsed.nominal_types[3].kind, NominalKind::Enum);
     assert_eq!(parsed.nominal_types[3].variants[1].name, "Green");
     assert_eq!(parsed.nominal_types[3].variants[1].tag, 1);
+    assert_eq!(parsed.nominal_types[4].kind, NominalKind::EnumData);
+    assert_eq!(parsed.nominal_types[4].variants[0].payload,
+               Some(TypeRef::Primitive(PrimitiveType::Long)));
     assert_eq!(parsed.parameter_counts, vec![0, 1]);
     assert_eq!(program_to_xhir_with_declarations(&parsed.name,
                                                  &parsed.nominal_types,
