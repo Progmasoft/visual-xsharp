@@ -89,7 +89,7 @@ foreach(output hir mir xlil)
     PASS_REGULAR_EXPRESSION "wrote ${output_upper}")
   add_test(NAME build_file_output_${output}_artifact COMMAND xs_text_artifact_tests
     ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls${output_extension}
-    "${output_extension} version 0" "${function_record} make_pair" "${function_record} main")
+    "${output_extension} version 1" "${function_record} make_pair" "${function_record} main")
   set_tests_properties(build_file_output_${output}_artifact PROPERTIES TIMEOUT 5
     DEPENDS build_file_output_${output})
 endforeach()

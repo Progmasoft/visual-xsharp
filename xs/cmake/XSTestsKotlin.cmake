@@ -85,7 +85,7 @@ foreach(output hir mir xlil)
     PASS_REGULAR_EXPRESSION "wrote ${output_upper}")
   add_test(NAME kotlin_project_output_${output}_artifact COMMAND xs_text_artifact_tests
     ${XS_PROJECT_NATIVE_FIXTURE_DIR}/multi_file/sources/main${output_extension}
-    "${output_extension} version 0" "${function_record} add" "${function_record} main")
+    "${output_extension} version 1" "${function_record} add" "${function_record} main")
   set_tests_properties(kotlin_project_output_${output}_artifact PROPERTIES TIMEOUT 5
     DEPENDS kotlin_project_output_${output})
 endforeach()

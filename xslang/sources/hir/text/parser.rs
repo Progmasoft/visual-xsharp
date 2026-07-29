@@ -913,10 +913,8 @@ impl Parser<'_>
     {
       Ok(version) if is_supported_xhir_version(version) =>
       {}
-      Ok(version) =>
-      {
-        self.report(format!("unsupported XHIR version {version}; supported version is {SUPPORTED_XHIR_VERSION}"))
-      }
+      Ok(version) => self.report(format!("unsupported XHIR version {version}; supported versions are 0 and \
+                                          {SUPPORTED_XHIR_VERSION}")),
       Err(_) => self.report("invalid XHIR version number".to_string()),
     }
     self.index += 1;

@@ -35,11 +35,11 @@ final class XlilBindingTest {
       text = writer.emit();
     }
 
-    assertTrue(text.startsWith(".xlil version 0\n.xlil module JavaBinding\n"));
+    assertTrue(text.startsWith(".xlil version 1\n.xlil module JavaBinding\n"));
     assertTrue(text.contains("%r0:i32 = const.i32 42"));
     try {
       XlilModule module = XlilReader.parse("JavaBinding.xlil", text);
-      assertEquals(0, module.textVersion());
+      assertEquals(1, module.textVersion());
       assertEquals("JavaBinding", module.name());
       assertEquals(1, module.functions().size());
       assertEquals("main", module.functions().getFirst().name());

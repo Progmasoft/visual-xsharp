@@ -833,7 +833,8 @@ XsLilStatus xs_lil_module_parse_text(const char *path, const char *text, size_t 
   Parser parser = {.path = path, .text = text, .length = length};
   const char *line = nullptr;
   size_t line_length = 0;
-  if(!next_line(&parser, &line, &line_length) || !span_equals(line, line_length, ".xlil version 0"))
+  if(!next_line(&parser, &line, &line_length) ||
+     (!span_equals(line, line_length, ".xlil version 0") && !span_equals(line, line_length, ".xlil version 1")))
     return parse_error(&parser, error, "XLIL version header is invalid or unsupported");
   if(!next_line(&parser, &line, &line_length))
     return parse_error(&parser, error, "XLIL module header is missing");

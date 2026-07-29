@@ -28,7 +28,7 @@ fn writes_symbol_module_as_structured_xhir()
 
   let text = module_symbols_to_xhir(&module);
 
-  assert!(text.contains(".xhir version 0\nmodule App"));
+  assert!(text.contains(".xhir version 1\nmodule App"));
   assert!(text.contains("import println from std.io"));
   assert!(text.contains("symbol Main\n    kind function\n    visibility public"));
   assert!(text.contains(".end\n.program end\n"));
@@ -195,11 +195,11 @@ fn rejects_non_xhir_header()
 fn rejects_unsupported_xhir_version()
 {
   let diagnostics =
-    parse_xhir_function(".xhir version 1\nfunction Main\n  signature\n    returns void\n").expect_err("unsupported \
+    parse_xhir_function(".xhir version 2\nfunction Main\n  signature\n    returns void\n").expect_err("unsupported \
                                                                                                        XHIR version \
                                                                                                        must fail");
 
-  assert!(diagnostics[0].message.contains("unsupported XHIR version 1"));
+  assert!(diagnostics[0].message.contains("unsupported XHIR version 2"));
 }
 
 #[test]
@@ -219,7 +219,7 @@ fn parses_explicit_end_markers_without_indentation()
 #[test]
 fn rejects_invalid_xhir_module_symbols()
 {
-  let diagnostics = parse_xhir_module_symbols(".xhir version 0\nmodule App\n\ndeclarations\n  symbol Main\n    kind \
+  let diagnostics = parse_xhir_module_symbols(".xhir version 1\nmodule App\n\ndeclarations\n  symbol Main\n    kind \
                                                nope\n").expect_err("invalid symbol kind should fail");
 
   assert_eq!(diagnostics.len(), 2);
@@ -229,7 +229,7 @@ fn rejects_invalid_xhir_module_symbols()
 fn rejects_invalid_xhir_function()
 {
   let diagnostics =
-    parse_xhir_function(".xhir version 0\nfunction Main\n  signature\n    returns ?\n").expect_err("unknown return \
+    parse_xhir_function(".xhir version 1\nfunction Main\n  signature\n    returns ?\n").expect_err("unknown return \
                                                                                                     type should fail");
 
   assert_eq!(diagnostics.len(), 1);

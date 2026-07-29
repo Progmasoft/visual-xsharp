@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module AggregateNative
 .type %t0 Point : (i32, i32)
 .func point_x : (i32, i32) -> i32

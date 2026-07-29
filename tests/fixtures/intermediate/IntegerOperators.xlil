@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module IntegerOperators
 
 .func add_byte : (u8, u8) -> u8

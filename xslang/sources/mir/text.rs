@@ -19,12 +19,12 @@ mod writer;
 pub use parser::{XmirParseDiagnostic, parse_xmir_function};
 pub use program::{XmirProgram, parse_xmir_program, program_to_xmir, program_to_xmir_with_types};
 pub use writer::function_to_xmir;
-pub const SUPPORTED_XMIR_VERSION: u32 = 0;
-
+/// Latest XMIR text version emitted by the canonical writer.
+pub const SUPPORTED_XMIR_VERSION: u32 = 1;
 #[must_use]
 pub const fn is_supported_xmir_version(version: u32) -> bool
 {
-  matches!(version, SUPPORTED_XMIR_VERSION)
+  matches!(version, 0 | SUPPORTED_XMIR_VERSION)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -388,7 +388,7 @@ mod tests
 
     let text = function_to_xmir(&function);
 
-    assert!(text.contains(".xmir version 0\nfunction Main"));
+    assert!(text.contains(".xmir version 1\nfunction Main"));
     assert!(text.contains("returns void"));
     assert!(text.contains("parameters"));
     assert!(text.contains("parameter argc"));
@@ -756,11 +756,11 @@ mod tests
   #[test]
   fn rejects_unsupported_xmir_version()
   {
-    let diagnostics = parse_xmir_function(".xmir version 1\nfunction Main\nreturns void\n").expect_err("unsupported \
+    let diagnostics = parse_xmir_function(".xmir version 2\nfunction Main\nreturns void\n").expect_err("unsupported \
                                                                                                         XMIR version \
                                                                                                         must fail");
 
-    assert!(diagnostics[0].message.contains("unsupported XMIR version 1"));
+    assert!(diagnostics[0].message.contains("unsupported XMIR version 2"));
   }
 
   #[test]
@@ -782,7 +782,7 @@ mod tests
   #[test]
   fn rejects_invalid_xmir_function()
   {
-    let diagnostics = parse_xmir_function(".xmir version 0\nfunction Main\n\ncontrol_flow\n  block nope\n    \
+    let diagnostics = parse_xmir_function(".xmir version 1\nfunction Main\n\ncontrol_flow\n  block nope\n    \
                                            terminator return\n").expect_err("invalid block id should fail");
 
     assert_eq!(diagnostics.len(), 1);

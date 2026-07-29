@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module BitwiseExit
 .func main : () -> i32
 bb0.entry:

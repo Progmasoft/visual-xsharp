@@ -51,12 +51,13 @@ use names::{field_path_name, literal_name, symbol_kind_name, type_name, visibili
 pub use parser::{XhirParseDiagnostic, parse_xhir_function, parse_xhir_module_symbols};
 use statement_writer::{write_desugared_statement, write_statement};
 
-pub const SUPPORTED_XHIR_VERSION: u32 = 0;
+/// Latest XHIR text version emitted by the canonical writer.
+pub const SUPPORTED_XHIR_VERSION: u32 = 1;
 
 #[must_use]
 pub const fn is_supported_xhir_version(version: u32) -> bool
 {
-  matches!(version, SUPPORTED_XHIR_VERSION)
+  matches!(version, 0 | SUPPORTED_XHIR_VERSION)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -99,7 +100,7 @@ pub fn parse_xhir_header(text: &str) -> Option<XhirDocumentHeader>
 pub fn module_symbols_to_xhir(module: &Module) -> String
 {
   let mut output = String::new();
-  let _ = writeln!(output, ".xhir version 0");
+  let _ = writeln!(output, ".xhir version 1");
   let _ = writeln!(output, "module {}", module.name);
   if !module.imports.is_empty()
   {
@@ -131,7 +132,7 @@ pub fn module_symbols_to_xhir(module: &Module) -> String
 pub fn function_to_xhir(function: &Function) -> String
 {
   let mut output = String::new();
-  let _ = writeln!(output, ".xhir version 0");
+  let _ = writeln!(output, ".xhir version 1");
   let _ = writeln!(output, "function {}", function.name);
   let _ = writeln!(output, "  signature");
   match &function.return_type
@@ -879,7 +880,7 @@ fn write_desugared_expression(output: &mut String, expression: &DesugaredExpress
 
 fn write_function_header(output: &mut String, name: &str, return_type: Option<&Type>)
 {
-  let _ = writeln!(output, ".xhir version 0");
+  let _ = writeln!(output, ".xhir version 1");
   let _ = writeln!(output, "function {name}");
   let _ = writeln!(output, "  signature");
   match return_type

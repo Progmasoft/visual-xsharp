@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module CharFlow
 .func identity : (u16) -> u16
 .param %r0:u16

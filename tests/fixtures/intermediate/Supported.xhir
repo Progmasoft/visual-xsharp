@@ -1,4 +1,4 @@
-.xhir version 0
+.xhir version 1
 program root
 
 function main

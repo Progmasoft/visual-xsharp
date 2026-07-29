@@ -12,6 +12,6 @@ fn main()
   println!("cargo::rustc-env=XSLANG_BUILD_VERSION={package_version}");
   for format in ["XHIR", "XMIR", "XLIL"]
   {
-    println!("cargo::rustc-env=XSLANG_{format}_VERSION=0");
+    println!("cargo::rustc-env=XSLANG_{format}_VERSION=1");
   }
 }

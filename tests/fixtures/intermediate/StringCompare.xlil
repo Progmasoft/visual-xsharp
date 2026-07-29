@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module StringCompare
 .func same : (str, str) -> bool
 .param %r0:str

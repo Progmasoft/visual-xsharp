@@ -97,12 +97,12 @@ static void test_materialized_syntax_packet(void)
   uint64_t xhir_length = 0;
   const uint8_t *xhir_text = xslang_compiler_core_session_xhir_text(session, &xhir_length);
   CHECK(packet == nullptr || xhir_text != nullptr);
-  CHECK(packet == nullptr || text_contains(xhir_text, xhir_length, ".xhir version 0"));
+  CHECK(packet == nullptr || text_contains(xhir_text, xhir_length, ".xhir version 1"));
   CHECK(packet == nullptr || text_contains(xhir_text, xhir_length, "function update_values"));
   uint64_t xmir_length = 0;
   const uint8_t *xmir_text = xslang_compiler_core_session_xmir_text(session, &xmir_length);
   CHECK(packet == nullptr || xmir_text != nullptr);
-  CHECK(packet == nullptr || text_contains(xmir_text, xmir_length, ".xmir version 0"));
+  CHECK(packet == nullptr || text_contains(xmir_text, xmir_length, ".xmir version 1"));
   CHECK(packet == nullptr || text_contains(xmir_text, xmir_length, "function update_values"));
   uint64_t xlil_length = 0;
   const uint8_t *xlil_text = xslang_compiler_core_session_xlil_text(session, &xlil_length);

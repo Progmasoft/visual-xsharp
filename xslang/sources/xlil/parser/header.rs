@@ -31,7 +31,8 @@ impl Parser<'_>
       {
         self.report(DiagnosticCode::InvalidVersionHeader,
                     1,
-                    &format!("XLIL version {version} is not supported; supported version is {SUPPORTED_XLIL_VERSION}"));
+                    &format!("XLIL version {version} is not supported; supported versions are 0 and \
+                              {SUPPORTED_XLIL_VERSION}"));
         false
       }
       Err(_) =>

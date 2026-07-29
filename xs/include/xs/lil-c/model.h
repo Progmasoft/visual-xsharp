@@ -12,7 +12,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define XS_LIL_TEXT_VERSION 0U
+#define XS_LIL_TEXT_VERSION 1U
 #define XS_LIL_INVALID_VALUE_ID UINT32_MAX
 #define XS_LIL_INVALID_BLOCK_ID UINT32_MAX
 #define XS_LIL_INVALID_SLOT_ID UINT32_MAX

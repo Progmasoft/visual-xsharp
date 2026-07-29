@@ -42,7 +42,7 @@ An `.xlil` file is not executable bytecode. It is backend input.
 Current text records intentionally look closer to assembly than to C-like declarations:
 
 ```text
-.xlil version 0
+.xlil version 1
 .xlil module App
 .type %t0 Pair : (i32, i32)
 .array %a0 : i32 x 3
@@ -58,7 +58,8 @@ bb0.entry:
 
 Format notes:
 
-- `.xlil version 0` starts a registry file and declares the XLIL text grammar version that `xs build` should parse.
+- `.xlil version 1` starts a registry file and declares the XLIL text grammar version that `xs build` should parse.
+  Canonical writers emit version `1`; readers retain version `0` compatibility.
 - `.xlil module <name>` declares the module name after the version header.
 - `.type %tN <name> : (<fields>)` adds a sequential nominal aggregate layout to the module type registry. Aggregate
   fields may reference primitive types or previously declared `%tN` types.
@@ -154,13 +155,14 @@ when MIR is lowered to XLIL. XHIR remains closer to X# source and represents the
 Similarly, XHIR preserves a source-like character literal, XMIR writes its 16-bit code-unit value as `const.u16`, and
 XLIL carries that value as a target-independent `u16` register.
 
-The XLIL v0 `str` value is a borrowed view containing a pointer and a target-sized UTF-16 code-unit count. A constant's
+The XLIL v1 `str` value is a borrowed view containing a pointer and a target-sized UTF-16 code-unit count. A constant's
 backing data is immutable and has static storage duration. Its length excludes any terminator; XLIL string constants do
 not add or require a null terminator. `Optional<Str>` ownership and allocation are separate higher-level semantics and
 are not represented by this `str` constant record.
 
-Version `0` is the only supported XLIL version today. The header exists so `xs build --xlil -file <input.xlil>` can select
-the correct XLIL grammar as the format evolves. It is not a bytecode VM version and does not make `.xlil` binary.
+Version `1` is the canonical XLIL format. Readers accept versions `0` and `1`; later versions are rejected so
+`xs build --xlil -file <input.xlil>` never silently interprets an unknown grammar. This is not a bytecode VM version and
+does not make `.xlil` binary.
 
 ## Public API
 
@@ -179,10 +181,10 @@ The API is intended to let:
 - alternative frontends exist,
 - every XLIL-producing compiler reuse the same backend infrastructure.
 
-The C23 API can construct every record in the currently implemented XLIL v0 model: scalar and registry types, external
+The C23 API can construct every record in the currently implemented XLIL v1 model: scalar and registry types, external
 and defined function signatures, parameter values, stack slots, blocks, constants, calls, integer and floating-point
 operations, strings, aggregates, arrays, memory operations, branches, returns, and panic terminators. It also provides
-module verification, canonical owned-text emission, bounded v0 text parsing, mutable producer lookup, and read-only
+module verification, canonical owned-text emission, bounded v0/v1 text parsing, mutable producer lookup, and read-only
 inspection of every instruction payload. Direct `xs build --xlil -file <input.xlil>` uses the same parser and verifier
 before emitting optimized LLVM IR, an object file, and a native `.xse` executable for the supported local-target subset.
 
@@ -229,7 +231,7 @@ xs_lil_text_destroy(&text);
 xs_lil_module_destroy(module);
 ```
 
-`xs_lil_module_emit_text` verifies the complete module before allocating canonical v0 text. The returned bytes belong to
+`xs_lil_module_emit_text` verifies the complete module before allocating canonical v1 text. The returned bytes belong to
 the caller until `xs_lil_text_destroy`. `XS_LIL_TEXT_VERSION` names the current format version, and explicit invalid
 value/block/slot ID constants are available to bindings that cannot conveniently use C designated initializers.
 
@@ -246,7 +248,7 @@ want to reproduce the error and text structure layouts can allocate those object
 the standalone headers under `<xs/lil-c/>`: `api.h`, `model.h`, `module.h`, `function.h`, `instruction.h`, `builder.h`,
 and `text.h`.
 The Rust producer API is exposed directly under `xslang::xlil::*`; its public model, parser, verifier, and writer can build
-and round-trip the same XLIL v0 registry without going through the C ABI.
+and round-trip the same XLIL v1 registry without going through the C ABI.
 Java 25 applications use the official `org.xsslang:xlil` module. Its reader and writer call this same stable ABI through
 the Foreign Function and Memory API; see [XLIL_JAVA.md](XLIL_JAVA.md).
 

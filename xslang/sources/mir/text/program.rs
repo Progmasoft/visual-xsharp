@@ -9,7 +9,7 @@ use crate::mir::Function;
 use crate::xlil::{AggregateType, ArrayType, Type, type_from_name, type_text};
 
 use super::parser::{XmirParseDiagnostic, parse_xmir_function};
-use super::{SUPPORTED_XMIR_VERSION, function_to_xmir};
+use super::{SUPPORTED_XMIR_VERSION, function_to_xmir, is_supported_xmir_version};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct XmirProgram
@@ -348,10 +348,14 @@ fn function_document(lines: &[&str]) -> String
 
 fn validate_header(lines: &[&str], diagnostics: &mut Vec<XmirParseDiagnostic>)
 {
-  let expected = format!(".xmir version {SUPPORTED_XMIR_VERSION}");
-  if lines.first().map(|line| line.trim()) != Some(expected.as_str())
+  let version = lines.first()
+                     .map(|line| line.trim())
+                     .and_then(|line| line.strip_prefix(".xmir version "))
+                     .and_then(|version| version.parse::<u32>().ok());
+  if !version.is_some_and(is_supported_xmir_version)
   {
-    diagnostics.push(diagnostic(1, format!("expected '{expected}'")));
+    diagnostics.push(diagnostic(1,
+                                format!("expected a supported XMIR version (0 or {SUPPORTED_XMIR_VERSION})")));
   }
 }
 

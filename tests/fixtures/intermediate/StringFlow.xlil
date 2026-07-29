@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module StringFlow
 .func identity : (str) -> str
 .param %r0:str

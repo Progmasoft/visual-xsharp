@@ -11,7 +11,7 @@ The official Java binding is published as `org.xsslang:xlil:2026.1`. It targets 
 The binding does not maintain a second XLIL implementation:
 
 - `org.xsslang.xlil.writer` constructs modules through `XsLilBuilder`, invokes the native verifier, and emits canonical
-  XLIL v0 text;
+  XLIL v1 text;
 - `org.xsslang.xlil.reader` delegates parsing and verification to `xs_lil_module_parse_text`, then takes immutable Java
   snapshots through read-only C accessors;
 - `org.xsslang.ffi.c.CString` provides explicit NUL-terminated UTF-8 conversion for FFM callers.

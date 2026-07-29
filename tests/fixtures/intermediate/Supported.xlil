@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module App
 .func Identity : (i64) -> i64
 .param %r0:i64

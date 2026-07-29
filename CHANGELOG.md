@@ -12,6 +12,9 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Advanced the canonical XHIR, XMIR, and XLIL text format header to version `1`. Readers continue to accept version `0`
+  artifacts for compatibility, while writers now emit version `1`.
+
 ## 0.2.3 - 2026-07-29
 
 - Moved the experimental managed-heap implementation out of `xslang` into the independent X Platform project, where it

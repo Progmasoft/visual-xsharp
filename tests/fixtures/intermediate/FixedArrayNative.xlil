@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module FixedArrayNative
 .array %a0 : i32 x 3
 .func second : (i32, i32, i32) -> i32

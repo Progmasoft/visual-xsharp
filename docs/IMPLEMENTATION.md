@@ -206,7 +206,7 @@ The documented compilation order is preserved:
   constants or existing checked index expressions. Runtime-sized storage currently uses hosted allocation and has no
   reclamation contract yet. Set runtime layout and operations, `ArrayList<T>` count-changing operations, and map
   value/layout lowering remain deferred.
-- Positional and named tuple types, literals, and projections now remain structural through typed HIR and XHIR v0. Tuple
+- Positional and named tuple types, literals, and projections now remain structural through typed HIR and XHIR v1. Tuple
   layouts share the target-independent aggregate registry with nominal `data` values, then reuse MIR/XLIL `aggregate` and
   `extract` operations through LLVM structure lowering and native `.xse` emission. The same registry discovers nested tuple
   layouts in tuple and fixed-array element types. Tuple-valued parameters, returns, calls, direct element assignment, and
@@ -520,11 +520,11 @@ typed stack slots. This keeps mutations visible after conditionals, loops, and m
 instructions.
 Value-producing `match` expressions use the same ordered pattern CFG. Every arm must provide a tail value of the declared
 result type. MIR writes those mutually exclusive values to compiler-owned target-independent storage, joins at a merge
-block, and loads the result for its enclosing expression. XHIR v0 records the selector type, result type, arms, and value
+block, and loads the result for its enclosing expression. XHIR v1 records the selector type, result type, arms, and value
 blocks explicitly; LLVM-specific phi or ABI semantics do not leak into HIR or MIR.
 For supported single-file and multi-file builds, this Rust path no longer stops at an internal MIR count. A program session
 collects all function signatures before lowering any body, allowing same-module forward calls across files. It then
-borrow-checks and optimizes each lowered function, lowers the combined module to XLIL v0 text, and exposes that text through
+borrow-checks and optimizes each lowered function, lowers the combined module to XLIL v1 text, and exposes that text through
 a borrowed C ABI view. The C23 driver parses it with the public `xs/lil.h` API, verifies the reconstructed module, and
 reuses the established LLVM IR, object, and native `.xse` emission path. This is the only source-body compilation route;
 unsupported source forms stop with a compiler diagnostic instead of entering a second fallback compiler. HIR and MIR
@@ -703,14 +703,14 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
 - Documented numeric primitive types map to LLVM types.
 - Body-less function declarations and function signature lowering are supported.
 - XLIL function declaration signatures lower through the XLIL type vocabulary rather than through HIR primitive types.
-- The public `xs/lil.h` producer surface can build every implemented XLIL v0 registry/body record, verify the completed
+- The public `xs/lil.h` producer surface can build every implemented XLIL v1 registry/body record, verify the completed
   opaque model, emit caller-owned canonical text without exposing `FILE *` across an FFI boundary, parse it back, and
   inspect typed instruction payloads. Its optional insertion-point builder infers common operand and registry types, while
   stable opaque handles, an API-version query, exported-symbol annotations, and the installed shared `xs_lil` library
   form the FFI boundary for official bindings.
 - LLVM optimization pipelines from `default<O0>` through `default<O3>` can be configured.
 - LLVM module verification, LLVM IR text emission, and object file emission work.
-- `xs build --xlil -file <input.xlil>` parses and verifies XLIL v0 text through `xs_lil_module_parse_text`, then lowers to
+- `xs build --xlil -file <input.xlil>` parses and verifies XLIL v1 text through `xs_lil_module_parse_text`, then lowers to
   LLVM IR, verifies and optimizes the LLVM module, and emits an object file and native `.xse` executable beside the input.
   Native direct XLIL requires exactly one defined
   `.func main : () -> i32`; its supported body subset includes `.param`, all fixed-width integer constants and operations,
@@ -743,8 +743,8 @@ Details: [LLVM_BACKEND.md](LLVM_BACKEND.md)
 - `.xhir`, `.xmir`, and `.xlil` are the extensions for HIR, MIR, and XLIL code. They are human-readable text formats, not
   binary or opaque serialized compiler state.
 - Their leading `version N` records are compiler input contracts for `xs build`; they select the supported XHIR/XMIR/XLIL
-  text grammar version to parse. Version `0` is the only supported version today, but the parser structure is open to adding
-  later versions explicitly.
+  text grammar version to parse. Canonical writers emit version `1`, while readers accept versions `0` and `1`; unknown
+  later versions remain explicit errors.
 - `.xhir` and `.xmir` are intended for direct developer inspection, code review, regression fixtures, and debugging. Their
   official record grammar is not fully documented yet, but future grammar changes must keep that human-readable property.
 - `.xhir` and `.xmir` are not assembly-like. XHIR should expose resolved semantic structure; XMIR should expose structured
@@ -758,7 +758,7 @@ Details: [LLVM_BACKEND.md](LLVM_BACKEND.md)
 - The stable XLIL registry/generation C23 API target is documented as `#include <xs/lil.h>`.
 - The XLIL AOT C23 API target is separated as `#include <xs/lil/aot.h>`; until concrete object/link behavior exists, it only
   marks the planned public surface.
-- External frontends and tools can produce the supported XLIL v0 subset through the public C23 model and use the LLVM
+- External frontends and tools can produce the supported XLIL v1 subset through the public C23 model and use the LLVM
   backend pipeline to produce native executables.
 - Third-party languages can generate XLIL through `xs/lil.h`; XLIL AOT, HIR baseline JIT, and MIR performance JIT are planned
   as separate public headers: `xs/lil/aot.h`, `xs/hir/jit.h`, and `xs/mir/jit.h`.
@@ -770,7 +770,7 @@ Details: [LLVM_BACKEND.md](LLVM_BACKEND.md)
   typed stack slots and `load`/`store`, i32 arithmetic/bitwise/shift/comparison, i64 arithmetic/bitwise/shift/comparison,
   aggregate and fixed-array type registries, `aggregate`, `array`, `extract`, `extract.array`, `call`, `br`, `br_if`,
   and `return`.
-- The XLIL text writer emits assembly-like registry records: `.xlil version 0`, `.xlil module`, `.extern`, `.func`,
+- The XLIL text writer emits assembly-like registry records: `.xlil version 1`, `.xlil module`, `.extern`, `.func`,
   `.type %tN Name : (...)`, `.array %aN : T x N`, `.slot %sN:type`, `bbN.label:`, typed SSA instructions, composite
   construction/extraction,
   `store %rN, %sA`, `%rN:type = load %sA`, `br bbN`,

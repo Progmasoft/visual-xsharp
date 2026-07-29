@@ -932,10 +932,8 @@ impl Parser<'_>
     {
       Ok(version) if is_supported_xmir_version(version) =>
       {}
-      Ok(version) =>
-      {
-        self.report(format!("unsupported XMIR version {version}; supported version is {SUPPORTED_XMIR_VERSION}"))
-      }
+      Ok(version) => self.report(format!("unsupported XMIR version {version}; supported versions are 0 and \
+                                          {SUPPORTED_XMIR_VERSION}")),
       Err(_) => self.report("invalid XMIR version number".to_string()),
     }
     self.index += 1;

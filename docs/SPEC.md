@@ -11,6 +11,12 @@ semantic intent, valid and invalid shapes, and larger complete-language sketches
 The compiler is not expected to compile every example today. Examples may describe the completed language, but documented
 syntax takes priority over ad-hoc implementation shortcuts.
 
+## Language stability
+
+The documented X# syntax and semantics are frozen. Compiler work implements that contract rather than redesigning it.
+Clarifications and defect fixes must preserve source meaning; intermediate-format and backend evolution remains
+independently versioned through XHIR, XMIR, and XLIL headers.
+
 ## How to read `Spec/`
 
 - `Spec/TypeSystem.xs` covers primitive names, nominal typing, `Optional<T>`, and standard wrapper behavior.

@@ -14,14 +14,17 @@ pub use instruction::Instruction;
 pub use integer::IntegerConstant;
 pub use types::{Type, TypeKind, Utf32Encoding};
 
-/// The only XLIL text/model version accepted by this crate release.
-pub const SUPPORTED_XLIL_VERSION: u32 = 0;
+/// Latest XLIL text/model version emitted by this crate release.
+pub const SUPPORTED_XLIL_VERSION: u32 = 1;
 
-/// Returns whether `version` is accepted by the XLIL v0 reader.
+/// Returns whether `version` is accepted by the XLIL reader.
+///
+/// Version 0 remains readable for compatibility while canonical output uses
+/// [`SUPPORTED_XLIL_VERSION`].
 #[must_use]
 pub const fn is_supported_xlil_version(version: u32) -> bool
 {
-  matches!(version, SUPPORTED_XLIL_VERSION)
+  matches!(version, 0 | SUPPORTED_XLIL_VERSION)
 }
 
 /// Sequential function-local SSA value register identifier.

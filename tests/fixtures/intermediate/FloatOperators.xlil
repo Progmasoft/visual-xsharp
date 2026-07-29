@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module FloatOperators
 .func F32Math : (f32, f32) -> f32
 .param %r0:f32

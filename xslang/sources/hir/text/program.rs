@@ -10,7 +10,7 @@ use crate::hir::type_check::Function;
 
 use super::declaration::{parse_declarations, write_declarations};
 use super::parser::{XhirParseDiagnostic, parse_xhir_function};
-use super::{SUPPORTED_XHIR_VERSION, function_to_xhir_with_parameters};
+use super::{SUPPORTED_XHIR_VERSION, function_to_xhir_with_parameters, is_supported_xhir_version};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct XhirProgram
@@ -183,10 +183,14 @@ fn parameter_count(lines: &[&str]) -> usize
 
 fn validate_header(lines: &[&str], diagnostics: &mut Vec<XhirParseDiagnostic>)
 {
-  let expected = format!(".xhir version {SUPPORTED_XHIR_VERSION}");
-  if lines.first().map(|line| line.trim()) != Some(expected.as_str())
+  let version = lines.first()
+                     .map(|line| line.trim())
+                     .and_then(|line| line.strip_prefix(".xhir version "))
+                     .and_then(|version| version.parse::<u32>().ok());
+  if !version.is_some_and(is_supported_xhir_version)
   {
-    diagnostics.push(diagnostic(1, format!("expected '{expected}'")));
+    diagnostics.push(diagnostic(1,
+                                format!("expected a supported XHIR version (0 or {SUPPORTED_XHIR_VERSION})")));
   }
 }
 

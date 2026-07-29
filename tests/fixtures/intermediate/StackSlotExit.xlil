@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module StackSlotExit
 .func main : () -> i32
 .slot %s0:i32

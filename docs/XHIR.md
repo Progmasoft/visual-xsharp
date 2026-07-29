@@ -34,7 +34,7 @@ semantic tree, not like an instruction stream.
 The exact grammar will be tightened as HIR stabilizes, but the intended shape is record/tree oriented:
 
 ```text
-.xhir version 0
+.xhir version 1
 module App
 
 import
@@ -65,7 +65,7 @@ reviewer should be able to understand which declaration or expression changed wi
 
 Rust `xslang` currently parses the module-symbol and checked-function subsets emitted by the first XHIR writer:
 
-- `.xhir version 0`
+- `.xhir version 1`
 - `program <name>` multi-function documents with repeated `function` records, explicit `.function end` boundaries, and one
   final `.program end`
 - an optional leading `declarations` section with `data` records, ordered base records, typed fields, explicit field
@@ -82,9 +82,8 @@ Rust `xslang` currently parses the module-symbol and checked-function subsets em
   statement-match, short-circuit logical binary, `propagate`, let, expression, and return records
 - `analysis typecheck` records for type-check diagnostics, spans, and messages
 
-The version header is part of the `xs build` input contract. It tells the compiler which XHIR text grammar version it is
-being asked to parse. Version `0` is the only supported XHIR version today; future versions can be accepted explicitly
-without changing the human-readable text requirement.
+The version header is part of the `xs build` input contract. Canonical writers emit XHIR version `1`. Readers accept
+versions `0` and `1`, preserving existing artifacts without silently accepting an unknown future grammar.
 
 Class, interface, and data declarations retain their nominal category, base relations, and available field layouts.
 Generic parameter declarations/constraints, macro-expansion records, and richer expression forms will be added as the

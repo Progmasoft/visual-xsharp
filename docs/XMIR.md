@@ -30,7 +30,7 @@ control-flow document rather than an assembly listing.
 The exact grammar will be tightened as MIR stabilizes, but the intended shape is CFG/document oriented:
 
 ```text
-.xmir version 0
+.xmir version 1
 function Main
 returns void
 
@@ -69,7 +69,7 @@ the later assembly-like backend input; XMIR is the compiler's readable mid-level
 
 Rust `xslang` currently parses the function/control-flow subset emitted by the first XMIR writer:
 
-- `.xmir version 0`
+- `.xmir version 1`
 - `program <name>` multi-function documents with repeated `function` records, explicit `.function end` boundaries, and one
   final `.program end`
 - a structured program-level `types` section containing `aggregate <id> <name>` records with `field <type>` entries and
@@ -89,9 +89,8 @@ Rust `xslang` currently parses the function/control-flow subset emitted by the f
 - `analysis optimizer` records for optimization pass reports and removed item counts
 - `analysis verify` records for structural verifier diagnostics, spans, and messages
 
-The version header is part of the `xs build` input contract. It tells the compiler which XMIR text grammar version it is
-being asked to parse. Version `0` is the only supported XMIR version today; future versions can be accepted explicitly
-without changing the structured, human-readable format direction.
+The version header is part of the `xs build` input contract. Canonical writers emit XMIR version `1`. Readers accept
+versions `0` and `1`, preserving existing artifacts without silently accepting an unknown future grammar.
 
 Parsed XMIR can be passed to the Rust MIR structural verifier. The current verifier checks duplicate local/block ids,
 missing terminators, unknown local references, and unknown block targets before borrow checking.

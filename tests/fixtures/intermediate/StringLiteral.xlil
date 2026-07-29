@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module StringLiteral
 .func greeting : () -> str
 bb0.entry:

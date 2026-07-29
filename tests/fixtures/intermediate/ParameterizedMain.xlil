@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module Invalid
 .func main : (i32) -> i32
 .param %r0:i32

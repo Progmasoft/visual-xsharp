@@ -6,7 +6,7 @@ SPDX-License-Identifier: MPL-2.0
 # xslang
 
 `xslang` is the target-independent Rust compiler core for the X# programming language. It provides typed HIR, MIR,
-monomorphization and codegen-unit models, and the human-readable XLIL v0 registry.
+monomorphization and codegen-unit models, and the human-readable XLIL v1 registry.
 
 The public `xslang::xlil` API lets Rust tools and third-party language implementations construct, parse, verify, optimize,
 and write XLIL without depending on LLVM. The corresponding C23 API is maintained in the xs-project repository under

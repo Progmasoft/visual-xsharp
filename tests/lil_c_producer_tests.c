@@ -143,7 +143,7 @@ static void test_complete_public_producer_round_trip(void)
   if(text.data != nullptr)
   {
     CHECK(text.length == strlen(text.data));
-    CHECK(strstr(text.data, ".xlil version 0\n") != nullptr);
+    CHECK(strstr(text.data, ".xlil version 1\n") != nullptr);
     CHECK(strstr(text.data, "%r") != nullptr);
   }
 

@@ -12,7 +12,7 @@ use crate::xlil::{Type, type_text};
 pub fn function_to_xmir(function: &Function) -> String
 {
   let mut output = String::new();
-  let _ = writeln!(output, ".xmir version 0");
+  let _ = writeln!(output, ".xmir version 1");
   let _ = writeln!(output, "function {}", function.name);
   let _ = writeln!(output, "returns {}", type_text(function.return_type));
   write_parameters(&mut output, function);

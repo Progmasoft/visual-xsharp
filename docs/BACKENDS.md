@@ -52,7 +52,7 @@ execution integration. It is not responsible for redefining X# typing, ownership
 or control-flow semantics.
 
 New XLIL instructions must update the model, text parser/writer, verifier, lowering, optimizer, and tests before a backend
-uses them. Backend-specific extensions should not leak into the common XLIL v0 grammar merely to simplify one target.
+uses them. Backend-specific extensions should not leak into the common XLIL v1 grammar merely to simplify one target.
 
 ## LLVM backend
 

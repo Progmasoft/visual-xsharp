@@ -403,11 +403,11 @@ mod tests
 {
   use super::*;
 
-  const VALID_XMIR: &str = ".xmir version 0\nprogram root\n\nfunction main\nreturns i32\n\nlocals\n  local 0\n    \
+  const VALID_XMIR: &str = ".xmir version 1\nprogram root\n\nfunction main\nreturns i32\n\nlocals\n  local 0\n    \
                             name result\n    type i32\n    mutability immutable\n.end\n\ncontrol_flow\n  block 0\n    \
                             statements\n      statement const.i32\n        target local 0\n        value 7\n    \
                             terminator return\n      value local 0\n.end\n.function end\n.program end\n";
-  const VALID_XHIR: &str = ".xhir version 0\nprogram root\n\nfunction main\n  signature\n    returns Long\n  .end\n  \
+  const VALID_XHIR: &str = ".xhir version 1\nprogram root\n\nfunction main\n  signature\n    returns Long\n  .end\n  \
                             body\n    return\n      literal integer 7\n  .end\n.function end\n.program end\n";
 
   #[test]

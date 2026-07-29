@@ -140,7 +140,7 @@ static bool is_direct_ir_input(const XsCliOptions *options)
 
 static bool supported_ir_version(uint32_t version)
 {
-  return version == 0;
+  return version <= 1U;
 }
 
 static bool parse_ir_version_line(const char *line, const char *prefix, uint32_t *version)
@@ -189,8 +189,8 @@ static bool validate_direct_ir_version(XsBuildOutput output, const char *path, c
   }
   if(!supported_ir_version(version))
   {
-    fprintf(stderr, "xs: %s version %" PRIu32 " is not supported; supported version is 0\n", ir_kind_name(output),
-            version);
+    fprintf(stderr, "xs: %s version %" PRIu32 " is not supported; supported versions are 0 and 1\n",
+            ir_kind_name(output), version);
     return false;
   }
   return true;

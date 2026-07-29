@@ -1,4 +1,4 @@
-.xlil version 0
+.xlil version 1
 .xlil module FloatConstants
 .func F32Value : () -> f32
 bb0.entry:
