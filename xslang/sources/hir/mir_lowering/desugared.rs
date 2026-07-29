@@ -316,12 +316,12 @@ impl HirToMirLowerer
                                           result_type: result_type.clone(),
                                           span: *span })
       }
-      DesugaredExpression::ResultMatch { span, .. } =>
+      DesugaredExpression::ResultMatch { value,
+                                         span,
+                                         .. } =>
       {
-        self.report(DiagnosticCode::UnsupportedExpression,
-                    "desugared Result match lowering awaits MIR Result control-flow support",
-                    *span);
-        None
+        Some(Expression::ResultPropagation { value: Box::new(self.surface_expression_from_desugared(value)?),
+                                             span: *span })
       }
       DesugaredExpression::Call { function,
                                   arguments,

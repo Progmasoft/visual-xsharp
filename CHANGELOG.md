@@ -12,6 +12,15 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Added structured typed-HIR `Result<T, E>` values, contextual `Ok`/`Error` constructor checking, and exact error-channel
+  validation for postfix `@`.
+- Lowered Result propagation through explicit MIR discriminant branches, active-payload extraction, early error return,
+  canonical aggregate reconstruction, XLIL, LLVM IR, object emission, and native `.xse` execution.
+- Added exhaustive `Ok(binding)`/`Error(binding)` match arms with lexical payload scope. Result matches reject duplicate
+  variants, non-Result selectors, and payload-type disagreement, and lower without introducing Result-specific XLIL or
+  LLVM instructions.
+- Added native source and Kotlin-project coverage for successful propagation, failure propagation, nested
+  `Result<Optional<T>, E>`, Result payload matching, malformed constructors, mismatched errors, and invalid match arms.
 - Advanced the canonical XHIR, XMIR, and XLIL text format header to version `1`. Readers continue to accept version `0`
   artifacts for compatibility, while writers now emit version `1`.
 - Lowered `Optional<T>` coalescing through target-independent MIR aggregate extraction, conditional control flow,

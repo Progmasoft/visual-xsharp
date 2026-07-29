@@ -4,12 +4,18 @@
  */
 
 use super::async_check::Span;
-use super::type_check::{Block, Literal};
+use super::type_check::{Block, Literal, Type};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum MatchPattern
 {
   Literal(Literal),
+  ResultVariant
+  {
+    success: bool,
+    binding: Option<String>,
+    payload_type: Type,
+  },
   Else,
 }
 

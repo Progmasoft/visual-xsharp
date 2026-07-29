@@ -40,36 +40,9 @@ fn lower_arm(tree: &SyntaxTree,
     return None;
   }
   let pattern_node = tree.nodes.get(arm.children[0])?;
-  let pattern = if pattern_node.kind == PATTERN_ELSE
-  {
-    MatchPattern::Else
-  }
-  else if pattern_node.kind == PATTERN_LITERAL
-  {
-    let literal_node = tree.nodes.get(*pattern_node.children.first()?)?;
-    let Expression::Literal { literal, .. } =
-      lower_expression(tree, literal_node, context, locals, Some(selector_type))?
-    else
-    {
-      return None;
-    };
-    MatchPattern::Literal(literal)
-  }
-  else if pattern_node.kind == PATTERN_ENUM_VARIANT
-  {
-    let Expression::Literal { literal, .. } =
-      nominal::enum_variant_literal(tree, pattern_node, context, span(pattern_node)?)?
-    else
-    {
-      return None;
-    };
-    MatchPattern::Literal(literal)
-  }
-  else
-  {
-    return None;
-  };
+  let pattern = lower_pattern(tree, pattern_node, context, locals, selector_type)?;
   let mut arm_locals = locals.clone();
+  bind_pattern(&pattern, &mut arm_locals);
   let body = lower_hir_block(tree,
                              tree.nodes.get(arm.children[1])?,
                              context,
@@ -80,4 +53,83 @@ fn lower_arm(tree: &SyntaxTree,
   Some(MatchArm { pattern,
                   body,
                   span: span(arm)? })
+}
+
+pub(super) fn lower_pattern(tree: &SyntaxTree,
+                            pattern_node: &SyntaxNode,
+                            context: &LoweringContext,
+                            locals: &HashMap<String, Type>,
+                            selector_type: &Type)
+                            -> Option<MatchPattern>
+{
+  if pattern_node.kind == PATTERN_ELSE
+  {
+    return Some(MatchPattern::Else);
+  }
+  if pattern_node.kind == PATTERN_LITERAL
+  {
+    let literal_node = tree.nodes.get(*pattern_node.children.first()?)?;
+    let Expression::Literal { literal, .. } =
+      lower_expression(tree, literal_node, context, locals, Some(selector_type))?
+    else
+    {
+      return None;
+    };
+    return Some(MatchPattern::Literal(literal));
+  }
+  if pattern_node.kind != PATTERN_ENUM_VARIANT
+  {
+    return None;
+  }
+  if let Type::Result { success,
+                        error, } = selector_type
+  {
+    let path = tree.nodes.get(*pattern_node.children.first()?)?;
+    let name = path_text(tree, path);
+    let success_variant = match name.as_str()
+    {
+      "Ok" | "std::result::Ok" => true,
+      "Error" | "std::result::Error" => false,
+      _ => return None,
+    };
+    let payload_type = if success_variant
+    {
+      success.as_ref()
+    }
+    else
+    {
+      error.as_ref()
+    };
+    let binding = match pattern_node.children.get(1).and_then(|index| tree.nodes.get(*index))
+    {
+      None => None,
+      Some(pattern) if pattern.kind == PATTERN_ELSE => None,
+      Some(pattern) if pattern.kind == PATTERN_IDENTIFIER => Some(path_text(tree, pattern)),
+      _ => return None,
+    };
+    if pattern_node.children.len() > 2
+    {
+      return None;
+    }
+    return Some(MatchPattern::ResultVariant { success: success_variant,
+                                              binding,
+                                              payload_type: payload_type.clone() });
+  }
+  let Expression::Literal { literal, .. } =
+    nominal::enum_variant_literal(tree, pattern_node, context, span(pattern_node)?)?
+  else
+  {
+    return None;
+  };
+  Some(MatchPattern::Literal(literal))
+}
+
+pub(super) fn bind_pattern(pattern: &MatchPattern, locals: &mut HashMap<String, Type>)
+{
+  if let MatchPattern::ResultVariant { binding: Some(binding),
+                                       payload_type,
+                                       .. } = pattern
+  {
+    locals.insert(binding.clone(), payload_type.clone());
+  }
 }

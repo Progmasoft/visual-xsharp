@@ -51,10 +51,25 @@ fn lower_generic(tree: &SyntaxTree, value: &SyntaxNode) -> declarations::TypeRef
 {
   let mut children = value.children.iter().filter_map(|index| tree.nodes.get(*index));
   let base = children.next();
-  if base.is_some_and(|base| path_text(tree, base) == "Optional") &&
+  let base_name = base.map(|base| path_text(tree, base)).unwrap_or_default();
+  if matches!(base_name.as_str(), "Optional" | "std::optional::Optional") &&
      let Some(element) = children.next()
   {
     return declarations::TypeRef::Optional { element: Box::new(lower_type(tree, element)) };
+  }
+  if matches!(base_name.as_str(), "Result" | "std::result::Result")
+  {
+    let arguments = children.map(|child| lower_type(tree, child)).collect::<Vec<_>>();
+    if let [success, error] = arguments.as_slice()
+    {
+      return declarations::TypeRef::Result { success: Box::new(success.clone()),
+                                             error: Box::new(error.clone()) };
+    }
+    if arguments.as_slice() == [declarations::TypeRef::Unit]
+    {
+      return declarations::TypeRef::Result { success: Box::new(declarations::TypeRef::Unit),
+                                             error: Box::new(declarations::TypeRef::Named("Error".to_string())) };
+    }
   }
   declarations::TypeRef::Named(value.text.trim_end_matches('?').to_string())
 }

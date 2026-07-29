@@ -20,6 +20,11 @@ pub enum TypeRef
   {
     element: Box<TypeRef>,
   },
+  Result
+  {
+    success: Box<TypeRef>,
+    error: Box<TypeRef>,
+  },
   Reference
   {
     referent: Box<TypeRef>,
@@ -57,6 +62,9 @@ pub fn type_ref_to_checked(value: &TypeRef) -> Option<type_check::Type>
     TypeRef::Primitive(value) => type_check::Type::Primitive(*value),
     TypeRef::Named(value) => type_check::Type::Named(value.clone()),
     TypeRef::Optional { element } => type_check::Type::Optional { element: Box::new(type_ref_to_checked(element)?) },
+    TypeRef::Result { success,
+                      error, } => type_check::Type::Result { success: Box::new(type_ref_to_checked(success)?),
+                                                             error: Box::new(type_ref_to_checked(error)?) },
     TypeRef::Reference { referent,
                          mutable, } => type_check::Type::Reference { referent:
                                                                        Box::new(type_ref_to_checked(referent)?),

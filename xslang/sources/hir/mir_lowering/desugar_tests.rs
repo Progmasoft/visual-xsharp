@@ -63,7 +63,7 @@ fn lowers_desugared_function_without_result_match()
 }
 
 #[test]
-fn rejects_desugared_result_match_until_cfg_lowering_exists()
+fn rejects_desugared_result_match_without_registered_layout()
 {
   let function = DesugaredFunction { name: "TryWork".to_string(),
                                      return_type: Some(Type::Named("Result<()>".to_string())),
@@ -79,8 +79,8 @@ fn rejects_desugared_result_match_until_cfg_lowering_exists()
     })] };
 
   let diagnostics = HirToMirLowerer::new().lower_desugared_function(&function)
-                                          .expect_err("ResultMatch CFG lowering is not implemented yet");
+                                          .expect_err("a desugared Result requires a registered aggregate layout");
 
   assert!(diagnostics.iter()
-                     .any(|diagnostic| diagnostic.code == DiagnosticCode::UnsupportedExpression));
+                     .any(|diagnostic| diagnostic.code == DiagnosticCode::UnsupportedType));
 }

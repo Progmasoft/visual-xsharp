@@ -53,6 +53,9 @@ pub struct HirToMirLowerer
   tuple_types: Vec<(Type, XlilType)>,
   optional_types: Vec<(Type, XlilType)>,
   optional_layouts: Vec<(XlilType, XlilType)>,
+  result_types: Vec<(Type, XlilType)>,
+  result_layouts: Vec<(XlilType, XlilType, XlilType)>,
+  function_return_type: Option<Type>,
   array_types: Vec<(Type, XlilType)>,
   array_layouts: Vec<(XlilType, XlilType, Option<u64>)>,
   nominal_locals: HashMap<String, String>,
@@ -79,6 +82,10 @@ mod optional;
 mod optional_member_tests;
 #[cfg(test)]
 mod optional_tests;
+mod result;
+mod result_match;
+#[cfg(test)]
+mod result_tests;
 mod unary;
 #[cfg(test)]
 mod unary_tests;
@@ -141,6 +148,20 @@ impl HirToMirLowerer
                                       Some((*value_type, element_type))
                                     })
                                     .collect();
+    self.result_types.clone_from(&registry.results);
+    self.result_layouts = registry.results
+                                  .iter()
+                                  .filter_map(|(_, value_type)| {
+                                    let fields =
+                                      registry.layouts.get(value_type.registry_id as usize)?.fields.as_slice();
+                                    let [tag, success, error] = fields
+                                    else
+                                    {
+                                      return None;
+                                    };
+                                    (*tag == XlilType::BOOL).then_some((*value_type, *success, *error))
+                                  })
+                                  .collect();
     self
   }
 
@@ -149,7 +170,15 @@ impl HirToMirLowerer
     self.lower_function_with_parameters(function, 0)
   }
 
-  pub fn lower_desugared_function(mut self, function: &DesugaredFunction) -> Result<mir::Function, Vec<Diagnostic>>
+  pub fn lower_desugared_function(self, function: &DesugaredFunction) -> Result<mir::Function, Vec<Diagnostic>>
+  {
+    self.lower_desugared_function_with_parameters(function, 0)
+  }
+
+  pub fn lower_desugared_function_with_parameters(mut self,
+                                                  function: &DesugaredFunction,
+                                                  parameter_count: usize)
+                                                  -> Result<mir::Function, Vec<Diagnostic>>
   {
     let mut body = Vec::with_capacity(function.body.len());
     for statement in &function.body
@@ -167,7 +196,7 @@ impl HirToMirLowerer
                              return_type: function.return_type.clone(),
                              locals: function.locals.clone(),
                              body };
-    self.lower_function(&surface)
+    self.lower_function_with_parameters(&surface, parameter_count)
   }
 
   fn lower_statement(&mut self, statement: &Statement, lowered: &mut mir::Function)
@@ -419,11 +448,7 @@ impl HirToMirLowerer
         None
       }
       Expression::Update { .. } => self.lower_update_expression(expression, expected_type, lowered),
-      Expression::ResultPropagation { .. } =>
-      {
-        self.unsupported_expression(expression);
-        None
-      }
+      Expression::ResultPropagation { .. } => self.lower_result_propagation(expression, expected_type, lowered),
       Expression::Call { span, .. } =>
       {
         let local = self.declare_temp(expected_type, *span, lowered)?;

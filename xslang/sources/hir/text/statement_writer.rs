@@ -6,8 +6,8 @@
 use std::fmt::Write;
 
 use super::{
-  DesugaredStatement, MatchPattern, Statement, literal_name, mutability_name, type_name, write_block,
-  write_desugared_block, write_desugared_expression, write_expression,
+  DesugaredStatement, Statement, match_pattern_name, mutability_name, type_name, write_block, write_desugared_block,
+  write_desugared_expression, write_expression,
 };
 
 pub(super) fn write_statement(output: &mut String, statement: &Statement, indent: usize)
@@ -134,17 +134,7 @@ pub(super) fn write_statement(output: &mut String, statement: &Statement, indent
       write_expression(output, selector, indent + 2);
       for arm in arms
       {
-        match &arm.pattern
-        {
-          MatchPattern::Literal(literal) =>
-          {
-            let _ = writeln!(output, "{pad}  arm literal {}", literal_name(literal));
-          }
-          MatchPattern::Else =>
-          {
-            let _ = writeln!(output, "{pad}  arm else");
-          }
-        }
+        let _ = writeln!(output, "{pad}  arm {}", match_pattern_name(&arm.pattern));
         let _ = writeln!(output, "{pad}    body");
         write_block(output, &arm.body, indent + 3);
       }
@@ -317,17 +307,7 @@ pub(super) fn write_desugared_statement(output: &mut String, statement: &Desugar
       write_desugared_expression(output, selector, indent + 2);
       for arm in arms
       {
-        match &arm.pattern
-        {
-          MatchPattern::Literal(literal) =>
-          {
-            let _ = writeln!(output, "{pad}  arm literal {}", literal_name(literal));
-          }
-          MatchPattern::Else =>
-          {
-            let _ = writeln!(output, "{pad}  arm else");
-          }
-        }
+        let _ = writeln!(output, "{pad}  arm {}", match_pattern_name(&arm.pattern));
         let _ = writeln!(output, "{pad}    body");
         write_desugared_block(output, &arm.body, indent + 3);
       }

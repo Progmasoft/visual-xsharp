@@ -63,6 +63,11 @@ impl TypeChecker
 
 pub(crate) fn result_type_parts(ty: &Type) -> Option<(Type, Type)>
 {
+  if let Type::Result { success,
+                        error, } = ty
+  {
+    return Some((success.as_ref().clone(), error.as_ref().clone()));
+  }
   let Type::Named(name) = ty
   else
   {

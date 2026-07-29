@@ -12,6 +12,7 @@ impl HirToMirLowerer
                                         parameter_count: usize)
                                         -> Result<mir::Function, Vec<Diagnostic>>
   {
+    self.function_return_type.clone_from(&function.return_type);
     let return_type = self.lower_return_type(function.return_type.as_ref(), Span::new(0, 0, 0));
     let mut lowered = mir::Function { name: function.name.clone(),
                                       parameters: vec![],

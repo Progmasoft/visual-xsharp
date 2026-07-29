@@ -23,8 +23,12 @@ foreach(source_fixture MainReturn0 MainReturn7 MainArithmetic MainDivision MainR
                        MainOptionalSomeCoalesce MainOptionalNoneCoalesce
                        MainOptionalAssignUnwrap MainOptionalAssignKeepsSome MainOptionalForcedSome
                        MainOptionalMemberSome MainOptionalMemberNone
+                       MainResultPropagation MainResultError MainResultNestedOptional
+                       MainResultMatch MainResultMatchError
                        InvalidCoalesceLeft InvalidOptionalForcedLong InvalidOptionalAssignImmutable
                        InvalidOptionalAssignNonOptional InvalidOptionalAssignType
+                       InvalidResultPropagationOutside InvalidResultErrorMismatch InvalidResultOkPayload
+                       InvalidResultConstructorOutside InvalidResultMatchDuplicate InvalidResultMatchVariant
                        CollectionSetCheck
                        MainEarlyReturn MainElseIf MainMatch MainMatchBool MainMatchExpression MainEnumFlow MainFor
                        MainPostfixDecrement MainUpdateValues
@@ -111,6 +115,20 @@ xs_add_source_native_tuple_test(MainOptionalMemberSome 7 "%Point = type { i32, i
                                 "%optional.0 = type { i8, %Point }" "%optional.1 = type { i8, i32 }" "br i1")
 xs_add_source_native_tuple_test(MainOptionalMemberNone 13 "%Point = type { i32, i32 }"
                                 "%optional.0 = type { i8, %Point }" "%optional.1 = type { i8, i32 }" "br i1")
+xs_add_source_native_tuple_test(MainResultPropagation 7 "%result.0 = type { i8, i32, i32 }"
+                                "define %result.0 @Produce" "define %result.0 @Forward"
+                                "extractvalue %result.0" "br i1")
+xs_add_source_native_tuple_test(MainResultError 13 "%result.0 = type { i8, i32, i32 }"
+                                "define %result.0 @Fail" "define %result.0 @ForwardFailure"
+                                "extractvalue %result.0" "br i1")
+xs_add_source_native_tuple_test(MainResultNestedOptional 7 "%optional.0 = type { i8, i32 }"
+                                "%result.0 = type { i8, %optional.0, i32 }"
+                                "%result.1 = type { i8, i32, i32 }"
+                                "define %result.0 @Maybe" "define %result.1 @Read" "br i1")
+xs_add_source_native_tuple_test(MainResultMatch 7 "%result.0 = type { i8, i32, i32 }"
+                                "define i32 @Read" "extractvalue %result.0" "br i1")
+xs_add_source_native_tuple_test(MainResultMatchError 9 "%result.0 = type { i8, i32, i32 }"
+                                "define i32 @Read" "extractvalue %result.0" "br i1")
 
 add_test(NAME compiler_check_builtin_set COMMAND xs check -file
                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/CollectionSetCheck.xs)

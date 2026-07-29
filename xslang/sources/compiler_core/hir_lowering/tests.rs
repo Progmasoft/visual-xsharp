@@ -491,3 +491,196 @@ fn lowers_optional_coalescing_assignment_with_implicit_some()
                         matches!(value.as_ref(), Expression::Call { function, .. } if function == "Some") &&
                         optional_type.as_ref() == &optional_long));
 }
+
+fn result_long_type() -> Type
+{
+  Type::Result { success: Box::new(Type::Primitive(PrimitiveType::Long)),
+                 error: Box::new(Type::Primitive(PrimitiveType::Long)) }
+}
+
+fn empty_context() -> LoweringContext
+{
+  LoweringContext { calls: HashMap::new(),
+                    generic_calls: HashMap::new(),
+                    constructors: HashMap::new(),
+                    methods: HashMap::new(),
+                    nominal_types: HashMap::new(),
+                    type_substitutions: HashMap::new() }
+}
+
+fn result_type_tree(base_name: &str, arguments: &[&str]) -> SyntaxTree
+{
+  let mut nodes = vec![syntax(TYPE_GENERIC,
+                              &format!("{base_name}<{}>", arguments.join(", ")),
+                              None,
+                              vec![])];
+  let base_type = nodes.len();
+  nodes.push(syntax(TYPE_NAMED, base_name, Some(0), vec![base_type + 1]));
+  nodes.push(syntax(PATH, base_name, Some(base_type), vec![base_type + 2]));
+  nodes.push(syntax(IDENTIFIER, base_name, Some(base_type + 1), vec![]));
+  nodes[0].children.push(base_type);
+  for argument in arguments
+  {
+    let ty = nodes.len();
+    nodes.push(syntax(if *argument == "()"
+                      {
+                        TYPE_UNIT
+                      }
+                      else
+                      {
+                        TYPE_NAMED
+                      },
+                      argument,
+                      Some(0),
+                      vec![]));
+    if *argument != "()"
+    {
+      let path = nodes.len();
+      nodes.push(syntax(PATH, argument, Some(ty), vec![path + 1]));
+      nodes.push(syntax(IDENTIFIER, argument, Some(path), vec![]));
+      nodes[ty].children.push(path);
+    }
+    nodes[0].children.push(ty);
+  }
+  SyntaxTree { root: 0,
+               nodes }
+}
+
+#[test]
+fn lowers_result_generic_to_a_structured_type()
+{
+  let tree = result_type_tree("Result", &["Long", "Bool"]);
+  assert_eq!(lower_type(&tree, &tree.nodes[0]),
+             declarations::TypeRef::Result { success:
+                                               Box::new(declarations::TypeRef::Primitive(PrimitiveType::Long)),
+                                             error: Box::new(declarations::TypeRef::Primitive(PrimitiveType::Bool)) });
+  assert_eq!(checked_type(&lower_type(&tree, &tree.nodes[0])),
+             Some(Type::Result { success: Box::new(Type::Primitive(PrimitiveType::Long)),
+                                 error: Box::new(Type::Primitive(PrimitiveType::Bool)) }));
+}
+
+#[test]
+fn lowers_canonical_result_path_and_unit_shorthand()
+{
+  let canonical = result_type_tree("std::result::Result", &["Long", "Long"]);
+  assert_eq!(lower_type(&canonical, &canonical.nodes[0]),
+             declarations::TypeRef::Result { success:
+                                               Box::new(declarations::TypeRef::Primitive(PrimitiveType::Long)),
+                                             error: Box::new(declarations::TypeRef::Primitive(PrimitiveType::Long)) });
+
+  let shorthand = result_type_tree("Result", &["()"]);
+  assert_eq!(lower_type(&shorthand, &shorthand.nodes[0]),
+             declarations::TypeRef::Result { success: Box::new(declarations::TypeRef::Unit),
+                                             error: Box::new(declarations::TypeRef::Named("Error".to_string())) });
+}
+
+fn result_constructor_tree(name: &str, literal_text: &str, token_kind: u32) -> SyntaxTree
+{
+  let mut literal = syntax(EXPR_LITERAL, literal_text, Some(0), vec![]);
+  literal.token_kind = token_kind;
+  SyntaxTree { root: 0,
+               nodes: vec![syntax(EXPR_CALL, &format!("{name}({literal_text})"), None, vec![1, 4]),
+                           syntax(EXPR_IDENTIFIER, name, Some(0), vec![2]),
+                           syntax(PATH, name, Some(1), vec![3]),
+                           syntax(IDENTIFIER, name, Some(2), vec![]),
+                           literal,] }
+}
+
+#[test]
+fn lowers_ok_and_error_calls_against_result_context()
+{
+  let expected = result_long_type();
+  for name in ["Ok", "Error"]
+  {
+    let tree = result_constructor_tree(name, "7", TOKEN_INTEGER);
+    let lowered = lower_expression(&tree,
+                                   &tree.nodes[0],
+                                   &empty_context(),
+                                   &HashMap::new(),
+                                   Some(&expected)).expect("Result constructor should lower");
+    assert!(matches!(lowered,
+                     Expression::Call {
+                       function,
+                       arguments,
+                       parameter_types,
+                       return_type,
+                       ..
+                     } if function == name &&
+                          arguments.len() == 1 &&
+                          parameter_types == vec![Type::Primitive(PrimitiveType::Long)] &&
+                          return_type.as_ref() == &expected));
+  }
+}
+
+#[test]
+fn result_constructor_rejects_wrong_payload_and_non_result_context()
+{
+  let wrong_payload = result_constructor_tree("Ok", "true", 0);
+  let lowered = lower_expression(&wrong_payload,
+                                 &wrong_payload.nodes[0],
+                                 &empty_context(),
+                                 &HashMap::new(),
+                                 Some(&result_long_type())).expect("syntax lowering preserves the mismatched payload \
+                                                                    for type diagnostics");
+  let function = crate::hir::type_check::Function { name: "invalid".to_string(),
+                                                    return_type: Some(result_long_type()),
+                                                    locals: vec![],
+                                                    body: vec![Statement::Return { value: Some(lowered),
+                                                                                   span: Span::new(1, 0, 1) }] };
+  assert!(!crate::hir::type_check::TypeChecker::new().check_function(&function)
+                                                     .is_empty());
+
+  let valid_payload = result_constructor_tree("Ok", "7", TOKEN_INTEGER);
+  assert!(lower_expression(&valid_payload,
+                           &valid_payload.nodes[0],
+                           &empty_context(),
+                           &HashMap::new(),
+                           Some(&Type::Primitive(PrimitiveType::Long))).is_none());
+}
+
+fn propagation_tree() -> SyntaxTree
+{
+  SyntaxTree { root: 0,
+               nodes: vec![syntax(EXPR_RESULT_PROPAGATION, "work@", None, vec![1]),
+                           syntax(EXPR_IDENTIFIER, "work", Some(0), vec![2]),
+                           syntax(PATH, "work", Some(1), vec![3]),
+                           syntax(IDENTIFIER, "work", Some(2), vec![]),] }
+}
+
+#[test]
+fn lowers_postfix_result_propagation_to_typed_hir()
+{
+  let tree = propagation_tree();
+  let locals = HashMap::from([("work".to_string(), result_long_type())]);
+  let lowered = lower_expression(&tree,
+                                 &tree.nodes[0],
+                                 &empty_context(),
+                                 &locals,
+                                 Some(&Type::Primitive(PrimitiveType::Long))).expect("Result propagation should lower");
+  assert!(matches!(lowered,
+                   Expression::ResultPropagation {
+                     value,
+                     ..
+                   } if matches!(value.as_ref(), Expression::Local { name, .. } if name == "work")));
+  assert_eq!(expression_type(&tree, &tree.nodes[0], &empty_context(), &locals),
+             Some(Type::Primitive(PrimitiveType::Long)));
+}
+
+#[test]
+fn result_propagation_rejects_non_result_and_wrong_success_context()
+{
+  let tree = propagation_tree();
+  let plain = HashMap::from([("work".to_string(), Type::Primitive(PrimitiveType::Long))]);
+  assert!(lower_expression(&tree,
+                           &tree.nodes[0],
+                           &empty_context(),
+                           &plain,
+                           Some(&Type::Primitive(PrimitiveType::Long))).is_none());
+
+  let result = HashMap::from([("work".to_string(), result_long_type())]);
+  assert!(lower_expression(&tree,
+                           &tree.nodes[0],
+                           &empty_context(),
+                           &result,
+                           Some(&Type::Primitive(PrimitiveType::Bool))).is_none());
+}

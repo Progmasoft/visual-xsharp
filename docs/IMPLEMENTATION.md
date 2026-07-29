@@ -238,8 +238,10 @@ The documented compilation order is preserved:
   shape, `#[repr(C)] extern "C"`, and rejects unsupported ABI strings or missing/non-C representation attributes. Library
   resolution, symbol binding, and backend lowering remain HIR/backend work.
 - Recoverable failures use the compiler-provided `Result<T, E>` enum data and postfix `@` propagation. Both payload types
-  are unrestricted. The standard `Error` class remains available as a root for nominal application error classes. The removed exception spellings are ordinary
-  identifiers and no longer introduce declarations, statements, or control-flow regions.
+  are unrestricted. The standard `Error` class remains available as a root for nominal application error classes.
+  Compiler-core represents Result as a structured typed-HIR type rather than parsing its generic arguments from a nominal
+  name. `Ok(value)` and `Error(value)` are checked against the enclosing expected Result type. The removed exception
+  spellings are ordinary identifiers and no longer introduce declarations, statements, or control-flow regions.
 - `data` declaration bodies accept fields, constructors, methods, and `fn operator <token>(...)` declarations. Data
   constructors and methods form overload sets by parameter type list; identical parameter type lists produce a parser
   diagnostic. Data destructors remain invalid.
@@ -284,8 +286,9 @@ The documented compilation order is preserved:
 - Data object initialization uses normal object field literals, and field access uses ordinary member access.
 - Postfix Result propagation syntax, `expression@`, is represented as `XS_SYNTAX_EXPR_RESULT_PROPAGATION`. The C23 HIR
   expression checker now requires an enclosing function whose return type is `Result<T, E>` or unit shorthand
-  `Result<()>`. It does not yet prove that the propagated operand itself has a matching Result type; full propagation
-  control-flow lowering is handled by later HIR/MIR work.
+  `Result<()>`. The compiler-core checker proves that the operand is a Result, yields its success payload type, and requires
+  the operand and enclosing function to use the same error payload type. MIR lowering turns the operation into explicit
+  discriminant extraction, success/error blocks, payload extraction, and an early Result return on the error edge.
 - `if`, `for`, for-each, `while`, `match`, `return`, `break`, `continue`, and `else: expression;` are parsed. The `else:`
   statement explicitly discards its expression value, analogous
   to a Rust discard binding, but X# spells the discard/default position as `else`.
@@ -402,9 +405,10 @@ membership, class/interface virtual dispatch, imported overload sets, and functi
 - The C23 HIR type resolver recognizes the standard wrapper type names `Optional<T>`, `std::optional::Optional<T>`,
   `std::result::Result<(), E>`, `std::result::Result<T, E>`, the special shorthand `Result<()>`, and the standard error type `Error`.
   The compiler treats the `std::result` namespace as implicitly usable, so `import result;` is optional for `Result<T, E>`,
-  `Result<T, E>`, `Ok(...)`, and `Error(...)`. The only one-argument form is `Result<()>`, defaulting its error payload to
-  `Error`; `Result<Int>` is rejected as incomplete. This is name and arity validation only. Postfix `@` and direct `Ok(...)`/`Error(...)` constructor use require an enclosing function with
-  a Result return type; constructor payload checking and complete propagation lowering remain later semantic work.
+  `Ok(...)`, and `Error(...)`. The only one-argument form is `Result<()>`, defaulting its error payload to `Error`;
+  `Result<Int>` is rejected as incomplete. Rust compiler-core lowering preserves both payloads as
+  `Type::Result { success, error }`, checks constructor payloads, and performs complete Result propagation lowering for the
+  supported source-native expression subset.
 - `Panic` is treated as an implicit standard import for the assertion and panic macro family. Those macros remain normal
   imported macros rather than built-ins; the macro validator treats the `Panic` module as always available. Panic is a
   macro-only module and HIR rejects `using namespace panic;`.
@@ -540,8 +544,8 @@ remain independent of LLVM.
 
 The C23 HIR prototype mirrors the first parts of that rule: `@` is accepted inside functions returning
 `Result<()>`/`Result<T, E>` and rejected elsewhere. When the operand is a direct same-file function call, the
-callee must also return a Result type. Imported calls, method calls, local function values, and full success/error
-compatibility remain the Rust compiler-core direction and later C/Rust integration work.
+callee must also return a Result type. Imported calls, method calls, and local function values remain later name-resolution
+work; the Rust compiler-core route performs exact success/error compatibility checks for resolved same-module calls.
 
 `@` is a surface-language sugar. In `xslang`, the Result desugar pass translates it into an explicit Result-match and
 early-return intent model before MIR lowering. If a raw `ResultPropagation` expression reaches MIR lowering, that is treated
@@ -549,13 +553,27 @@ as a pipeline ordering error and is rejected instead of becoming a backend primi
 
 For `xslang` propagation checking and desugaring, the single-argument `Result<()>` form uses standard `Error` as its error type.
 
-The MIR lowerer has a separate `DesugaredFunction` entry point. It can lower desugared functions that contain only currently
-supported expression forms, but explicit ResultMatch nodes remain deferred until Result-aware MIR control-flow and return
-construction are implemented.
+The MIR lowerer has a separate `DesugaredFunction` entry point. Result-match intent from `@` lowers to ordinary
+target-independent MIR:
+
+- extract the one-bit Result discriminant;
+- branch to a success edge and an error edge;
+- extract the active payload in the selected edge;
+- reconstruct the enclosing Result on the error edge and return immediately;
+- continue with the success payload on the success edge.
+
+There is no Result-specific XLIL opcode. Result values use a registered aggregate layout with a boolean tag, success
+payload, and error payload. `aggregate`, `extract`, `br_if`, and `ret` carry the operation into LLVM. Inactive payload slots
+receive a deterministic canonical value and are never observed on the opposite discriminant edge.
+
+Source `match` accepts typed `Ok(binding)` and `Error(binding)` patterns. Those two variants together are exhaustive and do
+not require a final `else` arm. A binding exists only within its arm block; spelling the payload as `else` discards it.
+Duplicate Result variants, patterns on a non-Result selector, and payload-type disagreement are typed-HIR errors. MIR
+extracts field 1 for `Ok` and field 2 for `Error`, then joins value-producing arms through compiler-owned storage.
 
 XHIR text writing can emit desugared functions for inspection. The desugared form writes `result_match` records with explicit
-success/error binding names and types, making `@` expansion visible without pretending that MIR Result control flow is
-complete.
+success/error binding names and types. Surface XHIR match arms use explicit records such as
+`arm result Ok binding value : Long`; this remains independent of LLVM spelling and ABI objects.
 
 ### Macro validation and scope resolution
 

@@ -337,6 +337,12 @@ pub(super) fn specialize_ref(value: &declarations::TypeRef,
     {
       declarations::TypeRef::Optional { element: Box::new(specialize_ref(element, substitutions)) }
     }
+    declarations::TypeRef::Result { success,
+                                    error, } =>
+    {
+      declarations::TypeRef::Result { success: Box::new(specialize_ref(success, substitutions)),
+                                      error: Box::new(specialize_ref(error, substitutions)) }
+    }
     declarations::TypeRef::Reference { referent,
                                        mutable, } =>
     {
@@ -468,6 +474,12 @@ pub(super) fn substitute_checked_type(value: &mut Type, substitutions: &HashMap<
       }
     }
     Type::Optional { element } => substitute_checked_type(element, substitutions),
+    Type::Result { success,
+                   error, } =>
+    {
+      substitute_checked_type(success, substitutions);
+      substitute_checked_type(error, substitutions);
+    }
     Type::Reference { referent, .. } => substitute_checked_type(referent, substitutions),
     Type::Array { element, .. } | Type::Set { element } => substitute_checked_type(element, substitutions),
     Type::Map { key,
@@ -503,6 +515,8 @@ fn type_key(value: &Type) -> String
     Type::Primitive(value) => format!("{value:?}"),
     Type::Named(name) => name.clone(),
     Type::Optional { element } => format!("optional<{}>", type_key(element)),
+    Type::Result { success,
+                   error, } => format!("result<{},{}>", type_key(success), type_key(error)),
     Type::Reference { referent,
                       mutable, } => format!("&{}{}",
                                             if *mutable
@@ -553,6 +567,8 @@ fn type_ref_key(value: &declarations::TypeRef) -> String
     declarations::TypeRef::Primitive(value) => format!("{value:?}"),
     declarations::TypeRef::Named(name) => name.clone(),
     declarations::TypeRef::Optional { element } => format!("optional<{}>", type_ref_key(element)),
+    declarations::TypeRef::Result { success,
+                                    error, } => format!("result<{},{}>", type_ref_key(success), type_ref_key(error)),
     declarations::TypeRef::Reference { referent,
                                        mutable, } =>
     {

@@ -111,7 +111,7 @@ impl HirToMirLowerer
     }
   }
 
-  fn known_value_type(&self, value: &Type) -> Option<XlilType>
+  pub(super) fn known_value_type(&self, value: &Type) -> Option<XlilType>
   {
     match value
     {
@@ -135,6 +135,10 @@ impl HirToMirLowerer
                                    .iter()
                                    .find(|(source, _)| source == value)
                                    .map(|(_, ty)| *ty),
+      Type::Result { .. } => self.result_types
+                                 .iter()
+                                 .find(|(source, _)| source == value)
+                                 .map(|(_, ty)| *ty),
       Type::Unit | Type::Set { .. } | Type::Map { .. } | Type::Reference { .. } => None,
     }
   }

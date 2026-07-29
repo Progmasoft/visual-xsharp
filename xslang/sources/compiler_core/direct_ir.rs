@@ -76,10 +76,23 @@ impl DirectIrSession
                                                               format!("XHIR function '{name}' type check: {}",
                                                                       error.message)
                                                             }));
+      let desugared = match hir::result_desugar::ResultDesugar::new().desugar_function(&function)
+      {
+        Ok(function) => function,
+        Err(errors) =>
+        {
+          diagnostics.extend(errors.into_iter()
+                                   .map(|error| {
+                                     format!("XHIR function '{name}' Result desugaring failed: {}", error.message)
+                                   }));
+          continue;
+        }
+      };
       match hir::mir_lowering::HirToMirLowerer::new().with_nominal_types(&program.nominal_types)
                                                      .with_aggregate_types(&aggregate_registry)
                                                      .with_collection_types(&collection_registry)
-                                                     .lower_function_with_parameters(&function, parameter_count)
+                                                     .lower_desugared_function_with_parameters(&desugared,
+                                                                                               parameter_count)
       {
         Ok(function) => functions.push(function),
         Err(errors) =>

@@ -107,6 +107,21 @@ pub(crate) fn parse_type_text(name: &str) -> Option<Type>
   {
     return Some(Type::Optional { element: Box::new(parse_type_text(element.trim())?) });
   }
+  if let Some(body) = name.strip_prefix("Result<").and_then(|value| value.strip_suffix('>'))
+  {
+    let parts = split_type_list(body);
+    if let [success, error] = parts.as_slice()
+    {
+      return Some(Type::Result { success: Box::new(parse_type_text(success.trim())?),
+                                 error: Box::new(parse_type_text(error.trim())?) });
+    }
+    if parts.as_slice() == ["()"]
+    {
+      return Some(Type::Result { success: Box::new(Type::Unit),
+                                 error: Box::new(Type::Named("Error".to_string())) });
+    }
+    return None;
+  }
   if let Some(body) = name.strip_prefix('(').and_then(|value| value.strip_suffix(')'))
   {
     let fields = if body.trim().is_empty()

@@ -89,6 +89,7 @@ const EXPR_METHOD_CALL: u32 = 62;
 const EXPR_MEMBER_ACCESS: u32 = 63;
 const EXPR_OPTIONAL_MEMBER_ACCESS: u32 = 65;
 const EXPR_OPTIONAL_FORGIVING: u32 = 66;
+const EXPR_RESULT_PROPAGATION: u32 = 67;
 const EXPR_NEW: u32 = 69;
 const EXPR_OBJECT_LITERAL: u32 = 77;
 const OBJECT_FIELD: u32 = 78;
@@ -328,6 +329,20 @@ fn lower_expression(tree: &SyntaxTree,
         span: source_span,
       })
     }
+    EXPR_RESULT_PROPAGATION if value.children.len() == 1 =>
+    {
+      let operand = tree.nodes.get(value.children[0])?;
+      let result_type = expression_type(tree, operand, context, locals)?;
+      let (success, _) = result_type.result_parts()?;
+      if expected_type.is_some_and(|expected| expected != success)
+      {
+        return None;
+      }
+      Some(Expression::ResultPropagation {
+        value: Box::new(lower_expression(tree, operand, context, locals, Some(&result_type))?),
+        span: source_span,
+      })
+    }
     EXPR_BINARY if value.children.len() == 3 =>
     {
       let operator = match value.token_kind
@@ -500,6 +515,24 @@ fn lower_expression(tree: &SyntaxTree,
                                        arguments: vec![argument],
                                        parameter_types: vec![element.clone()],
                                        return_type: Box::new(optional_type.clone()),
+                                       span: source_span });
+      }
+      if matches!(function.as_str(), "Ok" | "Error") &&
+         expected_type.is_some_and(Type::is_result) &&
+         value.children.len() == 2
+      {
+        let result_type = expected_type?;
+        let (success, error) = result_type.result_parts()?;
+        let payload_type = if function == "Ok" { success } else { error };
+        let argument = lower_expression(tree,
+                                        tree.nodes.get(value.children[1])?,
+                                        context,
+                                        locals,
+                                        Some(payload_type))?;
+        return Some(Expression::Call { function,
+                                       arguments: vec![argument],
+                                       parameter_types: vec![payload_type.clone()],
+                                       return_type: Box::new(result_type.clone()),
                                        span: source_span });
       }
       let signature = if callee.kind == EXPR_GENERIC_QUALIFIER
@@ -903,36 +936,10 @@ fn lower_match_statement(tree: &SyntaxTree,
                                return None;
                              }
                              let pattern_node = tree.nodes.get(arm.children[0])?;
-                             let pattern = if pattern_node.kind == PATTERN_ELSE
-                             {
-                               MatchPattern::Else
-                             }
-                             else if pattern_node.kind == PATTERN_LITERAL
-                             {
-                               let literal_node = tree.nodes.get(*pattern_node.children.first()?)?;
-                               let Expression::Literal { literal, .. } =
-                                 lower_expression(tree, literal_node, context, locals, Some(&selector_type))?
-                               else
-                               {
-                                 return None;
-                               };
-                               MatchPattern::Literal(literal)
-                             }
-                             else if pattern_node.kind == PATTERN_ENUM_VARIANT
-                             {
-                               let Expression::Literal { literal, .. } =
-                                 nominal::enum_variant_literal(tree, pattern_node, context, span(pattern_node)?)?
-                               else
-                               {
-                                 return None;
-                               };
-                               MatchPattern::Literal(literal)
-                             }
-                             else
-                             {
-                               return None;
-                             };
+                             let pattern =
+                               match_expression::lower_pattern(tree, pattern_node, context, locals, &selector_type)?;
                              let mut arm_locals = locals.clone();
+                             match_expression::bind_pattern(&pattern, &mut arm_locals);
                              let body = lower_hir_block(tree,
                                                         tree.nodes.get(arm.children[1])?,
                                                         context,

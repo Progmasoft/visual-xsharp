@@ -38,6 +38,11 @@ pub enum Type
   {
     element: Box<Type>,
   },
+  Result
+  {
+    success: Box<Type>,
+    error: Box<Type>,
+  },
   Reference
   {
     referent: Box<Type>,

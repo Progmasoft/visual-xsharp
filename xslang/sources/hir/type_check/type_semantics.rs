@@ -32,12 +32,32 @@ impl Type
   }
 
   #[must_use]
+  pub fn result_parts(&self) -> Option<(&Type, &Type)>
+  {
+    match self
+    {
+      Self::Result { success,
+                     error, } => Some((success, error)),
+      _ => None,
+    }
+  }
+
+  #[must_use]
+  pub fn is_result(&self) -> bool
+  {
+    self.result_parts().is_some()
+  }
+
+  #[must_use]
   pub fn ownership(&self) -> ValueOwnership
   {
     match self
     {
       Self::Reference { .. } => ValueOwnership::BorrowedStatic,
-      Self::Primitive(PrimitiveType::String) | Self::Optional { .. } => ValueOwnership::BoxedOwned,
+      Self::Primitive(PrimitiveType::String) | Self::Optional { .. } | Self::Result { .. } =>
+      {
+        ValueOwnership::BoxedOwned
+      }
       _ => ValueOwnership::Value,
     }
   }

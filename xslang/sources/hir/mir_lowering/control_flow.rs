@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
+use super::result_match::result_match_is_exhaustive;
 use super::*;
 
 impl HirToMirLowerer
@@ -39,6 +40,7 @@ impl HirToMirLowerer
       Type::Unit |
       Type::Named(_) |
       Type::Optional { .. } |
+      Type::Result { .. } |
       Type::Reference { .. } |
       Type::Array { .. } |
       Type::Set { .. } |
@@ -57,7 +59,8 @@ impl HirToMirLowerer
                   *span);
       return None;
     }
-    if !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
+    let exhaustive_result = result_match_is_exhaustive(selector_type, arms);
+    if !exhaustive_result && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
     {
       self.report(DiagnosticCode::UnsupportedExpression,
                   "MIR match expression lowering requires a final else arm",
@@ -71,7 +74,7 @@ impl HirToMirLowerer
     let outer_locals = self.locals.clone();
     let mut test = self.current_block;
     let mut open_arm = false;
-    for arm in arms
+    for (index, arm) in arms.iter().enumerate()
     {
       self.locals.clone_from(&outer_locals);
       self.switch_to(test);
@@ -100,6 +103,37 @@ impl HirToMirLowerer
             self.lower_value_block_into_storage(&arm.body, result_storage, expected_type, merge, arm.span, lowered);
           test = next;
         }
+        MatchPattern::ResultVariant { success, .. } =>
+        {
+          if exhaustive_result && index + 1 == arms.len()
+          {
+            self.bind_result_pattern(selector, &arm.pattern, arm.span, lowered)?;
+            open_arm |=
+              self.lower_value_block_into_storage(&arm.body, result_storage, expected_type, merge, arm.span, lowered);
+            continue;
+          }
+          let body = self.append_block(arm.body.span, lowered);
+          let next = self.append_block(arm.span, lowered);
+          let condition = self.result_tag(selector, selector_value_type, arm.span, lowered)?;
+          let (then_block, else_block) = if *success
+          {
+            (body, next)
+          }
+          else
+          {
+            (next, body)
+          };
+          self.set_terminator(mir::Terminator::BranchIf { condition,
+                                                          then_block,
+                                                          else_block },
+                              arm.span,
+                              lowered);
+          self.switch_to(body);
+          self.bind_result_pattern(selector, &arm.pattern, arm.span, lowered)?;
+          open_arm |=
+            self.lower_value_block_into_storage(&arm.body, result_storage, expected_type, merge, arm.span, lowered);
+          test = next;
+        }
         MatchPattern::Else =>
         {
           open_arm |=
@@ -123,23 +157,6 @@ impl HirToMirLowerer
                                           local: result_storage,
                                           span: *span });
     Some(result)
-  }
-
-  fn match_selector_value_type(&mut self, selector_type: &Type, span: Span) -> Option<XlilType>
-  {
-    match selector_type
-    {
-      Type::Primitive(PrimitiveType::Bool) => Some(XlilType::BOOL),
-      Type::Primitive(PrimitiveType::Long) => Some(XlilType::I32),
-      Type::Named(name) => self.aggregate_types.get(name).copied(),
-      _ =>
-      {
-        self.report(DiagnosticCode::UnsupportedType,
-                    format!("MIR match lowering does not support selector type {selector_type:?}"),
-                    span);
-        None
-      }
-    }
   }
 
   fn lower_match_test(&mut self,
@@ -254,7 +271,8 @@ impl HirToMirLowerer
     {
       return;
     };
-    if !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
+    let exhaustive_result = result_match_is_exhaustive(selector_type, arms);
+    if !exhaustive_result && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
     {
       self.report(DiagnosticCode::UnsupportedExpression,
                   "MIR match lowering requires a final else arm",
@@ -276,7 +294,7 @@ impl HirToMirLowerer
     let mut test = self.current_block;
     let mut has_open_arm = false;
     let mut final_arm_end = self.current_block;
-    for arm in arms
+    for (index, arm) in arms.iter().enumerate()
     {
       self.locals.clone_from(&outer_locals);
       self.switch_to(test);
@@ -311,6 +329,57 @@ impl HirToMirLowerer
           {
             self.set_terminator(mir::Terminator::Goto(merge), arm.span, lowered);
             has_open_arm = true;
+          }
+          test = next;
+        }
+        MatchPattern::ResultVariant { success, .. } =>
+        {
+          if exhaustive_result && index + 1 == arms.len()
+          {
+            if self.bind_result_pattern(selector, &arm.pattern, arm.span, lowered)
+                   .is_some()
+            {
+              self.lower_block_statements(&arm.body, lowered);
+              final_arm_end = self.current_block;
+              if !self.current_is_terminated(lowered)
+              {
+                self.set_terminator(mir::Terminator::Goto(merge), arm.span, lowered);
+                has_open_arm = true;
+              }
+            }
+            continue;
+          }
+          let body = self.append_block(arm.body.span, lowered);
+          let next = self.append_block(arm.span, lowered);
+          let Some(condition) = self.result_tag(selector, selector_type, arm.span, lowered)
+          else
+          {
+            return;
+          };
+          let (then_block, else_block) = if *success
+          {
+            (body, next)
+          }
+          else
+          {
+            (next, body)
+          };
+          self.set_terminator(mir::Terminator::BranchIf { condition,
+                                                          then_block,
+                                                          else_block },
+                              arm.span,
+                              lowered);
+          self.switch_to(body);
+          if self.bind_result_pattern(selector, &arm.pattern, arm.span, lowered)
+                 .is_some()
+          {
+            self.lower_block_statements(&arm.body, lowered);
+            final_arm_end = self.current_block;
+            if !self.current_is_terminated(lowered)
+            {
+              self.set_terminator(mir::Terminator::Goto(merge), arm.span, lowered);
+              has_open_arm = true;
+            }
           }
           test = next;
         }
@@ -773,6 +842,7 @@ impl HirToMirLowerer
       Type::Unit |
       Type::Named(_) |
       Type::Optional { .. } |
+      Type::Result { .. } |
       Type::Reference { .. } |
       Type::Array { .. } |
       Type::Set { .. } |

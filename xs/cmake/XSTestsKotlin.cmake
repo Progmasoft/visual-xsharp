@@ -95,6 +95,21 @@ add_test(NAME kotlin_project_optional_update_artifacts COMMAND xs_xse_artifact_t
   "%optional.0 = type { i8, i32 }" "br i1" "llvm.trap")
 set_tests_properties(kotlin_project_optional_update_artifacts PROPERTIES
   TIMEOUT 5 FIXTURES_REQUIRED kotlin_project_optional_update)
+
+add_test(NAME kotlin_project_result_propagation_build COMMAND xs build)
+set_tests_properties(kotlin_project_result_propagation_build PROPERTIES TIMEOUT 60
+  WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/result_propagation"
+  ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
+  FIXTURES_REQUIRED kotlin_project_resolver FIXTURES_SETUP kotlin_project_result_propagation
+  PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
+
+add_test(NAME kotlin_project_result_propagation_artifacts COMMAND xs_xse_artifact_tests
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/result_propagation/sources/main.ll
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/result_propagation/sources/main.o
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/result_propagation/sources/main.xse 13
+  "%result.0 = type { i8, i32, i32 }" "extractvalue %result.0" "br i1")
+set_tests_properties(kotlin_project_result_propagation_artifacts PROPERTIES
+  TIMEOUT 5 FIXTURES_REQUIRED kotlin_project_result_propagation)
 foreach(output hir mir xlil)
   string(TOUPPER "${output}" output_upper)
   set(output_extension ".x${output}")

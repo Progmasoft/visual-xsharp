@@ -103,6 +103,12 @@ pub(super) fn expression_type(tree: &SyntaxTree,
       };
       Some(*element)
     }
+    EXPR_RESULT_PROPAGATION =>
+    {
+      let result = expression_type(tree, tree.nodes.get(*value.children.first()?)?, context, locals)?;
+      let (success, _) = result.result_parts()?;
+      Some(success.clone())
+    }
     EXPR_ASSIGNMENT if value.token_kind == TOKEN_QUESTION_QUESTION_ASSIGN =>
     {
       let target = tree.nodes.get(*value.children.first()?)?;

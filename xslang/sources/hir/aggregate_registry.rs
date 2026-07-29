@@ -24,6 +24,7 @@ pub(crate) struct AggregateRegistry
   pub types: HashMap<String, Type>,
   pub tuples: Vec<(HirType, Type)>,
   pub optionals: Vec<(HirType, Type)>,
+  pub results: Vec<(HirType, Type)>,
 }
 
 pub(crate) fn build_module(module: &declarations::Module) -> Option<AggregateRegistry>
@@ -386,6 +387,23 @@ fn visit_checked_type(value: &HirType,
       registry.optionals.push((value.clone(), value_type));
       Some(value_type)
     }
+    HirType::Result { success,
+                      error, } =>
+    {
+      if let Some((_, value_type)) = registry.results.iter().find(|(source, _)| source == value)
+      {
+        return Some(*value_type);
+      }
+      let success_type = result_payload_type(success, definitions, visiting, registry)?;
+      let error_type = result_payload_type(error, definitions, visiting, registry)?;
+      let value_type = Type::aggregate(registry.layouts.len() as u32);
+      registry.layouts
+              .push(AggregateLayout { name: format!("result.{}", registry.results.len()),
+                                      value_type,
+                                      fields: vec![Type::BOOL, success_type, error_type] });
+      registry.results.push((value.clone(), value_type));
+      Some(value_type)
+    }
     HirType::Reference { referent, .. } =>
     {
       let _ = visit_checked_type(referent, definitions, visiting, registry);
@@ -421,6 +439,22 @@ fn visit_checked_type(value: &HirType,
       None
     }
     HirType::Unit => None,
+  }
+}
+
+fn result_payload_type(value: &HirType,
+                       definitions: &HashMap<&str, &NominalType>,
+                       visiting: &mut HashSet<String>,
+                       registry: &mut AggregateRegistry)
+                       -> Option<Type>
+{
+  if matches!(value, HirType::Unit)
+  {
+    Some(Type::BOOL)
+  }
+  else
+  {
+    visit_checked_type(value, definitions, visiting, registry)
   }
 }
 
@@ -507,6 +541,7 @@ fn visit(declaration: &NominalType,
             TypeRef::Map { .. } |
             TypeRef::Tuple { .. } |
             TypeRef::Optional { .. } |
+            TypeRef::Result { .. } |
             TypeRef::Reference { .. } => return None,
           });
   }

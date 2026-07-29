@@ -34,7 +34,8 @@ impl TypeChecker
                  span: Span)
   {
     self.check_expression_against_type(selector, selector_type);
-    if !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
+    let exhaustive_result = result_arms_are_exhaustive(selector_type, arms);
+    if !exhaustive_result && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
     {
       self.diagnostics
           .push(Diagnostic { code: DiagnosticCode::MatchRequiresFinalElse,
@@ -42,8 +43,10 @@ impl TypeChecker
                              span });
     }
     let mut patterns = Vec::new();
+    let mut result_variants = Vec::new();
     for (index, arm) in arms.iter().enumerate()
     {
+      let local_count = self.locals.len();
       match &arm.pattern
       {
         MatchPattern::Literal(literal) =>
@@ -63,6 +66,53 @@ impl TypeChecker
             patterns.push(literal.clone());
           }
         }
+        MatchPattern::ResultVariant { success,
+                                      binding,
+                                      payload_type, } =>
+        {
+          let expected_payload = match selector_type
+          {
+            Type::Result { success: expected_success,
+                           error: expected_error, } =>
+            {
+              if *success { expected_success.as_ref() } else { expected_error.as_ref() }
+            }
+            _ =>
+            {
+              self.diagnostics
+                  .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                     message: "Ok/Error patterns require a Result<T, E> selector".to_string(),
+                                     span: arm.span });
+              payload_type
+            }
+          };
+          if payload_type != expected_payload
+          {
+            self.diagnostics
+                .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                   message: "Result pattern payload type does not match its selector variant"
+                                     .to_string(),
+                                   span: arm.span });
+          }
+          if result_variants.contains(success)
+          {
+            self.diagnostics
+                .push(Diagnostic { code: DiagnosticCode::DuplicateMatchPattern,
+                                   message: "match statement contains a duplicate Result variant".to_string(),
+                                   span: arm.span });
+          }
+          else
+          {
+            result_variants.push(*success);
+          }
+          if let Some(binding) = binding
+          {
+            self.locals.push(Local { name: binding.clone(),
+                                     ty: payload_type.clone(),
+                                     mutable: false,
+                                     span: arm.span });
+          }
+        }
         MatchPattern::Else if index + 1 != arms.len() =>
         {
           self.diagnostics
@@ -74,8 +124,23 @@ impl TypeChecker
         {}
       }
       self.check_block(&arm.body, result_type);
+      self.locals.truncate(local_count);
     }
   }
+}
+
+fn result_arms_are_exhaustive(selector_type: &Type, arms: &[MatchArm]) -> bool
+{
+  matches!(selector_type, Type::Result { .. }) &&
+  arms.iter()
+      .filter_map(|arm| match arm.pattern
+      {
+        MatchPattern::ResultVariant { success, .. } => Some(success),
+        _ => None,
+      })
+      .collect::<std::collections::HashSet<_>>()
+      .len() ==
+  2
 }
 
 #[cfg(test)]
@@ -95,6 +160,34 @@ mod tests
                              tail: None,
                              span: span() },
                span: span() }
+  }
+
+  fn result_type(success: Type, error: Type) -> Type
+  {
+    Type::Result { success: Box::new(success),
+                   error: Box::new(error) }
+  }
+
+  fn primitive(kind: PrimitiveType) -> Type
+  {
+    Type::Primitive(kind)
+  }
+
+  fn result_arm(success: bool, binding: Option<&str>, payload_type: Type, tail: Option<Expression>) -> MatchArm
+  {
+    MatchArm { pattern: MatchPattern::ResultVariant { success,
+                                                      binding: binding.map(str::to_string),
+                                                      payload_type },
+               body: Block { statements: Vec::new(),
+                             tail: tail.map(Box::new),
+                             span: span() },
+               span: span() }
+  }
+
+  fn local(name: &str) -> Expression
+  {
+    Expression::Local { name: name.to_string(),
+                        span: span() }
   }
 
   #[test]
@@ -117,5 +210,153 @@ mod tests
                        .any(|value| value.code == DiagnosticCode::MatchRequiresFinalElse));
     assert!(diagnostics.iter()
                        .any(|value| value.code == DiagnosticCode::DuplicateMatchPattern));
+  }
+
+  #[test]
+  fn accepts_exhaustive_result_statement_without_else()
+  {
+    let long = primitive(PrimitiveType::Long);
+    let result = result_type(long.clone(), long.clone());
+    let function = Function {
+      name: "consume".to_string(),
+      return_type: None,
+      locals: vec![Local { name: "input".to_string(),
+                           ty: result.clone(),
+                           mutable: false,
+                           span: span() }],
+      body: vec![Statement::Match {
+        selector: local("input"),
+        selector_type: result,
+        arms: vec![result_arm(true, Some("value"), long.clone(), None),
+                   result_arm(false, Some("error"), long, None)],
+        span: span(),
+      }],
+    };
+
+    let diagnostics = TypeChecker::new().check_function(&function);
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+  }
+
+  #[test]
+  fn accepts_result_payload_binding_as_expression_arm_tail()
+  {
+    let long = primitive(PrimitiveType::Long);
+    let result = result_type(long.clone(), long.clone());
+    let function = Function {
+      name: "read".to_string(),
+      return_type: Some(long.clone()),
+      locals: vec![Local { name: "input".to_string(),
+                           ty: result.clone(),
+                           mutable: false,
+                           span: span() }],
+      body: vec![Statement::Return {
+        value: Some(Expression::Match {
+          selector: Box::new(local("input")),
+          selector_type: Box::new(result),
+          arms: vec![result_arm(true, Some("value"), long.clone(), Some(local("value"))),
+                     result_arm(false, Some("error"), long.clone(), Some(local("error")))],
+          result_type: Box::new(long),
+          span: span(),
+        }),
+        span: span(),
+      }],
+    };
+
+    let diagnostics = TypeChecker::new().check_function(&function);
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+  }
+
+  #[test]
+  fn ignored_result_payload_does_not_create_an_else_local()
+  {
+    let long = primitive(PrimitiveType::Long);
+    let result = result_type(long.clone(), long.clone());
+    let function = Function {
+      name: "ignore".to_string(),
+      return_type: Some(long.clone()),
+      locals: vec![Local { name: "input".to_string(),
+                           ty: result.clone(),
+                           mutable: false,
+                           span: span() }],
+      body: vec![Statement::Return {
+        value: Some(Expression::Match {
+          selector: Box::new(local("input")),
+          selector_type: Box::new(result),
+          arms: vec![
+            result_arm(true,
+                       None,
+                       long.clone(),
+                       Some(Expression::Literal { literal: Literal::Integer("1".to_string()),
+                                                  span: span() })),
+            result_arm(false,
+                       None,
+                       long.clone(),
+                       Some(Expression::Literal { literal: Literal::Integer("2".to_string()),
+                                                  span: span() })),
+          ],
+          result_type: Box::new(long),
+          span: span(),
+        }),
+        span: span(),
+      }],
+    };
+
+    let diagnostics = TypeChecker::new().check_function(&function);
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+  }
+
+  #[test]
+  fn rejects_result_arm_tail_with_the_wrong_result_type()
+  {
+    let long = primitive(PrimitiveType::Long);
+    let boolean = primitive(PrimitiveType::Bool);
+    let result = result_type(long.clone(), boolean.clone());
+    let function = Function {
+      name: "invalid_tail".to_string(),
+      return_type: Some(long.clone()),
+      locals: vec![Local { name: "input".to_string(),
+                           ty: result.clone(),
+                           mutable: false,
+                           span: span() }],
+      body: vec![Statement::Return {
+        value: Some(Expression::Match {
+          selector: Box::new(local("input")),
+          selector_type: Box::new(result),
+          arms: vec![result_arm(true, Some("value"), long.clone(), Some(local("value"))),
+                     result_arm(false, Some("failure"), boolean, Some(local("failure")))],
+          result_type: Box::new(long),
+          span: span(),
+        }),
+        span: span(),
+      }],
+    };
+
+    let diagnostics = TypeChecker::new().check_function(&function);
+    assert!(diagnostics.iter().any(|diagnostic| diagnostic.code == DiagnosticCode::LiteralTypeMismatch));
+  }
+
+  #[test]
+  fn rejects_else_before_a_result_variant()
+  {
+    let long = primitive(PrimitiveType::Long);
+    let result = result_type(long.clone(), long.clone());
+    let function = Function {
+      name: "invalid_order".to_string(),
+      return_type: None,
+      locals: vec![Local { name: "input".to_string(),
+                           ty: result.clone(),
+                           mutable: false,
+                           span: span() }],
+      body: vec![Statement::Match {
+        selector: local("input"),
+        selector_type: result,
+        arms: vec![arm(MatchPattern::Else), result_arm(true, Some("value"), long, None)],
+        span: span(),
+      }],
+    };
+
+    let diagnostics = TypeChecker::new().check_function(&function);
+    assert!(diagnostics.iter().any(|diagnostic| diagnostic.code == DiagnosticCode::MatchRequiresFinalElse &&
+                                                diagnostic.message.contains("final")));
   }
 }

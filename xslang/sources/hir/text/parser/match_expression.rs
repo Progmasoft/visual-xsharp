@@ -4,9 +4,35 @@
  */
 
 use super::*;
+use crate::hir::MatchPattern;
 
 impl Parser<'_>
 {
+  pub(super) fn match_pattern(&mut self, line: &str) -> Option<MatchPattern>
+  {
+    let record = line.strip_prefix("arm ")?;
+    if record == "else"
+    {
+      return Some(MatchPattern::Else);
+    }
+    if let Some(literal) = record.strip_prefix("literal ")
+    {
+      return Some(MatchPattern::Literal(self.literal(literal)));
+    }
+    let result = record.strip_prefix("result ")?;
+    let (variant_binding, payload_type) = result.split_once(" : ")?;
+    let (variant, binding) = variant_binding.split_once(" binding ")?;
+    let success = match variant
+    {
+      "Ok" => true,
+      "Error" => false,
+      _ => return None,
+    };
+    Some(MatchPattern::ResultVariant { success,
+                                       binding: (binding != "else").then(|| binding.to_string()),
+                                       payload_type: self.parse_type(payload_type)? })
+  }
+
   pub(super) fn match_expression(&mut self, signature: &str) -> Option<Expression>
   {
     self.index += 1;
@@ -32,14 +58,7 @@ impl Parser<'_>
         self.index += 1;
         break;
       }
-      let pattern = if line == "arm else"
-      {
-        MatchPattern::Else
-      }
-      else if let Some(literal) = line.strip_prefix("arm literal ")
-      {
-        MatchPattern::Literal(self.literal(literal))
-      }
+      let Some(pattern) = self.match_pattern(&line)
       else
       {
         self.report(format!("invalid match expression arm record '{line}'"));

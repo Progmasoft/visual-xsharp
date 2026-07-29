@@ -208,13 +208,13 @@ impl HirToMirLowerer
                                           span });
   }
 
-  fn lower_default_value(&mut self,
-                         target: mir::LocalId,
-                         value_type: XlilType,
-                         span: Span,
-                         lowered: &mut mir::Function,
-                         visiting: &mut HashSet<XlilType>)
-                         -> bool
+  pub(super) fn lower_default_value(&mut self,
+                                    target: mir::LocalId,
+                                    value_type: XlilType,
+                                    span: Span,
+                                    lowered: &mut mir::Function,
+                                    visiting: &mut HashSet<XlilType>)
+                                    -> bool
   {
     if let Some(value) = mir::IntegerConstant::from_bits(value_type, 0)
     {
@@ -412,6 +412,16 @@ impl HirToMirLowerer
                                                  span);
                                      None
                                    }),
+      Type::Result { .. } => self.result_types
+                                 .iter()
+                                 .find(|(source_type, _)| source_type == ty)
+                                 .map(|(_, value_type)| *value_type)
+                                 .or_else(|| {
+                                   self.report(DiagnosticCode::UnsupportedType,
+                                               "Result<T, E> has no MIR aggregate registry entry",
+                                               span);
+                                   None
+                                 }),
       Type::Array { .. } => self.array_types
                                 .iter()
                                 .find(|(source_type, _)| source_type == ty)

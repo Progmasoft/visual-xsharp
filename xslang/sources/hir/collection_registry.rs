@@ -44,6 +44,10 @@ impl CollectionRegistry
                                       .iter()
                                       .find(|(source, _)| source == source_type)
                                       .map(|(_, value_type)| *value_type),
+      Type::Result { .. } => aggregates.results
+                                       .iter()
+                                       .find(|(source, _)| source == source_type)
+                                       .map(|(_, value_type)| *value_type),
       Type::Array { length,
                     element, } =>
       {

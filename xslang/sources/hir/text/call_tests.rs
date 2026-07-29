@@ -14,7 +14,8 @@ fn span() -> Span
 #[test]
 fn roundtrips_typed_call_with_nested_generic_parameter()
 {
-  let result_type = Type::Named("Result<Long, Error>".to_string());
+  let result_type = Type::Result { success: Box::new(Type::Primitive(PrimitiveType::Long)),
+                                   error: Box::new(Type::Named("Error".to_string())) };
   let function = Function { name: "consume".to_string(),
                             return_type: Some(Type::Primitive(PrimitiveType::Long)),
                             locals: vec![Local { name: "result".to_string(),

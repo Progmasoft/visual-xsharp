@@ -1,0 +1,21 @@
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+// SPDX-License-Identifier: MPL-2.0
+
+fn Produce() -> Result<Long, Long>
+{
+  return Error(9);
+}
+
+fn Read(input: Result<Long, Long>) -> Long
+{
+  return match (input)
+  {
+    Ok(value) -> { value },
+    Error(error) -> { error },
+  };
+}
+
+fn main() -> Long
+{
+  return Read(Produce());
+}

@@ -47,6 +47,23 @@ existing panic terminator. LLVM therefore receives ordinary XLIL records rather 
 instruction. An absent `Optional<Data>` uses a recursively constructed deterministic aggregate payload; only its false
 discriminant is semantically observable.
 
+Structured `Result<T, E>` values use the same backend-neutral aggregate route. Compiler-core checks `Ok` and `Error`
+payloads, lowers postfix `@` to explicit MIR control flow and early return, and lowers exhaustive Result matches to
+discriminant branches plus payload extraction. LLVM sees only named aggregate values, `extractvalue`, ordinary conditional
+branches, and returns. No LLVM type or instruction is exposed in HIR or MIR.
+
+The currently supported native Result slice includes:
+
+- same-module functions accepting and returning concrete Result types;
+- direct `Ok(value)` and `Error(value)` construction;
+- postfix propagation when the enclosing function has the same error payload;
+- nested Result and Optional payload layouts already representable by the aggregate registry;
+- value-producing and statement Result matches with `Ok(binding)` and `Error(binding)` arms;
+- native observability through a `Long` reader function that converts either payload to the process exit result.
+
+Imported function resolution, method calls returning Result, runtime-owned standard Error objects, and unwinding are not
+part of this aggregate path. Recoverable failure does not require an exception ABI.
+
 ## String mapping and deferred owned strings
 
 `Str` is an immutable borrowed UTF-32 view with an implicit static lifetime. LLVM represents the view as a pointer plus
@@ -133,4 +150,5 @@ and fixed arrays containing tuples are declared before use. Tuple element update
 aggregate operations and lower to LLVM `insertvalue`; source array access remains ordinary indexing syntax.
 Payload-free normal enums reuse this aggregate route as a named single-`i32` tag structure. Their nominal identity stays
 in HIR/XHIR, while MIR/XLIL construction and extraction lower to ordinary LLVM aggregate operations. This representation
-does not define the future payload layout for `enum data`.
+does not define arbitrary user `enum data` layout. The compiler-provided Result layout described above is a bounded,
+specialized middle-end contract for the implemented recoverable-failure path.

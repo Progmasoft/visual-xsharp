@@ -82,6 +82,11 @@ impl HirToMirLowerer
       self.lower_optional_some(target, &arguments[0], &parameter_types[0], return_type, *span, lowered);
       return;
     }
+    if matches!(function.as_str(), "Ok" | "Error") && arguments.len() == 1 && parameter_types.len() == 1
+    {
+      self.lower_result_constructor(target, function == "Ok", &arguments[0], return_type, *span, lowered);
+      return;
+    }
     let Some(return_type) = self.lower_value_type(return_type, *span)
     else
     {

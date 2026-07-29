@@ -7,6 +7,8 @@ foreach(source_fixture MissingMain NonLiteralMain OutOfRangeMain OutOfRangeByteM
                        BoolCallAsLongMain UnitCallAsLongMain InvalidLogicalOperands ImmutableLocalReassignment
                        InvalidCoalesceLeft InvalidOptionalForcedLong InvalidOptionalAssignImmutable
                        InvalidOptionalAssignNonOptional InvalidOptionalAssignType
+                       InvalidResultPropagationOutside InvalidResultErrorMismatch InvalidResultOkPayload
+                       InvalidResultConstructorOutside InvalidResultMatchDuplicate InvalidResultMatchVariant
                        MatchMissingElse MatchPatternTypeMismatch RecursiveDataParameter
                        AmbiguousInheritedDataField IncompleteDataConstructor LegacyDataConstructorCall DuplicateDataMethod
                        ForEachNonArray ForEachBindingMismatch TupleUnknownMember TupleAssignmentMismatch

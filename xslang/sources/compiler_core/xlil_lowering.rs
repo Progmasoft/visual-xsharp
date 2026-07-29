@@ -33,6 +33,14 @@ fn lower_type(value: &TypeRef,
                 .find(|(source, _)| source == &checked)
                 .map(|(_, ty)| *ty)
     }
+    TypeRef::Result { .. } =>
+    {
+      let checked = crate::hir::declarations::type_ref_to_checked(value)?;
+      aggregates.results
+                .iter()
+                .find(|(source, _)| source == &checked)
+                .map(|(_, ty)| *ty)
+    }
     TypeRef::Reference { .. } => None,
     TypeRef::Tuple { .. } =>
     {
@@ -91,7 +99,7 @@ fn flatten_parameter(module: &HirModule,
       visiting.pop();
     }
     TypeRef::Reference { .. } => parameters.push(lower_type(value, aggregates, collections)?),
-    TypeRef::Optional { .. } => parameters.push(lower_type(value, aggregates, collections)?),
+    TypeRef::Optional { .. } | TypeRef::Result { .. } => parameters.push(lower_type(value, aggregates, collections)?),
     TypeRef::Tuple { .. } | TypeRef::Array { .. } => parameters.push(lower_type(value, aggregates, collections)?),
     TypeRef::Unit => return None,
     TypeRef::Map { .. } => return None,

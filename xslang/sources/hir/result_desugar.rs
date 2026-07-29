@@ -6,13 +6,11 @@
 use super::async_check::Span;
 use super::match_model::MatchPattern;
 use super::type_check::{
-  BinaryOperator, Block, Expression, FieldPath, Function, Literal, Local, PrimitiveType, Statement, Type,
-  UnaryOperator, UpdateOperator, UpdatePosition, result_type_parts,
+  BinaryOperator, Block, Expression, FieldPath, Function, Literal, Local, Statement, Type, UnaryOperator,
+  UpdateOperator, UpdatePosition, result_type_parts,
 };
 
 mod expression_type;
-
-use expression_type::{literal_default_type, unary_expression_type};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DiagnosticCode
@@ -457,11 +455,7 @@ impl ResultDesugar
       {
         DesugaredStatement::Match { selector: self.desugar_expression(selector),
                                     selector_type: selector_type.clone(),
-                                    arms: arms.iter()
-                                              .map(|arm| DesugaredMatchArm { pattern: arm.pattern.clone(),
-                                                                             body: self.desugar_block(&arm.body),
-                                                                             span: arm.span })
-                                              .collect(),
+                                    arms: arms.iter().map(|arm| self.desugar_match_arm(arm)).collect(),
                                     span: *span }
       }
       Statement::Break { span } => DesugaredStatement::Break { span: *span },
@@ -663,11 +657,7 @@ impl ResultDesugar
       {
         DesugaredExpression::Match { selector: Box::new(self.desugar_expression(selector)),
                                      selector_type: selector_type.clone(),
-                                     arms: arms.iter()
-                                               .map(|arm| DesugaredMatchArm { pattern: arm.pattern.clone(),
-                                                                              body: self.desugar_block(&arm.body),
-                                                                              span: arm.span })
-                                               .collect(),
+                                     arms: arms.iter().map(|arm| self.desugar_match_arm(arm)).collect(),
                                      result_type: result_type.clone(),
                                      span: *span }
       }
@@ -750,92 +740,6 @@ impl ResultDesugar
     parts
   }
 
-  fn expression_type(&mut self, expression: &Expression) -> Option<Type>
-  {
-    match expression
-    {
-      Expression::Literal { literal, .. } => literal_default_type(literal),
-      Expression::Local { name,
-                          span, } => self.find_local(name).map(|local| local.ty.clone()).or_else(|| {
-                                                                                          self.diagnostics
-                                                                 .push(Diagnostic { code:
-                                                                                      DiagnosticCode::UnknownLocal,
-                                                                                    message:
-                                                                                      format!("unknown local '{name}'"),
-                                                                                    span: *span });
-                                                                                          None
-                                                                                        }),
-      Expression::Field { path } => Some(path.ty.clone()),
-      Expression::Member { field_type, .. } => Some(field_type.as_ref().clone()),
-      Expression::Object { nominal_type, .. } => Some(Type::Named(nominal_type.clone())),
-      Expression::Array { elements, .. } =>
-      {
-        let first = self.expression_type(elements.first()?)?;
-        elements.iter()
-                .skip(1)
-                .all(|value| self.expression_type(value).as_ref() == Some(&first))
-                .then(|| Type::Array { element: Box::new(first),
-                                       length: u64::try_from(elements.len()).ok() })
-      }
-      Expression::Set { elements, .. } =>
-      {
-        let first = self.expression_type(elements.first()?)?;
-        elements.iter()
-                .skip(1)
-                .all(|value| self.expression_type(value).as_ref() == Some(&first))
-                .then(|| Type::Set { element: Box::new(first) })
-      }
-      Expression::Map { entries, .. } =>
-      {
-        let first = entries.first()?;
-        let key = self.expression_type(&first.key)?;
-        let value = self.expression_type(&first.value)?;
-        entries.iter()
-               .skip(1)
-               .all(|entry| {
-                 self.expression_type(&entry.key).as_ref() == Some(&key) &&
-                 self.expression_type(&entry.value).as_ref() == Some(&value)
-               })
-               .then(|| Type::Map { key: Box::new(key),
-                                    value: Box::new(value) })
-      }
-      Expression::Tuple { tuple_type, .. } => Some(tuple_type.as_ref().clone()),
-      Expression::TupleElement { element_type, .. } => Some(element_type.as_ref().clone()),
-      Expression::Index { element_type, .. } => Some(element_type.as_ref().clone()),
-      Expression::ArrayLength { .. } => Some(Type::Primitive(PrimitiveType::Int)),
-      Expression::Assign { value, .. } => self.expression_type(value),
-      Expression::AssignField { value, .. } => self.expression_type(value),
-      Expression::Update { target,
-                           span,
-                           .. } => self.find_local(target).map(|local| local.ty.clone()).or_else(|| {
-                                                                                          self.diagnostics
-                                                                  .push(Diagnostic { code:
-                                                                                       DiagnosticCode::UnknownLocal,
-                                                                                     message:
-                                                                                       format!("unknown local \
-                                                                                                '{target}'"),
-                                                                                     span: *span });
-                                                                                          None
-                                                                                        }),
-      Expression::Binary { operator,
-                           left,
-                           right,
-                           .. } => self.binary_expression_type(*operator, left, right),
-      Expression::Unary { operator,
-                          operand,
-                          .. } => unary_expression_type(*operator, self.expression_type(operand)?),
-      Expression::OptionalUnwrap { element_type, .. } => Some(element_type.as_ref().clone()),
-      Expression::OptionalCoalesceAssign { optional_type, .. } => Some(optional_type.as_ref().clone()),
-      Expression::OptionalMember { result_type, .. } => Some(result_type.as_ref().clone()),
-      Expression::ResultPropagation { value,
-                                      span, } => self.result_parts_of_expression(value, *span)
-                                                     .map(|(success, _)| success),
-      Expression::Call { return_type, .. } => Some(return_type.as_ref().clone()),
-      Expression::If { result_type, .. } => Some(result_type.as_ref().clone()),
-      Expression::Match { result_type, .. } => Some(result_type.as_ref().clone()),
-    }
-  }
-
   fn desugar_block(&mut self, block: &Block) -> DesugaredBlock
   {
     let local_count = self.locals.len();
@@ -852,6 +756,25 @@ impl ResultDesugar
                      span: block.span }
   }
 
+  fn desugar_match_arm(&mut self, arm: &super::match_model::MatchArm) -> DesugaredMatchArm
+  {
+    let local_count = self.locals.len();
+    if let MatchPattern::ResultVariant { binding: Some(name),
+                                         payload_type,
+                                         .. } = &arm.pattern
+    {
+      self.locals.push(Local { name: name.clone(),
+                               ty: payload_type.clone(),
+                               mutable: false,
+                               span: arm.span });
+    }
+    let body = self.desugar_block(&arm.body);
+    self.locals.truncate(local_count);
+    DesugaredMatchArm { pattern: arm.pattern.clone(),
+                        body,
+                        span: arm.span }
+  }
+
   fn find_local(&self, name: &str) -> Option<&Local>
   {
     self.locals.iter().rev().find(|local| local.name == name)
@@ -862,6 +785,7 @@ impl ResultDesugar
 mod tests
 {
   use super::*;
+  use crate::hir::type_check::PrimitiveType;
 
   fn span(start: u32, end: u32) -> Span
   {
@@ -973,5 +897,85 @@ mod tests
                                           .expect_err("mismatched error type cannot desugar");
 
     assert_eq!(diagnostics[0].code, DiagnosticCode::ReturnMismatch);
+  }
+
+  #[test]
+  fn match_payload_binding_is_visible_to_nested_propagation()
+  {
+    let result_type = Type::Result { success: Box::new(primitive(PrimitiveType::Long)),
+                                     error: Box::new(named("Error")) };
+    let function = Function { name: "flatten".to_string(),
+                              return_type: Some(result_type.clone()),
+                              locals: vec![local("outer", Type::Result { success: Box::new(result_type.clone()),
+                                                                         error: Box::new(named("Error")) })],
+                              body: vec![Statement::Return {
+        value: Some(Expression::Match {
+          selector: Box::new(Expression::Local { name: "outer".to_string(),
+                                                  span: span(2, 7) }),
+          selector_type: Box::new(Type::Result { success: Box::new(result_type.clone()),
+                                                 error: Box::new(named("Error")) }),
+          arms: vec![
+            super::super::match_model::MatchArm {
+              pattern: MatchPattern::ResultVariant { success: true,
+                                                     binding: Some("inner".to_string()),
+                                                     payload_type: result_type.clone() },
+              body: Block {
+                statements: vec![],
+                tail: Some(Box::new(Expression::Call {
+                  function: "Ok".to_string(),
+                  arguments: vec![Expression::ResultPropagation {
+                    value: Box::new(Expression::Local { name: "inner".to_string(),
+                                                        span: span(12, 17) }),
+                    span: span(12, 18),
+                  }],
+                  parameter_types: vec![primitive(PrimitiveType::Long)],
+                  return_type: Box::new(result_type.clone()),
+                  span: span(9, 19),
+                })),
+                span: span(8, 20),
+              },
+              span: span(8, 20),
+            },
+            super::super::match_model::MatchArm {
+              pattern: MatchPattern::ResultVariant { success: false,
+                                                     binding: Some("failure".to_string()),
+                                                     payload_type: named("Error") },
+              body: Block {
+                statements: vec![],
+                tail: Some(Box::new(Expression::Call {
+                  function: "Error".to_string(),
+                  arguments: vec![Expression::Local { name: "failure".to_string(),
+                                                       span: span(24, 31) }],
+                  parameter_types: vec![named("Error")],
+                  return_type: Box::new(result_type.clone()),
+                  span: span(22, 32),
+                })),
+                span: span(21, 33),
+              },
+              span: span(21, 33),
+            },
+          ],
+          result_type: Box::new(result_type),
+          span: span(2, 33),
+        }),
+        span: span(0, 34),
+      }] };
+
+    let desugared = ResultDesugar::new().desugar_function(&function)
+                                        .expect("Result arm payload must be in scope while its block is desugared");
+    let DesugaredStatement::Return { value: Some(DesugaredExpression::Match { arms, .. }),
+                                     .. } = &desugared.body[0]
+    else
+    {
+      panic!("expected a desugared match return");
+    };
+    let Some(DesugaredExpression::Call { arguments, .. }) = arms[0].body.tail.as_deref()
+    else
+    {
+      panic!("expected the Ok constructor in the success arm");
+    };
+    assert!(matches!(&arguments[0], DesugaredExpression::ResultMatch { success_type:
+                                                                         Type::Primitive(PrimitiveType::Long),
+                                                                       .. }));
   }
 }

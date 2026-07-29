@@ -5,7 +5,6 @@
 
 use std::fmt::Write;
 
-use super::match_model::MatchPattern;
 use super::result_desugar::{DesugaredBlock, DesugaredExpression, DesugaredFunction, DesugaredStatement};
 #[cfg(test)]
 use super::symbols::Visibility;
@@ -48,8 +47,8 @@ pub use program::{
 
 use block_writer::{mutability_name, write_block, write_desugared_block};
 use names::{
-  binary_operator_name, field_path_name, literal_name, symbol_kind_name, type_name, unary_operator_name,
-  update_operator_name, update_position_name, visibility_name,
+  binary_operator_name, field_path_name, literal_name, match_pattern_name, symbol_kind_name, type_name,
+  unary_operator_name, update_operator_name, update_position_name, visibility_name,
 };
 pub use parser::{XhirParseDiagnostic, parse_xhir_function, parse_xhir_module_symbols};
 use statement_writer::{write_desugared_statement, write_statement};
@@ -655,17 +654,7 @@ fn write_expression(output: &mut String, expression: &Expression, indent: usize)
       write_expression(output, selector, indent + 2);
       for arm in arms
       {
-        match &arm.pattern
-        {
-          MatchPattern::Literal(literal) =>
-          {
-            let _ = writeln!(output, "{pad}  arm literal {}", literal_name(literal));
-          }
-          MatchPattern::Else =>
-          {
-            let _ = writeln!(output, "{pad}  arm else");
-          }
-        }
+        let _ = writeln!(output, "{pad}  arm {}", match_pattern_name(&arm.pattern));
         let _ = writeln!(output, "{pad}    body");
         write_block(output, &arm.body, indent + 3);
       }
@@ -928,17 +917,7 @@ fn write_desugared_expression(output: &mut String, expression: &DesugaredExpress
       write_desugared_expression(output, selector, indent + 2);
       for arm in arms
       {
-        match &arm.pattern
-        {
-          MatchPattern::Literal(literal) =>
-          {
-            let _ = writeln!(output, "{pad}  arm literal {}", literal_name(literal));
-          }
-          MatchPattern::Else =>
-          {
-            let _ = writeln!(output, "{pad}  arm else");
-          }
-        }
+        let _ = writeln!(output, "{pad}  arm {}", match_pattern_name(&arm.pattern));
         let _ = writeln!(output, "{pad}    body");
         write_desugared_block(output, &arm.body, indent + 3);
       }

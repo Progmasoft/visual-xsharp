@@ -185,15 +185,25 @@ pub(super) fn build_session_from_declarations(syntax: Vec<SyntaxTree>,
                                declaration.name));
       continue;
     }
+    let desugared = match crate::hir::result_desugar::ResultDesugar::new().desugar_function(&function)
+    {
+      Ok(function) => function,
+      Err(errors) =>
+      {
+        diagnostics.push(format!("function '{}' failed Result desugaring: {errors:?}", declaration.name));
+        continue;
+      }
+    };
     hir_functions.push(function.clone());
     hir_parameter_counts.push(declaration.parameters.len());
     let mir =
       match crate::hir::mir_lowering::HirToMirLowerer::new().with_nominal_types(&declarations.nominal_types)
                                                             .with_aggregate_types(&aggregate_registry)
                                                             .with_collection_types(&collection_registry)
-                                                            .lower_function_with_parameters(&function,
-                                                                                            declaration.parameters
-                                                                                                       .len())
+                                                            .lower_desugared_function_with_parameters(
+                                                              &desugared,
+                                                              declaration.parameters.len(),
+                                                            )
       {
         Ok(mir) => mir,
         Err(errors) =>

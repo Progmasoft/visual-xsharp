@@ -160,6 +160,50 @@ builder can recursively construct this payload for scalar and non-recursive aggr
 XLIL deterministic and allows nested forms such as `Optional<Data>` to pass through verification without assigning a
 special null representation to every aggregate type.
 
+XLIL likewise has no dedicated Result, `Ok`, `Error`, propagation, or Result-pattern opcode. The typed HIR aggregate
+registry assigns each concrete `Result<T, E>` a layout with these fields:
+
+```text
+.type %t0 Result_Long_Long : (bool, i32, i32)
+```
+
+Field 0 is the variant discriminant (`true` for `Ok`, `false` for `Error`), field 1 stores the success payload, and field
+2 stores the error payload. The source-level payload types determine the concrete registry field types; the example uses
+`Long` for both and therefore carries two `i32` fields. A different specialization receives its own deterministic
+registry entry, while repeated uses of the same concrete type reuse one entry.
+
+`Ok(value)` and `Error(value)` become ordinary `aggregate` records. The inactive payload receives a deterministic
+canonical value but must not be observed. Postfix `@` becomes `extract` of the discriminant, `br_if`, extraction of the
+active payload, and `ret` of a reconstructed error Result on the failure edge. An exhaustive `Ok`/`Error` match uses the
+same records and extracts only the payload selected by control flow. This keeps the Result semantic model in HIR/MIR and
+keeps XLIL usable by non-X# producers.
+
+For example, the essential shape of forwarding a `Result<Long, Long>` is:
+
+```text
+.func Forward : (%t0) -> %t0
+.param %r0:%t0
+bb0.entry:
+  %r1:bool = extract %r0, 0
+  br_if %r1, bb1, bb2
+bb1.success:
+  %r2:i32 = extract %r0, 1
+  %r3:bool = const.bool true
+  %r4:i32 = const.i32 0
+  %r5:%t0 = aggregate %r3, %r2, %r4
+  ret %r5
+bb2.error:
+  %r6:i32 = extract %r0, 2
+  %r7:bool = const.bool false
+  %r8:i32 = const.i32 0
+  %r9:%t0 = aggregate %r7, %r8, %r6
+  ret %r9
+.end
+```
+
+Register ids and block labels in compiler output depend on surrounding expressions, but the data and control-flow
+contract is stable within format version 1.
+
 MIR remains target-independent and writes string constants as `utf32 [0x0000004c, ...]`. XHIR remains closer to X#
 source and represents the same value as a quoted string literal. Similarly, XHIR preserves a source-like character
 literal, XMIR writes its 32-bit scalar value as `const.u32`, and XLIL carries that value as a target-independent `u32`

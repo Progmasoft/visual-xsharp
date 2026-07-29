@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
+use crate::hir::MatchPattern;
 use crate::hir::symbols::{SymbolKind, Visibility};
 use crate::hir::type_check::{
   BinaryOperator, FieldPath, Literal, PrimitiveType, Type, UnaryOperator, UpdateOperator, UpdatePosition,
@@ -29,6 +30,31 @@ pub(super) fn field_path_name(path: &FieldPath) -> String
   std::iter::once(path.root.as_str()).chain(path.fields.iter().map(String::as_str))
                                      .collect::<Vec<_>>()
                                      .join(".")
+}
+
+pub(super) fn match_pattern_name(pattern: &MatchPattern) -> String
+{
+  match pattern
+  {
+    MatchPattern::Literal(literal) => format!("literal {}", literal_name(literal)),
+    MatchPattern::ResultVariant { success,
+                                  binding,
+                                  payload_type, } =>
+    {
+      format!("result {} binding {} : {}",
+              if *success
+              {
+                "Ok"
+              }
+              else
+              {
+                "Error"
+              },
+              binding.as_deref().unwrap_or("else"),
+              type_name(payload_type))
+    }
+    MatchPattern::Else => "else".to_string(),
+  }
 }
 
 pub(super) const fn symbol_kind_name(kind: SymbolKind) -> &'static str
@@ -62,6 +88,8 @@ pub(super) fn type_name(ty: &Type) -> String
     Type::Primitive(primitive) => primitive_type_name(*primitive).to_string(),
     Type::Named(name) => name.clone(),
     Type::Optional { element } => format!("Optional<{}>", type_name(element)),
+    Type::Result { success,
+                   error, } => format!("Result<{}, {}>", type_name(success), type_name(error)),
     Type::Reference { referent,
                       mutable: false, } => format!("&{}", type_name(referent)),
     Type::Reference { referent,

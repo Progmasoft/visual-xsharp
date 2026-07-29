@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
+use crate::hir::MatchArm;
 use crate::hir::symbols::{Module, Symbol, SymbolKind, Visibility};
 use crate::hir::type_check::{
   BinaryOperator, Block, Expression, FieldPath, Function, Literal, Local, ObjectField, Statement, Type, UnaryOperator,
   UpdateOperator, UpdatePosition,
 };
-use crate::hir::{MatchArm, MatchPattern};
 
 use super::{SUPPORTED_XHIR_VERSION, is_supported_xhir_version};
 mod collection;
@@ -401,14 +401,7 @@ impl Parser<'_>
         self.index += 1;
         break;
       }
-      let pattern = if line == "arm else"
-      {
-        MatchPattern::Else
-      }
-      else if let Some(literal) = line.strip_prefix("arm literal ")
-      {
-        MatchPattern::Literal(self.literal(literal))
-      }
+      let Some(pattern) = self.match_pattern(&line)
       else
       {
         self.report(format!("invalid match arm record '{line}'"));

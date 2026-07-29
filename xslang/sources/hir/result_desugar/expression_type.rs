@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
+use super::{Diagnostic, DiagnosticCode};
 use crate::hir::type_check::{
   BinaryOperator, Expression, Literal, PrimitiveType, Type, UnaryOperator, literal_matches_type,
 };
@@ -43,6 +44,92 @@ pub(super) fn literal_default_type(literal: &Literal) -> Option<Type>
 
 impl super::ResultDesugar
 {
+  pub(super) fn expression_type(&mut self, expression: &Expression) -> Option<Type>
+  {
+    match expression
+    {
+      Expression::Literal { literal, .. } => literal_default_type(literal),
+      Expression::Local { name,
+                          span, } => self.find_local(name).map(|local| local.ty.clone()).or_else(|| {
+                                                                                          self.diagnostics
+                                                                 .push(Diagnostic { code:
+                                                                                      DiagnosticCode::UnknownLocal,
+                                                                                    message:
+                                                                                      format!("unknown local '{name}'"),
+                                                                                    span: *span });
+                                                                                          None
+                                                                                        }),
+      Expression::Field { path } => Some(path.ty.clone()),
+      Expression::Member { field_type, .. } => Some(field_type.as_ref().clone()),
+      Expression::Object { nominal_type, .. } => Some(Type::Named(nominal_type.clone())),
+      Expression::Array { elements, .. } =>
+      {
+        let first = self.expression_type(elements.first()?)?;
+        elements.iter()
+                .skip(1)
+                .all(|value| self.expression_type(value).as_ref() == Some(&first))
+                .then(|| Type::Array { element: Box::new(first),
+                                       length: u64::try_from(elements.len()).ok() })
+      }
+      Expression::Set { elements, .. } =>
+      {
+        let first = self.expression_type(elements.first()?)?;
+        elements.iter()
+                .skip(1)
+                .all(|value| self.expression_type(value).as_ref() == Some(&first))
+                .then(|| Type::Set { element: Box::new(first) })
+      }
+      Expression::Map { entries, .. } =>
+      {
+        let first = entries.first()?;
+        let key = self.expression_type(&first.key)?;
+        let value = self.expression_type(&first.value)?;
+        entries.iter()
+               .skip(1)
+               .all(|entry| {
+                 self.expression_type(&entry.key).as_ref() == Some(&key) &&
+                 self.expression_type(&entry.value).as_ref() == Some(&value)
+               })
+               .then(|| Type::Map { key: Box::new(key),
+                                    value: Box::new(value) })
+      }
+      Expression::Tuple { tuple_type, .. } => Some(tuple_type.as_ref().clone()),
+      Expression::TupleElement { element_type, .. } => Some(element_type.as_ref().clone()),
+      Expression::Index { element_type, .. } => Some(element_type.as_ref().clone()),
+      Expression::ArrayLength { .. } => Some(Type::Primitive(PrimitiveType::Int)),
+      Expression::Assign { value, .. } => self.expression_type(value),
+      Expression::AssignField { value, .. } => self.expression_type(value),
+      Expression::Update { target,
+                           span,
+                           .. } => self.find_local(target).map(|local| local.ty.clone()).or_else(|| {
+                                                                                          self.diagnostics
+                                                                  .push(Diagnostic { code:
+                                                                                       DiagnosticCode::UnknownLocal,
+                                                                                     message:
+                                                                                       format!("unknown local \
+                                                                                                '{target}'"),
+                                                                                     span: *span });
+                                                                                          None
+                                                                                        }),
+      Expression::Binary { operator,
+                           left,
+                           right,
+                           .. } => self.binary_expression_type(*operator, left, right),
+      Expression::Unary { operator,
+                          operand,
+                          .. } => unary_expression_type(*operator, self.expression_type(operand)?),
+      Expression::OptionalUnwrap { element_type, .. } => Some(element_type.as_ref().clone()),
+      Expression::OptionalCoalesceAssign { optional_type, .. } => Some(optional_type.as_ref().clone()),
+      Expression::OptionalMember { result_type, .. } => Some(result_type.as_ref().clone()),
+      Expression::ResultPropagation { value,
+                                      span, } => self.result_parts_of_expression(value, *span)
+                                                     .map(|(success, _)| success),
+      Expression::Call { return_type, .. } => Some(return_type.as_ref().clone()),
+      Expression::If { result_type, .. } => Some(result_type.as_ref().clone()),
+      Expression::Match { result_type, .. } => Some(result_type.as_ref().clone()),
+    }
+  }
+
   pub(super) fn binary_expression_type(&mut self,
                                        operator: BinaryOperator,
                                        left: &Expression,
