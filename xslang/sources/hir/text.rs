@@ -10,9 +10,9 @@ use super::result_desugar::{DesugaredBlock, DesugaredExpression, DesugaredFuncti
 #[cfg(test)]
 use super::symbols::Visibility;
 use super::symbols::{Import, Module};
-use super::type_check::{
-  BinaryOperator, Block, Expression, Function, Statement, Type, UnaryOperator, UpdateOperator, UpdatePosition,
-};
+#[cfg(test)]
+use super::type_check::BinaryOperator;
+use super::type_check::{Block, Expression, Function, Statement, Type};
 use super::type_check::{Diagnostic as TypeDiagnostic, DiagnosticCode as TypeDiagnosticCode};
 #[cfg(test)]
 use super::type_check::{Literal, PrimitiveType};
@@ -47,7 +47,10 @@ pub use program::{
 };
 
 use block_writer::{mutability_name, write_block, write_desugared_block};
-use names::{field_path_name, literal_name, symbol_kind_name, type_name, visibility_name};
+use names::{
+  binary_operator_name, field_path_name, literal_name, symbol_kind_name, type_name, unary_operator_name,
+  update_operator_name, update_position_name, visibility_name,
+};
 pub use parser::{XhirParseDiagnostic, parse_xhir_function, parse_xhir_module_symbols};
 use statement_writer::{write_desugared_statement, write_statement};
 
@@ -570,6 +573,39 @@ fn write_expression(output: &mut String, expression: &Expression, indent: usize)
       let _ = writeln!(output, "{pad}  operand");
       write_expression(output, operand, indent + 2);
     }
+    Expression::OptionalUnwrap { value,
+                                 element_type,
+                                 .. } =>
+    {
+      let _ = writeln!(output, "{pad}optional_unwrap {}", type_name(element_type));
+      let _ = writeln!(output, "{pad}  value");
+      write_expression(output, value, indent + 2);
+    }
+    Expression::OptionalCoalesceAssign { target,
+                                         value,
+                                         optional_type,
+                                         .. } =>
+    {
+      let _ = writeln!(output,
+                       "{pad}optional_coalesce_assign {target} : {}",
+                       type_name(optional_type));
+      let _ = writeln!(output, "{pad}  value");
+      write_expression(output, value, indent + 2);
+    }
+    Expression::OptionalMember { receiver,
+                                 owner,
+                                 name,
+                                 field_type,
+                                 result_type,
+                                 .. } =>
+    {
+      let _ = writeln!(output,
+                       "{pad}optional_member {owner}::{name} : {} -> {}",
+                       type_name(field_type),
+                       type_name(result_type));
+      let _ = writeln!(output, "{pad}  receiver");
+      write_expression(output, receiver, indent + 2);
+    }
     Expression::ResultPropagation { value, .. } =>
     {
       let _ = writeln!(output, "{pad}propagate");
@@ -802,6 +838,39 @@ fn write_desugared_expression(output: &mut String, expression: &DesugaredExpress
       let _ = writeln!(output, "{pad}  operand");
       write_desugared_expression(output, operand, indent + 2);
     }
+    DesugaredExpression::OptionalUnwrap { value,
+                                          element_type,
+                                          .. } =>
+    {
+      let _ = writeln!(output, "{pad}optional_unwrap {}", type_name(element_type));
+      let _ = writeln!(output, "{pad}  value");
+      write_desugared_expression(output, value, indent + 2);
+    }
+    DesugaredExpression::OptionalCoalesceAssign { target,
+                                                  value,
+                                                  optional_type,
+                                                  .. } =>
+    {
+      let _ = writeln!(output,
+                       "{pad}optional_coalesce_assign {target} : {}",
+                       type_name(optional_type));
+      let _ = writeln!(output, "{pad}  value");
+      write_desugared_expression(output, value, indent + 2);
+    }
+    DesugaredExpression::OptionalMember { receiver,
+                                          owner,
+                                          name,
+                                          field_type,
+                                          result_type,
+                                          .. } =>
+    {
+      let _ = writeln!(output,
+                       "{pad}optional_member {owner}::{name} : {} -> {}",
+                       type_name(field_type),
+                       type_name(result_type));
+      let _ = writeln!(output, "{pad}  receiver");
+      write_desugared_expression(output, receiver, indent + 2);
+    }
     DesugaredExpression::ResultMatch { value,
                                        success_binding,
                                        error_binding,
@@ -909,60 +978,6 @@ fn write_locals(output: &mut String, locals: &[super::type_check::Local])
                      mutability_name(local.mutable));
   }
   let _ = writeln!(output, "  .end");
-}
-
-const fn binary_operator_name(operator: BinaryOperator) -> &'static str
-{
-  match operator
-  {
-    BinaryOperator::Add => "add",
-    BinaryOperator::Sub => "sub",
-    BinaryOperator::Mul => "mul",
-    BinaryOperator::Div => "div",
-    BinaryOperator::Rem => "rem",
-    BinaryOperator::BitAnd => "bit_and",
-    BinaryOperator::BitOr => "bit_or",
-    BinaryOperator::BitXor => "bit_xor",
-    BinaryOperator::LogicalAnd => "logical_and",
-    BinaryOperator::LogicalOr => "logical_or",
-    BinaryOperator::Coalesce => "coalesce",
-    BinaryOperator::ShiftLeft => "shift_left",
-    BinaryOperator::ShiftRight => "shift_right",
-    BinaryOperator::Equal => "eq",
-    BinaryOperator::NotEqual => "ne",
-    BinaryOperator::Less => "lt",
-    BinaryOperator::LessEqual => "le",
-    BinaryOperator::Greater => "gt",
-    BinaryOperator::GreaterEqual => "ge",
-  }
-}
-
-const fn unary_operator_name(operator: UnaryOperator) -> &'static str
-{
-  match operator
-  {
-    UnaryOperator::LogicalNot => "logical_not",
-    UnaryOperator::Positive => "positive",
-    UnaryOperator::Negative => "negative",
-  }
-}
-
-const fn update_operator_name(operator: UpdateOperator) -> &'static str
-{
-  match operator
-  {
-    UpdateOperator::Increment => "increment",
-    UpdateOperator::Decrement => "decrement",
-  }
-}
-
-const fn update_position_name(position: UpdatePosition) -> &'static str
-{
-  match position
-  {
-    UpdatePosition::Prefix => "prefix",
-    UpdatePosition::Postfix => "postfix",
-  }
 }
 
 #[cfg(test)]

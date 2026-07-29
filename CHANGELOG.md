@@ -17,6 +17,14 @@ source-to-native executable pipeline.
 - Lowered `Optional<T>` coalescing through target-independent MIR aggregate extraction, conditional control flow,
   merge storage, XLIL, LLVM IR, object emission, and native `.xse` execution. Both `Some` and `nil` source paths are
   covered in direct source and Kotlin project builds.
+- Completed mutable-local Optional coalescing assignment and postfix forced unwrapping through typed HIR, canonical
+  XHIR/XMIR, MIR verification, XLIL, LLVM trap lowering, and native `.xse` tests. `??=` evaluates its replacement only
+  on the `None` edge, while postfix `!` makes the failed-unwrapping path explicit as a panic terminator.
+- Added safe `?.` access for fields of optional `data` values. The lowering maps `Optional<Data>` to
+  `Optional<FieldType>` with target-independent aggregate/control-flow records and recursively builds deterministic
+  zero payloads for absent non-recursive aggregates.
+- Made aggregate-registry discovery traverse complete HIR expression trees, including nested calls, blocks, Optional
+  operations, tuples, maps, and control flow, so expression-only aggregate result types are registered before MIR.
 - Extended the public C23 XLIL parser to consume canonical hexadecimal two's-complement bit patterns emitted by the Rust
   XLIL writer for signed `i32` and `i64` constants.
 

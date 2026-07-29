@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-use crate::hir::async_check::Span;
-use crate::hir::symbols::{Import, Module, Symbol, SymbolKind, Visibility};
+use crate::hir::symbols::{Module, Symbol, SymbolKind, Visibility};
 use crate::hir::type_check::{
   BinaryOperator, Block, Expression, FieldPath, Function, Literal, Local, ObjectField, Statement, Type, UnaryOperator,
   UpdateOperator, UpdatePosition,
@@ -14,6 +13,7 @@ use crate::hir::{MatchArm, MatchPattern};
 use super::{SUPPORTED_XHIR_VERSION, is_supported_xhir_version};
 mod collection;
 mod for_each;
+mod helpers;
 mod literal;
 mod match_expression;
 mod nominal;
@@ -21,6 +21,7 @@ mod tuple;
 pub(super) mod type_parser;
 mod unary;
 
+use helpers::{parse_import_line, span};
 use type_parser::{parse_local_record, parse_type_text, split_type_list};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct XhirParseDiagnostic
@@ -662,6 +663,55 @@ impl Parser<'_>
                                       operand: Box::new(operand),
                                       span: span() });
     }
+    if let Some(element_type) = rest.strip_prefix("optional_unwrap ")
+    {
+      self.index += 1;
+      let element_type = self.parse_type(element_type)
+                             .unwrap_or(Type::Named(element_type.to_string()));
+      self.consume_expression_field("value");
+      let value = self.expression()
+                      .unwrap_or(Expression::Literal { literal: Literal::None,
+                                                       span: span() });
+      return Some(Expression::OptionalUnwrap { value: Box::new(value),
+                                               element_type: Box::new(element_type),
+                                               span: span() });
+    }
+    if let Some(record) = rest.strip_prefix("optional_coalesce_assign ")
+    {
+      self.index += 1;
+      let (target, optional_type) = record.split_once(" : ").unwrap_or((record, "Optional<()>"));
+      let optional_type = self.parse_type(optional_type)
+                              .unwrap_or(Type::Named(optional_type.to_string()));
+      self.consume_expression_field("value");
+      let value = self.expression()
+                      .unwrap_or(Expression::Literal { literal: Literal::None,
+                                                       span: span() });
+      return Some(Expression::OptionalCoalesceAssign { target: target.to_string(),
+                                                       value: Box::new(value),
+                                                       optional_type: Box::new(optional_type),
+                                                       span: span() });
+    }
+    if let Some(record) = rest.strip_prefix("optional_member ")
+    {
+      self.index += 1;
+      let (member, types) = record.split_once(" : ").unwrap_or((record, "() -> Optional<()>"));
+      let (owner, name) = member.rsplit_once("::").unwrap_or((member, ""));
+      let (field_type, result_type) = types.split_once(" -> ").unwrap_or((types, "Optional<()>"));
+      let field_type = self.parse_type(field_type)
+                           .unwrap_or(Type::Named(field_type.to_string()));
+      let result_type = self.parse_type(result_type)
+                            .unwrap_or(Type::Named(result_type.to_string()));
+      self.consume_expression_field("receiver");
+      let receiver = self.expression()
+                         .unwrap_or(Expression::Literal { literal: Literal::None,
+                                                          span: span() });
+      return Some(Expression::OptionalMember { receiver: Box::new(receiver),
+                                               owner: owner.to_string(),
+                                               name: name.to_string(),
+                                               field_type: Box::new(field_type),
+                                               result_type: Box::new(result_type),
+                                               span: span() });
+    }
     if rest == "propagate"
     {
       self.index += 1;
@@ -940,36 +990,4 @@ impl Parser<'_>
     self.diagnostics.push(XhirParseDiagnostic { line: self.index + 1,
                                                 message });
   }
-}
-
-fn parse_import_line(line: &str) -> Option<Import>
-{
-  let rest = line.strip_prefix("import ")?;
-  if let Some(module) = rest.strip_prefix("module ")
-  {
-    return Some(Import::Module { module: module.to_string(),
-                                 span: span() });
-  }
-  if let Some(module) = rest.strip_prefix("all from ")
-  {
-    return Some(Import::All { module: module.to_string(),
-                              span: span() });
-  }
-  let (left, module) = rest.rsplit_once(" from ")?;
-  if let Some((name, alias)) = left.split_once(" as ")
-  {
-    return Some(Import::Selected { module: module.to_string(),
-                                   name: name.to_string(),
-                                   alias: Some(alias.to_string()),
-                                   span: span() });
-  }
-  Some(Import::Selected { module: module.to_string(),
-                          name: left.to_string(),
-                          alias: None,
-                          span: span() })
-}
-
-const fn span() -> Span
-{
-  Span::new(0, 0, 0)
 }

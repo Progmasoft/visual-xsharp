@@ -4,7 +4,9 @@
  */
 
 use crate::hir::symbols::{SymbolKind, Visibility};
-use crate::hir::type_check::{FieldPath, Literal, PrimitiveType, Type};
+use crate::hir::type_check::{
+  BinaryOperator, FieldPath, Literal, PrimitiveType, Type, UnaryOperator, UpdateOperator, UpdatePosition,
+};
 
 pub(super) fn literal_name(literal: &Literal) -> String
 {
@@ -105,5 +107,59 @@ const fn primitive_type_name(primitive: PrimitiveType) -> &'static str
     PrimitiveType::Double => "Double",
     PrimitiveType::Str => "Str",
     PrimitiveType::String => "String",
+  }
+}
+
+pub(super) const fn binary_operator_name(operator: BinaryOperator) -> &'static str
+{
+  match operator
+  {
+    BinaryOperator::Add => "add",
+    BinaryOperator::Sub => "sub",
+    BinaryOperator::Mul => "mul",
+    BinaryOperator::Div => "div",
+    BinaryOperator::Rem => "rem",
+    BinaryOperator::BitAnd => "bit_and",
+    BinaryOperator::BitOr => "bit_or",
+    BinaryOperator::BitXor => "bit_xor",
+    BinaryOperator::LogicalAnd => "logical_and",
+    BinaryOperator::LogicalOr => "logical_or",
+    BinaryOperator::Coalesce => "coalesce",
+    BinaryOperator::ShiftLeft => "shift_left",
+    BinaryOperator::ShiftRight => "shift_right",
+    BinaryOperator::Equal => "eq",
+    BinaryOperator::NotEqual => "ne",
+    BinaryOperator::Less => "lt",
+    BinaryOperator::LessEqual => "le",
+    BinaryOperator::Greater => "gt",
+    BinaryOperator::GreaterEqual => "ge",
+  }
+}
+
+pub(super) const fn unary_operator_name(operator: UnaryOperator) -> &'static str
+{
+  match operator
+  {
+    UnaryOperator::LogicalNot => "logical_not",
+    UnaryOperator::Positive => "positive",
+    UnaryOperator::Negative => "negative",
+  }
+}
+
+pub(super) const fn update_operator_name(operator: UpdateOperator) -> &'static str
+{
+  match operator
+  {
+    UpdateOperator::Increment => "increment",
+    UpdateOperator::Decrement => "decrement",
+  }
+}
+
+pub(super) const fn update_position_name(position: UpdatePosition) -> &'static str
+{
+  match position
+  {
+    UpdatePosition::Prefix => "prefix",
+    UpdatePosition::Postfix => "postfix",
   }
 }

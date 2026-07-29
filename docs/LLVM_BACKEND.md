@@ -40,10 +40,12 @@ Object file emission and linker invocation are wired into direct `.xlil` native 
 compiler-core slice. Unsupported source constructs are diagnosed or remain outside that incremental slice; they are not
 lowered by inventing LLVM-only semantics.
 
-The supported source slice includes `Optional<T>` construction and `??` for payload types already representable in the
-XLIL aggregate model. Coalescing is lowered before the backend to aggregate extraction, conditional branches, and
-function-local merge storage. LLVM therefore receives ordinary XLIL records rather than an Optional-specific ABI or
-instruction.
+The supported source slice includes `Optional<T>` construction, `??`, mutable-local `??=`, postfix `!`, and safe
+data-field access for payload types already representable in the XLIL aggregate model. These operations are lowered
+before the backend to aggregate construction/extraction, conditional branches, function-local merge storage, and the
+existing panic terminator. LLVM therefore receives ordinary XLIL records rather than an Optional-specific ABI or
+instruction. An absent `Optional<Data>` uses a recursively constructed deterministic aggregate payload; only its false
+discriminant is semantically observable.
 
 ## String mapping and deferred owned strings
 

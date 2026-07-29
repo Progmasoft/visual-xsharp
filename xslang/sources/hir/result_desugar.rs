@@ -7,7 +7,7 @@ use super::async_check::Span;
 use super::match_model::MatchPattern;
 use super::type_check::{
   BinaryOperator, Block, Expression, FieldPath, Function, Literal, Local, PrimitiveType, Statement, Type,
-  UnaryOperator, UpdateOperator, UpdatePosition, literal_matches_type, result_type_parts,
+  UnaryOperator, UpdateOperator, UpdatePosition, result_type_parts,
 };
 
 mod expression_type;
@@ -129,6 +129,28 @@ pub enum DesugaredExpression
   {
     operator: UnaryOperator,
     operand: Box<DesugaredExpression>,
+    span: Span,
+  },
+  OptionalUnwrap
+  {
+    value: Box<DesugaredExpression>,
+    element_type: Box<Type>,
+    span: Span,
+  },
+  OptionalCoalesceAssign
+  {
+    target: String,
+    value: Box<DesugaredExpression>,
+    optional_type: Box<Type>,
+    span: Span,
+  },
+  OptionalMember
+  {
+    receiver: Box<DesugaredExpression>,
+    owner: String,
+    name: String,
+    field_type: Box<Type>,
+    result_type: Box<Type>,
     span: Span,
   },
   Call
@@ -578,6 +600,38 @@ impl ResultDesugar
                                                                   operand:
                                                                     Box::new(self.desugar_expression(operand)),
                                                                   span: *span },
+      Expression::OptionalUnwrap { value,
+                                   element_type,
+                                   span, } =>
+      {
+        DesugaredExpression::OptionalUnwrap { value: Box::new(self.desugar_expression(value)),
+                                              element_type: element_type.clone(),
+                                              span: *span }
+      }
+      Expression::OptionalCoalesceAssign { target,
+                                           value,
+                                           optional_type,
+                                           span, } =>
+      {
+        DesugaredExpression::OptionalCoalesceAssign { target: target.clone(),
+                                                      value: Box::new(self.desugar_expression(value)),
+                                                      optional_type: optional_type.clone(),
+                                                      span: *span }
+      }
+      Expression::OptionalMember { receiver,
+                                   owner,
+                                   name,
+                                   field_type,
+                                   result_type,
+                                   span, } =>
+      {
+        DesugaredExpression::OptionalMember { receiver: Box::new(self.desugar_expression(receiver)),
+                                              owner: owner.clone(),
+                                              name: name.clone(),
+                                              field_type: field_type.clone(),
+                                              result_type: result_type.clone(),
+                                              span: *span }
+      }
       Expression::ResultPropagation { value,
                                       span, } => self.desugar_result_propagation(value, *span),
       Expression::Call { function,
@@ -770,6 +824,9 @@ impl ResultDesugar
       Expression::Unary { operator,
                           operand,
                           .. } => unary_expression_type(*operator, self.expression_type(operand)?),
+      Expression::OptionalUnwrap { element_type, .. } => Some(element_type.as_ref().clone()),
+      Expression::OptionalCoalesceAssign { optional_type, .. } => Some(optional_type.as_ref().clone()),
+      Expression::OptionalMember { result_type, .. } => Some(result_type.as_ref().clone()),
       Expression::ResultPropagation { value,
                                       span, } => self.result_parts_of_expression(value, *span)
                                                      .map(|(success, _)| success),
@@ -793,82 +850,6 @@ impl ResultDesugar
     DesugaredBlock { statements,
                      tail,
                      span: block.span }
-  }
-
-  fn binary_expression_type(&mut self, operator: BinaryOperator, left: &Expression, right: &Expression)
-                            -> Option<Type>
-  {
-    if operator == BinaryOperator::Coalesce
-    {
-      let right_type = self.expression_type(right)?;
-      if matches!(left, Expression::Literal { literal: Literal::None,
-                                              .. })
-      {
-        return Some(right_type);
-      }
-      let Type::Optional { element } = self.expression_type(left)?
-      else
-      {
-        return None;
-      };
-      return (*element == right_type).then_some(*element);
-    }
-    let mut left_type = self.expression_type(left)?;
-    let mut right_type = self.expression_type(right)?;
-    if left_type != right_type
-    {
-      if let Expression::Literal { literal, .. } = left &&
-         literal_matches_type(literal, &right_type)
-      {
-        left_type = right_type.clone();
-      }
-      else if let Expression::Literal { literal, .. } = right &&
-                literal_matches_type(literal, &left_type)
-      {
-        right_type = left_type.clone();
-      }
-    }
-    if left_type != right_type
-    {
-      return None;
-    }
-    let Type::Primitive(primitive) = left_type
-    else
-    {
-      return None;
-    };
-    match operator
-    {
-      BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr if primitive == PrimitiveType::Bool =>
-      {
-        Some(Type::Primitive(PrimitiveType::Bool))
-      }
-      BinaryOperator::Add |
-      BinaryOperator::Sub |
-      BinaryOperator::Mul |
-      BinaryOperator::Div |
-      BinaryOperator::Rem |
-      BinaryOperator::BitAnd |
-      BinaryOperator::BitOr |
-      BinaryOperator::BitXor |
-      BinaryOperator::ShiftLeft |
-      BinaryOperator::ShiftRight
-        if matches!(primitive, PrimitiveType::Long | PrimitiveType::Int) =>
-      {
-        Some(Type::Primitive(primitive))
-      }
-      BinaryOperator::Equal | BinaryOperator::NotEqual
-        if matches!(primitive, PrimitiveType::Long | PrimitiveType::Int) =>
-      {
-        Some(Type::Primitive(PrimitiveType::Bool))
-      }
-      BinaryOperator::Less | BinaryOperator::LessEqual | BinaryOperator::Greater | BinaryOperator::GreaterEqual
-        if primitive == PrimitiveType::Long =>
-      {
-        Some(Type::Primitive(PrimitiveType::Bool))
-      }
-      _ => None,
-    }
   }
 
   fn find_local(&self, name: &str) -> Option<&Local>

@@ -38,6 +38,7 @@ pub(super) fn expression_type(tree: &SyntaxTree,
                                                                nominal::member_type(tree, value, context, locals)
                                                              })
     }
+    EXPR_OPTIONAL_MEMBER_ACCESS => nominal::optional_member_type(tree, value, context, locals),
     EXPR_TUPLE => tuple::tuple_expression_type(tree, value, context, locals),
     EXPR_NEW => constructor::new_expression_type(tree, value, context, locals),
     EXPR_CALL =>
@@ -92,6 +93,21 @@ pub(super) fn expression_type(tree: &SyntaxTree,
                         .or(Some(Type::Primitive(PrimitiveType::Int))),
     EXPR_UNARY if value.token_kind == TOKEN_BANG => Some(Type::Primitive(PrimitiveType::Bool)),
     EXPR_UNARY => expression_type(tree, tree.nodes.get(*value.children.first()?)?, context, locals),
+    EXPR_OPTIONAL_FORGIVING =>
+    {
+      let Type::Optional { element } =
+        expression_type(tree, tree.nodes.get(*value.children.first()?)?, context, locals)?
+      else
+      {
+        return None;
+      };
+      Some(*element)
+    }
+    EXPR_ASSIGNMENT if value.token_kind == TOKEN_QUESTION_QUESTION_ASSIGN =>
+    {
+      let target = tree.nodes.get(*value.children.first()?)?;
+      locals.get(&path_text(tree, target)).cloned()
+    }
     _ => None,
   }
 }

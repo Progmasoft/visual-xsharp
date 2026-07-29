@@ -300,3 +300,194 @@ fn resolves_fixed_array_members_to_canonical_hir()
   assert_eq!(collection::array_member_type(&first_tree, &first_tree.nodes[0], &context, &locals),
              None);
 }
+
+fn point_nominal() -> declarations::NominalType
+{
+  declarations::NominalType { name: "Point".to_string(),
+                              kind: declarations::NominalKind::Data,
+                              bases: vec![],
+                              fields: vec![declarations::Field { name: "x".to_string(),
+                                                                 ty:
+                                                                   declarations::TypeRef::Primitive(PrimitiveType::Long),
+                                                                 mutable: true,
+                                                                 span: SourceSpan { file_id: 1,
+                                                                                    start_offset: 0,
+                                                                                    end_offset: 1,
+                                                                                    start_line: 1,
+                                                                                    start_column: 1,
+                                                                                    end_line: 1,
+                                                                                    end_column: 2 } },
+                                           declarations::Field { name: "visible".to_string(),
+                                                                 ty:
+                                                                   declarations::TypeRef::Primitive(PrimitiveType::Bool),
+                                                                 mutable: false,
+                                                                 span: SourceSpan { file_id: 1,
+                                                                                    start_offset: 0,
+                                                                                    end_offset: 1,
+                                                                                    start_line: 1,
+                                                                                    start_column: 1,
+                                                                                    end_line: 1,
+                                                                                    end_column: 2 } },],
+                              variants: vec![],
+                              span: SourceSpan { file_id: 1,
+                                                 start_offset: 0,
+                                                 end_offset: 1,
+                                                 start_line: 1,
+                                                 start_column: 1,
+                                                 end_line: 1,
+                                                 end_column: 2 } }
+}
+
+fn optional_member_tree(member: &str) -> SyntaxTree
+{
+  SyntaxTree { root: 0,
+               nodes: vec![syntax(EXPR_OPTIONAL_MEMBER_ACCESS, &format!("point?.{member}"), None, vec![1,
+                                                                                                       4]),
+                           syntax(EXPR_IDENTIFIER, "point", Some(0), vec![2]),
+                           syntax(PATH, "point", Some(1), vec![3]),
+                           syntax(IDENTIFIER, "point", Some(2), vec![]),
+                           syntax(IDENTIFIER, member, Some(0), vec![]),] }
+}
+
+fn point_context() -> LoweringContext
+{
+  let point = point_nominal();
+  LoweringContext { calls: HashMap::new(),
+                    generic_calls: HashMap::new(),
+                    constructors: HashMap::new(),
+                    methods: HashMap::new(),
+                    nominal_types: HashMap::from([(point.name.clone(), point)]),
+                    type_substitutions: HashMap::new() }
+}
+
+#[test]
+fn resolves_optional_member_type_from_the_wrapped_nominal()
+{
+  let tree = optional_member_tree("x");
+  let context = point_context();
+  let locals =
+    HashMap::from([("point".to_string(), Type::Optional { element: Box::new(Type::Named("Point".to_string())) })]);
+  assert_eq!(nominal::optional_member_type(&tree, &tree.nodes[0], &context, &locals),
+             Some(Type::Optional { element: Box::new(Type::Primitive(PrimitiveType::Long)) }));
+
+  let visible = optional_member_tree("visible");
+  assert_eq!(nominal::optional_member_type(&visible, &visible.nodes[0], &context, &locals),
+             Some(Type::Optional { element: Box::new(Type::Primitive(PrimitiveType::Bool)) }));
+}
+
+#[test]
+fn lowers_optional_member_to_explicit_typed_hir()
+{
+  let tree = optional_member_tree("x");
+  let context = point_context();
+  let receiver_type = Type::Optional { element: Box::new(Type::Named("Point".to_string())) };
+  let result_type = Type::Optional { element: Box::new(Type::Primitive(PrimitiveType::Long)) };
+  let locals = HashMap::from([("point".to_string(), receiver_type)]);
+  let lowered =
+    lower_expression(&tree, &tree.nodes[0], &context, &locals, Some(&result_type)).expect("valid optional member \
+                                                                                           should lower");
+  assert!(matches!(lowered,
+                   Expression::OptionalMember {
+                     receiver,
+                     owner,
+                     name,
+                     field_type,
+                     result_type: lowered_result,
+                     ..
+                   } if matches!(receiver.as_ref(), Expression::Local { name, .. } if name == "point") &&
+                        owner == "Point" && name == "x" &&
+                        field_type.as_ref() == &Type::Primitive(PrimitiveType::Long) &&
+                        lowered_result.as_ref() == &result_type));
+}
+
+#[test]
+fn optional_member_rejects_non_optional_and_unknown_receivers()
+{
+  let tree = optional_member_tree("x");
+  let context = point_context();
+  let plain = HashMap::from([("point".to_string(), Type::Named("Point".to_string()))]);
+  assert_eq!(nominal::optional_member_type(&tree, &tree.nodes[0], &context, &plain),
+             None);
+
+  let optional_long =
+    HashMap::from([("point".to_string(), Type::Optional { element: Box::new(Type::Primitive(PrimitiveType::Long)) })]);
+  assert_eq!(nominal::optional_member_type(&tree, &tree.nodes[0], &context, &optional_long),
+             None);
+
+  let unknown =
+    HashMap::from([("point".to_string(), Type::Optional { element: Box::new(Type::Named("Unknown".to_string())) })]);
+  assert_eq!(nominal::optional_member_type(&tree, &tree.nodes[0], &context, &unknown),
+             None);
+}
+
+#[test]
+fn optional_member_rejects_unknown_fields_and_wrong_context_types()
+{
+  let tree = optional_member_tree("missing");
+  let context = point_context();
+  let locals =
+    HashMap::from([("point".to_string(), Type::Optional { element: Box::new(Type::Named("Point".to_string())) })]);
+  assert_eq!(nominal::optional_member_type(&tree, &tree.nodes[0], &context, &locals),
+             None);
+
+  let valid = optional_member_tree("x");
+  let wrong_expected = Type::Optional { element: Box::new(Type::Primitive(PrimitiveType::Bool)) };
+  assert!(lower_expression(&valid, &valid.nodes[0], &context, &locals, Some(&wrong_expected)).is_none());
+}
+
+#[test]
+fn lowers_postfix_optional_unwrap_from_syntax_packet()
+{
+  let tree = SyntaxTree { root: 0,
+                          nodes: vec![syntax(EXPR_OPTIONAL_FORGIVING, "value!", None, vec![1]),
+                                      syntax(EXPR_IDENTIFIER, "value", Some(0), vec![2]),
+                                      syntax(PATH, "value", Some(1), vec![3]),
+                                      syntax(IDENTIFIER, "value", Some(2), vec![]),] };
+  let context = point_context();
+  let locals =
+    HashMap::from([("value".to_string(), Type::Optional { element: Box::new(Type::Primitive(PrimitiveType::Long)) })]);
+  assert!(matches!(lower_expression(&tree,
+                                    &tree.nodes[0],
+                                    &context,
+                                    &locals,
+                                    Some(&Type::Primitive(PrimitiveType::Long))),
+                   Some(Expression::OptionalUnwrap {
+                     value,
+                     element_type,
+                     ..
+                   }) if matches!(value.as_ref(), Expression::Local { name, .. } if name == "value") &&
+                        element_type.as_ref() == &Type::Primitive(PrimitiveType::Long)));
+  assert!(lower_expression(&tree,
+                           &tree.nodes[0],
+                           &context,
+                           &locals,
+                           Some(&Type::Primitive(PrimitiveType::Bool))).is_none());
+}
+
+#[test]
+fn lowers_optional_coalescing_assignment_with_implicit_some()
+{
+  let mut assignment = syntax(EXPR_ASSIGNMENT, "value ??= 7", None, vec![1, 4, 5]);
+  assignment.token_kind = TOKEN_QUESTION_QUESTION_ASSIGN;
+  let mut literal = syntax(EXPR_LITERAL, "7", Some(0), vec![]);
+  literal.token_kind = TOKEN_INTEGER;
+  let tree = SyntaxTree { root: 0,
+                          nodes: vec![assignment,
+                                      syntax(EXPR_IDENTIFIER, "value", Some(0), vec![2]),
+                                      syntax(PATH, "value", Some(1), vec![3]),
+                                      syntax(IDENTIFIER, "value", Some(2), vec![]),
+                                      syntax(IDENTIFIER, "??=", Some(0), vec![]),
+                                      literal,] };
+  let context = point_context();
+  let optional_long = Type::Optional { element: Box::new(Type::Primitive(PrimitiveType::Long)) };
+  let locals = HashMap::from([("value".to_string(), optional_long.clone())]);
+  assert!(matches!(lower_expression(&tree, &tree.nodes[0], &context, &locals, Some(&optional_long)),
+                   Some(Expression::OptionalCoalesceAssign {
+                     target,
+                     value,
+                     optional_type,
+                     ..
+                   }) if target == "value" &&
+                        matches!(value.as_ref(), Expression::Call { function, .. } if function == "Some") &&
+                        optional_type.as_ref() == &optional_long));
+}

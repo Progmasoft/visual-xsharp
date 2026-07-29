@@ -284,6 +284,38 @@ impl HirToMirLowerer
                                  operand: Box::new(self.surface_expression_from_desugared(operand)?),
                                  span: *span })
       }
+      DesugaredExpression::OptionalUnwrap { value,
+                                            element_type,
+                                            span, } =>
+      {
+        Some(Expression::OptionalUnwrap { value: Box::new(self.surface_expression_from_desugared(value)?),
+                                          element_type: element_type.clone(),
+                                          span: *span })
+      }
+      DesugaredExpression::OptionalCoalesceAssign { target,
+                                                    value,
+                                                    optional_type,
+                                                    span, } =>
+      {
+        Some(Expression::OptionalCoalesceAssign { target: target.clone(),
+                                                  value: Box::new(self.surface_expression_from_desugared(value)?),
+                                                  optional_type: optional_type.clone(),
+                                                  span: *span })
+      }
+      DesugaredExpression::OptionalMember { receiver,
+                                            owner,
+                                            name,
+                                            field_type,
+                                            result_type,
+                                            span, } =>
+      {
+        Some(Expression::OptionalMember { receiver: Box::new(self.surface_expression_from_desugared(receiver)?),
+                                          owner: owner.clone(),
+                                          name: name.clone(),
+                                          field_type: field_type.clone(),
+                                          result_type: result_type.clone(),
+                                          span: *span })
+      }
       DesugaredExpression::ResultMatch { span, .. } =>
       {
         self.report(DiagnosticCode::UnsupportedExpression,

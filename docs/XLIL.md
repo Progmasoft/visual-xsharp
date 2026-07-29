@@ -149,10 +149,16 @@ Stack slots are function-local and target-independent. Slot ids are sequential, 
 value types must exactly match the slot type. The LLVM backend currently materializes them with entry-block `alloca`
 instructions and typed `load`/`store` operations.
 
-XLIL has no dedicated Optional or coalescing opcode. HIR lowers the currently supported `Optional<T>` representation to
-an aggregate containing a boolean discriminant and a `T` payload. MIR lowers `??` to `extract`, `br_if`, and merge
-storage, so XLIL and its backends consume ordinary aggregate and control-flow records without acquiring source-language
-Optional semantics.
+XLIL has no dedicated Optional, coalescing, safe-member, or forced-unwrapping opcode. HIR lowers the currently supported
+`Optional<T>` representation to an aggregate containing a boolean discriminant and a `T` payload. MIR lowers `??`,
+local `??=`, and data-field `?.` to `extract`, `aggregate`, `load`, `store`, `br_if`, and merge storage. Postfix `!`
+uses the same discriminant branch and terminates its `None` edge with `panic`. XLIL and its backends therefore consume
+ordinary aggregate, memory, and control-flow records without acquiring source-language Optional semantics.
+
+Canonical `None` values retain a deterministic zero payload even though the payload must not be observed. The MIR
+builder can recursively construct this payload for scalar and non-recursive aggregate types. This keeps textual XMIR and
+XLIL deterministic and allows nested forms such as `Optional<Data>` to pass through verification without assigning a
+special null representation to every aggregate type.
 
 MIR remains target-independent and writes string constants as `utf32 [0x0000004c, ...]`. XHIR remains closer to X#
 source and represents the same value as a quoted string literal. Similarly, XHIR preserves a source-like character

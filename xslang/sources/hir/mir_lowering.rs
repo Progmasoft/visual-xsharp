@@ -49,6 +49,7 @@ pub struct HirToMirLowerer
   storage_locals: HashSet<mir::LocalId>,
   nominal_types: HashMap<String, crate::hir::declarations::NominalType>,
   aggregate_types: HashMap<String, XlilType>,
+  aggregate_layouts: HashMap<XlilType, Vec<XlilType>>,
   tuple_types: Vec<(Type, XlilType)>,
   optional_types: Vec<(Type, XlilType)>,
   optional_layouts: Vec<(XlilType, XlilType)>,
@@ -74,6 +75,8 @@ mod nominal_return_tests;
 #[cfg(test)]
 mod operator_tests;
 mod optional;
+#[cfg(test)]
+mod optional_member_tests;
 #[cfg(test)]
 mod optional_tests;
 mod unary;
@@ -116,6 +119,10 @@ impl HirToMirLowerer
   pub(crate) fn with_aggregate_types(mut self, registry: &crate::hir::aggregate_registry::AggregateRegistry) -> Self
   {
     self.aggregate_types.clone_from(&registry.types);
+    self.aggregate_layouts = registry.layouts
+                                     .iter()
+                                     .map(|layout| (layout.value_type, layout.fields.clone()))
+                                     .collect();
     self.tuple_types.clone_from(&registry.tuples);
     self.optional_types.clone_from(&registry.optionals);
     self.optional_layouts = registry.optionals
@@ -221,6 +228,16 @@ impl HirToMirLowerer
           return;
         };
         let _ = self.lower_update_expression(expression, value_type, lowered);
+      }
+      Statement::Expr(expression @ Expression::OptionalCoalesceAssign { .. }) =>
+      {
+        let Some(value_type) = self.expression_value_type(expression, lowered)
+        else
+        {
+          self.unsupported_expression(expression);
+          return;
+        };
+        let _ = self.lower_expression_to_local(expression, value_type, lowered);
       }
       Statement::Expr(expression @ Expression::Call { .. }) => self.lower_call_statement(expression, lowered),
       Statement::Expr(expression) => self.unsupported_expression(expression),
@@ -385,6 +402,17 @@ impl HirToMirLowerer
         self.lower_unary_into(local, *operator, operand, *span, lowered);
         Some(local)
       }
+      Expression::OptionalUnwrap { value,
+                                   span,
+                                   .. } => self.lower_optional_unwrap(value, expected_type, *span, lowered),
+      Expression::OptionalCoalesceAssign { target,
+                                           value,
+                                           span,
+                                           .. } =>
+      {
+        self.lower_optional_coalesce_assign(target, value, expected_type, *span, lowered)
+      }
+      Expression::OptionalMember { .. } => self.lower_optional_member(expression, expected_type, lowered),
       Expression::Assign { .. } | Expression::AssignField { .. } =>
       {
         self.unsupported_expression(expression);
@@ -733,6 +761,9 @@ const fn expression_span(expression: &Expression) -> Span
     Expression::Update { span, .. } |
     Expression::Binary { span, .. } |
     Expression::Unary { span, .. } |
+    Expression::OptionalUnwrap { span, .. } |
+    Expression::OptionalCoalesceAssign { span, .. } |
+    Expression::OptionalMember { span, .. } |
     Expression::ResultPropagation { span, .. } => *span,
     Expression::Field { path } => path.span,
     Expression::Member { span, .. } => *span,

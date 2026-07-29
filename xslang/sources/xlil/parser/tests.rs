@@ -239,6 +239,72 @@ fn rejects_integer_bit_pattern_with_wrong_width()
 }
 
 #[test]
+fn parses_i32_decimal_and_exact_bit_pattern_immediates()
+{
+  let text = ".xlil version 1\n.xlil module I32Forms\n.func values : () -> i32\nbb0.entry:\n  %r0:i32 = const.i32 \
+              -1\n  %r1:i32 = const.i32 0x80000000\n  %r2:i32 = const.i32 0xffffffff\n  ret %r2\n.end\n";
+  let module = parse_module(text).expect("canonical i32 immediate forms should parse");
+  assert!(crate::xlil::verify_module(&module).is_empty());
+  let instructions = &module.functions[0].blocks[0].instructions;
+  assert!(matches!(instructions[0], Instruction::ConstI32 { value: -1,
+                                                            .. }));
+  assert!(matches!(instructions[1],
+                   Instruction::ConstInteger { value, .. } if value.bits == 0x8000_0000));
+  assert!(matches!(instructions[2],
+                   Instruction::ConstInteger { value, .. } if value.bits == 0xffff_ffff));
+}
+
+#[test]
+fn preserves_canonical_i32_bit_pattern_records()
+{
+  let text = ".xlil version 1\n.xlil module I32Bits\n.func minimum : () -> i32\nbb0.entry:\n  %r0:i32 = const.i32 \
+              0x80000000\n  ret %r0\n.end\n";
+  let module = parse_module(text).expect("i32 minimum bit pattern should parse");
+  let canonical = module_to_string(&module);
+  assert!(canonical.contains("const.i32 0x80000000"));
+  assert_eq!(parse_module(&canonical).expect("canonical signed i32 should parse"),
+             module);
+}
+
+#[test]
+fn rejects_malformed_i32_bit_patterns()
+{
+  for immediate in ["0x0",
+                    "0x0000000",
+                    "0x000000000",
+                    "0xgggggggg",
+                    "-0x00000001",
+                    "2147483648",
+                    "-2147483649"]
+  {
+    let text = format!(".xlil version 1\n.xlil module BadI32\n.func bad : () -> i32\nbb0.entry:\n  %r0:i32 = \
+                        const.i32 {immediate}\n  ret %r0\n.end\n");
+    let diagnostics = parse_module(&text).expect_err("malformed i32 immediate should fail");
+    assert!(diagnostics.iter()
+                       .any(|diagnostic| diagnostic.code == DiagnosticCode::InvalidInteger),
+            "{immediate} should report InvalidInteger");
+  }
+}
+
+#[test]
+fn writer_output_for_generic_i32_constants_is_parseable()
+{
+  let mut module = Module::new("GenericI32");
+  let mut function = Function::definition("main", Type::I32, vec![]);
+  let block = function.append_block("entry");
+  let result = function.add_const_integer(block,
+                                          super::super::IntegerConstant::new(Type::I32, 0).expect("valid i32 bit \
+                                                                                                   pattern"))
+                       .expect("block exists");
+  function.blocks[block.0 as usize].terminator = Some(Terminator::Return(Some(result)));
+  module.add_function(function);
+  let text = module_to_string(&module);
+  assert!(text.contains("const.i32 0x00000000"));
+  let reparsed = parse_module(&text).expect("writer output must always be accepted by the parser");
+  assert!(crate::xlil::verify_module(&reparsed).is_empty());
+}
+
+#[test]
 fn rejects_untagged_or_malformed_utf32_string_constants()
 {
   for instruction in ["%r0:str = const.str utf32 [0x00000041]",

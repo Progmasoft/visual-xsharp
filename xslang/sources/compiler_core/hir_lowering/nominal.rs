@@ -219,6 +219,73 @@ pub(super) fn lower_member_expression(tree: &SyntaxTree,
                             span: source_span })
 }
 
+fn optional_member_parts(tree: &SyntaxTree,
+                         value: &SyntaxNode,
+                         context: &LoweringContext,
+                         locals: &HashMap<String, Type>)
+                         -> Option<(Type, String, String, Type)>
+{
+  if value.kind != EXPR_OPTIONAL_MEMBER_ACCESS || value.children.len() != 2
+  {
+    return None;
+  }
+  let receiver = tree.nodes.get(value.children[0])?;
+  let Type::Optional { element } = expression_type::expression_type(tree, receiver, context, locals)?
+  else
+  {
+    return None;
+  };
+  let Type::Named(owner) = element.as_ref()
+  else
+  {
+    return None;
+  };
+  let name = path_text(tree, tree.nodes.get(value.children[1])?);
+  let definition = context.nominal_types.get(owner)?;
+  let field_type =
+    declarations::resolved_fields(definition, &context.nominal_types).ok()?
+                                                                     .into_iter()
+                                                                     .find(|field| field.name == name)
+                                                                     .and_then(|field| {
+                                                                       declarations::type_ref_to_checked(&field.ty)
+                                                                     })?;
+  Some((Type::Optional { element: Box::new(Type::Named(owner.clone())) }, owner.clone(), name, field_type))
+}
+
+pub(super) fn optional_member_type(tree: &SyntaxTree,
+                                   value: &SyntaxNode,
+                                   context: &LoweringContext,
+                                   locals: &HashMap<String, Type>)
+                                   -> Option<Type>
+{
+  let (_, _, _, field_type) = optional_member_parts(tree, value, context, locals)?;
+  Some(Type::Optional { element: Box::new(field_type) })
+}
+
+pub(super) fn lower_optional_member_expression(tree: &SyntaxTree,
+                                               value: &SyntaxNode,
+                                               context: &LoweringContext,
+                                               locals: &HashMap<String, Type>,
+                                               expected_type: Option<&Type>,
+                                               source_span: Span)
+                                               -> Option<Expression>
+{
+  let (receiver_type, owner, name, field_type) = optional_member_parts(tree, value, context, locals)?;
+  let result_type = Type::Optional { element: Box::new(field_type.clone()) };
+  if expected_type.is_some_and(|expected| expected != &result_type)
+  {
+    return None;
+  }
+  let receiver_node = tree.nodes.get(value.children[0])?;
+  let receiver = lower_expression(tree, receiver_node, context, locals, Some(&receiver_type))?;
+  Some(Expression::OptionalMember { receiver: Box::new(receiver),
+                                    owner,
+                                    name,
+                                    field_type: Box::new(field_type),
+                                    result_type: Box::new(result_type),
+                                    span: source_span })
+}
+
 pub(super) fn lower_field_assignment(tree: &SyntaxTree,
                                      value: &SyntaxNode,
                                      context: &LoweringContext,

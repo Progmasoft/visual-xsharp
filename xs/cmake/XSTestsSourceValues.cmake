@@ -20,7 +20,11 @@ foreach(source_fixture MainReturn0 MainReturn7 MainArithmetic MainDivision MainR
                        MainTupleForEach TupleUnknownMember TupleAssignmentMismatch TuplePatternArityMismatch
                        TuplePatternTypeMismatch TuplePatternDuplicateBinding TupleDeclarationArityMismatch
                        TupleDeclarationTypeMismatch TupleDeclarationDuplicateBinding
-                       MainOptionalSomeCoalesce MainOptionalNoneCoalesce InvalidCoalesceLeft
+                       MainOptionalSomeCoalesce MainOptionalNoneCoalesce
+                       MainOptionalAssignUnwrap MainOptionalAssignKeepsSome MainOptionalForcedSome
+                       MainOptionalMemberSome MainOptionalMemberNone
+                       InvalidCoalesceLeft InvalidOptionalForcedLong InvalidOptionalAssignImmutable
+                       InvalidOptionalAssignNonOptional InvalidOptionalAssignType
                        CollectionSetCheck
                        MainEarlyReturn MainElseIf MainMatch MainMatchBool MainMatchExpression MainEnumFlow MainFor
                        MainPostfixDecrement MainUpdateValues
@@ -97,6 +101,16 @@ xs_add_source_native_tuple_test(MainOptionalSomeCoalesce 7 "%optional.0 = type {
                                 "extractvalue %optional.0" "br i1")
 xs_add_source_native_tuple_test(MainOptionalNoneCoalesce 3 "%optional.0 = type { i8, i32 }"
                                 "zeroinitializer" "br i1")
+xs_add_source_native_tuple_test(MainOptionalAssignUnwrap 7 "%optional.0 = type { i8, i32 }"
+                                "br i1" "llvm.trap" "store %optional.0")
+xs_add_source_native_tuple_test(MainOptionalAssignKeepsSome 5 "%optional.0 = type { i8, i32 }"
+                                "br i1" "llvm.trap" "store %optional.0")
+xs_add_source_native_tuple_test(MainOptionalForcedSome 11 "%optional.0 = type { i8, i32 }"
+                                "extractvalue %optional.0" "llvm.trap")
+xs_add_source_native_tuple_test(MainOptionalMemberSome 7 "%Point = type { i32, i32 }"
+                                "%optional.0 = type { i8, %Point }" "%optional.1 = type { i8, i32 }" "br i1")
+xs_add_source_native_tuple_test(MainOptionalMemberNone 13 "%Point = type { i32, i32 }"
+                                "%optional.0 = type { i8, %Point }" "%optional.1 = type { i8, i32 }" "br i1")
 
 add_test(NAME compiler_check_builtin_set COMMAND xs check -file
                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/CollectionSetCheck.xs)

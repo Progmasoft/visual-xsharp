@@ -7,6 +7,58 @@ use super::*;
 
 impl TypeChecker
 {
+  pub(super) fn check_optional_member(&mut self,
+                                      receiver: &Expression,
+                                      owner: &str,
+                                      name: &str,
+                                      field_type: &Type,
+                                      result_type: &Type,
+                                      span: Span)
+  {
+    self.check_expression(receiver);
+    let expected_receiver = Type::Optional { element: Box::new(Type::Named(owner.to_string())) };
+    if self.expression_type(receiver) != Some(expected_receiver)
+    {
+      self.diagnostics
+          .push(Diagnostic { code: DiagnosticCode::UnknownField,
+                             message: format!("optional member receiver is not an Optional<{owner}> value"),
+                             span });
+      return;
+    }
+    let expected_result = Type::Optional { element: Box::new(field_type.clone()) };
+    if result_type != &expected_result
+    {
+      self.diagnostics
+          .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                             message: "optional member result must wrap the declared field type".to_string(),
+                             span });
+    }
+    let Some(definition) = self.nominal_types.get(owner)
+    else
+    {
+      self.diagnostics
+          .push(Diagnostic { code: DiagnosticCode::UnknownNominalType,
+                             message: format!("unknown nominal type '{owner}'"),
+                             span });
+      return;
+    };
+    let Ok(fields) = super::super::declarations::resolved_fields(definition, &self.nominal_types)
+    else
+    {
+      return;
+    };
+    let declared = fields.into_iter()
+                         .find(|field| field.name == name)
+                         .and_then(|field| super::super::declarations::type_ref_to_checked(&field.ty));
+    if declared.as_ref() != Some(field_type)
+    {
+      self.diagnostics
+          .push(Diagnostic { code: DiagnosticCode::UnknownField,
+                             message: format!("type '{owner}' has no matching field '{name}' for optional access"),
+                             span });
+    }
+  }
+
   pub(super) fn check_member(&mut self, receiver: &Expression, owner: &str, name: &str, field_type: &Type, span: Span)
   {
     self.check_expression(receiver);

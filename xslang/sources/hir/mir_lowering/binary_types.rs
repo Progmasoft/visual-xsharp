@@ -94,6 +94,9 @@ impl HirToMirLowerer
         UnaryOperator::LogicalNot => Some(XlilType::BOOL),
         UnaryOperator::Positive | UnaryOperator::Negative => self.expression_value_type(operand, lowered),
       },
+      Expression::OptionalUnwrap { element_type, .. } => self.known_value_type(element_type),
+      Expression::OptionalCoalesceAssign { optional_type, .. } => self.known_value_type(optional_type),
+      Expression::OptionalMember { result_type, .. } => self.known_value_type(result_type),
       Expression::Call { return_type, .. } => self.known_value_type(return_type),
       Expression::If { result_type, .. } | Expression::Match { result_type, .. } => self.known_value_type(result_type),
       Expression::Literal { literal, .. } => match literal

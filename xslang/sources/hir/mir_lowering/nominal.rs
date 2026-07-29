@@ -924,9 +924,9 @@ impl HirToMirLowerer
     }
   }
 
-  fn resolved_nominal_fields(&self,
-                             definition: &crate::hir::declarations::NominalType)
-                             -> Option<Vec<crate::hir::declarations::Field>>
+  pub(super) fn resolved_nominal_fields(&self,
+                                        definition: &crate::hir::declarations::NominalType)
+                                        -> Option<Vec<crate::hir::declarations::Field>>
   {
     crate::hir::declarations::resolved_fields(definition, &self.nominal_types).ok()
   }

@@ -160,11 +160,11 @@ impl HirToMirLowerer
     }
   }
 
-  fn lower_optional_none(&mut self,
-                         target: mir::LocalId,
-                         optional_type: XlilType,
-                         span: Span,
-                         lowered: &mut mir::Function)
+  pub(super) fn lower_optional_none(&mut self,
+                                    target: mir::LocalId,
+                                    optional_type: XlilType,
+                                    span: Span,
+                                    lowered: &mut mir::Function)
   {
     let Some((_, element_type)) = self.optional_layouts
                                       .iter()
@@ -192,40 +192,13 @@ impl HirToMirLowerer
         .push(mir::Statement::ConstBool { local: tag,
                                           value: false,
                                           span });
-    let default = if let Some(value) = mir::IntegerConstant::from_bits(element_type, 0)
-    {
-      Some(mir::Statement::ConstInteger { local: payload,
-                                          value,
-                                          span })
-    }
-    else
-    {
-      match element_type
-      {
-        XlilType::BOOL => Some(mir::Statement::ConstBool { local: payload,
-                                                           value: false,
-                                                           span }),
-        XlilType::F32 => Some(mir::Statement::ConstF32 { local: payload,
-                                                         bits: 0,
-                                                         span }),
-        XlilType::F64 => Some(mir::Statement::ConstF64 { local: payload,
-                                                         bits: 0,
-                                                         span }),
-        XlilType::STR => Some(mir::Statement::ConstStr { local: payload,
-                                                         units: Vec::new(),
-                                                         span }),
-        _ => None,
-      }
-    };
-    let Some(default) = default
-    else
+    if !self.lower_default_value(payload, element_type, span, lowered, &mut HashSet::new())
     {
       self.report(DiagnosticCode::UnsupportedType,
                   "Optional<T> None payload has no canonical zero value yet",
                   span);
       return;
-    };
-    self.current_block_mut(lowered).statements.push(default);
+    }
     self.current_block_mut(lowered)
         .statements
         .push(mir::Statement::Aggregate { result: target,
@@ -233,6 +206,80 @@ impl HirToMirLowerer
                                           fields: vec![tag, payload],
                                           field_types: vec![XlilType::BOOL, element_type],
                                           span });
+  }
+
+  fn lower_default_value(&mut self,
+                         target: mir::LocalId,
+                         value_type: XlilType,
+                         span: Span,
+                         lowered: &mut mir::Function,
+                         visiting: &mut HashSet<XlilType>)
+                         -> bool
+  {
+    if let Some(value) = mir::IntegerConstant::from_bits(value_type, 0)
+    {
+      self.current_block_mut(lowered)
+          .statements
+          .push(mir::Statement::ConstInteger { local: target,
+                                               value,
+                                               span });
+      return true;
+    }
+    let scalar = match value_type
+    {
+      XlilType::BOOL => Some(mir::Statement::ConstBool { local: target,
+                                                         value: false,
+                                                         span }),
+      XlilType::F32 => Some(mir::Statement::ConstF32 { local: target,
+                                                       bits: 0,
+                                                       span }),
+      XlilType::F64 => Some(mir::Statement::ConstF64 { local: target,
+                                                       bits: 0,
+                                                       span }),
+      XlilType::STR => Some(mir::Statement::ConstStr { local: target,
+                                                       units: Vec::new(),
+                                                       span }),
+      _ => None,
+    };
+    if let Some(scalar) = scalar
+    {
+      self.current_block_mut(lowered).statements.push(scalar);
+      return true;
+    }
+    let Some(field_types) = self.aggregate_layouts.get(&value_type).cloned()
+    else
+    {
+      return false;
+    };
+    if !visiting.insert(value_type)
+    {
+      return false;
+    }
+    let mut fields = Vec::with_capacity(field_types.len());
+    for field_type in &field_types
+    {
+      let Some(field) = self.declare_temp(*field_type, span, lowered)
+      else
+      {
+        visiting.remove(&value_type);
+        return false;
+      };
+      if !self.lower_default_value(field, *field_type, span, lowered, visiting)
+      {
+        visiting.remove(&value_type);
+        return false;
+      }
+      fields.push(field);
+    }
+    visiting.remove(&value_type);
+    self.current_block_mut(lowered)
+        .statements
+        .push(mir::Statement::Aggregate { result: target,
+                                          value_type,
+                                          fields,
+                                          field_types,
+                                          span });
+    true
   }
 
   pub(super) fn declare_local(&mut self,

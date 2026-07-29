@@ -265,6 +265,50 @@ impl TypeChecker
                                  span: *span });
         }
       }
+      Expression::OptionalUnwrap { value,
+                                   element_type,
+                                   span, } =>
+      {
+        self.check_expression(value);
+        let expected = Type::Optional { element: element_type.clone() };
+        if self.expression_type(value).as_ref() != Some(&expected)
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::UnaryTypeMismatch,
+                                 message: "optional-forgiving '!' requires Optional<T>".to_string(),
+                                 span: *span });
+        }
+      }
+      Expression::OptionalCoalesceAssign { target,
+                                           value,
+                                           optional_type,
+                                           span, } =>
+      {
+        let Some(local) = self.find_local(target).cloned()
+        else
+        {
+          self.diagnostics.push(Diagnostic { code: DiagnosticCode::UnknownLocal,
+                                             message: format!("unknown local '{target}'"),
+                                             span: *span });
+          return;
+        };
+        if !local.mutable
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::ImmutableAssignment,
+                                 message: format!("cannot update binding '{target}'"),
+                                 span: *span });
+        }
+        if local.ty != **optional_type || !optional_type.is_optional()
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::BinaryTypeMismatch,
+                                 message: "coalescing assignment requires an Optional<T> binding".to_string(),
+                                 span: *span });
+          return;
+        }
+        self.check_expression_against_type(value, optional_type);
+      }
       Expression::ResultPropagation { value,
                                       span, } =>
       {
@@ -322,6 +366,15 @@ impl TypeChecker
                            name,
                            field_type,
                            span, } => self.check_member(receiver, owner, name, field_type, *span),
+      Expression::OptionalMember { receiver,
+                                   owner,
+                                   name,
+                                   field_type,
+                                   result_type,
+                                   span, } =>
+      {
+        self.check_optional_member(receiver, owner, name, field_type, result_type, *span);
+      }
       Expression::Object { nominal_type,
                            fields,
                            span, } => self.check_object(nominal_type, fields, *span),
@@ -470,6 +523,46 @@ impl TypeChecker
           self.diagnostics
               .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
                                  message: "updated value is not assignable to the target type".to_string(),
+                                 span: *span });
+        }
+      }
+      Expression::OptionalUnwrap { element_type,
+                                   span,
+                                   .. } =>
+      {
+        self.check_expression(expression);
+        if element_type.as_ref() != ty
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                 message: "unboxed Optional value is not assignable to the target type".to_string(),
+                                 span: *span });
+        }
+      }
+      Expression::OptionalCoalesceAssign { optional_type,
+                                           span,
+                                           .. } =>
+      {
+        self.check_expression(expression);
+        if optional_type.as_ref() != ty
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                 message:
+                                   "coalescing assignment result is not assignable to the target type".to_string(),
+                                 span: *span });
+        }
+      }
+      Expression::OptionalMember { result_type,
+                                   span,
+                                   .. } =>
+      {
+        self.check_expression(expression);
+        if result_type.as_ref() != ty
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                 message: "optional member value is not assignable to the target type".to_string(),
                                  span: *span });
         }
       }

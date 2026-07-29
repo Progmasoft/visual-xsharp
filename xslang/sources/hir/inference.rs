@@ -136,6 +136,9 @@ pub fn infer_expression_type(expression: &Expression, locals: &[Local]) -> Optio
     Expression::Unary { operator,
                         operand,
                         .. } => infer_unary_expression_type(*operator, operand, locals),
+    Expression::OptionalUnwrap { element_type, .. } => Some(element_type.as_ref().clone()),
+    Expression::OptionalCoalesceAssign { optional_type, .. } => Some(optional_type.as_ref().clone()),
+    Expression::OptionalMember { result_type, .. } => Some(result_type.as_ref().clone()),
     Expression::ResultPropagation { value, .. } =>
     {
       let result_type = infer_expression_type(value, locals)?;

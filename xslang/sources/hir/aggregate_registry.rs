@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::declarations::{self, NominalKind, NominalType, TypeRef};
-use super::type_check::{Statement, Type as HirType};
+use super::type_check::{Block, Expression, Statement, Type as HirType};
 use crate::xlil::Type;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -85,22 +85,43 @@ fn visit_statements(statements: &[Statement],
       Statement::Let { local, .. } =>
       {
         let _ = visit_checked_type(&local.ty, definitions, &mut HashSet::new(), registry);
+        if let Statement::Let { initializer: Some(initializer),
+                                .. } = statement
+        {
+          visit_expression(initializer, definitions, registry)?;
+        }
       }
       Statement::If { then_block,
                       else_block,
+                      condition,
                       .. } =>
       {
+        visit_expression(condition, definitions, registry)?;
         visit_statements(&then_block.statements, definitions, registry)?;
         if let Some(block) = else_block
         {
           visit_statements(&block.statements, definitions, registry)?;
         }
       }
-      Statement::While { body, .. } | Statement::ForEach { body, .. } =>
+      Statement::While { condition,
+                         body,
+                         .. } =>
       {
+        visit_expression(condition, definitions, registry)?;
+        visit_statements(&body.statements, definitions, registry)?
+      }
+      Statement::ForEach { iterable,
+                           iterable_type,
+                           body,
+                           .. } =>
+      {
+        let _ = visit_checked_type(iterable_type, definitions, &mut HashSet::new(), registry);
+        visit_expression(iterable, definitions, registry)?;
         visit_statements(&body.statements, definitions, registry)?
       }
       Statement::For { initializer,
+                       condition,
+                       update,
                        body,
                        .. } =>
       {
@@ -108,17 +129,209 @@ fn visit_statements(statements: &[Statement],
         {
           visit_statements(std::slice::from_ref(initializer), definitions, registry)?;
         }
+        if let Some(condition) = condition
+        {
+          visit_expression(condition, definitions, registry)?;
+        }
+        if let Some(update) = update
+        {
+          visit_expression(update, definitions, registry)?;
+        }
         visit_statements(&body.statements, definitions, registry)?;
       }
-      Statement::Match { arms, .. } =>
+      Statement::Match { selector,
+                         selector_type,
+                         arms,
+                         .. } =>
       {
+        let _ = visit_checked_type(selector_type, definitions, &mut HashSet::new(), registry);
+        visit_expression(selector, definitions, registry)?;
         for arm in arms
         {
           visit_statements(&arm.body.statements, definitions, registry)?;
         }
       }
+      Statement::AssignIndex { index,
+                               value,
+                               element_type,
+                               .. } =>
+      {
+        let _ = visit_checked_type(element_type, definitions, &mut HashSet::new(), registry);
+        visit_expression(index, definitions, registry)?;
+        visit_expression(value, definitions, registry)?;
+      }
+      Statement::AssignTupleElement { value,
+                                      tuple_type,
+                                      .. } =>
+      {
+        let _ = visit_checked_type(tuple_type, definitions, &mut HashSet::new(), registry);
+        visit_expression(value, definitions, registry)?;
+      }
+      Statement::Expr(expression) => visit_expression(expression, definitions, registry)?,
+      Statement::Return { value: Some(value), .. } => visit_expression(value, definitions, registry)?,
       _ =>
       {}
+    }
+  }
+  Some(())
+}
+
+fn visit_block(block: &Block, definitions: &HashMap<&str, &NominalType>, registry: &mut AggregateRegistry)
+               -> Option<()>
+{
+  visit_statements(&block.statements, definitions, registry)?;
+  if let Some(tail) = &block.tail
+  {
+    visit_expression(tail, definitions, registry)?;
+  }
+  Some(())
+}
+
+fn visit_expression(expression: &Expression,
+                    definitions: &HashMap<&str, &NominalType>,
+                    registry: &mut AggregateRegistry)
+                    -> Option<()>
+{
+  let mut visit_type = |ty: &HirType| {
+    let _ = visit_checked_type(ty, definitions, &mut HashSet::new(), registry);
+  };
+  match expression
+  {
+    Expression::Literal { .. } |
+    Expression::Local { .. } |
+    Expression::Field { .. } |
+    Expression::ArrayLength { .. } =>
+    {}
+    Expression::Object { nominal_type,
+                         fields,
+                         .. } =>
+    {
+      visit_type(&HirType::Named(nominal_type.clone()));
+      for field in fields
+      {
+        visit_expression(&field.value, definitions, registry)?;
+      }
+    }
+    Expression::Array { elements, .. } | Expression::Set { elements, .. } =>
+    {
+      for element in elements
+      {
+        visit_expression(element, definitions, registry)?;
+      }
+    }
+    Expression::Map { entries, .. } =>
+    {
+      for entry in entries
+      {
+        visit_expression(&entry.key, definitions, registry)?;
+        visit_expression(&entry.value, definitions, registry)?;
+      }
+    }
+    Expression::Tuple { fields,
+                        tuple_type,
+                        .. } =>
+    {
+      visit_type(tuple_type);
+      for field in fields
+      {
+        visit_expression(&field.value, definitions, registry)?;
+      }
+    }
+    Expression::Member { receiver,
+                         field_type,
+                         .. } =>
+    {
+      visit_type(field_type);
+      visit_expression(receiver, definitions, registry)?;
+    }
+    Expression::TupleElement { tuple,
+                               element_type,
+                               .. } =>
+    {
+      visit_type(element_type);
+      visit_expression(tuple, definitions, registry)?;
+    }
+    Expression::Index { collection,
+                        index,
+                        element_type,
+                        .. } =>
+    {
+      visit_type(element_type);
+      visit_expression(collection, definitions, registry)?;
+      visit_expression(index, definitions, registry)?;
+    }
+    Expression::Assign { value, .. } |
+    Expression::AssignField { value, .. } |
+    Expression::OptionalCoalesceAssign { value, .. } =>
+    {
+      visit_expression(value, definitions, registry)?;
+    }
+    Expression::Update { .. } =>
+    {}
+    Expression::Binary { left,
+                         right,
+                         .. } =>
+    {
+      visit_expression(left, definitions, registry)?;
+      visit_expression(right, definitions, registry)?;
+    }
+    Expression::Unary { operand, .. } => visit_expression(operand, definitions, registry)?,
+    Expression::OptionalUnwrap { value,
+                                 element_type,
+                                 .. } =>
+    {
+      visit_type(&HirType::Optional { element: element_type.clone() });
+      visit_expression(value, definitions, registry)?;
+    }
+    Expression::OptionalMember { receiver,
+                                 field_type,
+                                 result_type,
+                                 .. } =>
+    {
+      visit_type(field_type);
+      visit_type(result_type);
+      visit_expression(receiver, definitions, registry)?;
+    }
+    Expression::ResultPropagation { value, .. } => visit_expression(value, definitions, registry)?,
+    Expression::Call { arguments,
+                       parameter_types,
+                       return_type,
+                       .. } =>
+    {
+      for ty in parameter_types
+      {
+        visit_type(ty);
+      }
+      visit_type(return_type);
+      for argument in arguments
+      {
+        visit_expression(argument, definitions, registry)?;
+      }
+    }
+    Expression::If { condition,
+                     then_block,
+                     else_block,
+                     result_type,
+                     .. } =>
+    {
+      visit_type(result_type);
+      visit_expression(condition, definitions, registry)?;
+      visit_block(then_block, definitions, registry)?;
+      visit_block(else_block, definitions, registry)?;
+    }
+    Expression::Match { selector,
+                        selector_type,
+                        arms,
+                        result_type,
+                        .. } =>
+    {
+      visit_type(selector_type);
+      visit_type(result_type);
+      visit_expression(selector, definitions, registry)?;
+      for arm in arms
+      {
+        visit_block(&arm.body, definitions, registry)?;
+      }
     }
   }
   Some(())

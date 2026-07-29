@@ -3,6 +3,7 @@
 
 fn main() -> Long
 {
-  value: Bool = true;
-  return value ?? 3;
+  value: Long = 3;
+  value ??= 7;
+  return value;
 }

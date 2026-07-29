@@ -61,6 +61,9 @@ impl TypeChecker
       Expression::Unary { operator,
                           operand,
                           .. } => self.unary_expression_type(*operator, operand),
+      Expression::OptionalUnwrap { element_type, .. } => Some(element_type.as_ref().clone()),
+      Expression::OptionalCoalesceAssign { optional_type, .. } => Some(optional_type.as_ref().clone()),
+      Expression::OptionalMember { result_type, .. } => Some(result_type.as_ref().clone()),
       Expression::ResultPropagation { value, .. } => self.result_success_type(value),
       Expression::Call { return_type, .. } |
       Expression::If { result_type: return_type,

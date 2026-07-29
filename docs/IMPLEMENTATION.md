@@ -385,16 +385,20 @@ membership, class/interface virtual dispatch, imported overload sets, and functi
   `Optional<Str>`, and no implicit borrow from `String` to `Str` is inserted.
 - `Optional<T>` resolves as if the compiler had inserted `import optional; using namespace std::optional;`, making
   `std::optional::Optional<T>` available as `Optional<T>`. It is compiler-provided enum data with `Some: T` and
-  payload-free `None` variants, made available through that implicit namespace using. `?.`, `??`, `??=`, and postfix `!`
-  are represented syntactically. The implemented `??` slice uses a target-independent `{ Bool, T }` aggregate in MIR,
-  extracts the discriminant, evaluates only the selected payload or fallback path, and merges the result through a MIR
-  place before lowering to XLIL. The same path reaches LLVM and native `.xse` output for supported payload types.
-  `Optional<T>` has automatic unboxing to
-  `T`, and failed unboxing is modeled through the standard `Result`/`Error` direction. `Optional<Str>` owns and boxes its
+  payload-free `None` variants, made available through that implicit namespace using. The implemented `??`, `??=`,
+  postfix `!`, and data-field `?.` slices use target-independent Optional aggregates in MIR. Coalescing and safe member
+  access extract the discriminant, evaluate only the selected path, and merge through a MIR place. `??=` mutates only
+  mutable local Optional bindings and leaves an existing `Some` untouched. Postfix `!` creates explicit success and
+  failure blocks; the failure path becomes the ordinary MIR/XLIL panic terminator. Safe data-field access converts
+  `Optional<Data>` to `Optional<FieldType>` without evaluating or extracting a payload on the `None` path. These paths
+  reach XLIL, LLVM IR, object emission, and native `.xse` execution for supported payload types without introducing
+  Optional-specific backend instructions.
+  `Optional<T>` has explicit forced unboxing to `T` through postfix `!`; failed forced unboxing follows the compiler's
+  panic path. `Optional<Str>` owns and boxes its
   string payload instead of carrying an optional borrowed/static `Str` reference. `T?` is source sugar for
   `Optional<T>`; an assigned non-optional value is wrapped in `Some`, while `nil` becomes `None`. Literal inference does
-  not infer an Optional: `name := "Leitwolf";` infers `Str`. `?.`, `??=`, postfix `!`, and full flow-sensitive Optional
-  analysis remain later HIR work.
+  not infer an Optional: `name := "Leitwolf";` infers `Str`. Optional method calls, chained safe access across arbitrary
+  reference types, and full flow-sensitive Optional refinement remain later HIR work.
 - The C23 HIR type resolver recognizes the standard wrapper type names `Optional<T>`, `std::optional::Optional<T>`,
   `std::result::Result<(), E>`, `std::result::Result<T, E>`, the special shorthand `Result<()>`, and the standard error type `Error`.
   The compiler treats the `std::result` namespace as implicitly usable, so `import result;` is optional for `Result<T, E>`,

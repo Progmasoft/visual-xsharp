@@ -273,6 +273,28 @@ pub enum Expression
     operand: Box<Expression>,
     span: Span,
   },
+  OptionalUnwrap
+  {
+    value: Box<Expression>,
+    element_type: Box<Type>,
+    span: Span,
+  },
+  OptionalCoalesceAssign
+  {
+    target: String,
+    value: Box<Expression>,
+    optional_type: Box<Type>,
+    span: Span,
+  },
+  OptionalMember
+  {
+    receiver: Box<Expression>,
+    owner: String,
+    name: String,
+    field_type: Box<Type>,
+    result_type: Box<Type>,
+    span: Span,
+  },
   Call
   {
     function: String,

@@ -87,6 +87,8 @@ const EXPR_ASSIGNMENT: u32 = 60;
 const EXPR_CALL: u32 = 61;
 const EXPR_METHOD_CALL: u32 = 62;
 const EXPR_MEMBER_ACCESS: u32 = 63;
+const EXPR_OPTIONAL_MEMBER_ACCESS: u32 = 65;
+const EXPR_OPTIONAL_FORGIVING: u32 = 66;
 const EXPR_NEW: u32 = 69;
 const EXPR_OBJECT_LITERAL: u32 = 77;
 const OBJECT_FIELD: u32 = 78;
@@ -141,6 +143,7 @@ const TOKEN_SHIFT_RIGHT: u32 = 34;
 const TOKEN_SHIFT_LEFT: u32 = 37;
 const TOKEN_ASSIGN: u32 = 24;
 const TOKEN_QUESTION_QUESTION: u32 = 30;
+const TOKEN_QUESTION_QUESTION_ASSIGN: u32 = 31;
 const IMMUTABLE: u32 = 1 << 4;
 const STATIC: u32 = 1 << 1;
 const DATA_ENUM: u32 = 1 << 3;
@@ -289,6 +292,10 @@ fn lower_expression(tree: &SyntaxTree,
                                                                                                               source_span)
                                                                            })
     }
+    EXPR_OPTIONAL_MEMBER_ACCESS =>
+    {
+      nominal::lower_optional_member_expression(tree, value, context, locals, expected_type, source_span)
+    }
     EXPR_TUPLE => tuple::lower_tuple_expression(tree, value, context, locals, expected_type, source_span),
     EXPR_OBJECT_LITERAL | EXPR_TYPED_OBJECT_LITERAL =>
     {
@@ -301,6 +308,25 @@ fn lower_expression(tree: &SyntaxTree,
     EXPR_UNARY if value.children.len() == 1 =>
     {
       unary::lower_unary_expression(tree, value, context, locals, expected_type, source_span)
+    }
+    EXPR_OPTIONAL_FORGIVING if value.children.len() == 1 =>
+    {
+      let operand = tree.nodes.get(value.children[0])?;
+      let optional_type = expression_type(tree, operand, context, locals)?;
+      let Type::Optional { element } = &optional_type
+      else
+      {
+        return None;
+      };
+      if expected_type.is_some_and(|expected| expected != element.as_ref())
+      {
+        return None;
+      }
+      Some(Expression::OptionalUnwrap {
+        value: Box::new(lower_expression(tree, operand, context, locals, Some(&optional_type))?),
+        element_type: element.clone(),
+        span: source_span,
+      })
     }
     EXPR_BINARY if value.children.len() == 3 =>
     {
@@ -388,6 +414,23 @@ fn lower_expression(tree: &SyntaxTree,
         return None;
       }
       let target = path_text(tree, target);
+      if value.token_kind == TOKEN_QUESTION_QUESTION_ASSIGN
+      {
+        let optional_type = locals.get(&target)?.clone();
+        if !optional_type.is_optional()
+        {
+          return None;
+        }
+        let assigned = lower_expression(tree,
+                                        tree.nodes.get(value.children[2])?,
+                                        context,
+                                        locals,
+                                        Some(&optional_type))?;
+        return Some(Expression::OptionalCoalesceAssign { target,
+                                                          value: Box::new(assigned),
+                                                          optional_type: Box::new(optional_type),
+                                                          span: source_span });
+      }
       let assigned = lower_expression(tree,
                                       tree.nodes.get(value.children[2])?,
                                       context,

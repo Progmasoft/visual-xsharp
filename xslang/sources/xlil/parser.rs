@@ -4,8 +4,8 @@
  */
 
 use crate::xlil::{
-  Block, BlockId, Function, I32BinaryOperation, I64BinaryOperation, I64ComparisonOperation, Instruction, Module, Slot,
-  SlotId, Terminator, Type, Value, ValueId, type_from_name, type_name,
+  Block, BlockId, Function, I32BinaryOperation, I64BinaryOperation, I64ComparisonOperation, Instruction,
+  IntegerConstant, Module, Slot, SlotId, Terminator, Type, Value, ValueId, type_from_name, type_name,
 };
 
 mod aggregate;
@@ -622,7 +622,7 @@ impl Parser<'_>
       return None;
     };
     let result = self.value_id(result, line)?;
-    let Some(value) = value.parse::<i32>().ok()
+    let Some(parsed) = parse_i32_immediate(value)
     else
     {
       self.report(DiagnosticCode::InvalidInteger,
@@ -632,8 +632,16 @@ impl Parser<'_>
     };
     function.values.push(Value { id: result,
                                  value_type: Type::I32 });
-    Some(Instruction::ConstI32 { result,
-                                 value })
+    Some(if value.starts_with("0x")
+         {
+           Instruction::ConstInteger { result,
+                                       value: IntegerConstant::new(Type::I32, parsed as u32 as u128)? }
+         }
+         else
+         {
+           Instruction::ConstI32 { result,
+                                   value: parsed }
+         })
   }
 
   fn binary_i64(&mut self,
@@ -866,6 +874,19 @@ impl Parser<'_>
                                        line,
                                        message: message.to_string() });
   }
+}
+
+fn parse_i32_immediate(value: &str) -> Option<i32>
+{
+  if let Some(hexadecimal) = value.strip_prefix("0x")
+  {
+    if hexadecimal.len() != 8
+    {
+      return None;
+    }
+    return u32::from_str_radix(hexadecimal, 16).ok().map(|bits| bits as i32);
+  }
+  value.parse::<i32>().ok()
 }
 
 #[cfg(test)]
