@@ -19,7 +19,7 @@ impl Parser<'_>
       {
         self.index += 1;
         crate::text::parse_units(value).unwrap_or_else(|| {
-                                         self.report("invalid const.str UTF-16 code units".to_string());
+                                         self.report("invalid const.str UTF-32 code points".to_string());
                                          Vec::new()
                                        })
       }

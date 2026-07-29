@@ -20,6 +20,7 @@ foreach(source_fixture MainReturn0 MainReturn7 MainArithmetic MainDivision MainR
                        MainTupleForEach TupleUnknownMember TupleAssignmentMismatch TuplePatternArityMismatch
                        TuplePatternTypeMismatch TuplePatternDuplicateBinding TupleDeclarationArityMismatch
                        TupleDeclarationTypeMismatch TupleDeclarationDuplicateBinding
+                       MainOptionalSomeCoalesce MainOptionalNoneCoalesce InvalidCoalesceLeft
                        CollectionSetCheck
                        MainEarlyReturn MainElseIf MainMatch MainMatchBool MainMatchExpression MainEnumFlow MainFor
                        MainPostfixDecrement MainUpdateValues
@@ -91,6 +92,11 @@ xs_add_source_native_tuple_test(MainTupleForEach 10 "[2 x %tuple.1]" "extractval
 xs_add_source_native_tuple_test(MainTupleDestructure 7 "%tuple.1 = type { %tuple.0, i32 }" "extractvalue")
 xs_add_source_native_tuple_test(MainEnumFlow 7 "%Color = type { i32 }" "define %Color @next" "extractvalue %Color"
                                 "call %Color @next")
+
+xs_add_source_native_tuple_test(MainOptionalSomeCoalesce 7 "%optional.0 = type { i8, i32 }"
+                                "extractvalue %optional.0" "br i1")
+xs_add_source_native_tuple_test(MainOptionalNoneCoalesce 3 "%optional.0 = type { i8, i32 }"
+                                "zeroinitializer" "br i1")
 
 add_test(NAME compiler_check_builtin_set COMMAND xs check -file
                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/CollectionSetCheck.xs)

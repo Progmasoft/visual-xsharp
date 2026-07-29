@@ -97,12 +97,47 @@ static bool parse_i64_tail(const char *start, const char *end, int64_t *value)
     return false;
   char *tail = nullptr;
   errno = 0;
+  if(strncmp(copy, "0x", 2) == 0)
+  {
+    unsigned long long bits = strtoull(copy, &tail, 16);
+    bool ok = errno == 0 && tail != copy && *skip_space(tail, copy + strlen(copy)) == '\0';
+    free(copy);
+    if(!ok)
+      return false;
+    memcpy(value, &bits, sizeof(*value));
+    return true;
+  }
   long long parsed = strtoll(copy, &tail, 10);
   bool ok = errno == 0 && tail != copy && *skip_space(tail, copy + strlen(copy)) == '\0';
   free(copy);
   if(!ok)
     return false;
   *value = (int64_t)parsed;
+  return true;
+}
+
+static bool parse_i32_tail(const char *start, const char *end, int32_t *value)
+{
+  if((size_t)(end - start) >= 2U && start[0] == '0' && start[1] == 'x')
+  {
+    char *copy = xs_lil_copy_span(start, (size_t)(end - start));
+    if(copy == nullptr)
+      return false;
+    char *tail = nullptr;
+    errno = 0;
+    unsigned long long bits = strtoull(copy, &tail, 16);
+    bool ok = errno == 0 && bits <= UINT32_MAX && tail != copy && *skip_space(tail, copy + strlen(copy)) == '\0';
+    free(copy);
+    if(!ok)
+      return false;
+    uint32_t narrowed = (uint32_t)bits;
+    memcpy(value, &narrowed, sizeof(*value));
+    return true;
+  }
+  int64_t parsed = 0;
+  if(!parse_i64_tail(start, end, &parsed) || parsed < INT32_MIN || parsed > INT32_MAX)
+    return false;
+  *value = (int32_t)parsed;
   return true;
 }
 
@@ -582,14 +617,13 @@ static XsLilStatus parse_instruction(Parser *parser, XsLilBlock *block, const ch
       return parse_error(parser, error, "unsupported XLIL instruction");
     const char *operation = skip_space(colon + 6, line + length);
     static const char const_i32_prefix[] = "const.i32 ";
-    int64_t value = 0;
+    int32_t value = 0;
     if((size_t)(line + length - operation) < sizeof(const_i32_prefix) - 1U ||
        strncmp(operation, const_i32_prefix, sizeof(const_i32_prefix) - 1U) != 0 ||
-       !parse_i64_tail(operation + sizeof(const_i32_prefix) - 1U, line + length, &value) || value < INT32_MIN ||
-       value > INT32_MAX)
+       !parse_i32_tail(operation + sizeof(const_i32_prefix) - 1U, line + length, &value))
       return parse_error(parser, error, "unsupported XLIL instruction");
     XsLilValueId actual = 0;
-    XsLilStatus status = xs_lil_block_add_const_i32(block, (int32_t)value, &actual, error);
+    XsLilStatus status = xs_lil_block_add_const_i32(block, value, &actual, error);
     if(status != XS_LIL_OK)
       return status;
     if(actual != result)
@@ -895,9 +929,8 @@ XsLilStatus xs_lil_module_parse_text(const char *path, const char *text, size_t 
     XsLilType return_type = {0};
     XsLilType *parameters = nullptr;
     size_t parameter_count = 0;
-    bool signature_ok =
-        xs_lil_parse_signature(result, trimmed, trimmed_length, prefix, &name, &return_type, &parameters,
-                               &parameter_count);
+    bool signature_ok = xs_lil_parse_signature(result, trimmed, trimmed_length, prefix, &name, &return_type,
+                                               &parameters, &parameter_count);
     if(!signature_ok)
     {
       free(name);

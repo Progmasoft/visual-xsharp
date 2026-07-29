@@ -14,6 +14,11 @@ source-to-native executable pipeline.
 
 - Advanced the canonical XHIR, XMIR, and XLIL text format header to version `1`. Readers continue to accept version `0`
   artifacts for compatibility, while writers now emit version `1`.
+- Lowered `Optional<T>` coalescing through target-independent MIR aggregate extraction, conditional control flow,
+  merge storage, XLIL, LLVM IR, object emission, and native `.xse` execution. Both `Some` and `nil` source paths are
+  covered in direct source and Kotlin project builds.
+- Extended the public C23 XLIL parser to consume canonical hexadecimal two's-complement bit patterns emitted by the Rust
+  XLIL writer for signed `i32` and `i64` constants.
 
 ## 0.2.3 - 2026-07-29
 

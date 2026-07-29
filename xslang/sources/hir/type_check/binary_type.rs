@@ -13,6 +13,20 @@ impl TypeChecker
                                        right: &Expression)
                                        -> Option<Type>
   {
+    if operator == BinaryOperator::Coalesce
+    {
+      let right_type = self.expression_type(right)?;
+      if matches!(left, Expression::Literal { literal: Literal::None, .. })
+      {
+        return Some(right_type);
+      }
+      let Type::Optional { element } = self.expression_type(left)?
+      else
+      {
+        return None;
+      };
+      return self.expression_matches_type(right, &element).then_some(*element);
+    }
     let mut left_type = self.expression_type(left)?;
     let mut right_type = self.expression_type(right)?;
     if left_type != right_type
@@ -88,6 +102,11 @@ impl TypeChecker
                                                expected: &Type)
                                                -> bool
   {
+    if operator == BinaryOperator::Coalesce
+    {
+      let optional = Type::Optional { element: Box::new(expected.clone()) };
+      return self.expression_matches_type(left, &optional) && self.expression_matches_type(right, expected);
+    }
     if is_integer_value_operator(operator) &&
        matches!(expected, Type::Primitive(primitive) if is_supported_integer(*primitive))
     {

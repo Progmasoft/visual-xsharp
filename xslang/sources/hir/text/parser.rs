@@ -706,6 +706,7 @@ impl Parser<'_>
       "bit_xor" => Some(BinaryOperator::BitXor),
       "logical_and" => Some(BinaryOperator::LogicalAnd),
       "logical_or" => Some(BinaryOperator::LogicalOr),
+      "coalesce" => Some(BinaryOperator::Coalesce),
       "shift_left" => Some(BinaryOperator::ShiftLeft),
       "shift_right" => Some(BinaryOperator::ShiftRight),
       "eq" => Some(BinaryOperator::Equal),

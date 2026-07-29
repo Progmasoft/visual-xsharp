@@ -67,6 +67,19 @@ add_test(NAME kotlin_project_multi_file_native_artifacts COMMAND xs_xse_artifact
   "call i32 @add")
 set_tests_properties(kotlin_project_multi_file_native_artifacts PROPERTIES
   TIMEOUT 5 FIXTURES_REQUIRED kotlin_project_multi_file_native)
+add_test(NAME kotlin_project_optional_coalesce_build COMMAND xs build)
+set_tests_properties(kotlin_project_optional_coalesce_build PROPERTIES TIMEOUT 60
+  WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/optional_coalesce"
+  ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
+  FIXTURES_REQUIRED kotlin_project_resolver FIXTURES_SETUP kotlin_project_optional_coalesce
+  PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
+add_test(NAME kotlin_project_optional_coalesce_artifacts COMMAND xs_xse_artifact_tests
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/optional_coalesce/sources/main.ll
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/optional_coalesce/sources/main.o
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/optional_coalesce/sources/main.xse 9
+  "%optional.0 = type { i8, i32 }" "br i1")
+set_tests_properties(kotlin_project_optional_coalesce_artifacts PROPERTIES
+  TIMEOUT 5 FIXTURES_REQUIRED kotlin_project_optional_coalesce)
 foreach(output hir mir xlil)
   string(TOUPPER "${output}" output_upper)
   set(output_extension ".x${output}")
@@ -166,6 +179,7 @@ set_tests_properties(
   kotlin_project_recursive_build kotlin_project_recursive_artifacts
   kotlin_project_generic_functions_build kotlin_project_generic_functions_artifacts
   kotlin_project_multi_file_native_build kotlin_project_multi_file_native_artifacts
+  kotlin_project_optional_coalesce_build kotlin_project_optional_coalesce_artifacts
   kotlin_project_output_hir kotlin_project_output_hir_artifact
   kotlin_project_output_mir kotlin_project_output_mir_artifact
   kotlin_project_output_xlil kotlin_project_output_xlil_artifact

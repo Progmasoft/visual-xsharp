@@ -5,6 +5,7 @@ foreach(source_fixture MissingMain NonLiteralMain OutOfRangeMain OutOfRangeByteM
                        ParameterizedMain WrongReturnMain UnknownCallMain
                        WrongCallArityMain NonLongReturnCallMain
                        BoolCallAsLongMain UnitCallAsLongMain InvalidLogicalOperands ImmutableLocalReassignment
+                       InvalidCoalesceLeft
                        MatchMissingElse MatchPatternTypeMismatch RecursiveDataParameter
                        AmbiguousInheritedDataField IncompleteDataConstructor LegacyDataConstructorCall DuplicateDataMethod
                        ForEachNonArray ForEachBindingMismatch TupleUnknownMember TupleAssignmentMismatch

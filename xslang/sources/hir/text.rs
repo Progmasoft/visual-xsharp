@@ -925,6 +925,7 @@ const fn binary_operator_name(operator: BinaryOperator) -> &'static str
     BinaryOperator::BitXor => "bit_xor",
     BinaryOperator::LogicalAnd => "logical_and",
     BinaryOperator::LogicalOr => "logical_or",
+    BinaryOperator::Coalesce => "coalesce",
     BinaryOperator::ShiftLeft => "shift_left",
     BinaryOperator::ShiftRight => "shift_right",
     BinaryOperator::Equal => "eq",

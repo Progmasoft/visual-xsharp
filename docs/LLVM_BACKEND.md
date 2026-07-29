@@ -22,13 +22,13 @@ design to x86-64; ARM64 compatibility must be preserved.
 - Target data layout generation
 - Independent LLVM module per codegen unit
 - Numeric X# primitive type mapping to LLVM types
-- Borrowed `Str` mapping to a `{ pointer, target-sized UTF-16 code-unit count }` view
+- Borrowed `Str` mapping to a `{ pointer, target-sized UTF-32 code-point count }` view
 - Body-less function declaration and signature lowering
 - XLIL type mapping for function declarations
 - Direct `.xlil` parser/model-driven `.extern`/`.func` lowering to verified and optimized LLVM IR, objects, and local
   native `.xse` executable artifacts for `.func main : () -> i32`
 - Initial XLIL body lowering for parameters, constants including 16-bit character code units, i32 arithmetic/bitwise/shift/comparison, i64
-  arithmetic/bitwise/shift/comparison, f32/f64 arithmetic and ordered comparisons, explicit UTF-16 string constants,
+  arithmetic/bitwise/shift/comparison, f32/f64 arithmetic and ordered comparisons, explicit UTF-32 string constants,
   typed stack-slot `load`/`store`,
   `call`, `br`, `br_if`, `panic`, `ret`, and `ret %rN`
 - LLVM optimization pipeline selection from `default<O0>` through `default<O3>`
@@ -40,11 +40,16 @@ Object file emission and linker invocation are wired into direct `.xlil` native 
 compiler-core slice. Unsupported source constructs are diagnosed or remain outside that incremental slice; they are not
 lowered by inventing LLVM-only semantics.
 
+The supported source slice includes `Optional<T>` construction and `??` for payload types already representable in the
+XLIL aggregate model. Coalescing is lowered before the backend to aggregate extraction, conditional branches, and
+function-local merge storage. LLVM therefore receives ordinary XLIL records rather than an Optional-specific ABI or
+instruction.
+
 ## String mapping and deferred owned strings
 
-`Str` is an immutable borrowed UTF-16 view with an implicit static lifetime. LLVM represents the view as a pointer plus
-the target's pointer-sized integer count of UTF-16 code units. XLIL `const.str` carries an explicit `utf16le` or
-`utf16be` tag; lowering emits an immutable private byte array in that byte order and does not append a null terminator.
+`Str` is an immutable borrowed UTF-32 view with an implicit static lifetime. LLVM represents the view as a pointer plus
+the target's pointer-sized integer count of Unicode code points. XLIL `const.str utf32le|utf32be` lowering emits an
+immutable private `i32` array in the requested byte order and does not append a null terminator.
 
 Fixed-array constant indices lower to LLVM aggregate extraction. Calculated `Int` (`i64`) indices lower through temporary
 array storage and `getelementptr`; generated control flow checks both index bounds and traps on an invalid index before any
@@ -56,12 +61,13 @@ Native objects use position-independent relocation so the view can safely refer 
 `Optional<Str>` is the canonical boxed, owned optional-string type. Its allocator, ownership, discriminant, and runtime
 layout remain deferred; the borrowed `Str` view does not invent those semantics.
 
-`Bool` is resolved as a 1-bit primitive in HIR and lowered to `i1` by the LLVM backend.
+`Bool` has an unsigned 8-bit value representation. LLVM branch lowering compares it with zero to obtain an `i1`
+condition where required.
 
 `Byte` and `SByte` are separate unsigned/signed 8-bit primitive types at the HIR level. Their LLVM storage type is `i8` for
 both; signedness is selected later by typed MIR operations such as comparisons, conversions, and arithmetic.
 
-`Char` lowers to LLVM `i16` because its documented width is 16 bits.
+`Char` lowers to LLVM `i32` because it stores one Unicode scalar as `u32`.
 
 ## Preserved stage boundary
 
@@ -81,7 +87,7 @@ Borrow-checked and optimized MIR
 
 XLIL function body lowering currently covers explicit body parameters, every documented fixed-width integer constant,
 exact-bit f32/f64 constants, and
-boolean and explicit-endian UTF-16 string constants, UTF-16 string equality/inequality, fixed-width integer arithmetic/bitwise/shift/comparison instructions, f32/f64
+boolean and UTF-32 string constants, UTF-32 string equality/inequality, fixed-width integer arithmetic/bitwise/shift/comparison instructions, f32/f64
 arithmetic and ordered comparisons,
 direct calls, nominal aggregate construction/extraction, unconditional `br`, conditional `br_if`, `panic`, `ret`,
 typed stack slots with `load`/`store`, and `ret %rN`. Stack slots are allocated in the LLVM entry block and remain eligible
@@ -91,7 +97,7 @@ local initialization, reads, and simple mutable reassignment. `panic` emits an `
 locale-sensitive decimal conversion. Ordered floating comparisons lower to LLVM ordered predicates, so NaN makes each
 supported comparison false. Native Linux links include the platform math library because optimized floating remainder may
 become an `fmod`/`fmodf` runtime call.
-`eq.str`/`ne.str` compare the `{pointer, code-unit length}` views by length and target-endian UTF-16 storage content.
+`eq.str`/`ne.str` compare the `{pointer, code-point length}` views by length and UTF-32 storage content.
 The current hosted native ABI emits a bounded `memcmp` call after selecting the shorter byte length, then combines the
 content result with exact code-unit-length equality.
 

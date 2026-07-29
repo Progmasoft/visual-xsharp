@@ -660,6 +660,23 @@ static void test_text_parser_round_trips_i32_constant(void)
   xs_lil_module_destroy(module);
 }
 
+static void test_text_parser_accepts_integer_bit_patterns(void)
+{
+  const char text[] = ".xlil version 1\n.xlil module Bits\n.func Values : () -> i32\nbb0.entry:\n"
+                      "  %r0:i64 = const.i64 0xffffffffffffffff\n"
+                      "  %r1:i32 = const.i32 0xffffffff\n  ret %r1\n.end\n";
+  XsLilError error = {0};
+  XsLilModule *module = nullptr;
+  CHECK(xs_lil_module_parse_text("bits.xlil", text, strlen(text), &module, &error) == XS_LIL_OK);
+  if(module != nullptr)
+  {
+    const XsLilBlock *entry = xs_lil_function_block_at(xs_lil_module_function_at(module, 0), 0);
+    CHECK(xs_lil_block_instruction_i64(entry, 0) == -1);
+    CHECK(xs_lil_block_instruction_i64(entry, 1) == -1);
+  }
+  xs_lil_module_destroy(module);
+}
+
 static void test_text_parser_round_trips_binary_i32_instructions(void)
 {
   const char text[] = ".xlil version 1\n.xlil module App\n.func Arithmetic32 : () -> i32\nbb0.entry:\n"
@@ -941,6 +958,7 @@ int main(void)
   test_text_parser_round_trips_stack_slots();
   test_text_parser_round_trips_binary_i64_instructions();
   test_text_parser_round_trips_i32_constant();
+  test_text_parser_accepts_integer_bit_patterns();
   test_text_parser_round_trips_binary_i32_instructions();
   test_text_parser_round_trips_explicit_utf32_strings();
   test_text_parser_round_trips_str_comparisons();

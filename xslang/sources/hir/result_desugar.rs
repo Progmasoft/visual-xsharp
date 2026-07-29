@@ -798,6 +798,21 @@ impl ResultDesugar
   fn binary_expression_type(&mut self, operator: BinaryOperator, left: &Expression, right: &Expression)
                             -> Option<Type>
   {
+    if operator == BinaryOperator::Coalesce
+    {
+      let right_type = self.expression_type(right)?;
+      if matches!(left, Expression::Literal { literal: Literal::None,
+                                              .. })
+      {
+        return Some(right_type);
+      }
+      let Type::Optional { element } = self.expression_type(left)?
+      else
+      {
+        return None;
+      };
+      return (*element == right_type).then_some(*element);
+    }
     let mut left_type = self.expression_type(left)?;
     let mut right_type = self.expression_type(right)?;
     if left_type != right_type

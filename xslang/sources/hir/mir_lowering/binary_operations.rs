@@ -29,7 +29,7 @@ pub(super) const fn integer_operation(operator: BinaryOperator) -> Option<Intege
     BinaryOperator::LessEqual => IntegerBinaryOperation::LessEqual,
     BinaryOperator::Greater => IntegerBinaryOperation::Greater,
     BinaryOperator::GreaterEqual => IntegerBinaryOperation::GreaterEqual,
-    BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr => return None,
+    BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr | BinaryOperator::Coalesce => return None,
   })
 }
 

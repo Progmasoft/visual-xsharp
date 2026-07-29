@@ -143,6 +143,7 @@ pub enum BinaryOperator
   BitXor,
   LogicalAnd,
   LogicalOr,
+  Coalesce,
   ShiftLeft,
   ShiftRight,
   Equal,

@@ -73,9 +73,9 @@ independently versioned through XHIR, XMIR, and XLIL headers.
   before C foreign-function declarations and the canonical helper types under `std::cffi::*`.
 - `Optional<T>` is available as if the compiler had inserted `import optional; using namespace std::optional;`, making
   `std::optional::Optional<T>` available as `Optional<T>`.
-- `Str` is an immutable, borrowed UTF-16 string with an implicit static lifetime; the compiler/runtime selects UTF-16LE or
-  UTF-16BE automatically for the target/runtime situation. `Optional<Str>` is boxed and carries an owned optional string
-  payload. Explicit `String` is source sugar for `Optional<Str>`, while `:=` string-literal inference produces `Str`.
+- `Str` is an immutable borrowed UTF-32 code-point view with an implicit static lifetime. `String` is a distinct
+  built-in owned, heap-backed UTF-32 string; it is not `Optional<Str>` sugar and does not implicitly borrow as `Str`.
+  `Optional<Str>` and `Optional<String>` are distinct types, while `:=` string-literal inference produces `Str`.
 - X# uses `else` for placeholder/default positions. Type and lifetime placeholders are written as `Type<else, Foo>` and
   `&'else T`; `_` placeholders are not canonical X# syntax.
 - Statement/expression separation follows Rust: `expression;` evaluates and discards the value, while the final expression

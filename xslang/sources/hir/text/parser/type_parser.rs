@@ -103,6 +103,10 @@ pub(crate) fn parse_type_text(name: &str) -> Option<Type>
   {
     return Some(Type::Primitive(primitive));
   }
+  if let Some(element) = name.strip_prefix("Optional<").and_then(|value| value.strip_suffix('>'))
+  {
+    return Some(Type::Optional { element: Box::new(parse_type_text(element.trim())?) });
+  }
   if let Some(body) = name.strip_prefix('(').and_then(|value| value.strip_suffix(')'))
   {
     let fields = if body.trim().is_empty()

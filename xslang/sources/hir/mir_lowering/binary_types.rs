@@ -79,6 +79,7 @@ impl HirToMirLowerer
         BinaryOperator::ShiftLeft |
         BinaryOperator::ShiftRight => self.common_operand_type(left, right, lowered),
         BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr => Some(XlilType::BOOL),
+        BinaryOperator::Coalesce => self.expression_value_type(right, lowered),
         BinaryOperator::Equal |
         BinaryOperator::NotEqual |
         BinaryOperator::Less |
@@ -127,7 +128,11 @@ impl HirToMirLowerer
       {
         Some(XlilType::STR)
       }
-      Type::Unit | Type::Set { .. } | Type::Map { .. } | Type::Optional { .. } | Type::Reference { .. } => None,
+      Type::Optional { .. } => self.optional_types
+                                   .iter()
+                                   .find(|(source, _)| source == value)
+                                   .map(|(_, ty)| *ty),
+      Type::Unit | Type::Set { .. } | Type::Map { .. } | Type::Reference { .. } => None,
     }
   }
 }

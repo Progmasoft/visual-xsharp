@@ -187,6 +187,21 @@ fn infer_binary_expression_type(operator: BinaryOperator,
                                 locals: &[Local])
                                 -> Option<Type>
 {
+  if operator == BinaryOperator::Coalesce
+  {
+    let right_type = infer_expression_type(right, locals)?;
+    if matches!(left, Expression::Literal { literal: Literal::None,
+                                            .. })
+    {
+      return Some(right_type);
+    }
+    let Type::Optional { element } = infer_expression_type(left, locals)?
+    else
+    {
+      return None;
+    };
+    return (*element == right_type).then_some(*element);
+  }
   let left_type = infer_expression_type(left, locals)?;
   let right_type = infer_expression_type(right, locals)?;
   if left_type != right_type

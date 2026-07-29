@@ -75,15 +75,14 @@ Format notes:
 - `bbN.<label>:` starts a basic block.
 - `%rN:type` names a typed SSA value.
 - `%rN:bool = const.bool true|false` creates a boolean SSA value.
-- `%rN:u16 = const.u16 0xXXXX` creates one unsigned 16-bit value. X# `Char` uses this record for one UTF-16 code unit;
+- `%rN:u32 = const.u32 0xXXXXXXXX` creates one unsigned 32-bit value. X# `Char` uses this record for one Unicode scalar;
   the hexadecimal immediate always has exactly four digits.
 - `%rN:T = const.T 0x...` creates fixed-width integer bit patterns for `u8`, `i8`, `i16`, `u32`, `u64`, `u128`, and
   `i128`. The hexadecimal field has exactly two digits per byte. Signed records use two's-complement bits, so XLIL does
   not depend on a host C implementation's native 128-bit extension.
-- `%rN:str = const.str utf16le [0x004c, ...]` and its `utf16be` form create a borrowed static string view from
-  explicit UTF-16 code units. The tag fixes the byte order used by the target data object; the numeric list always
-  contains Unicode UTF-16 code-unit values. Untagged string constants are invalid.
-- `%rN:bool = eq.str %rA, %rB` and `ne.str` compare two `str` views by UTF-16 code-unit length and content. Pointer
+- `%rN:str = const.str utf32le [0x0000004c, ...]` and its `utf32be` form create a borrowed static string view from
+  explicit Unicode code points. The tag fixes target storage byte order; untagged string constants are invalid.
+- `%rN:bool = eq.str %rA, %rB` and `ne.str` compare two `str` views by UTF-32 code-point length and content. Pointer
   identity is not observable through these instructions.
 - `%rN:i32 = const.i32 N` creates a signed 32-bit integer constant.
 - `%rN:i64 = const.i64 N` creates a signed 64-bit integer constant. The explicit width is part of the opcode; the
@@ -150,12 +149,17 @@ Stack slots are function-local and target-independent. Slot ids are sequential, 
 value types must exactly match the slot type. The LLVM backend currently materializes them with entry-block `alloca`
 instructions and typed `load`/`store` operations.
 
-MIR remains target-independent and writes string constants as `utf16 [0x004c, ...]`. Endianness becomes concrete only
-when MIR is lowered to XLIL. XHIR remains closer to X# source and represents the same value as a quoted string literal.
-Similarly, XHIR preserves a source-like character literal, XMIR writes its 16-bit code-unit value as `const.u16`, and
-XLIL carries that value as a target-independent `u16` register.
+XLIL has no dedicated Optional or coalescing opcode. HIR lowers the currently supported `Optional<T>` representation to
+an aggregate containing a boolean discriminant and a `T` payload. MIR lowers `??` to `extract`, `br_if`, and merge
+storage, so XLIL and its backends consume ordinary aggregate and control-flow records without acquiring source-language
+Optional semantics.
 
-The XLIL v1 `str` value is a borrowed view containing a pointer and a target-sized UTF-16 code-unit count. A constant's
+MIR remains target-independent and writes string constants as `utf32 [0x0000004c, ...]`. XHIR remains closer to X#
+source and represents the same value as a quoted string literal. Similarly, XHIR preserves a source-like character
+literal, XMIR writes its 32-bit scalar value as `const.u32`, and XLIL carries that value as a target-independent `u32`
+register.
+
+The XLIL v1 `str` value is a borrowed view containing a pointer and a target-sized UTF-32 code-point count. A constant's
 backing data is immutable and has static storage duration. Its length excludes any terminator; XLIL string constants do
 not add or require a null terminator. `Optional<Str>` ownership and allocation are separate higher-level semantics and
 are not represented by this `str` constant record.
@@ -185,7 +189,9 @@ The C23 API can construct every record in the currently implemented XLIL v1 mode
 and defined function signatures, parameter values, stack slots, blocks, constants, calls, integer and floating-point
 operations, strings, aggregates, arrays, memory operations, branches, returns, and panic terminators. It also provides
 module verification, canonical owned-text emission, bounded v0/v1 text parsing, mutable producer lookup, and read-only
-inspection of every instruction payload. Direct `xs build --xlil -file <input.xlil>` uses the same parser and verifier
+inspection of every instruction payload. Signed integer constants may use decimal values or fixed-width hexadecimal
+two's-complement bit patterns; the C and Rust readers accept the canonical writer output. Direct
+`xs build --xlil -file <input.xlil>` uses the same parser and verifier
 before emitting optimized LLVM IR, an object file, and a native `.xse` executable for the supported local-target subset.
 
 The model API is the precise layer; `XsLilBuilder` is the convenience layer. A builder keeps an insertion block, infers

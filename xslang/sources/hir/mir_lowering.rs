@@ -73,6 +73,9 @@ mod nominal;
 mod nominal_return_tests;
 #[cfg(test)]
 mod operator_tests;
+mod optional;
+#[cfg(test)]
+mod optional_tests;
 mod unary;
 #[cfg(test)]
 mod unary_tests;
@@ -359,6 +362,10 @@ impl HirToMirLowerer
                            right,
                            span, } =>
       {
+        if *operator == BinaryOperator::Coalesce
+        {
+          return self.lower_optional_coalesce(left, right, expected_type, *span, lowered);
+        }
         if matches!(operator, BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr)
         {
           return self.lower_short_circuit_expression(*operator, left, right, *span, lowered);

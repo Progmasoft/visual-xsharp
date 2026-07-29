@@ -369,28 +369,32 @@ membership, class/interface virtual dispatch, imported overload sets, and functi
 ### HIR type resolution bootstrap
 
 - The `xs check` flow runs HIR type resolution after HIR import and name resolution.
-- The current primitive type names are recognized: `Str`, `Bool`, `Byte`, `SByte`, `Char`, `Short`, `Long`, `Int`,
-  `Integer`, `UShort`, `ULong`, `UInt`, `UInteger`, `SFloat`, and `Float`.
-- `Bool` is resolved as a 1-bit primitive in HIR; the LLVM backend lowers it to `i1`.
+- The current primitive type names are recognized: `Str`, `String`, `Bool`, `Byte`, `SByte`, `Char`, `Short`, `Long`,
+  `Int`, `Integer`, `UShort`, `ULong`, `UInt`, `UInteger`, `SFloat`, `LFloat`, `Float`, and `Double`.
+- `Bool` accepts `true`/`false` and explicitly contextual integer literals. It uses an unsigned 8-bit value
+  representation; an unannotated integer literal still infers `Int`.
 - `Byte` is an unsigned 8-bit primitive and `SByte` is a signed 8-bit primitive at the HIR level.
-- `Char` is a 16-bit UTF-16 code-unit type.
+- `Char` is one Unicode scalar value represented as `u32`.
 - Signed integer widths are `Short`/`Long`/`Int`/`Integer` = i16/i32/i64/i128; unsigned widths are
-  `UShort`/`ULong`/`UInt`/`UInteger` = u16/u32/u64/u128. `SFloat` means “Short Float” and maps to f32; `Float` maps
-  to f64. These widths are target-independent, and X# has no x86-32-specific primitive or native-width alias.
-- `Str` is encoded as UTF-16; the compiler/runtime selects UTF-16LE or UTF-16BE automatically for the target/runtime
-  situation. Its length is considered unbounded except by the representation allowed by UTF-16.
-- Semantically, `Str` is an immutable, borrowed static-lifetime string reference. The lifetime is implicit in source. Its
-  runtime layout remains deferred and it is not yet lowered to XLIL storage.
+  `UShort`/`ULong`/`UInt`/`UInteger` = u16/u32/u64/u128. Floating widths are
+  `SFloat`/`LFloat`/`Float`/`Double` = f16/f32/f64/f128. These widths are target-independent, and X# has no
+  x86-32-specific primitive or native-width alias.
+- `Str` is an immutable borrowed UTF-32 code-point view with an implicit static lifetime. String constants lower through
+  MIR and XLIL as explicit `u32` code points.
+- `String` is a distinct built-in owned, heap-backed UTF-32 string. It is not an alias or sugar for
+  `Optional<Str>`, and no implicit borrow from `String` to `Str` is inserted.
 - `Optional<T>` resolves as if the compiler had inserted `import optional; using namespace std::optional;`, making
   `std::optional::Optional<T>` available as `Optional<T>`. It is compiler-provided enum data with `Some: T` and
   payload-free `None` variants, made available through that implicit namespace using. `?.`, `??`, `??=`, and postfix `!`
-  are represented syntactically; `Optional<T>` has automatic unboxing to
+  are represented syntactically. The implemented `??` slice uses a target-independent `{ Bool, T }` aggregate in MIR,
+  extracts the discriminant, evaluates only the selected payload or fallback path, and merges the result through a MIR
+  place before lowering to XLIL. The same path reaches LLVM and native `.xse` output for supported payload types.
+  `Optional<T>` has automatic unboxing to
   `T`, and failed unboxing is modeled through the standard `Result`/`Error` direction. `Optional<Str>` owns and boxes its
-  string payload instead of carrying an optional borrowed/static `Str` reference. `String` is source-only sugar for this
-  canonical type: an explicit `String` annotation accepts a string value, `Some(Str)`, or `None` and is recorded as
-  `Optional<Str>` in HIR. Literal inference never produces `String`; `name := "Leitwolf";` infers `Str`. This sugar does
-  not apply to numeric types. Full flow-sensitive Optional semantics are later HIR work.
-  There is no nullable `T?` type operator.
+  string payload instead of carrying an optional borrowed/static `Str` reference. `T?` is source sugar for
+  `Optional<T>`; an assigned non-optional value is wrapped in `Some`, while `nil` becomes `None`. Literal inference does
+  not infer an Optional: `name := "Leitwolf";` infers `Str`. `?.`, `??=`, postfix `!`, and full flow-sensitive Optional
+  analysis remain later HIR work.
 - The C23 HIR type resolver recognizes the standard wrapper type names `Optional<T>`, `std::optional::Optional<T>`,
   `std::result::Result<(), E>`, `std::result::Result<T, E>`, the special shorthand `Result<()>`, and the standard error type `Error`.
   The compiler treats the `std::result` namespace as implicitly usable, so `import result;` is optional for `Result<T, E>`,

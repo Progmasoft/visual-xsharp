@@ -140,6 +140,7 @@ const TOKEN_CARET_ASSIGN: u32 = 57;
 const TOKEN_SHIFT_RIGHT: u32 = 34;
 const TOKEN_SHIFT_LEFT: u32 = 37;
 const TOKEN_ASSIGN: u32 = 24;
+const TOKEN_QUESTION_QUESTION: u32 = 30;
 const IMMUTABLE: u32 = 1 << 4;
 const STATIC: u32 = 1 << 1;
 const DATA_ENUM: u32 = 1 << 3;
@@ -207,6 +208,7 @@ fn lower_expression(tree: &SyntaxTree,
 {
   let source_span = span(value)?;
   if let Some(optional_type) = expected_type.filter(|ty| ty.is_optional()) &&
+     expression_type(tree, value, context, locals).as_ref() != Some(optional_type) &&
      !matches!(value.text.as_str(), "nil" | "None") &&
      !(value.kind == EXPR_CALL &&
        value.children
@@ -313,6 +315,7 @@ fn lower_expression(tree: &SyntaxTree,
         TOKEN_LOGICAL_AND => BinaryOperator::LogicalAnd,
         TOKEN_PIPE => BinaryOperator::BitOr,
         TOKEN_LOGICAL_OR => BinaryOperator::LogicalOr,
+        TOKEN_QUESTION_QUESTION => BinaryOperator::Coalesce,
         TOKEN_CARET => BinaryOperator::BitXor,
         TOKEN_SHIFT_LEFT => BinaryOperator::ShiftLeft,
         TOKEN_SHIFT_RIGHT => BinaryOperator::ShiftRight,
@@ -324,6 +327,25 @@ fn lower_expression(tree: &SyntaxTree,
         TOKEN_GREATER_EQUAL => BinaryOperator::GreaterEqual,
         _ => return None,
       };
+      if operator == BinaryOperator::Coalesce
+      {
+        let element_type = expected_type?;
+        let optional_type = Type::Optional { element: Box::new(element_type.clone()) };
+        let left = lower_expression(tree,
+                                    tree.nodes.get(value.children[0])?,
+                                    context,
+                                    locals,
+                                    Some(&optional_type))?;
+        let right = lower_expression(tree,
+                                     tree.nodes.get(value.children[2])?,
+                                     context,
+                                     locals,
+                                     Some(element_type))?;
+        return Some(Expression::Binary { operator,
+                                         left: Box::new(left),
+                                         right: Box::new(right),
+                                         span: source_span });
+      }
       let bool_type = Type::Primitive(PrimitiveType::Bool);
       let operand_type = if matches!(operator, BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr)
       {

@@ -151,7 +151,7 @@ fn rejects_unsupported_version()
   let diagnostics = parse_module(".xlil version 2\n.xlil module App\n").expect_err("unsupported version must fail");
 
   assert_eq!(diagnostics[0].code, DiagnosticCode::InvalidVersionHeader);
-  assert!(diagnostics[0].message.contains("version 1 is not supported"));
+  assert!(diagnostics[0].message.contains("version 2 is not supported"));
 }
 
 #[test]
