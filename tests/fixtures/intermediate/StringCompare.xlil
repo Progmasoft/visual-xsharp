@@ -16,12 +16,12 @@ bb0.entry:
 .end
 .func main : () -> i32
 bb0.entry:
-  %r0:str = const.str utf16le [0x0078, 0x0073]
-  %r1:str = const.str utf16le [0x0078, 0x0073]
+  %r0:str = const.str utf32le [0x00000078, 0x00000073]
+  %r1:str = const.str utf32le [0x00000078, 0x00000073]
   %r2:bool = call same(%r0, %r1)
   br_if %r2, bb1, bb3
 bb1.check_difference:
-  %r3:str = const.str utf16le [0x0079]
+  %r3:str = const.str utf32le [0x00000079]
   %r4:bool = call different(%r0, %r3)
   br_if %r4, bb2, bb3
 bb2.pass:

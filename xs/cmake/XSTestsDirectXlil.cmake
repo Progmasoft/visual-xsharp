@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 set(XS_DIRECT_XLIL_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/intermediate")
@@ -103,7 +103,7 @@ add_test(NAME direct_xlil_string_literal_artifacts COMMAND xs_xse_artifact_tests
                                                       ${XS_DIRECT_XLIL_FIXTURE_DIR}/StringLiteral.ll
                                                       ${XS_DIRECT_XLIL_FIXTURE_DIR}/StringLiteral.o
                                                       ${XS_DIRECT_XLIL_FIXTURE_DIR}/StringLiteral.xse 0
-                                                      "define { ptr, i64 } @greeting" "constant [6 x i8]")
+                                                      "define { ptr, i64 } @greeting" "constant [12 x i8]")
 set_tests_properties(direct_xlil_string_literal_artifacts PROPERTIES DEPENDS direct_xlil_string_literal_build
                                                                         TIMEOUT 5)
 add_test(NAME direct_xlil_string_flow_build COMMAND xs build --xlil -file

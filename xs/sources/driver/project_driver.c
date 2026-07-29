@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -16,7 +16,7 @@
 
 extern char **environ;
 
-static const char *const REGISTRY_VERSION = "xs-project-sources-v4";
+static const char *const REGISTRY_VERSION = "xs-project-sources-v5";
 
 #ifndef XS_PROJECT_RUNTIME_DEFAULT
 #define XS_PROJECT_RUNTIME_DEFAULT "xs-project-runtime"
@@ -185,13 +185,12 @@ static bool parse_header(char *data, size_t record_count, size_t *source_count, 
                          size_t *test_count, XsCompilerSettings *settings)
 {
   *settings = xs_cli_default_compiler_settings();
-  if(strcmp(data, REGISTRY_VERSION) != 0 || record_count < 8U)
+  if(strcmp(data, REGISTRY_VERSION) != 0 || record_count < 7U)
     return false;
   char *warning = next_record(data);
   char *werror = next_record(warning);
   char *verbose = next_record(werror);
-  char *xgc = next_record(verbose);
-  char *sources = next_record(xgc);
+  char *sources = next_record(verbose);
   char *modules = next_record(sources);
   char *tests = next_record(modules);
   bool parsed_warning = false;
@@ -205,14 +204,14 @@ static bool parse_header(char *data, size_t record_count, size_t *source_count, 
     }
   }
   if(!parsed_warning || !parse_bool_record(werror, &settings->warnings_as_errors) ||
-     !parse_bool_record(verbose, &settings->verbose) || !parse_bool_record(xgc, &settings->xgc_enabled) ||
-     !parse_size_record(sources, source_count) || !parse_size_record(modules, module_count) ||
+     !parse_bool_record(verbose, &settings->verbose) || !parse_size_record(sources, source_count) ||
+     !parse_size_record(modules, module_count) ||
      !parse_size_record(tests, test_count))
     return false;
-  if(*source_count > SIZE_MAX - 8U || *test_count > SIZE_MAX - 8U - *source_count ||
-     *module_count > (SIZE_MAX - 8U - *source_count - *test_count) / 2U)
+  if(*source_count > SIZE_MAX - 7U || *test_count > SIZE_MAX - 7U - *source_count ||
+     *module_count > (SIZE_MAX - 7U - *source_count - *test_count) / 2U)
     return false;
-  return record_count == 8U + *source_count + (*module_count * 2U) + *test_count;
+  return record_count == 7U + *source_count + (*module_count * 2U) + *test_count;
 }
 
 static bool resolve_project_registry(const char *mode, const char *project_root, const char *module_path,
@@ -267,7 +266,7 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
   }
   project->path_count = path_count;
   char *record = data;
-  for(size_t i = 0; i < 8U; ++i)
+  for(size_t i = 0; i < 7U; ++i)
     record = next_record(record);
   for(size_t i = 0; i < source_count; ++i)
   {

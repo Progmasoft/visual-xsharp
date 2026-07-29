@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -179,13 +179,13 @@ impl DirectIrSession
         }
       }
     }
-    diagnostics.extend(xlil::verify::verify_module(&module).into_iter().map(|error| {
-                                                                         format!("lowered XLIL verification failed: {}",
-                                                                                 error.message)
-                                                                       }));
+    diagnostics.extend(xlil::verify_module(&module).into_iter()
+                                                   .map(|error| {
+                                                     format!("lowered XLIL verification failed: {}", error.message)
+                                                   }));
     if diagnostics.is_empty()
     {
-      Self { xlil_text: Some(xlil::writer::module_to_string(&module).into_bytes()),
+      Self { xlil_text: Some(xlil::module_to_string(&module).into_bytes()),
              diagnostics }
     }
     else

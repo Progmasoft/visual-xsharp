@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
@@ -63,26 +63,27 @@ limitations are documented in [LLVM_BACKEND.md](LLVM_BACKEND.md).
 ## Planned C23 backend
 
 The C23 backend is planned as `xslang/c23_backend/Cargo.toml` inside the Rust workspace. It will emit portable C23 and use
-Clang to produce native artifacts.
-
-Memory-management lowering depends on the project XGC mode:
-
-- with XGC enabled, generated C23 binds to the public XGC runtime API;
-- with XGC disabled, generated C23 emits deterministic, RAII-equivalent cleanup through explicit C23 lifetime and cleanup
-  operations.
-
-The generated support surface must expose the runtime operations required by the selected mode. This backend must preserve
-X# destruction, finalization, ownership, and error behavior; generated C is an implementation artifact, not a second
-source-level language contract.
+Clang to produce native artifacts. Generated C must preserve X# destruction, ownership, and error behavior; it is an
+implementation artifact, not a second source-level language contract.
 
 ## Planned JavaScript backend
 
 The JavaScript backend is planned as `xslang/js_backend/Cargo.toml`. Its host runtime will use `deno_core`, V8, and Tokio.
 `xs run` will execute through that embedded runtime and will not require Node.js.
 
-X# language semantics remain unchanged. JavaScript execution uses V8 garbage collection rather than XGC. Finalizer and
-`defer` behavior therefore requires an explicit lowering/runtime contract comparable to the guarantees provided by the
-managed XGC mode; the backend may not expose host-GC timing as new X# semantics.
+X# language semantics remain unchanged. JavaScript execution uses V8 garbage collection, but the backend may not expose
+host-GC timing as new X# semantics.
+
+## Planned X Platform backend
+
+X Platform is a separate, language-neutral runtime project. Its common pipeline is `XPI → xpic → XPLR register
+bytecode`; X# may reach it through `XLIL → XPI`, while other languages can emit XPI directly. XPI is intentionally lower
+level than XLIL and does not contain X# nominal types, string rules, ownership semantics, or source constructs.
+
+The X Platform Garbage Collector (XPG) belongs to that runtime and is not an alternate mode inside `xslang`. The future
+X Platform JIT (XPJ) is planned as four optimization levels over two code generations. Neither bytecode emission nor XPJ
+is implemented by the current X# compiler. Memory management follows backend selection without a separate flag: LLVM
+always uses RAII and XPLR always uses XPG.
 
 The emitted module format, deployment artifact layout, JavaScript interop ABI, and asynchronous host boundary remain
 undecided and will be specified before implementation.

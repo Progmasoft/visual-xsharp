@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -11,9 +11,9 @@ use crate::xlil::{Instruction, Type as XlilType};
 use super::HirToMirLowerer;
 
 #[test]
-fn lowers_sfloat_and_float_literals_through_mir_and_xlil()
+fn lowers_lfloat_and_float_literals_through_mir_and_xlil()
 {
-  for (primitive, expected) in [(PrimitiveType::SFloat, XlilType::F32),
+  for (primitive, expected) in [(PrimitiveType::LFloat, XlilType::F32),
                                 (PrimitiveType::Float, XlilType::F64)]
   {
     let span = Span::new(1, 10, 13);

@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
@@ -12,7 +12,7 @@ APIs, and backend checkpoints before the full native executable pipeline is comp
 
 ## Current status
 
-- Current project version: `0.2.2`.
+- Current project version: `0.2.3`.
 - `xs --version` reports the configured compiler version.
 - The root [../CHANGELOG.md](../CHANGELOG.md) file keeps `Unreleased` for work after the current numbered line.
 - Numbered `0.0.x` entries are development snapshots, not stable language releases.
@@ -22,7 +22,7 @@ APIs, and backend checkpoints before the full native executable pipeline is comp
 The root `release.java` source-file tool checks release metadata without using shell scripts:
 
 ```text
-java --source=21 release.java check 0.2.2
+java --source=21 release.java check 0.2.3
 ```
 
 It validates the CMake project version, changelog heading, release documentation, CLI version documentation, and the built
@@ -30,8 +30,9 @@ It validates the CMake project version, changelog heading, release documentation
 
 ## Version line
 
-- `0.2.2` adds the first executable XGC heap-topology, barrier, LOH compaction-selection, POH free-list, and fallback
-  policy foundations while preserving LLVM as the only implemented backend.
+- `0.2.3` separates the language-neutral X Platform runtime from the X# compiler, reserves the XPLR project settings,
+  and keeps LLVM as the only implemented X# backend.
+- `0.2.2` added the experimental collector topology that has since moved into the independent X Platform project as XPG.
 - `0.2.1` publishes the compiler-core progress under MPL-2.0, while preserving the upstream Apache-2.0 license
   of the generated Gradle wrapper launchers.
 - `0.2.0` makes runtime-sized `[T]` arrays explicit across XHIR, XMIR, XLIL, the public C23 API, and LLVM. Construction,

@@ -1,45 +1,70 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
+/// Legacy XLIL v0 `i32` operations not represented by dedicated records.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum I32BinaryOperation
 {
+  /// Signed division.
   Div,
+  /// Signed remainder.
   Rem,
+  /// Bitwise AND.
   BitAnd,
+  /// Bitwise OR.
   BitOr,
+  /// Bitwise XOR.
   BitXor,
+  /// Left shift.
   ShiftLeft,
+  /// Arithmetic right shift.
   ShiftRight,
 }
 
+/// Uniform operation set for exact-width integer instructions.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IntegerBinaryOperation
 {
+  /// Addition.
   Add,
+  /// Subtraction.
   Sub,
+  /// Multiplication.
   Mul,
+  /// Signed or unsigned division according to the operand type.
   Div,
+  /// Signed or unsigned remainder according to the operand type.
   Rem,
+  /// Bitwise AND.
   BitAnd,
+  /// Bitwise OR.
   BitOr,
+  /// Bitwise XOR.
   BitXor,
+  /// Left shift.
   ShiftLeft,
+  /// Signed arithmetic or unsigned logical right shift.
   ShiftRight,
+  /// Equality comparison.
   Equal,
+  /// Inequality comparison.
   NotEqual,
+  /// Signed or unsigned less-than comparison.
   Less,
+  /// Signed or unsigned less-than-or-equal comparison.
   LessEqual,
+  /// Signed or unsigned greater-than comparison.
   Greater,
+  /// Signed or unsigned greater-than-or-equal comparison.
   GreaterEqual,
 }
 
 impl IntegerBinaryOperation
 {
   #[must_use]
-  pub const fn text_stem(self) -> &'static str
+  pub(crate) const fn text_stem(self) -> &'static str
   {
     match self
     {
@@ -63,7 +88,7 @@ impl IntegerBinaryOperation
   }
 
   #[must_use]
-  pub fn parse_text_stem(name: &str) -> Option<Self>
+  pub(crate) fn parse_text_stem(name: &str) -> Option<Self>
   {
     Some(match name
     {
@@ -88,29 +113,37 @@ impl IntegerBinaryOperation
   }
 
   #[must_use]
-  pub const fn is_comparison(self) -> bool
+  pub(crate) const fn is_comparison(self) -> bool
   {
     matches!(self,
              Self::Equal | Self::NotEqual | Self::Less | Self::LessEqual | Self::Greater | Self::GreaterEqual)
   }
 }
 
+/// Legacy XLIL v0 `i64` operations.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum I64BinaryOperation
 {
+  /// Signed division.
   Div,
+  /// Signed remainder.
   Rem,
+  /// Bitwise AND.
   BitAnd,
+  /// Bitwise OR.
   BitOr,
+  /// Bitwise XOR.
   BitXor,
+  /// Left shift.
   ShiftLeft,
+  /// Arithmetic right shift.
   ShiftRight,
 }
 
 impl I64BinaryOperation
 {
   #[must_use]
-  pub const fn text_name(self) -> &'static str
+  pub(crate) const fn text_name(self) -> &'static str
   {
     match self
     {
@@ -125,7 +158,7 @@ impl I64BinaryOperation
   }
 
   #[must_use]
-  pub fn parse_text(name: &str) -> Option<Self>
+  pub(crate) fn parse_text(name: &str) -> Option<Self>
   {
     Some(match name
     {
@@ -141,47 +174,68 @@ impl I64BinaryOperation
   }
 }
 
+/// Legacy signed `i64` ordering comparisons.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum I64ComparisonOperation
 {
+  /// Less-than.
   Less,
+  /// Less-than-or-equal.
   LessEqual,
+  /// Greater-than.
   Greater,
+  /// Greater-than-or-equal.
   GreaterEqual,
 }
 
+/// Floating-point arithmetic operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FloatBinaryOperation
 {
+  /// Addition.
   Add,
+  /// Subtraction.
   Sub,
+  /// Multiplication.
   Mul,
+  /// Division.
   Div,
+  /// Remainder.
   Rem,
 }
 
+/// Ordered floating-point comparison.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FloatComparisonOperation
 {
+  /// Equality.
   Equal,
+  /// Inequality.
   NotEqual,
+  /// Less-than.
   Less,
+  /// Less-than-or-equal.
   LessEqual,
+  /// Greater-than.
   Greater,
+  /// Greater-than-or-equal.
   GreaterEqual,
 }
 
+/// UTF-32 string comparison.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StrComparisonOperation
 {
+  /// Equality.
   Equal,
+  /// Inequality.
   NotEqual,
 }
 
 impl StrComparisonOperation
 {
   #[must_use]
-  pub const fn text_stem(self) -> &'static str
+  pub(crate) const fn text_stem(self) -> &'static str
   {
     match self
     {
@@ -191,7 +245,7 @@ impl StrComparisonOperation
   }
 
   #[must_use]
-  pub fn parse_text_stem(name: &str) -> Option<Self>
+  pub(crate) fn parse_text_stem(name: &str) -> Option<Self>
   {
     match name
     {
@@ -205,7 +259,7 @@ impl StrComparisonOperation
 impl FloatBinaryOperation
 {
   #[must_use]
-  pub const fn text_stem(self) -> &'static str
+  pub(crate) const fn text_stem(self) -> &'static str
   {
     match self
     {
@@ -218,7 +272,7 @@ impl FloatBinaryOperation
   }
 
   #[must_use]
-  pub fn parse_text_stem(name: &str) -> Option<Self>
+  pub(crate) fn parse_text_stem(name: &str) -> Option<Self>
   {
     Some(match name
     {
@@ -235,7 +289,7 @@ impl FloatBinaryOperation
 impl FloatComparisonOperation
 {
   #[must_use]
-  pub const fn text_stem(self) -> &'static str
+  pub(crate) const fn text_stem(self) -> &'static str
   {
     match self
     {
@@ -249,7 +303,7 @@ impl FloatComparisonOperation
   }
 
   #[must_use]
-  pub fn parse_text_stem(name: &str) -> Option<Self>
+  pub(crate) fn parse_text_stem(name: &str) -> Option<Self>
   {
     Some(match name
     {
@@ -267,7 +321,7 @@ impl FloatComparisonOperation
 impl I64ComparisonOperation
 {
   #[must_use]
-  pub const fn text_name(self) -> &'static str
+  pub(crate) const fn text_name(self) -> &'static str
   {
     match self
     {
@@ -279,7 +333,7 @@ impl I64ComparisonOperation
   }
 
   #[must_use]
-  pub fn parse_text(name: &str) -> Option<Self>
+  pub(crate) fn parse_text(name: &str) -> Option<Self>
   {
     Some(match name
     {
@@ -295,7 +349,7 @@ impl I64ComparisonOperation
 impl I32BinaryOperation
 {
   #[must_use]
-  pub const fn text_name(self) -> &'static str
+  pub(crate) const fn text_name(self) -> &'static str
   {
     match self
     {
@@ -310,7 +364,7 @@ impl I32BinaryOperation
   }
 
   #[must_use]
-  pub fn parse_text(name: &str) -> Option<Self>
+  pub(crate) fn parse_text(name: &str) -> Option<Self>
   {
     Some(match name
     {
@@ -330,13 +384,13 @@ use super::{BlockId, Function, Instruction, Type, Value, ValueId};
 
 impl Function
 {
-  pub fn binary_integer(&mut self,
-                        block: BlockId,
-                        operation: IntegerBinaryOperation,
-                        value_type: Type,
-                        left: ValueId,
-                        right: ValueId)
-                        -> Option<ValueId>
+  pub(crate) fn binary_integer(&mut self,
+                               block: BlockId,
+                               operation: IntegerBinaryOperation,
+                               value_type: Type,
+                               left: ValueId,
+                               right: ValueId)
+                               -> Option<ValueId>
   {
     self.block(block)?;
     if !value_type.is_integer() ||
@@ -366,13 +420,13 @@ impl Function
     Some(result)
   }
 
-  pub fn binary_float(&mut self,
-                      block: BlockId,
-                      operation: FloatBinaryOperation,
-                      value_type: Type,
-                      left: ValueId,
-                      right: ValueId)
-                      -> Option<ValueId>
+  pub(crate) fn binary_float(&mut self,
+                             block: BlockId,
+                             operation: FloatBinaryOperation,
+                             value_type: Type,
+                             left: ValueId,
+                             right: ValueId)
+                             -> Option<ValueId>
   {
     self.add_float_operation(block, value_type, value_type, left, right, |result| {
           Instruction::BinaryFloat { operation,
@@ -383,13 +437,13 @@ impl Function
         })
   }
 
-  pub fn compare_float(&mut self,
-                       block: BlockId,
-                       operation: FloatComparisonOperation,
-                       value_type: Type,
-                       left: ValueId,
-                       right: ValueId)
-                       -> Option<ValueId>
+  pub(crate) fn compare_float(&mut self,
+                              block: BlockId,
+                              operation: FloatComparisonOperation,
+                              value_type: Type,
+                              left: ValueId,
+                              right: ValueId)
+                              -> Option<ValueId>
   {
     self.add_float_operation(block, value_type, Type::BOOL, left, right, |result| {
           Instruction::CompareFloat { operation,
@@ -400,12 +454,12 @@ impl Function
         })
   }
 
-  pub fn compare_str(&mut self,
-                     block: BlockId,
-                     operation: StrComparisonOperation,
-                     left: ValueId,
-                     right: ValueId)
-                     -> Option<ValueId>
+  pub(crate) fn compare_str(&mut self,
+                            block: BlockId,
+                            operation: StrComparisonOperation,
+                            left: ValueId,
+                            right: ValueId)
+                            -> Option<ValueId>
   {
     self.block(block)?;
     if !self.value(left).is_some_and(|value| value.value_type == Type::STR) ||
@@ -448,12 +502,12 @@ impl Function
     Some(result)
   }
 
-  pub fn binary_i64(&mut self,
-                    block: BlockId,
-                    operation: I64BinaryOperation,
-                    left: ValueId,
-                    right: ValueId)
-                    -> Option<ValueId>
+  pub(crate) fn binary_i64(&mut self,
+                           block: BlockId,
+                           operation: I64BinaryOperation,
+                           left: ValueId,
+                           right: ValueId)
+                           -> Option<ValueId>
   {
     self.add_i64_operation(block,
                            left,
@@ -465,12 +519,12 @@ impl Function
                                                              right })
   }
 
-  pub fn compare_i64(&mut self,
-                     block: BlockId,
-                     operation: I64ComparisonOperation,
-                     left: ValueId,
-                     right: ValueId)
-                     -> Option<ValueId>
+  pub(crate) fn compare_i64(&mut self,
+                            block: BlockId,
+                            operation: I64ComparisonOperation,
+                            left: ValueId,
+                            right: ValueId)
+                            -> Option<ValueId>
   {
     self.add_i64_operation(block,
                            left,
@@ -503,7 +557,7 @@ impl Function
     Some(result)
   }
 
-  pub fn not_bool(&mut self, block: BlockId, operand: ValueId) -> Option<ValueId>
+  pub(crate) fn not_bool(&mut self, block: BlockId, operand: ValueId) -> Option<ValueId>
   {
     self.block(block)?;
     if !self.value(operand).is_some_and(|value| value.value_type == Type::BOOL)

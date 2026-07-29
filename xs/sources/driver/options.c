@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -64,8 +64,6 @@ void xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsCompilerSett
     settings->warnings_as_errors = options->compiler.warnings_as_errors;
   if(options->verbose_override)
     settings->verbose = options->compiler.verbose;
-  if(options->xgc_override)
-    settings->xgc_enabled = options->compiler.xgc_enabled;
 }
 
 const char *xs_cli_output_extension(XsBuildOutput output)
@@ -179,12 +177,6 @@ bool xs_cli_parse(int argc, char **argv, XsCliOptions *options)
         return false;
       options->verbose_override = true;
     }
-    else if(strcmp(argv[i], "--xgc-enabled") == 0)
-    {
-      if(++i >= argc || options->xgc_override || !parse_bool(argv[i], &options->compiler.xgc_enabled))
-        return false;
-      options->xgc_override = true;
-    }
     else if(!parse_output_flag(argv[i], options))
     {
       return false;
@@ -211,7 +203,6 @@ void xs_cli_print_usage(FILE *stream)
   fprintf(stream, "usage: xs resolve\n");
   fprintf(stream, "usage: xs <check|build|run|test> [--output hir|mir|xlil] [--module <directory>]\n");
   fprintf(stream, "       [--warning all|medium|low|none] [--werror true|false] [--verbose true|false]\n");
-  fprintf(stream, "       [--xgc-enabled true|false]\n");
   fprintf(stream, "usage: xs <build|run> -file <Main.xs>\n");
   fprintf(stream, "usage: xs test [-file <Test.xs>]\n");
   fprintf(stream, "usage: xs build [--output hir|mir|xlil] -file <input>\n");

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -8,10 +8,11 @@
 #include <string.h>
 
 static const XsHirPrimitiveInfo primitive_types[] = {
-    {.name = "Str", .kind = XS_HIR_PRIMITIVE_STR, .code_unit_bit_width = 16, .is_text = true},
+    {.name = "Str", .kind = XS_HIR_PRIMITIVE_STR, .code_unit_bit_width = 32, .is_text = true},
+    {.name = "String", .kind = XS_HIR_PRIMITIVE_STRING, .code_unit_bit_width = 32, .is_text = true},
     {.name = "Bool",
      .kind = XS_HIR_PRIMITIVE_BOOL,
-     .bit_width = 1,
+     .bit_width = 8,
      .is_integer = true,
      .has_xlil_type = true,
      .xlil_type = {.kind = XS_LIL_TYPE_BOOL}},
@@ -30,10 +31,10 @@ static const XsHirPrimitiveInfo primitive_types[] = {
      .xlil_type = {.kind = XS_LIL_TYPE_I8}},
     {.name = "Char",
      .kind = XS_HIR_PRIMITIVE_CHAR,
-     .bit_width = 16,
+     .bit_width = 32,
      .is_integer = true,
      .has_xlil_type = true,
-     .xlil_type = {.kind = XS_LIL_TYPE_U16}},
+     .xlil_type = {.kind = XS_LIL_TYPE_U32}},
     {.name = "Short",
      .kind = XS_HIR_PRIMITIVE_SHORT,
      .bit_width = 16,
@@ -88,6 +89,12 @@ static const XsHirPrimitiveInfo primitive_types[] = {
      .xlil_type = {.kind = XS_LIL_TYPE_U128}},
     {.name = "SFloat",
      .kind = XS_HIR_PRIMITIVE_SFLOAT,
+     .bit_width = 16,
+     .is_float = true,
+     .has_xlil_type = true,
+     .xlil_type = {.kind = XS_LIL_TYPE_F16}},
+    {.name = "LFloat",
+     .kind = XS_HIR_PRIMITIVE_LFLOAT,
      .bit_width = 32,
      .is_float = true,
      .has_xlil_type = true,
@@ -98,6 +105,12 @@ static const XsHirPrimitiveInfo primitive_types[] = {
      .is_float = true,
      .has_xlil_type = true,
      .xlil_type = {.kind = XS_LIL_TYPE_F64}},
+    {.name = "Double",
+     .kind = XS_HIR_PRIMITIVE_DOUBLE,
+     .bit_width = 128,
+     .is_float = true,
+     .has_xlil_type = true,
+     .xlil_type = {.kind = XS_LIL_TYPE_F128}},
 };
 
 const XsHirPrimitiveInfo *xs_hir_primitive_find(const char *name, size_t length)

@@ -2,7 +2,7 @@
 .xlil module StringLiteral
 .func greeting : () -> str
 bb0.entry:
-  %r0:str = const.str utf16le [0x004c, 0x0065, 0x0069]
+  %r0:str = const.str utf32le [0x0000004c, 0x00000065, 0x00000069]
   ret %r0
 .end
 .func main : () -> i32

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -19,6 +19,22 @@ impl HirToMirLowerer
                             .and_then(|local| local.value_type);
     match (literal, value_type)
     {
+      (Literal::Integer(value), Some(XlilType { kind: TypeKind::Bool, .. })) =>
+      {
+        let Ok(value) = value.replace('\'', "").parse::<u128>()
+        else
+        {
+          self.report(DiagnosticCode::InvalidIntegerLiteral,
+                      "HIR integer literal is not valid in Bool context",
+                      span);
+          return;
+        };
+        self.current_block_mut(lowered)
+            .statements
+            .push(mir::Statement::ConstBool { local: target,
+                                              value: value != 0,
+                                              span });
+      }
       (Literal::Integer(value), Some(value_type)) if value_type.integer_width().is_some() =>
       {
         self.lower_integer_literal_into(target, value, value_type, span, lowered);
@@ -82,16 +98,16 @@ impl HirToMirLowerer
         self.current_block_mut(lowered)
             .statements
             .push(mir::Statement::ConstStr { local: target,
-                                             units: value.encode_utf16().collect(),
+                                             units: value.chars().map(u32::from).collect(),
                                              span });
       }
-      (Literal::Char(value), Some(XlilType { kind: TypeKind::U16, .. })) =>
+      (Literal::Char(value), Some(XlilType { kind: TypeKind::U32, .. })) =>
       {
         self.current_block_mut(lowered)
             .statements
-            .push(mir::Statement::ConstU16 { local: target,
-                                             value: *value,
-                                             span });
+            .push(mir::Statement::ConstInteger { local: target,
+                                                 value: mir::IntegerConstant::U32(*value),
+                                                 span });
       }
       (Literal::EnumVariant { enum_type,
                               variant,
@@ -137,13 +153,86 @@ impl HirToMirLowerer
                                               field_types: vec![XlilType::I32],
                                               span });
       }
-      (Literal::None, _) => self.report(DiagnosticCode::UnsupportedExpression,
-                                        "Optional None lowering is not implemented in MIR yet",
-                                        span),
+      (Literal::None, Some(value_type)) => self.lower_optional_none(target, value_type, span, lowered),
       _ => self.report(DiagnosticCode::UnsupportedExpression,
                        "HIR literal kind cannot lower to MIR yet",
                        span),
     }
+  }
+
+  fn lower_optional_none(&mut self,
+                         target: mir::LocalId,
+                         optional_type: XlilType,
+                         span: Span,
+                         lowered: &mut mir::Function)
+  {
+    let Some((_, element_type)) = self.optional_layouts
+                                      .iter()
+                                      .find(|(value_type, _)| *value_type == optional_type)
+                                      .copied()
+    else
+    {
+      self.report(DiagnosticCode::UnsupportedType,
+                  "None target is not an Optional<T> MIR value",
+                  span);
+      return;
+    };
+    let Some(tag) = self.declare_temp(XlilType::BOOL, span, lowered)
+    else
+    {
+      return;
+    };
+    let Some(payload) = self.declare_temp(element_type, span, lowered)
+    else
+    {
+      return;
+    };
+    self.current_block_mut(lowered)
+        .statements
+        .push(mir::Statement::ConstBool { local: tag,
+                                          value: false,
+                                          span });
+    let default = if let Some(value) = mir::IntegerConstant::from_bits(element_type, 0)
+    {
+      Some(mir::Statement::ConstInteger { local: payload,
+                                          value,
+                                          span })
+    }
+    else
+    {
+      match element_type
+      {
+        XlilType::BOOL => Some(mir::Statement::ConstBool { local: payload,
+                                                           value: false,
+                                                           span }),
+        XlilType::F32 => Some(mir::Statement::ConstF32 { local: payload,
+                                                         bits: 0,
+                                                         span }),
+        XlilType::F64 => Some(mir::Statement::ConstF64 { local: payload,
+                                                         bits: 0,
+                                                         span }),
+        XlilType::STR => Some(mir::Statement::ConstStr { local: payload,
+                                                         units: Vec::new(),
+                                                         span }),
+        _ => None,
+      }
+    };
+    let Some(default) = default
+    else
+    {
+      self.report(DiagnosticCode::UnsupportedType,
+                  "Optional<T> None payload has no canonical zero value yet",
+                  span);
+      return;
+    };
+    self.current_block_mut(lowered).statements.push(default);
+    self.current_block_mut(lowered)
+        .statements
+        .push(mir::Statement::Aggregate { result: target,
+                                          value_type: optional_type,
+                                          fields: vec![tag, payload],
+                                          field_types: vec![XlilType::BOOL, element_type],
+                                          span });
   }
 
   pub(super) fn declare_local(&mut self,
@@ -239,6 +328,13 @@ impl HirToMirLowerer
                                                                                 span);
                                                                     None
                                                                   }),
+      Type::Primitive(PrimitiveType::Str) =>
+      {
+        self.report(DiagnosticCode::UnsupportedType,
+                    "Str is unsized; use an explicit &Str reference",
+                    span);
+        None
+      }
       Type::Primitive(primitive) => primitive_to_xlil(*primitive).or_else(|| {
                                                                    self.report(DiagnosticCode::UnsupportedType,
                                                                                "HIR primitive has no XLIL-backed MIR \
@@ -246,6 +342,29 @@ impl HirToMirLowerer
                                                                                span);
                                                                    None
                                                                  }),
+      Type::Reference { referent,
+                        mutable: false, }
+        if **referent == Type::Primitive(PrimitiveType::Str) =>
+      {
+        Some(XlilType::STR)
+      }
+      Type::Reference { .. } =>
+      {
+        self.report(DiagnosticCode::UnsupportedType,
+                    "this explicit HIR reference has no MIR value model yet",
+                    span);
+        None
+      }
+      Type::Optional { .. } => self.optional_types
+                                   .iter()
+                                   .find(|(source_type, _)| source_type == ty)
+                                   .map(|(_, value_type)| *value_type)
+                                   .or_else(|| {
+                                     self.report(DiagnosticCode::UnsupportedType,
+                                                 "Optional<T> has no MIR aggregate registry entry",
+                                                 span);
+                                     None
+                                   }),
       Type::Array { .. } => self.array_types
                                 .iter()
                                 .find(|(source_type, _)| source_type == ty)

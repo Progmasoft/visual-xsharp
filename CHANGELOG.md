@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
@@ -12,9 +12,19 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+## 0.2.3 - 2026-07-29
+
+- Moved the experimental managed-heap implementation out of `xslang` into the independent X Platform project, where it
+  continues as XPG. Removed the former XGC project switch and CLI override from the X# compiler.
+- Added LLVM-only Kotlin project controls for LTO and optimization level. PGO remains mandatory and ORC JIT remains
+  outside the LLVM backend contract.
+- Established the separate X Platform `0.0.1` foundation with language-neutral XPI v0, the `xpic` verifier and
+  canonicalizer, and a directly interoperable Swift/GNU++ XPG heap core.
 - Completed the public C23 XLIL v0 producer surface behind `<xs/lil.h>`. Third-party frontends can construct every
   implemented type, function, block, instruction, and terminator record; verify it; emit owned canonical text; parse it
   back; and inspect typed payloads without exchanging a C `FILE *` across their FFI boundary.
+- Added the official Rust `xslang::xlil` producer/reader surface. Its insertion-point `Builder`, public read-only model,
+  parser, verifier, and canonical writer provide the same target-independent XLIL v0 boundary without exposing LLVM.
 - Added the `XsLilBuilder` convenience layer, stable opaque function handles, packed C API version negotiation, public
   symbol visibility annotations, and an installed shared `xs_lil` library as the foundation for official FFI bindings.
 - Added the official Java 25 FFM binding with XLIL writer and reader packages plus the reusable
@@ -25,6 +35,8 @@ source-to-native executable pipeline.
 - Connected canonical `new Type(...)` data-constructor expressions to typed HIR, MIR aggregate values, XLIL, and LLVM.
   Constructor results can now be returned, projected, and passed directly through the scalarized native data-call ABI;
   the former constructor-shaped `Type(...)` call is rejected.
+- Integer literals now retain the default inferred `Int` type while accepting an explicit `Bool` context. Contextual
+  values are normalized with zero as false and every nonzero integer as true; the native Bool representation remains u8.
 
 ## 0.2.2 - 2026-07-26
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -78,8 +78,8 @@ fn lowers_named_tuple_construction_and_projection_through_xlil()
   assert_eq!(module.add_aggregate_type("tuple.0", vec![XlilType::I32, XlilType::I32]),
              Some(tuple_value_type));
   module.add_function(xlil);
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
-  let text = crate::xlil::writer::module_to_string(&module);
+  assert!(crate::xlil::verify_module(&module).is_empty());
+  let text = crate::xlil::module_to_string(&module);
   assert!(text.contains(":%t0 = aggregate "));
   assert!(text.contains(":i32 = extract "));
 }

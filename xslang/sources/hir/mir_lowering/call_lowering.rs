@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -77,6 +77,11 @@ impl HirToMirLowerer
     {
       return;
     };
+    if function == "Some" && arguments.len() == 1 && parameter_types.len() == 1
+    {
+      self.lower_optional_some(target, &arguments[0], &parameter_types[0], return_type, *span, lowered);
+      return;
+    }
     let Some(return_type) = self.lower_value_type(return_type, *span)
     else
     {
@@ -101,6 +106,60 @@ impl HirToMirLowerer
                                      arguments: lowered_arguments,
                                      return_type,
                                      span: *span });
+  }
+
+  fn lower_optional_some(&mut self,
+                         target: mir::LocalId,
+                         argument: &Expression,
+                         element: &Type,
+                         return_type: &Type,
+                         span: Span,
+                         lowered: &mut mir::Function)
+  {
+    if !return_type.is_optional()
+    {
+      self.report(DiagnosticCode::UnsupportedType, "Some must return Optional<T>", span);
+      return;
+    }
+    let Some(optional_type) = self.lower_value_type(return_type, span)
+    else
+    {
+      return;
+    };
+    let Some(element_type) = self.lower_value_type(element, span)
+    else
+    {
+      return;
+    };
+    if self.local_value_type(target, lowered) != Some(optional_type)
+    {
+      self.report(DiagnosticCode::UnsupportedType,
+                  "Optional<T> result does not match its target local",
+                  span);
+      return;
+    }
+    let Some(value) = self.lower_expression_to_local(argument, element_type, lowered)
+    else
+    {
+      return;
+    };
+    let Some(tag) = self.declare_temp(XlilType::BOOL, span, lowered)
+    else
+    {
+      return;
+    };
+    self.current_block_mut(lowered)
+        .statements
+        .push(mir::Statement::ConstBool { local: tag,
+                                          value: true,
+                                          span });
+    self.current_block_mut(lowered)
+        .statements
+        .push(mir::Statement::Aggregate { result: target,
+                                          value_type: optional_type,
+                                          fields: vec![tag, value],
+                                          field_types: vec![XlilType::BOOL, element_type],
+                                          span });
   }
 
   fn lower_call_arguments(&mut self,

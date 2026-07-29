@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
 // memory system:
@@ -13,8 +13,9 @@
 // - RAII
 // - Arena Allocation
 //
-// Garbage collection is not used in the default mode. The optional XGC mode
-// and its different cleanup guarantees are specified in GC.xs.
+// The current LLVM backend uses this ownership-oriented model. Managed memory
+// for the future XPLR target is an X Platform runtime concern rather than an
+// alternate X# source-language mode.
 //
 // All values are move-by-default.
 //
@@ -293,7 +294,7 @@ result: Str = a + b;
 // performance principles
 
 //
-// RAII mode has no garbage collection. XGC is an explicit whole-program mode.
+// The current LLVM mode has no garbage collection.
 //
 // No Hidden Allocation.
 //

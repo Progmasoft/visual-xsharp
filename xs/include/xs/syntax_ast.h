@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -187,6 +187,7 @@ enum
   XS_SYNTAX_FLAG_FOR_CONDITION = 1U << 28,
   XS_SYNTAX_FLAG_FOR_UPDATE = 1U << 29,
   XS_SYNTAX_FLAG_BLOCK_NAMESPACE = 1U << 30,
+  XS_SYNTAX_FLAG_OPTIONAL_TYPE = 1U << 31,
 };
 
 typedef struct XsSyntaxNode XsSyntaxNode;

@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
@@ -687,30 +687,13 @@ semantics.
 This stage does not yet produce complete statement/expression lowering, the full instruction set, async
 state machine generation, region/loan/move analysis, drop-point validation, or a comprehensive MIR optimization pass set.
 
-### XGC foundation
+### X Platform boundary
 
-- XGC is an optional, disabled-by-default whole-program policy represented inside the existing `xslang` crate.
-- Its target-independent model uses logical heap offsets and fixed 2 MiB regions across three physically separate
-  spaces. Young and Old share the Main Heap; the Large Object Heap (LOH) and Pinned Object Heap (POH) own independent
-  region directories and never exchange regions with the Main Heap or each other.
-- Young has a concurrent mark/copy plan, Old has concurrent SATB mark and selected-region relocation, LOH selects
-  fragmentation-heavy regions for concurrent compaction, and non-moving POH uses concurrent mark-sweep with coalescing
-  free lists. LOH's successful-cycle post-condition limits remaining fragmentation to five percent; failure to meet it
-  enters collector recovery. Moving plans require both read/load and write barriers.
-- Region metadata includes an object-start mark bitmap, a 512-byte-granularity card table, adaptive remembered sets,
-  live/garbage/allocation accounting, age, and validated lifecycle transitions.
-- Precise stack-map roots, thread-local SATB publication buffers, forwarding-table read barriers, card/remembered-set
-  write barriers, Old and LOH collection-set scoring, POH allocation/reuse, and saturating telemetry have independent
-  models and tests.
-- Failure recovery is ordered: an ordinary concurrent attempt is followed by one emergency concurrent retry, then by
-  stop-the-world recovery. A successful attempt resets the next cycle to ordinary concurrent mode.
-- The public Rust surface is `xslang::xgc::*`. XGC remains X#-first: an executable collector context requires an explicit
-  `XgcRuntimeBinding` that supplies target object layouts, precise reference tracing, and root rewriting. Third-party
-  runtimes may provide that binding; the model is not exposed as a standalone, metadata-free collector.
-- These structures allocate logical POH spans and define collection/barrier policy, but do not yet reserve native heap
-  pages or run collector threads. Compiler barrier and safepoint insertion, root scanning, physical copying/relocation,
-  and runtime/backend integration are later steps. Native `.xse` compilation continues to use the existing
-  ownership-oriented pipeline until XGC is connected end to end.
+- The former experimental XGC model no longer lives in `xslang`. Managed-heap work belongs to the independent X Platform
+  runtime as XPG.
+- XPI is a language-neutral register IL below language frontends. X# can lower `XLIL → XPI`; XPI itself does not inherit
+  X# nominal types, strings, ownership rules, or source semantics.
+- The current X# compiler remains on its ownership-oriented LLVM path. XPLR bytecode and XPJ are not implemented here.
 
 ### LLVM backend infrastructure
 

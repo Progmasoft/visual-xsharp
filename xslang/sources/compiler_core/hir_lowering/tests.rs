@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -69,10 +69,10 @@ fn canonicalizes_explicit_string_without_changing_literal_inference()
   nodes.push(syntax(IDENTIFIER, "String", Some(8), vec![]));
   nodes[6].flags = RETURN_TYPE;
   let module = lower_declarations(&SyntaxTree { root: 0,
-                                                nodes }).expect("String sugar signature");
-  let boxed = declarations::TypeRef::Named("Optional<Str>".to_string());
-  assert_eq!(module.functions[0].parameters[0].ty, boxed);
-  assert_eq!(module.functions[0].return_type, boxed);
+                                                nodes }).expect("owned String signature");
+  let owned = declarations::TypeRef::Primitive(PrimitiveType::String);
+  assert_eq!(module.functions[0].parameters[0].ty, owned);
+  assert_eq!(module.functions[0].return_type, owned);
   let inferred = crate::hir::inference::resolve_binding(
     &crate::hir::inference::Binding {
       name: "inferred".to_string(),
@@ -85,11 +85,13 @@ fn canonicalizes_explicit_string_without_changing_literal_inference()
     },
     &[],
   ).expect("string literal inference");
-  assert_eq!(inferred.ty, Type::Primitive(PrimitiveType::Str));
+  assert_eq!(inferred.ty, Type::Reference { referent:
+                                              Box::new(Type::Primitive(PrimitiveType::Str)),
+                                            mutable: false });
 }
 
 #[test]
-fn imports_inferred_str_and_desugars_explicit_string_initializer()
+fn preserves_borrowed_str_and_rejects_implicit_owned_string_construction()
 {
   let mut nodes = vec![syntax(FILE, "", None, vec![1]),
                        syntax(DECL_FUNCTION, "fn names()", Some(0), vec![2, 3]),
@@ -120,37 +122,37 @@ fn imports_inferred_str_and_desugars_explicit_string_initializer()
   {
     panic!("inferred string literal should stay a borrowed Str");
   };
-  assert_eq!(borrowed.ty, Type::Primitive(PrimitiveType::Str));
-  let Statement::Let { local: boxed,
+  assert_eq!(borrowed.ty, Type::Reference { referent:
+                                              Box::new(Type::Primitive(PrimitiveType::Str)),
+                                            mutable: false });
+  let Statement::Let { local: owned,
                        initializer:
-                         Some(Expression::Call { function,
-                                                 return_type,
-                                                 .. }), } = &body[1]
+                         Some(Expression::Literal { literal: Literal::String(_),
+                                                    .. }), } = &body[1]
   else
   {
-    panic!("explicit String should desugar to Some(Str)");
+    panic!("String must stay an owned type without Optional/Some desugaring");
   };
-  assert_eq!(boxed.ty, Type::Named("Optional<Str>".to_string()));
-  assert_eq!(function, "Some");
-  assert_eq!(return_type.as_ref(), &boxed.ty);
+  assert_eq!(owned.ty, Type::Primitive(PrimitiveType::String));
   let checked = module.functions[0].as_type_checked_input()
                                    .expect("checked string body");
-  assert!(crate::hir::type_check::TypeChecker::new().check_function(&checked)
-                                                    .is_empty());
+  let diagnostics = crate::hir::type_check::TypeChecker::new().check_function(&checked);
+  assert_eq!(diagnostics.len(), 1);
+  assert_eq!(diagnostics[0].code,
+             crate::hir::type_check::DiagnosticCode::LiteralTypeMismatch);
   let xhir = crate::hir::text::function_to_xhir(&checked);
-  assert!(xhir.contains("type Optional<Str>"));
-  assert!(!xhir.contains("type String\n"));
+  assert!(xhir.contains("type &Str"));
+  assert!(xhir.contains("type String"));
   let parsed = crate::hir::text::parse_xhir_function(&xhir).expect("canonical String XHIR");
-  let Statement::Let { local: parsed_boxed,
+  let Statement::Let { local: parsed_owned,
                        initializer:
-                         Some(Expression::Call { return_type: parsed_return,
-                                                 .. }), } = &parsed.body[1]
+                         Some(Expression::Literal { literal: Literal::String(_),
+                                                    .. }), } = &parsed.body[1]
   else
   {
-    panic!("canonical XHIR should retain boxed String desugaring");
+    panic!("canonical XHIR should retain owned String without implicit conversion");
   };
-  assert_eq!(parsed_boxed.ty, Type::Named("Optional<Str>".to_string()));
-  assert_eq!(parsed_return.as_ref(), &parsed_boxed.ty);
+  assert_eq!(parsed_owned.ty, Type::Primitive(PrimitiveType::String));
 }
 
 #[test]
@@ -252,7 +254,7 @@ fn preserves_canonical_builtin_collection_types()
                                               Box::new(declarations::TypeRef::Primitive(PrimitiveType::Long)),
                                             length: Some(4) });
   assert_eq!(lower_type(&map, &map.nodes[0]),
-             declarations::TypeRef::Map { key: Box::new(declarations::TypeRef::Named("Optional<Str>".to_string())),
+             declarations::TypeRef::Map { key: Box::new(declarations::TypeRef::Primitive(PrimitiveType::String)),
                                           value:
                                             Box::new(declarations::TypeRef::Named("Optional<Int>".to_string())) });
 }

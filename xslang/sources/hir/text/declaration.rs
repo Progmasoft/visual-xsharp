@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -245,6 +245,10 @@ fn checked_to_ref(ty: Type) -> Option<TypeRef>
     Type::Unit => TypeRef::Unit,
     Type::Primitive(value) => TypeRef::Primitive(value),
     Type::Named(value) => TypeRef::Named(value),
+    Type::Optional { element } => TypeRef::Optional { element: Box::new(checked_to_ref(*element)?) },
+    Type::Reference { referent,
+                      mutable, } => TypeRef::Reference { referent: Box::new(checked_to_ref(*referent)?),
+                                                         mutable },
     Type::Array { element,
                   length, } => TypeRef::Array { element: Box::new(checked_to_ref(*element)?),
                                                 length },

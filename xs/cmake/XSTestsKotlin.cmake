@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 add_test(NAME kotlin_project_resolve COMMAND xs resolve)
@@ -17,7 +17,7 @@ set_tests_properties(kotlin_project_call_build PROPERTIES TIMEOUT 60
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call"
   ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
   FIXTURES_REQUIRED kotlin_project_resolver FIXTURES_SETUP kotlin_project_call_native
-  PASS_REGULAR_EXPRESSION "xgc=true")
+  PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME kotlin_project_call_artifacts COMMAND xs_xse_artifact_tests
   ${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/sources/main.ll
   ${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/sources/main.o
@@ -38,7 +38,7 @@ add_test(NAME kotlin_project_recursive_artifacts COMMAND xs_xse_artifact_tests
   ${XS_PROJECT_NATIVE_FIXTURE_DIR}/recursive/sources/main.ll
   ${XS_PROJECT_NATIVE_FIXTURE_DIR}/recursive/sources/main.o
   ${XS_PROJECT_NATIVE_FIXTURE_DIR}/recursive/sources/main.xse 7
-  "call i1 @is_even" "call i1 @is_odd")
+  "call i8 @is_even" "call i8 @is_odd")
 set_tests_properties(kotlin_project_recursive_artifacts PROPERTIES
   TIMEOUT 5 FIXTURES_REQUIRED kotlin_project_recursive)
 add_test(NAME kotlin_project_generic_functions_build COMMAND xs build)

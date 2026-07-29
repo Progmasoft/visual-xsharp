@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -33,11 +33,13 @@ mod program;
 mod signature;
 mod syntax_helpers;
 mod tuple;
+mod type_lowering;
 mod unary;
 use call::{CallSignature, LoweringContext};
 use expression_type::expression_type;
 use syntax_helpers::primitive;
 use syntax_helpers::{first_child_kind, path_text};
+use type_lowering::lower_type;
 
 const FILE: u32 = 0;
 const DECL_MODULE: u32 = 1;
@@ -56,8 +58,11 @@ const GENERIC_PARAMETER: u32 = 22;
 const IDENTIFIER: u32 = 24;
 const PATH: u32 = 25;
 const TYPE_NAMED: u32 = 27;
+const TYPE_GENERIC: u32 = 28;
 const TYPE_ARRAY: u32 = 29;
 const TYPE_FIXED_ARRAY: u32 = 30;
+const TYPE_REFERENCE: u32 = 32;
+const TYPE_MUTABLE_REFERENCE: u32 = 33;
 const TYPE_TUPLE: u32 = 34;
 const TYPE_UNIT: u32 = 36;
 const STMT_BLOCK: u32 = 38;
@@ -150,6 +155,7 @@ const PREFIX_UPDATE: u32 = 1 << 26;
 const FOR_INITIALIZER: u32 = 1 << 27;
 const FOR_CONDITION: u32 = 1 << 28;
 const FOR_UPDATE: u32 = 1 << 29;
+const OPTIONAL_TYPE: u32 = 1 << 31;
 
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum LoweringError
@@ -180,68 +186,6 @@ fn node(tree: &SyntaxTree, index: usize) -> Result<&SyntaxNode, LoweringError>
   tree.nodes.get(index).ok_or(LoweringError::InvalidRoot)
 }
 
-fn lower_type(tree: &SyntaxTree, value: &SyntaxNode) -> declarations::TypeRef
-{
-  if value.kind == TYPE_UNIT
-  {
-    return declarations::TypeRef::Unit;
-  }
-  if value.kind == TYPE_NAMED
-  {
-    let name = path_text(tree, value);
-    if name == "String"
-    {
-      return declarations::TypeRef::Named("Optional<Str>".to_string());
-    }
-    if let Some(primitive) = primitive(&name)
-    {
-      return declarations::TypeRef::Primitive(primitive);
-    }
-    return declarations::TypeRef::Named(name);
-  }
-  if value.kind == TYPE_ARRAY
-  {
-    let element = value.children
-                       .first()
-                       .and_then(|index| tree.nodes.get(*index))
-                       .map(|element| lower_type(tree, element))
-                       .unwrap_or_else(|| declarations::TypeRef::Named(String::new()));
-    return declarations::TypeRef::Array { element: Box::new(element),
-                                          length: None };
-  }
-  if value.kind == TYPE_FIXED_ARRAY
-  {
-    let element = value.children
-                       .first()
-                       .and_then(|index| tree.nodes.get(*index))
-                       .map(|element| lower_type(tree, element))
-                       .unwrap_or_else(|| declarations::TypeRef::Named(String::new()));
-    let length = value.children
-                      .get(1)
-                      .and_then(|index| tree.nodes.get(*index))
-                      .and_then(|length| length.text.replace('\'', "").parse::<u64>().ok());
-    return declarations::TypeRef::Array { element: Box::new(element),
-                                          length };
-  }
-  if value.kind == TYPE_MAP
-  {
-    let mut children = value.children.iter().filter_map(|index| tree.nodes.get(*index));
-    let key = children.next()
-                      .map(|key| lower_type(tree, key))
-                      .unwrap_or_else(|| declarations::TypeRef::Named(String::new()));
-    let mapped = children.next()
-                         .map(|mapped| lower_type(tree, mapped))
-                         .unwrap_or_else(|| declarations::TypeRef::Named(String::new()));
-    return declarations::TypeRef::Map { key: Box::new(key),
-                                        value: Box::new(mapped) };
-  }
-  if value.kind == TYPE_TUPLE
-  {
-    return tuple::lower_tuple_type(tree, value);
-  }
-  declarations::TypeRef::Named(value.text.clone())
-}
-
 fn checked_type(value: &declarations::TypeRef) -> Option<crate::hir::type_check::Type>
 {
   declarations::type_ref_to_checked(value)
@@ -262,6 +206,22 @@ fn lower_expression(tree: &SyntaxTree,
                     -> Option<Expression>
 {
   let source_span = span(value)?;
+  if let Some(optional_type) = expected_type.filter(|ty| ty.is_optional()) &&
+     !matches!(value.text.as_str(), "nil" | "None") &&
+     !(value.kind == EXPR_CALL &&
+       value.children
+            .first()
+            .and_then(|index| tree.nodes.get(*index))
+            .is_some_and(|callee| path_text(tree, callee) == "Some"))
+  {
+    let element = optional_type.optional_element()?;
+    let argument = lower_expression(tree, value, context, locals, Some(element))?;
+    return Some(Expression::Call { function: "Some".to_string(),
+                                   arguments: vec![argument],
+                                   parameter_types: vec![element.clone()],
+                                   return_type: Box::new(optional_type.clone()),
+                                   span: source_span });
+  }
   match value.kind
   {
     kind if collection::is_expression(kind) =>
@@ -278,24 +238,15 @@ fn lower_expression(tree: &SyntaxTree,
                                                                                   span: source_span }),
     EXPR_LITERAL if value.token_kind == TOKEN_STRING =>
     {
-      let literal = Expression::Literal { literal: Literal::String(value.text.trim_matches('"').to_string()),
-                                          span: source_span };
-      if expected_type.is_some_and(Type::is_boxed_optional_str)
-      {
-        return Some(Expression::Call { function: "Some".to_string(),
-                                       arguments: vec![literal],
-                                       parameter_types: vec![Type::Primitive(PrimitiveType::Str)],
-                                       return_type: Box::new(Type::Named("Optional<Str>".to_string())),
-                                       span: source_span });
-      }
-      Some(literal)
+      Some(Expression::Literal { literal: Literal::String(value.text.trim_matches('"').to_string()),
+                                 span: source_span })
     }
     EXPR_LITERAL if value.token_kind == TOKEN_CHARACTER =>
     {
       Some(Expression::Literal { literal: Literal::Char(crate::text::decode_character(&value.text)?),
                                  span: source_span })
     }
-    EXPR_LITERAL if value.text == "None" && expected_type.is_some_and(Type::is_boxed_optional_str) =>
+    EXPR_LITERAL if matches!(value.text.as_str(), "nil" | "None") && expected_type.is_some_and(Type::is_optional) =>
     {
       Some(Expression::Literal { literal: Literal::None,
                                  span: source_span })
@@ -303,6 +254,11 @@ fn lower_expression(tree: &SyntaxTree,
     EXPR_LITERAL if value.text == "true" || value.text == "false" =>
     {
       Some(Expression::Literal { literal: Literal::Bool(value.text == "true"),
+                                 span: source_span })
+    }
+    EXPR_IDENTIFIER if matches!(value.text.as_str(), "nil" | "None") && expected_type.is_some_and(Type::is_optional) =>
+    {
+      Some(Expression::Literal { literal: Literal::None,
                                  span: source_span })
     }
     EXPR_IDENTIFIER => nominal::enum_variant_literal(tree, value, context, source_span)
@@ -466,17 +422,19 @@ fn lower_expression(tree: &SyntaxTree,
       {
         generic::call_use(tree, callee)?.name
       };
-      if function == "Some" && expected_type.is_some_and(Type::is_boxed_optional_str) && value.children.len() == 2
+      if function == "Some" && expected_type.is_some_and(Type::is_optional) && value.children.len() == 2
       {
+        let optional_type = expected_type?;
+        let element = optional_type.optional_element()?;
         let argument = lower_expression(tree,
                                         tree.nodes.get(value.children[1])?,
                                         context,
                                         locals,
-                                        Some(&Type::Primitive(PrimitiveType::Str)))?;
+                                        Some(element))?;
         return Some(Expression::Call { function,
                                        arguments: vec![argument],
-                                       parameter_types: vec![Type::Primitive(PrimitiveType::Str)],
-                                       return_type: Box::new(Type::Named("Optional<Str>".to_string())),
+                                       parameter_types: vec![element.clone()],
+                                       return_type: Box::new(optional_type.clone()),
                                        span: source_span });
       }
       let signature = if callee.kind == EXPR_GENERIC_QUALIFIER

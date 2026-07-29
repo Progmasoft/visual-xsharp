@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -26,7 +26,10 @@ typedef enum
   XS_HIR_PRIMITIVE_UINT,
   XS_HIR_PRIMITIVE_UINTEGER,
   XS_HIR_PRIMITIVE_SFLOAT,
+  XS_HIR_PRIMITIVE_LFLOAT,
   XS_HIR_PRIMITIVE_FLOAT,
+  XS_HIR_PRIMITIVE_DOUBLE,
+  XS_HIR_PRIMITIVE_STRING,
 } XsHirPrimitiveKind;
 
 typedef struct

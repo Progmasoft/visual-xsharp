@@ -1,7 +1,7 @@
-// SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-fn single_value() -> SFloat {
+fn single_value() -> LFloat {
   return 1.5;
 }
 

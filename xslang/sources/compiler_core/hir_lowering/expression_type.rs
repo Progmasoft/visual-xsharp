@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -18,7 +18,12 @@ pub(super) fn expression_type(tree: &SyntaxTree,
     EXPR_LITERAL if value.token_kind == TOKEN_INTEGER => Some(Type::Primitive(PrimitiveType::Int)),
     EXPR_LITERAL if value.token_kind == TOKEN_FLOAT => Some(Type::Primitive(PrimitiveType::Float)),
     EXPR_LITERAL if value.token_kind == TOKEN_CHARACTER => Some(Type::Primitive(PrimitiveType::Char)),
-    EXPR_LITERAL if value.token_kind == TOKEN_STRING => Some(Type::Primitive(PrimitiveType::Str)),
+    EXPR_LITERAL if value.token_kind == TOKEN_STRING =>
+    {
+      Some(Type::Reference { referent: Box::new(Type::Primitive(PrimitiveType::Str)),
+                             mutable: false })
+    }
+    EXPR_IDENTIFIER if value.text == "nil" => None,
     EXPR_IDENTIFIER =>
     {
       nominal::enum_variant_type(tree, value, context).or_else(|| locals.get(&path_text(tree, value)).cloned())

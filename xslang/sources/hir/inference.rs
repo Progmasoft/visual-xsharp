@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -219,19 +219,29 @@ fn infer_binary_expression_type(operator: BinaryOperator,
       Some(Type::Primitive(primitive))
     }
     BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mul | BinaryOperator::Div | BinaryOperator::Rem
-      if matches!(primitive, PrimitiveType::SFloat | PrimitiveType::Float) =>
+      if matches!(primitive,
+                  PrimitiveType::SFloat | PrimitiveType::LFloat | PrimitiveType::Float | PrimitiveType::Double) =>
     {
       Some(Type::Primitive(primitive))
     }
     BinaryOperator::Equal | BinaryOperator::NotEqual
       if matches!(primitive,
-                  PrimitiveType::Long | PrimitiveType::Int | PrimitiveType::SFloat | PrimitiveType::Float) =>
+                  PrimitiveType::Long |
+                  PrimitiveType::Int |
+                  PrimitiveType::SFloat |
+                  PrimitiveType::LFloat |
+                  PrimitiveType::Float |
+                  PrimitiveType::Double) =>
     {
       Some(Type::Primitive(PrimitiveType::Bool))
     }
     BinaryOperator::Less | BinaryOperator::LessEqual | BinaryOperator::Greater | BinaryOperator::GreaterEqual
       if matches!(primitive,
-                  PrimitiveType::Long | PrimitiveType::SFloat | PrimitiveType::Float) =>
+                  PrimitiveType::Long |
+                  PrimitiveType::SFloat |
+                  PrimitiveType::LFloat |
+                  PrimitiveType::Float |
+                  PrimitiveType::Double) =>
     {
       Some(Type::Primitive(PrimitiveType::Bool))
     }
@@ -241,13 +251,18 @@ fn infer_binary_expression_type(operator: BinaryOperator,
 
 fn infer_literal_type(literal: &Literal) -> Option<Type>
 {
+  if matches!(literal, Literal::String(_))
+  {
+    return Some(Type::Reference { referent: Box::new(Type::Primitive(PrimitiveType::Str)),
+                                  mutable: false });
+  }
   let primitive = match literal
   {
     Literal::Bool(_) => PrimitiveType::Bool,
     Literal::Integer(_) => PrimitiveType::Int,
     Literal::Float(_) => PrimitiveType::Float,
     Literal::Char(_) => PrimitiveType::Char,
-    Literal::String(_) => PrimitiveType::Str,
+    Literal::String(_) => unreachable!("string literals are handled as &Str"),
     Literal::None => return None,
     Literal::EnumVariant { enum_type, .. } => return Some(Type::Named(enum_type.clone())),
   };
@@ -256,7 +271,12 @@ fn infer_literal_type(literal: &Literal) -> Option<Type>
 
 fn is_optional_type(ty: &Type) -> bool
 {
-  matches!(ty, Type::Named(name) if name == "Optional" || name.starts_with("Optional<"))
+  match ty
+  {
+    Type::Optional { .. } => true,
+    Type::Named(name) => name == "Optional" || name.starts_with("Optional<"),
+    _ => false,
+  }
 }
 
 fn diagnostic(code: DiagnosticCode, message: impl Into<String>, span: Span) -> Diagnostic
@@ -301,12 +321,13 @@ mod tests
     assert_eq!(resolve_binding(&inferred(Literal::Float("3.14".to_string())), &[]).unwrap()
                                                                                   .ty,
                Type::Primitive(PrimitiveType::Float));
-    assert_eq!(resolve_binding(&inferred(Literal::Char(u16::from(b'A'))), &[]).unwrap()
+    assert_eq!(resolve_binding(&inferred(Literal::Char(u32::from(b'A'))), &[]).unwrap()
                                                                               .ty,
                Type::Primitive(PrimitiveType::Char));
     assert_eq!(resolve_binding(&inferred(Literal::String("A".to_string())), &[]).unwrap()
                                                                                 .ty,
-               Type::Primitive(PrimitiveType::Str));
+               Type::Reference { referent: Box::new(Type::Primitive(PrimitiveType::Str)),
+                                 mutable: false });
   }
 
   #[test]

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 function(xs_add_c_test test_name source_file library_name)
@@ -53,12 +53,9 @@ set_tests_properties(compiler_test_file PROPERTIES TIMEOUT 5
   PASS_REGULAR_EXPRESSION "test result: ok. 1 passed; 0 failed; 1 ignored")
 add_test(NAME compiler_check_file_verbose COMMAND xs check -file
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs
-  --warning all --werror true --verbose true --xgc-enabled true)
+  --warning all --werror true --verbose true)
 set_tests_properties(compiler_check_file_verbose PROPERTIES TIMEOUT 5
-  PASS_REGULAR_EXPRESSION "verbose: command=check.*warning=all.*werror=true.*xgc=true")
-add_test(NAME compiler_rejects_invalid_xgc COMMAND xs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs --xgc-enabled maybe)
-set_tests_properties(compiler_rejects_invalid_xgc PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
+  PASS_REGULAR_EXPRESSION "verbose: command=check.*warning=all.*werror=true")
 add_test(NAME compiler_rejects_invalid_warning COMMAND xs check -file
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs --warning invalid)
 set_tests_properties(compiler_rejects_invalid_warning PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)

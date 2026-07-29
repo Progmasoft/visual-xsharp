@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -379,7 +379,10 @@ fn default_element(element: &Type, span: Span) -> Option<Expression>
                     PrimitiveType::ULong |
                     PrimitiveType::UInt |
                     PrimitiveType::UInteger) => Literal::Integer("0".to_string()),
-    Type::Primitive(PrimitiveType::SFloat | PrimitiveType::Float) => Literal::Float("0.0".to_string()),
+    Type::Primitive(PrimitiveType::SFloat | PrimitiveType::LFloat | PrimitiveType::Float | PrimitiveType::Double) =>
+    {
+      Literal::Float("0.0".to_string())
+    }
     Type::Primitive(PrimitiveType::Char) => Literal::Char(0),
     _ => return None,
   };

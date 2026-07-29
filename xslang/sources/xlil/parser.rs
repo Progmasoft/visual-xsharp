@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -12,6 +12,7 @@ mod aggregate;
 mod aggregate_instruction;
 mod array;
 mod control;
+mod diagnostic;
 mod float;
 mod header;
 mod i64;
@@ -19,31 +20,9 @@ mod integer_operation;
 mod scalar;
 mod string;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DiagnosticCode
-{
-  EmptyInput,
-  InvalidModuleHeader,
-  InvalidVersionHeader,
-  InvalidFunctionRecord,
-  InvalidSignature,
-  InvalidType,
-  InvalidBlockRecord,
-  InvalidInstruction,
-  InvalidTerminator,
-  InvalidValueId,
-  InvalidInteger,
-  UnexpectedEndOfInput,
-}
+pub use diagnostic::{Diagnostic, DiagnosticCode};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Diagnostic
-{
-  pub code: DiagnosticCode,
-  pub line: usize,
-  pub message: String,
-}
-
+/// Parses a complete human-readable XLIL module.
 pub fn parse_module(text: &str) -> Result<Module, Vec<Diagnostic>>
 {
   let mut parser = Parser { lines: text.lines().collect(),

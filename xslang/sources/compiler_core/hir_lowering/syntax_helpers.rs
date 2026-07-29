@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -22,8 +22,11 @@ pub(super) fn primitive(name: &str) -> Option<PrimitiveType>
     "UInt" => PrimitiveType::UInt,
     "UInteger" => PrimitiveType::UInteger,
     "SFloat" => PrimitiveType::SFloat,
+    "LFloat" => PrimitiveType::LFloat,
     "Float" => PrimitiveType::Float,
+    "Double" => PrimitiveType::Double,
     "Str" => PrimitiveType::Str,
+    "String" => PrimitiveType::String,
     _ => return None,
   })
 }

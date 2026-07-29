@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
@@ -50,7 +50,7 @@ Fixed-array constant indices lower to LLVM aggregate extraction. Calculated `Int
 array storage and `getelementptr`; generated control flow checks both index bounds and traps on an invalid index before any
 element load or store. Runtime-sized `[T]` arrays lower as an element pointer plus an `i64` count. Their construction,
 checked reads/writes, `count`, same-module calls, and `for` iteration now reach native `.xse` output. This first storage
-slice uses hosted allocation; ownership, reclamation, and integration with XGC remain later runtime work.
+slice uses hosted allocation; ownership and reclamation remain later runtime work.
 Native objects use position-independent relocation so the view can safely refer to that static data from a PIE `.xse`.
 
 `Optional<Str>` is the canonical boxed, owned optional-string type. Its allocator, ownership, discriminant, and runtime

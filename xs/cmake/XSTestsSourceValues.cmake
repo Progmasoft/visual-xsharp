@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 set(XS_SOURCE_NATIVE_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/source")
@@ -197,7 +197,7 @@ add_test(NAME source_native_string_literal_artifacts COMMAND xs_xse_artifact_tes
                                                          ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainStringLiteral.ll
                                                          ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainStringLiteral.o
                                                          ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainStringLiteral.xse 0
-                                                         "define { ptr, i64 } @greeting" "constant [6 x i8]")
+                                                         "define { ptr, i64 } @greeting" "constant [12 x i8]")
 set_tests_properties(source_native_string_literal_artifacts PROPERTIES DEPENDS source_native_string_literal_build
                                                                           TIMEOUT 5)
 add_test(NAME source_native_string_flow_build COMMAND xs build -file
@@ -228,7 +228,7 @@ add_test(NAME source_native_char_flow_artifacts COMMAND xs_xse_artifact_tests
                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainCharFlow.ll
                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainCharFlow.o
                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainCharFlow.xse 0
-                                                    "define i16 @identity" "store i16 937" "call i16 @identity")
+                                                    "define i32 @identity" "store i32 937" "call i32 @identity")
 set_tests_properties(source_native_char_flow_artifacts PROPERTIES DEPENDS source_native_char_flow_build TIMEOUT 5)
 add_test(NAME source_native_integer_widths_build COMMAND xs build -file
                                                   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIntegerWidths.xs)

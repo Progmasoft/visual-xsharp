@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
 // X# project system
@@ -135,10 +135,13 @@
 // warnings("medium")
 // werror(false)
 // verbose(true)
-// set("XGC_ENABLED", false)
+// set("XS_BACKEND", "LLVM")
+// set("XS_LLVM_LTO", true)
+// set("XS_LLVM_OPT_LEVEL", "3")
 //
-// Command-line warning/verbose/XGC options override one invocation without
-// rewriting project scripts.
+// Command-line warning/verbose options override one invocation without
+// rewriting project scripts. XS_LLVM_LTO and XS_LLVM_OPT_LEVEL are effective
+// only when XS_BACKEND is LLVM. PGO remains enabled for that backend.
 //
 // set("TARGET", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu")
 // get("TARGET")

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -22,7 +22,7 @@ object ProjectOutput {
     when (System.getProperty("xs.project.output", "plan")) {
       "plan" -> println(PlanWriter.write(effectivePlan))
       "resolve" -> Unit
-      "sources0" -> writeSources(resolved, plan.compiler, effectivePlan.variables)
+      "sources0" -> writeSources(resolved, plan.compiler)
       else -> throw ProjectConfigurationException("unknown project output mode")
     }
   }
@@ -38,7 +38,7 @@ object ProjectOutput {
       }
     val modules = resolveModules(root, moduleIncludes, state.moduleSources, extension)
     if (state.identity != null) ModuleLockFile.write(root, state.modules)
-    writeSources(ResolvedProject(emptyList(), modules, emptyList()), state.compiler, state.variables)
+    writeSources(ResolvedProject(emptyList(), modules, emptyList()), state.compiler)
   }
 
   private fun writeModuleLock(modules: List<ModuleDependency>) {
@@ -239,16 +239,14 @@ object ProjectOutput {
   private fun writeSources(
     project: ResolvedProject,
     compiler: CompilerSettings,
-    variables: Map<String, List<String>>,
   ) {
     val configuredOutput = System.getProperty("xs.project.sources")?.takeIf(String::isNotBlank)
     val output = configuredOutput?.let { path -> Files.newOutputStream(Path.of(path)) } ?: System.out
     output.useIfOwned(configuredOutput != null) { stream ->
-      writeRecord(stream, "xs-project-sources-v4")
+      writeRecord(stream, "xs-project-sources-v5")
       writeRecord(stream, compiler.warningLevel.name.lowercase())
       writeRecord(stream, compiler.warningsAsErrors.toString())
       writeRecord(stream, compiler.verbose.toString())
-      writeRecord(stream, xgcEnabled(variables).toString())
       writeRecord(stream, project.sources.size.toString())
       writeRecord(stream, project.modules.size.toString())
       writeRecord(stream, project.tests.size.toString())
@@ -264,14 +262,6 @@ object ProjectOutput {
       }
       stream.flush()
     }
-  }
-
-  private fun xgcEnabled(variables: Map<String, List<String>>): Boolean {
-    val values = variables["XGC_ENABLED"] ?: listOf("false")
-    if (values.size != 1 || values.single() !in setOf("true", "false")) {
-      throw ProjectConfigurationException("XGC_ENABLED must be exactly true or false")
-    }
-    return values.single().toBooleanStrict()
   }
 
   private fun writeRecord(

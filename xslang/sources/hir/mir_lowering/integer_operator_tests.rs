@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -82,12 +82,10 @@ fn lowers_operations_for_every_non_legacy_integer_width()
                                        aggregate_types: vec![],
                                        array_types: vec![],
                                        functions: vec![xlil.clone()] };
-    assert!(crate::xlil::verify::verify_module(&module).is_empty());
-    let reparsed =
-      crate::xlil::parser::parse_module(&crate::xlil::writer::module_to_string(&module)).expect("integer operator \
-                                                                                                 XLIL should \
-                                                                                                 round-trip");
-    assert!(crate::xlil::verify::verify_module(&reparsed).is_empty());
+    assert!(crate::xlil::verify_module(&module).is_empty());
+    let reparsed = crate::xlil::parse_module(&crate::xlil::module_to_string(&module)).expect("integer operator XLIL \
+                                                                                              should round-trip");
+    assert!(crate::xlil::verify_module(&reparsed).is_empty());
     assert!(xlil.blocks.iter().flat_map(|block| &block.instructions).any(|instruction| {
       matches!(instruction, Instruction::BinaryInteger { operation: IntegerBinaryOperation::Add, value_type: actual, .. } if *actual == value_type)
     }));

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -99,7 +99,7 @@ impl HirToMirLowerer
       {
         Literal::String(_) => Some(XlilType::STR),
         Literal::Bool(_) => Some(XlilType::BOOL),
-        Literal::Char(_) => Some(XlilType::U16),
+        Literal::Char(_) => Some(XlilType::U32),
         Literal::EnumVariant { enum_type, .. } => self.aggregate_types.get(enum_type).copied(),
         Literal::Integer(_) | Literal::Float(_) | Literal::None => None,
       },
@@ -121,7 +121,13 @@ impl HirToMirLowerer
                                 .iter()
                                 .find(|(source, _)| source == value)
                                 .map(|(_, ty)| *ty),
-      Type::Unit | Type::Set { .. } | Type::Map { .. } => None,
+      Type::Reference { referent,
+                        mutable: false, }
+        if **referent == Type::Primitive(PrimitiveType::Str) =>
+      {
+        Some(XlilType::STR)
+      }
+      Type::Unit | Type::Set { .. } | Type::Map { .. } | Type::Optional { .. } | Type::Reference { .. } => None,
     }
   }
 }

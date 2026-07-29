@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -23,23 +23,24 @@ static XsBackendStatus fail(XsBackendError *error, XsBackendStatus status, const
 XsBackendStatus xs_llvm_lower_lil_const_str(XsLlvmBackend *backend, XsLlvmCodegenUnit *unit, const XsLilBlock *block,
                                             size_t index, LLVMValueRef *value, XsBackendError *error)
 {
-  size_t unit_count = xs_lil_block_instruction_utf16_length(block, index);
-  if(unit_count > SIZE_MAX / 2U)
+  size_t unit_count = xs_lil_block_instruction_utf32_length(block, index);
+  if(unit_count > SIZE_MAX / 4U)
     return fail(error, XS_BACKEND_INVALID_ARGUMENT, "XLIL const.str is too large for LLVM lowering");
-  size_t byte_count = unit_count * 2U;
+  size_t byte_count = unit_count * 4U;
   LLVMContextRef context = LLVMGetModuleContext(xs_llvm_codegen_unit_module(unit));
   LLVMTypeRef byte_type = LLVMInt8TypeInContext(context);
   LLVMValueRef *bytes = calloc(byte_count == 0 ? 1 : byte_count, sizeof(*bytes));
   if(bytes == nullptr)
     return fail(error, XS_BACKEND_SYSTEM_ERROR, "out of memory while lowering XLIL const.str");
-  XsLilUtf16Encoding encoding = xs_lil_block_instruction_utf16_encoding(block, index);
+  XsLilUtf32Encoding encoding = xs_lil_block_instruction_utf32_encoding(block, index);
   for(size_t current = 0; current < unit_count; ++current)
   {
-    uint16_t code_unit = xs_lil_block_instruction_utf16_unit(block, index, current);
-    unsigned low = code_unit & 0xFFU;
-    unsigned high = code_unit >> 8U;
-    bytes[current * 2U] = LLVMConstInt(byte_type, encoding == XS_LIL_UTF16_LE ? low : high, false);
-    bytes[current * 2U + 1U] = LLVMConstInt(byte_type, encoding == XS_LIL_UTF16_LE ? high : low, false);
+    uint32_t code_point = xs_lil_block_instruction_utf32_unit(block, index, current);
+    for(size_t byte = 0; byte < 4U; ++byte)
+    {
+      size_t shift = encoding == XS_LIL_UTF32_LE ? byte * 8U : (3U - byte) * 8U;
+      bytes[current * 4U + byte] = LLVMConstInt(byte_type, (code_point >> shift) & 0xFFU, false);
+    }
   }
   LLVMTypeRef array_type = LLVMArrayType2(byte_type, (uint64_t)byte_count);
   LLVMValueRef initializer = LLVMConstArray2(byte_type, bytes, (uint64_t)byte_count);
@@ -49,7 +50,7 @@ XsBackendStatus xs_llvm_lower_lil_const_str(XsLlvmBackend *backend, XsLlvmCodege
   LLVMSetGlobalConstant(global, true);
   LLVMSetLinkage(global, LLVMPrivateLinkage);
   LLVMSetUnnamedAddress(global, LLVMGlobalUnnamedAddr);
-  LLVMSetAlignment(global, 2);
+  LLVMSetAlignment(global, 4);
 
   LLVMTypeRef str_type = nullptr;
   XsBackendStatus status = xs_llvm_lil_type(backend, (XsLilType){.kind = XS_LIL_TYPE_STR}, &str_type, error);
@@ -80,7 +81,7 @@ XsBackendStatus xs_llvm_lower_lil_compare_str(XsLlvmCodegenUnit *unit, LLVMBuild
   LLVMValueRef left_is_shorter = LLVMBuildICmp(builder, LLVMIntULE, left_length, right_length, "str.len.le");
   LLVMValueRef compared_units = LLVMBuildSelect(builder, left_is_shorter, left_length, right_length, "str.min.len");
   LLVMValueRef byte_count =
-      LLVMBuildShl(builder, compared_units, LLVMConstInt(LLVMTypeOf(compared_units), 1, false), "str.byte.len");
+      LLVMBuildShl(builder, compared_units, LLVMConstInt(LLVMTypeOf(compared_units), 2, false), "str.byte.len");
 
   LLVMContextRef context = LLVMGetModuleContext(xs_llvm_codegen_unit_module(unit));
   LLVMTypeRef parameters[] = {LLVMPointerTypeInContext(context, 0), LLVMPointerTypeInContext(context, 0),

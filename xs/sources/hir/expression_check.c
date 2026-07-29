@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -123,6 +123,8 @@ static bool type_is_optional(const XsSyntaxNode *type)
 {
   if(type == nullptr)
     return false;
+  if((type->flags & XS_SYNTAX_FLAG_OPTIONAL_TYPE) != 0)
+    return true;
   if(type->kind == XS_SYNTAX_TYPE_GENERIC && type->child_count >= 1)
     return named_type_is_optional_base(type->children[0]);
   return false;
@@ -157,12 +159,12 @@ static bool literal_matches_primitive(XsTokenKind literal, const XsHirPrimitiveI
   if(literal == XS_TOKEN_KW_NONE)
     return false;
   if(literal == XS_TOKEN_INTEGER)
-    return primitive->is_integer && primitive->kind != XS_HIR_PRIMITIVE_BOOL &&
-           primitive->kind != XS_HIR_PRIMITIVE_CHAR;
+    return primitive->kind == XS_HIR_PRIMITIVE_BOOL ||
+           (primitive->is_integer && primitive->kind != XS_HIR_PRIMITIVE_CHAR);
   if(literal == XS_TOKEN_FLOAT)
     return primitive->is_float;
   if(literal == XS_TOKEN_STRING)
-    return primitive->kind == XS_HIR_PRIMITIVE_STR;
+    return false;
   if(literal == XS_TOKEN_CHARACTER)
     return primitive->kind == XS_HIR_PRIMITIVE_CHAR;
   if(literal == XS_TOKEN_KW_TRUE || literal == XS_TOKEN_KW_FALSE)
@@ -237,7 +239,7 @@ static bool report_context_literal_type_error(XsDiagnostics *diagnostics, const 
 static bool report_optional_type_error(XsDiagnostics *diagnostics, const XsSyntaxNode *expression)
 {
   return xs_diagnostics_add(diagnostics, XS_DIAGNOSTIC_ERROR, node_span(expression),
-                            "expression is not assignable to Optional<T>; use None or Some(value)");
+                            "expression is not assignable to Optional<T>");
 }
 
 static bool report_missing_block_value(XsDiagnostics *diagnostics, const XsSyntaxNode *block,
@@ -296,6 +298,7 @@ static bool expression_is_optional_none(const XsSyntaxNode *expression)
 {
   return (expression != nullptr && expression->kind == XS_SYNTAX_EXPR_LITERAL &&
           expression->token_kind == XS_TOKEN_KW_NONE) ||
+         expression_is_identifier_named(expression, "nil") ||
          expression_is_std_optional_member(expression, "None");
 }
 
@@ -427,7 +430,7 @@ static bool check_expression_value_against_optional(const XsSyntaxNode *expressi
   if(expression_is_optional_some_callee(expression))
     return report_optional_type_error(diagnostics, expression);
   if(expression->kind == XS_SYNTAX_EXPR_LITERAL)
-    return report_optional_type_error(diagnostics, expression);
+    return true;
   if(expression->kind == XS_SYNTAX_EXPR_IF && expression->child_count >= 3)
   {
     bool then_ok = check_block_value_against_optional(expression->children[1], diagnostics);
@@ -510,8 +513,8 @@ static bool check_variable_initializer(const XsSyntaxNode *declaration, XsDiagno
   const XsSyntaxNode *initializer = variable_initializer(declaration);
   if(type_is_optional(declaration->children[1]))
     return check_expression_value_against_optional(initializer, diagnostics) && constant_ok;
-  if(xs_hir_type_is_string_sugar(declaration->children[1]))
-    return xs_hir_check_string_sugar_value(initializer, diagnostics) && constant_ok;
+  if(xs_hir_type_is_borrowed_str(declaration->children[1]))
+    return xs_hir_check_borrowed_str_value(initializer, diagnostics) && constant_ok;
   bool success = check_expression_value_against_primitive(initializer, primitive, LITERAL_CONTEXT_INITIALIZER, nullptr,
                                                           diagnostics);
   return constant_ok && success;
@@ -638,8 +641,7 @@ static const XsSyntaxNode *function_return_type(const XsSyntaxNode *function)
   for(size_t i = 0; i < function->child_count; ++i)
   {
     const XsSyntaxNode *child = function->children[i];
-    if((child->kind == XS_SYNTAX_TYPE_NAMED || child->kind == XS_SYNTAX_TYPE_GENERIC) &&
-       (child->flags & XS_SYNTAX_FLAG_RETURN_TYPE) != 0)
+    if((child->flags & XS_SYNTAX_FLAG_RETURN_TYPE) != 0)
       return child;
   }
   return nullptr;
@@ -703,13 +705,13 @@ static bool check_return_statement(const XsSyntaxNode *node, const CheckContext 
 {
   if(node == nullptr || node->kind != XS_SYNTAX_STMT_RETURN || node->child_count == 0 ||
      (context->return_type == nullptr && !type_is_optional(context->return_type_node) &&
-      !xs_hir_type_is_string_sugar(context->return_type_node)))
+      !xs_hir_type_is_borrowed_str(context->return_type_node)))
     return true;
   const XsSyntaxNode *value = node->children[0];
   if(type_is_optional(context->return_type_node))
     return check_expression_value_against_optional(value, diagnostics);
-  if(xs_hir_type_is_string_sugar(context->return_type_node))
-    return xs_hir_check_string_sugar_value(value, diagnostics);
+  if(xs_hir_type_is_borrowed_str(context->return_type_node))
+    return xs_hir_check_borrowed_str_value(value, diagnostics);
   return check_expression_value_against_primitive(value, context->return_type, LITERAL_CONTEXT_RETURN, nullptr,
                                                   diagnostics);
 }
@@ -727,8 +729,8 @@ static bool check_assignment(const XsSyntaxNode *node, const CheckContext *conte
   const XsSyntaxNode *value = assignment_value(node);
   if(type_is_optional(binding->type_node))
     success = check_expression_value_against_optional(value, diagnostics) && success;
-  else if(xs_hir_type_is_string_sugar(binding->type_node))
-    success = xs_hir_check_string_sugar_value(value, diagnostics) && success;
+  else if(xs_hir_type_is_borrowed_str(binding->type_node))
+    success = xs_hir_check_borrowed_str_value(value, diagnostics) && success;
   success =
       check_expression_value_against_primitive(value, primitive, LITERAL_CONTEXT_ASSIGNMENT, binding, diagnostics) &&
       success;

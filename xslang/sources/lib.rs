@@ -1,9 +1,9 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
-//! Target-independent semantic analysis, HIR, MIR, XLIL, and XGC foundations for X#.
+//! Target-independent semantic analysis, HIR, MIR, and XLIL foundations for X#.
 
 #![warn(missing_docs)]
 
@@ -23,11 +23,8 @@ pub mod mir;
         reason = "existing monomorphization API documentation is being completed incrementally")]
 pub mod mono;
 pub(crate) mod text;
-#[allow(missing_docs,
-        reason = "existing XGC API documentation is being completed incrementally")]
-pub mod xgc;
-#[allow(missing_docs,
-        reason = "existing XLIL API documentation is being completed incrementally")]
+
+/// Public, target-independent XLIL model, producer, reader, verifier, and text API.
 pub mod xlil;
 
 /// Version of the `xslang` crate that built this compiler core.

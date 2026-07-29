@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -17,7 +17,7 @@ fn parses_aggregate_type_registry()
   assert_eq!(module.aggregate_types[1].fields, vec![Type::aggregate(0),
                                                     Type::aggregate(0)]);
   assert_eq!(module.functions[0].return_type, Type::aggregate(0));
-  assert_eq!(crate::xlil::writer::module_to_string(&module), text);
+  assert_eq!(crate::xlil::module_to_string(&module), text);
 }
 
 #[test]
@@ -34,10 +34,10 @@ fn verifier_rejects_unknown_aggregate_signature_type()
   let mut module = Module::new("Broken");
   module.add_function(Function::declaration("missing", Type::aggregate(7), vec![]));
 
-  assert!(crate::xlil::verify::verify_module(&module).iter().any(|diagnostic| {
-                                                              diagnostic.code ==
-                                                              crate::xlil::verify::DiagnosticCode::InvalidAggregateType
-                                                            }));
+  assert!(crate::xlil::verify_module(&module).iter().any(|diagnostic| {
+                                                      diagnostic.code ==
+                                                      crate::xlil::VerifyDiagnosticCode::InvalidAggregateType
+                                                    }));
 }
 
 #[test]
@@ -48,8 +48,8 @@ fn roundtrips_aggregate_and_extract_registers()
               %r2, 0\n  ret %r3\n.end\n";
   let module = parse_module(text).expect("aggregate instructions should parse");
 
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
-  assert_eq!(crate::xlil::writer::module_to_string(&module), text);
+  assert!(crate::xlil::verify_module(&module).is_empty());
+  assert_eq!(crate::xlil::module_to_string(&module), text);
 }
 
 #[test]
@@ -63,8 +63,8 @@ fn roundtrips_fixed_array_registry_and_registers()
   assert_eq!(module.array_types.len(), 1);
   assert_eq!(module.array_types[0].element_type, Type::I32);
   assert_eq!(module.array_types[0].length, Some(3));
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
-  assert_eq!(crate::xlil::writer::module_to_string(&module), text);
+  assert!(crate::xlil::verify_module(&module).is_empty());
+  assert_eq!(crate::xlil::module_to_string(&module), text);
 }
 
 #[test]
@@ -76,8 +76,8 @@ fn roundtrips_runtime_array_registry_length_and_access()
   let module = parse_module(text).expect("runtime array XLIL should parse");
 
   assert_eq!(module.array_types[0].length, None);
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
-  assert_eq!(crate::xlil::writer::module_to_string(&module), text);
+  assert!(crate::xlil::verify_module(&module).is_empty());
+  assert_eq!(crate::xlil::module_to_string(&module), text);
 }
 
 #[test]
@@ -87,10 +87,10 @@ fn verifier_rejects_wrong_fixed_array_length()
               %r0:i32\nbb0.entry:\n  %r1:%a0 = array %r0\n  ret %r1\n.end\n";
   let module = parse_module(text).expect("structurally valid fixed array should parse");
 
-  assert!(crate::xlil::verify::verify_module(&module).iter().any(|diagnostic| {
-                                                              diagnostic.code ==
-                                                              crate::xlil::verify::DiagnosticCode::InvalidArrayType
-                                                            }));
+  assert!(crate::xlil::verify_module(&module).iter()
+                                             .any(|diagnostic| {
+                                               diagnostic.code == crate::xlil::VerifyDiagnosticCode::InvalidArrayType
+                                             }));
 }
 
 #[test]
@@ -100,9 +100,9 @@ fn verifier_rejects_aggregate_field_type_mismatch()
               %t0\n.param %r0:i64\n.param %r1:i32\nbb0.entry:\n  %r2:%t0 = aggregate %r0, %r1\n  ret %r2\n.end\n";
   let module = parse_module(text).expect("structurally valid aggregate should parse");
 
-  assert!(!crate::xlil::verify::verify_module(&module).is_empty());
+  assert!(!crate::xlil::verify_module(&module).is_empty());
 }
-use crate::xlil::writer::module_to_string;
+use crate::xlil::module_to_string;
 
 #[test]
 fn parses_function_declaration()
@@ -191,18 +191,18 @@ fn roundtrips_const_i32_function()
   let text =
     ".xlil version 0\n.xlil module App\n.func main : () -> i32\nbb0.entry:\n  %r0:i32 = const.i32 0\n  ret %r0\n.end\n";
   let parsed = parse_module(text).expect("XLIL must parse");
-  assert_eq!(crate::xlil::writer::module_to_string(&parsed), text);
+  assert_eq!(crate::xlil::module_to_string(&parsed), text);
 }
 
 #[test]
-fn roundtrips_explicit_utf16_string_constants()
+fn roundtrips_explicit_utf32_string_constants()
 {
   let text = ".xlil version 0\n.xlil module Strings\n.func little : () -> str\nbb0.entry:\n  %r0:str = const.str \
-              utf16le [0x004c, 0x0065, 0x0069]\n  ret %r0\n.end\n.func big : () -> str\nbb0.entry:\n  %r0:str = \
-              const.str utf16be [0x004c, 0x0065, 0x0069]\n  ret %r0\n.end\n";
+              utf32le [0x0000004c, 0x00000065, 0x00000069]\n  ret %r0\n.end\n.func big : () -> str\nbb0.entry:\n  \
+              %r0:str = const.str utf32be [0x0000004c, 0x00000065, 0x00000069]\n  ret %r0\n.end\n";
   let module = parse_module(text).expect("explicit UTF-16 strings should parse");
 
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
+  assert!(crate::xlil::verify_module(&module).is_empty());
   assert_eq!(module_to_string(&module), text);
 }
 
@@ -213,7 +213,7 @@ fn roundtrips_u16_code_unit_constant()
               0x03a9\n  ret %r0\n.end\n";
   let module = parse_module(text).expect("u16 constant should parse");
 
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
+  assert!(crate::xlil::verify_module(&module).is_empty());
   assert_eq!(module_to_string(&module), text);
 }
 
@@ -226,7 +226,7 @@ fn roundtrips_all_fixed_integer_bit_patterns()
               %r6:u128 = const.u128 0xffffffffffffffffffffffffffffffff\n  ret\n.end\n";
   let module = parse_module(text).expect("integer constants should parse");
 
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
+  assert!(crate::xlil::verify_module(&module).is_empty());
   assert_eq!(module_to_string(&module), text);
 }
 
@@ -239,10 +239,10 @@ fn rejects_integer_bit_pattern_with_wrong_width()
 }
 
 #[test]
-fn rejects_untagged_or_malformed_utf16_string_constants()
+fn rejects_untagged_or_malformed_utf32_string_constants()
 {
-  for instruction in ["%r0:str = const.str utf16 [0x0041]",
-                      "%r0:str = const.str utf16le [0xd800]"]
+  for instruction in ["%r0:str = const.str utf32 [0x00000041]",
+                      "%r0:str = const.str utf32le [0x0000d800]"]
   {
     let text = format!(".xlil version 0\n.xlil module Strings\n.func value : () -> str\nbb0.entry:\n  \
                         {instruction}\n  ret %r0\n.end\n");
@@ -361,7 +361,7 @@ fn roundtrips_stack_slot_memory()
 
   let module = parse_module(text).expect("parse should succeed");
 
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
+  assert!(crate::xlil::verify_module(&module).is_empty());
   assert_eq!(module_to_string(&module), text);
 }
 
@@ -373,7 +373,7 @@ fn roundtrips_f32_and_f64_constant_bits()
               0x3ff8000000000000\n  ret %r0\n.end\n";
   let module = parse_module(text).expect("floating constants should parse");
 
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
+  assert!(crate::xlil::verify_module(&module).is_empty());
   assert_eq!(module_to_string(&module), text);
 }
 

@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
 use super::{Type, TypeKind};
 
+/// Returns the canonical primitive or registry-kind name.
 #[must_use]
 pub const fn type_name(value_type: Type) -> &'static str
 {
@@ -27,11 +28,13 @@ pub const fn type_name(value_type: Type) -> &'static str
     TypeKind::F64 => "f64",
     TypeKind::F128 => "f128",
     TypeKind::Str => "str",
+    TypeKind::String => "string",
     TypeKind::Aggregate => "aggregate",
     TypeKind::Array => "array",
   }
 }
 
+/// Parses a canonical primitive type name.
 #[must_use]
 pub fn type_from_name(name: &str) -> Option<Type>
 {
@@ -54,12 +57,14 @@ pub fn type_from_name(name: &str) -> Option<Type>
     "f64" => TypeKind::F64,
     "f128" => TypeKind::F128,
     "str" => TypeKind::Str,
+    "string" => TypeKind::String,
     _ => return None,
   };
   Some(Type { kind,
               registry_id: 0 })
 }
 
+/// Returns canonical text for a primitive or registry-referenced type.
 #[must_use]
 pub fn type_text(value_type: Type) -> String
 {

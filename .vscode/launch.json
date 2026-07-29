@@ -8,12 +8,28 @@
       "name": "Launch XS Analyzer Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/xs-analyzer"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/xs-analyzer/dist/**/*.js"
-      ]
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/xs-analyzer"],
+      "outFiles": ["${workspaceFolder}/xs-analyzer/dist/**/*.js"]
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:XS}/x-platform",
+      "name": "Debug xpic (x-platform)",
+      "target": "xpic",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug xpic (x-platform)"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:XS}/x-platform",
+      "name": "Release xpic (x-platform)",
+      "target": "xpic",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release xpic (x-platform)"
     }
   ]
 }

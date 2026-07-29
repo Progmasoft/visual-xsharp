@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -16,6 +16,15 @@ pub enum TypeRef
   Unit,
   Primitive(PrimitiveType),
   Named(String),
+  Optional
+  {
+    element: Box<TypeRef>,
+  },
+  Reference
+  {
+    referent: Box<TypeRef>,
+    mutable: bool,
+  },
   Array
   {
     element: Box<TypeRef>,
@@ -47,6 +56,11 @@ pub fn type_ref_to_checked(value: &TypeRef) -> Option<type_check::Type>
     TypeRef::Unit => type_check::Type::Unit,
     TypeRef::Primitive(value) => type_check::Type::Primitive(*value),
     TypeRef::Named(value) => type_check::Type::Named(value.clone()),
+    TypeRef::Optional { element } => type_check::Type::Optional { element: Box::new(type_ref_to_checked(element)?) },
+    TypeRef::Reference { referent,
+                         mutable, } => type_check::Type::Reference { referent:
+                                                                       Box::new(type_ref_to_checked(referent)?),
+                                                                     mutable: *mutable },
     TypeRef::Array { element,
                      length, } => type_check::Type::Array { element: Box::new(type_ref_to_checked(element)?),
                                                             length: *length },

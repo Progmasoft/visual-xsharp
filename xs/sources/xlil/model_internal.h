@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -52,9 +52,9 @@ typedef struct
   XsLilType integer_type;
   uint64_t immediate_float_bits;
   bool immediate_bool;
-  XsLilUtf16Encoding utf16_encoding;
-  uint16_t *utf16_units;
-  size_t utf16_length;
+  XsLilUtf32Encoding utf32_encoding;
+  uint32_t *utf32_units;
+  size_t utf32_length;
   XsLilValueId left;
   XsLilValueId right;
   XsLilSlotId slot;

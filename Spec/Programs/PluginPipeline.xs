@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
 // Complete-language example program:
@@ -9,13 +9,13 @@
 import stdio, process;
 
 interface TextPlugin {
-    fn name() -> Str;
+    fn name() -> &Str;
     fn run(input: Str) -> Result<Str, Error>;
 }
 
 class TrimPlugin : TextPlugin {
 
-    fn name() -> Str {
+    fn name() -> &Str {
         return "trim";
     }
 
@@ -26,7 +26,7 @@ class TrimPlugin : TextPlugin {
 
 class UppercasePlugin : TextPlugin {
 
-    fn name() -> Str {
+    fn name() -> &Str {
         return "upper";
     }
 
@@ -45,7 +45,7 @@ class ReplacePlugin : TextPlugin {
         self.to_text = to_text;
     }
 
-    fn name() -> Str {
+    fn name() -> &Str {
         return "replace";
     }
 
@@ -77,7 +77,7 @@ class Pipeline {
 }
 
 fn main(args: ArrayList<Str>) -> Result<Int, Error> {
-    input: Str = if (args.count > 1) {
+    input: &Str = if (args.count > 1) {
         args[1]
     }
     else {

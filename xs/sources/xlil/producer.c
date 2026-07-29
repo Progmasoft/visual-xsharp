@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -51,14 +51,14 @@ const char *xs_lil_error_message(const XsLilError *error)
 
 XsLilType xs_lil_scalar_type(XsLilTypeKind kind)
 {
-  if(kind > XS_LIL_TYPE_STR)
+  if(kind > XS_LIL_TYPE_STRING)
     return (XsLilType){.kind = XS_LIL_TYPE_VOID};
   return (XsLilType){.kind = kind};
 }
 
 bool xs_lil_type_is_scalar(XsLilType type)
 {
-  return type.kind <= XS_LIL_TYPE_STR && type.registry_id == 0;
+  return type.kind <= XS_LIL_TYPE_STRING && type.registry_id == 0;
 }
 
 XsLilTypeKind xs_lil_type_kind(XsLilType type)

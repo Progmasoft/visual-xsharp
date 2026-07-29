@@ -1,5 +1,5 @@
 xs-project
-Copyright 2026 Leitwolf <xs-lang.chess031@slmails.com>
+Copyright 2026 Leitwolf <support@xsharp-lang.xyz>
 
 The original source code in this repository is licensed under the Mozilla
 Public License, version 2.0. See LICENSE.txt for the complete license text.

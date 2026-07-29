@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -741,11 +741,11 @@ static void test_text_parser_rejects_invalid_inputs(void)
       ".xlil version 0\n.xlil module App\n.func Bad : () -> void\n.slot %s0:i32\nbb0.entry:\n"
       "  %r0:i64 = const.i64 1\n  store %r0, %s0\n  ret\n.end\n",
       ".xlil version 0\n.xlil module App\n.func Bad : () -> str\nbb0.entry:\n"
-      "  %r0:str = const.str utf16 [0x0041]\n  ret %r0\n.end\n",
+      "  %r0:str = const.str utf32 [0x00000041]\n  ret %r0\n.end\n",
       ".xlil version 0\n.xlil module App\n.func Bad : () -> str\nbb0.entry:\n"
-      "  %r0:str = const.str utf16le [0xd800]\n  ret %r0\n.end\n",
+      "  %r0:str = const.str utf32le [0x0000d800]\n  ret %r0\n.end\n",
       ".xlil version 0\n.xlil module App\n.func Bad : () -> str\nbb0.entry:\n"
-      "  %r0:str = const.str utf16be [0x0041,]\n  ret %r0\n.end\n",
+      "  %r0:str = const.str utf32be [0x00000041,]\n  ret %r0\n.end\n",
       ".xlil version 0\n.xlil module App\n.func Bad : () -> u16\nbb0.entry:\n"
       "  %r0:u16 = const.u16 0x041\n  ret %r0\n.end\n",
   };
@@ -759,10 +759,10 @@ static void test_text_parser_rejects_invalid_inputs(void)
   }
 }
 
-static void test_text_parser_round_trips_explicit_utf16_strings(void)
+static void test_text_parser_round_trips_explicit_utf32_strings(void)
 {
   static const char text[] = ".xlil version 0\n.xlil module Strings\n.func greeting : () -> str\nbb0.entry:\n"
-                             "  %r0:str = const.str utf16be [0x004c, 0x0065, 0x0069]\n  ret %r0\n.end\n";
+                             "  %r0:str = const.str utf32be [0x0000004c, 0x00000065, 0x00000069]\n  ret %r0\n.end\n";
   XsLilError error = {0};
   XsLilModule *module = nullptr;
   CHECK(xs_lil_module_parse_text("strings.xlil", text, strlen(text), &module, &error) == XS_LIL_OK);
@@ -771,10 +771,10 @@ static void test_text_parser_round_trips_explicit_utf16_strings(void)
     return;
   const XsLilBlock *block = xs_lil_function_block_at(xs_lil_module_function_at(module, 0), 0);
   CHECK(xs_lil_block_instruction_kind(block, 0) == XS_LIL_INSTRUCTION_CONST_STR);
-  CHECK(xs_lil_block_instruction_utf16_encoding(block, 0) == XS_LIL_UTF16_BE);
-  CHECK(xs_lil_block_instruction_utf16_length(block, 0) == 3);
-  CHECK(xs_lil_block_instruction_utf16_unit(block, 0, 0) == UINT16_C(0x004c));
-  CHECK(xs_lil_block_instruction_utf16_unit(block, 0, 2) == UINT16_C(0x0069));
+  CHECK(xs_lil_block_instruction_utf32_encoding(block, 0) == XS_LIL_UTF32_BE);
+  CHECK(xs_lil_block_instruction_utf32_length(block, 0) == 3);
+  CHECK(xs_lil_block_instruction_utf32_unit(block, 0, 0) == UINT16_C(0x004c));
+  CHECK(xs_lil_block_instruction_utf32_unit(block, 0, 2) == UINT16_C(0x0069));
   CHECK(xs_lil_module_verify(module, &error) == XS_LIL_OK);
   FILE *stream = tmpfile();
   CHECK(stream != nullptr);
@@ -942,7 +942,7 @@ int main(void)
   test_text_parser_round_trips_binary_i64_instructions();
   test_text_parser_round_trips_i32_constant();
   test_text_parser_round_trips_binary_i32_instructions();
-  test_text_parser_round_trips_explicit_utf16_strings();
+  test_text_parser_round_trips_explicit_utf32_strings();
   test_text_parser_round_trips_str_comparisons();
   test_text_parser_round_trips_u16_constant();
   test_public_integer_constant_api();

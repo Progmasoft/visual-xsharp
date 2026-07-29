@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -118,7 +118,10 @@ fn parse_named_or_primitive(name: &str) -> Type
     "UInt" => Some(PrimitiveType::UInt),
     "UInteger" => Some(PrimitiveType::UInteger),
     "SFloat" => Some(PrimitiveType::SFloat),
+    "LFloat" => Some(PrimitiveType::LFloat),
     "Float" => Some(PrimitiveType::Float),
+    "Double" => Some(PrimitiveType::Double),
+    "String" => Some(PrimitiveType::String),
     "Str" => Some(PrimitiveType::Str),
     _ => None,
   };

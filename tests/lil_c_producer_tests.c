@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -77,9 +77,9 @@ static bool build_main(XsLilModule *module, XsLilType pair, XsLilType fixed, XsL
      xs_lil_block_add_const_bool(entry, true, &condition, error) != XS_LIL_OK)
     return false;
 
-  static const uint16_t message[] = {0x004FU, 0x004BU};
+  static const uint32_t message[] = {0x004FU, 0x004BU};
   XsLilValueId string = XS_LIL_INVALID_VALUE_ID;
-  if(xs_lil_block_add_const_str(entry, XS_LIL_UTF16_LE, message, 2, &string, error) != XS_LIL_OK ||
+  if(xs_lil_block_add_const_str(entry, XS_LIL_UTF32_LE, message, 2, &string, error) != XS_LIL_OK ||
      xs_lil_block_add_void_call(entry, "sink", &string, 1, error) != XS_LIL_OK)
     return false;
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -58,11 +58,11 @@ fn lowers_fixed_array_literal_and_index_through_xlil()
   let mut module = crate::xlil::Module::new("Arrays");
   assert_eq!(module.add_array_type(XlilType::I32, 3), Some(XlilType::array(0)));
   module.add_function(xlil);
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
-  let text = crate::xlil::writer::module_to_string(&module);
+  assert!(crate::xlil::verify_module(&module).is_empty());
+  let text = crate::xlil::module_to_string(&module);
   assert!(text.contains("%r3:%a0 = array"));
   assert!(text.contains("extract.array"));
-  assert_eq!(crate::xlil::parser::parse_module(&text).expect("fixed array XLIL round-trip"),
+  assert_eq!(crate::xlil::parse_module(&text).expect("fixed array XLIL round-trip"),
              module);
 }
 
@@ -124,10 +124,10 @@ fn lowers_dynamic_array_get_and_set_through_xlil()
   let mut module = crate::xlil::Module::new("Arrays");
   assert_eq!(module.add_array_type(XlilType::I32, 3), Some(XlilType::array(0)));
   module.add_function(xlil);
-  assert!(crate::xlil::verify::verify_module(&module).is_empty());
-  let text = crate::xlil::writer::module_to_string(&module);
+  assert!(crate::xlil::verify_module(&module).is_empty());
+  let text = crate::xlil::module_to_string(&module);
   assert!(text.contains("array.set"));
   assert!(text.contains("array.get"));
-  assert_eq!(crate::xlil::parser::parse_module(&text).expect("dynamic array XLIL round-trip"),
+  assert_eq!(crate::xlil::parse_module(&text).expect("dynamic array XLIL round-trip"),
              module);
 }

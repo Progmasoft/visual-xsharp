@@ -1,12 +1,12 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
 use crate::hir::text::{function_to_xhir, parse_xhir_function};
 use crate::hir::{Expression, Function, Literal, PrimitiveType, Span, Statement, Type, UnaryOperator};
 use crate::mir::text::{function_to_xmir, parse_xmir_function};
-use crate::xlil::writer::module_to_string;
+use crate::xlil::module_to_string;
 use crate::xlil::{Module, lowering::MirToXlilLowerer};
 
 use super::HirToMirLowerer;

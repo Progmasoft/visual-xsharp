@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -9,6 +9,7 @@ use crate::xlil::{
   Block, Function, Instruction, Module, SUPPORTED_XLIL_VERSION, Terminator, ValueId, type_name, type_text,
 };
 
+/// Writes one module in canonical human-readable XLIL v0 form.
 pub fn write_module(module: &Module, output: &mut impl Write) -> fmt::Result
 {
   writeln!(output, ".xlil version {SUPPORTED_XLIL_VERSION}")?;
@@ -45,6 +46,7 @@ pub fn write_module(module: &Module, output: &mut impl Write) -> fmt::Result
   Ok(())
 }
 
+/// Returns canonical human-readable XLIL v0 text for `module`.
 #[must_use]
 pub fn module_to_string(module: &Module) -> String
 {

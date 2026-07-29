@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -8,7 +8,7 @@ pub(crate) use std::collections::HashMap;
 use crate::hir::async_check::Span;
 use crate::mir;
 use crate::xlil::{
-  BlockId, Function, I32BinaryOperation, IntegerBinaryOperation, IntegerConstant, SlotId, Type, Utf16Encoding, ValueId,
+  BlockId, Function, I32BinaryOperation, IntegerBinaryOperation, IntegerConstant, SlotId, Type, Utf32Encoding, ValueId,
 };
 
 mod aggregate;
@@ -41,7 +41,7 @@ pub struct Diagnostic
 pub struct MirToXlilLowerer
 {
   diagnostics: Vec<Diagnostic>,
-  utf16_encoding: Utf16Encoding,
+  utf32_encoding: Utf32Encoding,
 }
 
 impl MirToXlilLowerer
@@ -53,9 +53,10 @@ impl MirToXlilLowerer
   }
 
   #[must_use]
-  pub fn with_utf16_encoding(mut self, encoding: Utf16Encoding) -> Self
+  #[cfg(test)]
+  pub fn with_utf32_encoding(mut self, encoding: Utf32Encoding) -> Self
   {
-    self.utf16_encoding = encoding;
+    self.utf32_encoding = encoding;
     self
   }
 
@@ -444,7 +445,7 @@ impl MirToXlilLowerer
   #[allow(clippy::too_many_arguments)]
   fn lower_const_str(&mut self,
                      local: mir::LocalId,
-                     units: &[u16],
+                     units: &[u32],
                      span: Span,
                      block: BlockId,
                      local_types: &HashMap<mir::LocalId, Option<Type>>,
@@ -458,7 +459,7 @@ impl MirToXlilLowerer
                   span);
       return;
     }
-    match function.add_const_str(block, self.utf16_encoding, units)
+    match function.add_const_str(block, self.utf32_encoding, units)
     {
       Some(result) =>
       {

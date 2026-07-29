@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -23,6 +23,7 @@ pub(crate) struct AggregateRegistry
   pub layouts: Vec<AggregateLayout>,
   pub types: HashMap<String, Type>,
   pub tuples: Vec<(HirType, Type)>,
+  pub optionals: Vec<(HirType, Type)>,
 }
 
 pub(crate) fn build_module(module: &declarations::Module) -> Option<AggregateRegistry>
@@ -151,6 +152,32 @@ fn visit_checked_type(value: &HirType,
               .copied()
               .or_else(|| visit(definitions.get(name.as_str())?, definitions, visiting, registry))
     }
+    HirType::Reference { referent,
+                         mutable: false, }
+      if **referent == HirType::Primitive(crate::hir::type_check::PrimitiveType::Str) =>
+    {
+      Some(Type::STR)
+    }
+    HirType::Optional { element } =>
+    {
+      if let Some((_, value_type)) = registry.optionals.iter().find(|(source, _)| source == value)
+      {
+        return Some(*value_type);
+      }
+      let element_type = visit_checked_type(element, definitions, visiting, registry)?;
+      let value_type = Type::aggregate(registry.layouts.len() as u32);
+      registry.layouts
+              .push(AggregateLayout { name: format!("optional.{}", registry.optionals.len()),
+                                      value_type,
+                                      fields: vec![Type::BOOL, element_type] });
+      registry.optionals.push((value.clone(), value_type));
+      Some(value_type)
+    }
+    HirType::Reference { referent, .. } =>
+    {
+      let _ = visit_checked_type(referent, definitions, visiting, registry);
+      None
+    }
     HirType::Tuple { fields } =>
     {
       if let Some((_, value_type)) = registry.tuples.iter().find(|(source, _)| source == value)
@@ -263,7 +290,11 @@ fn visit(declaration: &NominalType,
             TypeRef::Primitive(primitive) => crate::hir::mir_lowering::primitive_to_xlil(*primitive)?,
             TypeRef::Named(name) => visit(definitions.get(name.as_str())?, definitions, visiting, registry)?,
             TypeRef::Unit => return None,
-            TypeRef::Array { .. } | TypeRef::Map { .. } | TypeRef::Tuple { .. } => return None,
+            TypeRef::Array { .. } |
+            TypeRef::Map { .. } |
+            TypeRef::Tuple { .. } |
+            TypeRef::Optional { .. } |
+            TypeRef::Reference { .. } => return None,
           });
   }
   visiting.remove(&declaration.name);

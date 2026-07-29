@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "org.xsslang"
-version = "0.2.2"
+version = "0.2.3"
 
 repositories {
   mavenCentral()

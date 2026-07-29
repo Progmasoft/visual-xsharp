@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
 // Complete-language example program:
@@ -70,7 +70,7 @@ class TodoStore {
         }
 
         for (item: TodoItem in self.items) {
-            status: Str = if (item.done) {
+            status: &Str = if (item.done) {
                 "x"
             }
             else {
@@ -134,7 +134,7 @@ class TodoCodec {
     }
 
     static fn format(item: TodoItem) -> Str {
-        state: Str = if (item.done) {
+        state: &Str = if (item.done) {
             "done"
         }
         else {

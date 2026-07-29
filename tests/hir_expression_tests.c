@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -96,13 +96,15 @@ static void test_literal_initializer_expression_types(void)
                       "fn Main() {\n"
                       "  a: Int = 1;\n"
                       "  b: Bool = true;\n"
-                      "  c: Str = \"hello\";\n"
+                      "  numeric_false: Bool = 0;\n"
+                      "  numeric_true: Bool = 2;\n"
+                      "  c: &Str = \"hello\";\n"
                       "  d: Char = 'x';\n"
                       "  e: Float = 1.0;\n"
                       "}\n";
   CHECK(check_single_source_expressions(valid));
   CHECK(!check_single_source_expressions("fn Main() { value: Int = \"bad\"; }\n"));
-  CHECK(!check_single_source_expressions("fn Main() { value: Bool = 1; }\n"));
+  CHECK(check_single_source_expressions("fn Main() { value: Bool = 1; inferred := 1; }\n"));
   CHECK(!check_single_source_expressions("fn Main() { value: Char = 1; }\n"));
   CHECK(!check_single_source_expressions("fn Main() { value: Float = true; }\n"));
 }
@@ -115,7 +117,7 @@ static void test_control_flow_initializer_expression_types(void)
                          "}\n";
   const char *valid_match = ""
                             "fn Main() {\n"
-                            "  value: Str = match (1) { 0 -> { \"zero\" }, else -> { \"many\" }, };\n"
+                            "  value: &Str = match (1) { 0 -> { \"zero\" }, else -> { \"many\" }, };\n"
                             "}\n";
   CHECK(check_single_source_expressions(valid_if));
   CHECK(check_single_source_expressions(valid_match));
@@ -123,7 +125,7 @@ static void test_control_flow_initializer_expression_types(void)
   CHECK(
       !check_single_source_expressions("fn Main() { value: Int = if (true) { \"bad\" } else { 1 }; }\n"));
   CHECK(!check_single_source_expressions(
-      "fn Main() { value: Bool = match (1) { 0 -> { true }, else -> { 1 }, }; }\n"));
+      "fn Main() { value: Bool = match (1) { 0 -> { true }, else -> { \"bad\" }, }; }\n"));
 }
 
 static void test_optional_expression_types(void)
@@ -141,24 +143,22 @@ static void test_optional_expression_types(void)
   CHECK(!check_single_source_expressions("fn Main() { value: Int = None; }\n"));
   CHECK(!check_single_source_expressions("fn Main() { value: Int = std::optional::None; }\n"));
   CHECK(!check_single_source_expressions("fn Main() { value: Int = Some(1); }\n"));
-  CHECK(!check_single_source_expressions("fn Main() { value: Optional<Int> = 1; }\n"));
+  CHECK(check_single_source_expressions("fn Main() { value: Optional<Int> = 1; }\n"));
+  CHECK(check_single_source_expressions("fn Main() { value: Int? = nil; }\n"));
   CHECK(!check_single_source_expressions("fn Main() { value: Optional<Int> = Some(); }\n"));
-  CHECK(!check_single_source_expressions("fn Read() -> Optional<Int> { return 1; }\n"));
+  CHECK(check_single_source_expressions("fn Read() -> Optional<Int> { return 1; }\n"));
 }
 
-static void test_string_sugar_expression_types(void)
+static void test_owned_string_is_not_optional_or_implicitly_borrowed(void)
 {
   const char *valid = ""
                       "fn Keep(value: String) -> String { return value; }\n"
-                      "fn Main() {\n"
-                      "  literal: String = \"Leitwolf\";\n"
-                      "  present: String = Some(\"Leitwolf\");\n"
-                      "  absent: String = None;\n"
-                      "  literal = Some(\"Luna\");\n"
-                      "}\n";
+                      "fn Borrow(value: &Str) -> &Str { return value; }\n";
   CHECK(check_single_source_expressions(valid));
+  CHECK(!check_single_source_expressions("fn Main() { bad: String = \"Leitwolf\"; }\n"));
+  CHECK(!check_single_source_expressions("fn Main() { bad: Str = \"Leitwolf\"; }\n"));
   CHECK(!check_single_source_expressions("fn Main() { bad: String = 1; }\n"));
-  CHECK(!check_single_source_expressions("fn Main() { bad: String = Some(1); }\n"));
+  CHECK(!check_single_source_expressions("fn Main() { bad: String = nil; }\n"));
   CHECK(!check_single_source_expressions("fn Bad() -> String { return 1; }\n"));
 }
 
@@ -177,7 +177,7 @@ static void test_binding_reassignment_errors(void)
 static void test_constant_initializer_errors(void)
 {
   CHECK(check_single_source_expressions("fn Main() { const value: Int = 1 + 2; }\n"));
-  CHECK(check_single_source_expressions("fn Main() { static value: Str = \"xs\"; }\n"));
+  CHECK(check_single_source_expressions("fn Main() { static value: &Str = \"xs\"; }\n"));
   CHECK(check_single_source_expressions("fn RuntimeValue() -> Int { return 1; }\nfn Main() { const "
                                         "value: Int = RuntimeValue(); }\n"));
   CHECK(!check_single_source_expressions("fn Main() { const value: Int; }\n"));
@@ -197,8 +197,8 @@ static void test_assignment_literal_expression_types(void)
                       "}\n";
   CHECK(check_single_source_expressions(valid));
   CHECK(!check_single_source_expressions("fn Main() { value: Int = 1; value = \"bad\"; }\n"));
-  CHECK(!check_single_source_expressions("fn Main() { value: Bool = false; value = 1; }\n"));
-  CHECK(!check_single_source_expressions("fn Main() { value: Str = \"ok\"; value = 'x'; }\n"));
+  CHECK(check_single_source_expressions("fn Main() { value: Bool = false; value = 1; }\n"));
+  CHECK(!check_single_source_expressions("fn Main() { value: &Str = \"ok\"; value = 'x'; }\n"));
 }
 
 static void test_control_flow_assignment_expression_types(void)
@@ -217,21 +217,23 @@ static void test_return_literal_expression_types(void)
 {
   CHECK(check_single_source_expressions("fn Count() -> Int { return 1; }\n"));
   CHECK(check_single_source_expressions("fn Flag() -> Bool { return true; }\n"));
-  CHECK(check_single_source_expressions("fn Name() -> Str { return \"xs\"; }\n"));
+  CHECK(check_single_source_expressions("fn Name() -> &Str { return \"xs\"; }\n"));
   CHECK(!check_single_source_expressions("fn Count() -> Int { return \"bad\"; }\n"));
-  CHECK(!check_single_source_expressions("fn Flag() -> Bool { return 1; }\n"));
-  CHECK(!check_single_source_expressions("fn Name() -> Str { return 'x'; }\n"));
+  CHECK(check_single_source_expressions("fn Flag() -> Bool { return 1; }\n"));
+  CHECK(!check_single_source_expressions("fn Name() -> &Str { return 'x'; }\n"));
 }
 
 static void test_control_flow_return_expression_types(void)
 {
   CHECK(check_single_source_expressions("fn Count() -> Int { return if (true) { 1 } else { 2 }; }\n"));
   CHECK(check_single_source_expressions(
-      "fn Name() -> Str { return match (1) { 0 -> { \"zero\" }, else -> { \"many\" }, }; }\n"));
+      "fn Name() -> &Str { return match (1) { 0 -> { \"zero\" }, else -> { \"many\" }, }; }\n"));
   CHECK(!check_single_source_expressions(
       "fn Count() -> Int { return if (true) { 1 } else { \"bad\" }; }\n"));
-  CHECK(!check_single_source_expressions(
+  CHECK(check_single_source_expressions(
       "fn Flag() -> Bool { return match (1) { 0 -> { true }, else -> { 1 }, }; }\n"));
+  CHECK(!check_single_source_expressions(
+      "fn Flag() -> Bool { return match (1) { 0 -> { true }, else -> { \"bad\" }, }; }\n"));
 }
 
 static void test_result_propagation_requires_result_return(void)
@@ -334,7 +336,7 @@ int main(void)
   test_literal_initializer_expression_types();
   test_control_flow_initializer_expression_types();
   test_optional_expression_types();
-  test_string_sugar_expression_types();
+  test_owned_string_is_not_optional_or_implicitly_borrowed();
   test_binding_reassignment_errors();
   test_constant_initializer_errors();
   test_assignment_literal_expression_types();

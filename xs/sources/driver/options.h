@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -23,7 +23,6 @@ typedef struct
   XsWarningLevel warning_level;
   bool warnings_as_errors;
   bool verbose;
-  bool xgc_enabled;
 } XsCompilerSettings;
 
 typedef struct
@@ -36,7 +35,6 @@ typedef struct
   bool warning_override;
   bool werror_override;
   bool verbose_override;
-  bool xgc_override;
 } XsCliOptions;
 
 XsCompilerSettings xs_cli_default_compiler_settings(void);

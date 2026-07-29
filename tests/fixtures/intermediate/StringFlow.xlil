@@ -8,7 +8,7 @@ bb0.entry:
 .func greeting : () -> str
 .slot %s0:str
 bb0.entry:
-  %r0:str = const.str utf16be [0x004c, 0x0065, 0x0069, 0x0074, 0x0077, 0x006f, 0x006c, 0x0066]
+  %r0:str = const.str utf32be [0x0000004c, 0x00000065, 0x00000069, 0x00000074, 0x00000077, 0x0000006f, 0x0000006c, 0x00000066]
   store %r0, %s0
   %r1:str = load %s0
   %r2:str = call identity(%r1)

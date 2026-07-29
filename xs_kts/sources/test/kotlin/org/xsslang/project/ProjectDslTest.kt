@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -10,6 +10,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ProjectDslTest {
@@ -199,7 +200,7 @@ class ProjectDslTest {
 
       val direct = ProjectContext().apply { project("Direct", "BETA", "0.1.0") }
       ProjectOutput.emit(direct.build())
-      assertEquals("2", readSourceRecords(output)[5])
+      assertEquals("2", readSourceRecords(output)[4])
 
       val recursive =
         ProjectContext().apply {
@@ -207,7 +208,7 @@ class ProjectDslTest {
           source { exclude() }
         }
       ProjectOutput.emit(recursive.build())
-      assertEquals("2", readSourceRecords(output)[5])
+      assertEquals("2", readSourceRecords(output)[4])
     } finally {
       restoreProperty("xs.project.root", oldRoot)
       restoreProperty("xs.project.output", oldOutput)
@@ -272,15 +273,20 @@ class ProjectDslTest {
     )
     assertEquals("Demo, BETA, 0.1.0", context.get("PROJECT"))
     assertEquals("LLVM", context.get("XS_BACKEND"))
+    assertEquals("true", context.get("XS_LLVM_LTO"))
+    assertEquals("3", context.get("XS_LLVM_OPT_LEVEL"))
     assertEquals("xs", context.get("XS_EXTENSION"))
-    assertEquals("false", context.get("XGC_ENABLED"))
     assertEquals("false", context.get("PUBLISH"))
     context.set("PUBLISH", true)
     assertEquals("true", context.get("PUBLISH"))
     assertFailsWith<ProjectConfigurationException> { context.set("PUBLISH", "true") }
     assertFailsWith<ProjectConfigurationException> { context.set("PUBLISH", true, false) }
-    context.set("XGC_ENABLED", true)
-    assertEquals("true", context.get("XGC_ENABLED"))
+    context.set("XS_LLVM_LTO", false)
+    context.set("XS_LLVM_OPT_LEVEL", "2")
+    assertEquals("false", context.get("XS_LLVM_LTO"))
+    assertEquals("2", context.get("XS_LLVM_OPT_LEVEL"))
+    assertFailsWith<ProjectConfigurationException> { context.set("XS_LLVM_LTO", "yes") }
+    assertFailsWith<ProjectConfigurationException> { context.set("XS_LLVM_OPT_LEVEL", "fast") }
     assertFailsWith<ProjectConfigurationException> { context.get("MISSING") }
     context.authors(arrayOf("Leitwolf", "leitwolf@example.me"))
     context.source {
@@ -295,8 +301,28 @@ class ProjectDslTest {
     val plan = context.build()
     assertEquals(listOf("native"), plan.variables["MODE"])
     assertEquals(listOf("LLVM"), plan.variables["XS_BACKEND"])
+    assertEquals(listOf("false"), plan.variables["XS_LLVM_LTO"])
+    assertEquals(listOf("2"), plan.variables["XS_LLVM_OPT_LEVEL"])
     assertEquals(WarningLevel.ALL, plan.compiler.warningLevel)
     assertTrue(PlanWriter.write(plan).startsWith("{\"format\":\"xs-project-plan\",\"version\":0"))
+  }
+
+  @Test
+  fun removesLlvmOnlySettingsFromXplrPlans() {
+    val context = ProjectContext()
+    context.project("RegisterVm", "BETA", "0.1.0")
+    context.set("XS_BACKEND", "XPLR")
+    val plan = context.build()
+    assertEquals(listOf("XPLR"), plan.variables["XS_BACKEND"])
+    assertFalse(plan.variables.containsKey("XS_LLVM_LTO"))
+    assertFalse(plan.variables.containsKey("XS_LLVM_OPT_LEVEL"))
+  }
+
+  @Test
+  fun derivesMemoryManagementFromTheBackend() {
+    val context = ProjectContext()
+    assertFailsWith<ProjectConfigurationException> { context.set("XGC_ENABLED", true) }
+    assertFailsWith<ProjectConfigurationException> { context.set("XPG_ENABLED", true) }
   }
 
   @Test
@@ -387,8 +413,8 @@ class ProjectDslTest {
           .split('\u0000')
           .filter(String::isNotEmpty)
       assertEquals(
-        listOf("xs-project-sources-v4", "medium", "false", "true", "false", "1", "1", "1"),
-        records.take(8),
+        listOf("xs-project-sources-v5", "medium", "false", "true", "1", "1", "1"),
+        records.take(7),
       )
       assertEquals(
         listOf(
@@ -397,7 +423,7 @@ class ProjectDslTest {
           modules.resolve("math.xsharp").toString(),
           tests.resolve("smoke.xsharp").toString(),
         ),
-        records.drop(8),
+        records.drop(7),
       )
     } finally {
       restoreProperty("xs.project.root", oldRoot)
@@ -470,7 +496,6 @@ class ProjectDslTest {
           werror(true)
           verbose(true)
         }
-        set("XGC_ENABLED", true)
       }
     val oldRoot = System.getProperty("xs.project.root")
     val oldOutput = System.getProperty("xs.project.output")
@@ -487,8 +512,8 @@ class ProjectDslTest {
           .split('\u0000')
           .filter(String::isNotEmpty)
       assertEquals(
-        listOf("xs-project-sources-v4", "all", "true", "true", "true", "3", "0", "0"),
-        paths.take(8),
+        listOf("xs-project-sources-v5", "all", "true", "true", "3", "0", "0"),
+        paths.take(7),
       )
       assertEquals(
         listOf(
@@ -496,7 +521,7 @@ class ProjectDslTest {
           sources.resolve("helper.xs").toString(),
           tests.resolve("ignored.xs").toString(),
         ),
-        paths.drop(8),
+        paths.drop(7),
       )
     } finally {
       restoreProperty("xs.project.root", oldRoot)
@@ -544,10 +569,10 @@ class ProjectDslTest {
           .split('\u0000')
           .filter(String::isNotEmpty)
       assertEquals(
-        listOf("xs-project-sources-v4", "medium", "false", "true", "false", "1", "2", "0"),
-        records.take(8),
+        listOf("xs-project-sources-v5", "medium", "false", "true", "1", "2", "0"),
+        records.take(7),
       )
-      assertEquals(sources.resolve("main.xs").toString(), records[8])
+      assertEquals(sources.resolve("main.xs").toString(), records[7])
       assertEquals(
         listOf(
           "MyModule",
@@ -555,7 +580,7 @@ class ProjectDslTest {
           "MyModule::util",
           modules.resolve("topla.xs").toString(),
         ),
-        records.drop(9),
+        records.drop(8),
       )
     } finally {
       restoreProperty("xs.project.root", oldRoot)

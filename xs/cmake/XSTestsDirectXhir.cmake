@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 set(XS_DIRECT_XHIR_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/direct_xhir")

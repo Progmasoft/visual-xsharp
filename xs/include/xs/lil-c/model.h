@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -50,6 +50,7 @@ typedef enum
   XS_LIL_TYPE_F64,
   XS_LIL_TYPE_F128,
   XS_LIL_TYPE_STR,
+  XS_LIL_TYPE_STRING,
   XS_LIL_TYPE_AGGREGATE,
   XS_LIL_TYPE_ARRAY,
 } XsLilTypeKind;
@@ -66,9 +67,9 @@ typedef uint32_t XsLilSlotId;
 
 typedef enum
 {
-  XS_LIL_UTF16_LE,
-  XS_LIL_UTF16_BE,
-} XsLilUtf16Encoding;
+  XS_LIL_UTF32_LE,
+  XS_LIL_UTF32_BE,
+} XsLilUtf32Encoding;
 
 typedef enum
 {

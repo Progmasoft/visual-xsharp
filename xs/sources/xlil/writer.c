@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -179,14 +179,14 @@ static XsLilStatus write_block(FILE *stream, XsLilError *error, const XsLilBlock
       return xs_lil_set_error(error, XS_LIL_IO_ERROR, "could not write XLIL const.bool instruction");
     if(instruction->kind == XS_LIL_INSTRUCTION_CONST_STR)
     {
-      const char *encoding = instruction->utf16_encoding == XS_LIL_UTF16_LE ? "utf16le" : "utf16be";
+      const char *encoding = instruction->utf32_encoding == XS_LIL_UTF32_LE ? "utf32le" : "utf32be";
       if(fprintf(stream, "  %%r%u:str = const.str %s [", instruction->result, encoding) < 0)
         return xs_lil_set_error(error, XS_LIL_IO_ERROR, "could not write XLIL const.str instruction");
-      for(size_t unit = 0; unit < instruction->utf16_length; ++unit)
+      for(size_t unit = 0; unit < instruction->utf32_length; ++unit)
       {
         if(unit != 0 && fputs(", ", stream) == EOF)
           return xs_lil_set_error(error, XS_LIL_IO_ERROR, "could not write XLIL const.str separator");
-        if(fprintf(stream, "0x%04x", (unsigned int)instruction->utf16_units[unit]) < 0)
+        if(fprintf(stream, "0x%08x", instruction->utf32_units[unit]) < 0)
           return xs_lil_set_error(error, XS_LIL_IO_ERROR, "could not write XLIL const.str code unit");
       }
       if(fputs("]\n", stream) == EOF)

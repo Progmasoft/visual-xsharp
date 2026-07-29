@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -24,8 +24,8 @@ XS_LIL_API XsLilStatus xs_lil_builder_const_i64(XsLilBuilder *builder, int64_t v
                                                 XsLilError *error);
 XS_LIL_API XsLilStatus xs_lil_builder_const_bool(XsLilBuilder *builder, bool value, XsLilValueId *result,
                                                  XsLilError *error);
-XS_LIL_API XsLilStatus xs_lil_builder_const_str(XsLilBuilder *builder, XsLilUtf16Encoding encoding,
-                                                const uint16_t *units, size_t unit_count, XsLilValueId *result,
+XS_LIL_API XsLilStatus xs_lil_builder_const_str(XsLilBuilder *builder, XsLilUtf32Encoding encoding,
+                                                const uint32_t *units, size_t unit_count, XsLilValueId *result,
                                                 XsLilError *error);
 XS_LIL_API XsLilStatus xs_lil_builder_const_f32_bits(XsLilBuilder *builder, uint32_t bits, XsLilValueId *result,
                                                      XsLilError *error);

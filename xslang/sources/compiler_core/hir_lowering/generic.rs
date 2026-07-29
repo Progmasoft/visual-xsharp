@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -333,6 +333,16 @@ pub(super) fn specialize_ref(value: &declarations::TypeRef,
                    .cloned()
                    .unwrap_or_else(|| declarations::TypeRef::Named(substitute_named_ref(name, substitutions)))
     }
+    declarations::TypeRef::Optional { element } =>
+    {
+      declarations::TypeRef::Optional { element: Box::new(specialize_ref(element, substitutions)) }
+    }
+    declarations::TypeRef::Reference { referent,
+                                       mutable, } =>
+    {
+      declarations::TypeRef::Reference { referent: Box::new(specialize_ref(referent, substitutions)),
+                                         mutable: *mutable }
+    }
     declarations::TypeRef::Array { element,
                                    length, } =>
     {
@@ -457,6 +467,8 @@ pub(super) fn substitute_checked_type(value: &mut Type, substitutions: &HashMap<
         *name = substitute_identifiers(name, |identifier| substitutions.get(identifier).map(type_key));
       }
     }
+    Type::Optional { element } => substitute_checked_type(element, substitutions),
+    Type::Reference { referent, .. } => substitute_checked_type(referent, substitutions),
     Type::Array { element, .. } | Type::Set { element } => substitute_checked_type(element, substitutions),
     Type::Map { key,
                 value, } =>
@@ -490,6 +502,18 @@ fn type_key(value: &Type) -> String
     Type::Unit => "unit".to_string(),
     Type::Primitive(value) => format!("{value:?}"),
     Type::Named(name) => name.clone(),
+    Type::Optional { element } => format!("optional<{}>", type_key(element)),
+    Type::Reference { referent,
+                      mutable, } => format!("&{}{}",
+                                            if *mutable
+                                            {
+                                              "mut "
+                                            }
+                                            else
+                                            {
+                                              ""
+                                            },
+                                            type_key(referent)),
     Type::Array { element,
                   length, } => match length
     {
@@ -528,6 +552,21 @@ fn type_ref_key(value: &declarations::TypeRef) -> String
     declarations::TypeRef::Unit => "unit".to_string(),
     declarations::TypeRef::Primitive(value) => format!("{value:?}"),
     declarations::TypeRef::Named(name) => name.clone(),
+    declarations::TypeRef::Optional { element } => format!("optional<{}>", type_ref_key(element)),
+    declarations::TypeRef::Reference { referent,
+                                       mutable, } =>
+    {
+      format!("&{}{}",
+              if *mutable
+              {
+                "mut "
+              }
+              else
+              {
+                ""
+              },
+              type_ref_key(referent))
+    }
     declarations::TypeRef::Array { element,
                                    length, } => match length
     {

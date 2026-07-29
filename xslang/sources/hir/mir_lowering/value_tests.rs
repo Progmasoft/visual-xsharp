@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -23,49 +23,72 @@ fn maps_hir_primitives_to_xlil_value_types()
   assert_eq!(primitive_to_xlil(PrimitiveType::Long), Some(XlilType::I32));
   assert_eq!(primitive_to_xlil(PrimitiveType::Int), Some(XlilType::I64));
   assert_eq!(primitive_to_xlil(PrimitiveType::Integer), Some(XlilType::I128));
-  assert_eq!(primitive_to_xlil(PrimitiveType::SFloat), Some(XlilType::F32));
+  assert_eq!(primitive_to_xlil(PrimitiveType::SFloat), Some(XlilType::F16));
+  assert_eq!(primitive_to_xlil(PrimitiveType::LFloat), Some(XlilType::F32));
   assert_eq!(primitive_to_xlil(PrimitiveType::Float), Some(XlilType::F64));
+  assert_eq!(primitive_to_xlil(PrimitiveType::Double), Some(XlilType::F128));
   assert_eq!(primitive_to_xlil(PrimitiveType::Str), Some(XlilType::STR));
+  assert_eq!(primitive_to_xlil(PrimitiveType::String), Some(XlilType::STRING));
+}
+
+#[test]
+fn normalizes_contextual_integer_literals_to_bool()
+{
+  for (source, expected) in [("0", false), ("2", true)]
+  {
+    let function = Function { name: format!("bool_{source}"),
+                              return_type: Some(primitive(PrimitiveType::Bool)),
+                              locals: vec![],
+                              body: vec![Statement::Return { value: Some(Expression::Literal { literal:
+                                                                                   Literal::Integer(source.to_string()),
+                                                                                 span: span(10, 11) }),
+                                                span: span(3, 12) }] };
+    let mir = HirToMirLowerer::new().lower_function(&function)
+                                    .expect("contextual integer Bool literal should lower");
+    assert!(matches!(mir.blocks[0].statements[0],
+                     mir::Statement::ConstBool { value, .. } if value == expected));
+  }
 }
 
 #[test]
 fn lowers_str_literal_through_target_independent_mir()
 {
   let function = Function { name: "Name".to_string(),
-                            return_type: Some(primitive(PrimitiveType::Str)),
+                            return_type: Some(Type::Reference { referent:
+                                                                  Box::new(primitive(PrimitiveType::Str)),
+                                                                mutable: false }),
                             locals: vec![],
-                            body: vec![Statement::Return { value: Some(Expression::Literal {
-                                                            literal: Literal::String("xs".to_string()),
-                                                            span: span(10, 14),
-                                                          }),
-                                                          span: span(3, 14) }] };
+                            body: vec![Statement::Return { value: Some(Expression::Literal { literal:
+                                                                                  Literal::String("xs".to_string()),
+                                                                                span: span(10, 14) }),
+                                              span: span(3, 14) }] };
 
   let xhir = crate::hir::text::function_to_xhir(&function);
   assert!(xhir.contains("literal string \"xs\""));
-  assert!(!xhir.contains("utf16"));
+  assert!(!xhir.contains("utf32"));
 
   let mir = HirToMirLowerer::new().lower_function(&function)
                                   .expect("Str literal should lower");
   assert!(matches!(&mir.blocks[0].statements[0],
-                   mir::Statement::ConstStr { units, .. } if units == &[0x0078, 0x0073]));
+                   mir::Statement::ConstStr { units, .. } if units == &[0x00000078, 0x00000073]));
   assert!(verify_function(&mir).is_empty());
 
   let xmir = crate::mir::text::function_to_xmir(&mir);
-  assert!(xmir.contains("value utf16 [0x0078, 0x0073]"));
-  assert!(!xmir.contains("utf16le"));
-  assert!(!xmir.contains("utf16be"));
+  assert!(xmir.contains("value utf32 [0x00000078, 0x00000073]"));
+  assert!(!xmir.contains("utf32le"));
+  assert!(!xmir.contains("utf32be"));
 
-  let xlil = crate::xlil::lowering::MirToXlilLowerer::new().with_utf16_encoding(crate::xlil::Utf16Encoding::BigEndian)
+  let xlil = crate::xlil::lowering::MirToXlilLowerer::new().with_utf32_encoding(crate::xlil::Utf32Encoding::BigEndian)
                                                            .lower_function(&mir)
                                                            .expect("Str MIR should lower to XLIL");
   assert!(matches!(&xlil.blocks[0].instructions[0],
-                   crate::xlil::Instruction::ConstStr { encoding: crate::xlil::Utf16Encoding::BigEndian,
+                   crate::xlil::Instruction::ConstStr { encoding: crate::xlil::Utf32Encoding::BigEndian,
                                                         units,
-                                                        .. } if units == &[0x0078, 0x0073]));
+                                                        .. } if units == &[0x00000078, 0x00000073]));
 }
 
 #[test]
-fn lowers_char_literal_as_one_u16_code_unit()
+fn lowers_char_literal_as_one_u32_scalar()
 {
   let function = Function { name: "omega".to_string(),
                             return_type: Some(primitive(PrimitiveType::Char)),
@@ -80,20 +103,21 @@ fn lowers_char_literal_as_one_u16_code_unit()
 
   let mir = HirToMirLowerer::new().lower_function(&function)
                                   .expect("Char literal should lower");
-  assert!(matches!(mir.blocks[0].statements[0], mir::Statement::ConstU16 { value: 0x03a9,
-                                                                           .. }));
+  assert!(matches!(mir.blocks[0].statements[0], mir::Statement::ConstInteger { value:
+                                                                                 mir::IntegerConstant::U32(0x000003a9),
+                                                                               .. }));
   assert!(verify_function(&mir).is_empty());
   let xmir = crate::mir::text::function_to_xmir(&mir);
-  assert!(xmir.contains("statement const.u16"));
-  assert!(xmir.contains("value 0x03a9"));
+  assert!(xmir.contains("statement const.u32"));
+  assert!(xmir.contains("value 937"));
   let parsed = crate::mir::text::parse_xmir_function(&xmir).expect("Char XMIR should parse");
   assert_eq!(crate::mir::text::function_to_xmir(&parsed), xmir);
 
   let xlil = crate::xlil::lowering::MirToXlilLowerer::new().lower_function(&mir)
                                                            .expect("Char MIR should lower");
   assert!(matches!(xlil.blocks[0].instructions[0],
-                   crate::xlil::Instruction::ConstU16 { value: 0x03a9,
-                                                        .. }));
+                   crate::xlil::Instruction::ConstInteger { value, .. }
+                     if value.value_type == XlilType::U32 && value.bits == 0x000003a9));
 }
 
 #[test]

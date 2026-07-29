@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 find_package(LLVM REQUIRED CONFIG)
@@ -153,6 +153,7 @@ target_link_libraries(xs PRIVATE xs_compiler)
 add_library(xs_backend_llvm
   sources/backend/linker.c
   sources/backend/llvm_backend.c
+  sources/backend/llvm_emission.c
   sources/backend/llvm_aggregate.c
   sources/backend/llvm_integer.c
   sources/backend/llvm_string.c

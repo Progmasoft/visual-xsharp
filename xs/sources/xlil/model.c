@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -62,7 +62,7 @@ static void function_free(XsLilFunction *function)
     {
       free(block->instructions[instruction].callee);
       free(block->instructions[instruction].arguments);
-      free(block->instructions[instruction].utf16_units);
+      free(block->instructions[instruction].utf32_units);
     }
     free(block->instructions);
     free(block);
@@ -992,7 +992,7 @@ const char *xs_lil_type_name(XsLilType type)
 {
   static const char *const names[] = {
       "void", "bool", "u8",  "i8",  "u16", "i16",  "u32", "i32",       "u64",   "i64",
-      "u128", "i128", "f16", "f32", "f64", "f128", "str", "aggregate", "array",
+      "u128", "i128", "f16", "f32", "f64", "f128", "str", "string", "aggregate", "array",
   };
   if((size_t)type.kind >= sizeof(names) / sizeof(names[0]))
     return "unknown";

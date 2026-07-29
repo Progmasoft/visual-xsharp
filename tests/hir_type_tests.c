@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -64,10 +64,12 @@ static bool check_single_source(const char *text)
 static void test_hir_primitive_info(void)
 {
   const XsHirPrimitiveInfo *string = xs_hir_primitive_find("Str", 3);
-  CHECK(string != nullptr && string->bit_width == 0 && string->code_unit_bit_width == 16 && string->is_text &&
+  CHECK(string != nullptr && string->bit_width == 0 && string->code_unit_bit_width == 32 && string->is_text &&
         !string->has_xlil_type);
+  const XsHirPrimitiveInfo *owned_string = xs_hir_primitive_find("String", 6);
+  CHECK(owned_string != nullptr && owned_string->code_unit_bit_width == 32 && owned_string->is_text);
   const XsHirPrimitiveInfo *boolean = xs_hir_primitive_find("Bool", 4);
-  CHECK(boolean != nullptr && boolean->bit_width == 1 && boolean->has_xlil_type &&
+  CHECK(boolean != nullptr && boolean->bit_width == 8 && boolean->has_xlil_type &&
         boolean->xlil_type.kind == XS_LIL_TYPE_BOOL);
   const XsHirPrimitiveInfo *byte = xs_hir_primitive_find("Byte", 4);
   CHECK(byte != nullptr && byte->bit_width == 8 && !byte->is_signed && byte->has_xlil_type &&
@@ -76,8 +78,8 @@ static void test_hir_primitive_info(void)
   CHECK(sbyte != nullptr && sbyte->bit_width == 8 && sbyte->is_signed && sbyte->has_xlil_type &&
         sbyte->xlil_type.kind == XS_LIL_TYPE_I8);
   const XsHirPrimitiveInfo *character = xs_hir_primitive_find("Char", 4);
-  CHECK(character != nullptr && character->bit_width == 16 && character->has_xlil_type &&
-        character->xlil_type.kind == XS_LIL_TYPE_U16);
+  CHECK(character != nullptr && character->bit_width == 32 && character->has_xlil_type &&
+        character->xlil_type.kind == XS_LIL_TYPE_U32);
   const XsHirPrimitiveInfo *long_type = xs_hir_primitive_find("Long", 4);
   CHECK(long_type != nullptr && long_type->bit_width == 32 && long_type->is_signed && long_type->has_xlil_type &&
         long_type->xlil_type.kind == XS_LIL_TYPE_I32);

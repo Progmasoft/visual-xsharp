@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -187,8 +187,9 @@ class ProjectContext internal constructor(
         "RELEASE_OUTDIR" to listOf("build/release"),
         "DEBUG_OUTDIR" to listOf("build/debug"),
         "XS_BACKEND" to listOf("LLVM"),
+        "XS_LLVM_LTO" to listOf("true"),
+        "XS_LLVM_OPT_LEVEL" to listOf("3"),
         "XS_EXTENSION" to listOf("xs"),
-        "XGC_ENABLED" to listOf("false"),
         "PUBLISH" to listOf("false"),
       )).toMutableMap()
   private val authors = state?.authors?.toMutableList() ?: mutableListOf()
@@ -361,9 +362,18 @@ class ProjectContext internal constructor(
     val project = identity ?: throw ProjectConfigurationException("project(...) is required")
     val resolvedModules = resolveModuleDependencies(modules)
     val effectiveSourceIncludes = sourceIncludes.ifEmpty { listOf("Sources") }
+    val backend = variables.getValue("XS_BACKEND").single()
+    val effectiveVariables =
+      if (backend == "LLVM") {
+        variables.toSortedMap()
+      } else {
+        variables
+          .filterKeys { key -> key != "XS_LLVM_LTO" && key != "XS_LLVM_OPT_LEVEL" }
+          .toSortedMap()
+      }
     return ProjectPlan(
       project,
-      variables.toSortedMap(),
+      effectiveVariables,
       binaries.toList(),
       libraries.toList(),
       authors.toList(),
@@ -414,6 +424,12 @@ private fun validateReservedVariable(
   values: List<String>,
 ) {
   when (key) {
+    "XGC_ENABLED", "XPG_ENABLED" -> {
+      throw ProjectConfigurationException(
+        "$key is not configurable; LLVM always uses RAII and XPLR always uses XPG",
+      )
+    }
+
     "BUILD_MODE" -> {
       if (values.size != 1 || values.single() !in setOf("Release", "Debug")) {
         throw ProjectConfigurationException("BUILD_MODE must be exactly Release or Debug")
@@ -422,6 +438,24 @@ private fun validateReservedVariable(
 
     "RELEASE_OUTDIR", "DEBUG_OUTDIR" -> {
       if (values.size != 1) throw ProjectConfigurationException("$key must be exactly one path")
+    }
+
+    "XS_BACKEND" -> {
+      if (values.size != 1 || values.single() !in setOf("LLVM", "XPLR")) {
+        throw ProjectConfigurationException("XS_BACKEND must be exactly LLVM or XPLR")
+      }
+    }
+
+    "XS_LLVM_LTO" -> {
+      if (values.size != 1 || values.single() !in setOf("true", "false")) {
+        throw ProjectConfigurationException("XS_LLVM_LTO must be exactly true or false")
+      }
+    }
+
+    "XS_LLVM_OPT_LEVEL" -> {
+      if (values.size != 1 || values.single() !in setOf("0", "1", "2", "3")) {
+        throw ProjectConfigurationException("XS_LLVM_OPT_LEVEL must be exactly 0, 1, 2, or 3")
+      }
     }
 
     "XSPKG_TYPE" -> {

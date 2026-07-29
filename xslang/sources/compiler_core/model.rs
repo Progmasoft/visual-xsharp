@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -256,7 +256,7 @@ pub(super) fn build_session_from_declarations(syntax: Vec<SyntaxTree>,
   {
     match xlil_lowering::lower_module(&declarations, &mir_functions)
     {
-      Some(module) => Some(crate::xlil::writer::module_to_string(&module).into_bytes()),
+      Some(module) => Some(crate::xlil::module_to_string(&module).into_bytes()),
       None =>
       {
         diagnostics.push("verified MIR could not be assembled into a valid XLIL module".to_string());

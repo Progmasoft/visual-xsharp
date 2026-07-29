@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 cmake_minimum_required(VERSION 3.31)
@@ -143,7 +143,7 @@ if(NOT XS_BUILD_PROJECT_XS)
   message(FATAL_ERROR "This checkout currently has one buildable compiler project: 'xs'.")
 endif()
 
-project(xs_project VERSION 0.2.2 LANGUAGES C)
+project(xs_project VERSION 0.2.3 LANGUAGES C)
 xs_validate_llvm_toolchain()
 
 file(RELATIVE_PATH XS_SOURCE_FROM_BINARY "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")

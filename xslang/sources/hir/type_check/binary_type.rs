@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -31,6 +31,14 @@ impl TypeChecker
     if left_type != right_type
     {
       return None;
+    }
+    if matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual) &&
+       matches!(&left_type,
+                Type::Reference { referent,
+                                  mutable: false }
+                  if **referent == Type::Primitive(PrimitiveType::Str))
+    {
+      return Some(Type::Primitive(PrimitiveType::Bool));
     }
     if let Type::Named(name) = &left_type &&
        matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual) &&
@@ -127,7 +135,8 @@ pub(super) const fn is_supported_integer(primitive: PrimitiveType) -> bool
 
 const fn is_supported_float(primitive: PrimitiveType) -> bool
 {
-  matches!(primitive, PrimitiveType::SFloat | PrimitiveType::Float)
+  matches!(primitive,
+           PrimitiveType::SFloat | PrimitiveType::LFloat | PrimitiveType::Float | PrimitiveType::Double)
 }
 
 const fn is_float_value_operator(operator: BinaryOperator) -> bool

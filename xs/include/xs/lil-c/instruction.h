@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -33,7 +33,7 @@ XS_LIL_API XsLilStatus xs_lil_block_binary_integer(XsLilBlock *block, XsLilInteg
                                                    XsLilValueId *result, XsLilError *error);
 XS_LIL_API XsLilStatus xs_lil_block_add_const_bool(XsLilBlock *block, bool value, XsLilValueId *result,
                                                    XsLilError *error);
-XS_LIL_API XsLilStatus xs_lil_block_add_const_str(XsLilBlock *block, XsLilUtf16Encoding encoding, const uint16_t *units,
+XS_LIL_API XsLilStatus xs_lil_block_add_const_str(XsLilBlock *block, XsLilUtf32Encoding encoding, const uint32_t *units,
                                                   size_t unit_count, XsLilValueId *result, XsLilError *error);
 XS_LIL_API XsLilStatus xs_lil_block_add_const_f32_bits(XsLilBlock *block, uint32_t bits, XsLilValueId *result,
                                                        XsLilError *error);
@@ -156,9 +156,9 @@ XS_LIL_API XsLilIntegerBinaryOperation xs_lil_block_instruction_integer_operatio
 XS_LIL_API XsLilType xs_lil_block_instruction_integer_type(const XsLilBlock *block, size_t index);
 XS_LIL_API uint64_t xs_lil_block_instruction_float_bits(const XsLilBlock *block, size_t index);
 XS_LIL_API bool xs_lil_block_instruction_bool(const XsLilBlock *block, size_t index);
-XS_LIL_API XsLilUtf16Encoding xs_lil_block_instruction_utf16_encoding(const XsLilBlock *block, size_t index);
-XS_LIL_API size_t xs_lil_block_instruction_utf16_length(const XsLilBlock *block, size_t index);
-XS_LIL_API uint16_t xs_lil_block_instruction_utf16_unit(const XsLilBlock *block, size_t index, size_t unit);
+XS_LIL_API XsLilUtf32Encoding xs_lil_block_instruction_utf32_encoding(const XsLilBlock *block, size_t index);
+XS_LIL_API size_t xs_lil_block_instruction_utf32_length(const XsLilBlock *block, size_t index);
+XS_LIL_API uint32_t xs_lil_block_instruction_utf32_unit(const XsLilBlock *block, size_t index, size_t unit);
 XS_LIL_API const char *xs_lil_block_instruction_callee(const XsLilBlock *block, size_t index);
 XS_LIL_API size_t xs_lil_block_instruction_argument_count(const XsLilBlock *block, size_t index);
 XS_LIL_API XsLilValueId xs_lil_block_instruction_argument(const XsLilBlock *block, size_t index, size_t argument);

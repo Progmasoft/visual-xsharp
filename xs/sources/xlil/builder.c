@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -107,7 +107,7 @@ XsLilStatus xs_lil_builder_const_bool(XsLilBuilder *builder, bool value, XsLilVa
   return status == XS_LIL_OK ? xs_lil_block_add_const_bool(block, value, result, error) : status;
 }
 
-XsLilStatus xs_lil_builder_const_str(XsLilBuilder *builder, XsLilUtf16Encoding encoding, const uint16_t *units,
+XsLilStatus xs_lil_builder_const_str(XsLilBuilder *builder, XsLilUtf32Encoding encoding, const uint32_t *units,
                                      size_t unit_count, XsLilValueId *result, XsLilError *error)
 {
   XsLilBlock *block = nullptr;

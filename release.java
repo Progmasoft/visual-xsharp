@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -30,7 +30,7 @@ class Release
           help    Show this help.
 
         examples:
-          java --source=21 release.java check 0.2.2
+          java --source=21 release.java check 0.2.3
         """);
   }
 

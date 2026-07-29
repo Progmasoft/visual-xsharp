@@ -1,12 +1,12 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 [package]
 name = "xslang"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 build = "build.rs"
-authors = ["Leitwolf <xs-lang.chess031@slmails.com>"]
+authors = ["Leitwolf <support@xsharp-lang.xyz>"]
 description = "Target-independent semantic analysis and IR core for the X# compiler"
 license = "MPL-2.0"
 repository = "https://github.com/xss-lang/xs-project"

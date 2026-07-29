@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -156,13 +156,15 @@ static bool is_hex(char character)
   return isxdigit((unsigned char)character) != 0;
 }
 
-static size_t bmp_utf8_length(const XsLexer *lexer)
+static size_t scalar_utf8_length(const XsLexer *lexer)
 {
   unsigned char first = (unsigned char)peek(lexer, 0);
   unsigned char second = (unsigned char)peek(lexer, 1);
   unsigned char third = (unsigned char)peek(lexer, 2);
+  unsigned char fourth = (unsigned char)peek(lexer, 3);
   bool second_is_continuation = second >= 0x80U && second <= 0xbfU;
   bool third_is_continuation = third >= 0x80U && third <= 0xbfU;
+  bool fourth_is_continuation = fourth >= 0x80U && fourth <= 0xbfU;
   if(first <= 0x7fU)
     return 1;
   if(first >= 0xc2U && first <= 0xdfU && second_is_continuation)
@@ -174,6 +176,12 @@ static size_t bmp_utf8_length(const XsLexer *lexer)
     return 3;
   if(first == 0xedU && second >= 0x80U && second <= 0x9fU && third_is_continuation)
     return 3;
+  if(first == 0xf0U && second >= 0x90U && second <= 0xbfU && third_is_continuation && fourth_is_continuation)
+    return 4;
+  if(first >= 0xf1U && first <= 0xf3U && second_is_continuation && third_is_continuation && fourth_is_continuation)
+    return 4;
+  if(first == 0xf4U && second >= 0x80U && second <= 0x8fU && third_is_continuation && fourth_is_continuation)
+    return 4;
   return 0;
 }
 
@@ -186,14 +194,14 @@ static unsigned hexadecimal_value(char digit)
   return (unsigned)(digit - 'A') + 10U;
 }
 
-static bool character_escape_fits_u16(const XsLexer *lexer, size_t slash)
+static bool character_escape_is_scalar(const XsLexer *lexer, size_t slash)
 {
   if(slash + 1U >= lexer->source->length || lexer->source->text[slash + 1U] != 'U')
     return true;
   unsigned value = 0;
   for(size_t index = slash + 2U; index < slash + 10U; ++index)
     value = (value << 4U) | hexadecimal_value(lexer->source->text[index]);
-  return value <= 0xffffU;
+  return value <= 0x10ffffU && (value < 0xd800U || value > 0xdfffU);
 }
 
 static bool validate_escape(XsLexer *lexer, size_t slash)
@@ -295,9 +303,9 @@ static XsToken lex_character(XsLexer *lexer)
         ++lexer->cursor;
       return token(XS_TOKEN_ERROR, start, lexer->cursor);
     }
-    if(!character_escape_fits_u16(lexer, slash))
+    if(!character_escape_is_scalar(lexer, slash))
     {
-      error(lexer, slash, lexer->cursor, "character escape must fit one UTF-16 code unit");
+      error(lexer, slash, lexer->cursor, "character escape must be one Unicode scalar value");
       while(!at_end(lexer) && peek(lexer, 0) != '\n' && peek(lexer, 0) != '\'')
         ++lexer->cursor;
       if(peek(lexer, 0) == '\'')
@@ -307,11 +315,11 @@ static XsToken lex_character(XsLexer *lexer)
   }
   else
   {
-    size_t length = bmp_utf8_length(lexer);
+    size_t length = scalar_utf8_length(lexer);
     if(length == 0)
     {
       ++lexer->cursor;
-      error(lexer, start, lexer->cursor, "character literal must contain one UTF-16 code unit");
+      error(lexer, start, lexer->cursor, "character literal must contain one Unicode scalar value");
     }
     else
     {

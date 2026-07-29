@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -59,7 +59,7 @@ impl CollectionRegistry
                                        length: *length });
         Some(value_type)
       }
-      Type::Unit | Type::Set { .. } | Type::Map { .. } => None,
+      Type::Unit | Type::Set { .. } | Type::Map { .. } | Type::Optional { .. } | Type::Reference { .. } => None,
     }
   }
 }

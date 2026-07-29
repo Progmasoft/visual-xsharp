@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -23,8 +23,11 @@ pub(super) fn primitive_type(name: &str) -> Option<PrimitiveType>
     "UInt" => PrimitiveType::UInt,
     "UInteger" => PrimitiveType::UInteger,
     "SFloat" => PrimitiveType::SFloat,
+    "LFloat" => PrimitiveType::LFloat,
     "Float" => PrimitiveType::Float,
+    "Double" => PrimitiveType::Double,
     "Str" => PrimitiveType::Str,
+    "String" => PrimitiveType::String,
     _ => return None,
   })
 }
@@ -82,6 +85,16 @@ pub(super) fn split_type_list(text: &str) -> Vec<&str>
 
 pub(crate) fn parse_type_text(name: &str) -> Option<Type>
 {
+  if let Some(referent) = name.strip_prefix("&mut ")
+  {
+    return Some(Type::Reference { referent: Box::new(parse_type_text(referent.trim())?),
+                                  mutable: true });
+  }
+  if let Some(referent) = name.strip_prefix('&')
+  {
+    return Some(Type::Reference { referent: Box::new(parse_type_text(referent.trim())?),
+                                  mutable: false });
+  }
   if name == "()"
   {
     return Some(Type::Unit);

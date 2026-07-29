@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -31,6 +31,9 @@ struct XsLlvmCodegenUnit
   size_t lil_array_type_count;
 };
 
+void xs_llvm_clear_error(XsBackendError *error);
+XsBackendStatus xs_llvm_set_error(XsBackendError *error, XsBackendStatus status, const char *message);
+char *xs_llvm_copy_text(const char *text);
 XsBackendStatus xs_llvm_codegen_lil_type(XsLlvmCodegenUnit *unit, XsLilType type, LLVMTypeRef *llvm_type,
                                          XsBackendError *error);
 XsBackendStatus xs_llvm_lower_aggregate_instruction(XsLlvmCodegenUnit *unit, LLVMBuilderRef builder,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -64,7 +64,7 @@ int main(int argc, char **argv)
 
   LLVMTypeRef type = nullptr;
   CHECK(xs_llvm_primitive_type(backend, XS_PRIMITIVE_BOOL, &type, &error) == XS_BACKEND_OK);
-  CHECK(LLVMGetIntTypeWidth(type) == 1);
+  CHECK(LLVMGetIntTypeWidth(type) == 8);
   CHECK(xs_llvm_primitive_type(backend, XS_PRIMITIVE_BYTE, &type, &error) == XS_BACKEND_OK);
   CHECK(LLVMGetIntTypeWidth(type) == 8);
   CHECK(xs_llvm_primitive_type(backend, XS_PRIMITIVE_SBYTE, &type, &error) == XS_BACKEND_OK);
@@ -74,13 +74,13 @@ int main(int argc, char **argv)
   CHECK(xs_llvm_primitive_type(backend, XS_PRIMITIVE_INTEGER, &type, &error) == XS_BACKEND_OK);
   CHECK(LLVMGetIntTypeWidth(type) == 128);
   CHECK(xs_llvm_primitive_type(backend, XS_PRIMITIVE_CHAR, &type, &error) == XS_BACKEND_OK);
-  CHECK(LLVMGetIntTypeWidth(type) == 16);
+  CHECK(LLVMGetIntTypeWidth(type) == 32);
   CHECK(xs_llvm_primitive_type(backend, XS_PRIMITIVE_SFLOAT, &type, &error) == XS_BACKEND_OK);
-  CHECK(LLVMGetTypeKind(type) == LLVMFloatTypeKind);
+  CHECK(LLVMGetTypeKind(type) == LLVMHalfTypeKind);
   CHECK(xs_llvm_primitive_type(backend, XS_PRIMITIVE_STR, &type, &error) == XS_BACKEND_OK);
   CHECK(LLVMGetTypeKind(type) == LLVMStructTypeKind && LLVMCountStructElementTypes(type) == 2);
   CHECK(xs_llvm_lil_type(backend, (XsLilType){.kind = XS_LIL_TYPE_BOOL}, &type, &error) == XS_BACKEND_OK);
-  CHECK(LLVMGetIntTypeWidth(type) == 1);
+  CHECK(LLVMGetIntTypeWidth(type) == 8);
   CHECK(xs_llvm_lil_type(backend, (XsLilType){.kind = XS_LIL_TYPE_I64}, &type, &error) == XS_BACKEND_OK);
   CHECK(LLVMGetIntTypeWidth(type) == 64);
   CHECK(xs_llvm_lil_type(backend, (XsLilType){.kind = XS_LIL_TYPE_STR}, &type, &error) == XS_BACKEND_OK);
@@ -358,9 +358,9 @@ int main(int argc, char **argv)
                                               &string_function, nullptr) == XS_LIL_OK);
   XsLilBlock *string_entry = nullptr;
   CHECK(xs_lil_function_append_block(string_function, "entry", &string_entry, nullptr) == XS_LIL_OK);
-  const uint16_t string_units[] = {UINT16_C(0x004c), UINT16_C(0x0065), UINT16_C(0x0069)};
+  const uint32_t string_units[] = {UINT16_C(0x004c), UINT16_C(0x0065), UINT16_C(0x0069)};
   XsLilValueId string_value = 0;
-  CHECK(xs_lil_block_add_const_str(string_entry, XS_LIL_UTF16_BE, string_units, 3, &string_value, nullptr) ==
+  CHECK(xs_lil_block_add_const_str(string_entry, XS_LIL_UTF32_BE, string_units, 3, &string_value, nullptr) ==
         XS_LIL_OK);
   CHECK(xs_lil_block_set_return_value(string_entry, string_value, nullptr) == XS_LIL_OK);
   CHECK(xs_llvm_declare_lil_function(first, "Greeting", (XsLilType){.kind = XS_LIL_TYPE_STR}, nullptr, 0, &function,
@@ -392,9 +392,9 @@ int main(int argc, char **argv)
   CHECK(file_contains(ir_path, "xor i64"));
   CHECK(file_contains(ir_path, "shl i64"));
   CHECK(file_contains(ir_path, "ashr i64"));
-  CHECK(file_contains(ir_path, "define i1 @Equality(i64"));
+  CHECK(file_contains(ir_path, "define i8 @Equality(i64"));
   CHECK(file_contains(ir_path, "icmp eq i64"));
-  CHECK(file_contains(ir_path, "define i1 @Compare64(i64"));
+  CHECK(file_contains(ir_path, "define i8 @Compare64(i64"));
   CHECK(file_contains(ir_path, "icmp ne i64"));
   CHECK(file_contains(ir_path, "icmp slt i64"));
   CHECK(file_contains(ir_path, "icmp sle i64"));
@@ -407,14 +407,14 @@ int main(int argc, char **argv)
   CHECK(file_contains(ir_path, "sdiv i32"));
   CHECK(file_contains(ir_path, "srem i32"));
   CHECK(file_contains(ir_path, "xor i32"));
-  CHECK(file_contains(ir_path, "define i1 @Equality32(i32"));
+  CHECK(file_contains(ir_path, "define i8 @Equality32(i32"));
   CHECK(file_contains(ir_path, "icmp eq i32"));
-  CHECK(file_contains(ir_path, "define i1 @Compare32(i32"));
+  CHECK(file_contains(ir_path, "define i8 @Compare32(i32"));
   CHECK(file_contains(ir_path, "icmp slt i32"));
   CHECK(file_contains(ir_path, "icmp sle i32"));
   CHECK(file_contains(ir_path, "icmp sgt i32"));
   CHECK(file_contains(ir_path, "icmp sge i32"));
-  CHECK(file_contains(ir_path, "define void @Choose(i1"));
+  CHECK(file_contains(ir_path, "define void @Choose(i8"));
   CHECK(file_contains(ir_path, "br i1"));
   CHECK(file_contains(ir_path, "define void @Panic()"));
   CHECK(file_contains(ir_path, "call void @llvm.trap()"));
@@ -424,8 +424,8 @@ int main(int argc, char **argv)
   CHECK(file_contains(ir_path, "store i32 7"));
   CHECK(file_contains(ir_path, "load i32"));
   CHECK(file_contains(ir_path, "define { ptr, i64 } @Greeting()"));
-  CHECK(file_contains(ir_path, "private unnamed_addr constant [6 x i8]"));
-  CHECK(file_contains(ir_path, "c\"\\00L\\00e\\00i\""));
+  CHECK(file_contains(ir_path, "private unnamed_addr constant [12 x i8]"));
+  CHECK(file_contains(ir_path, "c\"\\00\\00\\00L\\00\\00\\00e\\00\\00\\00i\""));
   CHECK(xs_llvm_emit_object_file(first, argv[1], &error) == XS_BACKEND_OK);
   char array_ir_path[4096] = {0};
   CHECK(snprintf(array_ir_path, sizeof(array_ir_path), "%s.array.ll", argv[1]) > 0);

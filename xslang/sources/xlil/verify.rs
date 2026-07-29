@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -8,43 +8,11 @@ use std::collections::HashSet;
 use crate::xlil::{Function, Instruction, Module, SlotId, Terminator, Type, TypeKind, ValueId, type_name};
 
 mod composite;
+mod diagnostic;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DiagnosticCode
-{
-  EmptyModuleName,
-  InvalidAggregateType,
-  InvalidArrayType,
-  DuplicateAggregateName,
-  EmptyFunctionName,
-  DuplicateFunctionName,
-  DeclarationHasBody,
-  DefinitionHasNoBlocks,
-  DuplicateBlockId,
-  EmptyBlockLabel,
-  MissingTerminator,
-  InstructionResultUnknown,
-  ReturnValueUnknown,
-  ReturnValueTypeMismatch,
-  VoidReturnValue,
-  NonVoidReturnMissingValue,
-  BranchTargetUnknown,
-  CallTargetUnknown,
-  CallArgumentCountMismatch,
-  CallArgumentTypeMismatch,
-  CallResultTypeMismatch,
-  CallVoidResultMismatch,
-  StackSlotInvalid,
-  MemoryTypeMismatch,
-}
+pub use diagnostic::{Diagnostic, DiagnosticCode};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Diagnostic
-{
-  pub code: DiagnosticCode,
-  pub message: String,
-}
-
+/// Checks all registry, type, instruction, call, and control-flow invariants.
 #[must_use]
 pub fn verify_module(module: &Module) -> Vec<Diagnostic>
 {

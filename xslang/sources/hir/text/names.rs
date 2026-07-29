@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -59,6 +59,11 @@ pub(super) fn type_name(ty: &Type) -> String
     Type::Unit => "()".to_string(),
     Type::Primitive(primitive) => primitive_type_name(*primitive).to_string(),
     Type::Named(name) => name.clone(),
+    Type::Optional { element } => format!("Optional<{}>", type_name(element)),
+    Type::Reference { referent,
+                      mutable: false, } => format!("&{}", type_name(referent)),
+    Type::Reference { referent,
+                      mutable: true, } => format!("&mut {}", type_name(referent)),
     Type::Array { element,
                   length: None, } => format!("[{}]", type_name(element)),
     Type::Array { element,
@@ -95,7 +100,10 @@ const fn primitive_type_name(primitive: PrimitiveType) -> &'static str
     PrimitiveType::UInt => "UInt",
     PrimitiveType::UInteger => "UInteger",
     PrimitiveType::SFloat => "SFloat",
+    PrimitiveType::LFloat => "LFloat",
     PrimitiveType::Float => "Float",
+    PrimitiveType::Double => "Double",
     PrimitiveType::Str => "Str",
+    PrimitiveType::String => "String",
   }
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -19,6 +19,21 @@ fn lower_type(value: &TypeRef,
     TypeRef::Unit => Some(Type::VOID),
     TypeRef::Primitive(value) => crate::hir::mir_lowering::primitive_to_xlil(*value),
     TypeRef::Named(name) => aggregates.types.get(name).copied(),
+    TypeRef::Reference { referent,
+                         mutable: false, }
+      if **referent == TypeRef::Primitive(crate::hir::type_check::PrimitiveType::Str) =>
+    {
+      Some(Type::STR)
+    }
+    TypeRef::Optional { .. } =>
+    {
+      let checked = crate::hir::declarations::type_ref_to_checked(value)?;
+      aggregates.optionals
+                .iter()
+                .find(|(source, _)| source == &checked)
+                .map(|(_, ty)| *ty)
+    }
+    TypeRef::Reference { .. } => None,
     TypeRef::Tuple { .. } =>
     {
       let checked = crate::hir::declarations::type_ref_to_checked(value)?;
@@ -75,6 +90,8 @@ fn flatten_parameter(module: &HirModule,
       }
       visiting.pop();
     }
+    TypeRef::Reference { .. } => parameters.push(lower_type(value, aggregates, collections)?),
+    TypeRef::Optional { .. } => parameters.push(lower_type(value, aggregates, collections)?),
     TypeRef::Tuple { .. } | TypeRef::Array { .. } => parameters.push(lower_type(value, aggregates, collections)?),
     TypeRef::Unit => return None,
     TypeRef::Map { .. } => return None,
@@ -177,8 +194,7 @@ pub(super) fn lower_module(declarations: &HirModule, mir_functions: &[mir::Funct
       module.add_function(Function::declaration(declaration.name.clone(), return_type, parameters));
     }
   }
-  if used_mir.iter().filter(|used| **used).count() != mir_functions.len() ||
-     !xlil::verify::verify_module(&module).is_empty()
+  if used_mir.iter().filter(|used| **used).count() != mir_functions.len() || !xlil::verify_module(&module).is_empty()
   {
     return None;
   }

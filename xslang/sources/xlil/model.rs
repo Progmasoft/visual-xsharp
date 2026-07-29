@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -12,78 +12,110 @@ use super::I32BinaryOperation;
 
 pub use instruction::Instruction;
 pub use integer::IntegerConstant;
-pub use types::{Type, TypeKind, Utf16Encoding};
+pub use types::{Type, TypeKind, Utf32Encoding};
 
+/// The only XLIL text/model version accepted by this crate release.
 pub const SUPPORTED_XLIL_VERSION: u32 = 0;
 
+/// Returns whether `version` is accepted by the XLIL v0 reader.
 #[must_use]
 pub const fn is_supported_xlil_version(version: u32) -> bool
 {
   matches!(version, SUPPORTED_XLIL_VERSION)
 }
 
+/// Sequential function-local SSA value register identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ValueId(pub u32);
 
+/// Sequential function-local basic block identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BlockId(pub u32);
 
+/// Sequential function-local stack slot identifier.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct SlotId(pub u32);
 
+/// Typed value-table entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Value
 {
+  /// Register identifier.
   pub id: ValueId,
+  /// Exact XLIL value type.
   pub value_type: Type,
 }
 
+/// Typed stack-slot table entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Slot
 {
+  /// Slot identifier.
   pub id: SlotId,
+  /// Type accepted by loads and stores.
   pub value_type: Type,
 }
 
+/// Control-flow record that ends a basic block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Terminator
 {
+  /// Returns no value or one function result value.
   Return(Option<ValueId>),
+  /// Transfers control unconditionally.
   Branch(BlockId),
+  /// Selects one of two targets from a boolean register.
   BranchIf
   {
+    /// Boolean condition register.
     condition: ValueId,
+    /// Target selected when the condition is true.
     then_block: BlockId,
+    /// Target selected when the condition is false.
     else_block: BlockId,
   },
+  /// Terminates execution through the runtime panic path.
   Panic,
 }
 
+/// Ordered instruction list and terminator for one basic block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Block
 {
+  /// Function-local block identifier.
   pub id: BlockId,
+  /// Human-readable block label.
   pub label: String,
+  /// Instructions in execution order.
   pub instructions: Vec<Instruction>,
+  /// Required final control-flow record for a definition block.
   pub terminator: Option<Terminator>,
 }
 
+/// XLIL function declaration or definition.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Function
 {
+  /// Module-level symbol name.
   pub name: String,
+  /// Function result type, or [`Type::VOID`].
   pub return_type: Type,
+  /// Parameter types in ABI order.
   pub parameters: Vec<Type>,
+  /// Sequential value registry; definition parameters occupy the prefix.
   pub values: Vec<Value>,
+  /// Function-local stack-slot registry.
   pub slots: Vec<Slot>,
+  /// Definition body in registry order.
   pub blocks: Vec<Block>,
+  /// `true` for `.func` and `false` for `.extern`.
   pub is_definition: bool,
 }
 
 impl Function
 {
   #[must_use]
-  pub fn declaration(name: impl Into<String>, return_type: Type, parameters: Vec<Type>) -> Self
+  pub(crate) fn declaration(name: impl Into<String>, return_type: Type, parameters: Vec<Type>) -> Self
   {
     Self { name: name.into(),
            return_type,
@@ -95,7 +127,7 @@ impl Function
   }
 
   #[must_use]
-  pub fn definition(name: impl Into<String>, return_type: Type, parameters: Vec<Type>) -> Self
+  pub(crate) fn definition(name: impl Into<String>, return_type: Type, parameters: Vec<Type>) -> Self
   {
     let values = parameters.iter()
                            .enumerate()
@@ -112,13 +144,13 @@ impl Function
   }
 
   #[must_use]
-  pub fn parameter_value(&self, parameter: usize) -> Option<ValueId>
+  pub(crate) fn parameter_value(&self, parameter: usize) -> Option<ValueId>
   {
     self.parameters.get(parameter)?;
     Some(ValueId(parameter as u32))
   }
 
-  pub fn append_block(&mut self, label: impl Into<String>) -> BlockId
+  pub(crate) fn append_block(&mut self, label: impl Into<String>) -> BlockId
   {
     let id = BlockId(self.blocks.len() as u32);
     self.blocks.push(Block { id,
@@ -128,7 +160,7 @@ impl Function
     id
   }
 
-  pub fn add_const_i64(&mut self, block: BlockId, value: i64) -> Option<ValueId>
+  pub(crate) fn add_const_i64(&mut self, block: BlockId, value: i64) -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -138,7 +170,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_const_i32(&mut self, block: BlockId, value: i32) -> Option<ValueId>
+  pub(crate) fn add_const_i32(&mut self, block: BlockId, value: i32) -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -148,7 +180,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_const_u16(&mut self, block: BlockId, value: u16) -> Option<ValueId>
+  pub(crate) fn add_const_u16(&mut self, block: BlockId, value: u16) -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -158,7 +190,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_const_integer(&mut self, block: BlockId, value: IntegerConstant) -> Option<ValueId>
+  pub(crate) fn add_const_integer(&mut self, block: BlockId, value: IntegerConstant) -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -170,7 +202,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_const_f32_bits(&mut self, block: BlockId, bits: u32) -> Option<ValueId>
+  pub(crate) fn add_const_f32_bits(&mut self, block: BlockId, bits: u32) -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -180,7 +212,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_const_f64_bits(&mut self, block: BlockId, bits: u64) -> Option<ValueId>
+  pub(crate) fn add_const_f64_bits(&mut self, block: BlockId, bits: u64) -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -190,11 +222,11 @@ impl Function
     Some(result)
   }
 
-  pub fn add_const_str(&mut self,
-                       block: BlockId,
-                       encoding: Utf16Encoding,
-                       units: impl Into<Vec<u16>>)
-                       -> Option<ValueId>
+  pub(crate) fn add_const_str(&mut self,
+                              block: BlockId,
+                              encoding: Utf32Encoding,
+                              units: impl Into<Vec<u32>>)
+                              -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -205,7 +237,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_const_bool(&mut self, block: BlockId, value: bool) -> Option<ValueId>
+  pub(crate) fn add_const_bool(&mut self, block: BlockId, value: bool) -> Option<ValueId>
   {
     let result = ValueId(self.values.len() as u32);
     self.values.push(Value { id: result,
@@ -217,7 +249,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn add_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.block(block)?;
     if !self.value(left).is_some_and(|value| value.value_type == Type::I64) ||
@@ -234,7 +266,7 @@ impl Function
     Some(result)
   }
 
-  pub fn sub_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn sub_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.block(block)?;
     if !self.value(left).is_some_and(|value| value.value_type == Type::I64) ||
@@ -251,7 +283,7 @@ impl Function
     Some(result)
   }
 
-  pub fn mul_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn mul_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.block(block)?;
     if !self.value(left).is_some_and(|value| value.value_type == Type::I64) ||
@@ -268,7 +300,7 @@ impl Function
     Some(result)
   }
 
-  pub fn eq_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn eq_i64(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.block(block)?;
     if !self.value(left).is_some_and(|value| value.value_type == Type::I64) ||
@@ -285,27 +317,27 @@ impl Function
     Some(result)
   }
 
-  pub fn add_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn add_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::I32, I32Op::Add)
   }
 
-  pub fn sub_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn sub_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::I32, I32Op::Sub)
   }
 
-  pub fn mul_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn mul_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::I32, I32Op::Mul)
   }
 
-  pub fn binary_i32(&mut self,
-                    block: BlockId,
-                    left: ValueId,
-                    right: ValueId,
-                    operation: I32BinaryOperation)
-                    -> Option<ValueId>
+  pub(crate) fn binary_i32(&mut self,
+                           block: BlockId,
+                           left: ValueId,
+                           right: ValueId,
+                           operation: I32BinaryOperation)
+                           -> Option<ValueId>
   {
     self.block(block)?;
     if !self.value(left).is_some_and(|value| value.value_type == Type::I32) ||
@@ -325,27 +357,27 @@ impl Function
     Some(result)
   }
 
-  pub fn eq_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn eq_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::BOOL, I32Op::Eq)
   }
 
-  pub fn lt_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn lt_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::BOOL, I32Op::Lt)
   }
 
-  pub fn le_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn le_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::BOOL, I32Op::Le)
   }
 
-  pub fn gt_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn gt_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::BOOL, I32Op::Gt)
   }
 
-  pub fn ge_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
+  pub(crate) fn ge_i32(&mut self, block: BlockId, left: ValueId, right: ValueId) -> Option<ValueId>
   {
     self.add_i32_like(block, left, right, Type::BOOL, I32Op::Ge)
   }
@@ -373,12 +405,12 @@ impl Function
     Some(result)
   }
 
-  pub fn add_call(&mut self,
-                  block: BlockId,
-                  function: impl Into<String>,
-                  arguments: Vec<ValueId>,
-                  return_type: Type)
-                  -> Option<Option<ValueId>>
+  pub(crate) fn add_call(&mut self,
+                         block: BlockId,
+                         function: impl Into<String>,
+                         arguments: Vec<ValueId>,
+                         return_type: Type)
+                         -> Option<Option<ValueId>>
   {
     self.block(block)?;
     if arguments.iter().any(|argument| self.value(*argument).is_none())
@@ -403,12 +435,12 @@ impl Function
     Some(result)
   }
 
-  pub fn add_aggregate(&mut self, block: BlockId, value_type: Type, fields: Vec<ValueId>) -> Option<ValueId>
+  pub(crate) fn add_aggregate(&mut self, block: BlockId, value_type: Type, fields: Vec<ValueId>) -> Option<ValueId>
   {
     self.add_composite(block, value_type, fields, TypeKind::Aggregate)
   }
 
-  pub fn add_array(&mut self, block: BlockId, value_type: Type, elements: Vec<ValueId>) -> Option<ValueId>
+  pub(crate) fn add_array(&mut self, block: BlockId, value_type: Type, elements: Vec<ValueId>) -> Option<ValueId>
   {
     self.add_composite(block, value_type, elements, TypeKind::Array)
   }
@@ -435,7 +467,12 @@ impl Function
     Some(result)
   }
 
-  pub fn add_extract(&mut self, block: BlockId, aggregate: ValueId, field: u32, field_type: Type) -> Option<ValueId>
+  pub(crate) fn add_extract(&mut self,
+                            block: BlockId,
+                            aggregate: ValueId,
+                            field: u32,
+                            field_type: Type)
+                            -> Option<ValueId>
   {
     if field_type == Type::VOID ||
        !matches!(self.value(aggregate)?.value_type.kind,
@@ -452,7 +489,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_slot(&mut self, value_type: Type) -> Option<SlotId>
+  pub(crate) fn add_slot(&mut self, value_type: Type) -> Option<SlotId>
   {
     if value_type == Type::VOID
     {
@@ -464,7 +501,7 @@ impl Function
     Some(id)
   }
 
-  pub fn add_load(&mut self, block: BlockId, slot: SlotId) -> Option<ValueId>
+  pub(crate) fn add_load(&mut self, block: BlockId, slot: SlotId) -> Option<ValueId>
   {
     let value_type = self.slot(slot)?.value_type;
     let result = ValueId(self.values.len() as u32);
@@ -475,7 +512,7 @@ impl Function
     Some(result)
   }
 
-  pub fn add_store(&mut self, block: BlockId, slot: SlotId, value: ValueId) -> bool
+  pub(crate) fn add_store(&mut self, block: BlockId, slot: SlotId, value: ValueId) -> bool
   {
     let Some(slot_type) = self.slot(slot).map(|slot| slot.value_type)
     else
@@ -496,7 +533,7 @@ impl Function
     true
   }
 
-  pub fn set_return(&mut self, block: BlockId, value: Option<ValueId>) -> bool
+  pub(crate) fn set_return(&mut self, block: BlockId, value: Option<ValueId>) -> bool
   {
     let return_type_matches = match value
     {
@@ -522,7 +559,7 @@ impl Function
     true
   }
 
-  pub fn set_branch(&mut self, block: BlockId, target: BlockId) -> bool
+  pub(crate) fn set_branch(&mut self, block: BlockId, target: BlockId) -> bool
   {
     if self.block(target).is_none()
     {
@@ -541,8 +578,12 @@ impl Function
     true
   }
 
-  pub fn set_branch_if(&mut self, block: BlockId, condition: ValueId, then_block: BlockId, else_block: BlockId)
-                       -> bool
+  pub(crate) fn set_branch_if(&mut self,
+                              block: BlockId,
+                              condition: ValueId,
+                              then_block: BlockId,
+                              else_block: BlockId)
+                              -> bool
   {
     if self.block(then_block).is_none() || self.block(else_block).is_none()
     {
@@ -568,7 +609,7 @@ impl Function
     true
   }
 
-  pub fn set_panic(&mut self, block: BlockId) -> bool
+  pub(crate) fn set_panic(&mut self, block: BlockId) -> bool
   {
     let Some(block) = self.block_mut(block)
     else
@@ -654,35 +695,48 @@ fn i32_instruction(op: I32Op, result: ValueId, left: ValueId, right: ValueId) ->
   }
 }
 
+/// Complete XLIL v0 module registry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Module
 {
+  /// Module registry name.
   pub name: String,
+  /// Named aggregate layouts.
   pub aggregate_types: Vec<AggregateType>,
+  /// Fixed and runtime-length array layouts.
   pub array_types: Vec<ArrayType>,
+  /// Function declarations and definitions.
   pub functions: Vec<Function>,
 }
 
+/// Named aggregate layout entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AggregateType
 {
+  /// Sequential registry identifier.
   pub id: u32,
+  /// Stable text name.
   pub name: String,
+  /// Field types in layout order.
   pub fields: Vec<Type>,
 }
 
+/// Array layout entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArrayType
 {
+  /// Sequential registry identifier.
   pub id: u32,
+  /// Element type.
   pub element_type: Type,
+  /// Fixed length, or `None` for a runtime-length array.
   pub length: Option<u64>,
 }
 
 impl Module
 {
   #[must_use]
-  pub fn new(name: impl Into<String>) -> Self
+  pub(crate) fn new(name: impl Into<String>) -> Self
   {
     Self { name: name.into(),
            aggregate_types: vec![],
@@ -690,7 +744,7 @@ impl Module
            functions: vec![] }
   }
 
-  pub fn add_aggregate_type(&mut self, name: impl Into<String>, fields: Vec<Type>) -> Option<Type>
+  pub(crate) fn add_aggregate_type(&mut self, name: impl Into<String>, fields: Vec<Type>) -> Option<Type>
   {
     let name = name.into();
     if name.is_empty() || self.aggregate_types.iter().any(|entry| entry.name == name)
@@ -705,18 +759,18 @@ impl Module
   }
 
   #[must_use]
-  pub fn aggregate_type(&self, value_type: Type) -> Option<&AggregateType>
+  pub(crate) fn aggregate_type(&self, value_type: Type) -> Option<&AggregateType>
   {
     (value_type.kind == TypeKind::Aggregate).then_some(())?;
     self.aggregate_types.get(value_type.registry_id as usize)
   }
 
-  pub fn add_array_type(&mut self, element_type: Type, length: u64) -> Option<Type>
+  pub(crate) fn add_array_type(&mut self, element_type: Type, length: u64) -> Option<Type>
   {
     self.add_array_layout(element_type, Some(length))
   }
 
-  pub fn add_dynamic_array_type(&mut self, element_type: Type) -> Option<Type>
+  pub(crate) fn add_dynamic_array_type(&mut self, element_type: Type) -> Option<Type>
   {
     self.add_array_layout(element_type, None)
   }
@@ -739,238 +793,17 @@ impl Module
   }
 
   #[must_use]
-  pub fn array_type(&self, value_type: Type) -> Option<&ArrayType>
+  pub(crate) fn array_type(&self, value_type: Type) -> Option<&ArrayType>
   {
     (value_type.kind == TypeKind::Array).then_some(())?;
     self.array_types.get(value_type.registry_id as usize)
   }
 
-  pub fn add_function(&mut self, function: Function)
+  pub(crate) fn add_function(&mut self, function: Function)
   {
     self.functions.push(function);
   }
 }
 
 #[cfg(test)]
-mod tests
-{
-  use super::super::{type_from_name, type_name};
-  use super::*;
-
-  #[test]
-  fn models_function_declaration_signature()
-  {
-    let function = Function::declaration("xs$App$Main", Type::VOID, vec![Type::I64]);
-
-    assert!(!function.is_definition);
-    assert_eq!(function.name, "xs$App$Main");
-    assert_eq!(function.parameters, vec![Type::I64]);
-  }
-
-  #[test]
-  fn definitions_allocate_parameter_values_before_instruction_results()
-  {
-    let mut function = Function::definition("Identity", Type::I64, vec![Type::I64]);
-    let block = function.append_block("entry");
-
-    assert_eq!(function.parameter_value(0), Some(ValueId(0)));
-    assert_eq!(function.add_const_i64(block, 42), Some(ValueId(1)));
-  }
-
-  #[test]
-  fn validates_return_value_type()
-  {
-    let mut function = Function::definition("Value", Type::I64, vec![]);
-    let block = function.append_block("entry");
-    let value = function.add_const_i64(block, 42);
-
-    assert!(function.set_return(block, value));
-  }
-
-  #[test]
-  fn adds_call_instruction_with_result()
-  {
-    let mut function = Function::definition("Call", Type::I64, vec![]);
-    let block = function.append_block("entry");
-    let argument = function.add_const_i64(block, 7).expect("const should be added");
-    let result = function.add_call(block, "callee", vec![argument], Type::I64)
-                         .expect("call should be added");
-
-    assert_eq!(result, Some(ValueId(1)));
-    assert!(function.set_return(block, result));
-  }
-
-  #[test]
-  fn models_typed_stack_slot_load_and_store()
-  {
-    let mut function = Function::definition("Memory", Type::I32, vec![]);
-    let entry = function.append_block("entry");
-    let slot = function.add_slot(Type::I32).expect("slot should be added");
-    let value = function.add_const_i32(entry, 7).expect("constant should be added");
-
-    assert!(function.add_store(entry, slot, value));
-    let loaded = function.add_load(entry, slot).expect("load should be added");
-    assert!(function.set_return(entry, Some(loaded)));
-  }
-
-  #[test]
-  fn adds_i64_instruction_with_i64_operands()
-  {
-    let mut function = Function::definition("Add", Type::I64, vec![]);
-    let block = function.append_block("entry");
-    let left = function.add_const_i64(block, 2).expect("left const should be added");
-    let right = function.add_const_i64(block, 3).expect("right const should be added");
-    let result = function.add_i64(block, left, right).expect("add should be added");
-
-    assert_eq!(result, ValueId(2));
-    assert!(function.set_return(block, Some(result)));
-  }
-
-  #[test]
-  fn subtracts_i64_instruction_with_i64_operands()
-  {
-    let mut function = Function::definition("Sub", Type::I64, vec![]);
-    let block = function.append_block("entry");
-    let left = function.add_const_i64(block, 8).expect("left const should be added");
-    let right = function.add_const_i64(block, 3).expect("right const should be added");
-    let result = function.sub_i64(block, left, right).expect("sub should be added");
-
-    assert_eq!(result, ValueId(2));
-    assert!(function.set_return(block, Some(result)));
-  }
-
-  #[test]
-  fn multiplies_i64_instruction_with_i64_operands()
-  {
-    let mut function = Function::definition("Mul", Type::I64, vec![]);
-    let block = function.append_block("entry");
-    let left = function.add_const_i64(block, 6).expect("left const should be added");
-    let right = function.add_const_i64(block, 7).expect("right const should be added");
-    let result = function.mul_i64(block, left, right).expect("mul should be added");
-
-    assert_eq!(result, ValueId(2));
-    assert!(function.set_return(block, Some(result)));
-  }
-
-  #[test]
-  fn adds_bool_const_and_i64_equality()
-  {
-    let mut function = Function::definition("Eq", Type::BOOL, vec![]);
-    let block = function.append_block("entry");
-    let left = function.add_const_i64(block, 7).expect("left const should be added");
-    let right = function.add_const_i64(block, 7).expect("right const should be added");
-    let result = function.eq_i64(block, left, right).expect("eq should be added");
-
-    assert_eq!(result, ValueId(2));
-    assert!(function.set_return(block, Some(result)));
-  }
-
-  #[test]
-  fn adds_bool_const_instruction()
-  {
-    let mut function = Function::definition("Truth", Type::BOOL, vec![]);
-    let block = function.append_block("entry");
-    let result = function.add_const_bool(block, true)
-                         .expect("bool const should be added");
-
-    assert_eq!(result, ValueId(0));
-    assert!(function.set_return(block, Some(result)));
-  }
-
-  #[test]
-  fn adds_i32_const_instruction()
-  {
-    let mut function = Function::definition("main", Type::I32, vec![]);
-    let block = function.append_block("entry");
-    let result = function.add_const_i32(block, 0).expect("i32 const should be added");
-
-    assert_eq!(result, ValueId(0));
-    assert!(function.set_return(block, Some(result)));
-  }
-
-  #[test]
-  fn adds_i32_instruction_family()
-  {
-    let mut function = Function::definition("Compare", Type::BOOL, vec![]);
-    let block = function.append_block("entry");
-    let left = function.add_const_i32(block, 2).expect("left const should be added");
-    let right = function.add_const_i32(block, 3).expect("right const should be added");
-    assert_eq!(function.add_i32(block, left, right), Some(ValueId(2)));
-    assert_eq!(function.sub_i32(block, left, right), Some(ValueId(3)));
-    assert_eq!(function.mul_i32(block, left, right), Some(ValueId(4)));
-    assert_eq!(function.eq_i32(block, left, right), Some(ValueId(5)));
-    assert_eq!(function.lt_i32(block, left, right), Some(ValueId(6)));
-    assert_eq!(function.le_i32(block, left, right), Some(ValueId(7)));
-    assert_eq!(function.gt_i32(block, left, right), Some(ValueId(8)));
-    let result = function.ge_i32(block, left, right);
-
-    assert_eq!(result, Some(ValueId(9)));
-    assert!(function.set_return(block, result));
-  }
-
-  #[test]
-  fn sets_conditional_branch_with_bool_condition()
-  {
-    let mut function = Function::definition("BranchIf", Type::VOID, vec![]);
-    let entry = function.append_block("entry");
-    let then_block = function.append_block("then");
-    let else_block = function.append_block("else");
-    let condition = function.add_const_bool(entry, true)
-                            .expect("bool const should be added");
-
-    assert!(function.set_branch_if(entry, condition, then_block, else_block));
-    assert_eq!(function.blocks[0].terminator,
-               Some(Terminator::BranchIf { condition,
-                                           then_block,
-                                           else_block }));
-  }
-
-  #[test]
-  fn sets_panic_terminator()
-  {
-    let mut function = Function::definition("Panic", Type::VOID, vec![]);
-    let entry = function.append_block("entry");
-
-    assert!(function.set_panic(entry));
-    assert_eq!(function.blocks[0].terminator, Some(Terminator::Panic));
-  }
-
-  #[test]
-  fn rejects_void_return_from_non_void_function()
-  {
-    let mut function = Function::definition("Value", Type::I64, vec![]);
-    let block = function.append_block("entry");
-
-    assert!(!function.set_return(block, None));
-  }
-
-  #[test]
-  fn sets_branch_to_existing_block()
-  {
-    let mut function = Function::definition("Branch", Type::VOID, vec![]);
-    let entry = function.append_block("entry");
-    let exit = function.append_block("exit");
-
-    assert!(function.set_branch(entry, exit));
-    assert_eq!(function.blocks[0].terminator, Some(Terminator::Branch(exit)));
-  }
-
-  #[test]
-  fn reports_primitive_type_names()
-  {
-    assert_eq!(type_name(Type::VOID), "void");
-    assert_eq!(type_name(Type::I32), "i32");
-    assert_eq!(type_name(Type::I64), "i64");
-    assert_eq!(type_name(Type::STR), "str");
-  }
-
-  #[test]
-  fn parses_primitive_type_names()
-  {
-    assert_eq!(type_from_name("void"), Some(Type::VOID));
-    assert_eq!(type_from_name("i64"), Some(Type::I64));
-    assert_eq!(type_from_name("i32"), Some(Type::I32));
-    assert_eq!(type_from_name("str"), Some(Type::STR));
-    assert_eq!(type_from_name("unknown"), None);
-  }
-}
+mod tests;

@@ -1,9 +1,22 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
 #include "parser_internal.h"
+
+static XsSyntaxNode *parse_optional_suffix(SyntaxParser *parser, XsSyntaxNode *type)
+{
+  if(type != nullptr && accept(parser, XS_TOKEN_QUESTION))
+  {
+    type->flags |= XS_SYNTAX_FLAG_OPTIONAL_TYPE;
+    finish_node(parser, type, parser->previous.span.end);
+    if(parser->current.kind == XS_TOKEN_QUESTION)
+      xs_diagnostics_add(parser->diagnostics, XS_DIAGNOSTIC_ERROR, parser->current.span,
+                         "nested optional sugar must be written as Optional<T?>");
+  }
+  return type;
+}
 
 static XsSyntaxNode *parse_lifetime(SyntaxParser *parser)
 {
@@ -77,7 +90,7 @@ XsSyntaxNode *parse_type(SyntaxParser *parser)
       xs_syntax_node_add(parser->tree, map, parse_type(parser));
       expect(parser, XS_TOKEN_RIGHT_BRACKET, "expected ']' after map type");
       finish_node(parser, map, parser->previous.span.end);
-      return map;
+      return parse_optional_suffix(parser, map);
     }
     if(accept(parser, XS_TOKEN_SEMICOLON))
     {
@@ -86,16 +99,16 @@ XsSyntaxNode *parse_type(SyntaxParser *parser)
       xs_syntax_node_add(parser->tree, array, parse_expression(parser, 1));
       expect(parser, XS_TOKEN_RIGHT_BRACKET, "expected ']' after fixed array length");
       finish_node(parser, array, parser->previous.span.end);
-      return array;
+      return parse_optional_suffix(parser, array);
     }
     XsSyntaxNode *array = node(parser, XS_SYNTAX_TYPE_ARRAY, (XsSpan){start, parser->previous.span.end});
     xs_syntax_node_add(parser->tree, array, element_or_key);
     expect(parser, XS_TOKEN_RIGHT_BRACKET, "expected ']' after array type");
     finish_node(parser, array, parser->previous.span.end);
-    return array;
+    return parse_optional_suffix(parser, array);
   }
   if(parser->current.kind == XS_TOKEN_KW_FN)
-    return parse_function_type(parser, start);
+    return parse_optional_suffix(parser, parse_function_type(parser, start));
   if(accept(parser, XS_TOKEN_AMPERSAND))
   {
     XsSyntaxNode *lifetime = parser->current.kind == XS_TOKEN_LIFETIME ? parse_lifetime(parser) : nullptr;
@@ -106,19 +119,20 @@ XsSyntaxNode *parse_type(SyntaxParser *parser)
     if(lifetime != nullptr)
       xs_syntax_node_add(parser->tree, reference, lifetime);
     finish_node(parser, reference, parser->previous.span.end);
-    return reference;
+    return parse_optional_suffix(parser, reference);
   }
   if(accept(parser, XS_TOKEN_STAR))
   {
     XsSyntaxNode *pointer = node(parser, XS_SYNTAX_TYPE_POINTER, (XsSpan){start, parser->previous.span.end});
     xs_syntax_node_add(parser->tree, pointer, parse_type(parser));
     finish_node(parser, pointer, parser->previous.span.end);
-    return pointer;
+    return parse_optional_suffix(parser, pointer);
   }
   if(accept(parser, XS_TOKEN_LEFT_PAREN))
   {
     if(accept(parser, XS_TOKEN_RIGHT_PAREN))
-      return node(parser, XS_SYNTAX_TYPE_UNIT, (XsSpan){start, parser->previous.span.end});
+      return parse_optional_suffix(parser,
+                                   node(parser, XS_SYNTAX_TYPE_UNIT, (XsSpan){start, parser->previous.span.end}));
     XsSyntaxNode *tuple = node(parser, XS_SYNTAX_TYPE_TUPLE, (XsSpan){start, start});
     XsSyntaxNode *first = parse_tuple_type_element(parser);
     bool named = first != nullptr && first->kind == XS_SYNTAX_TUPLE_FIELD;
@@ -136,10 +150,10 @@ XsSyntaxNode *parse_type(SyntaxParser *parser)
     }
     expect(parser, XS_TOKEN_RIGHT_PAREN, "expected ')' after tuple type");
     finish_node(parser, tuple, parser->previous.span.end);
-    return tuple;
+    return parse_optional_suffix(parser, tuple);
   }
   if(parser->current.kind == XS_TOKEN_KW_ELSE)
-    return parse_else_type_placeholder(parser);
+    return parse_optional_suffix(parser, parse_else_type_placeholder(parser));
   if(parser->current.kind != XS_TOKEN_IDENTIFIER && parser->current.kind != XS_TOKEN_KW_ATOMIC)
   {
     xs_diagnostics_add(parser->diagnostics, XS_DIAGNOSTIC_ERROR, parser->current.span, "expected type");
@@ -190,5 +204,5 @@ XsSyntaxNode *parse_type(SyntaxParser *parser)
       result = array;
     }
   }
-  return result;
+  return parse_optional_suffix(parser, result);
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -26,15 +26,18 @@ fn local(name: &str, ty: Type, mutable: bool) -> Local
 #[test]
 fn validates_literal_initializer_types()
 {
-  let function =
-    Function { name: "main".to_string(),
-               return_type: None,
-               locals: vec![],
-               body: vec![Statement::Let { local: local("count", primitive(PrimitiveType::Int), true),
+  let function = Function { name: "main".to_string(),
+                            return_type: None,
+                            locals: vec![],
+                            body: vec![Statement::Let { local: local("count", primitive(PrimitiveType::Int), true),
                                            initializer: Some(Expression::Literal { literal:
                                                                                      Literal::Integer("1".to_string()),
                                                                                    span: span(10, 11) }) },
-                          Statement::Let { local: local("name", primitive(PrimitiveType::Str), false),
+                          Statement::Let { local: local("name",
+                                                        Type::Reference { referent:
+                                                                            Box::new(primitive(PrimitiveType::Str)),
+                                                                          mutable: false },
+                                                        false),
                                            initializer: Some(Expression::Literal { literal:
                                                                                      Literal::String("xs".to_string()),
                                                                                    span: span(20, 24) }) },] };
@@ -96,7 +99,11 @@ fn rejects_assignment_to_immutable_local()
 {
   let function = Function { name: "main".to_string(),
                             return_type: None,
-                            locals: vec![local("version", primitive(PrimitiveType::Str), false)],
+                            locals: vec![local("version",
+                                               Type::Reference { referent:
+                                                                   Box::new(primitive(PrimitiveType::Str)),
+                                                                 mutable: false },
+                                               false)],
                             body: vec![Statement::Expr(Expression::Assign {
                 target: "version".to_string(),
                 value: Box::new(Expression::Literal {
@@ -152,7 +159,7 @@ fn validates_return_literal_type()
 }
 
 #[test]
-fn rejects_return_literal_type_mismatch()
+fn accepts_integer_literal_in_explicit_bool_return_context()
 {
   let function = Function { name: "answer".to_string(),
                             return_type: Some(primitive(PrimitiveType::Bool)),
@@ -162,10 +169,7 @@ fn rejects_return_literal_type_mismatch()
                                                                                   span: span(10, 12) }),
                                                 span: span(3, 12) }] };
 
-  let diagnostics = TypeChecker::new().check_function(&function);
-
-  assert_eq!(diagnostics.len(), 1);
-  assert_eq!(diagnostics[0].code, DiagnosticCode::LiteralTypeMismatch);
+  assert!(TypeChecker::new().check_function(&function).is_empty());
 }
 
 #[test]

@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
@@ -41,7 +41,7 @@ cmake --preset clang-debug -DXS_ENABLE_RUNTIMES=xsrt
 ```
 
 `xsrt` is the first buildable runtime project. It currently defines runtime ABI version 0 and the ownership boundary for
-boxed `Optional<Str>` values; broader allocation, I/O, panic, and XGC integration remain incremental work.
+boxed `Optional<Str>` values; broader allocation, I/O, and panic integration remain incremental work.
 
 ## Future projects
 

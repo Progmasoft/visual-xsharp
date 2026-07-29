@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
  * SPDX-License-Identifier: MPL-2.0
  */
 
@@ -36,7 +36,14 @@ impl HirToMirLowerer
     if primitive_to_xlil(match result_type.as_ref()
     {
       Type::Primitive(value) => *value,
-      Type::Unit | Type::Named(_) | Type::Array { .. } | Type::Set { .. } | Type::Map { .. } | Type::Tuple { .. } =>
+      Type::Unit |
+      Type::Named(_) |
+      Type::Optional { .. } |
+      Type::Reference { .. } |
+      Type::Array { .. } |
+      Type::Set { .. } |
+      Type::Map { .. } |
+      Type::Tuple { .. } =>
       {
         self.report(DiagnosticCode::UnsupportedType,
                     "named match result cannot lower to MIR yet",
@@ -763,10 +770,14 @@ impl HirToMirLowerer
     let actual_type = match result_type.as_ref()
     {
       Type::Primitive(value) => primitive_to_xlil(*value),
-      Type::Unit | Type::Named(_) | Type::Array { .. } | Type::Set { .. } | Type::Map { .. } | Type::Tuple { .. } =>
-      {
-        None
-      }
+      Type::Unit |
+      Type::Named(_) |
+      Type::Optional { .. } |
+      Type::Reference { .. } |
+      Type::Array { .. } |
+      Type::Set { .. } |
+      Type::Map { .. } |
+      Type::Tuple { .. } => None,
     };
     if actual_type != Some(expected_type)
     {

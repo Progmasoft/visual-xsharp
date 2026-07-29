@@ -1,11 +1,11 @@
-// SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-fn single_add(a: SFloat, b: SFloat) -> SFloat {
+fn single_add(a: LFloat, b: LFloat) -> LFloat {
     return a + b;
 }
 
-fn single_remainder(a: SFloat, b: SFloat) -> SFloat {
+fn single_remainder(a: LFloat, b: LFloat) -> LFloat {
     return a % b;
 }
 

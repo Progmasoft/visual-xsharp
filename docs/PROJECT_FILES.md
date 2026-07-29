@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
@@ -14,7 +14,7 @@ A project may use one combined `xs.project.kts` file:
 ```kotlin
 project("Example", "BETA", "0.1.0")
 
-set("XS_VERSION", "0.2.2")
+set("XS_VERSION", "0.2.3")
 set("XS_BACKEND", "LLVM")
 set("PUBLISH", false)
 set("BUILD_MODE", "Release")
@@ -118,9 +118,17 @@ Example, BETA, 0.1.0
 ```
 
 The compiler policy is transferred with the resolved source registry to the native `xs` process. Command-line
-`--warning`, `--werror`, `--verbose`, and `--xgc-enabled` values are one-shot overrides applied after KTS evaluation;
-they never rewrite the project script. The defaults are `warnings("medium")`, `werror(false)`, `verbose(true)`, and
-`set("XGC_ENABLED", false)`.
+`--warning`, `--werror`, and `--verbose` values are one-shot overrides applied after KTS evaluation; they never rewrite
+the project script. The defaults are `warnings("medium")`, `werror(false)`, and `verbose(true)`.
+
+`XS_BACKEND` currently accepts `LLVM`; `XPLR` is reserved for the future X Platform runtime. When LLVM is selected,
+`XS_LLVM_LTO` is a boolean that defaults to `true`, and `XS_LLVM_OPT_LEVEL` accepts `0`, `1`, `2`, or `3` and defaults to
+`3`. These LLVM-specific values are omitted from the effective plan for other backends. PGO is always active in the LLVM
+pipeline and cannot be disabled. LLVM ORC JIT is not part of this backend; JIT execution belongs to higher compiler IR
+layers and, in the future, to X Platform.
+
+Memory management is derived from the backend and has no independent switch: LLVM always uses the X# RAII model, while
+the future XPLR backend always uses XPG. `XGC_ENABLED` and `XPG_ENABLED` are rejected configuration keys.
 
 `PUBLISH` is a reserved single-boolean project variable and defaults to `false`. Use `set("PUBLISH", true)` only to
 express publication intent in the generated project plan. Package upload is not implemented yet, so evaluation never
