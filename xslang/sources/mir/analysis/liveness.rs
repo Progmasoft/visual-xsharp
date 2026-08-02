@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 
-use super::ControlFlowGraph;
+use super::{ControlFlowGraph, statement_effects, terminator_uses};
 use crate::mir::{BlockId, Function, LocalId, Statement, Terminator};
 
 /// Local-liveness summary at the boundary of one block.
@@ -57,6 +57,13 @@ impl BlockLiveness
   pub fn before_statement(&self, index: usize) -> Option<&[LocalId]>
   {
     self.before_statements.get(index).map(Vec::as_slice)
+  }
+
+  /// Number of statement-boundary snapshots in this block.
+  #[must_use]
+  pub fn statement_count(&self) -> usize
+  {
+    self.before_statements.len()
   }
 
   /// Locals live immediately before the terminator executes.
@@ -181,14 +188,15 @@ fn local_facts(statements: &[Statement], terminator: Option<&Terminator>) -> Loc
   let mut facts = LocalFacts::default();
   for statement in statements
   {
-    for local in statement_uses(statement)
+    let effects = statement_effects(statement);
+    for local in effects.uses()
     {
-      if !facts.definitions.contains(&local)
+      if !facts.definitions.contains(local)
       {
-        facts.uses.insert(local);
+        facts.uses.insert(*local);
       }
     }
-    facts.definitions.extend(statement_definitions(statement));
+    facts.definitions.extend(effects.definitions());
   }
   for local in terminator_uses(terminator)
   {
@@ -209,165 +217,15 @@ fn statement_liveness(block: &crate::mir::BasicBlock, live_out: &HashSet<LocalId
   let mut snapshots = vec![Vec::new(); block.statements.len()];
   for (index, statement) in block.statements.iter().enumerate().rev()
   {
-    for definition in statement_definitions(statement)
+    let effects = statement_effects(statement);
+    for definition in effects.definitions()
     {
-      live.remove(&definition);
+      live.remove(definition);
     }
-    live.extend(statement_uses(statement));
+    live.extend(effects.uses());
     snapshots[index] = sorted(live.clone());
   }
   (snapshots, before_terminator)
-}
-
-fn statement_uses(statement: &Statement) -> Vec<LocalId>
-{
-  match statement
-  {
-    Statement::Use { local, .. } |
-    Statement::Move { local, .. } |
-    Statement::BorrowShared { local, .. } |
-    Statement::BorrowMutable { local, .. } |
-    Statement::EndBorrow { local, .. } |
-    Statement::Drop { local, .. } => vec![*local],
-    Statement::StoreLocal { value, .. } => vec![*value],
-    Statement::LoadLocal { local, .. } => vec![*local],
-    Statement::BinaryInteger { left,
-                               right,
-                               .. } |
-    Statement::BinaryFloat { left,
-                             right,
-                             .. } |
-    Statement::CompareFloat { left,
-                              right,
-                              .. } |
-    Statement::CompareStr { left,
-                            right,
-                            .. } |
-    Statement::AddI64 { left,
-                        right,
-                        .. } |
-    Statement::SubI64 { left,
-                        right,
-                        .. } |
-    Statement::MulI64 { left,
-                        right,
-                        .. } |
-    Statement::EqI64 { left,
-                       right,
-                       .. } |
-    Statement::BinaryI64 { left,
-                           right,
-                           .. } |
-    Statement::CompareI64 { left,
-                            right,
-                            .. } |
-    Statement::AddI32 { left,
-                        right,
-                        .. } |
-    Statement::SubI32 { left,
-                        right,
-                        .. } |
-    Statement::MulI32 { left,
-                        right,
-                        .. } |
-    Statement::BinaryI32 { left,
-                           right,
-                           .. } |
-    Statement::EqI32 { left,
-                       right,
-                       .. } |
-    Statement::LtI32 { left,
-                       right,
-                       .. } |
-    Statement::LeI32 { left,
-                       right,
-                       .. } |
-    Statement::GtI32 { left,
-                       right,
-                       .. } |
-    Statement::GeI32 { left,
-                       right,
-                       .. } => vec![*left, *right],
-    Statement::NotBool { operand, .. } => vec![*operand],
-    Statement::Call { arguments, .. } => arguments.clone(),
-    Statement::Aggregate { fields, .. } => fields.clone(),
-    Statement::Extract { aggregate, .. } => vec![*aggregate],
-    Statement::ArrayGet { array,
-                          index,
-                          .. } => vec![*array, *index],
-    Statement::ArrayLength { array, .. } => vec![*array],
-    Statement::ArraySet { array,
-                          index,
-                          value,
-                          .. } => vec![*array, *index, *value],
-    Statement::ConstI64 { .. } |
-    Statement::ConstI32 { .. } |
-    Statement::ConstU16 { .. } |
-    Statement::ConstInteger { .. } |
-    Statement::ConstF32 { .. } |
-    Statement::ConstF64 { .. } |
-    Statement::ConstStr { .. } |
-    Statement::ConstBool { .. } => Vec::new(),
-  }
-}
-
-fn statement_definitions(statement: &Statement) -> Vec<LocalId>
-{
-  match statement
-  {
-    Statement::ConstI64 { local, .. } |
-    Statement::ConstI32 { local, .. } |
-    Statement::ConstU16 { local, .. } |
-    Statement::ConstInteger { local, .. } |
-    Statement::ConstF32 { local, .. } |
-    Statement::ConstF64 { local, .. } |
-    Statement::ConstStr { local, .. } |
-    Statement::ConstBool { local, .. } |
-    Statement::StoreLocal { local, .. } => vec![*local],
-    Statement::BinaryInteger { result, .. } |
-    Statement::BinaryFloat { result, .. } |
-    Statement::CompareFloat { result, .. } |
-    Statement::CompareStr { result, .. } |
-    Statement::LoadLocal { result, .. } |
-    Statement::Aggregate { result, .. } |
-    Statement::Extract { result, .. } |
-    Statement::ArrayGet { result, .. } |
-    Statement::ArraySet { result, .. } |
-    Statement::ArrayLength { result, .. } |
-    Statement::AddI64 { result, .. } |
-    Statement::SubI64 { result, .. } |
-    Statement::MulI64 { result, .. } |
-    Statement::EqI64 { result, .. } |
-    Statement::BinaryI64 { result, .. } |
-    Statement::CompareI64 { result, .. } |
-    Statement::AddI32 { result, .. } |
-    Statement::SubI32 { result, .. } |
-    Statement::MulI32 { result, .. } |
-    Statement::BinaryI32 { result, .. } |
-    Statement::EqI32 { result, .. } |
-    Statement::LtI32 { result, .. } |
-    Statement::LeI32 { result, .. } |
-    Statement::GtI32 { result, .. } |
-    Statement::GeI32 { result, .. } |
-    Statement::NotBool { result, .. } => vec![*result],
-    Statement::Call { result, .. } => result.iter().copied().collect(),
-    Statement::Use { .. } |
-    Statement::Move { .. } |
-    Statement::BorrowShared { .. } |
-    Statement::BorrowMutable { .. } |
-    Statement::EndBorrow { .. } |
-    Statement::Drop { .. } => Vec::new(),
-  }
-}
-
-fn terminator_uses(terminator: Option<&Terminator>) -> Vec<LocalId>
-{
-  match terminator
-  {
-    Some(Terminator::Return(Some(value))) => vec![*value],
-    Some(Terminator::BranchIf { condition, .. }) => vec![*condition],
-    _ => Vec::new(),
-  }
 }
 
 fn sorted(values: HashSet<LocalId>) -> Vec<LocalId>

@@ -12,11 +12,13 @@ mod control_flow;
 mod i32_operations;
 mod i64_operations;
 mod integer_operations;
+mod pipeline;
 
 use control_flow::{collapse_single_predecessor_gotos, simplify_bool_branches};
 use i32_operations::fold_const_i32_binary;
 use i64_operations::fold_const_i64_operations;
 use integer_operations::fold_const_integer_operations;
+pub use pipeline::{OptimizationLevel, OptimizationPipeline};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OptimizationPass
@@ -35,6 +37,10 @@ pub enum OptimizationPass
   FoldConstBoolBranch,
   SimplifyBoolBranch,
   CollapseSinglePredecessorGoto,
+  DeadPureStatement,
+  RemoveUnusedLocal,
+  SimplifySameTargetBranch,
+  CanonicalizeBlockOrder,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

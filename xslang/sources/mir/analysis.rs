@@ -7,11 +7,13 @@
 
 mod cfg;
 mod dominators;
+mod effects;
 mod liveness;
 mod loops;
 
 pub use cfg::{ControlFlowGraph, StronglyConnectedComponent};
 pub use dominators::DominatorTree;
+pub use effects::{StatementEffects, statement_effects, terminator_uses};
 pub use liveness::{BlockLiveness, Liveness};
 pub use loops::{LoopForest, NaturalLoop};
 

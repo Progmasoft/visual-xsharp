@@ -188,6 +188,10 @@ const fn optimization_pass_name(pass: OptimizationPass) -> &'static str
     OptimizationPass::FoldConstBoolBranch => "fold_const_bool_branch",
     OptimizationPass::SimplifyBoolBranch => "simplify_bool_branch",
     OptimizationPass::CollapseSinglePredecessorGoto => "collapse_single_predecessor_goto",
+    OptimizationPass::DeadPureStatement => "dead_pure_statement",
+    OptimizationPass::RemoveUnusedLocal => "remove_unused_local",
+    OptimizationPass::SimplifySameTargetBranch => "simplify_same_target_branch",
+    OptimizationPass::CanonicalizeBlockOrder => "canonicalize_block_order",
   }
 }
 
