@@ -17,32 +17,32 @@ namespace xs::lil
 class Module final
 {
 public:
-  explicit Module(std::string_view name);
-  ~Module();
+    explicit Module(std::string_view name);
+    ~Module();
 
-  Module(const Module &) = delete;
-  Module &operator=(const Module &) = delete;
-  Module(Module &&other) noexcept;
-  Module &operator=(Module &&other) noexcept;
+    Module(const Module &) = delete;
+    Module &operator=(const Module &) = delete;
+    Module(Module &&other) noexcept;
+    Module &operator=(Module &&other) noexcept;
 
-  [[nodiscard]] static Module parse(std::string_view path, std::string_view text);
+    [[nodiscard]] static Module parse(std::string_view path, std::string_view text);
 
-  [[nodiscard]] std::string_view name() const noexcept;
-  [[nodiscard]] std::uint32_t text_version() const noexcept;
-  [[nodiscard]] std::string emit_text() const;
-  void verify() const;
+    [[nodiscard]] std::string_view name() const noexcept;
+    [[nodiscard]] std::uint32_t text_version() const noexcept;
+    [[nodiscard]] std::string emit_text() const;
+    void verify() const;
 
-  void declare_function(std::string_view name, Type return_type, std::span<const Type> parameters = {});
-  [[nodiscard]] Function define_function(std::string_view name, Type return_type,
-                                         std::span<const Type> parameters = {});
+    void declare_function(std::string_view name, Type return_type, std::span<const Type> parameters = {});
+    [[nodiscard]] Function define_function(std::string_view name, Type return_type,
+                                           std::span<const Type> parameters = {});
 
-  [[nodiscard]] XsLilModule *native_handle() noexcept;
-  [[nodiscard]] const XsLilModule *native_handle() const noexcept;
+    [[nodiscard]] XsLilModule *native_handle() noexcept;
+    [[nodiscard]] const XsLilModule *native_handle() const noexcept;
 
 private:
-  explicit Module(XsLilModule *value) noexcept;
+    explicit Module(XsLilModule *value) noexcept;
 
-  XsLilModule *value_{};
+    XsLilModule *value_{};
 };
 } // namespace xs::lil
 

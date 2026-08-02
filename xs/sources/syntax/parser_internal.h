@@ -15,25 +15,25 @@
 
 typedef struct
 {
-  XsLexer lexer;
-  XsDiagnostics *diagnostics;
-  XsSyntaxTree *tree;
-  XsToken previous;
-  XsToken current;
-  XsToken next;
-  size_t loop_depth;
-  bool allow_untyped_new;
-  bool suppress_typed_object_literal;
-  bool has_source_namespace;
-  bool seen_non_namespace;
+    XsLexer lexer;
+    XsDiagnostics *diagnostics;
+    XsSyntaxTree *tree;
+    XsToken previous;
+    XsToken current;
+    XsToken next;
+    size_t loop_depth;
+    bool allow_untyped_new;
+    bool suppress_typed_object_literal;
+    bool has_source_namespace;
+    bool seen_non_namespace;
 } SyntaxParser;
 
 typedef struct
 {
-  XsSyntaxVisibility visibility;
-  uint32_t flags;
-  XsSpan span;
-  XsSyntaxNode *attributes;
+    XsSyntaxVisibility visibility;
+    uint32_t flags;
+    XsSpan span;
+    XsSyntaxNode *attributes;
 } Modifiers;
 
 void xs_syntax_parser_advance(SyntaxParser *parser);

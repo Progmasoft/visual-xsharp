@@ -169,6 +169,7 @@ class ProjectContext internal constructor(
         "RELEASE_OUTDIR" to listOf("build/release"),
         "DEBUG_OUTDIR" to listOf("build/debug"),
         "XS_BACKEND" to listOf("LLVM"),
+        "XS_LLVM_COMPILER" to listOf("AOT"),
         "XS_LLVM_LTO" to listOf("true"),
         "XS_LLVM_OPT_LEVEL" to listOf("3"),
         "XS_EXTENSION" to listOf("xs"),
@@ -366,7 +367,9 @@ class ProjectContext internal constructor(
         variables.toSortedMap()
       } else {
         variables
-          .filterKeys { key -> key != "XS_LLVM_LTO" && key != "XS_LLVM_OPT_LEVEL" }
+          .filterKeys { key ->
+            key != "XS_LLVM_COMPILER" && key != "XS_LLVM_LTO" && key != "XS_LLVM_OPT_LEVEL"
+          }
           .toSortedMap()
       }
     return ProjectPlan(
@@ -450,6 +453,12 @@ private fun validateReservedVariable(
     "XS_LLVM_LTO" -> {
       if (values.size != 1 || values.single() !in setOf("true", "false")) {
         throw ProjectConfigurationException("XS_LLVM_LTO must be exactly true or false")
+      }
+    }
+
+    "XS_LLVM_COMPILER" -> {
+      if (values.size != 1 || values.single() !in setOf("AOT", "ORC")) {
+        throw ProjectConfigurationException("XS_LLVM_COMPILER must be exactly AOT or ORC")
       }
     }
 

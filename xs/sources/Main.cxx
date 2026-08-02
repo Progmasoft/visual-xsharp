@@ -7,5 +7,5 @@
 
 int main(int argc, char **argv)
 {
-  return xs_driver_main(argc, argv);
+    return xs_driver_main(argc, argv);
 }

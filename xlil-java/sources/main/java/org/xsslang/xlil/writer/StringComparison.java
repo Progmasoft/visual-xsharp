@@ -6,7 +6,7 @@
 package org.xsslang.xlil.writer;
 
 /** Borrowed-static XLIL string comparisons. */
-public enum StringComparison {
-  EQUAL,
-  NOT_EQUAL
+public enum StringComparison
+{
+    EQUAL, NOT_EQUAL
 }

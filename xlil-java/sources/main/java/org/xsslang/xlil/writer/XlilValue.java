@@ -6,10 +6,13 @@
 package org.xsslang.xlil.writer;
 
 /** Function-local XLIL register value. */
-public record XlilValue(int id) {
-  public XlilValue {
-    if (id < 0) {
-      throw new IllegalArgumentException("XLIL value id must not be negative");
+public record XlilValue(int id)
+{
+    public XlilValue
+    {
+        if(id < 0)
+        {
+            throw new IllegalArgumentException("XLIL value id must not be negative");
+        }
     }
-  }
 }

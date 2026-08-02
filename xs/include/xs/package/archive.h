@@ -18,34 +18,34 @@
 
 typedef enum XsPackageStatus
 {
-  XS_PACKAGE_OK = 0,
-  XS_PACKAGE_INVALID_ARGUMENT = 1,
-  XS_PACKAGE_INVALID_PATH = 2,
-  XS_PACKAGE_INVALID_ARCHIVE = 3,
-  XS_PACKAGE_MANIFEST_MISSING = 4,
-  XS_PACKAGE_IO_ERROR = 5,
-  XS_PACKAGE_SIZE_LIMIT = 6,
-  XS_PACKAGE_OUT_OF_MEMORY = 7
+    XS_PACKAGE_OK = 0,
+    XS_PACKAGE_INVALID_ARGUMENT = 1,
+    XS_PACKAGE_INVALID_PATH = 2,
+    XS_PACKAGE_INVALID_ARCHIVE = 3,
+    XS_PACKAGE_MANIFEST_MISSING = 4,
+    XS_PACKAGE_IO_ERROR = 5,
+    XS_PACKAGE_SIZE_LIMIT = 6,
+    XS_PACKAGE_OUT_OF_MEMORY = 7
 } XsPackageStatus;
 
 typedef struct XsPackageError
 {
-  XsPackageStatus status;
-  char message[256];
+    XsPackageStatus status;
+    char message[256];
 } XsPackageError;
 
 typedef struct XsPackageInput
 {
-  const char *archive_path;
-  const char *source_path;
+    const char *archive_path;
+    const char *source_path;
 } XsPackageInput;
 
 typedef struct XsPackageArchiveInfo
 {
-  uint8_t sha256[XS_PACKAGE_SHA256_SIZE];
-  uint64_t compressed_size;
-  uint64_t unpacked_size;
-  uint32_t entry_count;
+    uint8_t sha256[XS_PACKAGE_SHA256_SIZE];
+    uint64_t compressed_size;
+    uint64_t unpacked_size;
+    uint32_t entry_count;
 } XsPackageArchiveInfo;
 
 XsPackageStatus xs_package_archive_write(const char *output_path, const XsPackageInput *inputs, size_t input_count,

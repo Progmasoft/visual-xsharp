@@ -11,10 +11,10 @@
 
 typedef struct
 {
-  XsLexer lexer;
-  XsDiagnostics *diagnostics;
-  XsToken current;
-  XsToken previous;
+    XsLexer lexer;
+    XsDiagnostics *diagnostics;
+    XsToken current;
+    XsToken previous;
 } XsParser;
 
 void xs_parser_init(XsParser *parser, const XsSource *source, XsDiagnostics *diagnostics);

@@ -7,18 +7,18 @@ use super::*;
 
 impl Parser<'_>
 {
-  pub(super) fn unary_operator(&mut self, name: &str) -> Option<UnaryOperator>
-  {
-    match name
+    pub(super) fn unary_operator(&mut self, name: &str) -> Option<UnaryOperator>
     {
-      "logical_not" => Some(UnaryOperator::LogicalNot),
-      "positive" => Some(UnaryOperator::Positive),
-      "negative" => Some(UnaryOperator::Negative),
-      _ =>
-      {
-        self.report(format!("unknown unary operator '{name}'"));
-        None
-      }
+        match name
+        {
+            "logical_not" => Some(UnaryOperator::LogicalNot),
+            "positive" => Some(UnaryOperator::Positive),
+            "negative" => Some(UnaryOperator::Negative),
+            _ =>
+            {
+                self.report(format!("unknown unary operator '{name}'"));
+                None
+            }
+        }
     }
-  }
 }

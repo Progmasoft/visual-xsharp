@@ -10,19 +10,19 @@
 
 typedef struct
 {
-  const char *canonical_name;
-  const char *short_name;
-  const char *required_import;
-  const char *alternate_import;
-  size_t min_arity;
-  size_t max_arity;
+    const char *canonical_name;
+    const char *short_name;
+    const char *required_import;
+    const char *alternate_import;
+    size_t min_arity;
+    size_t max_arity;
 } XsHirStandardTypeInfo;
 
 typedef enum
 {
-  XS_HIR_STANDARD_UNKNOWN,
-  XS_HIR_STANDARD_AVAILABLE,
-  XS_HIR_STANDARD_MISSING_IMPORT,
+    XS_HIR_STANDARD_UNKNOWN,
+    XS_HIR_STANDARD_AVAILABLE,
+    XS_HIR_STANDARD_MISSING_IMPORT,
 } XsHirStandardLookup;
 
 const XsHirStandardTypeInfo *xs_hir_standard_type_find(const char *name);

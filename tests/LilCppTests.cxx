@@ -19,42 +19,42 @@ using xs::lil::TypeKind;
 
 TEST_CASE("C++ XLIL API owns, verifies, and emits a module", "[lil][cpp]")
 {
-  Module module{"CppProducer"};
-  const auto function = module.define_function("main", Type::scalar(TypeKind::I32));
-  Builder builder{module};
-  const auto entry = builder.append_block(function, "entry");
-  const auto value = builder.constant_i32(7);
-  builder.return_value(value);
+    Module module{"CppProducer"};
+    const auto function = module.define_function("main", Type::scalar(TypeKind::I32));
+    Builder builder{module};
+    const auto entry = builder.append_block(function, "entry");
+    const auto value = builder.constant_i32(7);
+    builder.return_value(value);
 
-  module.verify();
-  const auto text = module.emit_text();
-  CHECK(module.name() == "CppProducer");
-  CHECK(module.text_version() == XS_LIL_TEXT_VERSION);
-  CHECK(text.starts_with(".xlil version 1\n.xlil module CppProducer\n"));
-  CHECK(text.contains("%r0:i32 = const.i32 7"));
-  CHECK(text.contains("ret %r0"));
-  CHECK(entry.native_handle() != nullptr);
+    module.verify();
+    const auto text = module.emit_text();
+    CHECK(module.name() == "CppProducer");
+    CHECK(module.text_version() == XS_LIL_TEXT_VERSION);
+    CHECK(text.starts_with(".xlil version 1\n.xlil module CppProducer\n"));
+    CHECK(text.contains("%r0:i32 = const.i32 7"));
+    CHECK(text.contains("ret %r0"));
+    CHECK(entry.native_handle() != nullptr);
 }
 
 TEST_CASE("C++ XLIL API supports declarations and direct calls", "[lil][cpp]")
 {
-  Module module{"Calls"};
-  const std::array parameters{Type::scalar(TypeKind::I64)};
-  module.declare_function("identity", Type::scalar(TypeKind::I64), parameters);
-  const auto main = module.define_function("main", Type::scalar(TypeKind::I64), parameters);
-  Builder builder{module};
-  const auto entry = builder.append_block(main, "entry");
-  const std::array arguments{XsLilValueId{0U}};
-  const auto result = builder.call("identity", arguments);
-  builder.return_value(result);
+    Module module{"Calls"};
+    const std::array parameters{Type::scalar(TypeKind::I64)};
+    module.declare_function("identity", Type::scalar(TypeKind::I64), parameters);
+    const auto main = module.define_function("main", Type::scalar(TypeKind::I64), parameters);
+    Builder builder{module};
+    const auto entry = builder.append_block(main, "entry");
+    const std::array arguments{XsLilValueId{0U}};
+    const auto result = builder.call("identity", arguments);
+    builder.return_value(result);
 
-  CHECK(entry.native_handle() != nullptr);
-  CHECK(module.emit_text().contains("%r1:i64 = call identity(%r0)"));
+    CHECK(entry.native_handle() != nullptr);
+    CHECK(module.emit_text().contains("%r1:i64 = call identity(%r0)"));
 }
 
 TEST_CASE("C++ XLIL parser preserves ownership across moves", "[lil][cpp]")
 {
-  constexpr auto source = R"(.xlil version 1
+    constexpr auto source = R"(.xlil version 1
 .xlil module Parsed
 .func main : () -> i32
 bb0.entry:
@@ -62,29 +62,29 @@ bb0.entry:
   ret %r0
 .end
 )";
-  auto parsed = Module::parse("Parsed.xlil", source);
-  Module moved{std::move(parsed)};
-  CHECK(moved.name() == "Parsed");
-  CHECK(moved.emit_text() == source);
+    auto parsed = Module::parse("Parsed.xlil", source);
+    Module moved{std::move(parsed)};
+    CHECK(moved.name() == "Parsed");
+    CHECK(moved.emit_text() == source);
 }
 
 TEST_CASE("C++ XLIL failures retain C ABI status", "[lil][cpp]")
 {
-  Module module{"Invalid"};
-  const auto function = module.define_function("main", Type::scalar(TypeKind::I32));
-  Builder builder{module};
-  const auto entry = builder.append_block(function, "entry");
+    Module module{"Invalid"};
+    const auto function = module.define_function("main", Type::scalar(TypeKind::I32));
+    Builder builder{module};
+    const auto entry = builder.append_block(function, "entry");
 
-  try
-  {
-    module.verify();
-    FAIL("verification unexpectedly succeeded");
-  }
-  catch(const Error &error)
-  {
-    CHECK(error.status() == XS_LIL_INVALID_ARGUMENT);
-    CHECK(std::string{error.what()}.contains("missing a terminator"));
-  }
-  CHECK(entry.native_handle() != nullptr);
+    try
+    {
+        module.verify();
+        FAIL("verification unexpectedly succeeded");
+    }
+    catch(const Error &error)
+    {
+        CHECK(error.status() == XS_LIL_INVALID_ARGUMENT);
+        CHECK(std::string{error.what()}.contains("missing a terminator"));
+    }
+    CHECK(entry.native_handle() != nullptr);
 }
 } // namespace

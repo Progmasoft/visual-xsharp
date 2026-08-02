@@ -8,9 +8,10 @@ package org.xsslang.xlil.reader;
 import java.util.List;
 
 /** Immutable snapshot of one XLIL basic block. */
-public record XlilBlock(
-    int id, String label, List<XlilInstruction> instructions, XlilTerminator terminator) {
-  public XlilBlock {
-    instructions = List.copyOf(instructions);
-  }
+public record XlilBlock(int id, String label, List<XlilInstruction> instructions, XlilTerminator terminator)
+{
+    public XlilBlock
+    {
+        instructions = List.copyOf(instructions);
+    }
 }

@@ -11,8 +11,8 @@
 
 typedef struct
 {
-  char *text;
-  size_t length;
+    char *text;
+    size_t length;
 } XsIncludedSource;
 
 bool xs_source_expand_include_macros(const XsSyntaxTree *tree, XsDiagnostics *diagnostics, XsIncludedSource *expanded);

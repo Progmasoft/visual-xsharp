@@ -8,18 +8,18 @@ use crate::hir::async_check::Span;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DiagnosticCode
 {
-  MissingTerminator,
-  UnknownLocal,
-  UseAfterMove,
-  MoveWhileBorrowed,
-  MutableBorrowConflict,
-  ImmutableLocalMutableBorrow,
+    MissingTerminator,
+    UnknownLocal,
+    UseAfterMove,
+    MoveWhileBorrowed,
+    MutableBorrowConflict,
+    ImmutableLocalMutableBorrow,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Diagnostic
 {
-  pub code: DiagnosticCode,
-  pub message: String,
-  pub span: Span,
+    pub code: DiagnosticCode,
+    pub message: String,
+    pub span: Span,
 }

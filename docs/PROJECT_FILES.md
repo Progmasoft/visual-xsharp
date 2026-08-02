@@ -124,10 +124,11 @@ The compiler policy is transferred with the resolved source registry to the nati
 the project script. The defaults are `warnings("medium")`, `werror(false)`, and `verbose(true)`.
 
 `XS_BACKEND` currently accepts `LLVM`; `XPLR` is reserved for the future X Platform runtime. When LLVM is selected,
-`XS_LLVM_LTO` is a boolean that defaults to `true`, and `XS_LLVM_OPT_LEVEL` accepts `0`, `1`, `2`, or `3` and defaults to
-`3`. These LLVM-specific values are omitted from the effective plan for other backends. PGO is always active in the LLVM
-pipeline and cannot be disabled. LLVM ORC JIT is not part of this backend; JIT execution belongs to higher compiler IR
-layers and, in the future, to X Platform.
+`XS_LLVM_COMPILER` accepts `AOT` or `ORC` and defaults to `AOT`. `XS_LLVM_LTO` is a boolean that defaults to `true`, and
+`XS_LLVM_OPT_LEVEL` accepts `0`, `1`, `2`, or `3` and defaults to `3`. These LLVM-specific values are omitted from the
+effective plan for other backends. PGO is always active in the LLVM pipeline and cannot be disabled. The project DSL
+currently records the compiler selection; the native driver continues to implement the AOT path while ORC execution is
+connected incrementally.
 
 Memory management is derived from the backend and has no independent switch: LLVM always uses the X# RAII model, while
 the future XPLR backend always uses XPG. `XGC_ENABLED` and `XPG_ENABLED` are rejected configuration keys.
@@ -341,6 +342,7 @@ arrangement, with identity and shared metadata in the first file:
 // xs.settings.kts
 project("Example", "BETA", "0.1.0")
 set("XS_BACKEND", "LLVM")
+set("XS_LLVM_COMPILER", "AOT")
 authors(arrayOf("Leitwolf", "leitwolf@example.me"))
 
 dependencies {

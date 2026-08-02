@@ -13,103 +13,103 @@
 
 typedef struct
 {
-  size_t calls_seen;
-  size_t calls_resolved;
-  size_t calls_expandable;
-  size_t calls_deferred;
-  size_t output_tokens_planned;
-  size_t substitutions_planned;
+    size_t calls_seen;
+    size_t calls_resolved;
+    size_t calls_expandable;
+    size_t calls_deferred;
+    size_t output_tokens_planned;
+    size_t substitutions_planned;
 } XsMacroExpansionReport;
 
 typedef struct
 {
-  XsTokenKind kind;
-  XsText text;
-  XsSpan source_span;
-  bool from_substitution;
+    XsTokenKind kind;
+    XsText text;
+    XsSpan source_span;
+    bool from_substitution;
 } XsMacroExpansionToken;
 
 typedef struct
 {
-  XsSpan call_span;
-  XsMacroExpansionToken *tokens;
-  size_t token_count;
-  size_t token_capacity;
+    XsSpan call_span;
+    XsMacroExpansionToken *tokens;
+    size_t token_count;
+    size_t token_capacity;
 } XsMacroExpansion;
 
 typedef struct
 {
-  XsMacroExpansion *items;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsMacroExpansion *items;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsMacroExpansionSet;
 
 typedef struct
 {
-  char *text;
-  XsSource source;
-  XsSyntaxTree tree;
+    char *text;
+    XsSource source;
+    XsSyntaxTree tree;
 } XsMacroReparseResult;
 
 typedef struct
 {
-  XsSpan call_span;
-  XsMacroReparseResult reparse;
-  const XsSyntaxNode *statement;
+    XsSpan call_span;
+    XsMacroReparseResult reparse;
+    const XsSyntaxNode *statement;
 } XsMacroStatementExpansion;
 
 typedef struct
 {
-  XsSpan call_span;
-  XsMacroReparseResult reparse;
-  size_t declaration_count;
+    XsSpan call_span;
+    XsMacroReparseResult reparse;
+    size_t declaration_count;
 } XsMacroDeclarationExpansion;
 
 typedef struct
 {
-  XsMacroStatementExpansion *items;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsMacroStatementExpansion *items;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsMacroStatementExpansionSet;
 
 typedef struct
 {
-  XsMacroDeclarationExpansion *items;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsMacroDeclarationExpansion *items;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsMacroDeclarationExpansionSet;
 
 typedef struct
 {
-  const XsSyntaxNode *declaration;
-  XsSpan call_span;
-  bool from_macro_expansion;
+    const XsSyntaxNode *declaration;
+    XsSpan call_span;
+    bool from_macro_expansion;
 } XsMacroExpandedDeclaration;
 
 typedef struct
 {
-  const XsSyntaxNode *statement;
-  XsSpan call_span;
-  bool from_macro_expansion;
+    const XsSyntaxNode *statement;
+    XsSpan call_span;
+    bool from_macro_expansion;
 } XsMacroExpandedStatement;
 
 typedef struct
 {
-  XsMacroExpandedDeclaration *items;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsMacroExpandedDeclaration *items;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsMacroExpandedDeclarationSet;
 
 typedef struct
 {
-  XsMacroExpandedStatement *items;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsMacroExpandedStatement *items;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsMacroExpandedStatementSet;
 
 bool xs_macro_validate(const XsSyntaxTree *tree, XsDiagnostics *diagnostics);

@@ -15,23 +15,26 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.xsslang.ffi.c.CString;
 
-final class CStringTest {
-  @Test
-  void roundTripsUtf8Text() {
-    try (Arena arena = Arena.ofConfined()) {
-      assertEquals("XLIL · Java", CString.read(CString.allocate(arena, "XLIL · Java")));
+final class CStringTest
+{
+    @Test
+    void roundTripsUtf8Text()
+    {
+        try (Arena arena = Arena.ofConfined())
+        {
+            assertEquals("XLIL · Java", CString.read(CString.allocate(arena, "XLIL · Java")));
+        }
     }
-  }
 
-  @Test
-  void rejectsEmbeddedNullAndReadsNullPointer() {
-    try (Arena arena = Arena.ofConfined()) {
-      assertThrows(
-          IllegalArgumentException.class, () -> CString.allocate(arena, "not\0a C string"));
-      assertThrows(
-          IllegalArgumentException.class,
-          () -> CString.read(CString.allocate(arena, "text"), StandardCharsets.UTF_8, 0));
+    @Test
+    void rejectsEmbeddedNullAndReadsNullPointer()
+    {
+        try (Arena arena = Arena.ofConfined())
+        {
+            assertThrows(IllegalArgumentException.class, () -> CString.allocate(arena, "not\0a C string"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> CString.read(CString.allocate(arena, "text"), StandardCharsets.UTF_8, 0));
+        }
+        assertNull(CString.read(MemorySegment.NULL));
     }
-    assertNull(CString.read(MemorySegment.NULL));
-  }
 }

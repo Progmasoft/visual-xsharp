@@ -115,12 +115,12 @@ static const XsHirPrimitiveInfo primitive_types[] = {
 
 const XsHirPrimitiveInfo *xs_hir_primitive_find(const char *name, size_t length)
 {
-  if(name == nullptr)
+    if(name == nullptr)
+        return nullptr;
+    for(size_t i = 0; i < sizeof(primitive_types) / sizeof(primitive_types[0]); ++i)
+    {
+        if(strlen(primitive_types[i].name) == length && memcmp(primitive_types[i].name, name, length) == 0)
+            return &primitive_types[i];
+    }
     return nullptr;
-  for(size_t i = 0; i < sizeof(primitive_types) / sizeof(primitive_types[0]); ++i)
-  {
-    if(strlen(primitive_types[i].name) == length && memcmp(primitive_types[i].name, name, length) == 0)
-      return &primitive_types[i];
-  }
-  return nullptr;
 }

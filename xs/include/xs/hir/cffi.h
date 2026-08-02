@@ -11,40 +11,40 @@
 
 typedef struct
 {
-  XsText abi;
-  XsText link_library;
-  XsText header;
-  XsText calling_convention;
-  bool unsafe_boundary;
-  bool safe_boundary;
+    XsText abi;
+    XsText link_library;
+    XsText header;
+    XsText calling_convention;
+    bool unsafe_boundary;
+    bool safe_boundary;
 } XsHirCffiExternBlock;
 
 typedef struct
 {
-  XsText abi;
-  XsText link_name;
-  XsText export_name;
-  XsText symbol_visibility;
-  XsText ownership;
-  bool no_unwind;
-  bool may_unwind;
-  bool variadic;
-  bool unsafe_boundary;
-  bool safe_boundary;
-  bool foreign_thread_safe;
-  bool no_callback_into_runtime;
-  bool may_block;
-  bool cancellation_safe;
-  bool cancellation_unsafe;
+    XsText abi;
+    XsText link_name;
+    XsText export_name;
+    XsText symbol_visibility;
+    XsText ownership;
+    bool no_unwind;
+    bool may_unwind;
+    bool variadic;
+    bool unsafe_boundary;
+    bool safe_boundary;
+    bool foreign_thread_safe;
+    bool no_callback_into_runtime;
+    bool may_block;
+    bool cancellation_safe;
+    bool cancellation_unsafe;
 } XsHirCffiFunction;
 
 typedef struct
 {
-  XsText abi;
-  XsText link_name;
-  bool thread_local_storage;
-  bool unsafe_boundary;
-  bool safe_boundary;
+    XsText abi;
+    XsText link_name;
+    bool thread_local_storage;
+    bool unsafe_boundary;
+    bool safe_boundary;
 } XsHirCffiStatic;
 
 bool xs_hir_validate_cffi(const XsSyntaxTree *tree, XsDiagnostics *diagnostics);

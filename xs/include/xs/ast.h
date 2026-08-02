@@ -12,49 +12,49 @@
 
 typedef enum
 {
-  XS_VISIBILITY_DEFAULT,
-  XS_VISIBILITY_PUBLIC,
-  XS_VISIBILITY_PRIVATE,
-  XS_VISIBILITY_PROTECTED,
-  XS_VISIBILITY_INTERNAL,
+    XS_VISIBILITY_DEFAULT,
+    XS_VISIBILITY_PUBLIC,
+    XS_VISIBILITY_PRIVATE,
+    XS_VISIBILITY_PROTECTED,
+    XS_VISIBILITY_INTERNAL,
 } XsVisibility;
 
 typedef enum
 {
-  XS_AST_MODULE,
-  XS_AST_NAMESPACE,
-  XS_AST_IMPORT,
-  XS_AST_FUNCTION,
-  XS_AST_CLASS,
-  XS_AST_INTERFACE,
-  XS_AST_DATA,
-  XS_AST_ENUM,
-  XS_AST_MACRO,
+    XS_AST_MODULE,
+    XS_AST_NAMESPACE,
+    XS_AST_IMPORT,
+    XS_AST_FUNCTION,
+    XS_AST_CLASS,
+    XS_AST_INTERFACE,
+    XS_AST_DATA,
+    XS_AST_ENUM,
+    XS_AST_MACRO,
 } XsAstItemKind;
 
 typedef struct
 {
-  XsSpan span;
-  XsSpan name;
-  XsSpan body;
-  XsVisibility visibility;
-  bool is_async;
-  bool is_incomplete;
-  bool is_data_enum;
+    XsSpan span;
+    XsSpan name;
+    XsSpan body;
+    XsVisibility visibility;
+    bool is_async;
+    bool is_incomplete;
+    bool is_data_enum;
 } XsAstItem;
 
 typedef struct
 {
-  XsAstItemKind kind;
-  XsAstItem item;
+    XsAstItemKind kind;
+    XsAstItem item;
 } XsAstNode;
 
 typedef struct
 {
-  XsAstNode *items;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsAstNode *items;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsAst;
 
 void xs_ast_init(XsAst *ast);

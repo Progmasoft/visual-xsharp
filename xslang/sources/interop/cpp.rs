@@ -6,23 +6,23 @@
 #[cxx::bridge(namespace = "xslang::interop")]
 mod ffi
 {
-  unsafe extern "C++" {
-    include!("xslang/interop/CompilerBridge.hxx");
+    unsafe extern "C++" {
+        include!("xslang/interop/CompilerBridge.hxx");
 
-    #[cxx_name = "BridgeAbiVersion"]
-    fn bridge_abi_version() -> u32;
+        #[cxx_name = "BridgeAbiVersion"]
+        fn bridge_abi_version() -> u32;
 
-    #[cxx_name = "SupportsXlilVersion"]
-    fn supports_xlil_version(version: u32) -> bool;
-  }
+        #[cxx_name = "SupportsXlilVersion"]
+        fn supports_xlil_version(version: u32) -> bool;
+    }
 }
 
 pub(crate) fn bridge_abi_version() -> u32
 {
-  ffi::bridge_abi_version()
+    ffi::bridge_abi_version()
 }
 
 pub(crate) fn supports_xlil_version(version: u32) -> bool
 {
-  ffi::supports_xlil_version(version)
+    ffi::supports_xlil_version(version)
 }

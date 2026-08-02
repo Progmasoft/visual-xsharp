@@ -10,36 +10,39 @@ use super::{BlockId, Function, Terminator};
 #[must_use]
 pub fn reachable_blocks(function: &Function) -> HashSet<BlockId>
 {
-  let known = function.blocks
-                      .iter()
-                      .map(|block| (block.id, block))
-                      .collect::<HashMap<_, _>>();
-  let Some(entry) = function.blocks.first()
-  else
-  {
-    return HashSet::new();
-  };
-  let mut reachable = HashSet::new();
-  let mut stack = vec![entry.id];
-  while let Some(block_id) = stack.pop()
-  {
-    if !reachable.insert(block_id)
+    let known = function
+        .blocks
+        .iter()
+        .map(|block| (block.id, block))
+        .collect::<HashMap<_, _>>();
+    let Some(entry) = function.blocks.first()
+    else
     {
-      continue;
-    }
-    match known.get(&block_id).and_then(|block| block.terminator.as_ref())
+        return HashSet::new();
+    };
+    let mut reachable = HashSet::new();
+    let mut stack = vec![entry.id];
+    while let Some(block_id) = stack.pop()
     {
-      Some(Terminator::Goto(next)) => stack.push(*next),
-      Some(Terminator::BranchIf { then_block,
-                                  else_block,
-                                  .. }) =>
-      {
-        stack.push(*then_block);
-        stack.push(*else_block);
-      }
-      _ =>
-      {}
+        if !reachable.insert(block_id)
+        {
+            continue;
+        }
+        match known.get(&block_id).and_then(|block| block.terminator.as_ref())
+        {
+            Some(Terminator::Goto(next)) => stack.push(*next),
+            Some(Terminator::BranchIf {
+                then_block,
+                else_block,
+                ..
+            }) =>
+            {
+                stack.push(*then_block);
+                stack.push(*else_block);
+            }
+            _ =>
+            {}
+        }
     }
-  }
-  reachable
+    reachable
 }

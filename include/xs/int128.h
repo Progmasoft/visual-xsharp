@@ -11,14 +11,14 @@
 
 typedef struct
 {
-  uint64_t low;
-  uint64_t high;
+    uint64_t low;
+    uint64_t high;
 } XsUInt128;
 
 typedef struct
 {
-  uint64_t low;
-  int64_t high;
+    uint64_t low;
+    int64_t high;
 } XsInt128;
 
 XsUInt128 xs_uint128_from_words(uint64_t high, uint64_t low);

@@ -43,146 +43,146 @@ static_assert(XS_TOKEN_AMPERSAND == 50 && XS_TOKEN_LOGICAL_AND == 51 && XS_TOKEN
 
 struct XsCompilerCoreSyntaxStorage
 {
-  XsCompilerCoreSyntaxPacket packet;
-  XsCompilerCoreSyntaxNode *nodes;
-  uint64_t *child_indices;
-  uint8_t *text_bytes;
+    XsCompilerCoreSyntaxPacket packet;
+    XsCompilerCoreSyntaxNode *nodes;
+    uint64_t *child_indices;
+    uint8_t *text_bytes;
 };
 
 typedef struct
 {
-  uint64_t nodes;
-  uint64_t children;
-  uint64_t text_bytes;
+    uint64_t nodes;
+    uint64_t children;
+    uint64_t text_bytes;
 } PacketSize;
 
 typedef struct
 {
-  XsCompilerCoreSyntaxStorage *storage;
-  uint64_t node_cursor;
-  uint64_t child_cursor;
-  uint64_t text_cursor;
+    XsCompilerCoreSyntaxStorage *storage;
+    uint64_t node_cursor;
+    uint64_t child_cursor;
+    uint64_t text_cursor;
 } PacketWriter;
 
 static bool add_size(uint64_t *value, size_t addition)
 {
-  if(addition > UINT64_MAX || *value > UINT64_MAX - (uint64_t)addition)
-    return false;
-  *value += (uint64_t)addition;
-  return true;
+    if(addition > UINT64_MAX || *value > UINT64_MAX - (uint64_t)addition)
+        return false;
+    *value += (uint64_t)addition;
+    return true;
 }
 
 static bool measure_node(const XsSyntaxNode *node, size_t depth, PacketSize *size)
 {
-  if(node == nullptr || depth > 4096 || !add_size(&size->nodes, 1) || !add_size(&size->children, node->child_count) ||
-     !add_size(&size->text_bytes, node->text.length))
-    return false;
-  for(size_t index = 0; index < node->child_count; ++index)
-  {
-    if(!measure_node(node->children[index], depth + 1, size))
-      return false;
-  }
-  return true;
+    if(node == nullptr || depth > 4096 || !add_size(&size->nodes, 1) || !add_size(&size->children, node->child_count) ||
+       !add_size(&size->text_bytes, node->text.length))
+        return false;
+    for(size_t index = 0; index < node->child_count; ++index)
+    {
+        if(!measure_node(node->children[index], depth + 1, size))
+            return false;
+    }
+    return true;
 }
 
 static bool allocation_size(uint64_t count, size_t item_size, size_t *bytes)
 {
-  if(count > SIZE_MAX || (size_t)count > SIZE_MAX / item_size)
-    return false;
-  *bytes = (size_t)count * item_size;
-  return true;
+    if(count > SIZE_MAX || (size_t)count > SIZE_MAX / item_size)
+        return false;
+    *bytes = (size_t)count * item_size;
+    return true;
 }
 
 static uint64_t write_node(PacketWriter *writer, const XsSyntaxNode *node, uint64_t parent)
 {
-  uint64_t node_index = writer->node_cursor++;
-  XsCompilerCoreSyntaxNode *record = &writer->storage->nodes[node_index];
-  *record = (XsCompilerCoreSyntaxNode){
-      .kind = (uint32_t)node->kind,
-      .token_kind = (uint32_t)node->token_kind,
-      .visibility = (uint32_t)node->visibility,
-      .flags = node->flags,
-      .parent_index = parent,
-      .first_child = writer->child_cursor,
-      .child_count = (uint64_t)node->child_count,
-      .text_offset = writer->text_cursor,
-      .text_length = (uint64_t)node->text.length,
-      .file_id = node->span.file_id,
-      .start_offset = (uint64_t)node->span.start_offset,
-      .end_offset = (uint64_t)node->span.end_offset,
-      .start_line = (uint64_t)node->span.start_line,
-      .start_column = (uint64_t)node->span.start_column,
-      .end_line = (uint64_t)node->span.end_line,
-      .end_column = (uint64_t)node->span.end_column,
-  };
-  uint64_t child_start = writer->child_cursor;
-  writer->child_cursor += (uint64_t)node->child_count;
-  if(node->text.length != 0)
-  {
-    memcpy(writer->storage->text_bytes + writer->text_cursor, node->text.data, node->text.length);
-    writer->text_cursor += (uint64_t)node->text.length;
-  }
-  for(size_t index = 0; index < node->child_count; ++index)
-    writer->storage->child_indices[child_start + (uint64_t)index] =
-        write_node(writer, node->children[index], node_index);
-  return node_index;
+    uint64_t node_index = writer->node_cursor++;
+    XsCompilerCoreSyntaxNode *record = &writer->storage->nodes[node_index];
+    *record = (XsCompilerCoreSyntaxNode){
+        .kind = (uint32_t)node->kind,
+        .token_kind = (uint32_t)node->token_kind,
+        .visibility = (uint32_t)node->visibility,
+        .flags = node->flags,
+        .parent_index = parent,
+        .first_child = writer->child_cursor,
+        .child_count = (uint64_t)node->child_count,
+        .text_offset = writer->text_cursor,
+        .text_length = (uint64_t)node->text.length,
+        .file_id = node->span.file_id,
+        .start_offset = (uint64_t)node->span.start_offset,
+        .end_offset = (uint64_t)node->span.end_offset,
+        .start_line = (uint64_t)node->span.start_line,
+        .start_column = (uint64_t)node->span.start_column,
+        .end_line = (uint64_t)node->span.end_line,
+        .end_column = (uint64_t)node->span.end_column,
+    };
+    uint64_t child_start = writer->child_cursor;
+    writer->child_cursor += (uint64_t)node->child_count;
+    if(node->text.length != 0)
+    {
+        memcpy(writer->storage->text_bytes + writer->text_cursor, node->text.data, node->text.length);
+        writer->text_cursor += (uint64_t)node->text.length;
+    }
+    for(size_t index = 0; index < node->child_count; ++index)
+        writer->storage->child_indices[child_start + (uint64_t)index] =
+            write_node(writer, node->children[index], node_index);
+    return node_index;
 }
 
 XsCompilerCoreStatus xs_compiler_core_syntax_packet_create(const XsSyntaxTree *tree,
                                                            XsCompilerCoreSyntaxStorage **storage)
 {
-  if(storage == nullptr || tree == nullptr || tree->root == nullptr)
-    return XS_COMPILER_CORE_INVALID_ARGUMENT;
-  *storage = nullptr;
-  PacketSize size = {0};
-  if(!measure_node(tree->root, 0, &size))
-    return XS_COMPILER_CORE_LIMIT_EXCEEDED;
-  size_t node_bytes = 0;
-  size_t child_bytes = 0;
-  size_t text_bytes = 0;
-  if(!allocation_size(size.nodes, sizeof(XsCompilerCoreSyntaxNode), &node_bytes) ||
-     !allocation_size(size.children, sizeof(uint64_t), &child_bytes) ||
-     !allocation_size(size.text_bytes, sizeof(uint8_t), &text_bytes))
-    return XS_COMPILER_CORE_LIMIT_EXCEEDED;
-  XsCompilerCoreSyntaxStorage *result = calloc(1, sizeof(*result));
-  if(result == nullptr)
-    return XS_COMPILER_CORE_ALLOCATION_FAILED;
-  result->nodes = malloc(node_bytes);
-  result->child_indices = child_bytes == 0 ? nullptr : malloc(child_bytes);
-  result->text_bytes = text_bytes == 0 ? nullptr : malloc(text_bytes);
-  if(result->nodes == nullptr || (child_bytes != 0 && result->child_indices == nullptr) ||
-     (text_bytes != 0 && result->text_bytes == nullptr))
-  {
-    xs_compiler_core_syntax_packet_free(result);
-    return XS_COMPILER_CORE_ALLOCATION_FAILED;
-  }
-  PacketWriter writer = {.storage = result};
-  uint64_t root_index = write_node(&writer, tree->root, XS_COMPILER_CORE_NO_NODE);
-  result->packet = (XsCompilerCoreSyntaxPacket){
-      .abi_version = XS_COMPILER_CORE_SYNTAX_ABI_VERSION,
-      .root_index = root_index,
-      .nodes = result->nodes,
-      .node_count = size.nodes,
-      .child_indices = result->child_indices,
-      .child_index_count = size.children,
-      .text_bytes = result->text_bytes,
-      .text_byte_count = size.text_bytes,
-  };
-  *storage = result;
-  return XS_COMPILER_CORE_OK;
+    if(storage == nullptr || tree == nullptr || tree->root == nullptr)
+        return XS_COMPILER_CORE_INVALID_ARGUMENT;
+    *storage = nullptr;
+    PacketSize size = {0};
+    if(!measure_node(tree->root, 0, &size))
+        return XS_COMPILER_CORE_LIMIT_EXCEEDED;
+    size_t node_bytes = 0;
+    size_t child_bytes = 0;
+    size_t text_bytes = 0;
+    if(!allocation_size(size.nodes, sizeof(XsCompilerCoreSyntaxNode), &node_bytes) ||
+       !allocation_size(size.children, sizeof(uint64_t), &child_bytes) ||
+       !allocation_size(size.text_bytes, sizeof(uint8_t), &text_bytes))
+        return XS_COMPILER_CORE_LIMIT_EXCEEDED;
+    XsCompilerCoreSyntaxStorage *result = calloc(1, sizeof(*result));
+    if(result == nullptr)
+        return XS_COMPILER_CORE_ALLOCATION_FAILED;
+    result->nodes = malloc(node_bytes);
+    result->child_indices = child_bytes == 0 ? nullptr : malloc(child_bytes);
+    result->text_bytes = text_bytes == 0 ? nullptr : malloc(text_bytes);
+    if(result->nodes == nullptr || (child_bytes != 0 && result->child_indices == nullptr) ||
+       (text_bytes != 0 && result->text_bytes == nullptr))
+    {
+        xs_compiler_core_syntax_packet_free(result);
+        return XS_COMPILER_CORE_ALLOCATION_FAILED;
+    }
+    PacketWriter writer = {.storage = result};
+    uint64_t root_index = write_node(&writer, tree->root, XS_COMPILER_CORE_NO_NODE);
+    result->packet = (XsCompilerCoreSyntaxPacket){
+        .abi_version = XS_COMPILER_CORE_SYNTAX_ABI_VERSION,
+        .root_index = root_index,
+        .nodes = result->nodes,
+        .node_count = size.nodes,
+        .child_indices = result->child_indices,
+        .child_index_count = size.children,
+        .text_bytes = result->text_bytes,
+        .text_byte_count = size.text_bytes,
+    };
+    *storage = result;
+    return XS_COMPILER_CORE_OK;
 }
 
 const XsCompilerCoreSyntaxPacket *xs_compiler_core_syntax_packet(const XsCompilerCoreSyntaxStorage *storage)
 {
-  return storage == nullptr ? nullptr : &storage->packet;
+    return storage == nullptr ? nullptr : &storage->packet;
 }
 
 void xs_compiler_core_syntax_packet_free(XsCompilerCoreSyntaxStorage *storage)
 {
-  if(storage == nullptr)
-    return;
-  free(storage->nodes);
-  free(storage->child_indices);
-  free(storage->text_bytes);
-  free(storage);
+    if(storage == nullptr)
+        return;
+    free(storage->nodes);
+    free(storage->child_indices);
+    free(storage->text_bytes);
+    free(storage);
 }

@@ -7,23 +7,23 @@
 #define XS_COMPILER_CHECK_H
 
 #if defined(__GNUC__) && !defined(__clang__)
-#error "GCC is not supported; use Clang."
+#    error "GCC is not supported; use Clang."
 #endif
 
 #if defined(__GNUG__)
-#error "GNU C++ mode is not supported; this project is strict C23."
+#    error "GNU C++ mode is not supported; this project is strict C23."
 #endif
 
 #if !defined(__clang__)
-#error "Clang is required."
+#    error "Clang is required."
 #endif
 
 #if !defined(__STRICT_ANSI__)
-#error "GNU C extensions are enabled; compile with strict ISO C mode, e.g. -std=c23, not -std=gnu23."
+#    error "GNU C extensions are enabled; compile with strict ISO C mode, e.g. -std=c23, not -std=gnu23."
 #endif
 
 #if defined(_GNU_SOURCE)
-#error "_GNU_SOURCE is not supported; use portable C/POSIX interfaces only."
+#    error "_GNU_SOURCE is not supported; use portable C/POSIX interfaces only."
 #endif
 
 #endif

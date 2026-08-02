@@ -5,4 +5,5 @@
 
 project("SplitExample", "BETA", "0.1.0")
 set("XS_BACKEND", "LLVM")
+set("XS_LLVM_COMPILER", "AOT")
 authors(arrayOf("Leitwolf", "leitwolf@example.me"))

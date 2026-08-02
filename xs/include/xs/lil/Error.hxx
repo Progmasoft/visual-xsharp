@@ -15,12 +15,12 @@ namespace xs::lil
 class Error final : public std::runtime_error
 {
 public:
-  Error(XsLilStatus status, std::string message);
+    Error(XsLilStatus status, std::string message);
 
-  [[nodiscard]] XsLilStatus status() const noexcept;
+    [[nodiscard]] XsLilStatus status() const noexcept;
 
 private:
-  XsLilStatus status_;
+    XsLilStatus status_;
 };
 
 void throw_if_failed(XsLilStatus status, const XsLilError &error, std::string_view operation);

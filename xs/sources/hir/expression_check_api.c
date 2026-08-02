@@ -7,5 +7,5 @@
 
 bool xs_hir_check_expression_types(const XsSyntaxTree *tree, XsDiagnostics *diagnostics)
 {
-  return xs_hir_check_expression_types_with_macros(tree, nullptr, nullptr, diagnostics);
+    return xs_hir_check_expression_types_with_macros(tree, nullptr, nullptr, diagnostics);
 }

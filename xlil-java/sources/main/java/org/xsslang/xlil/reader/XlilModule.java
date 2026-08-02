@@ -8,8 +8,10 @@ package org.xsslang.xlil.reader;
 import java.util.List;
 
 /** Immutable Java snapshot of a parsed and verified XLIL module. */
-public record XlilModule(int textVersion, String name, List<XlilFunction> functions, String text) {
-  public XlilModule {
-    functions = List.copyOf(functions);
-  }
+public record XlilModule(int textVersion, String name, List<XlilFunction> functions, String text)
+{
+    public XlilModule
+    {
+        functions = List.copyOf(functions);
+    }
 }

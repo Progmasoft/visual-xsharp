@@ -41,7 +41,7 @@ target_link_libraries(xslang_compiler_core INTERFACE Threads::Threads ${CMAKE_DL
 
 add_library(xs_compiler
   sources/ast.c
-  sources/codegen/units.c
+  sources/codegen/Plan.cxx
   sources/compiler_core/syntax_packet.c
   sources/diagnostic.c
   sources/driver/cli.c
@@ -67,7 +67,7 @@ add_library(xs_compiler
   sources/mir/model_writer.c
   sources/mir/optimizer.c
   sources/mir/xlil_lowering.c
-  sources/mono/plan.c
+  sources/mono/Plan.cxx
   sources/hir/cffi.c
   sources/hir/dump.c
   sources/hir/expression_check.c
@@ -119,6 +119,7 @@ add_library(xs_lil SHARED
   sources/xlil/parser_string.c
   sources/xlil/producer.c
   sources/xlil/text_emit.c
+  sources/xlil/TypeName.cxx
   sources/xlil/verify.c
   sources/xlil/writer.c
 )

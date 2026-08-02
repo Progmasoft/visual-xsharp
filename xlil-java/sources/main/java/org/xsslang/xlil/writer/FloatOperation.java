@@ -6,10 +6,7 @@
 package org.xsslang.xlil.writer;
 
 /** Floating-point arithmetic operations. */
-public enum FloatOperation {
-  ADD,
-  SUBTRACT,
-  MULTIPLY,
-  DIVIDE,
-  REMAINDER
+public enum FloatOperation
+{
+    ADD, SUBTRACT, MULTIPLY, DIVIDE, REMAINDER
 }

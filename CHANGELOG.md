@@ -12,6 +12,10 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Migrated monomorphization and codegen-unit planning from manual C allocation tables to GNU++26 ownership while
+  preserving their existing C ABI, and added move-only C++ planning views plus Catch2 coverage.
+- Added the Kotlin project setting `XS_LLVM_COMPILER = "AOT" | "ORC"`; it defaults to `AOT` and is omitted from plans
+  targeting non-LLVM backends.
 - Added resolved user-defined enum-data patterns to typed HIR and XHIR, including exact overloaded payload selection,
   inherited owner/tag identity, duplicate detection, scoped bindings, and exhaustive coverage validation.
 - Lowered enum-data match statements and expressions through MIR and XLIL with tag extraction, `i32` comparison,

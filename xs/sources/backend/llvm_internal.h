@@ -10,25 +10,25 @@
 
 struct XsLlvmBackend
 {
-  LLVMContextRef context;
-  LLVMTargetMachineRef target_machine;
-  LLVMTargetDataRef target_data;
-  char *target_triple;
-  char *data_layout;
-  XsLlvmOptimizationLevel optimization;
-  bool verify_modules;
+    LLVMContextRef context;
+    LLVMTargetMachineRef target_machine;
+    LLVMTargetDataRef target_data;
+    char *target_triple;
+    char *data_layout;
+    XsLlvmOptimizationLevel optimization;
+    bool verify_modules;
 };
 
 struct XsLlvmCodegenUnit
 {
-  XsLlvmBackend *backend;
-  LLVMModuleRef module;
-  LLVMTypeRef *lil_types;
-  size_t lil_type_count;
-  LLVMTypeRef *lil_array_types;
-  LLVMTypeRef *lil_array_elements;
-  bool *lil_array_dynamic;
-  size_t lil_array_type_count;
+    XsLlvmBackend *backend;
+    LLVMModuleRef module;
+    LLVMTypeRef *lil_types;
+    size_t lil_type_count;
+    LLVMTypeRef *lil_array_types;
+    LLVMTypeRef *lil_array_elements;
+    bool *lil_array_dynamic;
+    size_t lil_array_type_count;
 };
 
 void xs_llvm_clear_error(XsBackendError *error);

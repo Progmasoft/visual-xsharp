@@ -11,9 +11,9 @@
 
 typedef struct
 {
-  const XsSource *source;
-  XsDiagnostics *diagnostics;
-  size_t cursor;
+    const XsSource *source;
+    XsDiagnostics *diagnostics;
+    size_t cursor;
 } XsLexer;
 
 void xs_lexer_init(XsLexer *lexer, const XsSource *source, XsDiagnostics *diagnostics);

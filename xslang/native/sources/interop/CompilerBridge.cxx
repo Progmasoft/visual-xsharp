@@ -7,11 +7,11 @@ namespace xslang::interop
 {
 std::uint32_t BridgeAbiVersion() noexcept
 {
-  return 1U;
+    return 1U;
 }
 
 bool SupportsXlilVersion(const std::uint32_t version) noexcept
 {
-  return version <= 1U;
+    return version <= 1U;
 }
 } // namespace xslang::interop

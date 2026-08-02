@@ -5,7 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # Current X# compiler status
 
-The compiler is written in C23 and uses Clang, CMake, Ninja, LLVM tools, and LLD. New and touched C code uses C23
+The compiler combines GNU++26, Rust, and a gradually shrinking C23 implementation and uses Clang, CMake, Ninja, LLVM
+tools, and LLD. New native subsystems favor GNU++26. New and touched C code uses C23
 `bool` directly, does not include `<stdbool.h>`, and prefers `nullptr` over `NULL`.
 
 The documented compilation order is preserved:
@@ -75,6 +76,10 @@ The documented compilation order is preserved:
 - Other compiler or generator combinations are outside the supported build contract.
 - The compiler is built in strict ISO C23 mode with `-std=c23` and `CMAKE_C_EXTENSIONS OFF`.
 - The build uses strict ISO C23 rather than compiler-extension dialects.
+- Monomorphization and codegen-unit planning are implemented in GNU++26 with `std::string`/`std::vector` ownership. Their
+  existing C functions remain ABI-compatible for the C23 driver, while `<xs/mono/Plan.hxx>` and
+  `<xs/codegen/Plan.hxx>` provide move-only RAII views for new C++ compiler code. This is the model for incremental
+  subsystem migration: retain tested boundaries, replace internal ownership, and avoid a whole-tree language flip.
 
 ### Project system
 

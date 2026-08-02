@@ -6,7 +6,7 @@
 package org.xsslang.xlil.writer;
 
 /** Explicit XLIL string constant byte order. */
-public enum Utf16Encoding {
-  LITTLE_ENDIAN,
-  BIG_ENDIAN
+public enum Utf16Encoding
+{
+    LITTLE_ENDIAN, BIG_ENDIAN
 }

@@ -273,6 +273,7 @@ class ProjectDslTest {
     )
     assertEquals("Demo, BETA, 0.1.0", context.get("PROJECT"))
     assertEquals("LLVM", context.get("XS_BACKEND"))
+    assertEquals("AOT", context.get("XS_LLVM_COMPILER"))
     assertEquals("true", context.get("XS_LLVM_LTO"))
     assertEquals("3", context.get("XS_LLVM_OPT_LEVEL"))
     assertEquals("xs", context.get("XS_EXTENSION"))
@@ -282,10 +283,13 @@ class ProjectDslTest {
     assertFailsWith<ProjectConfigurationException> { context.set("PUBLISH", "true") }
     assertFailsWith<ProjectConfigurationException> { context.set("PUBLISH", true, false) }
     context.set("XS_LLVM_LTO", false)
+    context.set("XS_LLVM_COMPILER", "ORC")
     context.set("XS_LLVM_OPT_LEVEL", "2")
+    assertEquals("ORC", context.get("XS_LLVM_COMPILER"))
     assertEquals("false", context.get("XS_LLVM_LTO"))
     assertEquals("2", context.get("XS_LLVM_OPT_LEVEL"))
     assertFailsWith<ProjectConfigurationException> { context.set("XS_LLVM_LTO", "yes") }
+    assertFailsWith<ProjectConfigurationException> { context.set("XS_LLVM_COMPILER", "JIT") }
     assertFailsWith<ProjectConfigurationException> { context.set("XS_LLVM_OPT_LEVEL", "fast") }
     assertFailsWith<ProjectConfigurationException> { context.get("MISSING") }
     context.authors(arrayOf("Leitwolf", "leitwolf@example.me"))
@@ -301,6 +305,7 @@ class ProjectDslTest {
     val plan = context.build()
     assertEquals(listOf("native"), plan.variables["MODE"])
     assertEquals(listOf("LLVM"), plan.variables["XS_BACKEND"])
+    assertEquals(listOf("ORC"), plan.variables["XS_LLVM_COMPILER"])
     assertEquals(listOf("false"), plan.variables["XS_LLVM_LTO"])
     assertEquals(listOf("2"), plan.variables["XS_LLVM_OPT_LEVEL"])
     assertEquals(WarningLevel.ALL, plan.compiler.warningLevel)
@@ -316,6 +321,7 @@ class ProjectDslTest {
     assertEquals(listOf("XPLR"), plan.variables["XS_BACKEND"])
     assertFalse(plan.variables.containsKey("XS_LLVM_LTO"))
     assertFalse(plan.variables.containsKey("XS_LLVM_OPT_LEVEL"))
+    assertFalse(plan.variables.containsKey("XS_LLVM_COMPILER"))
   }
 
   @Test

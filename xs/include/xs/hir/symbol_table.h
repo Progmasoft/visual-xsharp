@@ -14,80 +14,80 @@
 
 typedef enum
 {
-  XS_HIR_SYMBOL_FUNCTION,
-  XS_HIR_SYMBOL_CLASS,
-  XS_HIR_SYMBOL_INTERFACE,
-  XS_HIR_SYMBOL_ENUM,
-  XS_HIR_SYMBOL_DATA,
-  XS_HIR_SYMBOL_MACRO,
-  XS_HIR_SYMBOL_EXTERN_GLOBAL,
+    XS_HIR_SYMBOL_FUNCTION,
+    XS_HIR_SYMBOL_CLASS,
+    XS_HIR_SYMBOL_INTERFACE,
+    XS_HIR_SYMBOL_ENUM,
+    XS_HIR_SYMBOL_DATA,
+    XS_HIR_SYMBOL_MACRO,
+    XS_HIR_SYMBOL_EXTERN_GLOBAL,
 } XsHirSymbolKind;
 
 typedef enum
 {
-  XS_HIR_MEMBER_FIELD,
-  XS_HIR_MEMBER_METHOD,
-  XS_HIR_MEMBER_CONSTRUCTOR,
-  XS_HIR_MEMBER_DESTRUCTOR,
-  XS_HIR_MEMBER_NESTED_TYPE,
-  XS_HIR_MEMBER_VARIANT,
+    XS_HIR_MEMBER_FIELD,
+    XS_HIR_MEMBER_METHOD,
+    XS_HIR_MEMBER_CONSTRUCTOR,
+    XS_HIR_MEMBER_DESTRUCTOR,
+    XS_HIR_MEMBER_NESTED_TYPE,
+    XS_HIR_MEMBER_VARIANT,
 } XsHirMemberKind;
 
 typedef struct
 {
-  XsHirSymbolKind kind;
-  char *name;
-  char *module_name;
-  char *namespace_name;
-  char *qualified_name;
-  XsSyntaxVisibility visibility;
-  XsSourceSpan span;
-  const XsSyntaxNode *syntax;
+    XsHirSymbolKind kind;
+    char *name;
+    char *module_name;
+    char *namespace_name;
+    char *qualified_name;
+    XsSyntaxVisibility visibility;
+    XsSourceSpan span;
+    const XsSyntaxNode *syntax;
 } XsHirSymbol;
 
 typedef struct
 {
-  char *local_name;
-  const XsHirSymbol *symbol;
-  XsSourceSpan span;
+    char *local_name;
+    const XsHirSymbol *symbol;
+    XsSourceSpan span;
 } XsHirImportBinding;
 
 typedef struct
 {
-  XsHirSymbol *symbols;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsHirSymbol *symbols;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsHirSymbolTable;
 
 typedef struct
 {
-  XsHirImportBinding *bindings;
-  char **module_names;
-  size_t count;
-  size_t capacity;
-  size_t module_count;
-  size_t module_capacity;
-  bool allocation_failed;
+    XsHirImportBinding *bindings;
+    char **module_names;
+    size_t count;
+    size_t capacity;
+    size_t module_count;
+    size_t module_capacity;
+    bool allocation_failed;
 } XsHirImportScope;
 
 typedef struct
 {
-  XsHirMemberKind kind;
-  char *name;
-  char *owner_qualified_name;
-  char *qualified_name;
-  XsSyntaxVisibility visibility;
-  XsSourceSpan span;
-  const XsSyntaxNode *syntax;
+    XsHirMemberKind kind;
+    char *name;
+    char *owner_qualified_name;
+    char *qualified_name;
+    XsSyntaxVisibility visibility;
+    XsSourceSpan span;
+    const XsSyntaxNode *syntax;
 } XsHirMemberSymbol;
 
 typedef struct
 {
-  XsHirMemberSymbol *members;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsHirMemberSymbol *members;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsHirMemberSymbolTable;
 
 void xs_hir_symbol_table_init(XsHirSymbolTable *table);

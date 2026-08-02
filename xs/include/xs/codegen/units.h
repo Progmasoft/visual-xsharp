@@ -11,30 +11,39 @@
 
 #include <stddef.h>
 
-typedef enum
+#ifdef __cplusplus
+extern "C"
 {
-  XS_CODEGEN_UNITS_OK,
-  XS_CODEGEN_UNITS_INVALID_ARGUMENT,
-  XS_CODEGEN_UNITS_ALLOCATION_FAILED,
-} XsCodegenUnitsStatus;
+#endif
 
-typedef struct
-{
-  XsCodegenUnitsStatus status;
-  char message[256];
-} XsCodegenUnitsError;
+    typedef enum
+    {
+        XS_CODEGEN_UNITS_OK,
+        XS_CODEGEN_UNITS_INVALID_ARGUMENT,
+        XS_CODEGEN_UNITS_ALLOCATION_FAILED,
+    } XsCodegenUnitsStatus;
 
-typedef struct XsCodegenPlan XsCodegenPlan;
+    typedef struct
+    {
+        XsCodegenUnitsStatus status;
+        char message[256];
+    } XsCodegenUnitsError;
 
-XsCodegenUnitsStatus xs_codegen_plan_create_from_mir(const XsMirModule *module, XsCodegenPlan **plan,
-                                                     XsCodegenUnitsError *error);
-XsCodegenUnitsStatus xs_codegen_plan_create_from_mono(const XsMonoPlan *mono, XsCodegenPlan **plan,
-                                                      XsCodegenUnitsError *error);
-void xs_codegen_plan_destroy(XsCodegenPlan *plan);
+    typedef struct XsCodegenPlan XsCodegenPlan;
 
-size_t xs_codegen_plan_unit_count(const XsCodegenPlan *plan);
-const char *xs_codegen_plan_unit_name(const XsCodegenPlan *plan, size_t unit_index);
-size_t xs_codegen_plan_unit_function_count(const XsCodegenPlan *plan, size_t unit_index);
-const char *xs_codegen_plan_unit_function_name(const XsCodegenPlan *plan, size_t unit_index, size_t function_index);
+    XsCodegenUnitsStatus xs_codegen_plan_create_from_mir(const XsMirModule *module, XsCodegenPlan **plan,
+                                                         XsCodegenUnitsError *error);
+    XsCodegenUnitsStatus xs_codegen_plan_create_from_mono(const XsMonoPlan *mono, XsCodegenPlan **plan,
+                                                          XsCodegenUnitsError *error);
+    void xs_codegen_plan_destroy(XsCodegenPlan *plan);
+
+    size_t xs_codegen_plan_unit_count(const XsCodegenPlan *plan);
+    const char *xs_codegen_plan_unit_name(const XsCodegenPlan *plan, size_t unit_index);
+    size_t xs_codegen_plan_unit_function_count(const XsCodegenPlan *plan, size_t unit_index);
+    const char *xs_codegen_plan_unit_function_name(const XsCodegenPlan *plan, size_t unit_index, size_t function_index);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

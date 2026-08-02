@@ -13,7 +13,7 @@ extern "C"
 {
 #endif
 
-  bool xs_driver_build_direct_xhir(const char *input_path, const char *text, size_t length);
+    bool xs_driver_build_direct_xhir(const char *input_path, const char *text, size_t length);
 
 #ifdef __cplusplus
 }

@@ -12,12 +12,12 @@
 
 typedef struct
 {
-  char **paths;
-  char **module_names;
-  size_t path_count;
-  char **test_paths;
-  size_t test_path_count;
-  XsCompilerSettings settings;
+    char **paths;
+    char **module_names;
+    size_t path_count;
+    char **test_paths;
+    size_t test_path_count;
+    XsCompilerSettings settings;
 } XsResolvedProject;
 
 bool xs_driver_resolve_project(const char *module_path, XsResolvedProject *project);

@@ -12,30 +12,30 @@
 
 typedef struct
 {
-  char **items;
-  size_t count;
-  size_t capacity;
+    char **items;
+    size_t count;
+    size_t capacity;
 } StringList;
 
 typedef struct
 {
-  char *name;
-  size_t start;
-  size_t end;
+    char *name;
+    size_t start;
+    size_t end;
 } ImportView;
 
 typedef struct
 {
-  ImportView *items;
-  size_t count;
-  size_t capacity;
+    ImportView *items;
+    size_t count;
+    size_t capacity;
 } ImportList;
 
 typedef struct
 {
-  XsLexer lexer;
-  XsToken current;
-  const XsSource *source;
+    XsLexer lexer;
+    XsToken current;
+    const XsSource *source;
 } ModuleScanner;
 
 char *xs_module_copy_text(const char *text);

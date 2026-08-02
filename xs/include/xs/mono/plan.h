@@ -10,27 +10,36 @@
 
 #include <stddef.h>
 
-typedef enum
+#ifdef __cplusplus
+extern "C"
 {
-  XS_MONO_OK,
-  XS_MONO_INVALID_ARGUMENT,
-  XS_MONO_ALLOCATION_FAILED,
-} XsMonoStatus;
+#endif
 
-typedef struct
-{
-  XsMonoStatus status;
-  char message[256];
-} XsMonoError;
+    typedef enum
+    {
+        XS_MONO_OK,
+        XS_MONO_INVALID_ARGUMENT,
+        XS_MONO_ALLOCATION_FAILED,
+    } XsMonoStatus;
 
-typedef struct XsMonoPlan XsMonoPlan;
+    typedef struct
+    {
+        XsMonoStatus status;
+        char message[256];
+    } XsMonoError;
 
-XsMonoStatus xs_mono_plan_create_for_concrete_mir(const XsMirModule *module, XsMonoPlan **plan, XsMonoError *error);
-void xs_mono_plan_destroy(XsMonoPlan *plan);
+    typedef struct XsMonoPlan XsMonoPlan;
 
-size_t xs_mono_plan_entry_count(const XsMonoPlan *plan);
-const char *xs_mono_plan_entry_unit_name(const XsMonoPlan *plan, size_t index);
-const char *xs_mono_plan_entry_source_name(const XsMonoPlan *plan, size_t index);
-const char *xs_mono_plan_entry_symbol_name(const XsMonoPlan *plan, size_t index);
+    XsMonoStatus xs_mono_plan_create_for_concrete_mir(const XsMirModule *module, XsMonoPlan **plan, XsMonoError *error);
+    void xs_mono_plan_destroy(XsMonoPlan *plan);
+
+    size_t xs_mono_plan_entry_count(const XsMonoPlan *plan);
+    const char *xs_mono_plan_entry_unit_name(const XsMonoPlan *plan, size_t index);
+    const char *xs_mono_plan_entry_source_name(const XsMonoPlan *plan, size_t index);
+    const char *xs_mono_plan_entry_symbol_name(const XsMonoPlan *plan, size_t index);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

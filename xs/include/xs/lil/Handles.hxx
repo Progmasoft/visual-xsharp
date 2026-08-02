@@ -11,34 +11,34 @@ namespace xs::lil
 class Function final
 {
 public:
-  [[nodiscard]] XsLilFunction *native_handle() const noexcept
-  {
-    return value_;
-  }
+    [[nodiscard]] XsLilFunction *native_handle() const noexcept
+    {
+        return value_;
+    }
 
 private:
-  friend class Module;
-  friend class Builder;
+    friend class Module;
+    friend class Builder;
 
-  explicit Function(XsLilFunction *value) noexcept : value_(value) {}
+    explicit Function(XsLilFunction *value) noexcept : value_(value) {}
 
-  XsLilFunction *value_{};
+    XsLilFunction *value_{};
 };
 
 class Block final
 {
 public:
-  [[nodiscard]] XsLilBlock *native_handle() const noexcept
-  {
-    return value_;
-  }
+    [[nodiscard]] XsLilBlock *native_handle() const noexcept
+    {
+        return value_;
+    }
 
 private:
-  friend class Builder;
+    friend class Builder;
 
-  explicit Block(XsLilBlock *value) noexcept : value_(value) {}
+    explicit Block(XsLilBlock *value) noexcept : value_(value) {}
 
-  XsLilBlock *value_{};
+    XsLilBlock *value_{};
 };
 
 using ValueId = XsLilValueId;

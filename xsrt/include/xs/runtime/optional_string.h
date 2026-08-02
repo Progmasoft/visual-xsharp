@@ -11,24 +11,24 @@
 
 typedef enum XsRuntimeStatus
 {
-  XS_RUNTIME_OK = 0,
-  XS_RUNTIME_INVALID_ARGUMENT = 1,
-  XS_RUNTIME_ALLOCATION_FAILED = 2,
-  XS_RUNTIME_SIZE_OVERFLOW = 3,
-  XS_RUNTIME_VALUE_IS_NONE = 4
+    XS_RUNTIME_OK = 0,
+    XS_RUNTIME_INVALID_ARGUMENT = 1,
+    XS_RUNTIME_ALLOCATION_FAILED = 2,
+    XS_RUNTIME_SIZE_OVERFLOW = 3,
+    XS_RUNTIME_VALUE_IS_NONE = 4
 } XsRuntimeStatus;
 
 typedef struct XsRuntimeStrView
 {
-  const uint16_t *units;
-  size_t length;
+    const uint16_t *units;
+    size_t length;
 } XsRuntimeStrView;
 
 typedef struct XsRuntimeStringBox XsRuntimeStringBox;
 
 typedef struct XsRuntimeOptionalStr
 {
-  XsRuntimeStringBox *box;
+    XsRuntimeStringBox *box;
 } XsRuntimeOptionalStr;
 
 XsRuntimeOptionalStr xs_runtime_optional_str_none(void);

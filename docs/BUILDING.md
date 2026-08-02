@@ -70,6 +70,9 @@ likewise split by direct XLIL, source values/control flow/calls, Kotlin projects
 
 The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` static library. Its GNU++26 executable
 entry and DIMCLI argument layer dispatch into the existing C23 compiler driver while subsystem migration continues.
+Monomorphization and codegen-unit planning are GNU++26-owned subsystems exposed through stable C entry points, so the
+remaining C23 driver can consume them without a simultaneous frontend rewrite. C++ consumers may use the move-only
+`<xs/mono/Plan.hxx>` and `<xs/codegen/Plan.hxx>` views.
 
 ## Compiler installation layout
 

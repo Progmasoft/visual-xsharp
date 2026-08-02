@@ -10,49 +10,49 @@
 
 typedef struct
 {
-  char *module_name;
-  char *source_path;
-  size_t declaration_start;
-  size_t declaration_end;
+    char *module_name;
+    char *source_path;
+    size_t declaration_start;
+    size_t declaration_end;
 } XsDiscoveredModule;
 
 typedef struct
 {
-  XsDiscoveredModule *modules;
-  size_t count;
-  size_t capacity;
+    XsDiscoveredModule *modules;
+    size_t count;
+    size_t capacity;
 } XsModuleRegistry;
 
 typedef struct
 {
-  char *importer_path;
-  char *module_name;
-  char *imported_path;
-  size_t import_start;
-  size_t import_end;
+    char *importer_path;
+    char *module_name;
+    char *imported_path;
+    size_t import_start;
+    size_t import_end;
 } XsModuleDependency;
 
 typedef struct
 {
-  XsModuleDependency *dependencies;
-  size_t count;
-  size_t capacity;
+    XsModuleDependency *dependencies;
+    size_t count;
+    size_t capacity;
 } XsModuleGraph;
 
 typedef struct
 {
-  char *source_path;
-  size_t start;
-  size_t end;
-  char *message;
+    char *source_path;
+    size_t start;
+    size_t end;
+    char *message;
 } XsModuleIssue;
 
 typedef struct
 {
-  XsModuleIssue *issues;
-  size_t count;
-  size_t capacity;
-  bool allocation_failed;
+    XsModuleIssue *issues;
+    size_t count;
+    size_t capacity;
+    bool allocation_failed;
 } XsModuleIssues;
 
 void xs_module_registry_init(XsModuleRegistry *registry);

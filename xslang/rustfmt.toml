@@ -8,7 +8,7 @@ required_version = "*"
 
 max_width = 120
 hard_tabs = false
-tab_spaces = 2
+tab_spaces = 4
 newline_style = "Unix"
 use_small_heuristics = "Default"
 fn_call_width = 72
@@ -27,7 +27,7 @@ empty_item_single_line = true
 fn_single_line = false
 where_single_line = false
 struct_lit_single_line = false
-indent_style = "Visual"
+indent_style = "Block"
 
 fn_params_layout = "Tall"
 binop_separator = "Back"

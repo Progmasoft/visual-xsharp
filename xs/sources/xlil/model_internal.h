@@ -10,101 +10,101 @@
 
 typedef struct
 {
-  XsLilTerminatorKind kind;
-  bool has_value;
-  XsLilValueId value;
-  XsLilValueId condition;
-  XsLilBlockId target;
-  XsLilBlockId else_target;
+    XsLilTerminatorKind kind;
+    bool has_value;
+    XsLilValueId value;
+    XsLilValueId condition;
+    XsLilBlockId target;
+    XsLilBlockId else_target;
 } XsLilTerminator;
 
 typedef struct
 {
-  XsLilType type;
+    XsLilType type;
 } XsLilValue;
 
 typedef struct
 {
-  XsLilType type;
+    XsLilType type;
 } XsLilSlot;
 
 typedef struct
 {
-  char *name;
-  XsLilType *fields;
-  size_t field_count;
+    char *name;
+    XsLilType *fields;
+    size_t field_count;
 } XsLilAggregateType;
 
 typedef struct
 {
-  XsLilType element_type;
-  uint64_t length;
-  bool dynamic;
+    XsLilType element_type;
+    uint64_t length;
+    bool dynamic;
 } XsLilArrayType;
 
 typedef struct
 {
-  XsLilInstructionKind kind;
-  XsLilValueId result;
-  int64_t immediate_i64;
-  XsUInt128 immediate_integer_bits;
-  XsLilIntegerBinaryOperation integer_operation;
-  XsLilType integer_type;
-  uint64_t immediate_float_bits;
-  bool immediate_bool;
-  XsLilUtf32Encoding utf32_encoding;
-  uint32_t *utf32_units;
-  size_t utf32_length;
-  XsLilValueId left;
-  XsLilValueId right;
-  XsLilSlotId slot;
-  char *callee;
-  XsLilValueId *arguments;
-  size_t argument_count;
+    XsLilInstructionKind kind;
+    XsLilValueId result;
+    int64_t immediate_i64;
+    XsUInt128 immediate_integer_bits;
+    XsLilIntegerBinaryOperation integer_operation;
+    XsLilType integer_type;
+    uint64_t immediate_float_bits;
+    bool immediate_bool;
+    XsLilUtf32Encoding utf32_encoding;
+    uint32_t *utf32_units;
+    size_t utf32_length;
+    XsLilValueId left;
+    XsLilValueId right;
+    XsLilSlotId slot;
+    char *callee;
+    XsLilValueId *arguments;
+    size_t argument_count;
 } XsLilInstruction;
 
 struct XsLilBlock
 {
-  char *label;
-  XsLilFunction *owner;
-  uint32_t id;
-  XsLilInstruction *instructions;
-  size_t instruction_count;
-  size_t instruction_capacity;
-  XsLilTerminator terminator;
+    char *label;
+    XsLilFunction *owner;
+    uint32_t id;
+    XsLilInstruction *instructions;
+    size_t instruction_count;
+    size_t instruction_capacity;
+    XsLilTerminator terminator;
 };
 
 struct XsLilFunction
 {
-  XsLilModule *owner;
-  char *name;
-  XsLilType return_type;
-  XsLilType *parameters;
-  size_t parameter_count;
-  bool is_definition;
-  XsLilValue *values;
-  size_t value_count;
-  size_t value_capacity;
-  XsLilSlot *slots;
-  size_t slot_count;
-  size_t slot_capacity;
-  XsLilBlock **blocks;
-  size_t block_count;
-  size_t block_capacity;
+    XsLilModule *owner;
+    char *name;
+    XsLilType return_type;
+    XsLilType *parameters;
+    size_t parameter_count;
+    bool is_definition;
+    XsLilValue *values;
+    size_t value_count;
+    size_t value_capacity;
+    XsLilSlot *slots;
+    size_t slot_count;
+    size_t slot_capacity;
+    XsLilBlock **blocks;
+    size_t block_count;
+    size_t block_capacity;
 };
 
 struct XsLilModule
 {
-  char *name;
-  XsLilAggregateType *aggregate_types;
-  size_t aggregate_type_count;
-  size_t aggregate_type_capacity;
-  XsLilArrayType *array_types;
-  size_t array_type_count;
-  size_t array_type_capacity;
-  XsLilFunction **functions;
-  size_t function_count;
-  size_t function_capacity;
+    char *name;
+    XsLilAggregateType *aggregate_types;
+    size_t aggregate_type_count;
+    size_t aggregate_type_capacity;
+    XsLilArrayType *array_types;
+    size_t array_type_count;
+    size_t array_type_capacity;
+    XsLilFunction **functions;
+    size_t function_count;
+    size_t function_capacity;
 };
 
 void xs_lil_clear_error(XsLilError *error);

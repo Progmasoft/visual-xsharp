@@ -9,9 +9,9 @@
 
 typedef struct
 {
-  const char *name;
-  const char *required_import;
-  const char *alternate_import;
+    const char *name;
+    const char *required_import;
+    const char *alternate_import;
 } StandardCallInfo;
 
 static const XsHirStandardTypeInfo standard_types[] = {
@@ -160,56 +160,57 @@ static const StandardCallInfo standard_calls[] = {
 
 static bool import_available(const XsHirImportScope *import, const char *required, const char *alternate)
 {
-  return required == nullptr || xs_hir_import_scope_has_module(import, required) ||
-         (alternate != nullptr && xs_hir_import_scope_has_module(import, alternate));
+    return required == nullptr || xs_hir_import_scope_has_module(import, required) ||
+           (alternate != nullptr && xs_hir_import_scope_has_module(import, alternate));
 }
 
 const XsHirStandardTypeInfo *xs_hir_standard_type_find(const char *name)
 {
-  if(name == nullptr)
+    if(name == nullptr)
+        return nullptr;
+    for(size_t i = 0; i < sizeof(standard_types) / sizeof(standard_types[0]); ++i)
+    {
+        if(strcmp(standard_types[i].canonical_name, name) == 0 ||
+           (standard_types[i].short_name != nullptr && strcmp(standard_types[i].short_name, name) == 0))
+            return &standard_types[i];
+    }
     return nullptr;
-  for(size_t i = 0; i < sizeof(standard_types) / sizeof(standard_types[0]); ++i)
-  {
-    if(strcmp(standard_types[i].canonical_name, name) == 0 ||
-       (standard_types[i].short_name != nullptr && strcmp(standard_types[i].short_name, name) == 0))
-      return &standard_types[i];
-  }
-  return nullptr;
 }
 
 XsHirStandardLookup xs_hir_standard_type_lookup(const XsHirStandardTypeInfo *type, const XsHirImportScope *import)
 {
-  if(type == nullptr)
-    return XS_HIR_STANDARD_UNKNOWN;
-  return import_available(import, type->required_import, type->alternate_import) ? XS_HIR_STANDARD_AVAILABLE
-                                                                                 : XS_HIR_STANDARD_MISSING_IMPORT;
+    if(type == nullptr)
+        return XS_HIR_STANDARD_UNKNOWN;
+    return import_available(import, type->required_import, type->alternate_import) ? XS_HIR_STANDARD_AVAILABLE
+                                                                                   : XS_HIR_STANDARD_MISSING_IMPORT;
 }
 
 XsHirStandardLookup xs_hir_standard_call_lookup(const char *name, const XsHirImportScope *import)
 {
-  if(name == nullptr)
+    if(name == nullptr)
+        return XS_HIR_STANDARD_UNKNOWN;
+    for(size_t i = 0; i < sizeof(standard_calls) / sizeof(standard_calls[0]); ++i)
+    {
+        if(strcmp(standard_calls[i].name, name) != 0)
+            continue;
+        return import_available(import, standard_calls[i].required_import, standard_calls[i].alternate_import)
+                   ? XS_HIR_STANDARD_AVAILABLE
+                   : XS_HIR_STANDARD_MISSING_IMPORT;
+    }
     return XS_HIR_STANDARD_UNKNOWN;
-  for(size_t i = 0; i < sizeof(standard_calls) / sizeof(standard_calls[0]); ++i)
-  {
-    if(strcmp(standard_calls[i].name, name) != 0)
-      continue;
-    return import_available(import, standard_calls[i].required_import, standard_calls[i].alternate_import)
-               ? XS_HIR_STANDARD_AVAILABLE
-               : XS_HIR_STANDARD_MISSING_IMPORT;
-  }
-  return XS_HIR_STANDARD_UNKNOWN;
 }
 
 bool xs_hir_standard_module_name(const char *name)
 {
-  static const char *const modules[] = {
-      "arc",   "atomic",  "attrs",  "cffi",    "fs",    "hardware", "http",   "mutex",        "net",        "optional",
-      "panic", "process", "result", "rw_lock", "stdio", "sync",     "thread", "std.optional", "std.result",
-  };
-  for(size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); ++i)
-  {
-    if(strcmp(name, modules[i]) == 0)
-      return true;
-  }
-  return false;
+    static const char *const modules[] = {
+        "arc",   "atomic", "attrs",    "cffi",         "fs",         "hardware", "http",
+        "mutex", "net",    "optional", "panic",        "process",    "result",   "rw_lock",
+        "stdio", "sync",   "thread",   "std.optional", "std.result",
+    };
+    for(size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); ++i)
+    {
+        if(strcmp(name, modules[i]) == 0)
+            return true;
+    }
+    return false;
 }

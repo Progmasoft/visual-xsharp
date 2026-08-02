@@ -13,35 +13,35 @@
 
 typedef enum
 {
-  XS_DIAGNOSTIC_ERROR,
-  XS_DIAGNOSTIC_WARNING,
-  XS_DIAGNOSTIC_NOTE,
+    XS_DIAGNOSTIC_ERROR,
+    XS_DIAGNOSTIC_WARNING,
+    XS_DIAGNOSTIC_NOTE,
 } XsDiagnosticSeverity;
 
 typedef enum
 {
-  XS_WARNING_NONE,
-  XS_WARNING_LOW,
-  XS_WARNING_MEDIUM,
-  XS_WARNING_ALL,
+    XS_WARNING_NONE,
+    XS_WARNING_LOW,
+    XS_WARNING_MEDIUM,
+    XS_WARNING_ALL,
 } XsWarningLevel;
 
 typedef struct
 {
-  XsDiagnosticSeverity severity;
-  XsWarningLevel warning_level;
-  XsSpan span;
-  char *message;
+    XsDiagnosticSeverity severity;
+    XsWarningLevel warning_level;
+    XsSpan span;
+    char *message;
 } XsDiagnostic;
 
 typedef struct
 {
-  XsDiagnostic *items;
-  size_t count;
-  size_t capacity;
-  XsWarningLevel warning_level;
-  bool warnings_as_errors;
-  bool allocation_failed;
+    XsDiagnostic *items;
+    size_t count;
+    size_t capacity;
+    XsWarningLevel warning_level;
+    bool warnings_as_errors;
+    bool allocation_failed;
 } XsDiagnostics;
 
 void xs_diagnostics_init(XsDiagnostics *diagnostics);

@@ -3,23 +3,34 @@
 
 # yaml-language-server: $schema=https://json.schemastore.org/clang-format
 ---
-# clang-format uses the Cpp language mode for C, C++, Objective-C, and Objective-C++.
 Language: Cpp
 BasedOnStyle: LLVM
+Standard: Latest
 DisableFormat: false
 
 ColumnLimit: 120
-IndentWidth: 2
+IndentWidth: 4
 ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
 BracedInitializerIndentWidth: -1
-TabWidth: 2
+TabWidth: 4
 UseTab: Never
-PPIndentWidth: -1
+IndentPPDirectives: AfterHash
+PPIndentWidth: 4
+
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: LogicalBlock
 
 IndentCaseLabels: false
 IndentCaseBlocks: false
 IndentGotoLabels: true
+
+NamespaceIndentation: None
+IndentExportBlock: true
 IndentExternBlock: AfterExternBlock
+IndentRequiresClause: true
 IndentWrappedFunctionNames: false
 
 BreakBeforeBraces: Allman
@@ -35,7 +46,11 @@ AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortCaseExpressionOnASingleLine: true
+AllowShortLambdasOnASingleLine: All
 AllowShortEnumsOnASingleLine: false
+AllowShortNamespacesOnASingleLine: false
+AllowShortCompoundRequirementOnASingleLine: true
+ShortNamespaceLines: 1
 
 AlignAfterOpenBracket: Align
 AlignOperands: Align
@@ -48,6 +63,7 @@ BinPackLongBracedList: true
 BreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
 BreakFunctionDefinitionParameters: false
+AllowBreakBeforeNoexceptSpecifier: Never
 
 PenaltyBreakBeforeFirstCallParameter: 19
 PenaltyReturnTypeOnItsOwnLine: 60
@@ -60,14 +76,17 @@ BreakBeforeTernaryOperators: true
 BreakBinaryOperations: Never
 SpaceBeforeAssignmentOperators: true
 SpaceAfterLogicalNot: false
+SpaceAfterOperatorKeyword: false
 
 DerivePointerAlignment: false
 PointerAlignment: Right
+ReferenceAlignment: Pointer
 QualifierAlignment: Leave
 SpaceAroundPointerQualifiers: Default
 
 PenaltyBreakAssignment: 2
 PenaltyBreakBeforeMemberAccess: 150
+PenaltyBreakScopeResolution: 500
 PenaltyBreakFirstLessLess: 120
 
 SpaceBeforeParens: Custom
@@ -77,6 +96,11 @@ SpaceBeforeParensOptions:
   AfterFunctionDefinitionName: false
   AfterFunctionDeclarationName: false
   AfterIfMacros: false
+  AfterNot: false
+  AfterOverloadedOperator: false
+  AfterPlacementOperator: true
+  AfterRequiresInClause: false
+  AfterRequiresInExpression: false
   BeforeNonEmptyParentheses: false
 
 SpacesInParens: Custom
@@ -88,8 +112,15 @@ SpacesInParensOptions:
   Other: false
 SpacesInSquareBrackets: false
 SpaceBeforeSquareBrackets: false
+SpacesInAngles: Never
 SpaceInEmptyBraces: Never
+SpaceBeforeCpp11BracedList: false
+
 SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeRangeBasedForLoopColon: true
 SpaceBeforeCaseColon: false
 BitFieldColonSpacing: Both
 
@@ -137,13 +168,32 @@ AlignConsecutiveShortCaseStatements:
   AlignCaseColons: false
 
 AlignArrayOfStructures: None
+
 AlignEscapedNewlines: Right
+
 AlignTrailingComments:
   Kind: Always
   OverEmptyLines: 0
   AlignPPAndNotPP: true
+
 SpacesBeforeTrailingComments: 1
 
+Cpp11BracedListStyle: true
+BreakAfterOpenBracketBracedList: false
+BreakBeforeCloseBracketBracedList: false
+BreakArrays: true
+PackConstructorInitializers: BinPack
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: BeforeColon
+
+BreakBeforeConceptDeclarations: Always
+BreakTemplateDeclarations: MultiLine
+BreakBeforeTemplateCloser: false
+PenaltyBreakTemplateDeclaration: 10
+RequiresClausePosition: OwnLine
+RequiresExpressionIndentation: OuterScope
+
+LambdaBodyIndentation: Signature
 BreakAfterAttributes: Leave
 AlwaysBreakBeforeMultilineStrings: false
 BreakStringLiterals: true
@@ -161,22 +211,22 @@ IncludeCategories:
     Priority: 1
     SortPriority: 1
     CaseSensitive: true
-  - Regex: '^<(assert|complex|ctype|errno|fenv|float|inttypes|iso646|limits|locale|math|setjmp|signal|stdalign|stdarg|stdatomic|stdbit|stdbool|stdckdint|stddef|stdint|stdio|stdlib|stdnoreturn|string|tgmath|threads|time|uchar|wchar|wctype)\.h>$'
+  - Regex: "^<[^>]+>$"
     Priority: 2
     SortPriority: 2
     CaseSensitive: true
-  - Regex: "^<[^>]+>$"
+  - Regex: ".*"
     Priority: 3
     SortPriority: 3
-    CaseSensitive: true
-  - Regex: ".*"
-    Priority: 4
-    SortPriority: 4
     CaseSensitive: true
 IncludeIsMainRegex: "(_test)?$"
 IncludeIsMainSourceRegex: ""
 MainIncludeChar: Quote
+SortUsingDeclarations: LexicographicNumeric
 
+CompactNamespaces: false
+FixNamespaceComments: true
+WrapNamespaceBodyWithEmptyLines: Leave
 SeparateDefinitionBlocks: Leave
 
 ReflowComments: Always
@@ -195,28 +245,6 @@ RemoveEmptyLinesInUnwrappedLines: false
 
 LineEnding: LF
 InsertNewlineAtEOF: true
-
-IndentPPDirectives: None
-SkipMacroDefinitionBody: false
-MacroBlockBegin: ""
-MacroBlockEnd: ""
-OneLineFormatOffRegex: ""
-
-# Project C macros.
-#
-# Function-like test macros that form a complete statement belong in
-# StatementMacros. Parser shorthand macros such as accept, expect, node,
-# parse_type and project parser aliases are object-like function aliases;
-# they intentionally stay out of StatementMacros/IfMacros so calls used as
-# expressions keep ordinary C formatting.
-ForEachMacros: []
-IfMacros: []
-StatementAttributeLikeMacros: []
-StatementMacros:
-  - CHECK
-  - XS_C23_IMPL_FOR
-  - XS_C23_TRAIT
-WhitespaceSensitiveMacros: []
 
 IntegerLiteralSeparator:
   Binary: 0

@@ -15,50 +15,50 @@
 
 typedef struct
 {
-  uint32_t kind;
-  uint32_t token_kind;
-  uint32_t visibility;
-  uint32_t flags;
-  uint64_t parent_index;
-  uint64_t first_child;
-  uint64_t child_count;
-  uint64_t text_offset;
-  uint64_t text_length;
-  uint64_t file_id;
-  uint64_t start_offset;
-  uint64_t end_offset;
-  uint64_t start_line;
-  uint64_t start_column;
-  uint64_t end_line;
-  uint64_t end_column;
+    uint32_t kind;
+    uint32_t token_kind;
+    uint32_t visibility;
+    uint32_t flags;
+    uint64_t parent_index;
+    uint64_t first_child;
+    uint64_t child_count;
+    uint64_t text_offset;
+    uint64_t text_length;
+    uint64_t file_id;
+    uint64_t start_offset;
+    uint64_t end_offset;
+    uint64_t start_line;
+    uint64_t start_column;
+    uint64_t end_line;
+    uint64_t end_column;
 } XsCompilerCoreSyntaxNode;
 
 typedef struct
 {
-  uint32_t abi_version;
-  uint32_t reserved;
-  uint64_t root_index;
-  const XsCompilerCoreSyntaxNode *nodes;
-  uint64_t node_count;
-  const uint64_t *child_indices;
-  uint64_t child_index_count;
-  const uint8_t *text_bytes;
-  uint64_t text_byte_count;
+    uint32_t abi_version;
+    uint32_t reserved;
+    uint64_t root_index;
+    const XsCompilerCoreSyntaxNode *nodes;
+    uint64_t node_count;
+    const uint64_t *child_indices;
+    uint64_t child_index_count;
+    const uint8_t *text_bytes;
+    uint64_t text_byte_count;
 } XsCompilerCoreSyntaxPacket;
 
 typedef enum
 {
-  XS_COMPILER_CORE_OK,
-  XS_COMPILER_CORE_INVALID_ARGUMENT,
-  XS_COMPILER_CORE_ALLOCATION_FAILED,
-  XS_COMPILER_CORE_LIMIT_EXCEEDED,
+    XS_COMPILER_CORE_OK,
+    XS_COMPILER_CORE_INVALID_ARGUMENT,
+    XS_COMPILER_CORE_ALLOCATION_FAILED,
+    XS_COMPILER_CORE_LIMIT_EXCEEDED,
 } XsCompilerCoreStatus;
 
 typedef enum
 {
-  XS_COMPILER_CORE_FFI_OK,
-  XS_COMPILER_CORE_FFI_NULL_ARGUMENT,
-  XS_COMPILER_CORE_FFI_INVALID_PACKET,
+    XS_COMPILER_CORE_FFI_OK,
+    XS_COMPILER_CORE_FFI_NULL_ARGUMENT,
+    XS_COMPILER_CORE_FFI_INVALID_PACKET,
 } XsCompilerCoreFfiStatus;
 
 typedef struct XsCompilerCoreSyntaxStorage XsCompilerCoreSyntaxStorage;
@@ -67,8 +67,8 @@ typedef struct XsCompilerCoreDirectIrSession XsCompilerCoreDirectIrSession;
 
 typedef enum
 {
-  XS_COMPILER_CORE_TEST_IGNORED = 1U << 0,
-  XS_COMPILER_CORE_TEST_SHOULD_PANIC = 1U << 1,
+    XS_COMPILER_CORE_TEST_IGNORED = 1U << 0,
+    XS_COMPILER_CORE_TEST_SHOULD_PANIC = 1U << 1,
 } XsCompilerCoreTestFlags;
 
 XsCompilerCoreStatus xs_compiler_core_syntax_packet_create(const XsSyntaxTree *tree,

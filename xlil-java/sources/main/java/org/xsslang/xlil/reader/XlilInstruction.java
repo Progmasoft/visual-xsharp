@@ -11,21 +11,13 @@ import java.util.OptionalInt;
 import org.xsslang.xlil.writer.XlilType;
 
 /** Immutable snapshot of one XLIL instruction. */
-public record XlilInstruction(
-    InstructionKind kind,
-    OptionalInt result,
-    Optional<XlilType> resultType,
-    long integerBits,
-    boolean booleanValue,
-    Optional<String> stringValue,
-    Optional<String> callee,
-    List<Integer> arguments,
-    int left,
-    int right,
-    int field,
-    int slot) {
+public record XlilInstruction(InstructionKind kind, OptionalInt result, Optional<XlilType> resultType, long integerBits,
+        boolean booleanValue, Optional<String> stringValue, Optional<String> callee, List<Integer> arguments, int left,
+        int right, int field, int slot)
+{
 
-  public XlilInstruction {
-    arguments = List.copyOf(arguments);
-  }
+    public XlilInstruction
+    {
+        arguments = List.copyOf(arguments);
+    }
 }

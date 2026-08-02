@@ -15,22 +15,32 @@
 #[cfg(feature = "proc-macros")]
 pub use xslang_proc_macros::xlil_create;
 
-#[allow(missing_docs,
-        reason = "existing codegen API documentation is being completed incrementally")]
+#[allow(
+    missing_docs,
+    reason = "existing codegen API documentation is being completed incrementally"
+)]
 pub mod codegen;
-#[allow(missing_docs,
-        reason = "existing compiler-core API documentation is being completed incrementally")]
+#[allow(
+    missing_docs,
+    reason = "existing compiler-core API documentation is being completed incrementally"
+)]
 pub mod compiler_core;
-#[allow(missing_docs,
-        reason = "existing HIR API documentation is being completed incrementally")]
+#[allow(
+    missing_docs,
+    reason = "existing HIR API documentation is being completed incrementally"
+)]
 pub mod hir;
 /// Compatibility queries for the native GNU++26 compiler-core bridge.
 pub mod interop;
-#[allow(missing_docs,
-        reason = "existing MIR API documentation is being completed incrementally")]
+#[allow(
+    missing_docs,
+    reason = "existing MIR API documentation is being completed incrementally"
+)]
 pub mod mir;
-#[allow(missing_docs,
-        reason = "existing monomorphization API documentation is being completed incrementally")]
+#[allow(
+    missing_docs,
+    reason = "existing monomorphization API documentation is being completed incrementally"
+)]
 pub mod mono;
 /// Optional Rust integration aliases for application-facing compiler tools.
 pub mod rust;

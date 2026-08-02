@@ -15,65 +15,65 @@
 
 typedef enum
 {
-  XS_BACKEND_OK,
-  XS_BACKEND_DEFERRED,
-  XS_BACKEND_INVALID_ARGUMENT,
-  XS_BACKEND_LLVM_ERROR,
-  XS_BACKEND_SYSTEM_ERROR,
+    XS_BACKEND_OK,
+    XS_BACKEND_DEFERRED,
+    XS_BACKEND_INVALID_ARGUMENT,
+    XS_BACKEND_LLVM_ERROR,
+    XS_BACKEND_SYSTEM_ERROR,
 } XsBackendStatus;
 
 typedef struct
 {
-  XsBackendStatus status;
-  char message[512];
+    XsBackendStatus status;
+    char message[512];
 } XsBackendError;
 
 typedef enum
 {
-  XS_LLVM_OPT_NONE,
-  XS_LLVM_OPT_LESS,
-  XS_LLVM_OPT_DEFAULT,
-  XS_LLVM_OPT_AGGRESSIVE,
+    XS_LLVM_OPT_NONE,
+    XS_LLVM_OPT_LESS,
+    XS_LLVM_OPT_DEFAULT,
+    XS_LLVM_OPT_AGGRESSIVE,
 } XsLlvmOptimizationLevel;
 
 typedef struct
 {
-  const char *target_triple;
-  const char *cpu;
-  const char *features;
-  XsLlvmOptimizationLevel optimization;
-  bool verify_modules;
+    const char *target_triple;
+    const char *cpu;
+    const char *features;
+    XsLlvmOptimizationLevel optimization;
+    bool verify_modules;
 } XsLlvmBackendConfig;
 
 typedef enum
 {
-  XS_PRIMITIVE_UNIT,
-  XS_PRIMITIVE_BOOL,
-  XS_PRIMITIVE_BYTE,
-  XS_PRIMITIVE_SBYTE,
-  XS_PRIMITIVE_CHAR,
-  XS_PRIMITIVE_STR,
-  XS_PRIMITIVE_SHORT,
-  XS_PRIMITIVE_LONG,
-  XS_PRIMITIVE_INT,
-  XS_PRIMITIVE_INTEGER,
-  XS_PRIMITIVE_USHORT,
-  XS_PRIMITIVE_ULONG,
-  XS_PRIMITIVE_UINT,
-  XS_PRIMITIVE_UINTEGER,
-  XS_PRIMITIVE_SFLOAT,
-  XS_PRIMITIVE_LFLOAT,
-  XS_PRIMITIVE_FLOAT,
-  XS_PRIMITIVE_DOUBLE,
-  XS_PRIMITIVE_STRING,
+    XS_PRIMITIVE_UNIT,
+    XS_PRIMITIVE_BOOL,
+    XS_PRIMITIVE_BYTE,
+    XS_PRIMITIVE_SBYTE,
+    XS_PRIMITIVE_CHAR,
+    XS_PRIMITIVE_STR,
+    XS_PRIMITIVE_SHORT,
+    XS_PRIMITIVE_LONG,
+    XS_PRIMITIVE_INT,
+    XS_PRIMITIVE_INTEGER,
+    XS_PRIMITIVE_USHORT,
+    XS_PRIMITIVE_ULONG,
+    XS_PRIMITIVE_UINT,
+    XS_PRIMITIVE_UINTEGER,
+    XS_PRIMITIVE_SFLOAT,
+    XS_PRIMITIVE_LFLOAT,
+    XS_PRIMITIVE_FLOAT,
+    XS_PRIMITIVE_DOUBLE,
+    XS_PRIMITIVE_STRING,
 } XsPrimitiveType;
 
 typedef struct
 {
-  const char *name;
-  XsPrimitiveType return_type;
-  const XsPrimitiveType *parameter_types;
-  size_t parameter_count;
+    const char *name;
+    XsPrimitiveType return_type;
+    const XsPrimitiveType *parameter_types;
+    size_t parameter_count;
 } XsFunctionSignature;
 
 typedef struct XsLlvmBackend XsLlvmBackend;

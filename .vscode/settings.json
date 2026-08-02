@@ -70,6 +70,8 @@
     "**/services/**",
     "**/target/**"
   ],
+  "java.format.settings.url": ".vscode/java-formatter.xml",
+  "java.format.settings.profile": "XS-Java",
   "java.jdt.ls.vmargs": "-Xms64m -Xmx768m -XX:+UseG1GC -XX:ActiveProcessorCount=2 -XX:+UseStringDeduplication -Dsun.zip.disableMemoryMapping=true -Xlog:disable",
   "java.maxConcurrentBuilds": 1,
   "C_Cpp.codeAnalysis.clangTidy.checks.disabled": ["clang-diagnostic-error"]

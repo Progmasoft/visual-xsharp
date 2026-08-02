@@ -6,11 +6,7 @@
 package org.xsslang.xlil.writer;
 
 /** Ordered XLIL floating-point comparisons. */
-public enum FloatComparison {
-  EQUAL,
-  NOT_EQUAL,
-  LESS,
-  LESS_EQUAL,
-  GREATER,
-  GREATER_EQUAL
+public enum FloatComparison
+{
+    EQUAL, NOT_EQUAL, LESS, LESS_EQUAL, GREATER, GREATER_EQUAL
 }
