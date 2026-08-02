@@ -86,4 +86,14 @@ impl ValueType
   {
     matches!(self, Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128)
   }
+
+  pub(crate) const fn is_float(self) -> bool
+  {
+    matches!(self, Self::F16 | Self::F32 | Self::F64 | Self::F128)
+  }
+
+  pub(crate) const fn supports_float_arithmetic(self) -> bool
+  {
+    matches!(self, Self::F32 | Self::F64)
+  }
 }

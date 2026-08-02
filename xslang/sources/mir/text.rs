@@ -10,39 +10,17 @@ use super::verify::{Diagnostic as VerifyDiagnostic, DiagnosticCode as VerifyDiag
 
 #[cfg(test)]
 mod aggregate_tests;
+mod header;
 pub mod parser;
 mod program;
 #[cfg(test)]
 mod storage_tests;
 mod writer;
 
+pub use header::{SUPPORTED_XMIR_VERSION, XmirDocumentHeader, is_supported_xmir_version, parse_xmir_header};
 pub use parser::{XmirParseDiagnostic, parse_xmir_function};
 pub use program::{XmirProgram, parse_xmir_program, program_to_xmir, program_to_xmir_with_types};
 pub use writer::function_to_xmir;
-/// Latest XMIR text version emitted by the canonical writer.
-pub const SUPPORTED_XMIR_VERSION: u32 = 1;
-#[must_use]
-pub const fn is_supported_xmir_version(version: u32) -> bool
-{
-  matches!(version, 0 | SUPPORTED_XMIR_VERSION)
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct XmirDocumentHeader
-{
-  pub version: u32,
-  pub function: String,
-}
-
-#[must_use]
-pub fn parse_xmir_header(text: &str) -> Option<XmirDocumentHeader>
-{
-  let mut lines = text.lines();
-  let version = lines.next()?.strip_prefix(".xmir version ")?.parse().ok()?;
-  let function = lines.next()?.strip_prefix("function ")?.to_string();
-  Some(XmirDocumentHeader { version,
-                            function })
-}
 
 #[must_use]
 pub fn optimizer_analysis_to_xmir(reports: &[OptimizationReport]) -> String

@@ -8,6 +8,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Error, FnArg, ItemFn, Pat, Signature, parse2};
 
+use crate::config::Config;
 use crate::lower::{Lowerer, Parameter};
 use crate::types::ValueType;
 
@@ -22,11 +23,7 @@ pub(crate) fn expand(attribute: TokenStream, item: TokenStream) -> TokenStream
 
 fn expand_checked(attribute: TokenStream, item: TokenStream) -> syn::Result<TokenStream>
 {
-  if !attribute.is_empty()
-  {
-    return Err(Error::new_spanned(attribute, "xlil_create does not accept attribute arguments"));
-  }
-
+  let config = Config::parse(attribute)?;
   let function: ItemFn = parse2(item)?;
   validate_signature(&function.sig)?;
   let crate_path = xslang_path()?;
@@ -36,7 +33,8 @@ fn expand_checked(attribute: TokenStream, item: TokenStream) -> syn::Result<Toke
   let body = lowerer.lower_body(&function.block, return_type)?;
 
   let original_name = &function.sig.ident;
-  let producer_name = format_ident!("{}_xlil", original_name);
+  let producer_name = config.producer(original_name);
+  let text_producer_name = config.text_producer(original_name);
   let visibility = &function.vis;
   let parameter_types = parameters.iter()
                                   .map(|parameter| parameter.value_type.tokens(&crate_path));
@@ -46,6 +44,15 @@ fn expand_checked(attribute: TokenStream, item: TokenStream) -> syn::Result<Toke
                                                         });
   let return_tokens = return_type.tokens(&crate_path);
   let documentation = format!("Builds the XLIL module generated from [`{original_name}`].");
+  let text_documentation = format!("Builds canonical XLIL text generated from [`{original_name}`].");
+  let module_name = if let Some(module) = config.module()
+  {
+    quote!(#module)
+  }
+  else
+  {
+    quote!(::core::concat!(::core::module_path!(), "::", ::core::stringify!(#original_name)))
+  };
 
   Ok(quote! {
     #function
@@ -54,9 +61,7 @@ fn expand_checked(attribute: TokenStream, item: TokenStream) -> syn::Result<Toke
     #visibility fn #producer_name()
       -> ::core::result::Result<#crate_path::xlil::Module, #crate_path::xlil::BuildError>
     {
-      let mut __xslang_builder = #crate_path::xlil::Builder::new(
-        ::core::concat!(::core::module_path!(), "::", ::core::stringify!(#original_name))
-      );
+      let mut __xslang_builder = #crate_path::xlil::Builder::new(#module_name);
       __xslang_builder.begin_function(
         ::core::stringify!(#original_name),
         #return_tokens,
@@ -66,6 +71,13 @@ fn expand_checked(attribute: TokenStream, item: TokenStream) -> syn::Result<Toke
       #(#parameter_bindings)*
       #body
       __xslang_builder.finish()
+    }
+
+    #[doc = #text_documentation]
+    #visibility fn #text_producer_name()
+      -> ::core::result::Result<::std::string::String, #crate_path::xlil::BuildError>
+    {
+      #producer_name().map(|module| #crate_path::xlil::module_to_string(&module))
     }
   })
 }
@@ -107,9 +119,9 @@ fn parameters(signature: &Signature) -> syn::Result<Vec<Parameter>>
                return Err(Error::new_spanned(&argument.pat,
                                              "xlil_create parameters must use simple identifier patterns"));
              };
-             if pattern.by_ref.is_some() || pattern.subpat.is_some()
+             if pattern.by_ref.is_some() || pattern.mutability.is_some() || pattern.subpat.is_some()
              {
-               return Err(Error::new_spanned(pattern, "xlil_create parameters cannot use ref or subpatterns"));
+               return Err(Error::new_spanned(pattern, "xlil_create parameters cannot use ref, mut, or subpatterns"));
              }
              Ok(Parameter { source: pattern.ident.clone(),
                             binding: format_ident!("__xslang_parameter_{index}"),

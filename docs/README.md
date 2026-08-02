@@ -25,12 +25,13 @@ Recommended order for newcomers:
 10. [XHIR.md](XHIR.md): human-readable XHIR text format direction
 11. [XMIR.md](XMIR.md): human-readable MIR text format direction
 12. [XLIL.md](XLIL.md): backend input text registry direction
-13. [XLIL_JAVA.md](XLIL_JAVA.md): official Java 25 FFM binding
-14. [TODO.md](TODO.md): public roadmap
-15. [RELEASES.md](RELEASES.md): pre-1.0 release policy
-16. [BACKENDS.md](BACKENDS.md): current backend status and future backend contracts
-17. [LLVM_BACKEND.md](LLVM_BACKEND.md): LLVM backend infrastructure
-18. [MONOREPO.md](MONOREPO.md): monorepo project/runtime selection model
+13. [XLIL_RUST.md](XLIL_RUST.md): official Rust model, typed builder, and producer macro
+14. [XLIL_JAVA.md](XLIL_JAVA.md): official Java 25 FFM binding
+15. [TODO.md](TODO.md): public roadmap
+16. [RELEASES.md](RELEASES.md): pre-1.0 release policy
+17. [BACKENDS.md](BACKENDS.md): current backend status and future backend contracts
+18. [LLVM_BACKEND.md](LLVM_BACKEND.md): LLVM backend infrastructure
+19. [MONOREPO.md](MONOREPO.md): monorepo project/runtime selection model
 
 ## Documentation authority
 

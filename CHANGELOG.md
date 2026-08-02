@@ -14,6 +14,10 @@ source-to-native executable pipeline.
 
 ## 0.2.6 - 2026-08-02
 
+- Expanded the Rust XLIL producer attribute with immutable local bindings, scoped value blocks, floating-point operations,
+  unary operations, value conditionals, and short-circuit boolean control flow.
+- Added configurable module and companion names plus a canonical-text companion for attributed XLIL producers.
+- Split procedural-macro inference from body lowering and added a dedicated public Rust XLIL API guide.
 - Added the optional `xslang` `proc-macros` feature and the `#[xslang::xlil_create]` attribute. It preserves a supported
   Rust function and generates a verified XLIL module producer beside it.
 - Added explicit Rust-side `I8` through `I128` and `F16` through `F128` XLIL type selectors plus a `Utf32Builder` that

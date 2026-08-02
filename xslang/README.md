@@ -73,7 +73,8 @@ Enable the optional procedural-macro workspace through the main crate:
 xslang = { version = "0.2.6", features = ["proc-macros"] }
 ```
 
-`xlil_create` preserves the attributed Rust function and adds a companion producer named `<function>_xlil`:
+`xlil_create` preserves the attributed Rust function and adds verified module and canonical-text companions named
+`<function>_xlil` and `<function>_xlil_text`:
 
 ```rust
 #[xslang::xlil_create]
@@ -82,12 +83,14 @@ fn max(a: i64, b: i64) -> i64 {
 }
 
 let module = max_xlil()?;
+let text = max_xlil_text()?;
 ```
 
-The initial 0.2.6 subset lowers `bool`, the explicit numeric aliases and bit containers in `xslang::xlil::types`, integer
-arithmetic and comparisons, and result-producing `if/else` control flow. `Utf32Builder` converts Rust text to numeric
-UTF-32 code points without retaining the source text in XLIL. Unsupported Rust constructs are rejected during macro
-expansion instead of producing incomplete XLIL.
+The 0.2.6 subset lowers immutable local bindings, `bool`, explicit numeric aliases and bit containers, integer and
+`f32`/`f64` operations, unary negation, result-producing `if/else`, and short-circuit boolean control flow. Attribute
+options can set the XLIL module and companion function names. `Utf32Builder` converts Rust text to numeric UTF-32 code
+points without retaining the source text in XLIL. Unsupported Rust constructs are rejected during macro expansion instead
+of producing incomplete XLIL. See the [Rust XLIL API guide](../docs/XLIL_RUST.md) for the complete supported subset.
 
 This crate is pre-1.0 compiler infrastructure. Its APIs and version-0 intermediate formats may evolve together with the X#
 compiler. The repository pins a Rust nightly toolchain for reproducible development and validation.
