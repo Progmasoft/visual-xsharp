@@ -16,6 +16,20 @@ pub enum MatchPattern
     binding: Option<String>,
     payload_type: Type,
   },
+  /// A resolved user-defined `enum data` variant pattern.
+  ///
+  /// The owner and flattened tag preserve the exact overload selected during
+  /// compiler-core lowering. `enum_type` is the selector's nominal type; it
+  /// may differ from `owner` when a variant is inherited.
+  EnumDataVariant
+  {
+    enum_type: String,
+    owner: String,
+    variant: String,
+    tag: u32,
+    binding: Option<String>,
+    payload_type: Option<Type>,
+  },
   Else,
 }
 

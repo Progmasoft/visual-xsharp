@@ -34,8 +34,8 @@ impl TypeChecker
                  span: Span)
   {
     self.check_expression_against_type(selector, selector_type);
-    let exhaustive_result = result_arms_are_exhaustive(selector_type, arms);
-    if !exhaustive_result && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
+    let exhaustive = self.match_is_exhaustive(selector_type, arms);
+    if !exhaustive && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
     {
       self.diagnostics
           .push(Diagnostic { code: DiagnosticCode::MatchRequiresFinalElse,
@@ -44,6 +44,7 @@ impl TypeChecker
     }
     let mut patterns = Vec::new();
     let mut result_variants = Vec::new();
+    let mut enum_data_variants = Vec::new();
     for (index, arm) in arms.iter().enumerate()
     {
       let local_count = self.locals.len();
@@ -113,6 +114,46 @@ impl TypeChecker
                                      span: arm.span });
           }
         }
+        MatchPattern::EnumDataVariant { enum_type,
+                                        owner,
+                                        variant,
+                                        tag,
+                                        binding,
+                                        payload_type, } =>
+        {
+          self.check_enum_data_pattern(selector_type,
+                                       enum_type,
+                                       owner,
+                                       variant,
+                                       *tag,
+                                       payload_type.as_ref(),
+                                       arm.span);
+          if enum_data_variants.contains(tag)
+          {
+            self.diagnostics
+                .push(Diagnostic { code: DiagnosticCode::DuplicateMatchPattern,
+                                   message: format!("match statement contains duplicate enum data tag {tag}"),
+                                   span: arm.span });
+          }
+          else
+          {
+            enum_data_variants.push(*tag);
+          }
+          if let (Some(binding), Some(payload_type)) = (binding, payload_type)
+          {
+            self.locals.push(Local { name: binding.clone(),
+                                     ty: payload_type.clone(),
+                                     mutable: false,
+                                     span: arm.span });
+          }
+          else if binding.is_some()
+          {
+            self.diagnostics
+                .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                   message: "payload-free enum data pattern cannot bind a value".to_string(),
+                                   span: arm.span });
+          }
+        }
         MatchPattern::Else if index + 1 != arms.len() =>
         {
           self.diagnostics
@@ -126,6 +167,68 @@ impl TypeChecker
       self.check_block(&arm.body, result_type);
       self.locals.truncate(local_count);
     }
+  }
+
+  fn check_enum_data_pattern(&mut self,
+                             selector_type: &Type,
+                             enum_type: &str,
+                             owner: &str,
+                             variant: &str,
+                             tag: u32,
+                             payload_type: Option<&Type>,
+                             span: Span)
+  {
+    if selector_type != &Type::Named(enum_type.to_string())
+    {
+      self.diagnostics
+          .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                             message: format!("enum data pattern for '{enum_type}' does not match selector type"),
+                             span });
+      return;
+    }
+    let selected = self.enum_data.select(enum_type, variant, payload_type);
+    match selected
+    {
+      Ok(selected) if selected.owner == owner && selected.tag == tag => {}
+      Ok(_) => self.diagnostics.push(Diagnostic {
+        code: DiagnosticCode::UnknownEnumVariant,
+        message: format!("enum data pattern '{owner}::{variant}' has inconsistent overload metadata"),
+        span,
+      }),
+      Err(error) => self.diagnostics.push(Diagnostic {
+        code: DiagnosticCode::UnknownEnumVariant,
+        message: format!("invalid enum data pattern '{enum_type}::{variant}': {error}"),
+        span,
+      }),
+    }
+  }
+
+  fn match_is_exhaustive(&self, selector_type: &Type, arms: &[MatchArm]) -> bool
+  {
+    if result_arms_are_exhaustive(selector_type, arms)
+    {
+      return true;
+    }
+    let Type::Named(enum_type) = selector_type
+    else
+    {
+      return false;
+    };
+    let Ok(variants) = self.enum_data.variants(enum_type)
+    else
+    {
+      return false;
+    };
+    let matched = arms.iter()
+                      .filter_map(|arm| match &arm.pattern
+                      {
+                        MatchPattern::EnumDataVariant { enum_type: pattern_type,
+                                                        tag,
+                                                        .. } if pattern_type == enum_type => Some(*tag),
+                        _ => None,
+                      })
+                      .collect::<std::collections::HashSet<_>>();
+    variants.iter().all(|variant| matched.contains(&variant.tag))
   }
 }
 

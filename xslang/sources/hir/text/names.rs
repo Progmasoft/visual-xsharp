@@ -53,6 +53,17 @@ pub(super) fn match_pattern_name(pattern: &MatchPattern) -> String
               binding.as_deref().unwrap_or("else"),
               type_name(payload_type))
     }
+    MatchPattern::EnumDataVariant { enum_type,
+                                    owner,
+                                    variant,
+                                    tag,
+                                    binding,
+                                    payload_type, } =>
+    {
+      format!("enum_data {enum_type}::{variant} owner {owner} tag {tag} binding {} : {}",
+              binding.as_deref().unwrap_or("else"),
+              payload_type.as_ref().map(type_name).unwrap_or_else(|| "()".to_string()))
+    }
     MatchPattern::Else => "else".to_string(),
   }
 }

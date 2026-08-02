@@ -134,6 +134,13 @@ impl HirToMirLowerer
             self.lower_value_block_into_storage(&arm.body, result_storage, expected_type, merge, arm.span, lowered);
           test = next;
         }
+        MatchPattern::EnumDataVariant { .. } =>
+        {
+          self.report(DiagnosticCode::UnsupportedExpression,
+                      "enum data match lowering is not available in this MIR stage",
+                      arm.span);
+          return None;
+        }
         MatchPattern::Else =>
         {
           open_arm |=
@@ -382,6 +389,13 @@ impl HirToMirLowerer
             }
           }
           test = next;
+        }
+        MatchPattern::EnumDataVariant { .. } =>
+        {
+          self.report(DiagnosticCode::UnsupportedExpression,
+                      "enum data match lowering is not available in this MIR stage",
+                      arm.span);
+          return;
         }
         MatchPattern::Else =>
         {

@@ -19,6 +19,24 @@ impl Parser<'_>
     {
       return Some(MatchPattern::Literal(self.literal(literal)));
     }
+    if let Some(enum_data) = record.strip_prefix("enum_data ")
+    {
+      let (identity, payload_type) = enum_data.split_once(" : ")?;
+      let (identity, binding) = identity.split_once(" binding ")?;
+      let (identity, tag) = identity.rsplit_once(" tag ")?;
+      let (variant_path, owner) = identity.rsplit_once(" owner ")?;
+      let (enum_type, variant) = variant_path.rsplit_once("::")?;
+      let tag = tag.parse().ok()?;
+      return Some(MatchPattern::EnumDataVariant { enum_type: enum_type.to_string(),
+                                                  owner: owner.to_string(),
+                                                  variant: variant.to_string(),
+                                                  tag,
+                                                  binding: (binding != "else").then(|| binding.to_string()),
+                                                  payload_type: (payload_type != "()").then(|| {
+                                                                                        self.parse_type(payload_type)
+                                                                                      })
+                                                                                      .flatten() });
+    }
     let result = record.strip_prefix("result ")?;
     let (variant_binding, payload_type) = result.split_once(" : ")?;
     let (variant, binding) = variant_binding.split_once(" binding ")?;

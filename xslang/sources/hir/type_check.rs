@@ -13,6 +13,8 @@ pub use model::*;
 
 mod diagnostic;
 pub use diagnostic::{Diagnostic, DiagnosticCode};
+#[cfg(test)]
+mod enum_data_match_tests;
 
 #[derive(Default)]
 pub struct TypeChecker
