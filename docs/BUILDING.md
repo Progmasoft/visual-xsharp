@@ -23,6 +23,7 @@ the Clang/LLVM toolchain.
 - `ld.lld`
 - libarchive development headers and library
 - OpenSSL development headers and Crypto library
+- fmt development headers and library
 - `rustup` and `cargo`; the pinned `xslang/rust-toolchain.toml` toolchain must be installed
 - JRE 25, Gradle 9.6.1 or newer, and the Kotlin 2.4.0 `kotlin` script runner for the `jvm` project-test label
 
@@ -33,7 +34,8 @@ git submodule update --init --recursive
 ```
 
 The pinned DIMCLI source under `third_party/dimcli` implements the GNU++26 command schema and generated help for `xs`.
-It is built directly by the project and does not require a system package manager.
+It is built directly by the project. Tests prefer a system Catch2 3 package and fall back to the pinned
+`third_party/catch2` source when the supported system does not provide one.
 
 Useful helper tools:
 

@@ -23,7 +23,16 @@ if(NOT XS_BUILD_PROJECT_XS)
   return()
 endif()
 
-find_package(Catch2 3 REQUIRED CONFIG)
+find_package(Catch2 3 QUIET CONFIG)
+if(NOT TARGET Catch2::Catch2WithMain)
+  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/third_party/catch2/CMakeLists.txt")
+    message(FATAL_ERROR "Catch2 3 is unavailable; initialize dependencies with: git submodule update --init --recursive")
+  endif()
+  set(CATCH_INSTALL_DOCS OFF CACHE BOOL "" FORCE)
+  set(CATCH_INSTALL_EXTRAS OFF CACHE BOOL "" FORCE)
+  add_subdirectory("${PROJECT_SOURCE_DIR}/third_party/catch2"
+                   "${PROJECT_BINARY_DIR}/third_party/catch2" EXCLUDE_FROM_ALL)
+endif()
 
 add_test(NAME cli_version COMMAND xs --version)
 string(REPLACE "." "\\." XS_PROJECT_VERSION_REGEX "${PROJECT_VERSION}")
