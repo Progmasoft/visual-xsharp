@@ -25,6 +25,10 @@ Rust applications may optionally use `xslang::rust::XSResult<T>` and `xslang::ru
 error boundary. XLIL's structured parse, verification, build, and I/O errors remain available and do not require these
 aliases.
 
+The optional `xslang::printf!` macro is implemented by the `xslang::rust` support module and exported at the crate root.
+It accepts C-style conversion specifiers and writes through a safe, synchronized standard-output path;
+`xslang::rust::printf!` is intentionally not a valid path.
+
 This crate is pre-1.0 compiler infrastructure. Its APIs and version-0 intermediate formats may evolve together with the X#
 compiler. The repository pins a Rust nightly toolchain for reproducible development and validation.
 

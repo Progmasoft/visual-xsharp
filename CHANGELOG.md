@@ -18,6 +18,8 @@ source-to-native executable pipeline.
   combined parse/verification errors, stream-oriented read/write helpers, and read-only model inspection methods.
 - Added optional `xslang::rust::XSResult<T>` and `XSError` aliases for thread-safe application error boundaries without
   replacing XLIL's structured build, parse, verification, and I/O errors.
+- Added the root-exported `xslang::printf!` Rust convenience macro with checked C-style format conversions and a safe
+  standard-output implementation under `xslang::rust`.
 - Added feature-gated Kotlin project dependencies through `addOptionalModule`, deterministic feature selection, and the
   version-1 SQLite lock schema. Required, optional, enabled, and disabled dependency records now round-trip without a
   readable lock-file surrogate.

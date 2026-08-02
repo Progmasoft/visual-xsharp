@@ -9,6 +9,11 @@
 //! useful at application boundaries where callers prefer one thread-safe,
 //! dynamically dispatched error type.
 
+mod printf;
+
+#[doc(hidden)]
+pub use printf::{_printf, PrintfArgument, PrintfArguments, PrintfValue};
+
 /// Thread-safe dynamically dispatched error used by [`XSResult`].
 pub type XSError = Box<dyn std::error::Error + Send + Sync + 'static>;
 

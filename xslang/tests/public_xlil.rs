@@ -106,3 +106,10 @@ fn rust_result_alias_accepts_xlil_errors()
   let error = load("not xlil").unwrap_err();
   assert!(error.to_string().contains("XLIL parsing failed"));
 }
+
+#[test]
+fn root_printf_macro_uses_c_format_specifiers()
+{
+  let result = xslang::printf!("public printf smoke test: %s=%d\n", "value", 1);
+  assert!(result.is_ok());
+}
