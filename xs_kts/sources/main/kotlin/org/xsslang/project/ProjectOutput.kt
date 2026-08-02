@@ -18,7 +18,7 @@ object ProjectOutput {
     val resolved = resolveSources(configuredPlan)
     val effectivePlan = configuredPlan.withInferredPackageTypes(resolved.sources)
     validatePackageTypeInputs(effectivePlan, resolved.sources)
-    writeModuleLock(plan.modules)
+    writeModuleLock(plan)
     when (System.getProperty("xs.project.output", "plan")) {
       "plan" -> println(PlanWriter.write(effectivePlan))
       "resolve" -> Unit
@@ -37,12 +37,17 @@ object ProjectOutput {
         state.moduleIncludes
       }
     val modules = resolveModules(root, moduleIncludes, state.moduleSources, extension)
-    if (state.identity != null) ModuleLockFile.write(root, state.modules)
+    if (state.identity != null) {
+      ModuleLockFile.write(root, resolveDependencies(state.modules, state.optionalModules, state.dependencyFeatures))
+    }
     writeSources(ResolvedProject(emptyList(), modules, emptyList()), state.compiler)
   }
 
-  private fun writeModuleLock(modules: List<ModuleDependency>) {
-    ModuleLockFile.write(projectRoot(), modules)
+  private fun writeModuleLock(plan: ProjectPlan) {
+    ModuleLockFile.write(
+      projectRoot(),
+      resolveDependencies(plan.requiredModules, plan.optionalModules, plan.dependencyFeatures),
+    )
   }
 
   private data class ResolvedProject(

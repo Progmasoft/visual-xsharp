@@ -3,7 +3,7 @@
 
 [package]
 name = "xslang"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2024"
 build = "build.rs"
 authors = ["Leitwolf <support@xsharp-lang.xyz>"]

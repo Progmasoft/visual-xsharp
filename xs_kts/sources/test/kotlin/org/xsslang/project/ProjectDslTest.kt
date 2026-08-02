@@ -22,22 +22,22 @@ class ProjectDslTest {
         project("Locked", "BETA", "0.1.0")
         source { include("Sources") }
         dependencies {
-          addModule("XML", "stable", "2.0.0")
-          addModule("JSON", "beta", "1.4.0")
-          addModule("JSON", "beta", "1.4.0")
+          addModule("XSharp.XML", "STABLE", "2.0.0")
+          addModule("XSharp.JSON", "BETA", "1.4.0")
+          addModule("XSharp.JSON", "BETA", "1.4.0")
         }
       }
     try {
       val plan = context.build()
       val expected =
         listOf(
-          ModuleDependency("JSON", "beta", "1.4.0"),
-          ModuleDependency("XML", "stable", "2.0.0"),
+          ModuleDependency("XSharp.JSON", "BETA", "1.4.0"),
+          ModuleDependency("XSharp.XML", "STABLE", "2.0.0"),
         )
       assertEquals(expected, plan.modules)
       assertTrue(
         PlanWriter.write(plan).contains(
-          "\"modules\":[{\"name\":\"JSON\",\"stability\":\"beta\",\"version\":\"1.4.0\"}",
+          "\"modules\":[{\"name\":\"XSharp.JSON\",\"stability\":\"BETA\",\"version\":\"1.4.0\"}",
         ),
       )
       ModuleLockFile.write(root, plan.modules)
@@ -60,8 +60,8 @@ class ProjectDslTest {
     val error =
       assertFailsWith<ProjectConfigurationException> {
         context.dependencies {
-          addModule("JSON", "stable", "1.0.0")
-          addModule("JSON", "stable", "2.0.0")
+          addModule("XSharp.JSON", "STABLE", "1.0.0")
+          addModule("XSharp.JSON", "STABLE", "2.0.0")
         }
       }
     assertTrue(error.message.orEmpty().contains("conflicting"))

@@ -5,7 +5,7 @@
 
 project("Example", "BETA", "0.1.0")
 
-set("XS_VERSION", "0.2.2")
+set("XS_VERSION", "0.2.5")
 set("XS_BACKEND", "LLVM")
 set("PUBLISH", false)
 set("BUILD_MODE", "Release")
@@ -38,8 +38,15 @@ authors(
 )
 
 dependencies {
-  addModule("JSON", "stable", "0.1.0")
-  addModule("XML", "stable", "0.1.0")
+  addModule("XSharp.JSON", "STABLE", "0.1.0")
+  addModule("XSharp.XML", "STABLE", "0.1.0")
+  addOptionalModule("TLS", "XSharp.Network", "BETA", "0.1.0")
+}
+
+features {
+  dependency("XSharp.Network") {
+    disable("TLS")
+  }
 }
 
 source {

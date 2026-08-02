@@ -94,6 +94,31 @@ data class ModuleDependency(
   val version: String,
 ) : Serializable
 
+data class OptionalModuleDependency(
+  val feature: String,
+  val module: ModuleDependency,
+) : Serializable
+
+data class ModuleFeatureSelection(
+  val moduleName: String,
+  val feature: String,
+  val enabled: Boolean,
+) : Serializable
+
+data class DependencyResolution(
+  val required: List<ModuleDependency>,
+  val optional: List<OptionalModuleDependency>,
+  val features: List<ModuleFeatureSelection>,
+) : Serializable {
+  val activeModules: List<ModuleDependency>
+    get() {
+      val enabled = features.filter(ModuleFeatureSelection::enabled).mapTo(mutableSetOf()) { it.moduleName to it.feature }
+      return (required + optional.filter { (it.module.name to it.feature) in enabled }.map(OptionalModuleDependency::module))
+        .distinctBy(ModuleDependency::name)
+        .sortedWith(moduleDependencyOrder)
+    }
+}
+
 data class ArtifactTarget(
   val name: String,
   val path: String,
@@ -106,6 +131,8 @@ data class ProjectState(
   val libraries: List<ArtifactTarget>,
   val authors: List<Author>,
   val modules: List<ModuleDependency>,
+  val optionalModules: List<OptionalModuleDependency>,
+  val dependencyFeatures: List<ModuleFeatureSelection>,
   val sourceIncludes: List<String>,
   val sourceExcludes: List<String>,
   val sourceFilters: List<String>?,
@@ -126,7 +153,10 @@ data class ProjectPlan(
   val binaries: List<ArtifactTarget>,
   val libraries: List<ArtifactTarget>,
   val authors: List<Author>,
+  val requiredModules: List<ModuleDependency>,
   val modules: List<ModuleDependency>,
+  val optionalModules: List<OptionalModuleDependency>,
+  val dependencyFeatures: List<ModuleFeatureSelection>,
   val sourceIncludes: List<String>,
   val sourceExcludes: List<String>,
   val sourceFilters: List<String>?,
@@ -140,6 +170,9 @@ data class ProjectPlan(
   val testFramework: String?,
   val compiler: CompilerSettings,
 )
+
+internal val moduleDependencyOrder =
+  compareBy(ModuleDependency::name, ModuleDependency::stability, ModuleDependency::version)
 
 class ProjectConfigurationException(
   message: String,

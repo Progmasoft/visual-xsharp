@@ -12,6 +12,16 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+## 0.2.5 - 2026-08-02
+
+- Added feature-gated Kotlin project dependencies through `addOptionalModule`, deterministic feature selection, and the
+  version-1 SQLite lock schema. Required, optional, enabled, and disabled dependency records now round-trip without a
+  readable lock-file surrogate.
+- Added reusable MIR CFG, dominator/frontier, natural-loop, and local-liveness analyses backed by the compiler core's
+  graph/dataflow dependencies.
+- Added a verified optimization pipeline with levels, fixpoint iteration, dead pure-definition elimination, unused-local
+  pruning, identical-target branch simplification, and canonical reverse-postorder block layout.
+
 - Migrated the `xs` executable entry and command schema to GNU++26. DIMCLI 7.6.0 now provides subcommand parsing,
   validation, and generated help while the existing C23 compiler driver and public C ABI remain intact.
 - Added command-specific `--help`, pinned DIMCLI source, and the corresponding third-party notice.

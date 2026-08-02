@@ -37,6 +37,30 @@ object PlanWriter {
           .append('}')
       }
       append(']')
+      append(",\"optionalModules\":[")
+      plan.optionalModules.forEachIndexed { index, declaration ->
+        if (index > 0) append(',')
+        append("{\"feature\":")
+          .quoted(declaration.feature)
+          .append(",\"name\":")
+          .quoted(declaration.module.name)
+          .append(",\"stability\":")
+          .quoted(declaration.module.stability)
+          .append(",\"version\":")
+          .quoted(declaration.module.version)
+          .append('}')
+      }
+      append(']')
+      append(",\"dependencyFeatures\":[")
+      plan.dependencyFeatures.forEachIndexed { index, feature ->
+        if (index > 0) append(',')
+        append("{\"module\":")
+          .quoted(feature.moduleName)
+          .append(",\"feature\":")
+          .quoted(feature.feature)
+          .append(",\"enabled\":${feature.enabled}}")
+      }
+      append(']')
       arrayField("sourceIncludes", plan.sourceIncludes)
       arrayField("sourceExcludes", plan.sourceExcludes)
       arrayField("sourceFilters", plan.sourceFilters.orEmpty())

@@ -14,7 +14,7 @@ A project may use one combined `xs.project.kts` file:
 ```kotlin
 project("Example", "BETA", "0.1.0")
 
-set("XS_VERSION", "0.2.4")
+set("XS_VERSION", "0.2.5")
 set("XS_BACKEND", "LLVM")
 set("PUBLISH", false)
 set("BUILD_MODE", "Release")
@@ -50,8 +50,8 @@ authors(
 )
 
 dependencies {
-  addModule("JSON", "stable", "0.1.0")
-  addModule("XML", "stable", "0.1.0")
+  addModule("XSharp.JSON", "STABLE", "0.1.0")
+  addModule("XSharp.XML", "STABLE", "0.1.0")
 }
 
 source {
@@ -100,7 +100,9 @@ The DSL also provides:
   script defines them;
 - `getAll(name)` to read every value without joining a multi-value setting;
 - `authors(...)` for project authors;
-- `dependencies { addModule(name, stability, version) }` for exact external module coordinates;
+- `dependencies { addModule(name, stability, version) }` for required external module coordinates;
+- `addOptionalModule(feature, name, stability, version)` plus `features { dependency(name) { ... } }` for feature-gated
+  coordinates;
 - `module { include(...); exclude(...); filter(...) }` for the pool assigned by `xs.module.kts`;
 - `test { include(...); exclude(...); filter(...); framework(...) }` for recursive test discovery metadata;
 - `compiler { warnings(...); werror(...); verbose(...) }` for diagnostic policy;
@@ -160,10 +162,33 @@ root. A requested `bin` without `main.<XS_EXTENSION>` requires `BINARY`; a reque
 
 Each successful KTS project evaluation writes `xs.lock.sqlite3` in the project root. `xs resolve` performs the same
 dependency resolution explicitly and atomically refreshes that lock without compiling X# sources. This is a real SQLite lock
-file with format version `0`; its `modules` table stores the exact case-sensitive `name`, `stability`, and `version`
-declared by `addModule`. Records are sorted and the database contains no timestamps, so lock updates are reproducible.
-Repeating an identical coordinate is harmless, while declaring
-the same module name with different stability or version values is an error.
+file with format version `1`. Module names use `Publisher.Name`; stability is normalized to `STABLE`, `BETA`, or `ALPHA`,
+and versions are exact semantic versions. The `modules` table stores required and optional declarations, including the
+optional feature and whether it is active. The `features` table stores the complete enabled/disabled feature selection.
+Records are sorted and the database contains no timestamps, so lock updates are reproducible. Repeating an identical
+coordinate is harmless, while declaring the same module name with different stability or version values is an error.
+
+Optional modules are inactive by default. A feature selection names both the module coordinate and its declared feature:
+
+```kotlin
+dependencies {
+  addOptionalModule("JSON", "XSharp.JSON", "STABLE", "1.2.0")
+  addOptionalModule("TLS", "XSharp.Network", "BETA", "0.8.0")
+}
+
+features {
+  dependency("XSharp.JSON") {
+    feature("JSON", true)
+  }
+  dependency("XSharp.Network") {
+    disable("TLS")
+  }
+}
+```
+
+`enable(name)`, `disable(name)`, and `feature(name, enabled)` are equivalent selection forms. Selecting a feature that
+was not declared by `addOptionalModule` is a configuration error. One module cannot be both required and optional, and
+all optional declarations for the same module must use one exact stability/version coordinate.
 
 The current resolver records and validates coordinates but does not download packages. Registry source identity,
 integrity hashes, and dependency graphs will be added with external module resolution rather than being guessed in the
@@ -173,8 +198,8 @@ For example, this declaration:
 
 ```kotlin
 dependencies {
-  addModule("JSON", "stable", "0.1.0")
-  addModule("XML", "beta", "0.2.0")
+  addModule("XSharp.JSON", "STABLE", "0.1.0")
+  addModule("XSharp.XML", "BETA", "0.2.0")
 }
 ```
 
@@ -182,12 +207,15 @@ produces a database equivalent to the following SQLite contents:
 
 ```text
 sqlite> SELECT key, value FROM metadata ORDER BY key;
-format_version|0
+format_version|1
 
-sqlite> SELECT name, stability, version FROM modules ORDER BY name;
-JSON|stable|0.1.0
-XML|beta|0.2.0
+sqlite> SELECT name, stability, version, optional_feature, enabled, required FROM modules ORDER BY name;
+XSharp.JSON|STABLE|0.1.0||1|1
+XSharp.XML|BETA|0.2.0||1|1
 ```
+
+This SQL is documentation of the logical contents only. Project evaluation and `xs resolve` always write binary SQLite;
+they never place a readable SQL dump beside the project.
 
 The version-0 schema is intentionally small:
 
@@ -316,7 +344,7 @@ set("XS_BACKEND", "LLVM")
 authors(arrayOf("Leitwolf", "leitwolf@example.me"))
 
 dependencies {
-  addModule("JSON", "stable", "0.1.0")
+  addModule("XSharp.JSON", "STABLE", "0.1.0")
 }
 ```
 

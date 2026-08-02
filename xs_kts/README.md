@@ -18,9 +18,26 @@ recognized `main`/`lib` filenames. Optional sections cover authors, external mod
 multi-value settings such as `TARGET`, tests, compiler diagnostics, variables, and host-dependent `cfg(...)` branches. See `xs.project.kts` for the complete
 working DSL example.
 
-External coordinates use `addModule(name, stability, version)`. A successful modern project evaluation writes the exact
-selection to the reproducible `xs.lock.sqlite3` SQLite lock file in the project root. The current resolver does not fetch
-the declared modules yet.
+External coordinates use `Publisher.Name` names and exact versions. Required modules use
+`addModule(name, stability, version)`. Feature-gated coordinates use
+`addOptionalModule(feature, name, stability, version)` and remain inactive unless their feature is enabled:
+
+```kotlin
+dependencies {
+  addModule("XSharp.Core", "STABLE", "1.0.0")
+  addOptionalModule("JSON", "XSharp.JSON", "BETA", "2.0.0")
+}
+
+features {
+  dependency("XSharp.JSON") {
+    enable("JSON")
+  }
+}
+```
+
+`STABLE`, `BETA`, and `ALPHA` are the supported stability values; input is normalized to uppercase. Optional declarations,
+their enabled state, and the active module registry are persisted in the reproducible `xs.lock.sqlite3` SQLite lock file.
+The current resolver validates the direct registry but does not fetch packages or solve transitive dependencies yet.
 
 `PUBLISH` is a single boolean project variable with a `false` default; it currently records publication intent without
 performing a registry upload.

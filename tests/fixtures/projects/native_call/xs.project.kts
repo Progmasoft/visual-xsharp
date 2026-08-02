@@ -4,7 +4,7 @@
 project("NativeCall", "BETA", "0.2.1")
 
 dependencies {
-  addModule("JSON", "stable", "0.1.0")
+  addModule("XSharp.JSON", "STABLE", "0.1.0")
 }
 
 source {

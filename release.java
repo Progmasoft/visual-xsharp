@@ -30,7 +30,7 @@ class Release
           help    Show this help.
 
         examples:
-          java --source=21 release.java check 0.2.4
+          java --source=21 release.java check 0.2.5
         """);
   }
 
@@ -74,7 +74,7 @@ class Release
   static int check(String version) throws IOException, InterruptedException
   {
     List<Check> checks = new ArrayList<>();
-    checks.add(contains(Path.of("CMakeLists.txt"), "project(xs_project VERSION " + version + " LANGUAGES C)",
+    checks.add(contains(Path.of("CMakeLists.txt"), "project(xs_project VERSION " + version + " LANGUAGES C CXX)",
         "CMake project version"));
     checks.add(containsOnce(Path.of("CHANGELOG.md"), "## " + version + " - ", "CHANGELOG heading"));
     checks.add(contains(Path.of("docs/RELEASES.md"), "Current project version: `" + version + "`", "release docs"));

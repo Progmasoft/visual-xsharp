@@ -106,24 +106,6 @@ class ModuleScope internal constructor() {
 }
 
 @XsProjectDsl
-class DependenciesScope internal constructor() {
-  internal val modules = mutableListOf<ModuleDependency>()
-
-  fun addModule(
-    name: String,
-    stability: String,
-    version: String,
-  ) {
-    modules +=
-      ModuleDependency(
-        requireText(name, "module name"),
-        requireText(stability, "module stability"),
-        requireText(version, "module version"),
-      )
-  }
-}
-
-@XsProjectDsl
 class TestScope internal constructor() {
   internal val includes = mutableListOf<String>()
   internal val excludes = mutableListOf<String>()
@@ -196,6 +178,8 @@ class ProjectContext internal constructor(
   private val binaries = state?.binaries?.toMutableList() ?: mutableListOf()
   private val libraries = state?.libraries?.toMutableList() ?: mutableListOf()
   private val modules = state?.modules?.toMutableList() ?: mutableListOf()
+  private val optionalModules = state?.optionalModules?.toMutableList() ?: mutableListOf()
+  private val dependencyFeatures = state?.dependencyFeatures?.toMutableList() ?: mutableListOf()
   private val sourceIncludes = state?.sourceIncludes?.toMutableList() ?: mutableListOf()
   private val sourceExcludes = state?.sourceExcludes?.toMutableList() ?: mutableListOf("*/**")
   private var sourceFilters = state?.sourceFilters
@@ -283,9 +267,21 @@ class ProjectContext internal constructor(
   }
 
   fun dependencies(block: DependenciesScope.() -> Unit) {
-    val resolved = resolveModuleDependencies(modules + DependenciesScope().apply(block).modules)
+    val scope = DependenciesScope().apply(block)
+    val resolved = resolveDependencies(modules + scope.required, optionalModules + scope.optional, dependencyFeatures)
     modules.clear()
-    modules += resolved
+    modules += resolved.required
+    optionalModules.clear()
+    optionalModules += resolved.optional
+    dependencyFeatures.clear()
+    dependencyFeatures += resolved.features
+  }
+
+  fun features(block: FeaturesScope.() -> Unit) {
+    val selected = FeaturesScope().apply(block).selections
+    val resolved = resolveDependencies(modules, optionalModules, dependencyFeatures + selected)
+    dependencyFeatures.clear()
+    dependencyFeatures += resolved.features
   }
 
   fun source(block: SourcesScope.() -> Unit) {
@@ -344,6 +340,8 @@ class ProjectContext internal constructor(
       libraries.toList(),
       authors.toList(),
       modules.toList(),
+      optionalModules.toList(),
+      dependencyFeatures.toList(),
       sourceIncludes.toList(),
       sourceExcludes.toList(),
       sourceFilters,
@@ -360,7 +358,7 @@ class ProjectContext internal constructor(
 
   fun build(): ProjectPlan {
     val project = identity ?: throw ProjectConfigurationException("project(...) is required")
-    val resolvedModules = resolveModuleDependencies(modules)
+    val dependencies = resolveDependencies(modules, optionalModules, dependencyFeatures)
     val effectiveSourceIncludes = sourceIncludes.ifEmpty { listOf("Sources") }
     val backend = variables.getValue("XS_BACKEND").single()
     val effectiveVariables =
@@ -377,7 +375,10 @@ class ProjectContext internal constructor(
       binaries.toList(),
       libraries.toList(),
       authors.toList(),
-      resolvedModules,
+      dependencies.required,
+      dependencies.activeModules,
+      dependencies.optional,
+      dependencies.features,
       effectiveSourceIncludes.distinct(),
       sourceExcludes.distinct(),
       sourceFilters?.distinct(),
@@ -470,22 +471,6 @@ private fun validateReservedVariable(
   }
 }
 
-internal fun resolveModuleDependencies(modules: List<ModuleDependency>): List<ModuleDependency> {
-  val resolved = linkedMapOf<String, ModuleDependency>()
-  modules.forEach { module ->
-    val previous = resolved[module.name]
-    if (previous != null && previous != module) {
-      throw ProjectConfigurationException(
-        "module '${module.name}' has conflicting stability or version coordinates",
-      )
-    }
-    resolved[module.name] = module
-  }
-  return resolved.values.sortedWith(
-    compareBy(ModuleDependency::name, ModuleDependency::stability, ModuleDependency::version),
-  )
-}
-
 internal fun requireText(
   value: String,
   field: String,
@@ -530,6 +515,8 @@ object ProjectRuntime {
   fun authors(vararg entries: Array<String>) = context.authors(*entries)
 
   fun dependencies(block: DependenciesScope.() -> Unit) = context.dependencies(block)
+
+  fun features(block: FeaturesScope.() -> Unit) = context.features(block)
 
   fun source(block: SourcesScope.() -> Unit) = context.source(block)
 
@@ -584,6 +571,8 @@ fun getAll(name: String) = ProjectRuntime.getAll(name)
 fun authors(vararg entries: Array<String>) = ProjectRuntime.authors(*entries)
 
 fun dependencies(block: DependenciesScope.() -> Unit) = ProjectRuntime.dependencies(block)
+
+fun features(block: FeaturesScope.() -> Unit) = ProjectRuntime.features(block)
 
 fun source(block: SourcesScope.() -> Unit) = ProjectRuntime.source(block)
 
