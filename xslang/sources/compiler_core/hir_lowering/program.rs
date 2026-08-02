@@ -217,6 +217,11 @@ pub(super) fn lower_program(trees: &[SyntaxTree]) -> Result<declarations::Module
   {
     return Err(LoweringError::DuplicateCallable);
   }
+  let enum_data = crate::hir::enum_data::EnumDataRegistry::build(&nominal_types);
+  if let Some(diagnostic) = enum_data.diagnostics().first()
+  {
+    return Err(LoweringError::InvalidEnumData(format!("{}: {}", diagnostic.type_name, diagnostic.error)));
+  }
   let context =
     LoweringContext { calls,
                       generic_calls,
@@ -245,6 +250,7 @@ pub(super) fn lower_program(trees: &[SyntaxTree]) -> Result<declarations::Module
                                                    }),
                       methods,
                       nominal_types: nominal_types.iter().cloned().map(|ty| (ty.name.clone(), ty)).collect(),
+                      enum_data,
                       type_substitutions: HashMap::new() };
   for location in locations
   {

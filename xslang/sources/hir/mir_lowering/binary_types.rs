@@ -54,6 +54,7 @@ impl HirToMirLowerer
       Expression::Field { path } => self.known_value_type(&path.ty),
       Expression::Member { field_type, .. } => self.known_value_type(field_type),
       Expression::Object { .. } => None,
+      Expression::EnumData { enum_type, .. } => self.aggregate_types.get(enum_type).copied(),
       Expression::Array { .. } | Expression::Set { .. } | Expression::Map { .. } => None,
       Expression::Tuple { tuple_type, .. } => self.tuple_types
                                                   .iter()

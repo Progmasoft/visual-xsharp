@@ -21,6 +21,7 @@ pub(super) struct LoweringContext
   pub(super) constructors: HashMap<String, Vec<CallSignature>>,
   pub(super) methods: HashMap<(String, String), Vec<CallSignature>>,
   pub(super) nominal_types: HashMap<String, declarations::NominalType>,
+  pub(super) enum_data: crate::hir::enum_data::EnumDataRegistry,
   pub(super) type_substitutions: HashMap<String, Type>,
 }
 

@@ -9,9 +9,7 @@ use super::type_check::{
   BinaryOperator, Block, Expression, FieldPath, Function, Literal, Local, Statement, Type, UnaryOperator,
   UpdateOperator, UpdatePosition, result_type_parts,
 };
-
 mod expression_type;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DiagnosticCode
 {
@@ -57,6 +55,8 @@ pub enum DesugaredExpression
     fields: Vec<DesugaredObjectField>,
     span: Span,
   },
+  #[rustfmt::skip]
+  EnumData { enum_type: String, owner: String, variant: String, tag: u32, payload: Option<Box<DesugaredExpression>>, payload_type: Option<Box<Type>>, span: Span },
   Array
   {
     elements: Vec<DesugaredExpression>,
@@ -505,6 +505,23 @@ impl ResultDesugar
       {
         DesugaredExpression::Array { elements: elements.iter().map(|value| self.desugar_expression(value)).collect(),
                                      span: *span }
+      }
+      Expression::EnumData { enum_type,
+                             owner,
+                             variant,
+                             tag,
+                             payload,
+                             payload_type,
+                             span, } =>
+      {
+        DesugaredExpression::EnumData { enum_type: enum_type.clone(),
+                                        owner: owner.clone(),
+                                        variant: variant.clone(),
+                                        tag: *tag,
+                                        payload: payload.as_deref()
+                                                        .map(|value| Box::new(self.desugar_expression(value))),
+                                        payload_type: payload_type.clone(),
+                                        span: *span }
       }
       Expression::Set { elements,
                         span, } =>

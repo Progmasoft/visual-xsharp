@@ -18,7 +18,6 @@ use crate::hir::{
 };
 
 use super::{SyntaxNode, SyntaxTree};
-
 mod call;
 mod collection;
 mod constructor;
@@ -40,7 +39,6 @@ use expression_type::expression_type;
 use syntax_helpers::primitive;
 use syntax_helpers::{first_child_kind, path_text};
 use type_lowering::lower_type;
-
 const FILE: u32 = 0;
 const DECL_MODULE: u32 = 1;
 const DECL_FUNCTION: u32 = 4;
@@ -184,6 +182,8 @@ pub enum LoweringError
   {
     argument: String, constraint: String
   },
+  #[error("invalid enum-data hierarchy: {0}")]
+  InvalidEnumData(String),
 }
 
 fn node(tree: &SyntaxTree, index: usize) -> Result<&SyntaxNode, LoweringError>
@@ -268,6 +268,7 @@ fn lower_expression(tree: &SyntaxTree,
                                  span: source_span })
     }
     EXPR_IDENTIFIER => nominal::enum_variant_literal(tree, value, context, source_span)
+      .or_else(|| nominal::enum_data_variant_literal(tree, value, context, source_span))
       .or_else(|| Some(Expression::Local { name: path_text(tree, value),
                                            span: source_span })),
     EXPR_MEMBER_ACCESS =>
@@ -534,6 +535,11 @@ fn lower_expression(tree: &SyntaxTree,
                                        parameter_types: vec![payload_type.clone()],
                                        return_type: Box::new(result_type.clone()),
                                        span: source_span });
+      }
+      if let Some(expression) =
+        nominal::lower_enum_data_constructor(tree, value, context, locals, expected_type, source_span)
+      {
+        return Some(expression);
       }
       let signature = if callee.kind == EXPR_GENERIC_QUALIFIER
       {
@@ -988,5 +994,7 @@ pub fn lower_program(trees: &[SyntaxTree]) -> Result<declarations::Module, Lower
   program::lower_program(trees)
 }
 
+#[cfg(test)]
+mod enum_data_tests;
 #[cfg(test)]
 mod tests;

@@ -213,6 +213,21 @@ fn visit_expression(expression: &Expression,
         visit_expression(&field.value, definitions, registry)?;
       }
     }
+    Expression::EnumData { enum_type,
+                           payload,
+                           payload_type,
+                           .. } =>
+    {
+      visit_type(&HirType::Named(enum_type.clone()));
+      if let Some(payload_type) = payload_type
+      {
+        visit_type(payload_type);
+      }
+      if let Some(payload) = payload
+      {
+        visit_expression(payload, definitions, registry)?;
+      }
+    }
     Expression::Array { elements, .. } | Expression::Set { elements, .. } =>
     {
       for element in elements

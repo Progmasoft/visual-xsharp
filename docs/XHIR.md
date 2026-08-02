@@ -148,6 +148,20 @@ types with identical fields do not select each other's overload. Primitive, opti
 tuple payloads preserve their full checked type structure during selection. No numeric widening or structural conversion
 is performed merely to choose an enum-data variant.
 
+Selected values are explicit records rather than ordinary calls:
+
+```text
+enum_data Value::Number owner Value tag 1 payload Long
+  value
+    literal integer 7
+.end
+```
+
+The `owner` is the declaration that introduced the selected overload. `tag` is the flattened hierarchy tag, so inherited
+constructors preserve their declaration identity while receiving the tag used by the target enum-data type. A
+payload-free variant uses `payload ()` and omits the `value` record. The XHIR parser and type checker reject a record whose
+owner, tag, payload presence, or payload type does not select the same registry entry.
+
 The hierarchy is rejected before MIR lowering when it contains an unknown or cross-category base, an inheritance cycle,
 two distinct variants with the same name and payload type, or an overload set containing a payload-free variant. A
 diamond-shaped hierarchy is valid when the repeated variant identity comes from the same original ancestor.

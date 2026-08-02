@@ -210,6 +210,16 @@ pub enum Expression
     fields: Vec<ObjectField>,
     span: Span,
   },
+  EnumData
+  {
+    enum_type: String,
+    owner: String,
+    variant: String,
+    tag: u32,
+    payload: Option<Box<Expression>>,
+    payload_type: Option<Box<Type>>,
+    span: Span,
+  },
   Array
   {
     elements: Vec<Expression>, span: Span

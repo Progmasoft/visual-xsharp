@@ -26,7 +26,8 @@ pub(super) fn expression_type(tree: &SyntaxTree,
     EXPR_IDENTIFIER if value.text == "nil" => None,
     EXPR_IDENTIFIER =>
     {
-      nominal::enum_variant_type(tree, value, context).or_else(|| locals.get(&path_text(tree, value)).cloned())
+      nominal::enum_variant_type(tree, value, context).or_else(|| nominal::enum_data_variant_type(tree, value, context))
+                                                      .or_else(|| locals.get(&path_text(tree, value)).cloned())
     }
     EXPR_MEMBER_ACCESS =>
     {
@@ -44,6 +45,10 @@ pub(super) fn expression_type(tree: &SyntaxTree,
     EXPR_CALL =>
     {
       let callee = tree.nodes.get(*value.children.first()?)?;
+      if let Some(ty) = nominal::enum_data_constructor_type(tree, value, callee, context, locals)
+      {
+        return Some(ty);
+      }
       let signature = if callee.kind == EXPR_GENERIC_QUALIFIER
       {
         call::resolve_generic_function(tree, value, callee, context, locals, None)

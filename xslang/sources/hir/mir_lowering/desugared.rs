@@ -171,6 +171,27 @@ impl HirToMirLowerer
                                                 .collect::<Option<Vec<_>>>()?,
                                   span: *span })
       }
+      DesugaredExpression::EnumData { enum_type,
+                                      owner,
+                                      variant,
+                                      tag,
+                                      payload,
+                                      payload_type,
+                                      span, } =>
+      {
+        let payload = match payload.as_deref()
+        {
+          Some(value) => Some(Box::new(self.surface_expression_from_desugared(value)?)),
+          None => None,
+        };
+        Some(Expression::EnumData { enum_type: enum_type.clone(),
+                                    owner: owner.clone(),
+                                    variant: variant.clone(),
+                                    tag: *tag,
+                                    payload,
+                                    payload_type: payload_type.clone(),
+                                    span: *span })
+      }
       DesugaredExpression::Array { elements,
                                    span, } =>
       {

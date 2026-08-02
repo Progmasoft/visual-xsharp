@@ -39,6 +39,91 @@ pub(super) fn enum_variant_literal(tree: &SyntaxTree,
                              span })
 }
 
+fn enum_data_path(tree: &SyntaxTree, value: &SyntaxNode) -> Option<(String, String)>
+{
+  let path = path_text(tree, value);
+  let (enum_type, variant) = path.rsplit_once("::")?;
+  Some((enum_type.to_string(), variant.to_string()))
+}
+
+pub(super) fn enum_data_variant_type(tree: &SyntaxTree, value: &SyntaxNode, context: &LoweringContext) -> Option<Type>
+{
+  let (enum_type, variant) = enum_data_path(tree, value)?;
+  context.enum_data.select(&enum_type, &variant, None).ok()?;
+  Some(Type::Named(enum_type))
+}
+
+pub(super) fn enum_data_variant_literal(tree: &SyntaxTree,
+                                        value: &SyntaxNode,
+                                        context: &LoweringContext,
+                                        source_span: Span)
+                                        -> Option<Expression>
+{
+  let (enum_type, variant_name) = enum_data_path(tree, value)?;
+  let variant = context.enum_data.select(&enum_type, &variant_name, None).ok()?;
+  Some(Expression::EnumData { enum_type,
+                              owner: variant.owner.clone(),
+                              variant: variant.name.clone(),
+                              tag: variant.tag,
+                              payload: None,
+                              payload_type: None,
+                              span: source_span })
+}
+
+pub(super) fn enum_data_constructor_type(tree: &SyntaxTree,
+                                         call: &SyntaxNode,
+                                         callee: &SyntaxNode,
+                                         context: &LoweringContext,
+                                         locals: &HashMap<String, Type>)
+                                         -> Option<Type>
+{
+  if call.children.len() != 2
+  {
+    return None;
+  }
+  let (enum_type, variant_name) = enum_data_path(tree, callee)?;
+  let argument = tree.nodes.get(call.children[1])?;
+  let argument_type = expression_type::expression_type(tree, argument, context, locals)?;
+  context.enum_data
+         .select(&enum_type, &variant_name, Some(&argument_type))
+         .ok()?;
+  Some(Type::Named(enum_type))
+}
+
+pub(super) fn lower_enum_data_constructor(tree: &SyntaxTree,
+                                          call: &SyntaxNode,
+                                          context: &LoweringContext,
+                                          locals: &HashMap<String, Type>,
+                                          expected_type: Option<&Type>,
+                                          source_span: Span)
+                                          -> Option<Expression>
+{
+  if call.children.len() != 2
+  {
+    return None;
+  }
+  let callee = tree.nodes.get(call.children[0])?;
+  let (enum_type, variant_name) = enum_data_path(tree, callee)?;
+  if expected_type.is_some_and(|expected| expected != &Type::Named(enum_type.clone()))
+  {
+    return None;
+  }
+  let argument_node = tree.nodes.get(call.children[1])?;
+  let argument_type = expression_type::expression_type(tree, argument_node, context, locals)?;
+  let selected = context.enum_data
+                        .select(&enum_type, &variant_name, Some(&argument_type))
+                        .ok()?;
+  let payload_type = selected.payload.as_ref().and_then(declarations::type_ref_to_checked)?;
+  let payload = lower_expression(tree, argument_node, context, locals, Some(&payload_type))?;
+  Some(Expression::EnumData { enum_type,
+                              owner: selected.owner.clone(),
+                              variant: selected.name.clone(),
+                              tag: selected.tag,
+                              payload: Some(Box::new(payload)),
+                              payload_type: Some(Box::new(payload_type)),
+                              span: source_span })
+}
+
 pub(super) fn lower_nominal_type(tree: &SyntaxTree,
                                  value: &SyntaxNode)
                                  -> Result<declarations::NominalType, LoweringError>

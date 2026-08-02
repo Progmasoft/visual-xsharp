@@ -297,6 +297,7 @@ fn resolves_fixed_array_members_to_canonical_hir()
                                   constructors: HashMap::new(),
                                   methods: HashMap::new(),
                                   nominal_types: HashMap::new(),
+                                  enum_data: crate::hir::enum_data::EnumDataRegistry::default(),
                                   type_substitutions: HashMap::new() };
   let array_type = Type::Array { element: Box::new(Type::Primitive(PrimitiveType::Long)),
                                  length: Some(3) };
@@ -381,6 +382,7 @@ fn point_context() -> LoweringContext
                     constructors: HashMap::new(),
                     methods: HashMap::new(),
                     nominal_types: HashMap::from([(point.name.clone(), point)]),
+                    enum_data: crate::hir::enum_data::EnumDataRegistry::default(),
                     type_substitutions: HashMap::new() }
 }
 
@@ -529,6 +531,7 @@ fn empty_context() -> LoweringContext
                     constructors: HashMap::new(),
                     methods: HashMap::new(),
                     nominal_types: HashMap::new(),
+                    enum_data: crate::hir::enum_data::EnumDataRegistry::default(),
                     type_substitutions: HashMap::new() }
 }
 

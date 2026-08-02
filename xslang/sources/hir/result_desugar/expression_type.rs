@@ -62,6 +62,7 @@ impl super::ResultDesugar
       Expression::Field { path } => Some(path.ty.clone()),
       Expression::Member { field_type, .. } => Some(field_type.as_ref().clone()),
       Expression::Object { nominal_type, .. } => Some(Type::Named(nominal_type.clone())),
+      Expression::EnumData { enum_type, .. } => Some(Type::Named(enum_type.clone())),
       Expression::Array { elements, .. } =>
       {
         let first = self.expression_type(elements.first()?)?;

@@ -102,6 +102,7 @@ pub fn infer_expression_type(expression: &Expression, locals: &[Local]) -> Optio
     Expression::Field { path } => Some(path.ty.clone()),
     Expression::Member { field_type, .. } => Some(field_type.as_ref().clone()),
     Expression::Object { nominal_type, .. } => Some(Type::Named(nominal_type.clone())),
+    Expression::EnumData { enum_type, .. } => Some(Type::Named(enum_type.clone())),
     Expression::Array { elements, .. } =>
     {
       let element = homogeneous_expression_type(elements, locals)?;

@@ -12,6 +12,7 @@ use crate::hir::type_check::{
 
 use super::{SUPPORTED_XHIR_VERSION, is_supported_xhir_version};
 mod collection;
+mod enum_data;
 mod for_each;
 mod helpers;
 mod literal;
@@ -485,6 +486,10 @@ impl Parser<'_>
     if let Some(nominal_type) = rest.strip_prefix("object ")
     {
       return self.object_expression(nominal_type);
+    }
+    if let Some(record) = rest.strip_prefix("enum_data ")
+    {
+      return self.enum_data_expression(record);
     }
     if rest == "array"
     {

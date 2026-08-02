@@ -23,6 +23,7 @@ pub struct TypeChecker
   scope_starts: Vec<usize>,
   loop_depth: usize,
   nominal_types: std::collections::HashMap<String, crate::hir::declarations::NominalType>,
+  enum_data: crate::hir::enum_data::EnumDataRegistry,
 }
 
 impl TypeChecker
@@ -36,6 +37,7 @@ impl TypeChecker
   #[must_use]
   pub fn with_nominal_types(mut self, types: &[crate::hir::declarations::NominalType]) -> Self
   {
+    self.enum_data = crate::hir::enum_data::EnumDataRegistry::build(types);
     self.nominal_types = types.iter().map(|ty| (ty.name.clone(), ty.clone())).collect();
     self
   }
@@ -378,6 +380,35 @@ impl TypeChecker
       Expression::Object { nominal_type,
                            fields,
                            span, } => self.check_object(nominal_type, fields, *span),
+      Expression::EnumData { enum_type,
+                             owner,
+                             variant,
+                             tag,
+                             payload,
+                             payload_type,
+                             span,
+                             .. } =>
+      {
+        let selected = self.enum_data.select(enum_type, variant, payload_type.as_deref());
+        if !selected.is_ok_and(|selected| selected.owner == *owner && selected.tag == *tag)
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::UnknownEnumVariant,
+                                 message: format!("enum-data variant '{enum_type}::{variant}' does not match its \
+                                                   recorded payload, owner, or tag"),
+                                 span: *span });
+        }
+        match (payload.as_deref(), payload_type.as_deref())
+        {
+          (Some(value), Some(ty)) => self.check_expression_against_type(value, ty),
+          (None, None) =>
+          {}
+          _ => self.diagnostics
+                   .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                      message: "enum-data payload metadata is inconsistent".to_string(),
+                                      span: *span }),
+        }
+      }
       Expression::Array { elements, .. } | Expression::Set { elements, .. } =>
       {
         for element in elements
@@ -628,6 +659,19 @@ impl TypeChecker
                                  span: *span });
         }
       }
+      Expression::EnumData { enum_type,
+                             span,
+                             .. } =>
+      {
+        self.check_expression(expression);
+        if ty != &Type::Named(enum_type.clone())
+        {
+          self.diagnostics
+              .push(Diagnostic { code: DiagnosticCode::LiteralTypeMismatch,
+                                 message: "enum-data value is not assignable to the target type".to_string(),
+                                 span: *span });
+        }
+      }
       Expression::Array { elements,
                           span, } =>
       {
@@ -705,5 +749,7 @@ impl TypeChecker
 
 include!("type_check/modules.rs");
 
+#[cfg(test)]
+mod enum_data_tests;
 #[cfg(test)]
 mod tests;

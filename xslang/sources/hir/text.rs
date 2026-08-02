@@ -27,6 +27,9 @@ mod collection_tests;
 #[cfg(test)]
 mod conditional_tests;
 mod declaration;
+mod enum_data;
+#[cfg(test)]
+mod enum_data_tests;
 #[cfg(test)]
 mod for_tests;
 #[cfg(test)]
@@ -445,6 +448,10 @@ fn write_expression(output: &mut String, expression: &Expression, indent: usize)
       }
       let _ = writeln!(output, "{pad}.end");
     }
+    Expression::EnumData { .. } =>
+    {
+      enum_data::write_expression(output, expression, indent);
+    }
     Expression::Array { elements, .. } =>
     {
       let _ = writeln!(output, "{pad}array");
@@ -699,6 +706,10 @@ fn write_desugared_expression(output: &mut String, expression: &DesugaredExpress
         write_desugared_expression(output, &field.value, indent + 2);
       }
       let _ = writeln!(output, "{pad}.end");
+    }
+    DesugaredExpression::EnumData { .. } =>
+    {
+      enum_data::write_desugared_expression(output, expression, indent);
     }
     DesugaredExpression::Array { elements, .. } =>
     {

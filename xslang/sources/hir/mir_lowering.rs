@@ -385,6 +385,11 @@ impl HirToMirLowerer
       Expression::Object { nominal_type,
                            fields,
                            span, } => self.lower_object_value(nominal_type, fields, *span, lowered),
+      Expression::EnumData { .. } =>
+      {
+        self.unsupported_expression(expression);
+        None
+      }
       Expression::Array { .. } => self.lower_array_expression(expression, expected_type, lowered),
       Expression::Tuple { .. } => self.lower_tuple_expression(expression, expected_type, lowered),
       Expression::TupleElement { .. } => self.lower_tuple_element(expression, expected_type, lowered),
@@ -774,6 +779,7 @@ const fn expression_span(expression: &Expression) -> Span
     Expression::Literal { span, .. } |
     Expression::Local { span, .. } |
     Expression::Object { span, .. } |
+    Expression::EnumData { span, .. } |
     Expression::Array { span, .. } |
     Expression::Set { span, .. } |
     Expression::Map { span, .. } |

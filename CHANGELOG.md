@@ -16,6 +16,8 @@ source-to-native executable pipeline.
 
 - Added a target-independent enum-data registry that validates same-category inheritance, deduplicates shared ancestors,
   assigns deterministic flattened tags, and resolves typed variant overloads by exact nominal or primitive payload type.
+- Lowered typed and payload-free enum-data constructors into explicit HIR values carrying the selected declaration owner,
+  flattened tag, and exact payload type; XHIR now round-trips and validates those records.
 
 ## 0.2.6 - 2026-08-02
 
