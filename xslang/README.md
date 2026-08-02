@@ -35,8 +35,11 @@ Enable the optional procedural-macro workspace through the main crate:
 
 ```toml
 [dependencies]
-xslang = { version = "0.2.5", features = ["proc-macros"] }
+xslang = { git = "https://github.com/xss-lang/xs-project", branch = "main", version = "0.2.5", features = ["proc-macros"] }
 ```
+
+The Git dependency is required until a later crates.io release includes the optional workspace; the already-published
+0.2.5 archive is immutable.
 
 `xlil_create` preserves the attributed Rust function and adds a companion producer named `<function>_xlil`:
 
