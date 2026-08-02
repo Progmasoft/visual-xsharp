@@ -19,6 +19,8 @@ mod io;
 mod model;
 mod operations;
 mod type_names;
+/// Type-checked Rust producer facade over the raw XLIL builder.
+pub mod typed;
 /// Rust value types and helpers that select explicit XLIL value types.
 pub mod types;
 

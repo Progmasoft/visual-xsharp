@@ -12,6 +12,41 @@ The public `xslang::xlil` API lets Rust tools and third-party language implement
 and write XLIL without depending on LLVM. The corresponding C23 API is maintained in the xs-project repository under
 `<xs/lil.h>` and `<xs/lil-c/*.h>`.
 
+### Typed producer facade
+
+`xslang::xlil::typed::TypedBuilder` is a checked facade over the same canonical XLIL model. It pairs register and slot
+identifiers with the explicit markers in `xslang::xlil::types`, catching common signature mistakes before whole-module
+verification:
+
+```rust
+use xslang::xlil::{IntegerBinaryOperation, module_to_string};
+use xslang::xlil::typed::{Signature, TypedBuilder};
+
+let mut builder = TypedBuilder::new("Example");
+builder.begin(
+    Signature::returning::<i64>("sum")
+        .parameter::<i64>()
+        .parameter::<i64>(),
+)?;
+builder.append_block("entry")?;
+
+let left = builder.parameter::<i64>(0)?;
+let right = builder.parameter::<i64>(1)?;
+let result = builder.integer(IntegerBinaryOperation::Add, left, right)?;
+builder.return_value(result)?;
+
+let module = builder.finish()?;
+println!("{}", module_to_string(&module));
+```
+
+Typed values can be erased into `AnyValue` for heterogeneous argument lists and checked back with `downcast`. The facade
+also covers checked calls, boolean and conditional control flow, typed stack slots, exact-width constants, `f32`/`f64`
+operations, and UTF-32 comparisons. `TypedBuilder::raw` and `TypedBuilder::into_raw` keep specialized producers able to
+use lower-level records without creating a second XLIL representation.
+
+`F16` and `F128` are exact bit containers. Their signatures and pass-through values are supported, but arithmetic stays
+explicitly deferred until the corresponding XLIL operation and backend coverage exists.
+
 `xslang::xlil::Builder` provides an insertion-point API for declarations, definitions, values, calls, storage, and
 control flow. Checked calls derive their signature from the module registry instead of requiring a repeated return type.
 `Builder::finish` verifies the completed module before returning it; lower-level public model types remain available for

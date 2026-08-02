@@ -305,6 +305,38 @@ the standalone headers under `<xs/lil-c/>`: `api.h`, `model.h`, `module.h`, `fun
 and `text.h`.
 The Rust producer API is exposed directly under `xslang::xlil::*`; its public model, parser, verifier, and writer can build
 and round-trip the same XLIL v1 registry without going through the C ABI.
+
+Rust producers with known primitive types can use `xslang::xlil::typed::TypedBuilder`. This facade delegates every
+emitted record to the ordinary XLIL `Builder`; it does not define another IR or bypass whole-module verification.
+
+`Signature::returning::<T>` and `Signature::void` describe declarations and definitions. Repeated `.parameter::<T>()`
+calls preserve source parameter order. Once a definition is open, `parameter::<T>(index)` checks the marker against the
+registered signature before returning a `Value<T>`.
+
+The typed facade covers:
+
+- exact-width integer constants, arithmetic, bitwise operations, shifts, and comparisons;
+- `f32` and `f64` constants, arithmetic, and ordered comparisons;
+- verified boolean constants, negation, and conditional branches;
+- typed stack-slot allocation, load, and store;
+- signature-derived value and void calls;
+- typed value and void returns;
+- UTF-32 constant construction and equality checks;
+- unconditional branches and explicit panic terminators.
+
+`Value<T>` and `Slot<T>` contain only XLIL identifiers plus zero-sized Rust marker data. `AnyValue` is the intentional
+type-erasure boundary for heterogeneous call arguments. Downcasting an `AnyValue` checks its stored XLIL `Type`; it never
+reinterprets a register. Early facade errors use `TypedBuildError`. `finish` still runs the canonical verifier and wraps
+its ordinary `BuildError`.
+
+Non-native `F16` and `F128` Rust values preserve raw bits. They can select function parameter and result types without
+inventing host arithmetic. Floating arithmetic in the typed facade currently accepts only `F32` and `F64`, matching the
+implemented XLIL instruction subset.
+
+`Utf32Builder` converts Rust UTF-8 input into Unicode scalar values immediately. Its XLIL output contains the selected
+`utf32le` or `utf32be` encoding and numeric code points, not the original source spelling. It can also serialize target-
+endian bytes for runtime/object producers without involving LLVM.
+
 Java 25 applications use the official `org.xsslang:xlil` module. Its reader and writer call this same stable ABI through
 the Foreign Function and Memory API; see [XLIL_JAVA.md](XLIL_JAVA.md).
 

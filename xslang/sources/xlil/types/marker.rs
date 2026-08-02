@@ -26,6 +26,12 @@ pub trait XlilType: private::Sealed + Copy + 'static
   const NAME: &'static str;
 }
 
+/// Rust values accepted by exact-width XLIL integer operations.
+pub trait IntegerType: XlilType {}
+
+/// Rust values represented by an XLIL floating-point format.
+pub trait FloatType: XlilType {}
+
 macro_rules! primitive_alias {
   ($name:ident, $rust:ty, $xlil:ident, $text:literal, $documentation:literal) => {
     #[doc = $documentation]
@@ -48,6 +54,25 @@ primitive_alias!(I64, i64, I64, "i64", "Rust value represented as XLIL `i64`.");
 primitive_alias!(I128, i128, I128, "i128", "Rust value represented as XLIL `i128`.");
 primitive_alias!(F32, f32, F32, "f32", "Rust value represented as XLIL IEEE binary32.");
 primitive_alias!(F64, f64, F64, "f64", "Rust value represented as XLIL IEEE binary64.");
+
+/// Rust value represented as verified XLIL `bool`.
+pub type Bool = bool;
+
+impl private::Sealed for bool {}
+
+impl XlilType for bool
+{
+  const XLIL_TYPE: Type = Type::BOOL;
+  const NAME: &'static str = "bool";
+}
+
+impl IntegerType for i8 {}
+impl IntegerType for i16 {}
+impl IntegerType for i32 {}
+impl IntegerType for i64 {}
+impl IntegerType for i128 {}
+impl FloatType for f32 {}
+impl FloatType for f64 {}
 
 macro_rules! float_bits {
   ($name:ident, $bits:ty, $xlil:ident, $text:literal, $documentation:literal) => {
@@ -120,6 +145,9 @@ float_bits!(F128,
             F128,
             "f128",
             "Exact bit container for an XLIL IEEE binary128 value.");
+
+impl FloatType for F16 {}
+impl FloatType for F128 {}
 
 #[cfg(test)]
 mod tests

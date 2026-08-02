@@ -18,6 +18,9 @@ source-to-native executable pipeline.
   Rust function and generates a verified XLIL module producer beside it.
 - Added explicit Rust-side `I8` through `I128` and `F16` through `F128` XLIL type selectors plus a `Utf32Builder` that
   emits numeric UTF-32 code points without retaining source text.
+- Added `xslang::xlil::typed`, a checked producer facade with typed signatures, registers, slots, constants, arithmetic,
+  comparisons, calls, branches, and returns while retaining the canonical raw builder and verifier as the only XLIL
+  model implementation.
 
 ## 0.2.5 - 2026-08-02
 

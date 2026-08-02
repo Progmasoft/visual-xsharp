@@ -13,6 +13,6 @@ mod marker;
 mod utf32;
 mod value;
 
-pub use marker::{F16, F32, F64, F128, I8, I16, I32, I64, I128, XlilType};
+pub use marker::{Bool, F16, F32, F64, F128, FloatType, I8, I16, I32, I64, I128, IntegerType, XlilType};
 pub use utf32::Utf32Builder;
 pub use value::{AnyValue, TypeMismatch, Value};
