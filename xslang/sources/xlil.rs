@@ -19,6 +19,8 @@ mod io;
 mod model;
 mod operations;
 mod type_names;
+/// Rust value types and helpers that select explicit XLIL value types.
+pub mod types;
 
 pub use builder::{BuildError, Builder};
 pub use checked::{ModuleError, VerifiedModule, parse_verified};

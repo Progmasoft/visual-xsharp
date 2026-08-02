@@ -12,6 +12,11 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Added the optional `xslang` `proc-macros` feature and the `#[xslang::xlil_create]` attribute. It preserves a supported
+  Rust function and generates a verified XLIL module producer beside it.
+- Added explicit Rust-side `I8` through `I128` and `F16` through `F128` XLIL type selectors plus a `Utf32Builder` that
+  emits numeric UTF-32 code points without retaining source text.
+
 ## 0.2.5 - 2026-08-02
 
 - Strengthened the public Rust XLIL surface with checked signature-derived calls, verified-module proof wrappers,

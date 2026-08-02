@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+# SPDX-License-Identifier: MPL-2.0
+
+[package]
+name = "xslang-proc-macros"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Procedural macros for producing XLIL with xslang"
+keywords = ["compiler", "proc-macro", "xlil", "xsharp"]
+categories = ["compilers", "development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+path = "sources/lib.rs"
+
+[dependencies]
+proc-macro-crate.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+syn.workspace = true
+
+[lints]
+workspace = true

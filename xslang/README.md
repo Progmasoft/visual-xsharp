@@ -29,6 +29,31 @@ The optional `xslang::printf!` macro is implemented by the `xslang::rust` suppor
 It accepts C-style conversion specifiers and writes through a safe, synchronized standard-output path;
 `xslang::rust::printf!` is intentionally not a valid path.
 
+## Procedural XLIL producers
+
+Enable the optional procedural-macro workspace through the main crate:
+
+```toml
+[dependencies]
+xslang = { version = "0.2.5", features = ["proc-macros"] }
+```
+
+`xlil_create` preserves the attributed Rust function and adds a companion producer named `<function>_xlil`:
+
+```rust
+#[xslang::xlil_create]
+fn max(a: i64, b: i64) -> i64 {
+    if a > b { a } else { b }
+}
+
+let module = max_xlil()?;
+```
+
+The initial 0.2.5 subset lowers `bool`, the explicit numeric aliases and bit containers in `xslang::xlil::types`, integer
+arithmetic and comparisons, and result-producing `if/else` control flow. `Utf32Builder` converts Rust text to numeric
+UTF-32 code points without retaining the source text in XLIL. Unsupported Rust constructs are rejected during macro
+expansion instead of producing incomplete XLIL.
+
 This crate is pre-1.0 compiler infrastructure. Its APIs and version-0 intermediate formats may evolve together with the X#
 compiler. The repository pins a Rust nightly toolchain for reproducible development and validation.
 

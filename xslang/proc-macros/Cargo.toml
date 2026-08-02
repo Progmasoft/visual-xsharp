@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+# SPDX-License-Identifier: MPL-2.0
+
+[workspace]
+members = ["xlil-create"]
+resolver = "3"
+
+[workspace.package]
+version = "0.2.5"
+edition = "2024"
+authors = ["Leitwolf <support@xsharp-lang.xyz>"]
+license = "MPL-2.0"
+repository = "https://github.com/xss-lang/xs-project"
+
+[workspace.dependencies]
+proc-macro-crate = "3.4"
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "parsing"] }
+
+[workspace.lints.rust]
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "allow"
+nursery = "allow"
