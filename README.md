@@ -70,6 +70,7 @@ temporary `.xse` harnesses. `#[Ignore]` and `#[ShouldPanic]` are honored.
 | `Spec/` | active source documentation | X# syntax and language behavior examples/spec files |
 | `docs/` | active documentation | Architecture, build, CLI, backend, roadmap, and implementation status |
 | `tests/` | active | C-based unit and integration tests |
+| `third_party/` | pinned dependencies | Source-pinned dependencies unavailable as required system packages |
 | `xsfmt/` | future | Rust nightly + Serde formatter |
 | `xstidy/` | future | Rust nightly + Serde linter |
 | `xs-analyzer/` | future | Rust language server + TypeScript VS Code extension |
@@ -207,6 +208,8 @@ as `.xlil module`, `.extern`, `.func`, `bb0.entry:`, `%r0:i64 = const.i64 42`, `
 - Use CMake; do not use Meson.
 - GNU++26 files use `.cxx` and `.hxx`; directories use `snake_case` and filenames use `PascalCase`.
 - Use `fmt` instead of iostreams. Do not add vcpkg or Conan.
+- Initialize Git submodules before configuring. The GNU++26 `xs` command schema uses the pinned DIMCLI source under
+  `third_party/dimcli`; compiler execution remains behind the existing driver ABI.
 - The supported build path is Clang, Ninja, LLVM tools, and LLD.
 - Do not add persistent shell scripts; use Java source-file tools or D for automation.
 - Keep files under 1000 lines; prefer smaller modules when a component starts to sprawl.

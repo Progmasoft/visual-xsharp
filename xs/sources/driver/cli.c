@@ -714,20 +714,20 @@ static int run_file_command(const XsCliOptions *options)
 
 int xs_driver_main(int argc, char **argv)
 {
-  if(argc == 2 && strcmp(argv[1], "--version") == 0)
-  {
-    printf("xs %s\n", XS_PROJECT_VERSION);
-    return 0;
-  }
   XsCliOptions options = {0};
-  if(!xs_cli_parse(argc, argv, &options))
-  {
-    xs_cli_print_usage(stderr);
+  XsCliParseResult parse_result = xs_cli_parse(argc, argv, &options);
+  if(parse_result == XS_CLI_PARSE_EXIT)
+    return 0;
+  if(parse_result == XS_CLI_PARSE_ERROR)
     return 2;
-  }
+
+  int exit_code = 0;
   if(strcmp(options.command, "resolve") == 0)
-    return xs_driver_refresh_lock() ? 0 : 1;
-  if(options.file_path != nullptr)
-    return run_file_command(&options);
-  return run_project_command(&options);
+    exit_code = xs_driver_refresh_lock() ? 0 : 1;
+  else if(options.file_path != nullptr)
+    exit_code = run_file_command(&options);
+  else
+    exit_code = run_project_command(&options);
+  xs_cli_options_free(&options);
+  return exit_code;
 }

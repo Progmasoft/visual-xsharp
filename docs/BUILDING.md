@@ -5,8 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # Build and test guide
 
-xs-project is built on C23, CMake, Ninja, Clang/LLVM, and LLD. The documented and tested build path uses the Clang/LLVM
-toolchain.
+xs-project is built on GNU++26, Rust, C23, CMake, Ninja, Clang/LLVM, and LLD. The documented and tested build path uses
+the Clang/LLVM toolchain.
 
 ## Required tools
 
@@ -25,6 +25,15 @@ toolchain.
 - OpenSSL development headers and Crypto library
 - `rustup` and `cargo`; the pinned `xslang/rust-toolchain.toml` toolchain must be installed
 - JRE 25, Gradle 9.6.1 or newer, and the Kotlin 2.4.0 `kotlin` script runner for the `jvm` project-test label
+
+Clone the repository with submodules, or initialize them before configuring:
+
+```text
+git submodule update --init --recursive
+```
+
+The pinned DIMCLI source under `third_party/dimcli` implements the GNU++26 command schema and generated help for `xs`.
+It is built directly by the project and does not require a system package manager.
 
 Useful helper tools:
 
@@ -57,8 +66,8 @@ targets are configured. The root build keeps project definitions separate from t
 likewise split by direct XLIL, source values/control flow/calls, Kotlin projects, and library-level suites under
 `cmake/XSTests*.cmake`.
 
-The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` static library, then links its compiler-core
-session API into the C23 driver.
+The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` static library. Its GNU++26 executable
+entry and DIMCLI argument layer dispatch into the existing C23 compiler driver while subsystem migration continues.
 
 ## Compiler installation layout
 

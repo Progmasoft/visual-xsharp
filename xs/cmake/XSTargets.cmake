@@ -9,6 +9,16 @@ find_package(Threads REQUIRED)
 find_package(fmt REQUIRED CONFIG)
 find_program(XS_CARGO_EXECUTABLE NAMES cargo REQUIRED)
 
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/third_party/dimcli/libs/dimcli/cli.cpp")
+  message(FATAL_ERROR "DIMCLI is missing; initialize dependencies with: git submodule update --init --recursive")
+endif()
+add_library(xs_dimcli STATIC
+  "${PROJECT_SOURCE_DIR}/third_party/dimcli/libs/dimcli/cli.cpp"
+)
+target_include_directories(xs_dimcli SYSTEM PUBLIC "${PROJECT_SOURCE_DIR}/third_party/dimcli/libs")
+target_compile_features(xs_dimcli PUBLIC cxx_std_26)
+target_compile_options(xs_dimcli PRIVATE -Wno-deprecated-declarations)
+
 set(XS_XSLANG_TARGET_DIR "${PROJECT_BINARY_DIR}/xslang-target")
 set(XS_XSLANG_STATIC_LIBRARY "${XS_XSLANG_TARGET_DIR}/debug/libxslang.a")
 file(GLOB_RECURSE XS_XSLANG_RUST_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/xslang/sources/*.rs")
@@ -40,7 +50,7 @@ add_library(xs_compiler
   sources/driver/direct_xmir.c
   sources/driver/direct_xlil.c
   sources/driver/native_artifact.c
-  sources/driver/options.c
+  sources/driver/Options.cxx
   sources/driver/project_driver.c
   sources/driver/test_runner.c
   sources/lexer.c
@@ -139,7 +149,7 @@ get_target_property(XS_LIL_LIBRARY_TYPE xs_lil TYPE)
 if(XS_LIL_LIBRARY_TYPE STREQUAL "SHARED_LIBRARY")
   target_compile_definitions(xs_lil PUBLIC XS_LIL_SHARED)
 endif()
-target_link_libraries(xs_compiler PUBLIC xs_lil PRIVATE xslang_compiler_core)
+target_link_libraries(xs_compiler PUBLIC xs_lil PRIVATE xslang_compiler_core xs_dimcli fmt::fmt)
 target_link_libraries(xs_package PRIVATE LibArchive::LibArchive OpenSSL::Crypto)
 target_compile_definitions(xs_package PUBLIC _POSIX_C_SOURCE=200809L)
 target_compile_definitions(xs_compiler PRIVATE _POSIX_C_SOURCE=200809L XS_PROJECT_VERSION="${PROJECT_VERSION}"
@@ -154,7 +164,7 @@ target_compile_options(xs_compiler PUBLIC "$<$<COMPILE_LANGUAGE:C>:-include${XS_
 target_compile_options(xs_lil PUBLIC "$<$<COMPILE_LANGUAGE:C>:-include${XS_COMPILER_CHECK_HEADER}>")
 target_compile_options(xs_package PUBLIC "$<$<COMPILE_LANGUAGE:C>:-include${XS_COMPILER_CHECK_HEADER}>")
 
-add_executable(xs sources/main.c)
+add_executable(xs sources/Main.cxx)
 set_target_properties(xs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 if(APPLE)
   set_target_properties(xs PROPERTIES INSTALL_RPATH "@loader_path/../lib")

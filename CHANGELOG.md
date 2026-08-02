@@ -12,6 +12,10 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Migrated the `xs` executable entry and command schema to GNU++26. DIMCLI 7.6.0 now provides subcommand parsing,
+  validation, and generated help while the existing C23 compiler driver and public C ABI remain intact.
+- Added command-specific `--help`, pinned DIMCLI source, and the corresponding third-party notice.
+
 ## 0.2.4 - 2026-08-02
 
 - Began the compiler's incremental Clang GNU++26 transition while retaining the existing strict C23 frontend and stable

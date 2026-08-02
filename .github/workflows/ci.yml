@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 name: CI
@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
       - name: Install CMake
         run: python3 -m pip install --user "cmake>=3.31,<5"
       - name: Add user tools to PATH

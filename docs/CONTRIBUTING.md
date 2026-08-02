@@ -16,6 +16,8 @@ This repository is compiler infrastructure. Prefer small, testable patches that 
 - GNU++26 sources use `.cxx`/`.hxx`; directories use `snake_case` and filenames use `PascalCase`.
 - Use `fmt` instead of iostreams. Prefer installed dependencies and add a Git submodule only when a required dependency
   is unavailable on supported systems. Do not add vcpkg or Conan.
+- Keep pinned third-party sources under `third_party/` unchanged. DIMCLI owns CLI schema parsing and generated help;
+  compiler execution remains behind the existing driver boundary.
 - Shell scripts are not added as persistent project artifacts.
 - Use CMake 3.31 or newer; do not use Meson.
 - Stay within the documented Clang/LLVM build path and avoid assumptions that are not covered by the supported toolchain.

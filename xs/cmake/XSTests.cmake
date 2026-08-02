@@ -28,6 +28,10 @@ find_package(Catch2 3 REQUIRED CONFIG)
 add_test(NAME cli_version COMMAND xs --version)
 string(REPLACE "." "\\." XS_PROJECT_VERSION_REGEX "${PROJECT_VERSION}")
 set_tests_properties(cli_version PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "xs ${XS_PROJECT_VERSION_REGEX}")
+add_test(NAME cli_help COMMAND xs --help)
+set_tests_properties(cli_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "Commands:")
+add_test(NAME cli_build_help COMMAND xs build --help)
+set_tests_properties(cli_build_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "--output=IR")
 
 add_test(NAME compiler_install_layout COMMAND "${CMAKE_COMMAND}"
   -DXS_BUILD_DIR=${CMAKE_BINARY_DIR}

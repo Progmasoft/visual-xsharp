@@ -10,38 +10,54 @@
 
 #include <stdio.h>
 
-typedef enum
+#ifdef __cplusplus
+extern "C"
 {
-  XS_BUILD_OUTPUT_NONE,
-  XS_BUILD_OUTPUT_HIR,
-  XS_BUILD_OUTPUT_MIR,
-  XS_BUILD_OUTPUT_XLIL,
-} XsBuildOutput;
+#endif
 
-typedef struct
-{
-  XsWarningLevel warning_level;
-  bool warnings_as_errors;
-  bool verbose;
-} XsCompilerSettings;
+  typedef enum
+  {
+    XS_BUILD_OUTPUT_NONE,
+    XS_BUILD_OUTPUT_HIR,
+    XS_BUILD_OUTPUT_MIR,
+    XS_BUILD_OUTPUT_XLIL,
+  } XsBuildOutput;
 
-typedef struct
-{
-  const char *command;
-  const char *file_path;
-  const char *module_path;
-  XsBuildOutput output;
-  XsCompilerSettings compiler;
-  bool warning_override;
-  bool werror_override;
-  bool verbose_override;
-} XsCliOptions;
+  typedef struct
+  {
+    XsWarningLevel warning_level;
+    bool warnings_as_errors;
+    bool verbose;
+  } XsCompilerSettings;
 
-XsCompilerSettings xs_cli_default_compiler_settings(void);
-void xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsCompilerSettings *settings);
-const char *xs_cli_warning_level_name(XsWarningLevel level);
-const char *xs_cli_output_extension(XsBuildOutput output);
-bool xs_cli_parse(int argc, char **argv, XsCliOptions *options);
-void xs_cli_print_usage(FILE *stream);
+  typedef struct
+  {
+    const char *command;
+    const char *file_path;
+    const char *module_path;
+    XsBuildOutput output;
+    XsCompilerSettings compiler;
+    bool warning_override;
+    bool werror_override;
+    bool verbose_override;
+  } XsCliOptions;
+
+  typedef enum
+  {
+    XS_CLI_PARSE_ERROR,
+    XS_CLI_PARSE_READY,
+    XS_CLI_PARSE_EXIT,
+  } XsCliParseResult;
+
+  XsCompilerSettings xs_cli_default_compiler_settings(void);
+  void xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsCompilerSettings *settings);
+  const char *xs_cli_warning_level_name(XsWarningLevel level);
+  const char *xs_cli_output_extension(XsBuildOutput output);
+  XsCliParseResult xs_cli_parse(int argc, char **argv, XsCliOptions *options);
+  void xs_cli_options_free(XsCliOptions *options);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

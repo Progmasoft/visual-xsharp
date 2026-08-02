@@ -6,6 +6,15 @@
 #ifndef XS_DRIVER_H
 #define XS_DRIVER_H
 
-int xs_driver_main(int argc, char **argv);
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+  int xs_driver_main(int argc, char **argv);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

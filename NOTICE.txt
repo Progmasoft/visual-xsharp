@@ -13,3 +13,8 @@ licensed under the Apache License, version 2.0.
 
 JUnit Jupiter and the JUnit Platform are used to test the Java XLIL binding.
 They are licensed under the Eclipse Public License, version 2.0.
+
+DIMCLI 7.6.0 is used by the native `xs` command-line interface.
+Copyright Glen Knowles 2016-2026.
+DIMCLI is licensed under the Boost Software License, version 1.0. Its source
+and license text are retained in `third_party/dimcli`.
