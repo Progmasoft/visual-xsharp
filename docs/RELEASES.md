@@ -12,7 +12,7 @@ APIs, and backend checkpoints before the full native executable pipeline is comp
 
 ## Current status
 
-- Current project version: `0.2.6`.
+- Current project version: `0.2.7`.
 - `xs --version` reports the configured compiler version.
 - The root [../CHANGELOG.md](../CHANGELOG.md) file keeps `Unreleased` for work after the current numbered line.
 - Numbered `0.0.x` entries are development snapshots, not stable language releases.
@@ -22,7 +22,7 @@ APIs, and backend checkpoints before the full native executable pipeline is comp
 The root `release.java` source-file tool checks release metadata without using shell scripts:
 
 ```text
-java --source=21 release.java check 0.2.6
+java --source=21 release.java check 0.2.7
 ```
 
 It validates the CMake project version, changelog heading, release documentation, CLI version documentation, and the built
@@ -30,6 +30,8 @@ It validates the CMake project version, changelog heading, release documentation
 
 ## Version line
 
+- `0.2.7` builds the target-independent enum-data inheritance and payload-overload registry used by semantic analysis,
+  typed HIR, and subsequent native lowering.
 - `0.2.6` adds opt-in Rust procedural XLIL generation, typed Rust XLIL producer values, and expanded compile-time
   diagnostics while preserving the target-independent XLIL model.
 - `0.2.5` adds the GNU++26 DIMCLI command schema, reusable MIR control-flow/dataflow analysis, a verified optimization

@@ -128,7 +128,7 @@ example today.
 
 ## Release policy
 
-The project is now in the `0.2.6` development period. Supported source functions cross the C23 structural-AST boundary into
+The project is now in the `0.2.7` development period. Supported source functions cross the C23 structural-AST boundary into
 Rust HIR (coordinated THIR and XHIR sides), verified and optimized MIR, and XLIL before the public C23 XLIL model drives
 LLVM native `.xse` emission.
 Rust compiler-core control flow now includes conditional loops, post-test `do`/`while` sugar, loop jumps, and statement

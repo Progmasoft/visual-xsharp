@@ -70,7 +70,7 @@ Enable the optional procedural-macro workspace through the main crate:
 
 ```toml
 [dependencies]
-xslang = { version = "0.2.6", features = ["proc-macros"] }
+xslang = { version = "0.2.7", features = ["proc-macros"] }
 ```
 
 `xlil_create` preserves the attributed Rust function and adds verified module and canonical-text companions named

@@ -28,12 +28,12 @@ or bypass the canonical verifier and writer.
 Use the main crate for the model and builders:
 
     [dependencies]
-    xslang = "0.2.6"
+    xslang = "0.2.7"
 
 Enable the attribute macro only when needed:
 
     [dependencies]
-    xslang = { version = "0.2.6", features = ["proc-macros"] }
+    xslang = { version = "0.2.7", features = ["proc-macros"] }
 
 The macro implementation is published as xslang-proc-macros, but applications
 should normally enable the feature on xslang instead of depending on the

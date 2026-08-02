@@ -12,6 +12,11 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+## 0.2.7 - 2026-08-02
+
+- Added a target-independent enum-data registry that validates same-category inheritance, deduplicates shared ancestors,
+  assigns deterministic flattened tags, and resolves typed variant overloads by exact nominal or primitive payload type.
+
 ## 0.2.6 - 2026-08-02
 
 - Expanded the Rust XLIL producer attribute with immutable local bindings, scoped value blocks, floating-point operations,

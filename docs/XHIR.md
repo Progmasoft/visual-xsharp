@@ -127,6 +127,31 @@ enum Color
 Variant values remain semantic XHIR literals such as `literal enum Color::Green tag 1`. The tag is checked against the
 declaration and carried toward MIR; X# does not expose enum-to-integer conversion.
 
+Enum-data declarations retain their source-level payload overloads:
+
+```text
+enum data Value
+  variant Number: Int
+  variant Number: Long
+  variant Text: String
+.end
+```
+
+The declaration-local order remains visible in XHIR. Semantic analysis additionally builds a target-independent resolved
+variant registry. Base declarations are traversed in source order before the derived declaration's own variants. A shared
+ancestor reached through multiple base paths contributes its variants once. The resolved registry assigns a flattened
+`u32` tag sequence beginning at zero for each concrete enum-data type; these runtime tags do not replace the
+declaration-local tags stored in XHIR.
+
+A typed variant constructor is selected by exact payload type. Nominal payloads compare by nominal identity, so two data
+types with identical fields do not select each other's overload. Primitive, optional, result, reference, collection, and
+tuple payloads preserve their full checked type structure during selection. No numeric widening or structural conversion
+is performed merely to choose an enum-data variant.
+
+The hierarchy is rejected before MIR lowering when it contains an unknown or cross-category base, an inheritance cycle,
+two distinct variants with the same name and payload type, or an overload set containing a payload-free variant. A
+diamond-shaped hierarchy is valid when the repeated variant identity comes from the same original ancestor.
+
 A typed direct call is represented as a semantic record rather than an instruction:
 
 ```text
