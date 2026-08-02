@@ -12,6 +12,9 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Simplified Kotlin dependency features: optional features now remain disabled by default and are activated only with
+  `feature(name)` or `enable(name)`; the redundant `disable(name)` DSL operation was removed.
+
 - Migrated monomorphization and codegen-unit planning from manual C allocation tables to GNU++26 ownership while
   preserving their existing C ABI, and added move-only C++ planning views plus Catch2 coverage.
 - Added the Kotlin project setting `XS_LLVM_COMPILER = "AOT" | "ORC"`; it defaults to `AOT` and is omitted from plans

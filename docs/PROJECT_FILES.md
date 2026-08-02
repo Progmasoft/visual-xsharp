@@ -179,17 +179,15 @@ dependencies {
 
 features {
   dependency("XSharp.JSON") {
-    feature("JSON", true)
-  }
-  dependency("XSharp.Network") {
-    disable("TLS")
+    feature("JSON")
   }
 }
 ```
 
-`enable(name)`, `disable(name)`, and `feature(name, enabled)` are equivalent selection forms. Selecting a feature that
-was not declared by `addOptionalModule` is a configuration error. One module cannot be both required and optional, and
-all optional declarations for the same module must use one exact stability/version coordinate.
+Every optional feature is disabled unless selected. `feature(name)` and its `enable(name)` alias select a feature; no
+explicit disable operation is needed. Selecting a feature that was not declared by `addOptionalModule` is a configuration
+error. One module cannot be both required and optional, and all optional declarations for the same module must use one
+exact stability/version coordinate.
 
 The current resolver records and validates coordinates but does not download packages. Registry source identity,
 integrity hashes, and dependency graphs will be added with external module resolution rather than being guessed in the

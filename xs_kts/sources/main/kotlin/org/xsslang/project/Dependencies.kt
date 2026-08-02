@@ -40,19 +40,12 @@ class DependencyFeatureScope internal constructor(
 ) {
   internal val selections = mutableListOf<ModuleFeatureSelection>()
 
-  fun feature(
-    name: String,
-    enabled: Boolean = true,
-  ) {
-    selections += ModuleFeatureSelection(moduleName, requireFeatureName(name), enabled)
+  fun feature(name: String) {
+    selections += ModuleFeatureSelection(moduleName, requireFeatureName(name), true)
   }
 
   fun enable(name: String) {
-    feature(name, true)
-  }
-
-  fun disable(name: String) {
-    feature(name, false)
+    feature(name)
   }
 }
 

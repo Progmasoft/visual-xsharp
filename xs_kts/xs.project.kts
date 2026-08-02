@@ -44,12 +44,6 @@ dependencies {
   addOptionalModule("TLS", "XSharp.Network", "BETA", "0.1.0")
 }
 
-features {
-  dependency("XSharp.Network") {
-    disable("TLS")
-  }
-}
-
 source {
   include("Sources")
   exclude("Sources/Tests/**")

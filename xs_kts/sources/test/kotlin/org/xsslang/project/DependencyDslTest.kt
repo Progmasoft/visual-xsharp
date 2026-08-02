@@ -71,7 +71,7 @@ class DependencyDslTest {
         }
         features {
           dependency("XSharp.JSON") {
-            feature("JSON", true)
+            feature("JSON")
           }
         }
       }.build()
@@ -87,17 +87,11 @@ class DependencyDslTest {
   }
 
   @Test
-  fun enableAndDisableHelpersUseLastSelection() {
+  fun optionalFeatureRemainsInactiveUntilEnabled() {
     val context =
       project {
         dependencies {
           addOptionalModule("TLS", "XSharp.Network", "ALPHA", "0.4.0")
-        }
-        features {
-          dependency("XSharp.Network") {
-            enable("TLS")
-            disable("TLS")
-          }
         }
       }
 
