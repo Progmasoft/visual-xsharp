@@ -14,6 +14,10 @@ source-to-native executable pipeline.
 
 ## 0.2.5 - 2026-08-02
 
+- Strengthened the public Rust XLIL surface with checked signature-derived calls, verified-module proof wrappers,
+  combined parse/verification errors, stream-oriented read/write helpers, and read-only model inspection methods.
+- Added optional `xslang::rust::XSResult<T>` and `XSError` aliases for thread-safe application error boundaries without
+  replacing XLIL's structured build, parse, verification, and I/O errors.
 - Added feature-gated Kotlin project dependencies through `addOptionalModule`, deterministic feature selection, and the
   version-1 SQLite lock schema. Required, optional, enabled, and disabled dependency records now round-trip without a
   readable lock-file surrogate.

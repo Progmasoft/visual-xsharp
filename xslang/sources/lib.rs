@@ -24,6 +24,8 @@ pub mod mir;
 #[allow(missing_docs,
         reason = "existing monomorphization API documentation is being completed incrementally")]
 pub mod mono;
+/// Optional Rust integration aliases for application-facing compiler tools.
+pub mod rust;
 pub(crate) mod text;
 
 /// Public, target-independent XLIL model, producer, reader, verifier, and text API.

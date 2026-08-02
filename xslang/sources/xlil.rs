@@ -13,11 +13,16 @@
 //! model records without depending on LLVM.
 
 mod builder;
+mod checked;
+mod inspect;
+mod io;
 mod model;
 mod operations;
 mod type_names;
 
 pub use builder::{BuildError, Builder};
+pub use checked::{ModuleError, VerifiedModule, parse_verified};
+pub use io::{ModuleIoError, read_module, read_verified, write_module_io, write_verified};
 pub use model::*;
 pub use operations::*;
 pub use type_names::*;

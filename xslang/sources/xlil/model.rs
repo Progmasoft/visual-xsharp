@@ -146,8 +146,9 @@ impl Function
            is_definition: true }
   }
 
+  /// Returns the value register corresponding to a parameter.
   #[must_use]
-  pub(crate) fn parameter_value(&self, parameter: usize) -> Option<ValueId>
+  pub fn parameter_value(&self, parameter: usize) -> Option<ValueId>
   {
     self.parameters.get(parameter)?;
     Some(ValueId(parameter as u32))
@@ -627,7 +628,9 @@ impl Function
     true
   }
 
-  pub(super) fn block(&self, block: BlockId) -> Option<&Block>
+  /// Finds a basic block by id.
+  #[must_use]
+  pub fn block(&self, block: BlockId) -> Option<&Block>
   {
     self.blocks
         .get(block.0 as usize)
@@ -641,7 +644,9 @@ impl Function
         .filter(|candidate| candidate.id == block)
   }
 
-  pub(super) fn value(&self, value: ValueId) -> Option<&Value>
+  /// Finds a value by its function-local register id.
+  #[must_use]
+  pub fn value(&self, value: ValueId) -> Option<&Value>
   {
     self.values
         .get(value.0 as usize)
@@ -651,6 +656,20 @@ impl Function
   fn slot(&self, slot: SlotId) -> Option<&Slot>
   {
     self.slots.get(slot.0 as usize).filter(|candidate| candidate.id == slot)
+  }
+
+  /// Finds a stack slot by its function-local id.
+  #[must_use]
+  pub fn stack_slot(&self, slot: SlotId) -> Option<&Slot>
+  {
+    self.slot(slot)
+  }
+
+  /// Finds a basic block by its human-readable label.
+  #[must_use]
+  pub fn block_named(&self, label: &str) -> Option<&Block>
+  {
+    self.blocks.iter().find(|candidate| candidate.label == label)
   }
 }
 
@@ -738,6 +757,34 @@ pub struct ArrayType
 
 impl Module
 {
+  /// Finds a function declaration or definition by symbol name.
+  #[must_use]
+  pub fn function(&self, name: &str) -> Option<&Function>
+  {
+    self.functions.iter().find(|function| function.name == name)
+  }
+
+  /// Finds a named aggregate layout.
+  #[must_use]
+  pub fn aggregate_named(&self, name: &str) -> Option<&AggregateType>
+  {
+    self.aggregate_types.iter().find(|aggregate| aggregate.name == name)
+  }
+
+  /// Resolves an aggregate registry reference.
+  #[must_use]
+  pub fn aggregate(&self, value_type: Type) -> Option<&AggregateType>
+  {
+    self.aggregate_type(value_type)
+  }
+
+  /// Resolves an array registry reference.
+  #[must_use]
+  pub fn array(&self, value_type: Type) -> Option<&ArrayType>
+  {
+    self.array_type(value_type)
+  }
+
   #[must_use]
   pub(crate) fn new(name: impl Into<String>) -> Self
   {
