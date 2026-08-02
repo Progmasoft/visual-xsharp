@@ -175,6 +175,15 @@ fn roundtrips_const_i64_function()
 }
 
 #[test]
+fn roundtrips_exact_width_i64_bit_pattern()
+{
+  let text = ".xlil version 1\n.xlil module App\n.func Value : () -> i64\nbb0.entry:\n  %r0:i64 = const.i64 \
+              0xffffffffffffffff\n  ret %r0\n.end\n";
+  let module = parse_module(text).expect("exact-width i64 bit pattern should parse");
+  assert_eq!(module_to_string(&module), text);
+}
+
+#[test]
 fn rejects_untyped_i64_constant_opcode()
 {
   let text =

@@ -12,6 +12,13 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+## 0.2.8 - 2026-08-02
+
+- Accepted canonical fixed-width hexadecimal `i64` bit patterns while preserving the legacy decimal `const.i64` form,
+  restoring writer/parser round trips for enum-data aggregates with inactive `Int` payload slots.
+- Aligned enum-data regression tests with XLIL v1 numeric type-registry identifiers, explicit borrowed `Str` payloads,
+  and the rule that a payload-free declaration is a regular `enum` rather than `enum data`.
+
 ## 0.2.7 - 2026-08-02
 
 - Added a target-independent enum-data registry that validates same-category inheritance, deduplicates shared ancestors,

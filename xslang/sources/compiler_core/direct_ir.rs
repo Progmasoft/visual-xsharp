@@ -504,11 +504,11 @@ mod tests
     let session = DirectIrSession::from_xhir(ENUM_DATA_XHIR.as_bytes());
     assert!(session.diagnostics.is_empty(), "{:?}", session.diagnostics);
     let text = str::from_utf8(session.xlil_text.as_deref().expect("XLIL should exist")).unwrap();
-    assert!(text.contains(".type %Value = aggregate { i32, i64, i32 }"), "{text}");
-    assert!(text.contains(".func make_long : () -> %Value"), "{text}");
+    assert!(text.contains(".type %t0 Value : (i32, i64, i32)"), "{text}");
+    assert!(text.contains(".func make_long : () -> %t0"), "{text}");
     assert!(text.contains(":i32 = const.i32 1"), "{text}");
     assert!(text.contains(":i32 = const.i32 7"), "{text}");
-    assert!(text.contains("aggregate %Value"), "{text}");
+    assert!(text.contains(":%t0 = aggregate "), "{text}");
   }
 
   #[test]
@@ -567,7 +567,9 @@ mod tests
     assert!(session.xlil_text.is_none());
     assert!(session.diagnostics
                    .iter()
-                   .any(|diagnostic| diagnostic.contains("duplicate") || diagnostic.contains("conflict")),
+                   .any(|diagnostic| diagnostic.contains("duplicate") ||
+                                     diagnostic.contains("conflict") ||
+                                     diagnostic.contains("repeats")),
             "{:?}",
             session.diagnostics);
   }
@@ -583,7 +585,7 @@ mod tests
     let session = DirectIrSession::from_xhir(input.as_bytes());
     assert!(session.diagnostics.is_empty(), "{:?}", session.diagnostics);
     let text = str::from_utf8(session.xlil_text.as_deref().unwrap()).unwrap();
-    assert!(text.contains(".type %Value = aggregate { i32, i64, i32 }"), "{text}");
+    assert!(text.contains(".type %t1 Value : (i32, i64, i32)"), "{text}");
   }
 
   #[test]
@@ -595,7 +597,9 @@ mod tests
                  end\n.program end\n";
     let session = DirectIrSession::from_xhir(input.as_bytes());
     assert!(session.xlil_text.is_none());
-    assert!(session.diagnostics.iter().any(|diagnostic| diagnostic.contains("base")),
+    assert!(session.diagnostics
+                   .iter()
+                   .any(|diagnostic| diagnostic.contains("base") || diagnostic.contains("inherits")),
             "{:?}",
             session.diagnostics);
   }

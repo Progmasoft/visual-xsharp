@@ -39,7 +39,7 @@ impl Parser<'_>
     let (result, operation) = text.split_once(" = const.")?;
     let (result, result_type_name) = result.split_once(':')?;
     let result_type = type_from_name(result_type_name)?;
-    if matches!(result_type, Type::U16 | Type::I32 | Type::I64) || result_type.integer_width().is_none()
+    if matches!(result_type, Type::U16 | Type::I32) || result_type.integer_width().is_none()
     {
       return None;
     }

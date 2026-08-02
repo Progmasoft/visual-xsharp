@@ -134,8 +134,9 @@ fn lowers_int_payload_with_tag_and_inactive_long_zero()
                                                                                .. }));
   assert!(matches!(lowered.blocks[0].statements[1], mir::Statement::ConstI64 { value: 7,
                                                                                .. }));
-  assert!(matches!(lowered.blocks[0].statements[2], mir::Statement::ConstI32 { value: 0,
-                                                                               .. }));
+  assert!(matches!(lowered.blocks[0].statements[2],
+                   mir::Statement::ConstInteger { value: mir::IntegerConstant::I32(0),
+                                                  .. }));
   assert!(matches!(&lowered.blocks[0].statements[3],
                    mir::Statement::Aggregate { value_type, field_types, fields, .. }
                      if *value_type == XlilType::aggregate(0) &&
@@ -251,8 +252,8 @@ fn lowers_enum_data_mir_through_xlil_registry_and_verifier()
   module.add_function(xlil);
   assert!(crate::xlil::verify_module(&module).is_empty());
   let text = crate::xlil::module_to_string(&module);
-  assert!(text.contains(".type %Value = aggregate { i32, i64, i32 }"));
-  assert!(text.contains("aggregate %Value"));
+  assert!(text.contains(".type %t0 Value : (i32, i64, i32)"));
+  assert!(text.contains(":%t0 = aggregate "));
   let parsed = crate::xlil::parse_module(&text).unwrap();
   assert!(crate::xlil::verify_module(&parsed).is_empty());
   assert_eq!(crate::xlil::module_to_string(&parsed), text);
@@ -469,8 +470,14 @@ fn float_payload_and_inactive_str_slot_lower_without_target_apis()
 #[test]
 fn str_payload_preserves_utf32_code_points_in_enum_data_slot()
 {
-  let declaration = enum_data("Value", &[], vec![variant("Text", Some(PrimitiveType::Str), 0),
-                                                 variant("Empty", None, 1)]);
+  let declaration = enum_data("Value", &[], vec![EnumVariant { name: "Text".to_string(),
+                                                 payload: Some(TypeRef::Reference {
+                                                   referent: Box::new(TypeRef::Primitive(PrimitiveType::Str)),
+                                                   mutable: false,
+                                                 }),
+                                                 tag: 0,
+                                                 span: source_span() },
+                                   variant("Empty", None, 1)]);
   let function = returning("wrap_text",
                            constructor("Value",
                                        "Value",
@@ -478,7 +485,9 @@ fn str_payload_preserves_utf32_code_points_in_enum_data_slot()
                                        0,
                                        Some(Expression::Literal { literal: Literal::String("Aß".to_string()),
                                                                   span: span() }),
-                                       Some(Type::Primitive(PrimitiveType::Str))));
+                                       Some(Type::Reference { referent:
+                                                                Box::new(Type::Primitive(PrimitiveType::Str)),
+                                                              mutable: false })));
   let mir = HirToMirLowerer::new().with_nominal_types(std::slice::from_ref(&declaration))
                                   .lower_function(&function)
                                   .unwrap();

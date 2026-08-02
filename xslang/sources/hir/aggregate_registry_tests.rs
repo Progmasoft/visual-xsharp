@@ -77,14 +77,10 @@ fn enum_data_layout_preserves_owner_tag_and_payload_identity()
 }
 
 #[test]
-fn payload_free_enum_data_uses_only_a_tag()
+fn payload_free_enum_data_is_rejected_in_favor_of_a_regular_enum()
 {
   let declaration = enum_data("Token", &[], vec![variant("Start", None, 0), variant("End", None, 1)]);
-  let registry = aggregate_registry::build(&[declaration]).unwrap();
-  assert_eq!(registry.layouts[0].fields, [Type::I32]);
-  assert!(registry.enum_data[0].variants
-                               .iter()
-                               .all(|variant| variant.field.is_none()));
+  assert!(aggregate_registry::build(&[declaration]).is_none());
 }
 
 #[test]
