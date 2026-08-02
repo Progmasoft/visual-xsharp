@@ -35,11 +35,8 @@ Enable the optional procedural-macro workspace through the main crate:
 
 ```toml
 [dependencies]
-xslang = { git = "https://github.com/xss-lang/xs-project", branch = "main", version = "0.2.5", features = ["proc-macros"] }
+xslang = { version = "0.2.6", features = ["proc-macros"] }
 ```
-
-The Git dependency is required until a later crates.io release includes the optional workspace; the already-published
-0.2.5 archive is immutable.
 
 `xlil_create` preserves the attributed Rust function and adds a companion producer named `<function>_xlil`:
 
@@ -52,7 +49,7 @@ fn max(a: i64, b: i64) -> i64 {
 let module = max_xlil()?;
 ```
 
-The initial 0.2.5 subset lowers `bool`, the explicit numeric aliases and bit containers in `xslang::xlil::types`, integer
+The initial 0.2.6 subset lowers `bool`, the explicit numeric aliases and bit containers in `xslang::xlil::types`, integer
 arithmetic and comparisons, and result-producing `if/else` control flow. `Utf32Builder` converts Rust text to numeric
 UTF-32 code points without retaining the source text in XLIL. Unsupported Rust constructs are rejected during macro
 expansion instead of producing incomplete XLIL.
