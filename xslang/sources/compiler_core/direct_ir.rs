@@ -226,7 +226,9 @@ fn validate_xhir_declarations(declarations: &[hir::declarations::NominalType]) -
       diagnostics.push(format!("XHIR nominal type '{}' is declared more than once", declaration.name));
     }
     if !matches!(declaration.kind,
-                 hir::declarations::NominalKind::Data | hir::declarations::NominalKind::Enum)
+                 hir::declarations::NominalKind::Data |
+                 hir::declarations::NominalKind::Enum |
+                 hir::declarations::NominalKind::EnumData)
     {
       diagnostics.push(format!("XHIR direct native lowering does not yet support nominal type '{}'",
                                declaration.name));
@@ -247,6 +249,10 @@ fn validate_xhir_declarations(declarations: &[hir::declarations::NominalType]) -
         }
       }
     }
+    if declaration.kind == hir::declarations::NominalKind::EnumData && !declaration.fields.is_empty()
+    {
+      diagnostics.push(format!("XHIR enum data '{}' cannot contain ordinary fields", declaration.name));
+    }
     let mut fields = HashSet::new();
     for field in &declaration.fields
     {
@@ -257,6 +263,12 @@ fn validate_xhir_declarations(declarations: &[hir::declarations::NominalType]) -
       }
     }
   }
+  let enum_data = hir::enum_data::EnumDataRegistry::build(declarations);
+  diagnostics.extend(enum_data.diagnostics()
+                              .iter()
+                              .map(|diagnostic| {
+                                format!("XHIR enum data '{}': {}", diagnostic.type_name, diagnostic.error)
+                              }));
   let definitions = declarations.iter()
                                 .cloned()
                                 .map(|declaration| (declaration.name.clone(), declaration))
@@ -422,6 +434,11 @@ mod tests
                             terminator return\n      value local 0\n.end\n.function end\n.program end\n";
   const VALID_XHIR: &str = ".xhir version 1\nprogram root\n\nfunction main\n  signature\n    returns Long\n  .end\n  \
                             body\n    return\n      literal integer 7\n  .end\n.function end\n.program end\n";
+  const ENUM_DATA_XHIR: &str = ".xhir version 1\nprogram enum_data\n\ndeclarations\n  enum data Value\n    variant \
+                                Number: Int\n    variant Number: Long\n    variant Empty\n  .end\n.end\n\nfunction \
+                                make_long\n  signature\n    returns Value\n  .end\n  body\n    return\n      \
+                                enum_data Value::Number owner Value tag 1 payload Long\n        value\n          \
+                                literal integer 7\n      .end\n  .end\n.function end\n.program end\n";
 
   #[test]
   fn compiles_checked_xhir_program_through_mir_to_xlil()
@@ -479,5 +496,107 @@ mod tests
     assert!(session.diagnostics
                    .iter()
                    .any(|message| message.contains("unknown base 'Missing'")));
+  }
+
+  #[test]
+  fn compiles_enum_data_overload_from_xhir_to_xlil_aggregate()
+  {
+    let session = DirectIrSession::from_xhir(ENUM_DATA_XHIR.as_bytes());
+    assert!(session.diagnostics.is_empty(), "{:?}", session.diagnostics);
+    let text = str::from_utf8(session.xlil_text.as_deref().expect("XLIL should exist")).unwrap();
+    assert!(text.contains(".type %Value = aggregate { i32, i64, i32 }"), "{text}");
+    assert!(text.contains(".func make_long : () -> %Value"), "{text}");
+    assert!(text.contains(":i32 = const.i32 1"), "{text}");
+    assert!(text.contains(":i32 = const.i32 7"), "{text}");
+    assert!(text.contains("aggregate %Value"), "{text}");
+  }
+
+  #[test]
+  fn compiles_payload_free_enum_data_value_with_canonical_zero_slots()
+  {
+    let input =
+      ENUM_DATA_XHIR.replace("enum_data Value::Number owner Value tag 1 payload Long\n        value\n          \
+                              literal integer 7\n      .end",
+                             "enum_data Value::Empty owner Value tag 2 payload ()\n      .end");
+    let session = DirectIrSession::from_xhir(input.as_bytes());
+    assert!(session.diagnostics.is_empty(), "{:?}", session.diagnostics);
+    let text = str::from_utf8(session.xlil_text.as_deref().unwrap()).unwrap();
+    assert!(text.contains(":i32 = const.i32 2"), "{text}");
+    assert!(text.contains(":i64 = const.i64 0"), "{text}");
+    assert!(text.contains(":i32 = const.i32 0"), "{text}");
+  }
+
+  #[test]
+  fn rejects_xhir_enum_data_payload_type_mismatch_before_mir()
+  {
+    let input = ENUM_DATA_XHIR.replace("tag 1 payload Long", "tag 1 payload Int");
+    let session = DirectIrSession::from_xhir(input.as_bytes());
+    assert!(session.xlil_text.is_none());
+    assert!(session.diagnostics
+                   .iter()
+                   .any(|diagnostic| diagnostic.contains("payload")),
+            "{:?}",
+            session.diagnostics);
+  }
+
+  #[test]
+  fn rejects_xhir_enum_data_flattened_tag_mismatch_before_mir()
+  {
+    let input = ENUM_DATA_XHIR.replace("tag 1 payload Long", "tag 0 payload Long");
+    let session = DirectIrSession::from_xhir(input.as_bytes());
+    assert!(session.xlil_text.is_none());
+    assert!(session.diagnostics.iter().any(|diagnostic| diagnostic.contains("tag")),
+            "{:?}",
+            session.diagnostics);
+  }
+
+  #[test]
+  fn accepts_distinct_same_name_payload_overloads_in_direct_xhir()
+  {
+    let session = DirectIrSession::from_xhir(ENUM_DATA_XHIR.as_bytes());
+    assert!(!session.diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.contains("declares variant 'Number' more than once")));
+  }
+
+  #[test]
+  fn rejects_duplicate_exact_enum_data_overloads_in_direct_xhir()
+  {
+    let input = ENUM_DATA_XHIR.replace("variant Number: Long", "variant Number: Int");
+    let session = DirectIrSession::from_xhir(input.as_bytes());
+    assert!(session.xlil_text.is_none());
+    assert!(session.diagnostics
+                   .iter()
+                   .any(|diagnostic| diagnostic.contains("duplicate") || diagnostic.contains("conflict")),
+            "{:?}",
+            session.diagnostics);
+  }
+
+  #[test]
+  fn allows_same_category_enum_data_inheritance_in_direct_xhir()
+  {
+    let input = ".xhir version 1\nprogram inherited\n\ndeclarations\n  enum data Root\n    variant RootValue: Int\n  \
+                 .end\n  enum data Value\n    base Root visibility internal\n    variant Number: Long\n  \
+                 .end\n.end\n\nfunction make_root\n  signature\n    returns Value\n  .end\n  body\n    return\n      \
+                 enum_data Value::RootValue owner Root tag 0 payload Int\n        value\n          literal integer \
+                 9\n      .end\n  .end\n.function end\n.program end\n";
+    let session = DirectIrSession::from_xhir(input.as_bytes());
+    assert!(session.diagnostics.is_empty(), "{:?}", session.diagnostics);
+    let text = str::from_utf8(session.xlil_text.as_deref().unwrap()).unwrap();
+    assert!(text.contains(".type %Value = aggregate { i32, i64, i32 }"), "{text}");
+  }
+
+  #[test]
+  fn rejects_cross_category_enum_data_base_in_direct_xhir()
+  {
+    let input = ".xhir version 1\nprogram invalid\n\ndeclarations\n  enum Color\n    variant Red\n  .end\n  enum data \
+                 Value\n    base Color visibility internal\n    variant Number: Long\n  .end\n.end\n\nfunction main\n  \
+                 signature\n    returns Long\n  .end\n  body\n    return\n      literal integer 0\n  .end\n.function \
+                 end\n.program end\n";
+    let session = DirectIrSession::from_xhir(input.as_bytes());
+    assert!(session.xlil_text.is_none());
+    assert!(session.diagnostics.iter().any(|diagnostic| diagnostic.contains("base")),
+            "{:?}",
+            session.diagnostics);
   }
 }

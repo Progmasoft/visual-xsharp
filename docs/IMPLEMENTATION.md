@@ -270,15 +270,23 @@ The documented compilation order is preserved:
 - Body-less function declarations outside interfaces require `incomplete fn ...;`. An `incomplete fn` with a body produces a
   parser diagnostic.
 - Regular enum variants cannot contain payload types and must have unique names. `enum data` requires at least one typed
-  variant, rejects tuple payloads, and permits same-name typed variants only when their payload types differ. Constructor
-  overload selection remains a later HIR type-checking responsibility. The compiler-provided generic families are
+  variant, rejects tuple payloads, and permits same-name typed variants only when their payload types differ. HIR resolves
+  constructor overloads by exact checked payload type; numeric widening and structural compatibility do not participate.
+  The compiler-provided generic families are
   `Optional<T> { Some: T, None }` and `Result<T, E> { Ok: T, Error: E }`. An `enum data` declaration may inherit an
   unspecialized standard family (`enum data Option : Optional`, `enum data MyResult : Result`); the derived declaration
   remains nominally usable as the base and inherits its variants and operations.
 - The compiler core now preserves payload-free enum declarations and assigns deterministic declaration-order tags.
   Enum values remain nominal in HIR/XHIR and are not integer-convertible. MIR, XLIL, and LLVM use a target-independent
   one-field `{ i32 tag }` aggregate for the current native ABI. Variant construction, parameters, returns, direct calls,
-  locals, equality, and statement-level `match` use this route. Payload-carrying `enum data` layout is separate work.
+  locals, equality, and statement-level `match` use this route.
+- Payload-carrying enum-data values now cross the source-native middle-end. The target-independent registry flattens base
+  variants before derived variants, preserves the owner that introduced each overload, assigns deterministic tags, and
+  creates a distinct payload slot for every typed overload. MIR constructs one aggregate containing the tag followed by
+  those slots. The selected slot receives the lowered payload and inactive slots receive canonical zero values. This
+  representation makes overloaded values, locals, parameters, returns, and direct calls verifiable in MIR and XLIL.
+  It is an internal compiler representation, not the final heap/object ABI promised for X# enum-data values. Payload
+  pattern extraction and the final ownership-aware runtime layout remain separate work.
 - Function expressions use inferred signatures: `fn(a, b) { a + b }` and `move fn() { work() }` are represented as
   `XS_SYNTAX_EXPR_FUNCTION` nodes. Parameter and return types are supplied by context rather than written on the lambda;
   `move` capture is a separate AST flag.

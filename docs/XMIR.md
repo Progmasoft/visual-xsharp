@@ -122,6 +122,47 @@ Place projections, drop trees, borrow regions, and optimizer annotations will be
 Runtime-sized arrays use `length dynamic` in the registry. MIR reads their current count with `statement array.length`;
 the statement names its result local, array local, and registry type before XLIL converts it to `len.array`.
 
+## Enum-data values
+
+Resolved enum-data overloads use the ordinary target-independent aggregate registry. Field zero is the flattened `i32`
+tag. Each typed overload contributes one later field, in base-first resolution order. For example, `Code: Long`,
+`Code: Int`, and payload-free `Ready` produce `{ i32, i32, i64 }` because X# `Long` is `i32` and `Int` is `i64`:
+
+```text
+types
+  aggregate 0 Status
+    field i32
+    field i32
+    field i64
+  .end
+.end
+```
+
+Construction stays explicit. The selected payload is written to its slot and every inactive slot receives a canonical
+zero value before the aggregate record is formed:
+
+```text
+statement const.i32
+  target local 1
+  value 1
+statement const.i32
+  target local 2
+  value 0
+statement const.i64
+  target local 3
+  value 3
+statement aggregate
+  result local 4
+  type %t0
+  field local 1 type i32
+  field local 2 type i32
+  field local 3 type i64
+```
+
+Enum-data parameters, locals, returns, and direct-call arguments retain `%tN` nominal aggregate identity. XMIR does not
+encode LLVM structure names, target alignment, heap pointers, or a final runtime object layout. General enum-data payload
+patterns are not emitted yet; this slice covers construction and whole-value flow.
+
 ## Non-goals
 
 - XMIR is not the backend input language.

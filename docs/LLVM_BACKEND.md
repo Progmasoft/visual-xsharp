@@ -149,6 +149,15 @@ parameters and returns retain their named structure identity through generated L
 and fixed arrays containing tuples are declared before use. Tuple element updates are rebuilt with target-independent
 aggregate operations and lower to LLVM `insertvalue`; source array access remains ordinary indexing syntax.
 Payload-free normal enums reuse this aggregate route as a named single-`i32` tag structure. Their nominal identity stays
-in HIR/XHIR, while MIR/XLIL construction and extraction lower to ordinary LLVM aggregate operations. This representation
-does not define arbitrary user `enum data` layout. The compiler-provided Result layout described above is a bounded,
-specialized middle-end contract for the implemented recoverable-failure path.
+in HIR/XHIR, while MIR/XLIL construction and extraction lower to ordinary LLVM aggregate operations.
+
+The current source-native enum-data slice uses a target-independent tagged aggregate. Field zero is an `i32` flattened
+variant tag. Each typed overload contributes one payload field in resolved base-first order; payload-free variants add no
+field. Construction writes the selected payload and canonical zero values for inactive fields. The entire aggregate can
+cross local, parameter, return, and direct-call boundaries, so XLIL verification and LLVM's named-structure signatures
+retain one nominal value type. This is intentionally an internal lowering contract. It does not freeze the eventual
+heap allocation, pointer identity, ownership, alignment, niche optimization, or XPG-facing runtime ABI for enum-data.
+
+The compiler-provided Result layout remains a specialized middle-end contract for recoverable-failure control flow.
+General enum-data pattern payload extraction is not yet connected to source `match`; source-native programs may construct,
+store, return, and pass enum-data values, but cannot yet inspect an arbitrary payload through that syntax.

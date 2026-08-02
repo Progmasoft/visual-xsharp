@@ -166,6 +166,11 @@ The hierarchy is rejected before MIR lowering when it contains an unknown or cro
 two distinct variants with the same name and payload type, or an overload set containing a payload-free variant. A
 diamond-shaped hierarchy is valid when the repeated variant identity comes from the same original ancestor.
 
+For the current native compiler slice, a selected enum-data record lowers to an XMIR aggregate value. Its first field is
+the flattened `i32` tag. Every typed overload in the resolved hierarchy owns one subsequent payload slot; unused slots are
+initialized with a canonical zero value. This layout keeps XHIR and XMIR independent of LLVM and lets XLIL carry the value
+through ordinary aggregate records. It is not a source-visible field layout and does not establish the final heap ABI.
+
 A typed direct call is represented as a semantic record rather than an instruction:
 
 ```text

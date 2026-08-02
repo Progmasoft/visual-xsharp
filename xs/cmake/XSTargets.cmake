@@ -46,8 +46,8 @@ add_library(xs_compiler
   sources/diagnostic.c
   sources/driver/cli.c
   sources/driver/compiler_core_native.c
-  sources/driver/direct_xhir.c
-  sources/driver/direct_xmir.c
+  sources/driver/DirectXhir.cxx
+  sources/driver/DirectXmir.cxx
   sources/driver/direct_xlil.c
   sources/driver/native_artifact.c
   sources/driver/Options.cxx

@@ -50,6 +50,7 @@ pub struct HirToMirLowerer
   nominal_types: HashMap<String, crate::hir::declarations::NominalType>,
   aggregate_types: HashMap<String, XlilType>,
   aggregate_layouts: HashMap<XlilType, Vec<XlilType>>,
+  enum_data_layouts: Vec<crate::hir::aggregate_registry::EnumDataLayout>,
   tuple_types: Vec<(Type, XlilType)>,
   optional_types: Vec<(Type, XlilType)>,
   optional_layouts: Vec<(XlilType, XlilType)>,
@@ -63,6 +64,9 @@ pub struct HirToMirLowerer
 }
 
 mod diagnostic;
+mod enum_data;
+#[cfg(test)]
+mod enum_data_tests;
 mod enum_value;
 #[cfg(test)]
 mod float_tests;
@@ -102,8 +106,10 @@ impl HirToMirLowerer
   pub fn with_nominal_types(mut self, types: &[crate::hir::declarations::NominalType]) -> Self
   {
     self.nominal_types = types.iter().map(|ty| (ty.name.clone(), ty.clone())).collect();
-    self.aggregate_types =
-      crate::hir::aggregate_registry::build(types).map_or_else(HashMap::new, |registry| registry.types);
+    if let Some(registry) = crate::hir::aggregate_registry::build(types)
+    {
+      self = self.with_aggregate_types(&registry);
+    }
     self
   }
 
@@ -130,6 +136,7 @@ impl HirToMirLowerer
                                      .iter()
                                      .map(|layout| (layout.value_type, layout.fields.clone()))
                                      .collect();
+    self.enum_data_layouts.clone_from(&registry.enum_data);
     self.tuple_types.clone_from(&registry.tuples);
     self.optional_types.clone_from(&registry.optionals);
     self.optional_layouts = registry.optionals
@@ -385,11 +392,7 @@ impl HirToMirLowerer
       Expression::Object { nominal_type,
                            fields,
                            span, } => self.lower_object_value(nominal_type, fields, *span, lowered),
-      Expression::EnumData { .. } =>
-      {
-        self.unsupported_expression(expression);
-        None
-      }
+      Expression::EnumData { .. } => self.lower_enum_data_value(expression, expected_type, lowered),
       Expression::Array { .. } => self.lower_array_expression(expression, expected_type, lowered),
       Expression::Tuple { .. } => self.lower_tuple_expression(expression, expected_type, lowered),
       Expression::TupleElement { .. } => self.lower_tuple_element(expression, expected_type, lowered),

@@ -123,7 +123,8 @@ impl HirToMirLowerer
                   local.span);
       return;
     };
-    if definition.kind == crate::hir::declarations::NominalKind::Enum
+    if matches!(definition.kind,
+                crate::hir::declarations::NominalKind::Enum | crate::hir::declarations::NominalKind::EnumData)
     {
       let Some(value_type) = self.aggregate_types.get(type_name).copied()
       else
@@ -175,7 +176,8 @@ impl HirToMirLowerer
                   local.span);
       return;
     };
-    if definition.kind == crate::hir::declarations::NominalKind::Enum
+    if matches!(definition.kind,
+                crate::hir::declarations::NominalKind::Enum | crate::hir::declarations::NominalKind::EnumData)
     {
       let id = self.declare_local(local.name.clone(), &local.ty, local.mutable, local.span, lowered);
       if let Some(initializer) = initializer
@@ -514,7 +516,8 @@ impl HirToMirLowerer
                                        -> Option<Vec<mir::LocalId>>
   {
     let definition = self.nominal_types.get(type_name)?.clone();
-    if definition.kind == crate::hir::declarations::NominalKind::Enum
+    if matches!(definition.kind,
+                crate::hir::declarations::NominalKind::Enum | crate::hir::declarations::NominalKind::EnumData)
     {
       let value_type = self.aggregate_types.get(type_name).copied()?;
       return self.lower_expression_to_local(expression, value_type, lowered)

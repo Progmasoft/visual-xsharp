@@ -17,6 +17,34 @@ pub(crate) struct AggregateLayout
   pub fields: Vec<Type>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct EnumDataVariantLayout
+{
+  pub owner: String,
+  pub name: String,
+  pub tag: u32,
+  pub field: Option<u32>,
+  pub payload_type: Option<Type>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct EnumDataLayout
+{
+  pub name: String,
+  pub value_type: Type,
+  pub variants: Vec<EnumDataVariantLayout>,
+}
+
+impl EnumDataLayout
+{
+  pub(crate) fn variant(&self, owner: &str, name: &str, tag: u32) -> Option<&EnumDataVariantLayout>
+  {
+    self.variants
+        .iter()
+        .find(|variant| variant.owner == owner && variant.name == name && variant.tag == tag)
+  }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct AggregateRegistry
 {
@@ -25,6 +53,7 @@ pub(crate) struct AggregateRegistry
   pub tuples: Vec<(HirType, Type)>,
   pub optionals: Vec<(HirType, Type)>,
   pub results: Vec<(HirType, Type)>,
+  pub enum_data: Vec<EnumDataLayout>,
 }
 
 pub(crate) fn build_module(module: &declarations::Module) -> Option<AggregateRegistry>
@@ -507,6 +536,46 @@ pub(crate) fn build(declarations: &[NominalType]) -> Option<AggregateRegistry>
     registry.layouts.push(AggregateLayout { name: declaration.name.clone(),
                                             value_type,
                                             fields: vec![Type::I32] });
+  }
+  let enum_data = super::enum_data::EnumDataRegistry::build(declarations);
+  if !enum_data.is_valid()
+  {
+    return None;
+  }
+  for declaration in declarations.iter()
+                                 .filter(|declaration| declaration.kind == NominalKind::EnumData)
+  {
+    let value_type = Type::aggregate(registry.layouts.len() as u32);
+    let mut fields = vec![Type::I32];
+    let mut variants = Vec::new();
+    for variant in enum_data.variants(&declaration.name).ok()?
+    {
+      let payload_type =
+        variant.payload
+               .as_ref()
+               .and_then(declarations::type_ref_to_checked)
+               .and_then(|payload| visit_checked_type(&payload, &definitions, &mut HashSet::new(), &mut registry));
+      if variant.payload.is_some() && payload_type.is_none()
+      {
+        return None;
+      }
+      let field = payload_type.and_then(|payload_type| {
+                                fields.push(payload_type);
+                                u32::try_from(fields.len() - 1).ok()
+                              });
+      variants.push(EnumDataVariantLayout { owner: variant.owner.clone(),
+                                            name: variant.name.clone(),
+                                            tag: variant.tag,
+                                            field,
+                                            payload_type });
+    }
+    registry.types.insert(declaration.name.clone(), value_type);
+    registry.layouts.push(AggregateLayout { name: declaration.name.clone(),
+                                            value_type,
+                                            fields });
+    registry.enum_data.push(EnumDataLayout { name: declaration.name.clone(),
+                                             value_type,
+                                             variants });
   }
   Some(registry)
 }

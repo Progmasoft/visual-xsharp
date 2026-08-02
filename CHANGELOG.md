@@ -18,6 +18,12 @@ source-to-native executable pipeline.
   assigns deterministic flattened tags, and resolves typed variant overloads by exact nominal or primitive payload type.
 - Lowered typed and payload-free enum-data constructors into explicit HIR values carrying the selected declaration owner,
   flattened tag, and exact payload type; XHIR now round-trips and validates those records.
+- Lowered enum-data constructors through MIR and XLIL as deterministic tagged aggregates, including overloaded payload
+  slots, inherited variants, canonical inactive values, first-class parameters and returns, and LLVM native calls.
+- Added a source-native enum-data overload fixture that produces and runs a `.xse`, plus direct XHIR and middle-end
+  regression coverage for payload selection, hierarchy validation, registry layout, and text round trips.
+- Migrated the direct XHIR and XMIR compiler-core adapters to GNU++26 translation units while retaining their stable C
+  entry points, beginning the incremental frontend-to-modern-C++ transition without rewriting working C23 subsystems.
 
 ## 0.2.6 - 2026-08-02
 

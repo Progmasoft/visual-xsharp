@@ -76,7 +76,7 @@ fn flatten_parameter(module: &HirModule,
       let definition = module.nominal_types
                              .iter()
                              .find(|definition| definition.name == *name)?;
-      if definition.kind == NominalKind::Enum
+      if matches!(definition.kind, NominalKind::Enum | NominalKind::EnumData)
       {
         parameters.push(lower_type(value, aggregates, collections)?);
         return Some(());

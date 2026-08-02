@@ -4,6 +4,8 @@
  */
 
 pub(crate) mod aggregate_registry;
+#[cfg(test)]
+mod aggregate_registry_tests;
 pub mod async_check;
 pub(crate) mod collection_registry;
 pub mod declarations;

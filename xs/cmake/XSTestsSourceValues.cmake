@@ -16,6 +16,7 @@ foreach(source_fixture MainReturn0 MainReturn7 MainArithmetic MainDivision MainR
                        MainArrayExcessDiscard MainInferredSizeArray MainArrayMutation MainDefaultFixedArray
                        MainDynamicArray MainDynamicArrayIndex MainDynamicArrayMutation MainArrayProperties
                        MainForEach MainTuple MainNamedTuple MainTupleCalls MainNestedTuple MainTupleArray MainTupleMutation
+                       MainEnumDataOverloads MainEnumDataEmpty
                        MainTupleDestructure
                        MainTupleForEach TupleUnknownMember TupleAssignmentMismatch TuplePatternArityMismatch
                        TuplePatternTypeMismatch TuplePatternDuplicateBinding TupleDeclarationArityMismatch
@@ -100,6 +101,10 @@ xs_add_source_native_tuple_test(MainTupleForEach 10 "[2 x %tuple.1]" "extractval
 xs_add_source_native_tuple_test(MainTupleDestructure 7 "%tuple.1 = type { %tuple.0, i32 }" "extractvalue")
 xs_add_source_native_tuple_test(MainEnumFlow 7 "%Color = type { i32 }" "define %Color @next" "extractvalue %Color"
                                 "call %Color @next")
+xs_add_source_native_tuple_test(MainEnumDataOverloads 7 "%Status = type { i32, i32, i64 }"
+                                "store %Status" "call i32 @consume(%Status")
+xs_add_source_native_tuple_test(MainEnumDataEmpty 11 "%Status = type { i32, i32 }"
+                                "%Status { i32 1, i32 0 }" "call i32 @consume(%Status")
 
 xs_add_source_native_tuple_test(MainOptionalSomeCoalesce 7 "%optional.0 = type { i8, i32 }"
                                 "extractvalue %optional.0" "br i1")
