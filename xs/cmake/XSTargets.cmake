@@ -6,6 +6,7 @@ find_package(LibArchive REQUIRED)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 find_library(XS_LLVM_LIBRARY NAMES LLVM-${LLVM_VERSION_MAJOR} LLVM HINTS ${LLVM_LIBRARY_DIRS} REQUIRED)
 find_package(Threads REQUIRED)
+find_package(fmt REQUIRED CONFIG)
 find_program(XS_CARGO_EXECUTABLE NAMES cargo REQUIRED)
 
 set(XS_XSLANG_TARGET_DIR "${PROJECT_BINARY_DIR}/xslang-target")
@@ -25,7 +26,8 @@ add_custom_target(xslang_compiler_core_build DEPENDS "${XS_XSLANG_STATIC_LIBRARY
 add_library(xslang_compiler_core STATIC IMPORTED GLOBAL)
 set_target_properties(xslang_compiler_core PROPERTIES IMPORTED_LOCATION "${XS_XSLANG_STATIC_LIBRARY}")
 add_dependencies(xslang_compiler_core xslang_compiler_core_build)
-target_link_libraries(xslang_compiler_core INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m)
+target_link_libraries(xslang_compiler_core INTERFACE Threads::Threads ${CMAKE_DL_LIBS} m
+                                                       ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
 
 add_library(xs_compiler
   sources/ast.c
@@ -112,6 +114,17 @@ add_library(xs_lil SHARED
 )
 set_target_properties(xs_lil PROPERTIES VERSION "${PROJECT_VERSION}" SOVERSION 1)
 
+add_library(xs_lil_cpp STATIC
+  sources/lil/Builder.cxx
+  sources/lil/Error.cxx
+  sources/lil/Module.cxx
+)
+add_library(xs::lil ALIAS xs_lil_cpp)
+target_include_directories(xs_lil_cpp PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
+target_link_libraries(xs_lil_cpp PUBLIC xs_lil PRIVATE fmt::fmt)
+target_compile_features(xs_lil_cpp PUBLIC cxx_std_26)
+target_compile_options(xs_lil_cpp PRIVATE -Wall -Wextra -Wconversion -Wshadow)
+
 add_library(xs_package
   sources/package/archive_common.c
   sources/package/archive_reader.c
@@ -134,12 +147,12 @@ target_compile_definitions(xs_compiler PRIVATE _POSIX_C_SOURCE=200809L XS_PROJEC
 if(CMAKE_C_COMPILER_TARGET)
   target_compile_definitions(xs_compiler PRIVATE XS_CONFIGURED_TARGET_TRIPLE="${CMAKE_C_COMPILER_TARGET}")
 endif()
-target_compile_options(xs_compiler PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-target_compile_options(xs_lil PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-target_compile_options(xs_package PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-target_compile_options(xs_compiler PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
-target_compile_options(xs_lil PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
-target_compile_options(xs_package PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
+target_compile_options(xs_compiler PRIVATE -Wall -Wextra -Wconversion -Wshadow)
+target_compile_options(xs_lil PRIVATE -Wall -Wextra -Wconversion -Wshadow)
+target_compile_options(xs_package PRIVATE -Wall -Wextra -Wconversion -Wshadow)
+target_compile_options(xs_compiler PUBLIC "$<$<COMPILE_LANGUAGE:C>:-include${XS_COMPILER_CHECK_HEADER}>")
+target_compile_options(xs_lil PUBLIC "$<$<COMPILE_LANGUAGE:C>:-include${XS_COMPILER_CHECK_HEADER}>")
+target_compile_options(xs_package PUBLIC "$<$<COMPILE_LANGUAGE:C>:-include${XS_COMPILER_CHECK_HEADER}>")
 
 add_executable(xs sources/main.c)
 set_target_properties(xs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
@@ -160,6 +173,6 @@ add_library(xs_backend_llvm
 )
 target_include_directories(xs_backend_llvm PUBLIC "${PROJECT_SOURCE_DIR}/include" include PRIVATE ${LLVM_INCLUDE_DIRS})
 target_link_libraries(xs_backend_llvm PUBLIC xs_lil PRIVATE ${XS_LLVM_LIBRARY})
-target_compile_options(xs_backend_llvm PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-target_compile_options(xs_backend_llvm PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
+target_compile_options(xs_backend_llvm PRIVATE -Wall -Wextra -Wconversion -Wshadow)
+target_compile_options(xs_backend_llvm PUBLIC "$<$<COMPILE_LANGUAGE:C>:-include${XS_COMPILER_CHECK_HEADER}>")
 target_link_libraries(xs PRIVATE xs_backend_llvm)

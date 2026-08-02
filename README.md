@@ -127,7 +127,7 @@ example today.
 
 ## Release policy
 
-The project is now in the `0.2.3` development period. Supported source functions cross the C23 structural-AST boundary into
+The project is now in the `0.2.4` development period. Supported source functions cross the C23 structural-AST boundary into
 Rust HIR (coordinated THIR and XHIR sides), verified and optimized MIR, and XLIL before the public C23 XLIL model drives
 LLVM native `.xse` emission.
 Rust compiler-core control flow now includes conditional loops, post-test `do`/`while` sugar, loop jumps, and statement
@@ -196,10 +196,17 @@ as `.xlil module`, `.extern`, `.func`, `bb0.entry:`, `%r0:i64 = const.i64 42`, `
 
 ## Development rules
 
-- The primary implementation language is C23.
+- The primary implementation languages are Clang GNU++26 and Rust. New native compiler components favor GNU++26;
+  ownership-heavy target-independent analysis remains in the existing Rust `xslang` core.
+- The working C23 frontend and LLVM layers migrate subsystem by subsystem behind passing tests; they are not mechanically
+  recompiled as C++ in one step.
+- Public C++ XLIL consumers use `<xs/lil/*.hxx>`. Stable language bindings and C consumers use the explicit
+  `<xs/lil-c/*.h>` C ABI.
 - Do not use `#include <stdbool.h>` in new/touched C code; use C23 `bool`.
 - Prefer `nullptr` over `NULL` in new/touched C code.
 - Use CMake; do not use Meson.
+- GNU++26 files use `.cxx` and `.hxx`; directories use `snake_case` and filenames use `PascalCase`.
+- Use `fmt` instead of iostreams. Do not add vcpkg or Conan.
 - The supported build path is Clang, Ninja, LLVM tools, and LLD.
 - Do not add persistent shell scripts; use Java source-file tools or D for automation.
 - Keep files under 1000 lines; prefer smaller modules when a component starts to sprawl.

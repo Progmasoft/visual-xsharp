@@ -7,8 +7,19 @@
 
 fn main()
 {
+  cxx_build::bridge("sources/interop/cpp.rs").file("native/sources/interop/CompilerBridge.cxx")
+                                             .include("native/include")
+                                             .compiler("clang++")
+                                             .flag_if_supported("-std=gnu++26")
+                                             .flag_if_supported("-Wall")
+                                             .flag_if_supported("-Wextra")
+                                             .compile("xslang_cpp_bridge");
+
   let package_version = std::env::var("CARGO_PKG_VERSION").expect("Cargo provides CARGO_PKG_VERSION");
   println!("cargo::rerun-if-changed=Cargo.toml");
+  println!("cargo::rerun-if-changed=native/include/xslang/interop/CompilerBridge.hxx");
+  println!("cargo::rerun-if-changed=native/sources/interop/CompilerBridge.cxx");
+  println!("cargo::rerun-if-changed=sources/interop/cpp.rs");
   println!("cargo::rustc-env=XSLANG_BUILD_VERSION={package_version}");
   for format in ["XHIR", "XMIR", "XLIL"]
   {

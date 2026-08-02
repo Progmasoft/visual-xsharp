@@ -12,6 +12,16 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+## 0.2.4 - 2026-08-02
+
+- Began the compiler's incremental Clang GNU++26 transition while retaining the existing strict C23 frontend and stable
+  C ABI. Added an owning C++ XLIL API under `<xs/lil/*.hxx>` with RAII modules and builders, typed handles, parsing,
+  verification, canonical text emission, calls, and control flow.
+- Made every `<xs/lil-c/*.h>` entry point safe to consume from C++ through explicit C linkage and moved the reserved C
+  AOT header to `<xs/lil-c/aot.h>`.
+- Added the first Rust/GNU++26 compiler-core bridge through the `cxx` crate and a Clang-built native bridge library.
+- Added system `fmt` and Catch2 integration without vendoring or package-manager-specific build logic.
+
 - Added structured typed-HIR `Result<T, E>` values, contextual `Ok`/`Error` constructor checking, and exact error-channel
   validation for postfix `@`.
 - Lowered Result propagation through explicit MIR discriminant branches, active-payload extraction, early error return,

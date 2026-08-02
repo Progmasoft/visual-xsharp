@@ -8,6 +8,11 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #define XS_LIL_C_API_VERSION_MAJOR 1U
 #define XS_LIL_C_API_VERSION_MINOR 0U
 #define XS_LIL_C_API_VERSION ((XS_LIL_C_API_VERSION_MAJOR << 16U) | XS_LIL_C_API_VERSION_MINOR)
@@ -28,6 +33,10 @@
 #define XS_LIL_API
 #endif
 
-XS_LIL_API uint32_t xs_lil_c_api_version(void);
+  XS_LIL_API uint32_t xs_lil_c_api_version(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

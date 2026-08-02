@@ -14,7 +14,7 @@ A project may use one combined `xs.project.kts` file:
 ```kotlin
 project("Example", "BETA", "0.1.0")
 
-set("XS_VERSION", "0.2.3")
+set("XS_VERSION", "0.2.4")
 set("XS_BACKEND", "LLVM")
 set("PUBLISH", false)
 set("BUILD_MODE", "Release")

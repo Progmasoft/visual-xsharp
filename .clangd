@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
 ---
@@ -16,11 +16,10 @@ CompileFlags:
     - '-x'
     - 'c-header'
     - '-std=c23'
-    - '-I/home/hasan/Projeler/XS/include'
-    - '-I/home/hasan/Projeler/XS/xs/include'
-    - '-I/home/hasan/Projeler/XS/xsproj/include'
+    - '-Iinclude'
+    - '-Ixs/include'
     - '-include'
-    - '/home/hasan/Projeler/XS/include/xs/compiler_check.h'
+    - 'include/xs/compiler_check.h'
 
 Index:
   Background: Build
@@ -57,11 +56,48 @@ CompileFlags:
     - '-D_GNU_SOURCE'
   Add:
     - '-std=c23'
-    - '-I/home/hasan/Projeler/XS/include'
-    - '-I/home/hasan/Projeler/XS/xs/include'
-    - '-I/home/hasan/Projeler/XS/xsproj/include'
+    - '-Iinclude'
+    - '-Ixs/include'
     - '-include'
-    - '/home/hasan/Projeler/XS/include/xs/compiler_check.h'
+    - 'include/xs/compiler_check.h'
+
+Index:
+  Background: Build
+  StandardLibrary: true
+
+Diagnostics:
+  ClangTidy:
+    FastCheckFilter: Strict
+  MissingIncludes: Strict
+  UnusedIncludes: Strict
+
+Completion:
+  AllScopes: true
+  ArgumentLists: FullPlaceholders
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+Hover:
+  ShowAKA: true
+...
+
+---
+If:
+  PathMatch: '.*\.(hxx|cxx)$'
+
+CompileFlags:
+  Compiler: /usr/bin/clang++
+  CompilationDatabase: build/clang-debug
+  Remove:
+    - '-std=*'
+    - '-Werror'
+  Add:
+    - '-std=gnu++26'
+    - '-Iinclude'
+    - '-Ixs/include'
 
 Index:
   Background: Build

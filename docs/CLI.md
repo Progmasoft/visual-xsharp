@@ -72,7 +72,7 @@ usage: xs --version
 
 ## `xs --version`
 
-`xs --version` prints the compiler version, such as `xs 0.2.3`.
+`xs --version` prints the compiler version, such as `xs 0.2.4`.
 
 ## `xs resolve`
 

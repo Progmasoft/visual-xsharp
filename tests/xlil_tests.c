@@ -4,7 +4,7 @@
  */
 
 #include "xs/lil.h"
-#include "xs/lil/aot.h"
+#include "xs/lil-c/aot.h"
 
 #include <stdio.h>
 #include <stdlib.h>

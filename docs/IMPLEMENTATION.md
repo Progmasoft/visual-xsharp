@@ -61,7 +61,8 @@ The documented compilation order is preserved:
 - LLVM IR generation is a separate backend layer; HIR/MIR/XLIL do not carry LLVM C API concepts.
 - Backend consumers lower typed, borrow-checked, monomorphized MIR to XLIL and then to their own target IR.
 - Planned public API surfaces are `#include <xs/hir/jit.h>` for the HIR baseline JIT, `#include <xs/mir/jit.h>` for the MIR
-  performance JIT, and `#include <xs/lil/aot.h>` for XLIL AOT. These APIs must not make HIR/MIR depend on the LLVM C API.
+  performance JIT, and `#include <xs/lil-c/aot.h>` for the XLIL AOT C ABI. These APIs must not make HIR/MIR depend on
+  the LLVM C API.
 - LLVM is the only currently implemented backend, but the architecture remains open to Cranelift, a C backend, an interpreter, or
   other targets.
 - Target-specific assembly, if needed, belongs in a separate backend/runtime layer. NASM `.asm`/`.inc` use is allowed, but it
@@ -782,12 +783,12 @@ Details: [LLVM_BACKEND.md](LLVM_BACKEND.md)
   target-independent mid/low-level registry language.
 - XLIL is not bytecode or a virtual-machine format.
 - The stable XLIL registry/generation C23 API target is documented as `#include <xs/lil.h>`.
-- The XLIL AOT C23 API target is separated as `#include <xs/lil/aot.h>`; until concrete object/link behavior exists, it only
+- The XLIL AOT C API target is separated as `#include <xs/lil-c/aot.h>`; until concrete object/link behavior exists, it only
   marks the planned public surface.
 - External frontends and tools can produce the supported XLIL v1 subset through the public C23 model and use the LLVM
   backend pipeline to produce native executables.
 - Third-party languages can generate XLIL through `xs/lil.h`; XLIL AOT, HIR baseline JIT, and MIR performance JIT are planned
-  as separate public headers: `xs/lil/aot.h`, `xs/hir/jit.h`, and `xs/mir/jit.h`.
+  as separate public headers: `xs/lil-c/aot.h`, `xs/hir/jit.h`, and `xs/mir/jit.h`.
 - Direct file compilation entries are recognized as `xs build --output hir|mir|xlil -file <input>` and
   `xs build --hir|--mir|--xlil -file <input>`. The commands are not fully implemented yet.
 - `xs/lil.h` contains target-independent core APIs for XLIL modules, verification, primitive types, text parsing/writing,

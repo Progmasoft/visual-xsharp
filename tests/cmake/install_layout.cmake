@@ -23,7 +23,11 @@ set(required_files
   include/xs/int128.h
   include/xs/compiler_core.h
   include/xs/lil.h
+  include/xs/lil.hxx
+  include/xs/lil/Module.hxx
+  include/xs/lil-c/aot.h
   include/xs/lil-c/model.h
+  lib/libxs_lil_cpp.a
   include/xs/backend/llvm_backend.h
   share/licenses/xs/LICENSE.txt
   share/licenses/xs/NOTICE.txt

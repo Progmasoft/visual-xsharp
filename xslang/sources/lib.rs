@@ -16,6 +16,8 @@ pub mod compiler_core;
 #[allow(missing_docs,
         reason = "existing HIR API documentation is being completed incrementally")]
 pub mod hir;
+/// Compatibility queries for the native GNU++26 compiler-core bridge.
+pub mod interop;
 #[allow(missing_docs,
         reason = "existing MIR API documentation is being completed incrementally")]
 pub mod mir;

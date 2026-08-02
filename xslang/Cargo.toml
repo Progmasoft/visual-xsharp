@@ -3,7 +3,7 @@
 
 [package]
 name = "xslang"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 build = "build.rs"
 authors = ["Leitwolf <support@xsharp-lang.xyz>"]
@@ -38,6 +38,10 @@ typed-arena = "2.0"
 bitflags = "2.13"
 camino = "1.2"
 lasso = "0.7"
+cxx = "1.0"
+
+[build-dependencies]
+cxx-build = "1.0"
 
 [dev-dependencies]
 proptest = "1.11"
@@ -47,10 +51,10 @@ libfuzzer-sys = "0.4"
 
 [package.metadata.xs]
 component = "compiler-core"
-syntax-abi-version = 0
-xhir-version = 0
-xmir-version = 0
-xlil-version = 0
+syntax-abi-version = 1
+xhir-version = 1
+xmir-version = 1
+xlil-version = 1
 
 [lints.rust]
 missing_docs = "warn"

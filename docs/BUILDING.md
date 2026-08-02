@@ -47,12 +47,12 @@ ctest --preset clang-debug --output-on-failure
 Preset details:
 
 - generator: Ninja
-- compiler: Clang
+- compilers: Clang for strict C23 and Clang++ for GNU++26
 - shared monorepo and LLVM toolchain policy: the root `CMakeLists.txt`
 - build directory: `build/clang-debug`
 - default project: `xs`
 
-The toolchain file selects and validates Clang, LLVM archive/object utilities, LLD, strict C23, and Ninja before project
+The root build selects and validates Clang/Clang++, LLVM archive/object utilities, LLD, strict C23, GNU++26, and Ninja before project
 targets are configured. The root build keeps project definitions separate from this tool selection. Test registration is
 likewise split by direct XLIL, source values/control flow/calls, Kotlin projects, and library-level suites under
 `cmake/XSTests*.cmake`.

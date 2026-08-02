@@ -10,9 +10,20 @@ function(xs_add_c_test test_name source_file library_name)
   set_tests_properties("${test_name}" PROPERTIES TIMEOUT 5)
 endfunction()
 
+function(xs_add_cxx_test test_name source_file library_name)
+  get_filename_component(target_stem "${source_file}" NAME_WE)
+  add_executable(xs_${target_stem} "${source_file}")
+  target_link_libraries(xs_${target_stem} PRIVATE "${library_name}" Catch2::Catch2WithMain)
+  target_compile_features(xs_${target_stem} PRIVATE cxx_std_26)
+  add_test(NAME "${test_name}" COMMAND xs_${target_stem})
+  set_tests_properties("${test_name}" PROPERTIES TIMEOUT 5)
+endfunction()
+
 if(NOT XS_BUILD_PROJECT_XS)
   return()
 endif()
+
+find_package(Catch2 3 REQUIRED CONFIG)
 
 add_test(NAME cli_version COMMAND xs --version)
 string(REPLACE "." "\\." XS_PROJECT_VERSION_REGEX "${PROJECT_VERSION}")

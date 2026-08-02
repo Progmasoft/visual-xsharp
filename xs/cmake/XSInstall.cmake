@@ -18,7 +18,7 @@ install(TARGETS xs
   COMPONENT compiler
 )
 
-install(TARGETS xs_lil xs_package
+install(TARGETS xs_lil xs_lil_cpp xs_package
   ARCHIVE DESTINATION "lib" COMPONENT compiler
   LIBRARY DESTINATION "lib" COMPONENT compiler NAMELINK_COMPONENT compiler
   RUNTIME DESTINATION "${XS_INSTALL_BINDIR}" COMPONENT compiler
@@ -27,13 +27,13 @@ install(TARGETS xs_lil xs_package
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/xs/"
   DESTINATION "${XS_INSTALL_INCLUDEDIR}/xs"
   COMPONENT compiler
-  FILES_MATCHING PATTERN "*.h"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hxx"
 )
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/xs/"
   DESTINATION "${XS_INSTALL_INCLUDEDIR}/xs"
   COMPONENT compiler
-  FILES_MATCHING PATTERN "*.h"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hxx"
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/LICENSE.txt" "${PROJECT_SOURCE_DIR}/NOTICE.txt"
