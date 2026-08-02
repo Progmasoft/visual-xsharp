@@ -60,7 +60,9 @@ impl HirToMirLowerer
       return None;
     }
     let exhaustive_result = result_match_is_exhaustive(selector_type, arms);
-    if !exhaustive_result && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
+    let exhaustive_enum_data = self.enum_data_match_is_exhaustive(selector_type, arms);
+    let exhaustive = exhaustive_result || exhaustive_enum_data;
+    if !exhaustive && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
     {
       self.report(DiagnosticCode::UnsupportedExpression,
                   "MIR match expression lowering requires a final else arm",
@@ -136,10 +138,26 @@ impl HirToMirLowerer
         }
         MatchPattern::EnumDataVariant { .. } =>
         {
-          self.report(DiagnosticCode::UnsupportedExpression,
-                      "enum data match lowering is not available in this MIR stage",
-                      arm.span);
-          return None;
+          if exhaustive_enum_data && index + 1 == arms.len()
+          {
+            self.bind_enum_data_pattern(selector, selector_value_type, &arm.pattern, arm.span, lowered)?;
+            open_arm |=
+              self.lower_value_block_into_storage(&arm.body, result_storage, expected_type, merge, arm.span, lowered);
+            continue;
+          }
+          let body = self.append_block(arm.body.span, lowered);
+          let next = self.append_block(arm.span, lowered);
+          let condition = self.enum_data_pattern_test(selector, selector_value_type, &arm.pattern, arm.span, lowered)?;
+          self.set_terminator(mir::Terminator::BranchIf { condition,
+                                                          then_block: body,
+                                                          else_block: next },
+                              arm.span,
+                              lowered);
+          self.switch_to(body);
+          self.bind_enum_data_pattern(selector, selector_value_type, &arm.pattern, arm.span, lowered)?;
+          open_arm |=
+            self.lower_value_block_into_storage(&arm.body, result_storage, expected_type, merge, arm.span, lowered);
+          test = next;
         }
         MatchPattern::Else =>
         {
@@ -225,14 +243,14 @@ impl HirToMirLowerer
     Some(condition)
   }
 
-  fn lower_value_block_into_storage(&mut self,
-                                    block: &Block,
-                                    result_storage: mir::LocalId,
-                                    result_type: XlilType,
-                                    merge: mir::BlockId,
-                                    span: Span,
-                                    lowered: &mut mir::Function)
-                                    -> bool
+  pub(super) fn lower_value_block_into_storage(&mut self,
+                                               block: &Block,
+                                               result_storage: mir::LocalId,
+                                               result_type: XlilType,
+                                               merge: mir::BlockId,
+                                               span: Span,
+                                               lowered: &mut mir::Function)
+                                               -> bool
   {
     for statement in &block.statements
     {
@@ -279,7 +297,9 @@ impl HirToMirLowerer
       return;
     };
     let exhaustive_result = result_match_is_exhaustive(selector_type, arms);
-    if !exhaustive_result && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
+    let exhaustive_enum_data = self.enum_data_match_is_exhaustive(selector_type, arms);
+    let exhaustive = exhaustive_result || exhaustive_enum_data;
+    if !exhaustive && !matches!(arms.last().map(|arm| &arm.pattern), Some(MatchPattern::Else))
     {
       self.report(DiagnosticCode::UnsupportedExpression,
                   "MIR match lowering requires a final else arm",
@@ -392,10 +412,46 @@ impl HirToMirLowerer
         }
         MatchPattern::EnumDataVariant { .. } =>
         {
-          self.report(DiagnosticCode::UnsupportedExpression,
-                      "enum data match lowering is not available in this MIR stage",
-                      arm.span);
-          return;
+          if exhaustive_enum_data && index + 1 == arms.len()
+          {
+            if self.bind_enum_data_pattern(selector, selector_type, &arm.pattern, arm.span, lowered)
+                   .is_some()
+            {
+              self.lower_block_statements(&arm.body, lowered);
+              final_arm_end = self.current_block;
+              if !self.current_is_terminated(lowered)
+              {
+                self.set_terminator(mir::Terminator::Goto(merge), arm.span, lowered);
+                has_open_arm = true;
+              }
+            }
+            continue;
+          }
+          let body = self.append_block(arm.body.span, lowered);
+          let next = self.append_block(arm.span, lowered);
+          let Some(condition) = self.enum_data_pattern_test(selector, selector_type, &arm.pattern, arm.span, lowered)
+          else
+          {
+            return;
+          };
+          self.set_terminator(mir::Terminator::BranchIf { condition,
+                                                          then_block: body,
+                                                          else_block: next },
+                              arm.span,
+                              lowered);
+          self.switch_to(body);
+          if self.bind_enum_data_pattern(selector, selector_type, &arm.pattern, arm.span, lowered)
+                 .is_some()
+          {
+            self.lower_block_statements(&arm.body, lowered);
+            final_arm_end = self.current_block;
+            if !self.current_is_terminated(lowered)
+            {
+              self.set_terminator(mir::Terminator::Goto(merge), arm.span, lowered);
+              has_open_arm = true;
+            }
+          }
+          test = next;
         }
         MatchPattern::Else =>
         {
@@ -768,202 +824,7 @@ impl HirToMirLowerer
     self.set_terminator(mir::Terminator::Goto(target), span, lowered);
   }
 
-  pub(super) fn lower_if_statement(&mut self, statement: &Statement, lowered: &mut mir::Function)
-  {
-    let Statement::If { condition,
-                        then_block,
-                        else_block,
-                        span, } = statement
-    else
-    {
-      return;
-    };
-    if self.current_is_terminated(lowered)
-    {
-      return;
-    }
-    let Some(condition) = self.lower_expression_to_local(condition, XlilType::BOOL, lowered)
-    else
-    {
-      return;
-    };
-    let branch_block = self.current_block;
-    let then_id = self.append_block(then_block.span, lowered);
-    let else_span = else_block.as_ref().map_or(*span, |block| block.span);
-    let else_id = self.append_block(else_span, lowered);
-    self.switch_to(branch_block);
-    self.set_terminator(mir::Terminator::BranchIf { condition,
-                                                    then_block: then_id,
-                                                    else_block: else_id },
-                        *span,
-                        lowered);
-
-    let outer_locals = self.locals.clone();
-    self.switch_to(then_id);
-    self.lower_block_statements(then_block, lowered);
-    let then_end = self.current_block;
-    let then_open = !self.current_is_terminated(lowered);
-
-    self.locals.clone_from(&outer_locals);
-    self.switch_to(else_id);
-    if let Some(else_block) = else_block
-    {
-      self.lower_block_statements(else_block, lowered);
-    }
-    let else_end = self.current_block;
-    let else_open = !self.current_is_terminated(lowered);
-    self.locals = outer_locals;
-
-    if then_open || else_open
-    {
-      let merge = self.append_block(*span, lowered);
-      if then_open
-      {
-        self.switch_to(then_end);
-        self.set_terminator(mir::Terminator::Goto(merge), *span, lowered);
-      }
-      if else_open
-      {
-        self.switch_to(else_end);
-        self.set_terminator(mir::Terminator::Goto(merge), *span, lowered);
-      }
-      self.switch_to(merge);
-    }
-    else
-    {
-      self.switch_to(else_end);
-    }
-  }
-
-  pub(super) fn lower_if_expression(&mut self,
-                                    expression: &Expression,
-                                    expected_type: XlilType,
-                                    lowered: &mut mir::Function)
-                                    -> Option<mir::LocalId>
-  {
-    let Expression::If { condition,
-                         then_block,
-                         else_block,
-                         result_type,
-                         span, } = expression
-    else
-    {
-      return None;
-    };
-    let actual_type = match result_type.as_ref()
-    {
-      Type::Primitive(value) => primitive_to_xlil(*value),
-      Type::Unit |
-      Type::Named(_) |
-      Type::Optional { .. } |
-      Type::Result { .. } |
-      Type::Reference { .. } |
-      Type::Array { .. } |
-      Type::Set { .. } |
-      Type::Map { .. } |
-      Type::Tuple { .. } => None,
-    };
-    if actual_type != Some(expected_type)
-    {
-      self.report(DiagnosticCode::UnsupportedType,
-                  "if expression result type does not match MIR context",
-                  *span);
-      return None;
-    }
-    let condition = self.lower_expression_to_local(condition, XlilType::BOOL, lowered)?;
-    let result_storage = self.declare_storage_temp(expected_type, *span, lowered)?;
-    let branch = self.current_block;
-    let then_id = self.append_block(then_block.span, lowered);
-    let else_id = self.append_block(else_block.span, lowered);
-    let merge = self.append_block(*span, lowered);
-    self.switch_to(branch);
-    self.set_terminator(mir::Terminator::BranchIf { condition,
-                                                    then_block: then_id,
-                                                    else_block: else_id },
-                        *span,
-                        lowered);
-
-    let outer_locals = self.locals.clone();
-    self.switch_to(then_id);
-    let then_open = self.lower_value_block_into_storage(then_block,
-                                                        result_storage,
-                                                        expected_type,
-                                                        merge,
-                                                        then_block.span,
-                                                        lowered);
-    self.locals.clone_from(&outer_locals);
-    self.switch_to(else_id);
-    let else_open = self.lower_value_block_into_storage(else_block,
-                                                        result_storage,
-                                                        expected_type,
-                                                        merge,
-                                                        else_block.span,
-                                                        lowered);
-    self.locals = outer_locals;
-    if !then_open && !else_open
-    {
-      self.report(DiagnosticCode::MissingReturn,
-                  "if expression has no value-producing continuation",
-                  *span);
-      return None;
-    }
-    self.switch_to(merge);
-    let result = self.declare_temp(expected_type, *span, lowered)?;
-    self.current_block_mut(lowered)
-        .statements
-        .push(mir::Statement::LoadLocal { result,
-                                          local: result_storage,
-                                          span: *span });
-    Some(result)
-  }
-
-  pub(super) fn lower_if_return(&mut self, expression: &Expression, return_span: Span, lowered: &mut mir::Function)
-  {
-    let Expression::If { condition,
-                         then_block,
-                         else_block,
-                         span,
-                         .. } = expression
-    else
-    {
-      return;
-    };
-    let Some(condition) = self.lower_expression_to_local(condition, XlilType::BOOL, lowered)
-    else
-    {
-      return;
-    };
-    let branch_block = self.current_block;
-    let then_id = self.append_block(then_block.span, lowered);
-    let else_id = self.append_block(else_block.span, lowered);
-    self.switch_to(branch_block);
-    self.set_terminator(mir::Terminator::BranchIf { condition,
-                                                    then_block: then_id,
-                                                    else_block: else_id },
-                        *span,
-                        lowered);
-
-    let outer_locals = self.locals.clone();
-    self.switch_to(then_id);
-    self.lower_value_block_return(then_block, return_span, lowered);
-    let then_end = self.current_block;
-
-    self.locals.clone_from(&outer_locals);
-    self.switch_to(else_id);
-    self.lower_value_block_return(else_block, return_span, lowered);
-    let else_end = self.current_block;
-    self.locals = outer_locals;
-
-    if !self.block_is_terminated(then_end, lowered) || !self.block_is_terminated(else_end, lowered)
-    {
-      self.report(DiagnosticCode::MissingReturn,
-                  "if expression branches must terminate with their value",
-                  *span);
-    }
-    self.switch_to(else_end);
-  }
-
-  fn lower_block_statements(&mut self, block: &Block, lowered: &mut mir::Function)
+  pub(super) fn lower_block_statements(&mut self, block: &Block, lowered: &mut mir::Function)
   {
     let mut declared_here = std::collections::HashSet::new();
     for statement in &block.statements
@@ -986,23 +847,7 @@ impl HirToMirLowerer
     }
   }
 
-  fn lower_value_block_return(&mut self, block: &Block, return_span: Span, lowered: &mut mir::Function)
-  {
-    for statement in &block.statements
-    {
-      if self.current_is_terminated(lowered)
-      {
-        return;
-      }
-      self.lower_statement(statement, lowered);
-    }
-    if !self.current_is_terminated(lowered)
-    {
-      self.lower_return(block.tail.as_deref(), return_span, lowered);
-    }
-  }
-
-  fn block_is_terminated(&self, id: mir::BlockId, lowered: &mir::Function) -> bool
+  pub(super) fn block_is_terminated(&self, id: mir::BlockId, lowered: &mir::Function) -> bool
   {
     lowered.blocks
            .iter()

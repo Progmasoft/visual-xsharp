@@ -114,20 +114,12 @@ impl TypeChecker
                                      span: arm.span });
           }
         }
-        MatchPattern::EnumDataVariant { enum_type,
-                                        owner,
-                                        variant,
-                                        tag,
+        MatchPattern::EnumDataVariant { tag,
                                         binding,
-                                        payload_type, } =>
+                                        payload_type,
+                                        .. } =>
         {
-          self.check_enum_data_pattern(selector_type,
-                                       enum_type,
-                                       owner,
-                                       variant,
-                                       *tag,
-                                       payload_type.as_ref(),
-                                       arm.span);
+          self.check_enum_data_pattern(selector_type, &arm.pattern, arm.span);
           if enum_data_variants.contains(tag)
           {
             self.diagnostics
@@ -169,15 +161,18 @@ impl TypeChecker
     }
   }
 
-  fn check_enum_data_pattern(&mut self,
-                             selector_type: &Type,
-                             enum_type: &str,
-                             owner: &str,
-                             variant: &str,
-                             tag: u32,
-                             payload_type: Option<&Type>,
-                             span: Span)
+  fn check_enum_data_pattern(&mut self, selector_type: &Type, pattern: &MatchPattern, span: Span)
   {
+    let MatchPattern::EnumDataVariant { enum_type,
+                                        owner,
+                                        variant,
+                                        tag,
+                                        payload_type,
+                                        .. } = pattern
+    else
+    {
+      return;
+    };
     if selector_type != &Type::Named(enum_type.to_string())
     {
       self.diagnostics
@@ -186,10 +181,10 @@ impl TypeChecker
                              span });
       return;
     }
-    let selected = self.enum_data.select(enum_type, variant, payload_type);
+    let selected = self.enum_data.select(enum_type, variant, payload_type.as_ref());
     match selected
     {
-      Ok(selected) if selected.owner == owner && selected.tag == tag => {}
+      Ok(selected) if selected.owner == *owner && selected.tag == *tag => {}
       Ok(_) => self.diagnostics.push(Diagnostic {
         code: DiagnosticCode::UnknownEnumVariant,
         message: format!("enum data pattern '{owner}::{variant}' has inconsistent overload metadata"),

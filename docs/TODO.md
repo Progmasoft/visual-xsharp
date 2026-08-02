@@ -18,6 +18,8 @@ implementation notes and internal design logs are not part of the public documen
 ## Middle end
 
 - Complete MIR lowering for statements, expressions, calls, Result propagation, async state machines, and drops.
+- Extend implemented enum-data match lowering with ownership-aware payload moves once the heap ABI and drop elaboration
+  are finalized.
 - Extend the implemented tuple declaration and for-each patterns to tuple patterns in `match` arms.
 - Finish borrow checking and drop-point validation.
 - Grow MIR optimizations while preserving observable control flow, drop behavior, and diagnostics.

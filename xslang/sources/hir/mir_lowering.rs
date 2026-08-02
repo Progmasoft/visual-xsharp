@@ -63,8 +63,12 @@ pub struct HirToMirLowerer
   field_locals: HashMap<String, mir::LocalId>,
 }
 
+mod conditional;
 mod diagnostic;
 mod enum_data;
+mod enum_data_match;
+#[cfg(test)]
+mod enum_data_match_tests;
 #[cfg(test)]
 mod enum_data_tests;
 mod enum_value;

@@ -285,8 +285,15 @@ The documented compilation order is preserved:
   creates a distinct payload slot for every typed overload. MIR constructs one aggregate containing the tag followed by
   those slots. The selected slot receives the lowered payload and inactive slots receive canonical zero values. This
   representation makes overloaded values, locals, parameters, returns, and direct calls verifiable in MIR and XLIL.
+  General enum-data patterns use the same flattened registry identity. Typed payload bindings select an exact overload;
+  inherited variants retain their declaring owner while matching the derived selector's flattened tag. The type checker
+  rejects duplicate tags and inconsistent owner/tag/payload metadata, and accepts a match without `else` only when every
+  visible flattened variant is covered. MIR lowers each tested arm to tag extraction, `i32` comparison, and conditional
+  control flow; a payload binding extracts only the selected overload's payload slot. An exhaustive final arm is emitted
+  as fallthrough without a redundant tag test. These records continue through canonical XLIL and the existing LLVM
+  aggregate/extract/branch lowering path.
   It is an internal compiler representation, not the final heap/object ABI promised for X# enum-data values. Payload
-  pattern extraction and the final ownership-aware runtime layout remain separate work.
+  ownership moves and the final ownership-aware runtime layout remain separate work.
 - Function expressions use inferred signatures: `fn(a, b) { a + b }` and `move fn() { work() }` are represented as
   `XS_SYNTAX_EXPR_FUNCTION` nodes. Parameter and return types are supplied by context rather than written on the lambda;
   `move` capture is a separate AST flag.

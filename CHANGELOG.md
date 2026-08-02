@@ -12,6 +12,13 @@ source-to-native executable pipeline.
 
 ## Unreleased
 
+- Added resolved user-defined enum-data patterns to typed HIR and XHIR, including exact overloaded payload selection,
+  inherited owner/tag identity, duplicate detection, scoped bindings, and exhaustive coverage validation.
+- Lowered enum-data match statements and expressions through MIR and XLIL with tag extraction, `i32` comparison,
+  conditional branches, selected payload-slot extraction, and exhaustive-final-arm fallthrough.
+- Split conditional lowering from the growing MIR control-flow module and added verifier plus canonical-text regression
+  coverage for payload-bearing, payload-free, overloaded, and inherited enum-data matches.
+
 ## 0.2.8 - 2026-08-02
 
 - Accepted canonical fixed-width hexadecimal `i64` bit patterns while preserving the legacy decimal `const.i64` form,
