@@ -7,6 +7,8 @@ mod model;
 
 pub use model::*;
 
+/// Control-flow, dominance, loop, and local-liveness analyses for MIR.
+pub mod analysis;
 pub mod optimizer;
 pub mod text;
 pub mod verify;
