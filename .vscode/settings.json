@@ -7,7 +7,11 @@
   "files.associations": {
     "*.xs": "xs",
     "*.ll": "llvm",
-    "*.asm": "asm-intel-x86-generic"
+    "*.asm": "asm-intel-x86-generic",
+    "clangd": "yaml",
+    "clang-format": "yaml",
+    "clang-tidy": "yaml",
+    "*.cmake.in": "cmake"
   },
   "files.watcherExclude": {
     "**/.git/objects/**": true,
