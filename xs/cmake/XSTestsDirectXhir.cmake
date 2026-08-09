@@ -7,33 +7,33 @@ foreach(fixture Supported InvalidReturn)
   configure_file(tests/fixtures/intermediate/${fixture}.xhir
                  "${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xhir" COPYONLY)
 endforeach()
-configure_file(tests/fixtures/source/MainCall.xs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainFunctionOverloads.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainTupleCalls.xs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainTupleCalls.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainTupleDestructure.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainTupleDestructure.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainFixedArray.xs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFixedArray.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainEnumFlow.xs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainEnumFlow.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataFields.xs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataFields.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainNestedDataFields.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainNestedDataFields.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataInheritance.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataInheritance.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataConstructors.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataConstructors.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataConstructorFlow.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataConstructorFlow.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataMethods.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataMethods.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataValueProjection.xs
-               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataValueProjection.xs" COPYONLY)
+configure_file(tests/fixtures/source/MainCall.vxs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainFunctionOverloads.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainTupleCalls.vxs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainTupleCalls.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainTupleDestructure.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainTupleDestructure.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainFixedArray.vxs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFixedArray.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainEnumFlow.vxs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainEnumFlow.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataFields.vxs "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataFields.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainNestedDataFields.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainNestedDataFields.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataInheritance.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataInheritance.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataConstructors.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataConstructors.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataConstructorFlow.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataConstructorFlow.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataMethods.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataMethods.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataValueProjection.vxs
+               "${XS_DIRECT_XHIR_FIXTURE_DIR}/MainDataValueProjection.vxs" COPYONLY)
 foreach(fixture MainGenericFunctions MainGenericRecursive MainGenericConstraint)
-  configure_file(tests/fixtures/source/${fixture}.xs "${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs" COPYONLY)
+  configure_file(tests/fixtures/source/${fixture}.vxs "${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.vxs" COPYONLY)
 endforeach()
 
 add_test(NAME direct_xhir_MainGenericConstraint_output COMMAND vxs build --hir -file
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainGenericConstraint.xs)
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainGenericConstraint.vxs)
 set_tests_properties(direct_xhir_MainGenericConstraint_output PROPERTIES TIMEOUT 5
   PASS_REGULAR_EXPRESSION "wrote XHIR")
 
@@ -52,7 +52,7 @@ add_test(NAME direct_xhir_rejects_wrong_return COMMAND vxs build --hir -file
 set_tests_properties(direct_xhir_rejects_wrong_return PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
 add_test(NAME direct_xhir_source_output COMMAND vxs build --hir -file
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.xs)
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.vxs)
 set_tests_properties(direct_xhir_source_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
 add_test(NAME direct_xhir_source_roundtrip COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.xhir)
@@ -66,7 +66,7 @@ set_tests_properties(direct_xhir_source_artifacts PROPERTIES TIMEOUT 5 DEPENDS d
 
 foreach(fixture MainTupleCalls MainTupleDestructure MainFixedArray MainEnumFlow)
   add_test(NAME direct_xhir_${fixture}_output COMMAND vxs build --hir -file
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs)
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.vxs)
   set_tests_properties(direct_xhir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
   add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xhir)
@@ -81,7 +81,7 @@ endforeach()
 
 foreach(fixture MainGenericFunctions MainGenericRecursive)
   add_test(NAME direct_xhir_${fixture}_output COMMAND vxs build --hir -file
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs)
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.vxs)
   set_tests_properties(direct_xhir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
   add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xhir)
@@ -96,7 +96,7 @@ foreach(fixture MainGenericFunctions MainGenericRecursive)
 endforeach()
 
 add_test(NAME direct_xhir_function_overloads_output COMMAND vxs build --hir -file
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.xs)
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.vxs)
 set_tests_properties(direct_xhir_function_overloads_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
 add_test(NAME direct_xhir_function_overloads_roundtrip COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.xhir)
@@ -127,7 +127,7 @@ foreach(fixture MainDataFields MainNestedDataFields MainDataInheritance MainData
     set(expected_exit 22)
   endif()
   add_test(NAME direct_xhir_${fixture}_output COMMAND vxs build --hir -file
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs)
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.vxs)
   set_tests_properties(direct_xhir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
   add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xhir)

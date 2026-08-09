@@ -27,7 +27,7 @@ static int failures;
 static bool parse_and_collect(const char *text, XsSyntaxTree *tree, XsHirSymbolTable *symbols,
                               XsDiagnostics *diagnostics)
 {
-    XsSource source = {.path = "Symbols.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Symbols.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     xs_diagnostics_init(diagnostics);
     xs_hir_symbol_table_init(symbols);
     if(!xs_syntax_parse(&source, 21, diagnostics, tree))
@@ -118,7 +118,7 @@ static void test_extern_block_duplicate_symbol_errors(void)
 
 static bool parse_and_validate_cffi(const char *text, XsSyntaxTree *tree, XsDiagnostics *diagnostics)
 {
-    XsSource source = {.path = "std.cffi.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "std.cffi.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     xs_diagnostics_init(diagnostics);
     if(!xs_syntax_parse(&source, 27, diagnostics, tree))
         return false;
@@ -277,7 +277,7 @@ static void test_same_name_in_different_namespace(void)
 static bool add_file_symbols_in_module(const char *text, const char *module_name, uint64_t file_id, XsSyntaxTree *tree,
                                        XsHirSymbolTable *symbols, XsDiagnostics *diagnostics)
 {
-    XsSource source = {.path = "File.xs", .module_name = module_name, .text = text, .length = strlen(text)};
+    XsSource source = {.path = "File.vxs", .module_name = module_name, .text = text, .length = strlen(text)};
     if(!xs_syntax_parse(&source, file_id, diagnostics, tree))
         return false;
     return xs_hir_collect_symbols(tree, symbols, diagnostics);
@@ -535,7 +535,7 @@ static void test_expanded_macro_name_use_errors(void)
     const char *main = ""
                        "macro_rules! bad { () -> { Missing.Call() }; }\n"
                        "fn Main() { bad!(); }\n";
-    XsSource source = {.path = "MacroNameUse.xs", .module_name = "App", .text = main, .length = strlen(main)};
+    XsSource source = {.path = "MacroNameUse.vxs", .module_name = "App", .text = main, .length = strlen(main)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;
@@ -567,7 +567,7 @@ static void test_statement_fragment_macro_name_use_errors(void)
     const char *main = ""
                        "macro_rules! pass { ($body:stmt) -> { $body }; }\n"
                        "fn Main() { pass!(Missing.Call();); }\n";
-    XsSource source = {.path = "MacroStatementNameUse.xs", .module_name = "App", .text = main, .length = strlen(main)};
+    XsSource source = {.path = "MacroStatementNameUse.vxs", .module_name = "App", .text = main, .length = strlen(main)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;
@@ -600,7 +600,7 @@ static void test_block_fragment_macro_name_use_errors(void)
     const char *main = ""
                        "macro_rules! pass { ($body:block) -> { $body }; }\n"
                        "fn Main() { pass!({ Missing.Call(); }); }\n";
-    XsSource source = {.path = "MacroBlockNameUse.xs", .module_name = "App", .text = main, .length = strlen(main)};
+    XsSource source = {.path = "MacroBlockNameUse.vxs", .module_name = "App", .text = main, .length = strlen(main)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;
@@ -633,7 +633,7 @@ static void test_path_fragment_macro_name_use_errors(void)
     const char *main = ""
                        "macro_rules! call { ($target:path) -> { $target(); }; }\n"
                        "fn Main() { call!(Missing.Call); }\n";
-    XsSource source = {.path = "MacroPathNameUse.xs", .module_name = "App", .text = main, .length = strlen(main)};
+    XsSource source = {.path = "MacroPathNameUse.vxs", .module_name = "App", .text = main, .length = strlen(main)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;

@@ -22,10 +22,10 @@ extern char **environ;
 static size_t source_stem_length(const char *base)
 {
     size_t length = strlen(base);
-    static const char *const extensions[] = {".xlil", ".xmir", ".xhir", ".xs"};
+    static const char *const extensions[] = {".core", ".xpp", ".xmm", ".vxs"};
     for(size_t index = 0; index < sizeof(extensions) / sizeof(*extensions); ++index)
     {
-        size_t extension_length = strlen(extensions[index]);
+        const size_t extension_length = strlen(extensions[index]);
         if(length >= extension_length && strcmp(base + length - extension_length, extensions[index]) == 0)
             return length - extension_length;
     }

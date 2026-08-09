@@ -260,8 +260,8 @@ static char *build_output_path(const char *input_path, XsBuildOutput output)
 {
     const char *extension = xs_cli_output_extension(output);
     size_t base_length = strlen(input_path);
-    if(base_length >= 3 && strcmp(input_path + base_length - 3, ".xs") == 0)
-        base_length -= 3;
+    if(base_length >= 4 && strcmp(input_path + base_length - 4, ".vxs") == 0)
+        base_length -= 4;
     size_t extension_length = strlen(extension);
     char *path = malloc(base_length + extension_length + 1);
     if(path == nullptr)
@@ -748,6 +748,11 @@ static int run_file_command(const XsCliOptions *options)
         free(text);
         fprintf(stderr, "vxs: unsupported direct intermediate input '%s'\n", options->file_path);
         return 1;
+    }
+    if(!has_suffix(options->file_path, ".vxs"))
+    {
+        fprintf(stderr, "vxs: Visual X# source file '%s' must use the '.vxs' extension\n", options->file_path);
+        return 2;
     }
     bool success =
         check_single_source_file(options->file_path, options->output,

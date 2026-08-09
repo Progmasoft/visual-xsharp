@@ -172,7 +172,7 @@ class ProjectContext internal constructor(
         "XS_LLVM_COMPILER" to listOf("AOT"),
         "XS_LLVM_LTO" to listOf("true"),
         "XS_LLVM_OPT_LEVEL" to listOf("3"),
-        "XS_EXTENSION" to listOf("xs"),
+        "XS_EXTENSION" to listOf("vxs"),
         "PUBLISH" to listOf("false"),
       )).toMutableMap()
   private val authors = state?.authors?.toMutableList() ?: mutableListOf()

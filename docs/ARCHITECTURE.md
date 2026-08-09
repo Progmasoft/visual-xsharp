@@ -11,7 +11,7 @@ guess missing semantics inside the backend.
 ## Pipeline
 
 ```text
-.xs sources
+.vxs sources
     → lexer
     → parser
     → structural AST
@@ -33,7 +33,7 @@ guess missing semantics inside the backend.
 
 ### Frontend
 
-The frontend owns `.xs` source text, tokens, parsing, and the structural AST. The parser produces syntax; it must not invent
+The frontend owns `.vxs` source text, tokens, parsing, and the structural AST. The parser produces syntax; it must not invent
 LLVM or MIR behavior for unfinished semantics.
 
 ### Macro layer

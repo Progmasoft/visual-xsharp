@@ -116,7 +116,7 @@ object ProjectOutput {
       }
     val unassigned = modulePool.filterNot(assigned::contains)
     if (unassigned.isNotEmpty()) {
-      throw ProjectConfigurationException("module source has no xs.module.kts membership: ${relative(root, unassigned.first())}")
+      throw ProjectConfigurationException("module source has no Visual.XSharp.kts membership: ${relative(root, unassigned.first())}")
     }
     return modules.sortedWith(compareBy<Pair<String, Path>> { it.first }.thenBy { it.second.toString() })
   }
@@ -175,7 +175,7 @@ object ProjectOutput {
   }
 
   private fun sourceExtension(variables: Map<String, List<String>>): String {
-    val values = variables["XS_EXTENSION"] ?: listOf("xs")
+    val values = variables["XS_EXTENSION"] ?: listOf("vxs")
     if (values.size != 1 || !values.single().matches(Regex("[A-Za-z0-9]+"))) {
       throw ProjectConfigurationException("XS_EXTENSION must be one extension without a leading dot")
     }

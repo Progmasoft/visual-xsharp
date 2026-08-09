@@ -17,8 +17,8 @@ calls and points users to canonical `new Type(...)` syntax. Comments and string
 literals are ignored. `--json` emits one Serde JSON diagnostic per line.
 
 ```text
-cargo +nightly run --manifest-path xstidy/Cargo.toml -- Main.xs
-cargo +nightly run --manifest-path xstidy/Cargo.toml -- --json Main.xs
+cargo +nightly run --manifest-path xstidy/Cargo.toml -- Main.vxs
+cargo +nightly run --manifest-path xstidy/Cargo.toml -- --json Main.vxs
 ```
 
 Rust sources live under `xstidy/sources/`.

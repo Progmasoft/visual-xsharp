@@ -24,7 +24,7 @@ static int failures;
 
 static bool validate(const char *text)
 {
-    XsSource source = {.path = "Inheritance.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Inheritance.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;

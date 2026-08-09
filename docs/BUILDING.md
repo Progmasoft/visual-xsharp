@@ -110,7 +110,7 @@ cmake --build --preset clang-debug
 ctest --preset clang-debug --output-on-failure -LE jvm -FA kotlin_project_resolver
 ```
 
-Then run the real `xs.project.kts` integration tests outside that virtual-address-space limit. A JVM reserves more virtual
+Then run the real `Visual.XSharp.kts` integration tests outside that virtual-address-space limit. A JVM reserves more virtual
 address space than its live heap, so applying `ulimit -v 2097152` to this step is not valid:
 
 ```text

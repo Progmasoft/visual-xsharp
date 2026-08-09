@@ -45,7 +45,7 @@ XsBackendStatus xs_llvm_lower_lil_const_str(XsLlvmBackend *backend, XsLlvmCodege
     LLVMTypeRef array_type = LLVMArrayType2(byte_type, (uint64_t)byte_count);
     LLVMValueRef initializer = LLVMConstArray2(byte_type, bytes, (uint64_t)byte_count);
     free(bytes);
-    LLVMValueRef global = LLVMAddGlobal(xs_llvm_codegen_unit_module(unit), array_type, ".xs.str");
+    LLVMValueRef global = LLVMAddGlobal(xs_llvm_codegen_unit_module(unit), array_type, ".vxs.str");
     LLVMSetInitializer(global, initializer);
     LLVMSetGlobalConstant(global, true);
     LLVMSetLinkage(global, LLVMPrivateLinkage);

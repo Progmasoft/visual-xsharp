@@ -35,10 +35,10 @@ static bool write_text_file(const char *path, const char *text)
 
 static void test_source_include_macro(void)
 {
-    const char *leaf_path = "xs_include_leaf.xs";
-    const char *main_path = "xs_include_main.xs";
+    const char *leaf_path = "xs_include_leaf.vxs";
+    const char *main_path = "xs_include_main.vxs";
     CHECK(write_text_file(leaf_path, "incomplete fn Included();\n"));
-    const char *main = "include!(\"xs_include_leaf.xs\");\n"
+    const char *main = "include!(\"xs_include_leaf.vxs\");\n"
                        "incomplete fn Main();\n";
     CHECK(write_text_file(main_path, main));
     XsSource source = {.path = main_path, .text = main, .length = strlen(main)};
@@ -61,8 +61,8 @@ static void test_source_include_macro(void)
 
 static void test_source_include_rejects_nonlocal_path(void)
 {
-    const char *text = "include!(\"/tmp/Nope.xs\");\n";
-    XsSource source = {.path = "RejectInclude.xs", .text = text, .length = strlen(text)};
+    const char *text = "include!(\"/tmp/Nope.vxs\");\n";
+    XsSource source = {.path = "RejectInclude.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsIncludedSource expanded;
     XsSyntaxTree tree;
@@ -76,10 +76,10 @@ static void test_source_include_rejects_nonlocal_path(void)
 
 static void test_source_include_ignores_comments_and_strings(void)
 {
-    const char *text = "// include!(\"missing.xs\");\n"
+    const char *text = "// include!(\"missing.vxs\");\n"
                        "incomplete fn Main();\n"
-                       "fn Text() { value: Str = \"include!(\\\"missing.xs\\\")\"; }\n";
-    XsSource source = {.path = "IgnoredInclude.xs", .text = text, .length = strlen(text)};
+                       "fn Text() { value: Str = \"include!(\\\"missing.vxs\\\")\"; }\n";
+    XsSource source = {.path = "IgnoredInclude.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsIncludedSource expanded;
     XsSyntaxTree tree;

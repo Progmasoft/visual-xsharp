@@ -41,8 +41,8 @@ static void test_qualified_public_module_import(void)
     xs_hir_symbol_table_init(&symbols);
     xs_hir_import_scope_init(&imports);
     xs_diagnostics_init(&diagnostics);
-    CHECK(add_source("Modules/Math/add.xs", "Math::Advanced", library, 1, &library_tree, &symbols, &diagnostics));
-    CHECK(add_source("Sources/main.xs", nullptr, application, 2, &application_tree, &symbols, &diagnostics));
+    CHECK(add_source("Modules/Math/add.vxs", "Math::Advanced", library, 1, &library_tree, &symbols, &diagnostics));
+    CHECK(add_source("Sources/main.vxs", nullptr, application, 2, &application_tree, &symbols, &diagnostics));
     CHECK(xs_hir_symbol_table_find(&symbols, "Math.Advanced.add") != nullptr);
     CHECK(xs_hir_resolve_imports(&application_tree, &symbols, &imports, &diagnostics));
     CHECK(xs_hir_import_scope_has_module(&imports, "Math.Advanced"));
@@ -66,8 +66,8 @@ static void test_module_names_are_case_sensitive(void)
     xs_hir_symbol_table_init(&symbols);
     xs_hir_import_scope_init(&imports);
     xs_diagnostics_init(&diagnostics);
-    CHECK(add_source("Modules/Math/add.xs", "Math", library, 10, &library_tree, &symbols, &diagnostics));
-    CHECK(add_source("Sources/main.xs", "App", application, 11, &application_tree, &symbols, &diagnostics));
+    CHECK(add_source("Modules/Math/add.vxs", "Math", library, 10, &library_tree, &symbols, &diagnostics));
+    CHECK(add_source("Sources/main.vxs", "App", application, 11, &application_tree, &symbols, &diagnostics));
     CHECK(!xs_hir_resolve_imports(&application_tree, &symbols, &imports, &diagnostics));
     CHECK(xs_diagnostics_has_error(&diagnostics));
     xs_hir_import_scope_free(&imports);
@@ -93,9 +93,9 @@ static void test_default_visibility_is_module_internal(void)
     xs_hir_import_scope_init(&same_imports);
     xs_hir_import_scope_init(&other_imports);
     xs_diagnostics_init(&diagnostics);
-    CHECK(add_source("Modules/Math/hidden.xs", "Math", library, 20, &library_tree, &symbols, &diagnostics));
-    CHECK(add_source("Modules/Math/use_hidden.xs", "Math", same_module, 21, &same_tree, &symbols, &diagnostics));
-    CHECK(add_source("Sources/main.xs", "App", other_module, 22, &other_tree, &symbols, &diagnostics));
+    CHECK(add_source("Modules/Math/hidden.vxs", "Math", library, 20, &library_tree, &symbols, &diagnostics));
+    CHECK(add_source("Modules/Math/use_hidden.vxs", "Math", same_module, 21, &same_tree, &symbols, &diagnostics));
+    CHECK(add_source("Sources/main.vxs", "App", other_module, 22, &other_tree, &symbols, &diagnostics));
     const XsHirSymbol *hidden = xs_hir_symbol_table_find(&symbols, "Math.hidden");
     CHECK(hidden != nullptr);
     CHECK(hidden != nullptr && hidden->visibility == XS_SYNTAX_VISIBILITY_INTERNAL);
@@ -122,7 +122,7 @@ static void test_panic_namespace_cannot_be_opened(void)
     xs_hir_symbol_table_init(&symbols);
     xs_hir_import_scope_init(&imports);
     xs_diagnostics_init(&diagnostics);
-    CHECK(add_source("Sources/main.xs", "App", text, 30, &tree, &symbols, &diagnostics));
+    CHECK(add_source("Sources/main.vxs", "App", text, 30, &tree, &symbols, &diagnostics));
     CHECK(!xs_hir_resolve_imports(&tree, &symbols, &imports, &diagnostics));
     CHECK(xs_diagnostics_has_error(&diagnostics));
     xs_hir_import_scope_free(&imports);
@@ -142,7 +142,7 @@ static void test_block_namespaces_restore_parent_scope(void)
     XsDiagnostics diagnostics;
     xs_hir_symbol_table_init(&symbols);
     xs_diagnostics_init(&diagnostics);
-    CHECK(add_source("Modules/Math/namespaces.xs", "Math", text, 40, &tree, &symbols, &diagnostics));
+    CHECK(add_source("Modules/Math/namespaces.vxs", "Math", text, 40, &tree, &symbols, &diagnostics));
     CHECK(xs_hir_symbol_table_find(&symbols, "Math.detail.first.one") != nullptr);
     CHECK(xs_hir_symbol_table_find(&symbols, "Math.detail.second.nested.two") != nullptr);
     CHECK(xs_hir_symbol_table_find(&symbols, "Math.detail.root") != nullptr);

@@ -24,7 +24,7 @@ fn main() -> ExitCode
   }
   if paths.is_empty()
   {
-    eprintln!("usage: xsfmt [--check] <file.xs>...");
+    eprintln!("usage: xsfmt [--check] <file.vxs>...");
     return ExitCode::from(2);
   }
 

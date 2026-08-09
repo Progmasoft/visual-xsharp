@@ -17,7 +17,7 @@ object ProjectStateFile {
     if (!Files.exists(path)) return null
     ObjectInputStream(Files.newInputStream(path)).use { input ->
       return input.readObject() as? ProjectState
-        ?: throw ProjectConfigurationException("invalid xs.settings.kts state")
+        ?: throw ProjectConfigurationException("invalid internal project runtime state")
     }
   }
 

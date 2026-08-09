@@ -66,7 +66,7 @@ static void test_top_level_declaration_view_expands_macro_calls(void)
                        "}\n"
                        "make!(first);\n"
                        "data Tail { value: Int }\n";
-    XsSource source = {.path = "ExpandedView.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ExpandedView.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroDeclarationExpansionSet declarations;
@@ -96,7 +96,7 @@ static void test_child_declaration_view_expands_member_macro_calls(void)
                        "  macro_rules! make { () -> { incomplete fn Generated(); }; }\n"
                        "  make!();\n"
                        "}\n";
-    XsSource source = {.path = "ExpandedMemberView.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ExpandedMemberView.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroDeclarationExpansionSet declarations;
@@ -132,7 +132,7 @@ static void test_child_declaration_view_expands_field_like_macro_calls(void)
                        "  make!();\n"
                        "}\n";
     XsSource source = {
-        .path = "ExpandedFieldLikeMemberView.xs", .module_name = "App", .text = text, .length = strlen(text)};
+        .path = "ExpandedFieldLikeMemberView.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroDeclarationExpansionSet declarations;
@@ -170,7 +170,7 @@ static void test_child_statement_view_expands_macro_calls(void)
                        "  emit!();\n"
                        "  After();\n"
                        "}\n";
-    XsSource source = {.path = "ExpandedStatementView.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ExpandedStatementView.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroStatementExpansionSet statements;
@@ -211,7 +211,7 @@ static void test_materialized_expanded_tree_replaces_macro_calls(void)
                        "macro_rules! emit { () -> { Generated(); }; }\n"
                        "make!();\n"
                        "fn Main() { emit!(); }\n";
-    XsSource source = {.path = "MaterializedMacroTree.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MaterializedMacroTree.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsSyntaxTree expanded_tree;

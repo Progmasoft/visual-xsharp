@@ -146,9 +146,9 @@ int xs_driver_run_compiler_core_tests(const XsCompilerCoreSession *session)
         }
         char input_path[sizeof(directory) + 32U];
 #ifdef _WIN32
-        int written = snprintf(input_path, sizeof(input_path), "%s\\case-%llu.xs", directory, (unsigned long long)index);
+        int written = snprintf(input_path, sizeof(input_path), "%s\\case-%llu.vxs", directory, (unsigned long long)index);
 #else
-        int written = snprintf(input_path, sizeof(input_path), "%s/case-%llu.xs", directory, (unsigned long long)index);
+        int written = snprintf(input_path, sizeof(input_path), "%s/case-%llu.vxs", directory, (unsigned long long)index);
 #endif
         bool success = written > 0 && (size_t)written < sizeof(input_path) &&
                        run_one_test(session, index, input_path, name, flags);

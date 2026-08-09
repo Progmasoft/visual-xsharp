@@ -13,7 +13,7 @@ import java.sql.Connection
 import java.sql.DriverManager
 
 object ModuleLockFile {
-  const val FILE_NAME = "xs.lock.sqlite3"
+  const val FILE_NAME = "Visual.XSharp.Lockfile.sqlite3"
   private const val FORMAT_VERSION = 1
   private const val LEGACY_FORMAT_VERSION = 0
 
@@ -28,7 +28,7 @@ object ModuleLockFile {
   ) {
     val resolved = resolveDependencies(resolution.required, resolution.optional, resolution.features)
     Files.createDirectories(root)
-    val temporary = Files.createTempFile(root, ".xs-lock-", ".sqlite3")
+    val temporary = Files.createTempFile(root, ".vxs-lock-", ".sqlite3")
     try {
       DriverManager.getConnection("jdbc:sqlite:${temporary.toAbsolutePath()}").use { connection ->
         connection.autoCommit = false
@@ -56,7 +56,7 @@ object ModuleLockFile {
       when (val version = formatVersion(connection)) {
         LEGACY_FORMAT_VERSION -> readLegacy(connection)
         FORMAT_VERSION -> readCurrent(connection)
-        else -> throw ProjectConfigurationException("unsupported xs.lock.sqlite3 format version '$version'")
+        else -> throw ProjectConfigurationException("unsupported Visual.XSharp.Lockfile.sqlite3 format version '$version'")
       }
     }
 

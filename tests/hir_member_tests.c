@@ -25,7 +25,7 @@ static int failures;
 
 static bool parse_symbols(const char *text, XsSyntaxTree *tree, XsHirSymbolTable *symbols, XsDiagnostics *diagnostics)
 {
-    XsSource source = {.path = "Members.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Members.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     xs_diagnostics_init(diagnostics);
     xs_hir_symbol_table_init(symbols);
     if(!xs_syntax_parse(&source, 101, diagnostics, tree))
@@ -180,7 +180,7 @@ static void test_macro_generated_field_like_member_symbol(void)
                        "  macro_rules! make { () -> { value: Int; }; }\n"
                        "  make!();\n"
                        "}\n";
-    XsSource source = {.path = "MacroMembers.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroMembers.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirMemberSymbolTable members;
@@ -212,7 +212,7 @@ static void test_macro_generated_member_conflicts_with_field(void)
                        "  macro_rules! make { () -> { value: Str; }; }\n"
                        "  make!();\n"
                        "}\n";
-    XsSource source = {.path = "MacroFieldConflict.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroFieldConflict.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirMemberSymbolTable members;
@@ -244,7 +244,7 @@ static void test_macro_generated_member_conflicts_with_method(void)
                        "  make!();\n"
                        "}\n";
     XsSource source = {
-        .path = "MacroMethodFieldConflict.xs", .module_name = "App", .text = text, .length = strlen(text)};
+        .path = "MacroMethodFieldConflict.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirMemberSymbolTable members;
@@ -314,7 +314,7 @@ static void test_macro_generated_method_call_resolution(void)
                        "  make!();\n"
                        "}\n"
                        "fn main() { user: User = new User(); user.generated(); }\n";
-    XsSource source = {.path = "MacroMethodCall.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroMethodCall.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;

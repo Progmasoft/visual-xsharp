@@ -51,7 +51,7 @@ static const XsSyntaxNode *find_kind_with_flag(const XsSyntaxNode *node, XsSynta
 static void test_function_tree(void)
 {
     const char *text = "fn Add(a: Int, b: Int) -> Int {\n    result: Int = a + b;\n    return result;\n}\n";
-    XsSource source = {.path = "Add.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Add.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -88,7 +88,7 @@ static void test_import_and_macro(void)
     const char *text = "import Math::Advanced;\n"
                        "macro_rules! identity { ($value:expr) -> { $value }; }\n"
                        "fn Main() { identity!(42); }\n";
-    XsSource source = {.path = "Main.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Main.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -109,7 +109,7 @@ static void test_macro_call_declaration_structure(void)
     const char *text = "macro_rules! create_item { () -> {}; }\n"
                        "create_item!();\n"
                        "class Host { create_item!(); }\n";
-    XsSource source = {.path = "MacroDeclarationCall.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroDeclarationCall.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -131,7 +131,7 @@ static void test_control_flow_structure(void)
                        "  do { continue; } while (false);\n"
                        "  match (value) { 0 -> { return; }, else -> { return; }, }\n"
                        "}\n";
-    XsSource source = {.path = "Flow.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Flow.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -157,7 +157,7 @@ static void test_control_flow_expression_structure(void)
                        "  selected: Int = if (value > 0) { 1 } else { 0 };\n"
                        "  return match (selected) { 0 -> { 10 }, else -> { 20 }, };\n"
                        "}\n";
-    XsSource source = {.path = "ControlFlowExpressions.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ControlFlowExpressions.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -173,7 +173,7 @@ static void test_if_expression_requires_else(void)
     const char *text = "fn Choose(value: Int) -> Int {\n"
                        "  return if (value > 0) { 1 };\n"
                        "}\n";
-    XsSource source = {.path = "InvalidIfExpression.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "InvalidIfExpression.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -189,7 +189,7 @@ static void test_function_expression_structure(void)
                        "  std::thread::spawn(move fn() { 42 });\n"
                        "  mapper: Mapper = fn(value) { value + 1 };\n"
                        "}\n";
-    XsSource source = {.path = "ThreadClosure.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ThreadClosure.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -207,7 +207,7 @@ static void test_function_expression_structure(void)
 static void test_function_expression_rejects_written_types(void)
 {
     const char *text = "fn main() { mapper: Mapper = fn(value: Int) -> Int { value }; }\n";
-    XsSource source = {.path = "TypedLambda.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "TypedLambda.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -224,7 +224,7 @@ static void test_new_expression_structure(void)
                        "  client: std::http::Client = new std::http::Client();\n"
                        "  factory: Factory<Str> = new Factory<Str>();\n"
                        "}\n";
-    XsSource source = {.path = "NewExpression.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "NewExpression.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -242,7 +242,7 @@ static void test_new_expression_structure(void)
 static void test_associated_new_constructor_is_rejected(void)
 {
     const char *text = "fn main() { value := Type::new(); }\n";
-    XsSource source = {.path = "AssociatedNew.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "AssociatedNew.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -255,7 +255,7 @@ static void test_associated_new_constructor_is_rejected(void)
 static void test_else_discard_statement_structure(void)
 {
     const char *text = "fn main() { else: a = new(); if (true) {} else: b = new(); }\n";
-    XsSource source = {.path = "Discard.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Discard.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -274,7 +274,7 @@ static void test_tail_expression_semicolon_split(void)
 {
     const char *text = "fn Value() -> Int { 42 }\n"
                        "fn Discard() { 42; }\n";
-    XsSource source = {.path = "TailExpression.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "TailExpression.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -303,7 +303,7 @@ static void test_tail_expression_semicolon_split(void)
 static void test_top_level_execution_stays_invalid(void)
 {
     const char *text = "Run();\n";
-    XsSource source = {.path = "TopLevelExecution.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "TopLevelExecution.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -319,7 +319,7 @@ static void test_data_literal_and_member_access_structure(void)
                        "  next: User = { name: \"Alpha\" };\n"
                        "  name: Str = user.name;\n"
                        "}\n";
-    XsSource source = {.path = "DataAccess.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "DataAccess.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -337,7 +337,7 @@ static void test_function_type_structure(void)
                        "  mapper: fn(Int, Str) -> Bool = fn(value, name) { true };\n"
                        "  done: fn() -> () = fn() { return; };\n"
                        "}\n";
-    XsSource source = {.path = "FunctionTypes.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "FunctionTypes.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -356,7 +356,7 @@ static void test_character_literal_structure(void)
                        "  newline: Char = '\\n';\n"
                        "  match (value) { 'A' -> { return; }, else -> { return; }, }\n"
                        "}\n";
-    XsSource source = {.path = "CharacterLiteral.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "CharacterLiteral.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -378,7 +378,7 @@ static void test_optional_operator_structure(void)
                        "?= Some(\"guest\");\n"
                        "  forced: Str = name!;\n"
                        "}\n";
-    XsSource source = {.path = "OptionalOperators.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "OptionalOperators.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -395,7 +395,7 @@ static void test_optional_operator_structure(void)
 static void test_postfix_binds_before_prefix(void)
 {
     const char *text = "fn Main(value: Value) { if (!value.is_empty) { return; } }\n";
-    XsSource source = {.path = "PrefixPostfix.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "PrefixPostfix.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -418,7 +418,7 @@ static void test_control_parentheses_are_optional(void)
                        "}\n"
                        "fn choose(flag: Bool) -> Int { return if flag { 1 } else { 2 }; }\n"
                        "fn inspect(flag: Bool) -> Int { return match flag { true -> { 1 }, else -> { 0 }, }; }\n";
-    XsSource source = {.path = "OptionalControlParentheses.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "OptionalControlParentheses.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -441,7 +441,7 @@ static void test_positional_and_named_tuple_structure(void)
                        "}\n"
                        "fn singleton() -> (name: Str) { return (name: \"Leitwolf\"); }\n"
                        "fn first(value: (Int, Int)) -> Int { return value.0; }\n";
-    XsSource source = {.path = "Tuples.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Tuples.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -458,7 +458,7 @@ static void test_positional_and_named_tuple_structure(void)
 static void test_chained_positional_tuple_projection(void)
 {
     const char *text = "fn nested(value: ((Long, Bool), Long)) -> Long { return value.0.0 + value.1; }\n";
-    XsSource source = {.path = "NestedTuple.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "NestedTuple.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -471,7 +471,7 @@ static void test_chained_positional_tuple_projection(void)
 static void test_tuple_forms_cannot_be_mixed(void)
 {
     const char *text = "fn invalid(value: (left: Int, Int)) { pair := (left: 1, 2); }\n";
-    XsSource source = {.path = "MixedTuple.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MixedTuple.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -487,7 +487,7 @@ static void test_expression_turbofish_structure(void)
                        "  value: Int = Factory::<Int>();\n"
                        "  name: Optional<Str> = std::optional::Some::<Str>(\"xs\");\n"
                        "}\n";
-    XsSource source = {.path = "Turbofish.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Turbofish.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -501,7 +501,7 @@ static void test_expression_turbofish_structure(void)
 static void test_removed_exception_syntax_is_rejected(void)
 {
     const char *text = "fn Main() throws Error { try { throw Error(); } catch (error: Error) {} }\n";
-    XsSource source = {.path = "RemovedExceptions.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "RemovedExceptions.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -517,7 +517,7 @@ static void test_result_propagation_structure(void)
                        "  DoWork()@;\n"
                        "  file.read_to_string(&mut content)@;\n"
                        "}\n";
-    XsSource source = {.path = "ResultPropagation.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ResultPropagation.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -535,7 +535,7 @@ static void test_lifetime_type_structure(void)
         "fn Print(first: &'a User, second: &'b mut User, shared: &'static Str, inferred: &'else User) {\n"
         "  return;\n"
         "}\n";
-    XsSource source = {.path = "Lifetimes.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Lifetimes.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -550,7 +550,7 @@ static void test_lifetime_type_structure(void)
 static void test_underscore_lifetime_is_rejected(void)
 {
     const char *text = "fn Print(inferred: &'_ User) {}\n";
-    XsSource source = {.path = "BadLifetime.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "BadLifetime.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -564,7 +564,7 @@ static void test_else_type_placeholder_structure(void)
 {
     const char *text = "class Box<T> { value: T; }\n"
                        "fn Use(value: Box<else>) {}\n";
-    XsSource source = {.path = "ElseTypePlaceholder.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ElseTypePlaceholder.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -578,7 +578,7 @@ static void test_nested_generic_type_closers(void)
 {
     const char *text = "interface Parser<T> { fn Parse(value: T); }\n"
                        "fn UseParser<T: Parser<Box<Int>> >(value: T, items: List<Box<Int>>) {}\n";
-    XsSource source = {.path = "NestedGenerics.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "NestedGenerics.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -594,7 +594,7 @@ static void test_attribute_structure(void)
                        "#[Deprecated(\"use NewMain\")]\n"
                        "#[Derive(std::attrs::Ord, std::attrs::Partial)]\n"
                        "fn Main() {}\n";
-    XsSource source = {.path = "Attributes.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Attributes.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -622,7 +622,7 @@ static void test_complete_program_expression_shapes(void)
                        "  task := move async fn(value) { value };\n"
                        "  loop { break; }\n"
                        "}\n";
-    XsSource source = {.path = "CompleteShapes.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "CompleteShapes.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);

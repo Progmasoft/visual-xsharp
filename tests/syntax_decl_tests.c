@@ -47,7 +47,7 @@ static void test_top_level_variable_declaration_structure(void)
     const char *text = "data User { name: Str }\n"
                        "user: User = { name: \"Alpha\" };\n"
                        "public static Pi: Float = 3.141592653589793;\n";
-    XsSource source = {.path = "TopLevelData.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "TopLevelData.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -59,7 +59,7 @@ static void test_top_level_variable_declaration_structure(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *type_first = "public class Person { public Str Name { getter; setter; } }\n";
-    source = (XsSource){.path = "TypeFirstPropertyInvalid.xs", .text = type_first, .length = strlen(type_first)};
+    source = (XsSource){.path = "TypeFirstPropertyInvalid.vxs", .text = type_first, .length = strlen(type_first)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 67, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -70,7 +70,7 @@ static void test_top_level_variable_declaration_structure(void)
 static void test_inferred_variable_declaration_structure(void)
 {
     const char *text = "fn Main() { age := 26; val name := \"XS\"; const enabled := true; }\n";
-    XsSource source = {.path = "InferredVariables.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "InferredVariables.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -88,7 +88,7 @@ static void test_data_callables_and_overloads(void)
 {
     const char *valid = "data User { name: Str; User(name: Str) {} User(name: Str, age: Int) {} "
                         "fn Get(value: Int) {} fn Get(value: Str) {} fn operator +(right: User) -> User {} }\n";
-    XsSource source = {.path = "DataOverloads.xs", .text = valid, .length = strlen(valid)};
+    XsSource source = {.path = "DataOverloads.vxs", .text = valid, .length = strlen(valid)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -104,7 +104,7 @@ static void test_data_callables_and_overloads(void)
 
     const char *duplicate_constructor = "data User { User(name: Str) {} User(value: Str) {} }\n";
     source = (XsSource){
-        .path = "DataConstructorDuplicate.xs", .text = duplicate_constructor, .length = strlen(duplicate_constructor)};
+        .path = "DataConstructorDuplicate.vxs", .text = duplicate_constructor, .length = strlen(duplicate_constructor)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 27, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -112,7 +112,7 @@ static void test_data_callables_and_overloads(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *duplicate_method = "data User { fn Get(value: Int) {} fn Get(other: Int) {} }\n";
-    source = (XsSource){.path = "DataMethodDuplicate.xs", .text = duplicate_method, .length = strlen(duplicate_method)};
+    source = (XsSource){.path = "DataMethodDuplicate.vxs", .text = duplicate_method, .length = strlen(duplicate_method)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 28, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -120,7 +120,7 @@ static void test_data_callables_and_overloads(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *data_inheritance = "data User : Person { name: Str; }\n";
-    source = (XsSource){.path = "DataInheritance.xs", .text = data_inheritance, .length = strlen(data_inheritance)};
+    source = (XsSource){.path = "DataInheritance.vxs", .text = data_inheritance, .length = strlen(data_inheritance)};
     xs_diagnostics_init(&diagnostics);
     CHECK(xs_syntax_parse(&source, 29, &diagnostics, &tree));
     CHECK(!xs_diagnostics_has_error(&diagnostics));
@@ -132,7 +132,7 @@ static void test_data_callables_and_overloads(void)
 static void test_op_declaration_structure(void)
 {
     const char *text = "op Add(left: Int, right: Int) -> Int { return left + right; }\n";
-    XsSource source = {.path = "Ops.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Ops.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -147,7 +147,7 @@ static void test_op_declaration_structure(void)
 static void test_class_constructor_rules(void)
 {
     const char *valid = "class User { User(name: Str) {} }\n";
-    XsSource source = {.path = "ConstructorValid.xs", .text = valid, .length = strlen(valid)};
+    XsSource source = {.path = "ConstructorValid.vxs", .text = valid, .length = strlen(valid)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -157,7 +157,7 @@ static void test_class_constructor_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *invalid_name = "class User { Person() {} }\n";
-    source = (XsSource){.path = "ConstructorNameInvalid.xs", .text = invalid_name, .length = strlen(invalid_name)};
+    source = (XsSource){.path = "ConstructorNameInvalid.vxs", .text = invalid_name, .length = strlen(invalid_name)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 32, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -165,7 +165,7 @@ static void test_class_constructor_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *overload = "class User { User() {} User(name: Str) {} }\n";
-    source = (XsSource){.path = "ConstructorOverload.xs", .text = overload, .length = strlen(overload)};
+    source = (XsSource){.path = "ConstructorOverload.vxs", .text = overload, .length = strlen(overload)};
     xs_diagnostics_init(&diagnostics);
     CHECK(xs_syntax_parse(&source, 33, &diagnostics, &tree));
     CHECK(count_kind(tree.root, XS_SYNTAX_CLASS_CONSTRUCTOR) == 2);
@@ -174,7 +174,7 @@ static void test_class_constructor_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *duplicate = "class User { User(name: Str) {} User(value: Str) {} }\n";
-    source = (XsSource){.path = "ConstructorDuplicate.xs", .text = duplicate, .length = strlen(duplicate)};
+    source = (XsSource){.path = "ConstructorDuplicate.vxs", .text = duplicate, .length = strlen(duplicate)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 64, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -186,7 +186,7 @@ static void test_class_property_accessors(void)
 {
     const char *text = "class User { private _age: Int; name: Str { getter; setter; } "
                        "age: Int { getter { return self._age; } setter { self._age = value; } } }\n";
-    XsSource source = {.path = "ClassProperties.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ClassProperties.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -199,7 +199,7 @@ static void test_class_property_accessors(void)
     const char *property_visibility = "public class Person { public Name: Str { getter; setter; } "
                                       "public Age: Int { getter; setter; } }\n";
     source =
-        (XsSource){.path = "PropertyVisibility.xs", .text = property_visibility, .length = strlen(property_visibility)};
+        (XsSource){.path = "PropertyVisibility.vxs", .text = property_visibility, .length = strlen(property_visibility)};
     xs_diagnostics_init(&diagnostics);
     CHECK(xs_syntax_parse(&source, 66, &diagnostics, &tree));
     CHECK(count_kind(tree.root, XS_SYNTAX_DECL_CLASS) == 1);
@@ -212,7 +212,7 @@ static void test_class_property_accessors(void)
 static void test_interface_member_rules(void)
 {
     const char *valid = "interface Runnable { fn Run(); fn Close(); }\n";
-    XsSource source = {.path = "InterfaceValid.xs", .text = valid, .length = strlen(valid)};
+    XsSource source = {.path = "InterfaceValid.vxs", .text = valid, .length = strlen(valid)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -222,7 +222,7 @@ static void test_interface_member_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *field = "interface Runnable { name: Str; }\n";
-    source = (XsSource){.path = "InterfaceFieldInvalid.xs", .text = field, .length = strlen(field)};
+    source = (XsSource){.path = "InterfaceFieldInvalid.vxs", .text = field, .length = strlen(field)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 35, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -230,7 +230,7 @@ static void test_interface_member_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *body = "interface Runnable { fn Run() {} }\n";
-    source = (XsSource){.path = "InterfaceBodyInvalid.xs", .text = body, .length = strlen(body)};
+    source = (XsSource){.path = "InterfaceBodyInvalid.vxs", .text = body, .length = strlen(body)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 36, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -244,7 +244,7 @@ static void test_class_inheritance_rules(void)
                         "interface Runnable { fn Run(); }\n"
                         "interface Closeable { fn Close(); }\n"
                         "class Program : Animal, Runnable, Closeable { }\n";
-    XsSource source = {.path = "ClassInheritanceValid.xs", .text = valid, .length = strlen(valid)};
+    XsSource source = {.path = "ClassInheritanceValid.vxs", .text = valid, .length = strlen(valid)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -254,7 +254,7 @@ static void test_class_inheritance_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *interface_base = "interface Runnable : Base { fn Run(); }\n";
-    source = (XsSource){.path = "InterfaceBaseValid.xs", .text = interface_base, .length = strlen(interface_base)};
+    source = (XsSource){.path = "InterfaceBaseValid.vxs", .text = interface_base, .length = strlen(interface_base)};
     xs_diagnostics_init(&diagnostics);
     CHECK(xs_syntax_parse(&source, 46, &diagnostics, &tree));
     CHECK(count_kind(tree.root, XS_SYNTAX_TYPE_NAMED) == 1);
@@ -262,7 +262,7 @@ static void test_class_inheritance_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *old_extends = "class Program { extends Animal; }\n";
-    source = (XsSource){.path = "OldExtendsInvalid.xs", .text = old_extends, .length = strlen(old_extends)};
+    source = (XsSource){.path = "OldExtendsInvalid.vxs", .text = old_extends, .length = strlen(old_extends)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 47, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -270,7 +270,7 @@ static void test_class_inheritance_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *old_implements = "class Program { implements Runnable; }\n";
-    source = (XsSource){.path = "OldImplementsInvalid.xs", .text = old_implements, .length = strlen(old_implements)};
+    source = (XsSource){.path = "OldImplementsInvalid.vxs", .text = old_implements, .length = strlen(old_implements)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 48, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -281,7 +281,7 @@ static void test_class_inheritance_rules(void)
 static void test_incomplete_function_rules(void)
 {
     const char *valid = "incomplete class Animal { incomplete fn Speak(); }\n";
-    XsSource source = {.path = "IncompleteValid.xs", .text = valid, .length = strlen(valid)};
+    XsSource source = {.path = "IncompleteValid.vxs", .text = valid, .length = strlen(valid)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -294,7 +294,7 @@ static void test_incomplete_function_rules(void)
 
     const char *missing_modifier = "class Animal { fn Speak(); }\n";
     source = (XsSource){
-        .path = "IncompleteMissingModifier.xs", .text = missing_modifier, .length = strlen(missing_modifier)};
+        .path = "IncompleteMissingModifier.vxs", .text = missing_modifier, .length = strlen(missing_modifier)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 38, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -302,7 +302,7 @@ static void test_incomplete_function_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *body = "class Animal { incomplete fn Speak() {} }\n";
-    source = (XsSource){.path = "IncompleteBodyInvalid.xs", .text = body, .length = strlen(body)};
+    source = (XsSource){.path = "IncompleteBodyInvalid.vxs", .text = body, .length = strlen(body)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 39, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -313,7 +313,7 @@ static void test_incomplete_function_rules(void)
 static void test_enum_payload_rules(void)
 {
     const char *valid = "enum data Token { Identifier: Str, Integer: Int, Plus, }\n";
-    XsSource source = {.path = "DataEnumValid.xs", .text = valid, .length = strlen(valid)};
+    XsSource source = {.path = "DataEnumValid.vxs", .text = valid, .length = strlen(valid)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -326,7 +326,7 @@ static void test_enum_payload_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *typed_regular = "enum Color { Red: Int, }\n";
-    source = (XsSource){.path = "RegularEnumPayloadInvalid.xs", .text = typed_regular, .length = strlen(typed_regular)};
+    source = (XsSource){.path = "RegularEnumPayloadInvalid.vxs", .text = typed_regular, .length = strlen(typed_regular)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 41, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -334,7 +334,7 @@ static void test_enum_payload_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *empty_data = "enum data Empty { }\n";
-    source = (XsSource){.path = "DataEnumEmptyInvalid.xs", .text = empty_data, .length = strlen(empty_data)};
+    source = (XsSource){.path = "DataEnumEmptyInvalid.vxs", .text = empty_data, .length = strlen(empty_data)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 42, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -342,7 +342,7 @@ static void test_enum_payload_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *tuple_payload = "enum data Token { Position: (Int, Int), }\n";
-    source = (XsSource){.path = "DataEnumTupleInvalid.xs", .text = tuple_payload, .length = strlen(tuple_payload)};
+    source = (XsSource){.path = "DataEnumTupleInvalid.vxs", .text = tuple_payload, .length = strlen(tuple_payload)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 43, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -350,7 +350,7 @@ static void test_enum_payload_rules(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *overloaded = "enum data Value { Number: Int, Number: Long, Text: Str, }\n";
-    source = (XsSource){.path = "DataEnumOverload.xs", .text = overloaded, .length = strlen(overloaded)};
+    source = (XsSource){.path = "DataEnumOverload.vxs", .text = overloaded, .length = strlen(overloaded)};
     xs_diagnostics_init(&diagnostics);
     CHECK(xs_syntax_parse(&source, 44, &diagnostics, &tree));
     CHECK(count_kind_with_flag(tree.root, XS_SYNTAX_ENUM_VARIANT, XS_SYNTAX_FLAG_ENUM_VARIANT_OVERLOAD) == 1);
@@ -359,7 +359,7 @@ static void test_enum_payload_rules(void)
 
     const char *duplicate_regular = "enum Color { Red, Red, }\n";
     source =
-        (XsSource){.path = "RegularEnumDuplicate.xs", .text = duplicate_regular, .length = strlen(duplicate_regular)};
+        (XsSource){.path = "RegularEnumDuplicate.vxs", .text = duplicate_regular, .length = strlen(duplicate_regular)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 45, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -368,7 +368,7 @@ static void test_enum_payload_rules(void)
 
     const char *duplicate_payload = "enum data Value { Number: Int, Number: Int, }\n";
     source = (XsSource){
-        .path = "DataEnumDuplicatePayload.xs", .text = duplicate_payload, .length = strlen(duplicate_payload)};
+        .path = "DataEnumDuplicatePayload.vxs", .text = duplicate_payload, .length = strlen(duplicate_payload)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 46, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -381,7 +381,7 @@ static void test_generic_constraint_structure(void)
     const char *text = "interface Runnable { fn Run(); }\n"
                        "interface Printable { fn Print(); }\n"
                        "fn Execute<T: Runnable, Printable, U: Runnable>(value: T, worker: U) {}\n";
-    XsSource source = {.path = "GenericConstraints.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "GenericConstraints.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -402,7 +402,7 @@ static void test_extern_c_function_structure(void)
                        "  #[ThreadLocal]\n"
                        "  static errno: Int;\n"
                        "}\n";
-    XsSource source = {.path = "ExternC.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "ExternC.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -420,7 +420,7 @@ static void test_extern_c_function_structure(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *body = "extern \"C\" { fn puts(text: std::cffi::CStr) -> Int {} }\n";
-    source = (XsSource){.path = "ExternCBodyInvalid.xs", .text = body, .length = strlen(body)};
+    source = (XsSource){.path = "ExternCBodyInvalid.vxs", .text = body, .length = strlen(body)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 48, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -429,7 +429,7 @@ static void test_extern_c_function_structure(void)
 
     const char *initializer = "extern \"C\" { static errno: Int = 0; }\n";
     source =
-        (XsSource){.path = "ExternCStaticInitializerInvalid.xs", .text = initializer, .length = strlen(initializer)};
+        (XsSource){.path = "ExternCStaticInitializerInvalid.vxs", .text = initializer, .length = strlen(initializer)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 49, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -443,7 +443,7 @@ static void test_using_declaration_structure(void)
                        "using namespace Math::Advanced::*;\n"
                        "using Math::Add;\n"
                        "using Sum = Math::Add;\n";
-    XsSource source = {.path = "Using.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Using.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -456,7 +456,7 @@ static void test_using_declaration_structure(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *glob = "using Math::*;\n";
-    source = (XsSource){.path = "UsingGlobInvalid.xs", .text = glob, .length = strlen(glob)};
+    source = (XsSource){.path = "UsingGlobInvalid.vxs", .text = glob, .length = strlen(glob)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 51, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -468,7 +468,7 @@ static void test_namespace_scoping_forms(void)
 {
     const char *blocks = "namespace first { fn one() {} }\n"
                          "namespace second { namespace nested { fn two() {} } }\n";
-    XsSource source = {.path = "BlockNamespaces.xs", .text = blocks, .length = strlen(blocks)};
+    XsSource source = {.path = "BlockNamespaces.vxs", .text = blocks, .length = strlen(blocks)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -479,7 +479,7 @@ static void test_namespace_scoping_forms(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *mixed = "namespace scoped;\nnamespace blocked { namespace nested { fn value() {} } }\n";
-    source = (XsSource){.path = "CombinedNamespaces.xs", .text = mixed, .length = strlen(mixed)};
+    source = (XsSource){.path = "CombinedNamespaces.vxs", .text = mixed, .length = strlen(mixed)};
     xs_diagnostics_init(&diagnostics);
     CHECK(xs_syntax_parse(&source, 53, &diagnostics, &tree));
     CHECK(count_kind_with_flag(tree.root, XS_SYNTAX_DECL_NAMESPACE, XS_SYNTAX_FLAG_BLOCK_NAMESPACE) == 2);
@@ -487,7 +487,7 @@ static void test_namespace_scoping_forms(void)
     xs_diagnostics_free(&diagnostics);
 
     const char *duplicate = "namespace first;\nnamespace second;\n";
-    source = (XsSource){.path = "DuplicateScopedNamespace.xs", .text = duplicate, .length = strlen(duplicate)};
+    source = (XsSource){.path = "DuplicateScopedNamespace.vxs", .text = duplicate, .length = strlen(duplicate)};
     xs_diagnostics_init(&diagnostics);
     CHECK(!xs_syntax_parse(&source, 54, &diagnostics, &tree));
     CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -503,7 +503,7 @@ static void test_dispatch_and_multiple_inheritance_modifiers(void)
                         "interface Printable { fn Print(); }\n"
                         "sealed class Leaf : public Left, protected Right, Printable { "
                         "public sealed override fn Run() -> Long { return 3; } }\n";
-    XsSource source = {.path = "DispatchModifiers.xs", .text = valid, .length = strlen(valid)};
+    XsSource source = {.path = "DispatchModifiers.vxs", .text = valid, .length = strlen(valid)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -523,7 +523,7 @@ static void test_dispatch_and_multiple_inheritance_modifiers(void)
     for(size_t index = 0; index < sizeof(invalid) / sizeof(invalid[0]); ++index)
     {
         source =
-            (XsSource){.path = "InvalidDispatchModifier.xs", .text = invalid[index], .length = strlen(invalid[index])};
+            (XsSource){.path = "InvalidDispatchModifier.vxs", .text = invalid[index], .length = strlen(invalid[index])};
         xs_diagnostics_init(&diagnostics);
         CHECK(!xs_syntax_parse(&source, 66 + index, &diagnostics, &tree));
         CHECK(xs_diagnostics_has_error(&diagnostics));
@@ -537,7 +537,7 @@ static void test_builtin_collection_type_syntax(void)
     const char *text = "fn Collections(values: [Int], fixed: [Long; 4], ages: [String: Optional<Int>]) {"
                        "numbers: [Int] = [1, 2, 3]; unique: [Int] = {1, 2, 3}; "
                        "scores: [Str: Int] = [\"Alpha\": 7, \"Beta\": 9]; }\n";
-    XsSource source = {.path = "BuiltinCollections.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "BuiltinCollections.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);

@@ -1,0 +1,762 @@
+-- SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+-- SPDX-License-Identifier: MPL-2.0
+
+-- Visual X# executable specification: Visual X# Operators
+--
+-- This file is an explanatory example suite derived from the renewed normative design.
+-- Each fragment states its intent explicitly; fragments marked INVALID are expected to be rejected.
+-- The normative rule is restated here only through focused, independently readable examples.
+
+-- ============================================================================
+-- Example 1: 2.1 Power Before Prefix
+-- Demonstrates: User-defined precedence groups do not exist.
+
+-2 ** 2
+
+-- ============================================================================
+-- Example 2: 2.1 Power Before Prefix
+-- Demonstrates: is parsed as:
+
+-(2 ** 2)
+
+-- ============================================================================
+-- Example 3: 2.1 Power Before Prefix
+-- Demonstrates: Power is right-associative:
+
+2 ** 3 ** 2
+
+-- ============================================================================
+-- Example 4: 2.1 Power Before Prefix
+-- Demonstrates: is parsed as:
+
+2 ** (3 ** 2)
+
+-- ============================================================================
+-- Example 5: 2.2 Range Placement
+-- Demonstrates: is parsed as:
+
+start + 1 ..< end - 1
+
+-- ============================================================================
+-- Example 6: 2.2 Range Placement
+-- Demonstrates: is parsed as:
+
+(start + 1) ..< (end - 1)
+
+-- ============================================================================
+-- Example 7: 2.2 Range Placement
+-- Demonstrates: by binds more weakly than the range-forming operators:
+
+1 ..< count by 2
+
+-- ============================================================================
+-- Example 8: 2.2 Range Placement
+-- Demonstrates: is parsed as:
+
+(1 ..< count) by 2
+
+-- ============================================================================
+-- Example 9: 2.2 Range Placement
+-- Demonstrates: by binds more strongly than relational and membership operators:
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+value in 1 ... 10 by 2
+
+-- ============================================================================
+-- Example 10: 2.2 Range Placement
+-- Demonstrates: is parsed as:
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+value in ((1 ... 10) by 2)
+
+-- ============================================================================
+-- Example 11: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: ?? binds more strongly than ?: and ? :.
+
+a ?? b ? x : y
+
+-- ============================================================================
+-- Example 12: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: is parsed as:
+
+(a ?? b) ? x : y
+
+-- ============================================================================
+-- Example 13: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: All coalescing and conditional forms are right-associative within their groups.
+
+a ?? b ?? c
+
+-- ============================================================================
+-- Example 14: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: is parsed as:
+
+a ?? (b ?? c)
+
+-- ============================================================================
+-- Example 15: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: is parsed as:
+
+a ?: b ?: c
+
+-- ============================================================================
+-- Example 16: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: is parsed as:
+
+a ?: (b ?: c)
+
+-- ============================================================================
+-- Example 17: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: is parsed as:
+
+a ? b : c ? d : e
+
+-- ============================================================================
+-- Example 18: 2.3 Coalescing and Conditional Placement
+-- Demonstrates: is parsed as:
+
+a ? b : (c ? d : e)
+
+-- ============================================================================
+-- Example 19: 5. Rounded Integer Division //
+-- Demonstrates: Its result is always an integer.
+
+7 // 2      // 4
+6 // 2      // 3
+5 // 2      // 3
+-7 // 2     // -4
+-5 // 2     // -3
+
+-- ============================================================================
+-- Example 20: 5. Rounded Integer Division //
+-- Demonstrates: Exact half values round away from zero.
+
+1 // 2      // 1
+-1 // 2     // -1
+
+-- ============================================================================
+-- Example 21: 5. Rounded Integer Division //
+-- Demonstrates: When both operands are integer values, normal integer promotion determines the integer
+--   result type.
+
+long left = 7;
+long right = 2;
+auto result = left // right; // long
+
+-- ============================================================================
+-- Example 22: 5. Rounded Integer Division //
+-- Demonstrates: When floating-point operands participate, the result is still an integer. The default
+--   result type is int.
+
+auto result = 7.8 // 2.0; // int
+
+-- ============================================================================
+-- Example 23: 6. Remainder %
+-- Demonstrates: For signed values, the sign of a non-zero remainder follows the left operand.
+
+7 % 3       // 1
+-7 % 3      // -1
+7 % -3      // 1
+
+-- ============================================================================
+-- Example 24: 7. Power
+-- Demonstrates: performs exponentiation.
+
+2 ** 8        // 256
+2.0 ** 3      // 8.0
+9.0 ** 0.5    // 3.0
+
+-- ============================================================================
+-- Example 25: 7. Power
+-- Demonstrates: Integer exponentiation does not accept a negative exponent.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+2 ** -3 // INVALID for integer exponentiation
+
+-- ============================================================================
+-- Example 26: 7. Power
+-- Demonstrates: Use floating-point operands when a negative or fractional exponent is required.
+
+2.0 ** -3 // 0.125
+
+-- ============================================================================
+-- Example 27: 8. Increment and Decrement
+-- Demonstrates: The operand must be an assignable mutable numeric storage expression.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+++value;      // VALID
+items[i]++;   // VALID
+
+++10;         // INVALID
+(a + b)++;    // INVALID
+
+-- ============================================================================
+-- Example 28: 8. Increment and Decrement
+-- Demonstrates: Prefix increment/decrement modifies the operand first and yields the new value.
+
+int a = 10;
+int b = ++a;
+
+// a == 11
+// b == 11
+
+-- ============================================================================
+-- Example 29: 8. Increment and Decrement
+-- Demonstrates: Postfix increment/decrement yields the previous value and then modifies the operand.
+
+int a = 10;
+int b = a++;
+
+// b == 10
+// a == 11
+
+-- ============================================================================
+-- Example 30: 9. Bitwise Operators
+-- Demonstrates: ! is bitwise NOT.
+
+!mask
+
+-- ============================================================================
+-- Example 31: 9. Bitwise Operators
+-- Demonstrates: ! is not logical NOT.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+!true     // INVALID
+not true  // VALID
+
+-- ============================================================================
+-- Example 32: 11. Relational Operators
+-- Demonstrates: The Relational group has associativity none.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+a < b < c // INVALID
+
+-- ============================================================================
+-- Example 33: 11. Relational Operators
+-- Demonstrates: Write the relationship explicitly:
+-- Expected result: accepted when the referenced declarations are available.
+
+a < b && b < c // VALID
+
+-- ============================================================================
+-- Example 34: 12. Equality Operators
+-- Demonstrates: The Equality group has associativity none.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+a == b == c // INVALID
+
+-- ============================================================================
+-- Example 35: 14. Null Coalescing ??
+-- Demonstrates: || short-circuits its right operand when the left operand is true.
+
+left ?? right
+
+-- ============================================================================
+-- Example 36: 15. Truthy Coalescing ?:
+-- Demonstrates: ?? tests only for null; it does not use general truthiness.
+
+left ?: fallback
+
+-- ============================================================================
+-- Example 37: 16. Ternary Conditional ? :
+-- Demonstrates: Otherwise fallback is evaluated and becomes the result.
+
+condition ? first : second
+
+-- ============================================================================
+-- Example 38: 17.1 Simple Assignment
+-- Demonstrates: Assignment is right-associative.
+
+a = b = 10;
+
+-- ============================================================================
+-- Example 39: 17.1 Simple Assignment
+-- Demonstrates: is grouped as:
+
+a = (b = 10);
+
+-- ============================================================================
+-- Example 40: 17.2 Compound Assignment
+-- Demonstrates: A direct compound-assignment operator declaration is invalid.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Operator<+=> // INVALID
+
+-- ============================================================================
+-- Example 41: 17.2 Compound Assignment
+-- Demonstrates: The left-hand storage expression is evaluated exactly once.
+
+int result = (value += 5);
+
+-- ============================================================================
+-- Example 42: 17.3 Null-Coalescing Assignment ??=
+-- Demonstrates: result receives the new value of value.
+
+target ??= fallback;
+
+-- ============================================================================
+-- Example 43: 17.3 Null-Coalescing Assignment ??=
+-- Demonstrates: ??= is right-associative.
+
+a ??= b ??= c;
+
+-- ============================================================================
+-- Example 44: 17.3 Null-Coalescing Assignment ??=
+-- Demonstrates: is grouped as:
+
+a ??= (b ??= c);
+
+-- ============================================================================
+-- Example 45: 18. Discard Statement
+-- Demonstrates: is grouped as:
+
+_ = Expr();
+
+-- ============================================================================
+-- Example 46: 18. Discard Statement
+-- Demonstrates: is a special discard statement, not an ordinary assignment expression.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+int value = (_ = Save()); // INVALID
+
+-- ============================================================================
+-- Example 47: 19.1 Closed Range ...
+-- Demonstrates: ... ..<
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+1 ... 5
+
+-- ============================================================================
+-- Example 48: 19.2 Half-Open Range ..<
+-- Demonstrates: 1, 2, 3, 4, 5
+
+1 ..< 5
+
+-- ============================================================================
+-- Example 49: 19.3 Descending Ranges
+-- Demonstrates: If by is omitted, the default step direction is inferred from the boundaries.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+1 ... 5
+// implicit by 1
+
+-- ============================================================================
+-- Example 50: 19.3 Descending Ranges
+-- Demonstrates: If by is omitted, the default step direction is inferred from the boundaries.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+5 ... 1
+// implicit by -1
+
+-- ============================================================================
+-- Example 51: 19.3 Descending Ranges
+-- Demonstrates: If by is omitted, the default step direction is inferred from the boundaries.
+
+5 ..< 1
+// 5, 4, 3, 2
+
+-- ============================================================================
+-- Example 52: 19.4 Range Type
+-- Demonstrates: The declaration uses Visual X# template syntax:
+
+namespace System.Ranges;
+
+template<typename T>
+public data Range {
+    T Start,
+    T End,
+    T Step,
+    bool IncludesEnd,
+
+    public op bool Contains(_ T value);
+    public op bool IsAscending();
+    public op bool IsDescending();
+    public op bool IsEmpty();
+}
+
+-- ============================================================================
+-- Example 53: 19.4 Range Type
+-- Demonstrates: Accepted category examples:
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+Range<int> closed = 1 ... 10; // CoW
+Range<Integer> halfOpen = first ..< last; // reference
+
+-- ============================================================================
+-- Example 54: 19.5 Range Iteration
+-- Demonstrates: A range is iterable.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+for (int value : 1 ... 10 by 2) {
+    ...
+}
+
+-- ============================================================================
+-- Example 55: 20. Range Step by
+-- Demonstrates: by applies an explicit step to a range.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+1 ... 10 by 2
+
+-- ============================================================================
+-- Example 56: 20. Range Step by
+-- Demonstrates: 1, 3, 5, 7, 9
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+10 ... 1 by -2
+
+-- ============================================================================
+-- Example 57: 20. Range Step by
+-- Demonstrates: by 0 is invalid.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+1 ... 10 by 0 // INVALID
+
+-- ============================================================================
+-- Example 58: 20. Range Step by
+-- Demonstrates: by has associativity none.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+1 ... 10 by 2 by 3 // INVALID
+
+-- ============================================================================
+-- Example 59: 21. Membership
+-- Demonstrates: not in is a single infix operator form.
+
+value not in collection
+
+-- ============================================================================
+-- Example 60: 21. Membership
+-- Demonstrates: has the same result as:
+
+not (value in collection)
+
+-- ============================================================================
+-- Example 61: 21. Membership
+-- Demonstrates: The canonical membership surface is:
+
+collection.Contains(value)
+
+-- ============================================================================
+-- Example 62: 21. Membership
+-- Demonstrates: Therefore:
+
+name in names
+
+-- ============================================================================
+-- Example 63: 21. Membership
+-- Demonstrates: corresponds to:
+
+names.Contains(name)
+
+-- ============================================================================
+-- Example 64: 21. Membership
+-- Demonstrates: and:
+
+name not in names
+
+-- ============================================================================
+-- Example 65: 21. Membership
+-- Demonstrates: corresponds to:
+
+not names.Contains(name)
+
+-- ============================================================================
+-- Example 66: 22. Type Test is
+-- Demonstrates: in and not in are not overloadable through Operator<...>.
+
+value is Target
+
+-- ============================================================================
+-- Example 67: 23.1 Static Cast as
+-- Demonstrates: All belong to the Relational precedence group.
+
+value as Target
+
+-- ============================================================================
+-- Example 68: 23.1 Static Cast as
+-- Demonstrates: is sugar for:
+
+StaticCast<Target>(value)
+
+-- ============================================================================
+-- Example 69: 23.2 Dynamic Nullable Cast as?
+-- Demonstrates: A failed runtime cast produces an unchecked exception.
+
+value as? Target
+
+-- ============================================================================
+-- Example 70: 23.2 Dynamic Nullable Cast as?
+-- Demonstrates: is sugar for:
+
+DynamicCast<Target>(value)
+
+-- ============================================================================
+-- Example 71: 23.3 Panic Cast as!
+-- Demonstrates: A failed cast produces null.
+
+value as! Target
+
+-- ============================================================================
+-- Example 72: 23.3 Panic Cast as!
+-- Demonstrates: If conversion fails, the operation invokes:
+
+Console.Panic();
+
+-- ============================================================================
+-- Example 73: 24.1 Member Access .
+-- Demonstrates: . [] () :: x++ x--
+
+value.Member
+
+-- ============================================================================
+-- Example 74: 24.2 Indexing []
+-- Demonstrates: performs normal member access.
+
+value[index]
+
+-- ============================================================================
+-- Example 75: 24.3 Call ()
+-- Demonstrates: [] itself is not declared through Operator<[]>.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+value(...)
+
+-- ============================================================================
+-- Example 76: 24.4 Method Reference ::
+-- Demonstrates: () is not independently overloadable through Operator<()>.
+
+auto append = values::Append;
+auto parse = Int::Parse;
+
+-- ============================================================================
+-- Example 77: 24.4 Method Reference ::
+-- Demonstrates: It is distinct from normal call syntax.
+
+values.Append(42); // call
+values::Append     // method reference
+
+-- ============================================================================
+-- Example 78: 25. No Null-Safe Access Operators
+-- Demonstrates: ?. ?[]
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+user?.Name;    // INVALID
+items?[index]; // INVALID
+
+-- ============================================================================
+-- Example 79: 26. Operator Declarations
+-- Demonstrates: Built-in and user-defined overloadable operators use Operator<...> declarations.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+public static Vector Operator<+>(
+    _ Vector left,
+    _ Vector right
+) noexcept {
+    ...
+}
+
+-- ============================================================================
+-- Example 80: 27. Prefix and Postfix Operator Declarations
+-- Demonstrates: Prefix and postfix forms are distinct where the operator is overloadable.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+public static Counter Operator<++ prefix>(
+    _ Counter value
+) {
+    ...
+}
+
+-- ============================================================================
+-- Example 81: 27. Prefix and Postfix Operator Declarations
+-- Demonstrates: Prefix and postfix forms are distinct where the operator is overloadable.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+public static Counter Operator<++ postfix>(
+    _ Counter value
+) {
+    ...
+}
+
+-- ============================================================================
+-- Example 82: 31. Custom Operator Precedence
+-- Demonstrates: A new binary custom operator must specify one existing precedence group and one
+--   associativity.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+public static Result Operator<%%>(
+    _ Value left,
+    _ Value right
+) precedence Multiplicative associativity left {
+    ...
+}
+
+-- ============================================================================
+-- Example 83: 32. Operator Result Rules
+-- Demonstrates: Assignments yield the value stored by the assignment.
+
+int result = (value *= 2);
+
+-- ============================================================================
+-- Example 84: 34. -- and Comment Lexing
+-- Demonstrates: Outside a String:
+
+a --b
+
+-- ============================================================================
+-- Example 85: 34. -- and Comment Lexing
+-- Demonstrates: By contrast:
+
+a - -b
+
+-- ============================================================================
+-- Example 86: 34. -- and Comment Lexing
+-- Demonstrates: The following parenthesized form is also parsed as binary - followed by unary -:
+
+(a --b)
+
+-- ============================================================================
+-- Example 87: 35. Strings and Operator-Like Text
+-- Demonstrates: Inside any String literal, -- is literal String content and never starts a comment.
+
+String a = "-- not a comment";
+String b = "a -- b";
+
+-- ============================================================================
+-- Example 88: 35. Strings and Operator-Like Text
+-- Demonstrates: The same rule applies to long-bracket raw/multiline Strings.
+
+String text = [[
+a -- b
+-- still string content
+]];
+
+-- ============================================================================
+-- Example 89: 36.1 Power, Prefix, and Multiplication
+-- Demonstrates: The same rule applies to long-bracket raw/multiline Strings.
+
+-value ** 2 * scale
+
+-- ============================================================================
+-- Example 90: 36.1 Power, Prefix, and Multiplication
+-- Demonstrates: groups as:
+
+(-(value ** 2)) * scale
+
+-- ============================================================================
+-- Example 91: 36.2 Additive and Range
+-- Demonstrates: groups as:
+
+begin + 1 ..< end - 1
+
+-- ============================================================================
+-- Example 92: 36.2 Additive and Range
+-- Demonstrates: groups as:
+
+(begin + 1) ..< (end - 1)
+
+-- ============================================================================
+-- Example 93: 36.3 Range, Step, and Membership
+-- Demonstrates: groups as:
+
+index in 0 ..< count by 2
+
+-- ============================================================================
+-- Example 94: 36.3 Range, Step, and Membership
+-- Demonstrates: groups as:
+
+index in ((0 ..< count) by 2)
+
+-- ============================================================================
+-- Example 95: 36.4 Logical and Null Coalescing
+-- Demonstrates: groups as:
+
+a || b ?? fallback
+
+-- ============================================================================
+-- Example 96: 36.4 Logical and Null Coalescing
+-- Demonstrates: groups as:
+
+(a || b) ?? fallback
+
+-- ============================================================================
+-- Example 97: 36.5 Null Coalescing and Ternary
+-- Demonstrates: groups as:
+
+a ?? b ? x : y
+
+-- ============================================================================
+-- Example 98: 36.5 Null Coalescing and Ternary
+-- Demonstrates: groups as:
+
+(a ?? b) ? x : y
+
+-- ============================================================================
+-- Example 99: 36.6 Assignment
+-- Demonstrates: groups as:
+
+a = b += 2;
+
+-- ============================================================================
+-- Example 100: 36.6 Assignment
+-- Demonstrates: groups as:
+
+a = (b += 2);
+
+-- ============================================================================
+-- Example 101: 38. Normative Invalid Examples
+-- Demonstrates: groups as:
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+a < b < c;             // INVALID
+a == b == c;           // INVALID
+
+!true;                  // INVALID: ! is bitwise NOT
+
+++10;                   // INVALID
+(a + b)++;              // INVALID
+
+2 ** -3;                // INVALID for integer exponentiation
+
+1 ... 10 by 0;          // INVALID
+1 ... 10 by 2 by 3;     // INVALID
+
+user?.Name;             // INVALID
+items?[0];              // INVALID
+
+Operator<+=>;           // INVALID direct compound assignment declaration
+Operator<==>;           // INVALID equality overload
+
+int x = (_ = Save());   // INVALID: discard is not an expression
+
+-- ============================================================================
+-- Example 102: 39. Normative Valid Examples
+-- Demonstrates: groups as:
+-- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
+
+int value = 2 ** 8;
+int rounded = 7 // 2;
+
+mask = !mask;
+
+count++;
+--index;
+
+Range<int> range = 1 ... 10 by 2;
+
+bool first = 5 in range;
+bool second = 6 not in range;
+
+User user = value as User;
+User maybe = value as? User;
+User required = value as! User;
+
+auto append = values::Append;
+
+user ??= CreateGuest();
+
+int selected = condition ? 10 : 20;
+int fallback = count ?: 10;

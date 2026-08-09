@@ -6,9 +6,9 @@ set_tests_properties(kotlin_project_resolve PROPERTIES TIMEOUT 60
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call"
   ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
   FIXTURES_REQUIRED kotlin_project_resolver FIXTURES_SETUP kotlin_project_lock
-  PASS_REGULAR_EXPRESSION "refreshed binary lock file 'xs.lock.sqlite3'")
+  PASS_REGULAR_EXPRESSION "refreshed binary lock file 'Visual.XSharp.Lockfile.sqlite3'")
 add_test(NAME kotlin_project_resolve_binary_lock COMMAND xs_text_artifact_tests
-  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/xs.lock.sqlite3 "SQLite format 3")
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/Visual.XSharp.Lockfile.sqlite3 "SQLite format 3")
 set_tests_properties(kotlin_project_resolve_binary_lock PROPERTIES TIMEOUT 5
   FIXTURES_REQUIRED kotlin_project_lock)
 
@@ -25,7 +25,7 @@ add_test(NAME kotlin_project_call_artifacts COMMAND xs_xse_artifact_tests
 set_tests_properties(kotlin_project_call_artifacts PROPERTIES TIMEOUT 5
   FIXTURES_REQUIRED kotlin_project_call_native)
 add_test(NAME kotlin_project_lock_artifact COMMAND xs_text_artifact_tests
-  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/xs.lock.sqlite3 "SQLite format 3")
+  ${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/Visual.XSharp.Lockfile.sqlite3 "SQLite format 3")
 set_tests_properties(kotlin_project_lock_artifact PROPERTIES TIMEOUT 5
   FIXTURES_REQUIRED kotlin_project_call_native)
 add_test(NAME kotlin_project_recursive_build COMMAND vxs build)
@@ -169,7 +169,7 @@ set_tests_properties(kotlin_project_module_check PROPERTIES TIMEOUT 60
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/modules"
   ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
   FIXTURES_REQUIRED kotlin_project_resolver
-  PASS_REGULAR_EXPRESSION "source\\[1\\].*Modules[\\\\/]Math[\\\\/]add.xs")
+  PASS_REGULAR_EXPRESSION "source\\[1\\].*Modules[\\\\/]Math[\\\\/]add.vxs")
 add_test(NAME kotlin_project_module_requires_root COMMAND vxs check)
 set_tests_properties(kotlin_project_module_requires_root PROPERTIES TIMEOUT 60 WILL_FAIL TRUE
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/modules"

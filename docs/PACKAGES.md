@@ -19,13 +19,13 @@ xs yank <module>@<version>
 ```
 
 `xs resolve` is implemented for local KTS project coordinates. It reevaluates the project and atomically replaces
-`xs.lock.sqlite3` with a real binary SQLite database. It never writes a text lock or SQL dump. Registry-backed version
+`Visual.XSharp.Lockfile.sqlite3` with a real binary SQLite database. It never writes a text lock or SQL dump. Registry-backed version
 selection and downloads are not active yet.
 
 `xs login` prompts without echo for a GitHub personal access token. The service uses it once to establish the GitHub
 identity, does not store it, and returns a revocable Visual X# registry token. `xs publish` requires the evaluated project to set
 `PUBLISH` to `true`; versions are immutable after publication. `xs update` resolves dependencies and replaces
-`xs.lock.sqlite3` atomically only after the complete solution succeeds. `xs yank` excludes a version from new solutions
+`Visual.XSharp.Lockfile.sqlite3` atomically only after the complete solution succeeds. `vxs yank` excludes a version from new solutions
 without breaking projects that already pin it in a lock file.
 
 Registry transport, artifact signing, namespace policy, and public service availability are still under development.

@@ -269,7 +269,7 @@ static bool discover_path(const char *path, XsModuleRegistry *registry, XsModule
         {
             success = discover_path(child, registry, issues) && success;
         }
-        else if(has_suffix(child, ".xs"))
+        else if(has_suffix(child, ".vxs"))
         {
             char *module_name = nullptr;
             size_t start = 0;
@@ -340,7 +340,7 @@ static bool discover_path(const char *path, XsModuleRegistry *registry, XsModule
         {
             success = discover_path(child, registry, issues) && success;
         }
-        else if(S_ISREG(info.st_mode) && has_suffix(child, ".xs"))
+        else if(S_ISREG(info.st_mode) && has_suffix(child, ".vxs"))
         {
             char *module_name = nullptr;
             size_t start = 0;

@@ -7,29 +7,29 @@ foreach(fixture Supported InvalidLocal)
   configure_file(tests/fixtures/intermediate/${fixture}.xmir
                  "${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xmir" COPYONLY)
 endforeach()
-configure_file(tests/fixtures/source/MainCall.xs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainCall.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainFunctionOverloads.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainFunctionOverloads.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainTupleCalls.xs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainTupleCalls.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainTupleDestructure.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainTupleDestructure.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainFixedArray.xs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainFixedArray.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainEnumFlow.xs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainEnumFlow.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataFields.xs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataFields.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainNestedDataFields.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainNestedDataFields.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataInheritance.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataInheritance.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataConstructors.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataConstructors.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataConstructorFlow.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataConstructorFlow.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataMethods.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataMethods.xs" COPYONLY)
-configure_file(tests/fixtures/source/MainDataValueProjection.xs
-               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataValueProjection.xs" COPYONLY)
+configure_file(tests/fixtures/source/MainCall.vxs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainCall.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainFunctionOverloads.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainFunctionOverloads.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainTupleCalls.vxs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainTupleCalls.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainTupleDestructure.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainTupleDestructure.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainFixedArray.vxs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainFixedArray.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainEnumFlow.vxs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainEnumFlow.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataFields.vxs "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataFields.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainNestedDataFields.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainNestedDataFields.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataInheritance.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataInheritance.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataConstructors.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataConstructors.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataConstructorFlow.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataConstructorFlow.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataMethods.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataMethods.vxs" COPYONLY)
+configure_file(tests/fixtures/source/MainDataValueProjection.vxs
+               "${XS_DIRECT_XMIR_FIXTURE_DIR}/MainDataValueProjection.vxs" COPYONLY)
 foreach(fixture MainGenericFunctions MainGenericRecursive)
-  configure_file(tests/fixtures/source/${fixture}.xs "${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xs" COPYONLY)
+  configure_file(tests/fixtures/source/${fixture}.vxs "${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.vxs" COPYONLY)
 endforeach()
 
 add_test(NAME direct_xmir_native_build COMMAND vxs build --mir -file
@@ -47,7 +47,7 @@ add_test(NAME direct_xmir_rejects_invalid_local COMMAND vxs build --mir -file
 set_tests_properties(direct_xmir_rejects_invalid_local PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
 add_test(NAME direct_xmir_source_output COMMAND vxs build --mir -file
-  ${XS_DIRECT_XMIR_FIXTURE_DIR}/MainCall.xs)
+  ${XS_DIRECT_XMIR_FIXTURE_DIR}/MainCall.vxs)
 set_tests_properties(direct_xmir_source_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XMIR")
 add_test(NAME direct_xmir_source_roundtrip COMMAND vxs build --mir -file
   ${XS_DIRECT_XMIR_FIXTURE_DIR}/MainCall.xmir)
@@ -61,7 +61,7 @@ set_tests_properties(direct_xmir_source_artifacts PROPERTIES TIMEOUT 5 DEPENDS d
 
 foreach(fixture MainTupleCalls MainTupleDestructure MainFixedArray MainEnumFlow)
   add_test(NAME direct_xmir_${fixture}_output COMMAND vxs build --mir -file
-    ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xs)
+    ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.vxs)
   set_tests_properties(direct_xmir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XMIR")
   add_test(NAME direct_xmir_${fixture}_roundtrip COMMAND vxs build --mir -file
     ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xmir)
@@ -76,7 +76,7 @@ endforeach()
 
 foreach(fixture MainGenericFunctions MainGenericRecursive)
   add_test(NAME direct_xmir_${fixture}_output COMMAND vxs build --mir -file
-    ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xs)
+    ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.vxs)
   set_tests_properties(direct_xmir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XMIR")
   add_test(NAME direct_xmir_${fixture}_roundtrip COMMAND vxs build --mir -file
     ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xmir)
@@ -91,7 +91,7 @@ foreach(fixture MainGenericFunctions MainGenericRecursive)
 endforeach()
 
 add_test(NAME direct_xmir_function_overloads_output COMMAND vxs build --mir -file
-  ${XS_DIRECT_XMIR_FIXTURE_DIR}/MainFunctionOverloads.xs)
+  ${XS_DIRECT_XMIR_FIXTURE_DIR}/MainFunctionOverloads.vxs)
 set_tests_properties(direct_xmir_function_overloads_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XMIR")
 add_test(NAME direct_xmir_function_overloads_roundtrip COMMAND vxs build --mir -file
   ${XS_DIRECT_XMIR_FIXTURE_DIR}/MainFunctionOverloads.xmir)
@@ -122,7 +122,7 @@ foreach(fixture MainDataFields MainNestedDataFields MainDataInheritance MainData
     set(expected_exit 22)
   endif()
   add_test(NAME direct_xmir_${fixture}_output COMMAND vxs build --mir -file
-    ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xs)
+    ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.vxs)
   set_tests_properties(direct_xmir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XMIR")
   add_test(NAME direct_xmir_${fixture}_roundtrip COMMAND vxs build --mir -file
     ${XS_DIRECT_XMIR_FIXTURE_DIR}/${fixture}.xmir)

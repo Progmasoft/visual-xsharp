@@ -20,14 +20,14 @@
           "XS"
         ],
         "extensions": [
-          ".xs"
+          ".vxs"
         ]
       }
     ],
     "grammars": [
       {
         "language": "xs",
-        "scopeName": "source.xs",
+        "scopeName": "source.vxs",
         "path": "./sources/extension/syntaxes/xs.tmLanguage.json"
       }
     ],

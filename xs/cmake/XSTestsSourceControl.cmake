@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
-add_test(NAME source_native_negative_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainNegative.xs)
+add_test(NAME source_native_negative_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainNegative.vxs)
 set_tests_properties(source_native_negative_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_negative_artifacts COMMAND xs_xse_artifact_tests
@@ -9,7 +9,7 @@ add_test(NAME source_native_negative_artifacts COMMAND xs_xse_artifact_tests
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainNegative.obj
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainNegative.vxse 7)
 set_tests_properties(source_native_negative_artifacts PROPERTIES DEPENDS source_native_negative_build TIMEOUT 5)
-add_test(NAME source_native_positive_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainPositive.xs)
+add_test(NAME source_native_positive_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainPositive.vxs)
 set_tests_properties(source_native_positive_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_positive_artifacts COMMAND xs_xse_artifact_tests
@@ -17,7 +17,7 @@ add_test(NAME source_native_positive_artifacts COMMAND xs_xse_artifact_tests
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainPositive.obj
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainPositive.vxse 7)
 set_tests_properties(source_native_positive_artifacts PROPERTIES DEPENDS source_native_positive_build TIMEOUT 5)
-add_test(NAME source_native_bitwise_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBitwise.xs)
+add_test(NAME source_native_bitwise_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBitwise.vxs)
 set_tests_properties(source_native_bitwise_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_bitwise_artifacts COMMAND xs_xse_artifact_tests
@@ -25,14 +25,14 @@ add_test(NAME source_native_bitwise_artifacts COMMAND xs_xse_artifact_tests
                                                ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBitwise.obj
                                                ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBitwise.vxse 6 "ret i32 6")
 set_tests_properties(source_native_bitwise_artifacts PROPERTIES DEPENDS source_native_bitwise_build TIMEOUT 5)
-add_test(NAME source_native_xor_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainXor.xs)
+add_test(NAME source_native_xor_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainXor.vxs)
 set_tests_properties(source_native_xor_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_xor_artifacts COMMAND xs_xse_artifact_tests ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainXor.ll
                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainXor.obj
                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainXor.vxse 5 "ret i32 5")
 set_tests_properties(source_native_xor_artifacts PROPERTIES DEPENDS source_native_xor_build TIMEOUT 5)
-add_test(NAME source_native_local_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocal.xs)
+add_test(NAME source_native_local_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocal.vxs)
 set_tests_properties(source_native_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_local_artifacts COMMAND xs_xse_artifact_tests
@@ -41,7 +41,7 @@ add_test(NAME source_native_local_artifacts COMMAND xs_xse_artifact_tests
                                              ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocal.vxse 7 "load i32")
 set_tests_properties(source_native_local_artifacts PROPERTIES DEPENDS source_native_local_build TIMEOUT 5)
 add_test(NAME source_native_local_arithmetic_build COMMAND vxs build -file
-                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocalArithmetic.xs)
+                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocalArithmetic.vxs)
 set_tests_properties(source_native_local_arithmetic_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_local_arithmetic_artifacts COMMAND xs_xse_artifact_tests
@@ -51,7 +51,7 @@ add_test(NAME source_native_local_arithmetic_artifacts COMMAND xs_xse_artifact_t
                                                         "add i32")
 set_tests_properties(source_native_local_arithmetic_artifacts PROPERTIES DEPENDS source_native_local_arithmetic_build
                                                                          TIMEOUT 5)
-add_test(NAME source_native_local_if_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocalIf.xs)
+add_test(NAME source_native_local_if_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocalIf.vxs)
 set_tests_properties(source_native_local_if_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_local_if_artifacts COMMAND xs_xse_artifact_tests
@@ -60,7 +60,7 @@ add_test(NAME source_native_local_if_artifacts COMMAND xs_xse_artifact_tests
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLocalIf.vxse 7)
 set_tests_properties(source_native_local_if_artifacts PROPERTIES DEPENDS source_native_local_if_build TIMEOUT 5)
 add_test(NAME source_native_inferred_local_build COMMAND vxs build -file
-                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainInferredLocal.xs)
+                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainInferredLocal.vxs)
 set_tests_properties(source_native_inferred_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_inferred_local_artifacts COMMAND xs_xse_artifact_tests
@@ -71,7 +71,7 @@ add_test(NAME source_native_inferred_local_artifacts COMMAND xs_xse_artifact_tes
 set_tests_properties(source_native_inferred_local_artifacts PROPERTIES DEPENDS source_native_inferred_local_build
                                                                        TIMEOUT 5)
 add_test(NAME source_native_mutable_local_build COMMAND vxs build -file
-                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMutableLocal.xs)
+                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMutableLocal.vxs)
 set_tests_properties(source_native_mutable_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_mutable_local_artifacts COMMAND xs_xse_artifact_tests
@@ -81,7 +81,7 @@ add_test(NAME source_native_mutable_local_artifacts COMMAND xs_xse_artifact_test
 set_tests_properties(source_native_mutable_local_artifacts PROPERTIES DEPENDS source_native_mutable_local_build
                                                                        TIMEOUT 5)
 add_test(NAME source_native_mutable_bool_local_build COMMAND vxs build -file
-                                                       ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMutableBoolLocal.xs)
+                                                       ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMutableBoolLocal.vxs)
 set_tests_properties(source_native_mutable_bool_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_mutable_bool_local_artifacts COMMAND xs_xse_artifact_tests
@@ -91,7 +91,7 @@ add_test(NAME source_native_mutable_bool_local_artifacts COMMAND xs_xse_artifact
 set_tests_properties(source_native_mutable_bool_local_artifacts PROPERTIES
                      DEPENDS source_native_mutable_bool_local_build TIMEOUT 5)
 add_test(NAME source_native_if_assignment_build COMMAND vxs build -file
-                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfAssignment.xs)
+                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfAssignment.vxs)
 set_tests_properties(source_native_if_assignment_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_if_assignment_artifacts COMMAND xs_xse_artifact_tests
@@ -100,7 +100,7 @@ add_test(NAME source_native_if_assignment_artifacts COMMAND xs_xse_artifact_test
                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfAssignment.vxse 7 "store i32 7")
 set_tests_properties(source_native_if_assignment_artifacts PROPERTIES DEPENDS source_native_if_assignment_build TIMEOUT 5)
 add_test(NAME source_native_compound_assignment_build COMMAND vxs build -file
-                                                         ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainCompoundAssignment.xs)
+                                                         ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainCompoundAssignment.vxs)
 set_tests_properties(source_native_compound_assignment_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_compound_assignment_artifacts COMMAND xs_xse_artifact_tests
@@ -110,7 +110,7 @@ add_test(NAME source_native_compound_assignment_artifacts COMMAND xs_xse_artifac
 set_tests_properties(source_native_compound_assignment_artifacts PROPERTIES
                      DEPENDS source_native_compound_assignment_build TIMEOUT 5)
 add_test(NAME source_native_if_multiple_assignments_build COMMAND vxs build -file
-                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfMultipleAssignments.xs)
+                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfMultipleAssignments.vxs)
 set_tests_properties(source_native_if_multiple_assignments_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_if_multiple_assignments_artifacts COMMAND xs_xse_artifact_tests
@@ -121,7 +121,7 @@ add_test(NAME source_native_if_multiple_assignments_artifacts COMMAND xs_xse_art
 set_tests_properties(source_native_if_multiple_assignments_artifacts PROPERTIES
                      DEPENDS source_native_if_multiple_assignments_build TIMEOUT 5)
 add_test(NAME source_native_nested_if_assignment_build COMMAND vxs build -file
-                                                        ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainNestedIfAssignment.xs)
+                                                        ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainNestedIfAssignment.vxs)
 set_tests_properties(source_native_nested_if_assignment_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_nested_if_assignment_artifacts COMMAND xs_xse_artifact_tests
@@ -130,14 +130,14 @@ add_test(NAME source_native_nested_if_assignment_artifacts COMMAND xs_xse_artifa
                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainNestedIfAssignment.vxse 7 "br i1")
 set_tests_properties(source_native_nested_if_assignment_artifacts PROPERTIES
                      DEPENDS source_native_nested_if_assignment_build TIMEOUT 5)
-add_test(NAME source_native_while_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhile.xs)
+add_test(NAME source_native_while_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhile.vxs)
 set_tests_properties(source_native_while_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_while_artifacts COMMAND xs_xse_artifact_tests ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhile.ll
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhile.obj
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhile.vxse 7 "br i1")
 set_tests_properties(source_native_while_artifacts PROPERTIES DEPENDS source_native_while_build TIMEOUT 5)
-add_test(NAME source_native_while_control_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhileControl.xs)
+add_test(NAME source_native_while_control_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhileControl.vxs)
 set_tests_properties(source_native_while_control_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_while_control_artifacts COMMAND xs_xse_artifact_tests
@@ -145,7 +145,7 @@ add_test(NAME source_native_while_control_artifacts COMMAND xs_xse_artifact_test
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhileControl.obj
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainWhileControl.vxse 7 "br label")
 set_tests_properties(source_native_while_control_artifacts PROPERTIES DEPENDS source_native_while_control_build TIMEOUT 5)
-add_test(NAME source_native_do_while_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDoWhile.xs)
+add_test(NAME source_native_do_while_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDoWhile.vxs)
 set_tests_properties(source_native_do_while_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_do_while_artifacts COMMAND xs_xse_artifact_tests
@@ -153,14 +153,14 @@ add_test(NAME source_native_do_while_artifacts COMMAND xs_xse_artifact_tests
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDoWhile.obj
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainDoWhile.vxse 7 "store i32 7")
 set_tests_properties(source_native_do_while_artifacts PROPERTIES DEPENDS source_native_do_while_build TIMEOUT 5)
-add_test(NAME source_native_loop_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLoop.xs)
+add_test(NAME source_native_loop_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLoop.vxs)
 set_tests_properties(source_native_loop_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_loop_artifacts COMMAND xs_xse_artifact_tests ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLoop.ll
                                                ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLoop.obj
                                                ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainLoop.vxse 7 "br label %bb1")
 set_tests_properties(source_native_loop_artifacts PROPERTIES DEPENDS source_native_loop_build TIMEOUT 5)
-add_test(NAME source_native_block_locals_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBlockLocals.xs)
+add_test(NAME source_native_block_locals_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBlockLocals.vxs)
 set_tests_properties(source_native_block_locals_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_block_locals_artifacts COMMAND xs_xse_artifact_tests
@@ -169,7 +169,7 @@ add_test(NAME source_native_block_locals_artifacts COMMAND xs_xse_artifact_tests
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBlockLocals.vxse 10 "alloca i32")
 set_tests_properties(source_native_block_locals_artifacts PROPERTIES DEPENDS source_native_block_locals_build TIMEOUT 5)
 add_test(NAME source_native_block_local_shadow_build COMMAND vxs build -file
-                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/BlockLocalShadow.xs)
+                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/BlockLocalShadow.vxs)
 set_tests_properties(source_native_block_local_shadow_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_block_local_shadow_artifacts COMMAND xs_xse_artifact_tests
@@ -179,9 +179,9 @@ add_test(NAME source_native_block_local_shadow_artifacts COMMAND xs_xse_artifact
 set_tests_properties(source_native_block_local_shadow_artifacts PROPERTIES
                      DEPENDS source_native_block_local_shadow_build TIMEOUT 5)
 add_test(NAME source_native_same_scope_duplicate_local COMMAND vxs build -file
-                                                         ${XS_SOURCE_NATIVE_FIXTURE_DIR}/SameScopeDuplicateLocal.xs)
+                                                         ${XS_SOURCE_NATIVE_FIXTURE_DIR}/SameScopeDuplicateLocal.vxs)
 set_tests_properties(source_native_same_scope_duplicate_local PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
-add_test(NAME source_native_early_return_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainEarlyReturn.xs)
+add_test(NAME source_native_early_return_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainEarlyReturn.vxs)
 set_tests_properties(source_native_early_return_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_early_return_artifacts COMMAND xs_xse_artifact_tests
@@ -189,7 +189,7 @@ add_test(NAME source_native_early_return_artifacts COMMAND xs_xse_artifact_tests
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainEarlyReturn.obj
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainEarlyReturn.vxse 7 "ret i32 7")
 set_tests_properties(source_native_early_return_artifacts PROPERTIES DEPENDS source_native_early_return_build TIMEOUT 5)
-add_test(NAME source_native_else_if_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainElseIf.xs)
+add_test(NAME source_native_else_if_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainElseIf.vxs)
 set_tests_properties(source_native_else_if_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_else_if_artifacts COMMAND xs_xse_artifact_tests
@@ -197,14 +197,14 @@ add_test(NAME source_native_else_if_artifacts COMMAND xs_xse_artifact_tests
                                             ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainElseIf.obj
                                             ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainElseIf.vxse 7 "br i1")
 set_tests_properties(source_native_else_if_artifacts PROPERTIES DEPENDS source_native_else_if_build TIMEOUT 5)
-add_test(NAME source_native_match_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatch.xs)
+add_test(NAME source_native_match_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatch.vxs)
 set_tests_properties(source_native_match_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_match_artifacts COMMAND xs_xse_artifact_tests ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatch.ll
                                              ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatch.obj
                                              ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatch.vxse 7 "icmp eq i32")
 set_tests_properties(source_native_match_artifacts PROPERTIES DEPENDS source_native_match_build TIMEOUT 5)
-add_test(NAME source_native_match_bool_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatchBool.xs)
+add_test(NAME source_native_match_bool_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatchBool.vxs)
 set_tests_properties(source_native_match_bool_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_match_bool_artifacts COMMAND xs_xse_artifact_tests
@@ -213,7 +213,7 @@ add_test(NAME source_native_match_bool_artifacts COMMAND xs_xse_artifact_tests
                                                   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatchBool.vxse 7 "br i1")
 set_tests_properties(source_native_match_bool_artifacts PROPERTIES DEPENDS source_native_match_bool_build TIMEOUT 5)
 add_test(NAME source_native_match_expression_build COMMAND vxs build -file
-                                                           ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatchExpression.xs)
+                                                           ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatchExpression.vxs)
 set_tests_properties(source_native_match_expression_build PROPERTIES TIMEOUT 5
                      FIXTURES_SETUP source_native_match_expression)
 add_test(NAME source_native_match_expression_artifacts COMMAND xs_xse_artifact_tests
@@ -222,7 +222,7 @@ add_test(NAME source_native_match_expression_artifacts COMMAND xs_xse_artifact_t
   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainMatchExpression.vxse 7 "icmp eq i32")
 set_tests_properties(source_native_match_expression_artifacts PROPERTIES
                      DEPENDS source_native_match_expression_build TIMEOUT 5)
-add_test(NAME source_native_for_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainFor.xs)
+add_test(NAME source_native_for_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainFor.vxs)
 set_tests_properties(source_native_for_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_for_artifacts COMMAND xs_xse_artifact_tests ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainFor.ll
@@ -230,7 +230,7 @@ add_test(NAME source_native_for_artifacts COMMAND xs_xse_artifact_tests ${XS_SOU
                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainFor.vxse 8 "icmp slt i32")
 set_tests_properties(source_native_for_artifacts PROPERTIES DEPENDS source_native_for_build TIMEOUT 5)
 add_test(NAME source_native_postfix_decrement_build COMMAND vxs build -file
-                                                        ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainPostfixDecrement.xs)
+                                                        ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainPostfixDecrement.vxs)
 set_tests_properties(source_native_postfix_decrement_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_postfix_decrement_artifacts COMMAND xs_xse_artifact_tests
@@ -240,7 +240,7 @@ add_test(NAME source_native_postfix_decrement_artifacts COMMAND xs_xse_artifact_
 set_tests_properties(source_native_postfix_decrement_artifacts PROPERTIES
                      DEPENDS source_native_postfix_decrement_build TIMEOUT 5)
 add_test(NAME source_native_update_values_build COMMAND vxs build -file
-                                                   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainUpdateValues.xs)
+                                                   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainUpdateValues.vxs)
 set_tests_properties(source_native_update_values_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_update_values_artifacts COMMAND xs_xse_artifact_tests
@@ -249,28 +249,28 @@ add_test(NAME source_native_update_values_artifacts COMMAND xs_xse_artifact_test
                                                       ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainUpdateValues.vxse 24
                                                       "store i32")
 set_tests_properties(source_native_update_values_artifacts PROPERTIES DEPENDS source_native_update_values_build TIMEOUT 5)
-add_test(NAME source_native_if_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIf.xs)
+add_test(NAME source_native_if_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIf.vxs)
 set_tests_properties(source_native_if_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_if_artifacts COMMAND xs_xse_artifact_tests ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIf.ll
                                           ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIf.obj
                                           ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIf.vxse 7 "ret i32 7" "!br label")
 set_tests_properties(source_native_if_artifacts PROPERTIES DEPENDS source_native_if_build TIMEOUT 5)
-add_test(NAME source_native_if_value_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfValue.xs)
+add_test(NAME source_native_if_value_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfValue.vxs)
 set_tests_properties(source_native_if_value_build PROPERTIES TIMEOUT 5 FIXTURES_SETUP source_native_if_value)
 add_test(NAME source_native_if_value_artifacts COMMAND xs_xse_artifact_tests
   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfValue.ll
   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfValue.obj
   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfValue.vxse 7 "call i32 @identity")
 set_tests_properties(source_native_if_value_artifacts PROPERTIES DEPENDS source_native_if_value_build TIMEOUT 5)
-add_test(NAME source_native_if_not_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNot.xs)
+add_test(NAME source_native_if_not_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNot.vxs)
 set_tests_properties(source_native_if_not_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_if_not_artifacts COMMAND xs_xse_artifact_tests ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNot.ll
                                               ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNot.obj
                                               ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNot.vxse 7 "ret i32 7" "!br label")
 set_tests_properties(source_native_if_not_artifacts PROPERTIES DEPENDS source_native_if_not_build TIMEOUT 5)
-add_test(NAME source_native_if_false_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfFalse.xs)
+add_test(NAME source_native_if_false_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfFalse.vxs)
 set_tests_properties(source_native_if_false_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_if_false_artifacts COMMAND xs_xse_artifact_tests
@@ -279,7 +279,7 @@ add_test(NAME source_native_if_false_artifacts COMMAND xs_xse_artifact_tests
                                                 ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfFalse.vxse 7 "ret i32 7")
 set_tests_properties(source_native_if_false_artifacts PROPERTIES DEPENDS source_native_if_false_build TIMEOUT 5)
 add_test(NAME source_native_if_not_equal_build COMMAND vxs build -file
-                                                    ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNotEqual.xs)
+                                                    ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNotEqual.vxs)
 set_tests_properties(source_native_if_not_equal_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_if_not_equal_artifacts COMMAND xs_xse_artifact_tests
@@ -288,7 +288,7 @@ add_test(NAME source_native_if_not_equal_artifacts COMMAND xs_xse_artifact_tests
                                                     ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainIfNotEqual.vxse 7 "ret i32 7"
                                                     "!br label")
 set_tests_properties(source_native_if_not_equal_artifacts PROPERTIES DEPENDS source_native_if_not_equal_build TIMEOUT 5)
-add_test(NAME source_native_bool_local_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBoolLocal.xs)
+add_test(NAME source_native_bool_local_build COMMAND vxs build -file ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBoolLocal.vxs)
 set_tests_properties(source_native_bool_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_bool_local_artifacts COMMAND xs_xse_artifact_tests
@@ -297,7 +297,7 @@ add_test(NAME source_native_bool_local_artifacts COMMAND xs_xse_artifact_tests
                                                  ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBoolLocal.vxse 7)
 set_tests_properties(source_native_bool_local_artifacts PROPERTIES DEPENDS source_native_bool_local_build TIMEOUT 5)
 add_test(NAME source_native_bool_not_local_build COMMAND vxs build -file
-                                                   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBoolNotLocal.xs)
+                                                   ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainBoolNotLocal.vxs)
 set_tests_properties(source_native_bool_not_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_bool_not_local_artifacts COMMAND xs_xse_artifact_tests
@@ -307,7 +307,7 @@ add_test(NAME source_native_bool_not_local_artifacts COMMAND xs_xse_artifact_tes
 set_tests_properties(source_native_bool_not_local_artifacts PROPERTIES DEPENDS source_native_bool_not_local_build
                                                                        TIMEOUT 5)
 add_test(NAME source_native_inferred_bool_local_build COMMAND vxs build -file
-                                                       ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainInferredBoolLocal.xs)
+                                                       ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainInferredBoolLocal.vxs)
 set_tests_properties(source_native_inferred_bool_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_inferred_bool_local_artifacts COMMAND xs_xse_artifact_tests
@@ -317,7 +317,7 @@ add_test(NAME source_native_inferred_bool_local_artifacts COMMAND xs_xse_artifac
 set_tests_properties(source_native_inferred_bool_local_artifacts PROPERTIES
                      DEPENDS source_native_inferred_bool_local_build TIMEOUT 5)
 add_test(NAME source_native_inferred_bool_not_local_build COMMAND vxs build -file
-                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainInferredBoolNotLocal.xs)
+                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/MainInferredBoolNotLocal.vxs)
 set_tests_properties(source_native_inferred_bool_not_local_build PROPERTIES TIMEOUT 5
                     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME source_native_inferred_bool_not_local_artifacts COMMAND xs_xse_artifact_tests

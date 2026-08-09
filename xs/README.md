@@ -7,6 +7,6 @@ SPDX-License-Identifier: MPL-2.0
 
 Buildable Visual X# compiler project.
 
-This project owns the compiler CLI, `.xs` lexer/parser, AST, HIR, MIR, XLIL planning,
+This project owns the compiler CLI, `.vxs` lexer/parser, AST, HIR, MIR, XLIL planning,
 LLVM backend bridge and compiler tests. New C23 compiler implementation files live under
 `xs/sources/`.

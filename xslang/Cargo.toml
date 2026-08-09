@@ -54,7 +54,7 @@ insta = "1.48"
 criterion = "0.8"
 libfuzzer-sys = "0.4"
 
-[package.metadata.xs]
+[package.metadata.vxs]
 component = "compiler-core"
 syntax-abi-version = 1
 xhir-version = 1

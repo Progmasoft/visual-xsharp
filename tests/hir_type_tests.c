@@ -28,7 +28,7 @@ static int failures;
 static bool add_file_in_module(const char *text, const char *module_name, uint64_t file_id, XsSyntaxTree *tree,
                                XsHirSymbolTable *symbols, XsDiagnostics *diagnostics)
 {
-    XsSource source = {.path = "HirTypes.xs", .module_name = module_name, .text = text, .length = strlen(text)};
+    XsSource source = {.path = "HirTypes.vxs", .module_name = module_name, .text = text, .length = strlen(text)};
     if(!xs_syntax_parse(&source, file_id, diagnostics, tree))
         return false;
     return xs_hir_collect_symbols(tree, symbols, diagnostics);
@@ -459,7 +459,7 @@ static void test_expanded_macro_type_errors(void)
     const char *main = ""
                        "macro_rules! bad { () -> { value: Missing = None }; }\n"
                        "fn Main() { bad!(); }\n";
-    XsSource source = {.path = "MacroTypes.xs", .module_name = "App", .text = main, .length = strlen(main)};
+    XsSource source = {.path = "MacroTypes.vxs", .module_name = "App", .text = main, .length = strlen(main)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;
@@ -491,7 +491,7 @@ static void test_type_fragment_macro_type_errors(void)
     const char *main = ""
                        "macro_rules! declare { ($kind:ty) -> { value: $kind = None }; }\n"
                        "fn Main() { declare!(Missing); }\n";
-    XsSource source = {.path = "MacroTypeFragmentTypes.xs", .module_name = "App", .text = main, .length = strlen(main)};
+    XsSource source = {.path = "MacroTypeFragmentTypes.vxs", .module_name = "App", .text = main, .length = strlen(main)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;

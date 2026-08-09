@@ -22,4 +22,4 @@ x-platform/
 vcpkg-debug.log
 vcpkg_installed/
 xs_kts/sources/Tests/
-xs_kts/sources/main.xs
+xs_kts/sources/main.vxs

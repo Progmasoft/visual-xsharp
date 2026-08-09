@@ -12,7 +12,7 @@ tools, and LLD. New native subsystems favor C++23 Preview. New and touched C cod
 The documented compilation order is preserved:
 
 ```text
-.xs sources
+.vxs sources
     → lexing and parsing
     → structural AST
     → macro expansion
@@ -83,12 +83,12 @@ The documented compilation order is preserved:
 
 ### Project system
 
-- Kotlin `xs.project.kts` or split `xs.settings.kts` + `xs.build.kts` projects are evaluated by the project runtime bundled
+- A single Kotlin `Visual.XSharp.kts` project is evaluated by the project runtime bundled
   with `xs`, on JRE 25 or newer through an external `kotlin` scripting command. Argument-free `xs` starts this internal
-  runtime and retains all `.xs` compilation work itself.
+  runtime and retains all `.vxs` compilation work itself.
 - Kotlin source, test, and module includes name directory roots; the resolver recursively selects the configured source
   extension while excludes retain glob support. `XS_EXTENSION` defaults to `xs` and may select another extension.
-- `xs resolve` reevaluates declared module coordinates and atomically replaces `xs.lock.sqlite3` through the Kotlin
+- `vxs resolve` reevaluates declared module coordinates and atomically replaces `Visual.XSharp.Lockfile.sqlite3` through the Kotlin
   resolver. The artifact is binary SQLite; text/SQL forms exist only as documentation examples.
 - The version-4 Kotlin resolver protocol transfers source, module, and test registries separately. `xs test` combines
   those registries for frontend and semantic validation, discovers top-level unit-returning `#[Test]` functions from the
@@ -109,7 +109,7 @@ The documented compilation order is preserved:
   remain outside this first boundary.
 - `include!` is the built-in source-inclusion macro. It runs after the enclosing source first has a structural AST, then
   reparses the included local source at the call site; it is not a lexer/preprocessor step or a `macro_rules!` declaration.
-- `xs build --output hir|mir|xlil -file <source.xs>` and `--hir`/`--mir`/`--xlil` write real compiler-core program output
+- `xs build --output hir|mir|xlil -file <source.vxs>` and `--hir`/`--mir`/`--xlil` write real compiler-core program output
   beside the source. Kotlin project output uses the merged source session and the selected entry source as its artifact base.
 - Direct `.xhir` inputs use the Rust program reader, type checker, HIR → MIR lowering, MIR verification/borrow checking,
   optimization, and MIR → XLIL lowering before entering the existing C23 XLIL/LLVM native backend.
@@ -224,8 +224,8 @@ The documented compilation order is preserved:
   tokens when closing generic type/generic parameter contexts.
 - Type-qualified associated expressions such as `new Vector<Str>()`, expression turbofish, typed object literals,
   typed for-each patterns, tuple-pattern bindings, asynchronous function expressions, and unconditional `loop` statements
-  have dedicated structural nodes. Every complete-language example under `Spec/Programs` is covered by both structural
-  parsing and semantic `xs check` tests.
+  have dedicated structural nodes. The renewed topic suites under `Spec/` are specification material; focused parser and
+  semantic tests should be added as implementation support for each documented fragment lands.
 - HIR standard-library lookup has one registry for automatic types and constructors plus import-gated modules. It checks
   `Optional`, `Result`, `Error`, `Task`, common standard-library types/functions, user static associated functions,
   enum-data variants, and local names introduced by tuple or for-each patterns. This is semantic availability checking;
@@ -320,7 +320,7 @@ The documented compilation order is preserved:
 
 - Kotlin projects recursively discover configured-extension sources under `source.include` directory roots. Module source
   roots come from `module.include` or the explicit `--module` option.
-- `xs.module.kts` assigns every selected module source to one case-sensitive logical module name; file paths never infer
+- Module declarations in `Visual.XSharp.kts` assign every selected module source to one case-sensitive logical module name; file paths never infer
   module identity. Direct and `members` entries belong to the named module, while `submodule` appends one path segment.
 - `import` and `using` dependencies are resolved against project-assigned module names. Source-level `module` declarations
   have been removed; Kotlin projects transfer exact source paths and optional logical module names through the v2 project
@@ -766,7 +766,7 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
   `add.i32`, `sub.i32`, `mul.i32`, `div.i32`, `rem.i32`, `and.i32`, `or.i32`, `shl.i32`, `shr.i32`, `eq.i32`,
   `ne.i32`, `lt.i32`, `le.i32`, `gt.i32`, `ge.i32`, `not.bool`, signed i64 arithmetic/bitwise/shift/comparison
   instructions, typed `.slot`/`load`/`store`, `call`, `br`, `br_if`, `panic`, `ret`, and `ret %rN`.
-- `xs build -file <input.xs>` and argument-free `xs build` use the same native path for supported compiler-core
+- `xs build -file <input.vxs>` and argument-free `xs build` use the same native path for supported compiler-core
   sessions. Context-typed literals, parameters, locals, direct calls, and returns preserve every fixed integer width;
   `main` remains `Long`. The broader expression slice includes `Long`/`Bool` mutable locals,
   unary `+`/`-`,

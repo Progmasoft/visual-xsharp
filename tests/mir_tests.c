@@ -561,7 +561,7 @@ static void test_hir_function_declaration_lowering(void)
     const char *text = ""
                        "fn Add(a: Int, b: Int) -> Int { return a + b; }\n"
                        "data User { value: Int; }\n";
-    XsSource source = {.path = "MirLowering.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MirLowering.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;

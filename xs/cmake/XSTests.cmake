@@ -72,34 +72,34 @@ set_tests_properties(kotlin_project_resolver_build PROPERTIES TIMEOUT 180
   FIXTURES_SETUP kotlin_project_resolver ENVIRONMENT "GRADLE_OPTS=-Xmx512m")
 
 add_test(NAME example_source COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs)
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs)
 set_tests_properties(example_source PROPERTIES TIMEOUT 5)
 add_test(NAME macro_source COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/macro_project/source/Main.xs)
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/macro_project/source/Main.vxs)
 set_tests_properties(macro_source PROPERTIES TIMEOUT 5)
 add_test(NAME compiler_check_file COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs)
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs)
 set_tests_properties(compiler_check_file PROPERTIES TIMEOUT 5)
 add_test(NAME compiler_test_file COMMAND vxs test -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/projects/test_command/Sources/Test/arithmetic.xs)
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/projects/test_command/Sources/Test/arithmetic.vxs)
 set_tests_properties(compiler_test_file PROPERTIES TIMEOUT 5
   PASS_REGULAR_EXPRESSION "test result: ok. 1 passed; 0 failed; 1 ignored")
 add_test(NAME compiler_check_file_verbose COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs
   --warning all --werror true --verbose true)
 set_tests_properties(compiler_check_file_verbose PROPERTIES TIMEOUT 5
   PASS_REGULAR_EXPRESSION "verbose: command=check.*warning=all.*werror=true")
 add_test(NAME compiler_rejects_invalid_warning COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs --warning invalid)
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs --warning invalid)
 set_tests_properties(compiler_rejects_invalid_warning PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 add_test(NAME compiler_rejects_misspelled_werror COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.xs --werrror true)
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs --werrror true)
 set_tests_properties(compiler_rejects_misspelled_werror PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
 set(XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/intermediate_output")
 file(MAKE_DIRECTORY "${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}")
-configure_file(tests/fixtures/source/MainTupleCalls.xs
-               "${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.xs" COPYONLY)
+configure_file(tests/fixtures/source/MainTupleCalls.vxs
+               "${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.vxs" COPYONLY)
 add_executable(xs_text_artifact_tests tests/text_artifact_tests.c)
 foreach(output hir mir xlil)
   string(TOUPPER "${output}" output_upper)
@@ -113,11 +113,11 @@ foreach(output hir mir xlil)
     set(function_record ".func")
   endif()
   add_test(NAME build_file_output_${output} COMMAND vxs build --output ${output} -file
-    ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.xs)
+    ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.vxs)
   set_tests_properties(build_file_output_${output} PROPERTIES TIMEOUT 5
     PASS_REGULAR_EXPRESSION "wrote ${output_upper}")
   add_test(NAME build_file_short_${output} COMMAND vxs build --${output} -file
-    ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.xs)
+    ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.vxs)
   set_tests_properties(build_file_short_${output} PROPERTIES TIMEOUT 5
     PASS_REGULAR_EXPRESSION "wrote ${output_upper}")
   add_test(NAME build_file_output_${output}_artifact COMMAND xs_text_artifact_tests

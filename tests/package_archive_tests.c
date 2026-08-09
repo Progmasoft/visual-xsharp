@@ -46,14 +46,14 @@ static void test_archive_roundtrip(const char *directory)
     char source_path[512];
     char archive_path[512];
     join_path(manifest_path, sizeof(manifest_path), directory, "manifest.json");
-    join_path(source_path, sizeof(source_path), directory, "main.xs");
+    join_path(source_path, sizeof(source_path), directory, "main.vxs");
     join_path(archive_path, sizeof(archive_path), directory, "Example-0.1.0.xspkg.tar.zst");
     check(write_text(manifest_path, "{\"format\":0,\"name\":\"Example\",\"version\":\"0.1.0\"}\n"),
           "manifest fixture is written");
     check(write_text(source_path, "fn main() -> Long { 0 }\n"), "source fixture is written");
 
     const XsPackageInput inputs[] = {
-        {.archive_path = "Sources/main.xs", .source_path = source_path},
+        {.archive_path = "Sources/main.vxs", .source_path = source_path},
         {.archive_path = XS_PACKAGE_MANIFEST_PATH, .source_path = manifest_path},
     };
     XsPackageArchiveInfo written = {0};

@@ -41,7 +41,7 @@ source-to-native executable pipeline.
   flattened tag, and exact payload type; XHIR now round-trips and validates those records.
 - Lowered enum-data constructors through MIR and XLIL as deterministic tagged aggregates, including overloaded payload
   slots, inherited variants, canonical inactive values, first-class parameters and returns, and LLVM native calls.
-- Added a source-native enum-data overload fixture that produces and runs a `.xse`, plus direct XHIR and middle-end
+- Added a source-native enum-data overload fixture that produces and runs a `.vxse`, plus direct XHIR and middle-end
   regression coverage for payload selection, hierarchy validation, registry layout, and text round trips.
 - Migrated the direct XHIR and XMIR compiler-core adapters to GNU++26 translation units while retaining their stable C
   entry points, beginning the incremental frontend-to-modern-C++ transition without rewriting working C23 subsystems.
@@ -95,7 +95,7 @@ source-to-native executable pipeline.
 - Added structured typed-HIR `Result<T, E>` values, contextual `Ok`/`Error` constructor checking, and exact error-channel
   validation for postfix `@`.
 - Lowered Result propagation through explicit MIR discriminant branches, active-payload extraction, early error return,
-  canonical aggregate reconstruction, XLIL, LLVM IR, object emission, and native `.xse` execution.
+  canonical aggregate reconstruction, XLIL, LLVM IR, object emission, and native `.vxse` execution.
 - Added exhaustive `Ok(binding)`/`Error(binding)` match arms with lexical payload scope. Result matches reject duplicate
   variants, non-Result selectors, and payload-type disagreement, and lower without introducing Result-specific XLIL or
   LLVM instructions.
@@ -104,10 +104,10 @@ source-to-native executable pipeline.
 - Advanced the canonical XHIR, XMIR, and XLIL text format header to version `1`. Readers continue to accept version `0`
   artifacts for compatibility, while writers now emit version `1`.
 - Lowered `Optional<T>` coalescing through target-independent MIR aggregate extraction, conditional control flow,
-  merge storage, XLIL, LLVM IR, object emission, and native `.xse` execution. Both `Some` and `nil` source paths are
+  merge storage, XLIL, LLVM IR, object emission, and native `.vxse` execution. Both `Some` and `nil` source paths are
   covered in direct source and Kotlin project builds.
 - Completed mutable-local Optional coalescing assignment and postfix forced unwrapping through typed HIR, canonical
-  XHIR/XMIR, MIR verification, XLIL, LLVM trap lowering, and native `.xse` tests. `??=` evaluates its replacement only
+  XHIR/XMIR, MIR verification, XLIL, LLVM trap lowering, and native `.vxse` tests. `??=` evaluates its replacement only
   on the `None` edge, while postfix `!` makes the failed-unwrapping path explicit as a panic terminator.
 - Added safe `?.` access for fields of optional `data` values. The lowering maps `Optional<Data>` to
   `Optional<FieldType>` with target-independent aggregate/control-flow records and recursively builds deterministic
@@ -173,7 +173,7 @@ source-to-native executable pipeline.
   successors are identical.
 - Added `xs test` for modern Kotlin projects and `xs test -file` for one source. The resolver transfers its disjoint test
   registry to the native compiler; each valid top-level `#[Test] fn name()` receives an isolated native harness and is
-  compiled through HIR, MIR, XLIL, LLVM, object emission, linking, and `.xse` execution. `Ignore` and `ShouldPanic` are
+  compiled through HIR, MIR, XLIL, LLVM, object emission, linking, and `.vxse` execution. `Ignore` and `ShouldPanic` are
   honored, and unexpected native failure makes the command fail.
 - `panic!` statement calls now survive expanded-AST materialization and lower to the existing MIR/XLIL panic terminator
   and LLVM trap path.
@@ -192,12 +192,12 @@ source-to-native executable pipeline.
 
 ### Added
 
-- `xs run` and `xs run -file` now execute the native `.xse` produced by the supported compiler
+- `xs run` and `xs run -file` now execute the native `.vxse` produced by the supported compiler
   pipeline and propagate the program exit code. Compiler installation now has an explicit component that installs the
   `xs` command, both public C23 header trees under one `include/xs` hierarchy, and project license notices.
 - Tuple destructuring declarations now cross the structural AST into typed HIR as explicit tuple storage and projection
   bindings. Inferred and explicitly typed nested patterns, `else` discard fields, MIR/XLIL aggregate extraction, LLVM
-  lowering, and native `.xse` execution share the existing target-independent tuple registry.
+  lowering, and native `.vxse` execution share the existing target-independent tuple registry.
 
 ### Changed
 
@@ -213,9 +213,9 @@ source-to-native executable pipeline.
   `PUBLISH` project setting defaults to `false` and records future publication intent without uploading packages.
 - Payload-free normal enums now retain nominal declarations and ordered variant tags through XHIR, lower to a
   target-independent single-tag aggregate in MIR/XMIR/XLIL, and support construction, direct calls, local storage,
-  equality, statement `match`, LLVM lowering, and native `.xse` execution.
+  equality, statement `match`, LLVM lowering, and native `.vxse` execution.
 - Explicit concrete turbofish calls to top-level generic functions now create deterministic Rust compiler-core
-  monomorphizations and continue through typed HIR, MIR, XLIL, LLVM, object emission, and native `.xse` execution.
+  monomorphizations and continue through typed HIR, MIR, XLIL, LLVM, object emission, and native `.vxse` execution.
 - Reachable generic specializations are discovered transitively, including same-instance recursion. Expanding
   polymorphic recursion is rejected before it can exhaust memory, and interface constraints are checked against direct
   and inherited implementations.
@@ -241,7 +241,7 @@ source-to-native executable pipeline.
 - XLIL v0 now has runtime-sized `.array %aN : T` registry entries and `%rN:i64 = len.array %rA`. Rust and public C23
   model/parser/writer/verifier APIs preserve the same readable registry contract.
 - Runtime-sized `[T]` values now cross function signatures, checked indexing and mutation, `count`, `for` iteration,
-  LLVM lowering, object emission, and native `.xse` execution.
+  LLVM lowering, object emission, and native `.vxse` execution.
 - The `xslang` Rust compiler-core crate is now packaged as a documented public crate.
 
 ### Changed
@@ -257,19 +257,19 @@ source-to-native executable pipeline.
 - Public `<xs/c23_features.h>` and selective `<xs/c23/trait.h>` / `<xs/c23/impl.h>` headers provide the first strict-C23
   trait-object, implementation binding, and dynamic-call helpers. A standalone public-header test exercises real dispatch.
 - Chained `data` field projection from arbitrary values, including aggregate-returning calls, now has a typed XHIR `member`
-  record and lowers through MIR/XLIL aggregate extraction to LLVM `extractvalue` and native `.xse` execution.
+  record and lowers through MIR/XLIL aggregate extraction to LLVM `extractvalue` and native `.vxse` execution.
 - Built-in collection spelling is now consistent across the specification: resizable sequences use `ArrayList<T>`, maps
   use `[K: V]`, sets use `[T] = {...}`, and none of these built-in forms requires `import collections`.
 - Ordered, transitive, and multiple `data` base lists now cross the C23 structural AST into Rust HIR and canonical XHIR.
   Inherited fields are laid out base-first in source base-list order, participate in object initialization, member access,
-  mutation, scalar call ABI lowering, XMIR aggregate registries, LLVM IR, and native `.xse` execution. Unknown/cyclic/
+  mutation, scalar call ABI lowering, XMIR aggregate registries, LLVM IR, and native `.vxse` execution. Unknown/cyclic/
   cross-category bases and ambiguous inherited field names are rejected before backend lowering.
 - XHIR v0 now preserves nominal `data` declarations, field order, field types, and field mutability before function
   records. Direct XHIR rebuilds the same aggregate registry used by source and XMIR, allowing nested nominal data values
-  to survive source → XHIR → native `.xse` round-trips.
+  to survive source → XHIR → native `.vxse` round-trips.
 - XMIR v0 program documents now preserve aggregate and fixed-array registry entries in a structured `types` section.
   Direct XHIR rebuilds the same deterministic registry from its higher-level tuple/array types. Tuple-valued calls and
-  fixed-array operations now survive both source → XHIR → native and source → XMIR → native `.xse` round-trips.
+  fixed-array operations now survive both source → XHIR → native and source → XMIR → native `.vxse` round-trips.
 
 ### Changed
 
@@ -278,18 +278,18 @@ source-to-native executable pipeline.
   target-dependent pointers or ABI details into XLIL.
 - Direct `xs build --hir -file <program.xhir>` and `xs build --mir -file <program.xmir>` now parse complete version-0
   program documents in the Rust compiler core, validate their typed/control-flow models, lower through verified XLIL, and
-  reuse the LLVM object/link path to produce `.ll`, `.o`, and native `.xse` artifacts. Canonical XHIR program output now
+  reuse the LLVM object/link path to produce `.ll`, `.o`, and native `.vxse` artifacts. Canonical XHIR program output now
   records leading function parameters separately from ordinary locals, preserving call ABI across source → XHIR → native
   round-trips.
-- `xs build --output hir|mir|xlil -file <source.xs>` and the `--hir`/`--mir`/`--xlil` short forms now write real
+- `xs build --output hir|mir|xlil -file <source.vxs>` and the `--hir`/`--mir`/`--xlil` short forms now write real
   compiler-core output beside the source as `.xhir`, `.xmir`, or `.xlil`. Kotlin project builds use the merged program
   session and write beside the selected entry source. Multi-function XHIR/XMIR files have one versioned `program` record,
   explicit `.function end` boundaries, and a final `.program end`; their Rust readers round-trip the complete document.
 - Fixed-size built-in arrays now support source-level `for (value in values)` iteration through typed XHIR, MIR control
-  flow, checked array indexing, LLVM IR, and native `.xse` execution. The iterable is evaluated once, the element
+  flow, checked array indexing, LLVM IR, and native `.vxse` execution. The iterable is evaluated once, the element
   binding is lexical and immutable, and `break`/`continue` target the generated loop exit/update blocks.
 - Positional and named tuple values now cross the Rust compiler core as structural typed-HIR tuples, use target-independent
-  MIR/XLIL aggregate construction and extraction, lower to LLVM structure values, and execute in native `.xse` fixtures.
+  MIR/XLIL aggregate construction and extraction, lower to LLVM structure values, and execute in native `.vxse` fixtures.
   XHIR v0 preserves tuple types, field names, literals, element projections, and element assignments in its human-readable
   text form. Tuple values can cross same-module function signatures, nest inside other tuples, and appear as fixed-array
   elements. Chained positional projection such as `value.0.1` remains source syntax; arrays continue to use `value[index]`.
@@ -307,16 +307,16 @@ source-to-native executable pipeline.
   policy. Allocation, collector threads, barriers, and runtime integration remain deliberately inactive.
 - The public XGC Rust API is available exclusively through `xslang::xgc::*`. Executable use requires an explicit X#
   runtime binding for object layout, reference tracing, and root rewriting; no legacy `xslang::gc` alias is provided.
-- Data constructor overloads now lower through typed HIR, MIR, XLIL, LLVM IR, and native `.xse` emission. Constructor
+- Data constructor overloads now lower through typed HIR, MIR, XLIL, LLVM IR, and native `.vxse` emission. Constructor
   selection uses exact parameter types, hidden constructor symbols preserve overload identity, and definite field
   initialization rejects paths that leave primitive storage uninitialized.
 - Top-level function overloads and instance/static `data` methods now use exact parameter-type selection. Instance
   receivers desugar to explicit target-independent HIR arguments, and deterministic hidden symbols remain distinct through
-  direct XHIR/XMIR round-trips and native `.xse` emission.
+  direct XHIR/XMIR round-trips and native `.vxse` emission.
 - `<xs/lil.h>` is now the umbrella for the selective public C23 XLIL producer headers under `<xs/lil-c/*.h>`.
   Rust producers use `xslang::xlil::*`; both surfaces can build and verify human-readable XLIL v0 modules.
 - Canonical `[T; N]` fixed arrays and `[T]` declarations initialized by square-bracket literals now preserve their element
-  count through typed HIR, MIR, XLIL, LLVM, and native `.xse` emission.
+  count through typed HIR, MIR, XLIL, LLVM, and native `.vxse` emission.
 - Fixed-array literals now fill omitted numeric elements with zero and discard elements beyond the declared layout, as
   required by the collection specification. Literal index assignment reconstructs the target-independent MIR aggregate
   and can mutate array contents without reassigning a `val` binding.
@@ -328,7 +328,7 @@ source-to-native executable pipeline.
 - Kotlin projects may define importable source membership in `xs.module.kts`. Direct members and optional `submodule`
   blocks accept concrete paths or globs and cross the xs-project/xs-compiler boundary in a module-aware v3 registry.
 - Project source, test, and module includes are recursive directory roots rather than globs. Exclude patterns retain glob
-  support, `--module` supplies an omitted module root, and `XS_EXTENSION` replaces the default `.xs` discovery suffix.
+  support, `--module` supplies an omitted module root, and `XS_EXTENSION` replaces the default `.vxs` discovery suffix.
 - Positional and named tuple types/literals now have explicit structural-AST tuple field records, including positional
   `.0` member syntax.
 - Source files now support one optional source-scoped namespace and any number of nested block-scoped namespaces.
@@ -340,7 +340,7 @@ source-to-native executable pipeline.
 - `[T] = [...]` denotes an array and `[T] = {...}` denotes a built-in set. A `[T]` declaration without an initializer is
   an array. The literal delimiter supplies the distinction when an initializer is present.
 - Fixed arrays now support calculated `Int` indices for reads and writes through checked MIR/XLIL array access records,
-  the public C23 XLIL model, and bounds-checked LLVM lowering. Native `.xse` fixtures cover both operations.
+  the public C23 XLIL model, and bounds-checked LLVM lowering. Native `.vxse` fixtures cover both operations.
 - Prefix operators now consume a postfix-complete operand, so `!value.member` is parsed as `!(value.member)`.
 - The source keyword is now singular `import`; legacy `imports` is no longer tokenized as a keyword. Source-level
   `module` declarations have been removed in favor of project metadata, and control-flow parentheses are optional.
@@ -360,14 +360,14 @@ source-to-native executable pipeline.
   desugaring to nominal collection names. Typed HIR now preserves array/map literals, performs homogeneous inference and
   contextual element checks, and round-trips those records through XHIR.
 - First-class fixed arrays now lower through typed HIR, MIR, XLIL `%aN` registry records, the public C23 XLIL API, LLVM
-  array values, object emission, and native `.xse` linking. XLIL construction and constant indexing use `array` and
+  array values, object emission, and native `.vxse` linking. XLIL construction and constant indexing use `array` and
   `extract.array` records; dynamic arrays and maps remain deferred beyond typed HIR.
 - Nominal `data` return values now use first-class aggregate values across typed HIR, MIR, XMIR, XLIL, LLVM, and native
-  `.xse` emission. Aggregate-returning calls can initialize local `data` places, including nested layouts, and their fields
+  `.vxse` emission. Aggregate-returning calls can initialize local `data` places, including nested layouts, and their fields
   are extracted back into the existing place model without exposing LLVM types to HIR or MIR.
 - XLIL v0 now has sequential nominal aggregate type registry records, first-class aggregate construction and field
   extraction instructions, matching Rust and public C23 parse/write/verify APIs, and LLVM named-structure lowering.
-  Direct XLIL builds exercise the complete path through object emission and a native `.xse` executable.
+  Direct XLIL builds exercise the complete path through object emission and a native `.vxse` executable.
 - HIR now resolves automatic `Optional`, `Result`, `Error`, and `Task` types together with import-gated standard-library
   types and functions through one standard-library registry. Associated enum-data variants, static user functions,
   `Task<Result<...>>` propagation contexts, and destructuring/for-each pattern bindings participate in name checking.
@@ -377,23 +377,23 @@ source-to-native executable pipeline.
   X# source remains a later milestone.
 - The structural frontend now retains generic type-qualified associated expressions, typed object literals, typed
   patterns and tuple-pattern bindings, async function expressions, and unconditional `loop` statements. `loop` also
-  crosses the compiler-core, MIR, XLIL, LLVM, and native `.xse` path for the supported body subset.
+  crosses the compiler-core, MIR, XLIL, LLVM, and native `.vxse` path for the supported body subset.
 - `Str` `==` and `!=` now lower through typed HIR, XMIR `eq.str`/`ne.str`, XLIL, the public C23 model, and hosted LLVM
   native emission. Equality compares UTF-16 code-unit length and content rather than backing-pointer identity.
 - Floating-point `!=` now crosses XHIR, XMIR, XLIL `ne.f32`/`ne.f64`, the public C23 XLIL model, and LLVM ordered
   not-equal comparison lowering. Contextual unary `+` and expression-inferred call locals also use the compiler-core
   path.
 - Boolean `&&` and `||` now lower as real short-circuit control flow through typed HIR, MIR branches, XLIL `br_if`, LLVM,
-  and native `.xse` builds. Inferred `:=` locals now derive their type from supported expressions rather than literals
+  and native `.vxse` builds. Inferred `:=` locals now derive their type from supported expressions rather than literals
   alone, so chained logical results retain `Bool` without an explicit annotation.
 - Same-module direct calls now support self recursion and mutual recursion across KTS-selected source files through typed
-  HIR, MIR, XLIL, LLVM, and native `.xse` emission. Unit-returning call statements lower without a result register, while
+  HIR, MIR, XLIL, LLVM, and native `.vxse` emission. Unit-returning call statements lower without a result register, while
   semicolon-terminated value calls retain evaluation and explicitly discard their result.
 - Prefix and postfix integer updates now preserve their different expression results through typed HIR, MIR local
-  storage, XLIL, LLVM, and native `.xse` output. The remaining arithmetic/bitwise compound assignments also use the Rust
+  storage, XLIL, LLVM, and native `.vxse` output. The remaining arithmetic/bitwise compound assignments also use the Rust
   compiler-core route instead of the temporary C source bridge.
 - Primitive fields of locally initialized `data` values now cross the structural AST, typed HIR, MIR storage, XLIL, and
-  LLVM pipeline. Object literals, field reads, and field assignments are covered by native `.xse` regression tests.
+  LLVM pipeline. Object literals, field reads, and field assignments are covered by native `.vxse` regression tests.
 - Nested `data` values now scalarize recursively for local storage, whole-value copies, nested-field replacement, and
   same-module calls. Non-recursive `data` parameters use declaration-order primitive leaf parameters in the current native
   ABI; direct object literals and initialized local places can both supply those calls.
@@ -408,13 +408,13 @@ source-to-native executable pipeline.
 - Native project tests now evaluate real `xs.project.kts` files with the external Kotlin 2.4.0 runner and JRE 25, including
   multi-file and fixed-width integer projects.
 - Rust compiler-core sessions can merge multiple expanded structural-AST source trees into one program-wide declaration,
-  typed HIR, MIR, XLIL, and LLVM module. Same-module helper calls across project files now produce native `.xse` output.
+  typed HIR, MIR, XLIL, and LLVM module. Same-module helper calls across project files now produce native `.vxse` output.
 - Compiler-core sessions retain type-check, MIR-lowering, borrow-check, and optimization diagnostics instead of silently
   dropping failed function bodies. The C23 driver exposes those messages when native emission cannot proceed.
 - Recursive by-value `data` parameters are rejected with an explicit indirect-ABI diagnostic instead of recursing during
   compiler lowering. Non-recursive `data` returns now use the shared aggregate registry rather than the scalar parameter
   ABI.
-- Kotlin `sources` includes now expand `*`, `**`, and `?` globs, apply excludes, require exactly one resolved `main.xs`,
+- Kotlin `sources` includes now expand `*`, `**`, and `?` globs, apply excludes, require exactly one resolved `main.vxs`,
   and emit a deterministic main-first source registry.
 - `--warning all|medium|low|none`, `--werror true|false`, and `--verbose true|false` provide one-shot compiler-policy
   overrides for KTS and direct source invocations. The KTS resolver now transfers its evaluated
@@ -425,7 +425,7 @@ source-to-native executable pipeline.
   compiler, backend, and `TARGET` values through ordinary Kotlin `println` calls.
 - The Kotlin/JVM 25 `xs-project` resolver evaluates combined `xs.project.kts` files or split `xs.settings.kts` and
   `xs.build.kts` files through the required external `kotlin` script runner. Explicit source registries require one
-  case-sensitive `main.xs` entry and are compiled by the JVM-free `/usr/bin/xs` process.
+  case-sensitive `main.vxs` entry and are compiled by the JVM-free `/usr/bin/xs` process.
 
 ### Changed
 
@@ -442,18 +442,18 @@ source-to-native executable pipeline.
 ### Added
 
 - Arithmetic, division/remainder, bitwise operations, shifts, equality, and ordering now preserve every fixed integer
-  width through XHIR, verified XMIR, optimized XLIL, signed/unsigned LLVM lowering, object emission, and native `.xse`
+  width through XHIR, verified XMIR, optimized XLIL, signed/unsigned LLVM lowering, object emission, and native `.vxse`
   builds. The public C23 XLIL API exposes the same typed operation model to third-party producers.
 - The complete fixed-width integer literal family now lowers through typed HIR, decimal XMIR constants, fixed-width XLIL
-  hexadecimal bit patterns, LLVM IR, object emission, and native `.xse` builds. Range checking includes signed minimum
+  hexadecimal bit patterns, LLVM IR, object emission, and native `.vxse` builds. Range checking includes signed minimum
   values and full u128 values. Public C23 `XsUInt128`/`XsInt128` types use two 64-bit words; no `__int128` extension is used.
 - `Char` literals now cross the structural AST into typed HIR as one UTF-16 code unit, lower through XMIR `const.u16`,
-  XLIL `%rN:u16 = const.u16 0xXXXX`, LLVM `i16`, object emission, and native `.xse` builds. Parameters, locals, direct
+  XLIL `%rN:u16 = const.u16 0xXXXX`, LLVM `i16`, object emission, and native `.vxse` builds. Parameters, locals, direct
   calls, and returns preserve the 16-bit value; the public C23 XLIL API can construct and inspect the record.
 - Project-local VS Code settings exclude generated build, Cargo target, dependency, and output directories from file
   watching and workspace search to avoid indexing multi-gigabyte artifact trees.
 - Borrowed-static `Str` literals now lower through XHIR, endian-neutral `utf16 [...]` MIR/XMIR, explicit
-  `const.str utf16le|utf16be [...]` XLIL v0 records, LLVM static data, PIC object emission, and native `.xse` linking.
+  `const.str utf16le|utf16be [...]` XLIL v0 records, LLVM static data, PIC object emission, and native `.vxse` linking.
   The public C23 XLIL API exposes the selected encoding and individual UTF-16 code units.
 - HIR now documents its coordinated THIR and XHIR sides explicitly: THIR carries typed/source-oriented facts, XHIR carries
   normalized operations for MIR lowering, and `.xhir` represents XHIR rather than THIR.
@@ -461,24 +461,24 @@ source-to-native executable pipeline.
   borrowed-static `Str` type; C23 semantic checks and the Rust compiler core preserve this distinction through canonical
   XHIR text.
 - `SFloat`/`Float` addition, subtraction, multiplication, division, remainder, equality, and ordered comparisons now
-  lower through typed HIR, MIR/XMIR, XLIL v0, LLVM IR, object emission, and native `.xse` builds. XLIL spells these as
+  lower through typed HIR, MIR/XMIR, XLIL v0, LLVM IR, object emission, and native `.vxse` builds. XLIL spells these as
   width-explicit records such as `add.f32` and `lt.f64`; Linux native linking supplies the math runtime needed when LLVM
   legalizes floating remainder to `fmod`/`fmodf`.
 - `SFloat` and `Float` literals now cross the C23 structural AST into Rust typed HIR, verified MIR/XMIR, XLIL v0, LLVM
-  IR, object emission, and native `.xse` builds. XMIR and XLIL store exact IEEE-754 f32/f64 bit patterns in fixed-width
+  IR, object emission, and native `.vxse` builds. XMIR and XLIL store exact IEEE-754 f32/f64 bit patterns in fixed-width
   hexadecimal `const.f32` and `const.f64` records.
 - Same-module `Int` functions now lower as real i64 functions through typed HIR, MIR/XMIR, XLIL, LLVM IR, object
-  emission, and native `.xse` builds. Division, remainder, bitwise operations, signed shifts, and ordered comparisons use
+  emission, and native `.vxse` builds. Division, remainder, bitwise operations, signed shifts, and ordered comparisons use
   the complete i64 instruction family without changing the required `Long`/i32 process entry ABI.
 - Unary `+`/`-` on explicitly typed `Long` values and logical `!` on `Bool` values now remain in the Rust typed-HIR,
-  XHIR, verified MIR/XMIR, optimized XLIL, LLVM, and native `.xse` route. `Long` is lowered as i32; `Int` remains i64.
+  XHIR, verified MIR/XMIR, optimized XLIL, LLVM, and native `.vxse` route. `Long` is lowered as i32; `Int` remains i64.
 - `Long` division, remainder, bitwise AND/OR/XOR, and left/arithmetic-right shifts now cross the C23 structural AST into
-  Rust typed HIR, XHIR, verified MIR/XMIR, XLIL, and the existing LLVM native `.xse` backend. Context-free integer
+  Rust typed HIR, XHIR, verified MIR/XMIR, XLIL, and the existing LLVM native `.vxse` backend. Context-free integer
   literals remain `Int`; an explicit `Long` return, binding, or parameter supplies the i32 lowering context.
 - `format_args_nl!` is now a source-callable compiler-special built-in and shares format-string validation with
   `format_args!`; neither formatting-argument intrinsic can be declared or shadowed through `macro_rules!`.
 - Value-producing `match` expressions with `Long`/`Bool` selectors, literal arms, and a final `else` now cross the C23
-  structural AST into typed HIR, versioned XHIR, MIR control flow and storage, XLIL, LLVM IR, and native `.xse` output.
+  structural AST into typed HIR, versioned XHIR, MIR control flow and storage, XLIL, LLVM IR, and native `.vxse` output.
 - Value-producing `if` expressions now lower in general value contexts, including local initializers and function-call
   arguments, through target-independent MIR merge storage and the existing XLIL/LLVM native pipeline.
 
@@ -516,7 +516,7 @@ source-to-native executable pipeline.
 ### Added
 
 - Classic `for` statements now cross the C23 structural-AST boundary into checked HIR, target-independent MIR control
-  flow, XLIL, LLVM IR, and native `.xse` emission for the supported source subset.
+  flow, XLIL, LLVM IR, and native `.vxse` emission for the supported source subset.
 - XHIR v0 can read and write explicit `for` records with optional initializer, condition, and update sections.
 
 ### Changed
@@ -533,7 +533,7 @@ source-to-native executable pipeline.
 - Rust compiler-core HIR now import statement `match` with typed `Long`/`Bool` selectors, literal arms, and a required
   final `else`; HIR verification rejects mismatched, duplicate, and incomplete arm sets.
 - HIR `match` lowers into explicit MIR test/body/merge blocks and continues through XLIL `eq.i32`/`br_if`, LLVM IR,
-  object emission, and native `.xse` linking.
+  object emission, and native `.vxse` linking.
 - Rust MIR now carries `store.local` and `load.local` statements. XMIR parser/writer, MIR verifier and borrow checker,
   MIR-to-XLIL lowering, XLIL stack slots, and regression tests cover the new storage path.
 - Source syntax now accepts `do { ... } while (condition);`. The frontend marks it as post-test loop sugar and lowers it
@@ -579,7 +579,7 @@ source-to-native executable pipeline.
 - Statement `if`/`else` and value-producing `if` expressions now import into typed Rust HIR blocks. Returned conditional
   values lower to verified multi-block MIR and XLIL `branch_if` control flow.
 - Supported single-unit source builds now consume compiler-core XLIL through the public C23 XLIL parser and continue through
-  LLVM IR, object emission, LLD linking, and native `.xse` generation. Unsupported source forms retain the existing C23
+  LLVM IR, object emission, LLD linking, and native `.vxse` generation. Unsupported source forms retain the existing C23
   source-native fallback while the Rust compiler core grows.
 - Same-module compiler-core functions may carry `Long` and `Bool` parameters through MIR, XLIL, LLVM calls, and native
   execution.
@@ -640,7 +640,7 @@ source-to-native executable pipeline.
 - Specification declarations and examples now consistently use snake_case for modules, namespaces, functions, methods,
   fields, and local bindings while preserving PascalCase for types and enum variants.
 - Source-native statement `match` now lowers `Long` and `Bool` selectors with literal arms and a required final `else`
-  through MIR branches, XLIL, LLVM IR, ELF object emission, and native `.xse` linking.
+  through MIR branches, XLIL, LLVM IR, ELF object emission, and native `.vxse` linking.
 
 ## 0.0.8 - 2026-07-13
 
@@ -651,7 +651,7 @@ source-to-native executable pipeline.
 - XLIL v0 now has typed stack slots (`.slot %sN:type`) plus register-to-slot `store` and slot-to-register `load`
   instructions in both the public C23 model and Rust `xslang`.
 - C MIR root-local places now lower to XLIL stack slots, and LLVM emits corresponding `alloca`, `store`, and `load`
-  instructions. Direct XLIL native builds exercise the complete path through `.xse` linking.
+  instructions. Direct XLIL native builds exercise the complete path through `.vxse` linking.
 
 ### Changed
 
@@ -677,7 +677,7 @@ source-to-native executable pipeline.
 ### Added
 
 - Source-native builds now lower same-module `Long -> Long` helper calls through C MIR, XLIL, LLVM IR, object emission, and
-  native `.xse` linking.
+  native `.vxse` linking.
 - Source-native builds now also lower same-module `Long -> Bool` helper calls for supported `if` conditions and explicit
   `Bool` local initializers.
 - C MIR now has a call instruction and MIR-to-XLIL call lowering for the supported source-native direct-call slice.
@@ -707,7 +707,7 @@ source-to-native executable pipeline.
   inherited block visibility.
 - HIR type resolution now recognizes the initial standard CFFI type family and validates its generic arity.
 - HIR semantic validation now accepts only explicitly represented C ABI extern blocks, requiring `#[repr(C)] extern "C"`.
-- `Spec/Attrs.xs` and `Spec/CFFI.xs` document the standard attribute registry and the explicit opt-in CFFI surface.
+- `Spec/Attrs.vxs` and `Spec/CFFI.vxs` document the standard attribute registry and the explicit opt-in CFFI surface.
 
 ### Changed
 
@@ -736,7 +736,7 @@ source-to-native executable pipeline.
 
 - Imported `Stdio` macros now include `print!`, `println!`, `eprint!`, `eprintln!`, and `format!`, with
   newline-only `println!()`/`eprintln!()` forms.
-- `Spec/Stdio.xs` now documents `std::stdin()` line input examples, and `Spec/Result.xs` documents the explicit `Result`
+- `Spec/Stdio.vxs` now documents `std::stdin()` line input examples, and `Spec/Result.vxs` documents the explicit `Result`
   model, postfix `@` propagation, `expect`, and `unwrap`.
 - The C23 lexer/parser now accepts postfix `@` as a structural Result propagation expression; semantic checking and lowering
   are intentionally left for later Result work, and HIR expression checking reports that gap explicitly instead of silently
@@ -784,9 +784,9 @@ source-to-native executable pipeline.
 
 ### Added
 
-- Native executable artifacts now use the `.xse` extension; the first implemented container target is Linux ELF, with PE
+- Native executable artifacts now use the `.vxse` extension; the first implemented container target is Linux ELF, with PE
   planned after ELF support.
-- `xs build -file <Main.xs>` can now produce `.ll`, `.o`, and `.xse` artifacts for the
+- `xs build -file <Main.vxs>` can now produce `.ll`, `.o`, and `.vxse` artifacts for the
   first supported source-native entry slice: top-level `main` returning `Long` with i32-range literals, `+`, `-`, `*`, and
   one top-level `if` expression over i32 comparisons.
 - XLIL, MIR, LLVM lowering, and source-native `if` conditions now support signed `ne.i32` inequality.

@@ -29,7 +29,7 @@ static void test_declaration_macro_symbols(void)
     const char *text = ""
                        "macro_rules! make { () -> { incomplete fn Generated(); }; }\n"
                        "make!();\n";
-    XsSource source = {.path = "MacroSymbols.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroSymbols.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroExpansionReport report;
@@ -61,7 +61,7 @@ static void test_declaration_macro_duplicate_symbols(void)
                        "fn Generated() {}\n"
                        "macro_rules! make { () -> { incomplete fn Generated(); }; }\n"
                        "make!();\n";
-    XsSource source = {.path = "MacroDuplicateSymbols.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroDuplicateSymbols.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroDeclarationExpansionSet declarations;
@@ -85,7 +85,7 @@ static void test_generated_function_name_use(void)
                        "fn Main() { Generated(); }\n"
                        "macro_rules! make { () -> { incomplete fn Generated(); }; }\n"
                        "make!();\n";
-    XsSource source = {.path = "MacroGeneratedNameUse.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroGeneratedNameUse.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroStatementExpansionSet statements;
@@ -116,7 +116,7 @@ static void test_generated_declaration_type_errors(void)
                        "macro_rules! make { () -> { incomplete fn Broken(value: Missing); }; }\n"
                        "make!();\n";
     XsSource source = {
-        .path = "MacroGeneratedTypeError.xs", .module_name = "App", .text = text, .length = strlen(text)};
+        .path = "MacroGeneratedTypeError.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroStatementExpansionSet statements;
@@ -147,7 +147,7 @@ static void test_item_fragment_declaration_symbol(void)
     const char *text = ""
                        "macro_rules! forward { ($item:item) -> { $item }; }\n"
                        "forward!(incomplete fn Generated(););\n";
-    XsSource source = {.path = "MacroItemFragment.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroItemFragment.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroExpansionReport report;
@@ -179,7 +179,7 @@ static void test_item_fragment_empty_call_errors(void)
     const char *text = ""
                        "macro_rules! forward { ($item:item) -> { $item }; }\n"
                        "forward!();\n";
-    XsSource source = {.path = "MacroItemFragmentEmpty.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroItemFragmentEmpty.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -198,7 +198,7 @@ static void test_multiple_matching_declaration_rules(void)
                        "  () -> { incomplete fn Second(); };\n"
                        "}\n"
                        "make!();\n";
-    XsSource source = {.path = "MacroMultipleRules.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "MacroMultipleRules.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -219,7 +219,7 @@ static void test_multiple_matching_statement_rules_name_errors(void)
                        "}\n"
                        "fn Main() { both!(); }\n";
     XsSource source = {
-        .path = "MacroMultipleStatementNames.xs", .module_name = "App", .text = text, .length = strlen(text)};
+        .path = "MacroMultipleStatementNames.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -239,7 +239,7 @@ static void test_multiple_matching_statement_rules_type_errors(void)
                        "}\n"
                        "fn Main() { both!(); }\n";
     XsSource source = {
-        .path = "MacroMultipleStatementTypes.xs", .module_name = "App", .text = text, .length = strlen(text)};
+        .path = "MacroMultipleStatementTypes.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     xs_diagnostics_init(&diagnostics);
@@ -258,7 +258,7 @@ static void test_generated_class_member_type_errors(void)
                        "  make!();\n"
                        "}\n";
     XsSource source = {
-        .path = "MacroGeneratedMemberTypeError.xs", .module_name = "App", .text = text, .length = strlen(text)};
+        .path = "MacroGeneratedMemberTypeError.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroStatementExpansionSet statements;
@@ -293,7 +293,7 @@ static void test_generated_class_field_like_type_errors(void)
                        "  make!();\n"
                        "}\n";
     XsSource source = {
-        .path = "MacroGeneratedFieldLikeTypeError.xs", .module_name = "App", .text = text, .length = strlen(text)};
+        .path = "MacroGeneratedFieldLikeTypeError.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsMacroStatementExpansionSet statements;

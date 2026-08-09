@@ -142,7 +142,7 @@ void configure_cli(Dim::Cli &cli, ParsedValues &values)
     cli.command("test").desc("Build and execute Visual X# tests.");
     add_common_options(cli, values, true);
 
-    cli.command("resolve").desc("Resolve project dependencies and refresh xs.lock.sqlite3.");
+    cli.command("resolve").desc("Resolve project dependencies and refresh Visual.XSharp.Lockfile.sqlite3.");
 
     cli.command("");
     cli.opt(&values.version, "version.").desc("Show the compiler version and exit.");

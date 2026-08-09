@@ -127,7 +127,7 @@ bool xs_driver_refresh_lock(void)
     }
     if(result != 0)
         return false;
-    fprintf(stderr, "vxs: refreshed binary lock file 'xs.lock.sqlite3'\n");
+    fprintf(stderr, "vxs: refreshed binary lock file 'Visual.XSharp.Lockfile.sqlite3'\n");
     return true;
 }
 

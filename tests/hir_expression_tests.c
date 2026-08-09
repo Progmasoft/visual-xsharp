@@ -28,7 +28,7 @@ static int failures;
 static bool add_file(const char *text, uint64_t file_id, XsSyntaxTree *tree, XsHirSymbolTable *symbols,
                      XsDiagnostics *diagnostics)
 {
-    XsSource source = {.path = "HirExpressions.xs", .module_name = "App", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "HirExpressions.vxs", .module_name = "App", .text = text, .length = strlen(text)};
     if(!xs_syntax_parse(&source, file_id, diagnostics, tree))
         return false;
     return xs_hir_collect_symbols(tree, symbols, diagnostics);
@@ -59,7 +59,7 @@ static bool check_single_source_expressions(const char *text)
 
 static bool check_macro_expression_error(const char *main, uint64_t file_id)
 {
-    XsSource source = {.path = "MacroExpressionTypes.xs", .module_name = "App", .text = main, .length = strlen(main)};
+    XsSource source = {.path = "MacroExpressionTypes.vxs", .module_name = "App", .text = main, .length = strlen(main)};
     XsSyntaxTree tree;
     XsHirSymbolTable symbols;
     XsHirImportScope import;

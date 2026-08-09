@@ -6,7 +6,7 @@
 
 {
   "[xs]": {
-    "editor.defaultFormatter": "xs-lang.xs-analyzer"
+    "editor.defaultFormatter": "xs-lang.vxs-analyzer"
   },
 
   // xs-analyzer: baseline LSP behavior.

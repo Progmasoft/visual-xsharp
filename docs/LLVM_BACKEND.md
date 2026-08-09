@@ -36,7 +36,7 @@ design to x86-64; ARM64 compatibility must be preserved.
 - Object file emission per codegen unit
 - Linker invocation layer that does not use a shell and receives arguments from the caller
 
-Object file emission and linker invocation are wired into direct `.xlil` native builds and the supported `.xs`
+Object file emission and linker invocation are wired into direct `.xlil` native builds and the supported `.vxs`
 compiler-core slice. Unsupported source constructs are diagnosed or remain outside that incremental slice; they are not
 lowered by inventing LLVM-only semantics.
 

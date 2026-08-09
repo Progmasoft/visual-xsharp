@@ -65,7 +65,7 @@ RespectFormatterConfig = true
 UseColor = true
 
 [Analysis.Scope]
-Include = ["**/*.xs"]
+Include = ["**/*.vxs"]
 
 Exclude = [
     "target/**",

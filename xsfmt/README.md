@@ -18,8 +18,8 @@ The configuration model currently validates `max_width` (40–320),
 excess final blank lines, and the final newline without changing Visual X# syntax.
 
 ```text
-cargo +nightly run --manifest-path xsfmt/Cargo.toml -- --check Main.xs
-cargo +nightly run --manifest-path xsfmt/Cargo.toml -- Main.xs
+cargo +nightly run --manifest-path xsfmt/Cargo.toml -- --check Main.vxs
+cargo +nightly run --manifest-path xsfmt/Cargo.toml -- Main.vxs
 ```
 
 Rust sources live under `xsfmt/sources/`.

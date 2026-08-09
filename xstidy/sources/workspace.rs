@@ -91,6 +91,6 @@ mod tests
   fn ignores_non_xs_inputs()
   {
     assert!(!is_xs_file(Path::new("README.md")));
-    assert!(is_xs_file(Path::new("main.xs")));
+    assert!(is_xs_file(Path::new("main.vxs")));
   }
 }

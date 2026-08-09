@@ -70,7 +70,7 @@ static void test_materialized_syntax_packet(void)
                        "(left | right) & (left ^ right) & ((left << right) >> right); }\n"
                        "fn wide_compare(left: Int, right: Int) -> Bool { return left >= right; }\n"
                        "fn main() -> Long { if (true) { return add(3, 4); } else { return choose(false); } }\n";
-    XsSource source = {.path = "Bridge.xs", .module_name = "app", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Bridge.vxs", .module_name = "app", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsSyntaxTree expanded;
@@ -206,7 +206,7 @@ static void test_nominal_data_packet(void)
     const char *text =
         "data Point { x: Long; y: Long; }\n"
         "fn main() -> Long { point: Point = Point { x: 2, y: 3 }; point.x += 4; return point.x + point.y; }\n";
-    XsSource source = {.path = "Nominal.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Nominal.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsCompilerCoreSyntaxStorage *storage = nullptr;
@@ -231,7 +231,7 @@ static void test_nominal_data_packet(void)
 static void test_native_test_harness_packet(void)
 {
     const char *text = "#[Test] #[ShouldPanic] fn expected_failure() { panic!(\"expected\"); }\n";
-    XsSource source = {.path = "Harness.xs", .text = text, .length = strlen(text)};
+    XsSource source = {.path = "Harness.vxs", .text = text, .length = strlen(text)};
     XsDiagnostics diagnostics;
     XsSyntaxTree tree;
     XsSyntaxTree expanded;

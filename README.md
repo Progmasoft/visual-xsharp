@@ -45,7 +45,7 @@ Run the JVM-labelled project tests separately without a virtual-memory limit.
 Check a source file:
 
 ```text
-./build/clang-debug/xs check -file tests/fixtures/example_project/source/Main.xs
+./build/clang-debug/xs check -file tests/fixtures/example_project/source/Main.vxs
 ```
 
 Validate the test registry of a modern Kotlin project from its project directory:
@@ -80,7 +80,7 @@ temporary `.vxse` harnesses. `#[Ignore]` and `#[ShouldPanic]` are honored.
 Documented order:
 
 ```text
-.xs sources
+.vxs sources
     → lexing and parsing
     → structural AST
     → macro expansion
@@ -121,10 +121,9 @@ For the detailed current status, see [docs/IMPLEMENTATION.md](docs/IMPLEMENTATIO
 
 ## Specification examples
 
-The public language examples live under [Spec/](Spec). Smaller files document syntax and semantic intent for declarations,
-types, macros, standard modules, control flow, and project manifests. Larger one-file completed-language sketches live under
-[Spec/Programs/](Spec/Programs); they are design fixtures, not promises that the current partial compiler can compile every
-example today.
+The public language examples live under [Spec/](Spec) as topic-oriented `.vxs` suites. Each numbered fragment explains the
+rule it demonstrates and marks intentionally rejected forms. A suite is a readable executable specification rather than one
+large source file, so its fragments may depend on declarations shown elsewhere in the same topic.
 
 ## Release policy
 
@@ -169,18 +168,18 @@ xs check
 xs build
 xs run
 xs resolve
-xs build --output hir -file Main.xs
-xs build --output mir -file Main.xs
-xs build --output xlil -file Main.xs
-xs build --hir -file Main.xs
-xs build --mir -file Main.xs
-xs build --xlil -file Main.xs
+xs build --output hir -file Main.vxs
+xs build --output mir -file Main.vxs
+xs build --output xlil -file Main.vxs
+xs build --hir -file Main.vxs
+xs build --mir -file Main.vxs
+xs build --xlil -file Main.vxs
 ```
 
-The argument-free `xs` project forms use the bundled project runtime to discover and evaluate `xs.project.kts` or the
-`xs.settings.kts` + `xs.build.kts` pair, then compile the returned `.xs` source registry. The `xs -file`
+The argument-free `vxs` project forms use the bundled project runtime to discover and evaluate `Visual.XSharp.kts`, then
+compile the returned `.vxs` source registry. The `vxs -File`
 forms are direct single-file/intermediate input flows. `xs resolve` refreshes the binary SQLite dependency lock without
-compiling sources. Checked `.xs` input can emit real `.xhir`, `.xmir`, or `.xlil`
+compiling sources. Checked `.vxs` input can emit real `.xhir`, `.xmir`, or `.xlil`
 program text. Supported `.xhir`, `.xmir`, `.xlil`, and source programs can continue through verified XLIL and LLVM to
 native `.vxse` output.
 Intermediate output extensions:
