@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # CLI contract
 
-`/usr/bin/xs` is the single user-facing command. It owns native X# compilation and invokes its bundled project runtime to
+`/usr/bin/xs` is the single user-facing command. It owns native Visual X# compilation and invokes its bundled project runtime to
 evaluate Kotlin project files on JRE 25 or newer.
 
 ## Supported forms
@@ -85,7 +85,7 @@ variant. The current format records exact declared coordinates. Remote package s
 `xs check` does not produce objects. Current flow:
 
 1. source input validation
-2. X# parse/structural AST
+2. Visual X# parse/structural AST
 3. macro validation and expansion preparation
 4. HIR symbol/import/name/type resolution
 5. early expression checks
@@ -94,7 +94,7 @@ variant. The current format records exact declared coordinates. Remote package s
 
 `xs build` will eventually run the full check, MIR, borrow checker, monomorphization, XLIL, backend, object, and link flow.
 Today, plain `xs build -file <main.xs>` and argument-free `xs build` can produce a native
-`.xse` only for the first
+`.vxse` only for the first
 supported source slice:
 
 ```xs
@@ -141,7 +141,7 @@ The `--output hir|mir|xlil` spelling and the short `--hir`, `--mir`, and
 
 `xs test` evaluates the modern Kotlin project, selects its disjoint test registry, and parses and semantically validates
 the production, module, and test sources as one program. Each top-level `#[Test] fn name()` is then compiled through the
-normal HIR → MIR → XLIL → LLVM → object → link path into an isolated temporary `.xse` harness and executed. A test passes
+normal HIR → MIR → XLIL → LLVM → object → link path into an isolated temporary `.vxse` harness and executed. A test passes
 when it exits successfully; `#[ShouldPanic]` reverses that expectation, and `#[Ignore]` skips execution. Temporary test
 artifacts are removed after each case. A syntax, semantic, harness-compilation, or unexpected runtime failure makes the
 command fail. `xs test -file <Test.xs>` uses the same path for one source file.
@@ -151,7 +151,7 @@ Test functions currently must be top-level, have a body, take no parameters, and
 ## `xs run`
 
 For the supported native source subset, `xs run` and `xs run -file <main.xs>` perform the
-same checked build as `xs build`, write `.ll`, `.o`, and `.xse`, then execute the generated `.xse`. The CLI returns the
+same checked build as `xs build`, write `.ll`, `.o`, and `.vxse`, then execute the generated `.vxse`. The CLI returns the
 native program's exit code unchanged. A compilation, linking, spawn, or wait failure returns a non-zero compiler error
 instead. Program arguments and direct XHIR/XMIR/XLIL execution are not part of this first run slice.
 
@@ -189,12 +189,12 @@ The direct file paths skip project manifests. Their final semantics depend on th
 - `mir` with `.xs`: parse/check/lower a single `.xs` input and emit `.xmir`.
 - `mir` with `.xmir`: parse the versioned XMIR program, structurally verify and borrow-check it, optimize it, lower it to
   verified XLIL, and produce native artifacts for the supported model subset.
-- `xlil` with `.xs`: lower a single X# source file to `.xlil`.
+- `xlil` with `.xs`: lower a single Visual X# source file to `.xlil`.
 - `xlil` with `.xlil`: parse and verify the `.xlil version N` registry, lower the supported subset to LLVM IR, run the
   configured LLVM verification/optimization pipeline, emit an object file, and link a native executable when the target is
   the local host.
 - no output flag with `.xs`: check the source file and, for the first supported `main` slice, emit `.ll`, `.o`, and
-  `.xse` beside the input.
+  `.vxse` beside the input.
 
 For `.xs` input, all three output forms use the same checked compiler-core session as native compilation. They write beside
 the source file, replacing `.xs` with `.xhir`, `.xmir`, or `.xlil`. A Kotlin project merges every selected source session
@@ -205,7 +205,7 @@ For direct `.xhir`, `.xmir`, and `.xlil` inputs, the CLI validates the complete 
 unsupported versions. XHIR and XMIR are lowered to an in-memory XLIL registry before entering the same backend boundary.
 A supported XLIL module is parsed through the public XLIL C23 parser API, verified, lowered through the LLVM backend,
 verified by LLVM, and passed through the configured optimization pipeline. It writes
-`<input-stem>.ll`, `<input-stem>.o`, and a native executable named `<input-stem>.xse` alongside the input file. The direct
+`<input-stem>.ll`, `<input-stem>.o`, and a native executable named `<input-stem>.vxse` alongside the input file. The direct
 XLIL path currently uses the backend default `O0` pipeline; no CLI optimization flag is exposed yet.
 
 Direct native XLIL builds require exactly one function definition with this platform entry signature:
@@ -214,10 +214,10 @@ Direct native XLIL builds require exactly one function definition with this plat
 .func main : () -> i32
 ```
 
-This is a direct XLIL build ABI, not the X# source-language entry-point rule. The command uses the Clang driver with LLD
+This is a direct XLIL build ABI, not the Visual X# source-language entry-point rule. The command uses the Clang driver with LLD
 for local Linux ELF linking. When the configured target triple differs from the host, it still writes the LLVM IR and object
 file but stops before linking with a cross-linking diagnostic. Runtime and external-library linking are not configured yet;
 an unresolved XLIL `.extern` symbol causes the linker to report a failed direct native build.
 
-The `.xse` extension is the xs-project native executable artifact name. The first target format is Linux ELF; PE native
+The `.vxse` extension is the xs-project native executable artifact name. The first target format is Linux ELF; PE native
 executables are planned after ELF support.

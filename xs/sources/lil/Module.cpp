@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "xs/lil/Module.hxx"
+#include "xs/lil/Module.hpp"
 
 #include "xs/lil-c/function.h"
 #include "xs/lil-c/module.h"
 #include "xs/lil-c/text.h"
-#include "xs/lil/Error.hxx"
+#include "xs/lil/Error.hpp"
 
 #include <utility>
 #include <vector>

@@ -85,7 +85,7 @@ source-to-native executable pipeline.
 ## 0.2.4 - 2026-08-02
 
 - Began the compiler's incremental Clang GNU++26 transition while retaining the existing strict C23 frontend and stable
-  C ABI. Added an owning C++ XLIL API under `<xs/lil/*.hxx>` with RAII modules and builders, typed handles, parsing,
+  C ABI. Added an owning C++ XLIL API under `<xs/lil/*.hpp>` with RAII modules and builders, typed handles, parsing,
   verification, canonical text emission, calls, and control flow.
 - Made every `<xs/lil-c/*.h>` entry point safe to consume from C++ through explicit C linkage and moved the reserved C
   AOT header to `<xs/lil-c/aot.h>`.

@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Backend architecture and roadmap
 
-LLVM is the only implemented and supported X# backend today. The compiler is intentionally not defined as an LLVM-only
+LLVM is the only implemented and supported Visual X# backend today. The compiler is intentionally not defined as an LLVM-only
 language: typed HIR, MIR, and XLIL do not contain LLVM handles or require the LLVM C API. Future backends must consume the
 same verified, target-independent compiler state instead of bypassing semantic analysis.
 
@@ -48,7 +48,7 @@ source → AST → macro expansion → typed HIR → MIR → verification
 ```
 
 A backend is responsible for target representation, target-specific lowering, artifact emission, runtime binding, and
-execution integration. It is not responsible for redefining X# typing, ownership, overload resolution, macro expansion,
+execution integration. It is not responsible for redefining Visual X# typing, ownership, overload resolution, macro expansion,
 or control-flow semantics.
 
 New XLIL instructions must update the model, text parser/writer, verifier, lowering, optimizer, and tests before a backend
@@ -57,13 +57,13 @@ uses them. Backend-specific extensions should not leak into the common XLIL v1 g
 ## LLVM backend
 
 LLVM remains the production path. It lowers verified XLIL into LLVM IR, applies the configured LLVM optimization pipeline,
-emits object files, and links native `.xse` executables on supported host targets. Its implementation and current
+emits object files, and links native `.vxse` executables on supported host targets. Its implementation and current
 limitations are documented in [LLVM_BACKEND.md](LLVM_BACKEND.md).
 
 ## Planned C23 backend
 
 The C23 backend is planned as `xslang/c23_backend/Cargo.toml` inside the Rust workspace. It will emit portable C23 and use
-Clang to produce native artifacts. Generated C must preserve X# destruction, ownership, and error behavior; it is an
+Clang to produce native artifacts. Generated C must preserve Visual X# destruction, ownership, and error behavior; it is an
 implementation artifact, not a second source-level language contract.
 
 ## Planned JavaScript backend
@@ -71,18 +71,18 @@ implementation artifact, not a second source-level language contract.
 The JavaScript backend is planned as `xslang/js_backend/Cargo.toml`. Its host runtime will use `deno_core`, V8, and Tokio.
 `xs run` will execute through that embedded runtime and will not require Node.js.
 
-X# language semantics remain unchanged. JavaScript execution uses V8 garbage collection, but the backend may not expose
-host-GC timing as new X# semantics.
+Visual X# language semantics remain unchanged. JavaScript execution uses V8 garbage collection, but the backend may not expose
+host-GC timing as new Visual X# semantics.
 
 ## Planned X Platform backend
 
 X Platform is a separate, language-neutral runtime project. Its common pipeline is `XPI → xpic → XPLR register
-bytecode`; X# may reach it through `XLIL → XPI`, while other languages can emit XPI directly. XPI is intentionally lower
-level than XLIL and does not contain X# nominal types, string rules, ownership semantics, or source constructs.
+bytecode`; Visual X# may reach it through `XLIL → XPI`, while other languages can emit XPI directly. XPI is intentionally lower
+level than XLIL and does not contain Visual X# nominal types, string rules, ownership semantics, or source constructs.
 
 The X Platform Garbage Collector (XPG) belongs to that runtime and is not an alternate mode inside `xslang`. The future
 X Platform JIT (XPJ) is planned as four optimization levels over two code generations. Neither bytecode emission nor XPJ
-is implemented by the current X# compiler. Memory management follows backend selection without a separate flag: LLVM
+is implemented by the current Visual X# compiler. Memory management follows backend selection without a separate flag: LLVM
 always uses RAII and XPLR always uses XPG.
 
 The emitted module format, deployment artifact layout, JavaScript interop ABI, and asynchronous host boundary remain
@@ -91,7 +91,7 @@ undecided and will be specified before implementation.
 ## Planned WebAssembly backend
 
 The WebAssembly backend is planned as `xslang/wasm_backend/Cargo.toml`, with Wasmtime embedded for local execution.
-Language-visible memory-management behavior is intended to match the LLVM backend and the selected X# runtime mode.
+Language-visible memory-management behavior is intended to match the LLVM backend and the selected Visual X# runtime mode.
 
 The WebAssembly target must define its runtime imports, module/component choice, WASI policy, linking model, and final
 artifact naming before it becomes supported. `xs run` integration must use the bundled Wasmtime path rather than depending

@@ -95,5 +95,5 @@ metadata and keeps all X# frontend/backend work inside `xs`. The runtime's `sour
 alternative X# build command or a separately installed user command.
 
 `xs test` requests the separately resolved test registry and validates it together with project and module sources. The
-compiler generates an isolated native `.xse` harness for each supported top-level `#[Test]` function; `Ignore` and
+compiler generates an isolated native `.vxse` harness for each supported top-level `#[Test]` function; `Ignore` and
 `ShouldPanic` control execution expectations.

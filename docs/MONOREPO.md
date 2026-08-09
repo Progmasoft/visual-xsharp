@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # xs-project monorepo
 
-This repository uses an LLVM-project-style single-checkout monorepo model for X#. The X# equivalents of LLVM’s
+This repository uses an LLVM-project-style single-checkout monorepo model for Visual X#. The Visual X# equivalents of LLVM’s
 `LLVM_ENABLE_PROJECTS` / `LLVM_ENABLE_RUNTIMES` split are `XS_ENABLE_PROJECTS` and `XS_ENABLE_RUNTIMES`.
 
 The checkout/root concept is `xs-project`. The top-level CMake project name is `xs_project`.
@@ -22,7 +22,7 @@ The default value is `xs`. The value `all` selects all stable projects.
 
 ## Stable projects
 
-- `xs`: the X# compiler, public C23 API headers, unified CLI, and current test targets.
+- `xs`: the Visual X# compiler, public C23 API headers, unified CLI, and current test targets.
 - `xs_kts`: the mandatory Kotlin/JVM 25 project runtime bundled in the `xs` package.
 - `xslang`: the Rust semantic compiler core. It is built as an internal static library of `xs`, not selected as a separate
   top-level CMake project.

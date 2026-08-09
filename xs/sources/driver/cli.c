@@ -27,6 +27,7 @@
 #include "xs/syntax_ast.h"
 #include "xs/syntax_parser.h"
 
+#include <ctype.h>
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -50,7 +51,7 @@ static void print_verbose_settings(const XsCliOptions *options, const XsCompiler
 {
     if(!settings->verbose)
         return;
-    fprintf(stderr, "xs: verbose: command=%s input=%s warning=%s werror=%s\n", options->command, input,
+    fprintf(stderr, "vxs: verbose: command=%s input=%s warning=%s werror=%s\n", options->command, input,
             xs_cli_warning_level_name(settings->warning_level), settings->warnings_as_errors ? "true" : "false");
 }
 
@@ -174,7 +175,7 @@ static bool validate_direct_ir_version(XsBuildOutput output, const char *path, c
     char *line = malloc(line_length + 1U);
     if(line == nullptr)
     {
-        fprintf(stderr, "xs: out of memory while checking %s version\n", ir_kind_name(output));
+        fprintf(stderr, "vxs: out of memory while checking %s version\n", ir_kind_name(output));
         return false;
     }
     memcpy(line, text, line_length);
@@ -184,12 +185,12 @@ static bool validate_direct_ir_version(XsBuildOutput output, const char *path, c
     free(line);
     if(!parsed)
     {
-        fprintf(stderr, "xs: %s file '%s' has an invalid version header\n", ir_kind_name(output), path);
+        fprintf(stderr, "vxs: %s file '%s' has an invalid version header\n", ir_kind_name(output), path);
         return false;
     }
     if(!supported_ir_version(version))
     {
-        fprintf(stderr, "xs: %s version %" PRIu32 " is not supported; supported versions are 0 and 1\n",
+        fprintf(stderr, "vxs: %s version %" PRIu32 " is not supported; supported versions are 0 and 1\n",
                 ir_kind_name(output), version);
         return false;
     }
@@ -198,7 +199,10 @@ static bool validate_direct_ir_version(XsBuildOutput output, const char *path, c
 
 static char *rooted_path(const char *root, const char *source_path)
 {
-    if(source_path[0] == '/')
+    bool absolute = source_path[0] == '/' || source_path[0] == '\\' ||
+                    (isalpha((unsigned char)source_path[0]) && source_path[1] == ':' &&
+                     (source_path[2] == '/' || source_path[2] == '\\'));
+    if(absolute)
     {
         size_t length = strlen(source_path);
         char *result = malloc(length + 1);
@@ -218,6 +222,38 @@ static char *rooted_path(const char *root, const char *source_path)
         result[offset++] = '/';
     memcpy(result + offset, source_path, source_length + 1U);
     return result;
+}
+
+static bool register_assigned_modules(const char *root, const char *const *paths, size_t path_count,
+                                      char *const *assigned_modules, XsModuleRegistry *registry)
+{
+    if(assigned_modules == nullptr)
+        return true;
+    for(size_t i = 0; i < path_count; ++i)
+    {
+        if(assigned_modules[i] == nullptr || xs_module_registry_find(registry, assigned_modules[i]) != nullptr)
+            continue;
+        if(registry->count == registry->capacity)
+        {
+            size_t capacity = registry->capacity == 0U ? 8U : registry->capacity * 2U;
+            XsDiscoveredModule *modules = realloc(registry->modules, capacity * sizeof(*modules));
+            if(modules == nullptr)
+                return false;
+            registry->modules = modules;
+            registry->capacity = capacity;
+        }
+        char *name = copy_text(assigned_modules[i]);
+        char *path = rooted_path(root, paths[i]);
+        if(name == nullptr || path == nullptr)
+        {
+            free(name);
+            free(path);
+            return false;
+        }
+        registry->modules[registry->count++] =
+            (XsDiscoveredModule){.module_name = name, .source_path = path, .declaration_start = 0U, .declaration_end = 0U};
+    }
+    return true;
 }
 
 static char *build_output_path(const char *input_path, XsBuildOutput output)
@@ -352,7 +388,7 @@ static bool parse_compilation_unit(CompilationUnit *unit, uint64_t file_id, XsHi
     unit->text = read_file(unit->path, &length);
     if(unit->text == nullptr)
     {
-        fprintf(stderr, "xs: source file '%s' could not be read\n", unit->path);
+        fprintf(stderr, "vxs: source file '%s' could not be read\n", unit->path);
         return false;
     }
     xs_diagnostics_init(&unit->diagnostics);
@@ -410,7 +446,7 @@ static bool emit_requested_output(XsBuildOutput output, const XsCompilerCoreSess
     char *path = build_output_path(input_path, output);
     if(path == nullptr)
     {
-        fprintf(stderr, "xs: out of memory while preparing the output file\n");
+        fprintf(stderr, "vxs: out of memory while preparing the output file\n");
         return false;
     }
     bool success = xs_driver_emit_compiler_core_output(path, session, output, diagnostics, span);
@@ -442,7 +478,7 @@ static bool check_single_source_file(const char *path, XsBuildOutput output, boo
     CompilationUnit unit = {.path = copy_text(path)};
     if(unit.path == nullptr)
     {
-        fprintf(stderr, "xs: out of memory while preparing source file '%s'\n", path);
+        fprintf(stderr, "vxs: out of memory while preparing source file '%s'\n", path);
         return false;
     }
     XsHirSymbolTable symbols;
@@ -499,7 +535,7 @@ static bool check_project_sources(const char *root, const char *const *direct, s
 {
     if(build_native && direct_count == 0U)
     {
-        fprintf(stderr, "xs: project native build requires at least one selected source\n");
+        fprintf(stderr, "vxs: project native build requires at least one selected source\n");
         return false;
     }
 
@@ -511,6 +547,8 @@ static bool check_project_sources(const char *root, const char *const *direct, s
     xs_module_issues_init(&issues);
     bool success = xs_module_registry_discover(root, &registry, &issues);
     if(success)
+        success = register_assigned_modules(root, direct, direct_count, assigned_modules, &registry);
+    if(success)
         success = xs_module_graph_resolve(root, direct, direct_count, &registry, &graph, &issues);
     xs_module_issues_print(&issues);
 
@@ -519,13 +557,19 @@ static bool check_project_sources(const char *root, const char *const *direct, s
     size_t unit_capacity = 0;
     for(size_t i = 0; i < direct_count; ++i)
     {
-        char *path = direct[i][0] == '/' ? copy_text(direct[i]) : rooted_path(root, direct[i]);
+        char *path = rooted_path(root, direct[i]);
         const char *module_name = assigned_modules == nullptr ? nullptr : assigned_modules[i];
         if(path == nullptr || !append_compilation_unit(&units, &unit_count, &unit_capacity, path, module_name))
             success = false;
     }
     for(size_t i = 0; i < graph.count; ++i)
     {
+        bool already_direct = false;
+        for(size_t direct_index = 0; direct_index < direct_count; ++direct_index)
+            if(strcmp(graph.dependencies[i].imported_path, direct[direct_index]) == 0)
+                already_direct = true;
+        if(already_direct)
+            continue;
         char *path = copy_text(graph.dependencies[i].imported_path);
         if(path == nullptr || !append_compilation_unit(&units, &unit_count, &unit_capacity, path, nullptr))
             success = false;
@@ -537,7 +581,7 @@ static bool check_project_sources(const char *root, const char *const *direct, s
     for(size_t i = 0; i < unit_count; ++i)
     {
         if(settings->verbose)
-            fprintf(stderr, "xs: verbose: source[%zu]=%s\n", i, units[i].path);
+            fprintf(stderr, "vxs: verbose: source[%zu]=%s\n", i, units[i].path);
         success = parse_compilation_unit(&units[i], file_id++, &symbols, settings) && success;
     }
     if(success)
@@ -648,7 +692,7 @@ static int run_project_command(const XsCliOptions *options)
     bool success = check_project_sources(".", direct, selected_count, options->output, build_native, testing,
                                          &resolved.settings, assigned);
     if(success && testing && selected_count == 0U)
-        fprintf(stderr, "xs: test result: ok. 0 passed; 0 failed; 0 ignored\n");
+        fprintf(stderr, "vxs: test result: ok. 0 passed; 0 failed; 0 ignored\n");
     if(success && strcmp(options->command, "run") == 0)
     {
         int exit_code = xs_driver_run_native_artifact(resolved.paths[0]);
@@ -674,7 +718,7 @@ static int run_file_command(const XsCliOptions *options)
         char *text = read_file(options->file_path, &length);
         if(text == nullptr)
         {
-            fprintf(stderr, "xs: input file '%s' could not be read\n", options->file_path);
+            fprintf(stderr, "vxs: input file '%s' could not be read\n", options->file_path);
             return 2;
         }
         bool valid_version = validate_direct_ir_version(options->output, options->file_path, text, length);
@@ -702,7 +746,7 @@ static int run_file_command(const XsCliOptions *options)
             return success ? 0 : 1;
         }
         free(text);
-        fprintf(stderr, "xs: unsupported direct intermediate input '%s'\n", options->file_path);
+        fprintf(stderr, "vxs: unsupported direct intermediate input '%s'\n", options->file_path);
         return 1;
     }
     bool success =

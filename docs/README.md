@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # xs-project documentation
 
-This directory contains the active architecture and implementation documentation for the X# compiler. The `Spec/` directory
+This directory contains the active architecture and implementation documentation for the Visual X# compiler. The `Spec/` directory
 is the source documentation area for syntax and language examples; `docs/` explains compiler architecture, the build/test
 process, the CLI contract, and implementation status.
 
@@ -35,7 +35,7 @@ Recommended order for newcomers:
 
 ## Documentation authority
 
-- For documented X# syntax, `Spec/` has priority.
+- For documented Visual X# syntax, `Spec/` has priority.
 - For how to read the example/spec tree, start with [SPEC.md](SPEC.md).
 - For project configuration, `PROJECT_FILES.md` and the `xs_kts/` DSL API have priority.
 - For XHIR/XMIR text-output behavior, read `docs/XHIR.md` and `docs/XMIR.md`.

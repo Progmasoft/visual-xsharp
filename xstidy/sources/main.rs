@@ -11,7 +11,7 @@ use tracing::Level;
 use xstidy::{FileDiagnostics, lint_paths};
 
 #[derive(Debug, Parser)]
-#[command(name = "xstidy", about = "Experimental X# source linter")]
+#[command(name = "xstidy", about = "Experimental Visual X# source linter")]
 struct Arguments
 {
   /// Emit one JSON diagnostic per line.
@@ -22,7 +22,7 @@ struct Arguments
   #[arg(long)]
   verbose: bool,
 
-  /// X# files or directories to inspect recursively.
+  /// Visual X# files or directories to inspect recursively.
   #[arg(required = true)]
   paths: Vec<PathBuf>,
 }

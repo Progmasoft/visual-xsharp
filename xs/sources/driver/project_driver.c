@@ -5,16 +5,26 @@
 
 #include "project_driver.h"
 
+#include <errno.h>
 #include <limits.h>
-#include <spawn.h>
+#ifdef _WIN32
+#    include <io.h>
+#    include <process.h>
+#    include <windows.h>
+#    define access _access
+#    define X_OK 0
+#else
+#    include <spawn.h>
+#    include <sys/wait.h>
+#    include <unistd.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
+#ifndef _WIN32
 extern char **environ;
+#endif
 
 static const char *const REGISTRY_VERSION = "xs-project-sources-v5";
 
@@ -24,6 +34,23 @@ static const char *const REGISTRY_VERSION = "xs-project-sources-v5";
 
 static const char *installed_project_runtime(void)
 {
+#ifdef _WIN32
+    static char path[MAX_PATH];
+    DWORD length = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    if(length == 0 || length >= MAX_PATH)
+        return nullptr;
+    char *separator = strrchr(path, '\\');
+    if(separator == nullptr)
+        return nullptr;
+    *separator = '\0';
+    const char *suffix = "\\..\\libexec\\xs\\project-runtime\\bin\\xs-project-runtime.bat";
+    size_t directory_length = strlen(path);
+    size_t suffix_length = strlen(suffix);
+    if(directory_length > sizeof(path) - suffix_length - 1U)
+        return nullptr;
+    memcpy(path + directory_length, suffix, suffix_length + 1U);
+    return access(path, 0) == 0 ? path : nullptr;
+#else
     static char path[PATH_MAX];
     ssize_t length = readlink("/proc/self/exe", path, sizeof(path) - 1U);
     if(length <= 0 || (size_t)length >= sizeof(path))
@@ -40,6 +67,24 @@ static const char *installed_project_runtime(void)
         return nullptr;
     memcpy(path + directory_length, suffix, suffix_length + 1U);
     return access(path, X_OK) == 0 ? path : nullptr;
+#endif
+}
+
+static int run_program(const char *program, const char *const *arguments)
+{
+#ifdef _WIN32
+    intptr_t result = _spawnvp(_P_WAIT, program, arguments);
+    return result == -1 ? -1 : (int)result;
+#else
+    pid_t process = 0;
+    int status = posix_spawnp(&process, program, nullptr, nullptr, (char *const *)arguments, environ);
+    if(status != 0)
+        return -1;
+    int result = 0;
+    if(waitpid(process, &result, 0) < 0 || !WIFEXITED(result))
+        return -1;
+    return WEXITSTATUS(result);
+#endif
 }
 
 static const char *project_runtime_program(void)
@@ -60,44 +105,29 @@ static const char *project_runtime_program(void)
 static bool run_resolver(const char *mode, const char *project_root, const char *output_path, const char *module_path)
 {
     const char *program = project_runtime_program();
-    char *arguments[] = {(char *)program,     (char *)mode,        (char *)project_root,
-                         (char *)output_path, (char *)module_path, nullptr};
-    pid_t process = 0;
-    int status = posix_spawnp(&process, program, nullptr, nullptr, arguments, environ);
-    if(status != 0)
+    const char *arguments[] = {program, mode, project_root, output_path, module_path, nullptr};
+    int result = run_program(program, arguments);
+    if(result < 0)
     {
-        fprintf(stderr, "xs: could not start the bundled project runtime '%s': error %d\n", program, status);
+        fprintf(stderr, "vxs: could not start the bundled project runtime '%s': %s\n", program, strerror(errno));
         return false;
     }
-    int result = 0;
-    if(waitpid(process, &result, 0) < 0 || !WIFEXITED(result))
-    {
-        fprintf(stderr, "xs: bundled project runtime terminated abnormally\n");
-        return false;
-    }
-    return WEXITSTATUS(result) == 0;
+    return result == 0;
 }
 
 bool xs_driver_refresh_lock(void)
 {
     const char *program = project_runtime_program();
-    char *arguments[] = {(char *)program, "resolve", ".", nullptr};
-    pid_t process = 0;
-    int status = posix_spawnp(&process, program, nullptr, nullptr, arguments, environ);
-    if(status != 0)
+    const char *arguments[] = {program, "resolve", ".", nullptr};
+    int result = run_program(program, arguments);
+    if(result < 0)
     {
-        fprintf(stderr, "xs: could not start the bundled project runtime '%s': error %d\n", program, status);
+        fprintf(stderr, "vxs: could not start the bundled project runtime '%s': %s\n", program, strerror(errno));
         return false;
     }
-    int result = 0;
-    if(waitpid(process, &result, 0) < 0 || !WIFEXITED(result))
-    {
-        fprintf(stderr, "xs: bundled project runtime terminated abnormally\n");
+    if(result != 0)
         return false;
-    }
-    if(WEXITSTATUS(result) != 0)
-        return false;
-    fprintf(stderr, "xs: refreshed binary lock file 'xs.lock.sqlite3'\n");
+    fprintf(stderr, "vxs: refreshed binary lock file 'xs.lock.sqlite3'\n");
     return true;
 }
 
@@ -219,23 +249,33 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
     if(project == nullptr)
         return false;
     *project = (XsResolvedProject){0};
+#ifdef _WIN32
+    char temporary_directory[MAX_PATH] = {0};
+    char registry_path[MAX_PATH] = {0};
+    bool registry_created = GetTempPathA(MAX_PATH, temporary_directory) != 0 &&
+                            GetTempFileNameA(temporary_directory, "xsr", 0, registry_path) != 0;
+#else
     char registry_path[] = "/tmp/xs-project-sources-XXXXXX";
     int registry = mkstemp(registry_path);
-    if(registry < 0)
+    bool registry_created = registry >= 0;
+#endif
+    if(!registry_created)
     {
-        fprintf(stderr, "xs: could not create the project source registry\n");
+        fprintf(stderr, "vxs: could not create the project source registry\n");
         return false;
     }
+#ifndef _WIN32
     close(registry);
+#endif
     bool success = run_resolver(mode, project_root, registry_path, module_path);
     size_t length = 0;
     char *data = success ? read_registry(registry_path, &length) : nullptr;
-    unlink(registry_path);
+    (void)remove(registry_path);
     if(data == nullptr || data[length - 1U] != '\0')
     {
         free(data);
         if(success)
-            fprintf(stderr, "xs: bundled project runtime produced an invalid source registry\n");
+            fprintf(stderr, "vxs: bundled project runtime produced an invalid source registry\n");
         return false;
     }
     size_t count = 0;
@@ -248,7 +288,7 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
        (require_sources && source_count == 0U))
     {
         free(data);
-        fprintf(stderr, "xs: bundled project runtime returned an invalid compiler/source registry\n");
+        fprintf(stderr, "vxs: bundled project runtime returned an invalid compiler/source registry\n");
         return false;
     }
     size_t path_count = source_count + module_count;

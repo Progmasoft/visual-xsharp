@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#ifndef XS_LIL_TYPE_HXX
-#define XS_LIL_TYPE_HXX
+#ifndef XS_LIL_TYPE_HPP
+#define XS_LIL_TYPE_HPP
 
 #include "xs/lil-c/model.h"
 

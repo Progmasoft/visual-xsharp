@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # xslang
 
-`xslang` is the target-independent Rust compiler core for the X# programming language. It provides typed HIR, MIR,
+`xslang` is the target-independent Rust compiler core for the Visual X# programming language. It provides typed HIR, MIR,
 monomorphization and codegen-unit models, and the human-readable XLIL v1 registry.
 
 The public `xslang::xlil` API lets Rust tools and third-party language implementations construct, parse, verify, optimize,
@@ -92,7 +92,7 @@ options can set the XLIL module and companion function names. `Utf32Builder` con
 points without retaining the source text in XLIL. Unsupported Rust constructs are rejected during macro expansion instead
 of producing incomplete XLIL. See the [Rust XLIL API guide](../docs/XLIL_RUST.md) for the complete supported subset.
 
-This crate is pre-1.0 compiler infrastructure. Its APIs and version-0 intermediate formats may evolve together with the X#
+This crate is pre-1.0 compiler infrastructure. Its APIs and version-0 intermediate formats may evolve together with the Visual X#
 compiler. The repository pins a Rust nightly toolchain for reproducible development and validation.
 
 Documentation and source are available in the [xs-project repository](https://github.com/xss-lang/xs-project).

@@ -52,7 +52,14 @@ static XsPackageStatus write_entry(struct archive *writer, const XsPackageInput 
                                    XsPackageError *error)
 {
     struct stat metadata = {0};
-    if(stat(input->source_path, &metadata) != 0 || !S_ISREG(metadata.st_mode) || metadata.st_size < 0)
+    if(stat(input->source_path, &metadata) != 0)
+        return xs_package_error(error, XS_PACKAGE_IO_ERROR, "package input must be a regular file");
+#ifdef _WIN32
+    const bool regular_file = (metadata.st_mode & _S_IFREG) != 0;
+#else
+    const bool regular_file = S_ISREG(metadata.st_mode);
+#endif
+    if(!regular_file || metadata.st_size < 0)
         return xs_package_error(error, XS_PACKAGE_IO_ERROR, "package input must be a regular file");
 
     const uint64_t size = (uint64_t)metadata.st_size;

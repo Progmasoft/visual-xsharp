@@ -5,6 +5,7 @@
 
 #include "module_internal.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,12 @@ static bool append_import(ImportList *import, char *name, size_t start, size_t e
     }
     import->items[import->count++] = (ImportView){.name = name, .start = start, .end = end};
     return true;
+}
+
+static bool is_absolute_path(const char *path)
+{
+    return path[0] == '/' || path[0] == '\\' ||
+           (isalpha((unsigned char)path[0]) && path[1] == ':' && (path[2] == '/' || path[2] == '\\'));
 }
 
 static void free_imports(ImportList *import)
@@ -196,8 +203,8 @@ bool xs_module_graph_resolve(const char *project_root, const char *const *direct
     bool success = true;
     for(size_t i = 0; i < direct_source_count; ++i)
     {
-        char *path =
-            direct_sources[i][0] == '/' ? copy_text(direct_sources[i]) : join_path(project_root, direct_sources[i]);
+        char *path = is_absolute_path(direct_sources[i]) ? copy_text(direct_sources[i])
+                                                        : join_path(project_root, direct_sources[i]);
         if(path == nullptr || !string_list_append(&queue, path))
         {
             free(path);

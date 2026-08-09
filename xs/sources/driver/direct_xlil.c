@@ -58,7 +58,21 @@ static bool target_is_native_host(const XsLlvmBackend *backend)
 
 static bool link_native_executable(const char *object_path, const char *executable_path, XsBackendError *error)
 {
+#ifdef _WIN32
+    size_t option_length = strlen(executable_path) + sizeof("/Fe:");
+    char *output_option = malloc(option_length);
+    if(output_option == nullptr)
+    {
+        error->status = XS_BACKEND_SYSTEM_ERROR;
+        snprintf(error->message, sizeof(error->message), "%s", "out of memory while preparing linker arguments");
+        return false;
+    }
+    (void)snprintf(output_option, option_length, "/Fe:%s", executable_path);
+    const char *arguments[] = {"-fuse-ld=lld", object_path, "libcmt.lib", "oldnames.lib", "kernel32.lib",
+                               output_option};
+#else
     const char *arguments[] = {"-fuse-ld=lld", object_path, "-lm", "-o", executable_path};
+#endif
     XsLinkerInvocation invocation = {
         .program = XS_CLANG_EXECUTABLE,
         .arguments = arguments,
@@ -66,12 +80,15 @@ static bool link_native_executable(const char *object_path, const char *executab
     };
     int exit_code = -1;
     XsBackendStatus status = xs_linker_invoke(&invocation, &exit_code, error);
+#ifdef _WIN32
+    free(output_option);
+#endif
     if(status != XS_BACKEND_OK)
         return false;
     if(exit_code == 0)
         return true;
     error->status = XS_BACKEND_SYSTEM_ERROR;
-    snprintf(error->message, sizeof(error->message), "Clang and LLD exited with status %d", exit_code);
+    snprintf(error->message, sizeof(error->message), "ClangCL and LLD exited with status %d", exit_code);
     return false;
 }
 
@@ -132,18 +149,18 @@ bool xs_driver_build_lil_module_native(const char *input_path, const XsLilModule
 {
     if(module == nullptr)
     {
-        fprintf(stderr, "xs: XLIL module is required for native build\n");
+        fprintf(stderr, "vxs: XLIL module is required for native build\n");
         return false;
     }
     char *ir_path = xs_driver_native_artifact_path(input_path, ".ll");
-    char *object_path = xs_driver_native_artifact_path(input_path, ".o");
-    char *executable_path = xs_driver_native_artifact_path(input_path, ".xse");
+    char *object_path = xs_driver_native_artifact_path(input_path, ".obj");
+    char *executable_path = xs_driver_native_artifact_path(input_path, ".vxse");
     if(ir_path == nullptr || object_path == nullptr || executable_path == nullptr)
     {
         free(ir_path);
         free(object_path);
         free(executable_path);
-        fprintf(stderr, "xs: out of memory while preparing direct XLIL artifact paths\n");
+        fprintf(stderr, "vxs: out of memory while preparing direct XLIL artifact paths\n");
         return false;
     }
     XsBackendError error = {0};
@@ -215,11 +232,11 @@ bool xs_driver_build_lil_module_native(const char *input_path, const XsLilModule
     }
     if(success)
         fprintf(stderr,
-                "xs: wrote optimized LLVM IR '%s', object '%s', and executable '%s' from XLIL module '%s' with %zu "
+                "vxs: wrote optimized LLVM IR '%s', object '%s', and executable '%s' from XLIL module '%s' with %zu "
                 "declaration(s), %zu body/bodies\n",
                 ir_path, object_path, executable_path, xs_lil_module_name(module), declared, lowered);
     else
-        fprintf(stderr, "xs: direct XLIL native build failed during %s: %s\n", stage, error.message);
+        fprintf(stderr, "vxs: direct XLIL native build failed during %s: %s\n", stage, error.message);
     xs_llvm_codegen_unit_destroy(unit);
     xs_llvm_backend_destroy(backend);
     free(ir_path);
@@ -234,7 +251,7 @@ bool xs_driver_build_direct_xlil(const char *input_path, const char *text, size_
     XsLilModule *module = nullptr;
     if(xs_lil_module_parse_text(input_path, text, length, &module, &lil_error) != XS_LIL_OK)
     {
-        fprintf(stderr, "xs: XLIL parse failed: %s\n", lil_error.message);
+        fprintf(stderr, "vxs: XLIL parse failed: %s\n", lil_error.message);
         return false;
     }
     bool success = xs_driver_build_lil_module_native(input_path, module);

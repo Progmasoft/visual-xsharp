@@ -16,7 +16,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#ifdef _WIN32
+#    include <direct.h>
+#    include <windows.h>
+#else
+#    include <unistd.h>
+#endif
 
 static char *test_name(const XsCompilerCoreSession *session, uint64_t index)
 {
@@ -38,7 +43,7 @@ static void remove_artifact(const char *input_path, const char *extension)
     char *path = xs_driver_native_artifact_path(input_path, extension);
     if(path != nullptr)
     {
-        (void)unlink(path);
+        (void)remove(path);
         free(path);
     }
 }
@@ -46,8 +51,8 @@ static void remove_artifact(const char *input_path, const char *extension)
 static void remove_test_artifacts(const char *input_path)
 {
     remove_artifact(input_path, ".ll");
-    remove_artifact(input_path, ".o");
-    remove_artifact(input_path, ".xse");
+    remove_artifact(input_path, ".obj");
+    remove_artifact(input_path, ".vxse");
 }
 
 static bool build_harness(const char *input_path, const char *name, const XsCompilerCoreSession *harness)
@@ -76,14 +81,14 @@ static bool run_one_test(const XsCompilerCoreSession *session, uint64_t index, c
     if(xslang_compiler_core_test_harness_create(session, index, &harness) != XS_COMPILER_CORE_FFI_OK ||
        harness == nullptr)
     {
-        fprintf(stderr, "xs: test %s ... FAILED (harness creation)\n", name);
+        fprintf(stderr, "vxs: test %s ... FAILED (harness creation)\n", name);
         return false;
     }
     bool built = build_harness(input_path, name, harness);
     xslang_compiler_core_session_free(harness);
     if(!built)
     {
-        fprintf(stderr, "xs: test %s ... FAILED (compilation)\n", name);
+        fprintf(stderr, "vxs: test %s ... FAILED (compilation)\n", name);
         remove_test_artifacts(input_path);
         return false;
     }
@@ -91,7 +96,7 @@ static bool run_one_test(const XsCompilerCoreSession *session, uint64_t index, c
     bool executed = xs_driver_execute_native_artifact(input_path, &exit_code);
     bool should_panic = (flags & XS_COMPILER_CORE_TEST_SHOULD_PANIC) != 0U;
     bool passed = executed && (should_panic ? exit_code != 0 : exit_code == 0);
-    fprintf(stderr, "xs: test %s ... %s\n", name, passed ? "ok" : "FAILED");
+    fprintf(stderr, "vxs: test %s ... %s\n", name, passed ? "ok" : "FAILED");
     remove_test_artifacts(input_path);
     return passed;
 }
@@ -99,10 +104,25 @@ static bool run_one_test(const XsCompilerCoreSession *session, uint64_t index, c
 int xs_driver_run_compiler_core_tests(const XsCompilerCoreSession *session)
 {
     uint64_t count = xslang_compiler_core_session_test_count(session);
-    char directory[] = "/tmp/xs-tests-XXXXXX";
-    if(count != 0U && mkdtemp(directory) == nullptr)
+#ifdef _WIN32
+    char directory[MAX_PATH] = {0};
+    char temporary[MAX_PATH] = {0};
+    bool directory_created = count == 0U;
+    if(count != 0U && GetTempPathA(MAX_PATH, directory) != 0 &&
+       GetTempFileNameA(directory, "xst", 0, temporary) != 0)
     {
-        fprintf(stderr, "xs: could not create the native test artifact directory\n");
+        (void)DeleteFileA(temporary);
+        directory_created = CreateDirectoryA(temporary, nullptr) != 0;
+        if(directory_created)
+            (void)snprintf(directory, sizeof(directory), "%s", temporary);
+    }
+#else
+    char directory[] = "/tmp/xs-tests-XXXXXX";
+    bool directory_created = count == 0U || mkdtemp(directory) != nullptr;
+#endif
+    if(!directory_created)
+    {
+        fprintf(stderr, "vxs: could not create the native test artifact directory\n");
         return 1;
     }
     size_t passed = 0;
@@ -119,13 +139,17 @@ int xs_driver_run_compiler_core_tests(const XsCompilerCoreSession *session)
         uint32_t flags = xslang_compiler_core_session_test_flags(session, index);
         if((flags & XS_COMPILER_CORE_TEST_IGNORED) != 0U)
         {
-            fprintf(stderr, "xs: test %s ... ignored\n", name);
+            fprintf(stderr, "vxs: test %s ... ignored\n", name);
             ++ignored;
             free(name);
             continue;
         }
         char input_path[sizeof(directory) + 32U];
+#ifdef _WIN32
+        int written = snprintf(input_path, sizeof(input_path), "%s\\case-%llu.xs", directory, (unsigned long long)index);
+#else
         int written = snprintf(input_path, sizeof(input_path), "%s/case-%llu.xs", directory, (unsigned long long)index);
+#endif
         bool success = written > 0 && (size_t)written < sizeof(input_path) &&
                        run_one_test(session, index, input_path, name, flags);
         passed += success ? 1U : 0U;
@@ -133,8 +157,12 @@ int xs_driver_run_compiler_core_tests(const XsCompilerCoreSession *session)
         free(name);
     }
     if(count != 0U)
+#ifdef _WIN32
+        (void)_rmdir(directory);
+#else
         (void)rmdir(directory);
-    fprintf(stderr, "xs: test result: %s. %zu passed; %zu failed; %zu ignored\n", failed == 0U ? "ok" : "FAILED",
+#endif
+    fprintf(stderr, "vxs: test result: %s. %zu passed; %zu failed; %zu ignored\n", failed == 0U ? "ok" : "FAILED",
             passed, failed, ignored);
     return failed == 0U ? 0 : 1;
 }

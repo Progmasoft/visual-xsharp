@@ -8,8 +8,8 @@ target_include_directories(
   xsrt
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
          "$<INSTALL_INTERFACE:include>")
-target_compile_options(xsrt PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-target_compile_options(xsrt PUBLIC -include "${XS_COMPILER_CHECK_HEADER}")
+target_compile_options(xsrt PRIVATE /W4 /clang:-Wconversion /clang:-Wshadow)
+target_compile_options(xsrt PUBLIC "/FI${XS_COMPILER_CHECK_HEADER}")
 
 if(BUILD_TESTING)
   add_executable(xsrt_optional_string_tests tests/optional_string_tests.c)

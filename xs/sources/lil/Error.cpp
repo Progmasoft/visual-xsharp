@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "xs/lil/Error.hxx"
-
-#include <fmt/format.h>
+#include "xs/lil/Error.hpp"
 
 #include <utility>
 
@@ -23,7 +21,12 @@ void throw_if_failed(const XsLilStatus status, const XsLilError &error, const st
 
     const auto *status_name = xs_lil_status_name(status);
     const auto *message = xs_lil_error_message(&error);
-    throw Error{status, fmt::format("{} failed: {} ({})", operation, message == nullptr ? "XLIL error" : message,
-                                    status_name == nullptr ? "unknown" : status_name)};
+    std::string detail{operation};
+    detail += " failed: ";
+    detail += message == nullptr ? "XLIL error" : message;
+    detail += " (";
+    detail += status_name == nullptr ? "unknown" : status_name;
+    detail += ')';
+    throw Error{status, std::move(detail)};
 }
 } // namespace xs::lil

@@ -105,8 +105,8 @@ void add_common_options(Dim::Cli &cli, ParsedValues &values, bool allow_file)
     if(allow_file)
         cli.opt(&values.file, "file")
             .valueDesc("PATH")
-            .desc("Compile one X# or intermediate-language file; -file is the canonical spelling.");
-    cli.opt(&values.module, "module").valueDesc("DIRECTORY").desc("Add an X# module root.");
+            .desc("Compile one Visual X# or intermediate-language file; -file is the canonical spelling.");
+    cli.opt(&values.module, "module").valueDesc("DIRECTORY").desc("Add a Visual X# module root.");
     cli.opt(&values.warning, "warning").valueDesc("LEVEL").desc("Set warning level: all, medium, low, or none.");
     cli.opt(&values.werror, "werror").valueDesc("BOOL").desc("Treat warnings as errors (true or false).");
     cli.opt(&values.verbose, "verbose").valueDesc("BOOL").desc("Enable verbose compiler output (true or false).");
@@ -115,7 +115,7 @@ void add_common_options(Dim::Cli &cli, ParsedValues &values, bool allow_file)
 void configure_cli(Dim::Cli &cli, ParsedValues &values)
 {
     cli.responseFiles(false);
-    cli.header("X# compiler and project command-line interface.");
+    cli.header("Visual X# compiler and project command-line interface.");
     cli.before(
         [](Dim::Cli &, std::vector<std::string> &args)
         {
@@ -126,20 +126,20 @@ void configure_cli(Dim::Cli &cli, ParsedValues &values)
             }
         });
 
-    cli.command("check").desc("Parse, expand, and type-check X# sources without emitting artifacts.");
+    cli.command("check").desc("Parse, expand, and type-check Visual X# sources without emitting artifacts.");
     add_common_options(cli, values, true);
 
-    cli.command("build").desc("Build X# sources or emit a selected intermediate representation.");
+    cli.command("build").desc("Build Visual X# sources or emit a selected intermediate representation.");
     add_common_options(cli, values, true);
     cli.opt(&values.output, "output").valueDesc("IR").desc("Emit hir, mir, or xlil text.");
     cli.opt(&values.hir, "hir.").desc("Compile a direct XHIR input or emit XHIR.");
     cli.opt(&values.mir, "mir.").desc("Compile a direct XMIR input or emit XMIR.");
     cli.opt(&values.xlil, "xlil.").desc("Compile a direct XLIL input or emit XLIL.");
 
-    cli.command("run").desc("Build and run an X# native executable.");
+    cli.command("run").desc("Build and run a Visual X# native executable.");
     add_common_options(cli, values, true);
 
-    cli.command("test").desc("Build and execute X# tests.");
+    cli.command("test").desc("Build and execute Visual X# tests.");
     add_common_options(cli, values, true);
 
     cli.command("resolve").desc("Resolve project dependencies and refresh xs.lock.sqlite3.");
@@ -151,7 +151,7 @@ void configure_cli(Dim::Cli &cli, ParsedValues &values)
 [[nodiscard]] XsCliParseResult report_error(Dim::Cli &cli, std::string_view message)
 {
     static_cast<void>(cli);
-    fmt::print(stderr, "xs: {}\n", message);
+    fmt::print(stderr, "vxs: {}\n", message);
     return XS_CLI_PARSE_ERROR;
 }
 
@@ -251,7 +251,7 @@ extern "C" XsCliParseResult xs_cli_parse(int argc, char **argv, XsCliOptions *op
 
     if(values.version)
     {
-        fmt::print("xs {}\n", XS_PROJECT_VERSION);
+        fmt::print("vxs {}\n", XS_PROJECT_VERSION);
         return XS_CLI_PARSE_EXIT;
     }
 

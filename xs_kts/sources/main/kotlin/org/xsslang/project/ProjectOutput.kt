@@ -127,11 +127,12 @@ object ProjectOutput {
     extension: String,
   ): List<Path> {
     val normalized = include.replace('\\', '/')
-    val includePath = Path.of(normalized)
-    if (includePath.isAbsolute || normalized.split('/').any { component -> component == ".." }) {
+    val absoluteLike = normalized.startsWith('/') || Regex("^[A-Za-z]:/").containsMatchIn(normalized)
+    if (absoluteLike || normalized.split('/').any { component -> component == ".." }) {
       throw ProjectConfigurationException("source include escapes the project root: $include")
     }
     if (normalized.none { character -> character in "*?" }) {
+      val includePath = Path.of(normalized)
       val path = root.resolve(includePath).normalize()
       if (!path.startsWith(root) || !path.isRegularFile() || !path.fileName.toString().endsWith(".$extension")) {
         throw ProjectConfigurationException("included source file does not exist: $path")

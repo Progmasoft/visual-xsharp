@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # XHIR text format
 
-`.xhir` is the human-readable text form of XHIR, the normalized operational side of X# HIR. It is not assembly-like, not
+`.xhir` is the human-readable text form of XHIR, the normalized operational side of Visual X# HIR. It is not assembly-like, not
 binary, and not an opaque compiler serialization format.
 
 HIR is split into coordinated THIR and XHIR sides. THIR carries the typed, source-oriented semantic structure; XHIR carries
@@ -24,7 +24,7 @@ semantic tree, not like an instruction stream.
 - Records use stable field names instead of positional operands.
 - Indentation is for readability only; parsers must use explicit records such as `.end` and `.program end`, not leading
   spaces, to determine structure.
-- Identifiers, paths, and types are printed in their X# spelling where that spelling is still meaningful.
+- Identifiers, paths, and types are printed in their Visual X# spelling where that spelling is still meaningful.
 - Compiler-generated ids are allowed only when they help diagnostics or cross-reference repeated records.
 - XHIR must remain suitable for code review and text fixtures.
 - XHIR must not use XLIL-style directives such as `.func`, `.extern`, or `%r0:type = op`.
@@ -51,7 +51,7 @@ declarations
       block
         let message
           type Str
-          value string "Hello from X#"
+          value string "Hello from Visual X#"
         call std::io.println
           arguments [message]
 .end
@@ -125,7 +125,7 @@ enum Color
 ```
 
 Variant values remain semantic XHIR literals such as `literal enum Color::Green tag 1`. The tag is checked against the
-declaration and carried toward MIR; X# does not expose enum-to-integer conversion.
+declaration and carried toward MIR; Visual X# does not expose enum-to-integer conversion.
 
 Enum-data declarations retain their source-level payload overloads:
 

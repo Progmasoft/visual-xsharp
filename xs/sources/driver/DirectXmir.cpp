@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "direct_xhir.h"
+#include "direct_xmir.h"
 
 extern "C"
 {
@@ -27,21 +27,21 @@ void print_diagnostics(const char *input_path, const XsCompilerCoreDirectIrSessi
         const std::uint8_t *text = xslang_compiler_core_direct_ir_diagnostic_text(session, index, &length);
         if(text == nullptr)
             continue;
-        std::fprintf(stderr, "xs: %s: ", input_path);
+        std::fprintf(stderr, "vxs: %s: ", input_path);
         static_cast<void>(std::fwrite(text, 1, static_cast<std::size_t>(length), stderr));
         std::fputc('\n', stderr);
     }
 }
 } // namespace
 
-bool xs_driver_build_direct_xhir(const char *input_path, const char *text, std::size_t length)
+bool xs_driver_build_direct_xmir(const char *input_path, const char *text, std::size_t length)
 {
     XsCompilerCoreDirectIrSession *session = nullptr;
-    const XsCompilerCoreFfiStatus status = xslang_compiler_core_direct_xhir_create(
+    const XsCompilerCoreFfiStatus status = xslang_compiler_core_direct_xmir_create(
         reinterpret_cast<const std::uint8_t *>(text), static_cast<std::uint64_t>(length), &session);
     if(status != XS_COMPILER_CORE_FFI_OK || session == nullptr)
     {
-        std::fprintf(stderr, "xs: XHIR compiler core session could not be created (status %u)\n",
+        std::fprintf(stderr, "vxs: XMIR compiler core session could not be created (status %u)\n",
                      static_cast<unsigned int>(status));
         return false;
     }
@@ -53,7 +53,7 @@ bool xs_driver_build_direct_xhir(const char *input_path, const char *text, std::
         success = xs_driver_build_direct_xlil(input_path, reinterpret_cast<const char *>(xlil),
                                               static_cast<std::size_t>(xlil_length));
     else if(xslang_compiler_core_direct_ir_diagnostic_count(session) == 0)
-        std::fputs("xs: XHIR compiler core did not produce a verified XLIL module\n", stderr);
+        std::fputs("vxs: XMIR compiler core did not produce a verified XLIL module\n", stderr);
     xslang_compiler_core_direct_ir_free(session);
     return success;
 }

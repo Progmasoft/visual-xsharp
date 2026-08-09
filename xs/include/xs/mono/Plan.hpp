@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#ifndef XS_MONO_PLAN_HXX
-#define XS_MONO_PLAN_HXX
+#ifndef XS_MONO_PLAN_HPP
+#define XS_MONO_PLAN_HPP
 
 #include "xs/mono/plan.h"
 

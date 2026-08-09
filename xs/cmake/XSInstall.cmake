@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
-set(XS_INSTALL_BINDIR "bin" CACHE STRING "X# compiler executable installation directory")
-set(XS_INSTALL_INCLUDEDIR "include" CACHE STRING "X# public header installation directory")
-set(XS_INSTALL_LICENSEDIR "share/licenses/xs" CACHE STRING "X# compiler license installation directory")
+set(XS_INSTALL_BINDIR "bin" CACHE STRING "Visual X# compiler executable installation directory")
+set(XS_INSTALL_INCLUDEDIR "include" CACHE STRING "Visual X# public header installation directory")
+set(XS_INSTALL_LICENSEDIR "share/licenses/xs" CACHE STRING "Visual X# compiler license installation directory")
 
 file(GLOB_RECURSE XS_COMMON_PUBLIC_HEADERS RELATIVE "${PROJECT_SOURCE_DIR}/include/xs"
   "${PROJECT_SOURCE_DIR}/include/xs/*.h")
@@ -13,7 +13,7 @@ foreach(relative_header IN LISTS XS_COMMON_PUBLIC_HEADERS)
   endif()
 endforeach()
 
-install(TARGETS xs
+install(TARGETS vxs
   RUNTIME DESTINATION "${XS_INSTALL_BINDIR}"
   COMPONENT compiler
 )
@@ -27,13 +27,13 @@ install(TARGETS xs_lil xs_lil_cpp xs_package
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/include/xs/"
   DESTINATION "${XS_INSTALL_INCLUDEDIR}/xs"
   COMPONENT compiler
-  FILES_MATCHING PATTERN "*.h" PATTERN "*.hxx"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/xs/"
   DESTINATION "${XS_INSTALL_INCLUDEDIR}/xs"
   COMPONENT compiler
-  FILES_MATCHING PATTERN "*.h" PATTERN "*.hxx"
+  FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/LICENSE.txt" "${PROJECT_SOURCE_DIR}/NOTICE.txt"

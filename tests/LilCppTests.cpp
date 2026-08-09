@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "xs/lil.hxx"
+#include "xs/lil.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -31,8 +31,8 @@ TEST_CASE("C++ XLIL API owns, verifies, and emits a module", "[lil][cpp]")
     CHECK(module.name() == "CppProducer");
     CHECK(module.text_version() == XS_LIL_TEXT_VERSION);
     CHECK(text.starts_with(".xlil version 1\n.xlil module CppProducer\n"));
-    CHECK(text.contains("%r0:i32 = const.i32 7"));
-    CHECK(text.contains("ret %r0"));
+    CHECK(text.find("%r0:i32 = const.i32 7") != std::string::npos);
+    CHECK(text.find("ret %r0") != std::string::npos);
     CHECK(entry.native_handle() != nullptr);
 }
 
@@ -49,7 +49,7 @@ TEST_CASE("C++ XLIL API supports declarations and direct calls", "[lil][cpp]")
     builder.return_value(result);
 
     CHECK(entry.native_handle() != nullptr);
-    CHECK(module.emit_text().contains("%r1:i64 = call identity(%r0)"));
+    CHECK(module.emit_text().find("%r1:i64 = call identity(%r0)") != std::string::npos);
 }
 
 TEST_CASE("C++ XLIL parser preserves ownership across moves", "[lil][cpp]")
@@ -83,7 +83,7 @@ TEST_CASE("C++ XLIL failures retain C ABI status", "[lil][cpp]")
     catch(const Error &error)
     {
         CHECK(error.status() == XS_LIL_INVALID_ARGUMENT);
-        CHECK(std::string{error.what()}.contains("missing a terminator"));
+        CHECK(std::string{error.what()}.find("missing a terminator") != std::string::npos);
     }
     CHECK(entry.native_handle() != nullptr);
 }

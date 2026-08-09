@@ -80,7 +80,7 @@ pub fn lint_source(source: &str) -> Vec<Diagnostic>
   let file_id = files.add("<memory>", source);
   matches.into_iter()
          .map(|byte_start| {
-           let byte_index = u32::try_from(byte_start).expect("X# source exceeds the v0 diagnostic limit");
+           let byte_index = u32::try_from(byte_start).expect("Visual X# source exceeds the v0 diagnostic limit");
            let location = files.location(file_id, byte_index)
                                .expect("scanner produced a valid offset");
            Diagnostic { code: "XT0001",

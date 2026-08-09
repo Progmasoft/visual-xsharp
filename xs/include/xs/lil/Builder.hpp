@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#ifndef XS_LIL_BUILDER_HXX
-#define XS_LIL_BUILDER_HXX
+#ifndef XS_LIL_BUILDER_HPP
+#define XS_LIL_BUILDER_HPP
 
 #include "xs/lil-c/builder.h"
-#include "xs/lil/Handles.hxx"
-#include "xs/lil/Module.hxx"
+#include "xs/lil/Handles.hpp"
+#include "xs/lil/Module.hpp"
 
 #include <cstdint>
 #include <span>

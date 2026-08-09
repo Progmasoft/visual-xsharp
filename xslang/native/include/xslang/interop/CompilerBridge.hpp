@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#ifndef XSLANG_INTEROP_COMPILER_BRIDGE_HXX
-#define XSLANG_INTEROP_COMPILER_BRIDGE_HXX
+#ifndef XSLANG_INTEROP_COMPILER_BRIDGE_HPP
+#define XSLANG_INTEROP_COMPILER_BRIDGE_HPP
 
 #include <cstdint>
 

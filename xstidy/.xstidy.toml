@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
 # SPDX-License-Identifier: MPL-2.0
 
-# xstidy does not run unless an X# project provides this file.
-# This configuration file defines the rules and settings used to analyze and improve X# code.
+# xstidy does not run unless an Visual X# project provides this file.
+# This configuration file defines the rules and settings used to analyze and improve Visual X# code.
 
 [Comments]
 AcceptAboveAttributes = true

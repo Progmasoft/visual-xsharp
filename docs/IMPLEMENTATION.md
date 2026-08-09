@@ -3,10 +3,10 @@ SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# Current X# compiler status
+# Current Visual X# compiler status
 
-The compiler combines GNU++26, Rust, and a gradually shrinking C23 implementation and uses Clang, CMake, Ninja, LLVM
-tools, and LLD. New native subsystems favor GNU++26. New and touched C code uses C23
+The compiler combines C++23 Preview, Rust, and a gradually shrinking C23 implementation and uses Clang, CMake, Ninja, LLVM
+tools, and LLD. New native subsystems favor C++23 Preview. New and touched C code uses C23
 `bool` directly, does not include `<stdbool.h>`, and prefers `nullptr` over `NULL`.
 
 The documented compilation order is preserved:
@@ -76,9 +76,9 @@ The documented compilation order is preserved:
 - Other compiler or generator combinations are outside the supported build contract.
 - The compiler is built in strict ISO C23 mode with `-std=c23` and `CMAKE_C_EXTENSIONS OFF`.
 - The build uses strict ISO C23 rather than compiler-extension dialects.
-- Monomorphization and codegen-unit planning are implemented in GNU++26 with `std::string`/`std::vector` ownership. Their
-  existing C functions remain ABI-compatible for the C23 driver, while `<xs/mono/Plan.hxx>` and
-  `<xs/codegen/Plan.hxx>` provide move-only RAII views for new C++ compiler code. This is the model for incremental
+- Monomorphization and codegen-unit planning are implemented in C++23 Preview with `std::string`/`std::vector` ownership. Their
+  existing C functions remain ABI-compatible for the C23 driver, while `<xs/mono/Plan.hpp>` and
+  `<xs/codegen/Plan.hpp>` provide move-only RAII views for new C++ compiler code. This is the model for incremental
   subsystem migration: retain tested boundaries, replace internal ownership, and avoid a whole-tree language flip.
 
 ### Project system
@@ -93,7 +93,7 @@ The documented compilation order is preserved:
 - The version-4 Kotlin resolver protocol transfers source, module, and test registries separately. `xs test` combines
   those registries for frontend and semantic validation, discovers top-level unit-returning `#[Test]` functions from the
   expanded structural AST, and creates one synthetic `main` per test in the Rust compiler core. Every non-ignored harness
-  follows MIR/XLIL/LLVM/object/link and isolated native `.xse` execution; `ShouldPanic` reverses the exit expectation.
+  follows MIR/XLIL/LLVM/object/link and isolated native `.vxse` execution; `ShouldPanic` reverses the exit expectation.
 - Standard `panic!` statement calls remain compiler-recognized nodes when no user `macro_rules!` replacement exists.
   They lower to HIR panic, the MIR/XLIL panic terminator, and the LLVM trap path. Formatted panic payload transport is not
   implemented yet.
@@ -117,13 +117,13 @@ The documented compilation order is preserved:
   optimization, MIR → XLIL lowering, XLIL verification, and the same native backend.
 - XHIR direct compilation deterministically rebuilds tuple and fixed-array layouts from higher-level function types. XMIR
   persists those layouts in its structured program-level `types` section because MIR values retain registry ids rather than
-  source tuple field syntax. Both paths round-trip tuple calls and fixed-array operations into native `.xse` artifacts.
+  source tuple field syntax. Both paths round-trip tuple calls and fixed-array operations into native `.vxse` artifacts.
 - Direct `.xlil` inputs are parsed and verified through the public XLIL C23 parser API. A supported local-target native
   input runs through LLVM lowering, module verification, the configured optimization pipeline, object emission, and the
-  Clang/LLD `.xse` executable path.
+  Clang/LLD `.vxse` executable path.
 - Plain source native builds support the first expression/local/call slice for top-level `fn main() -> Long` plus
   same-module helper functions with supported primitive signatures. A zero-parameter `Str` helper returning a string
-  literal now crosses XHIR, target-independent UTF-16 MIR/XMIR, explicit-endian XLIL, LLVM IR, and native `.xse` linking.
+  literal now crosses XHIR, target-independent UTF-16 MIR/XMIR, explicit-endian XLIL, LLVM IR, and native `.vxse` linking.
   The existing local/control-flow slice covers helper functions with `Long`/`Bool` parameters and results: explicit
   `Long`/`Bool` local bindings, inferred `:=` bindings with i32-compatible or bool-compatible initializers, simple
   assignment to mutable `Long`/`Bool` locals, local
@@ -132,7 +132,7 @@ The documented compilation order is preserved:
   expression with a bool literal, `Bool` local, direct same-module `Bool` helper call, unary `!`, or i32 comparison
   condition. `!=` and unary `!` can either swap branch targets for condition-only control flow or materialize as a `not.bool` value for supported `Bool` local
   initializers. Syntactically constant conditions, such as `false`, `!true`, or i32 literal comparisons like `1 < 2`, lower
-  only the selected branch in this slice. This lowers through C MIR, XLIL, LLVM IR, object emission, and native `.xse`
+  only the selected branch in this slice. This lowers through C MIR, XLIL, LLVM IR, object emission, and native `.vxse`
   linking.
 - Top-level generic functions with explicit concrete turbofish arguments are specialized by the Rust compiler core. Type
   substitutions apply to parameter, result, and local types; each distinct concrete argument list receives a deterministic
@@ -179,7 +179,7 @@ The documented compilation order is preserved:
 
 ### Lexer and structural AST
 
-- Documented keywords, operators, line comments, and multiline text literals are tokenized. X# accepts `//`, `///`, and
+- Documented keywords, operators, line comments, and multiline text literals are tokenized. Visual X# accepts `//`, `///`, and
   `//!` line comments. Each comment ends at its physical newline; multiline and nested comments are excluded so comments
   cannot split or hide source line boundaries.
 - ASCII identifier rules are applied.
@@ -190,7 +190,7 @@ The documented compilation order is preserved:
 - AST nodes carry full source location: file id, offset, line, and column.
 - Declaration, type, statement, expression, pattern, and macro node families are represented.
 - Outer `#[...]` attributes are parsed before declarations and declaration members into `XS_SYNTAX_ATTRIBUTE` nodes.
-  File-level inner `#![...]` attributes are parsed before declarations. Attribute syntax is built in, but official X#
+  File-level inner `#![...]` attributes are parsed before declarations. Attribute syntax is built in, but official Visual X#
   attribute names live under `std::attrs::*`; semantic validation of each attribute remains a HIR/name-resolution step.
 - In top-level and class-member contexts, `name!();` macro calls are represented as `XS_SYNTAX_DECL_MACRO_CALL` declaration
   nodes. This node is the entry point for item/declaration-producing macro expansion; inserting produced items as real AST
@@ -205,16 +205,16 @@ The documented compilation order is preserved:
   only an explicit `[T; N]` annotation selects a fixed layout. Contextual element checks, set XHIR round-tripping, numeric
   default fill, excess-element discard, and element assignment are implemented. Constant indices use composite extraction;
   calculated `Int` indices use checked MIR/XLIL array access records. Fixed arrays continue through XLIL `%aN`, the public
-  C23 XLIL boundary, bounds-checked LLVM array access, and native `.xse` emission. Runtime-sized `[T]` construction,
+  C23 XLIL boundary, bounds-checked LLVM array access, and native `.vxse` emission. Runtime-sized `[T]` construction,
   same-module parameter/return flow, checked indexing and mutation, `count`, and index-based `for` iteration use the same
-  target-independent registry and now lower through LLVM to native `.xse`. Fixed-array `count`, `capacity`,
+  target-independent registry and now lower through LLVM to native `.vxse`. Fixed-array `count`, `capacity`,
   `is_empty`, `start_index`, `end_index`, `first`, and `last` members are resolved in compiler-core and desugared to typed
   constants or existing checked index expressions. Runtime-sized storage currently uses hosted allocation and has no
   reclamation contract yet. Set runtime layout and operations, `ArrayList<T>` count-changing operations, and map
   value/layout lowering remain deferred.
 - Positional and named tuple types, literals, and projections now remain structural through typed HIR and XHIR v1. Tuple
   layouts share the target-independent aggregate registry with nominal `data` values, then reuse MIR/XLIL `aggregate` and
-  `extract` operations through LLVM structure lowering and native `.xse` emission. The same registry discovers nested tuple
+  `extract` operations through LLVM structure lowering and native `.vxse` emission. The same registry discovers nested tuple
   layouts in tuple and fixed-array element types. Tuple-valued parameters, returns, calls, direct element assignment, and
   chained positional projection use the same typed path. Fixed-array for-each supports recursively nested tuple binding
   patterns, typed tuple annotations, and `else` discard elements by desugaring them to explicit typed projections before
@@ -230,8 +230,8 @@ The documented compilation order is preserved:
   `Optional`, `Result`, `Error`, `Task`, common standard-library types/functions, user static associated functions,
   enum-data variants, and local names introduced by tuple or for-each patterns. This is semantic availability checking;
   native runtime implementations and nominal object layout are still incomplete.
-- Lifetime spellings in reference types follow X# forms based on Rust lifetimes (`&'a T`, `&'a mut T`, `&'static T`,
-  `&'else T`) and are carried into the AST as `XS_SYNTAX_LIFETIME` nodes. X# uses `else` where Rust examples often use
+- Lifetime spellings in reference types follow Visual X# forms based on Rust lifetimes (`&'a T`, `&'a mut T`, `&'static T`,
+  `&'else T`) and are carried into the AST as `XS_SYNTAX_LIFETIME` nodes. Visual X# uses `else` where Rust examples often use
   `_`; lifetime elision and validation are left to the borrow-checker stage.
 - Function parameters, return type, and function bodies are structural nodes; bodies are not stored as raw ranges. The
   `->` return type is marked with `XS_SYNTAX_FLAG_RETURN_TYPE`.
@@ -261,7 +261,7 @@ The documented compilation order is preserved:
   Legacy `extends` and `implements` spellings produce parser diagnostics.
 - Class fields may carry `getter` and `setter` property accessors. Accessors are represented as
   `XS_SYNTAX_PROPERTY_ACCESSOR` children; accessor bodies are parsed as ordinary blocks when present. Properties use the
-  canonical X# field spelling, for example `public Name: Str { getter; setter; }`.
+  canonical Visual X# field spelling, for example `public Name: Str { getter; setter; }`.
 - Visibility modifiers are explicit: `public` is externally visible, `private` is limited to the declaring scope,
   `protected` is available to derived classes, and `internal` is limited to the current logical module. Current HIR
   symbol collection applies one default everywhere: declarations, members, and base entries are `internal` unless an
@@ -297,7 +297,7 @@ The documented compilation order is preserved:
   control flow; a payload binding extracts only the selected overload's payload slot. An exhaustive final arm is emitted
   as fallthrough without a redundant tag test. These records continue through canonical XLIL and the existing LLVM
   aggregate/extract/branch lowering path.
-  It is an internal compiler representation, not the final heap/object ABI promised for X# enum-data values. Payload
+  It is an internal compiler representation, not the final heap/object ABI promised for Visual X# enum-data values. Payload
   ownership moves and the final ownership-aware runtime layout remain separate work.
 - Function expressions use inferred signatures: `fn(a, b) { a + b }` and `move fn() { work() }` are represented as
   `XS_SYNTAX_EXPR_FUNCTION` nodes. Parameter and return types are supplied by context rather than written on the lambda;
@@ -312,7 +312,7 @@ The documented compilation order is preserved:
   discriminant extraction, success/error blocks, payload extraction, and an early Result return on the error edge.
 - `if`, `for`, for-each, `while`, `match`, `return`, `break`, `continue`, and `else: expression;` are parsed. The `else:`
   statement explicitly discards its expression value, analogous
-  to a Rust discard binding, but X# spells the discard/default position as `else`.
+  to a Rust discard binding, but Visual X# spells the discard/default position as `else`.
 - Expression statements distinguish discarded and tail values: `expression;` is marked with `XS_SYNTAX_FLAG_DISCARDED`, while a
   final block expression without `;` stays value-producing and is the input for implicit-return desugaring.
 
@@ -353,7 +353,7 @@ This layer lives under the HIR directory.
   the same namespace rule as normal declarations.
 - `xs_hir_collect_member_symbols` produces a separate HIR member symbol table for a class/interface owner symbol. V0 scope
   covers fields, field-like macro output, methods, constructors, destructors, and nested types.
-- If methods repeat with the same name, the last declaration wins in lookup according to the X# method-merge rule; field and
+- If methods repeat with the same name, the last declaration wins in lookup according to the Visual X# method-merge rule; field and
   nested-member name conflicts produce diagnostics.
 - Symbols carry short name, logical module name, namespace name, fully qualified name, visibility, source location, and
   source AST node.
@@ -401,7 +401,7 @@ membership, class/interface virtual dispatch, imported overload sets, and functi
 - `Char` is one Unicode scalar value represented as `u32`.
 - Signed integer widths are `Short`/`Long`/`Int`/`Integer` = i16/i32/i64/i128; unsigned widths are
   `UShort`/`ULong`/`UInt`/`UInteger` = u16/u32/u64/u128. Floating widths are
-  `SFloat`/`LFloat`/`Float`/`Double` = f16/f32/f64/f128. These widths are target-independent, and X# has no
+  `SFloat`/`LFloat`/`Float`/`Double` = f16/f32/f64/f128. These widths are target-independent, and Visual X# has no
   x86-32-specific primitive or native-width alias.
 - `Str` is an immutable borrowed UTF-32 code-point view with an implicit static lifetime. String constants lower through
   MIR and XLIL as explicit `u32` code points.
@@ -415,7 +415,7 @@ membership, class/interface virtual dispatch, imported overload sets, and functi
   mutable local Optional bindings and leaves an existing `Some` untouched. Postfix `!` creates explicit success and
   failure blocks; the failure path becomes the ordinary MIR/XLIL panic terminator. Safe data-field access converts
   `Optional<Data>` to `Optional<FieldType>` without evaluating or extracting a payload on the `None` path. These paths
-  reach XLIL, LLVM IR, object emission, and native `.xse` execution for supported payload types without introducing
+  reach XLIL, LLVM IR, object emission, and native `.vxse` execution for supported payload types without introducing
   Optional-specific backend instructions.
   `Optional<T>` has explicit forced unboxing to `T` through postfix `!`; failed forced unboxing follows the compiler's
   panic path. `Optional<Str>` owns and boxes its
@@ -444,7 +444,7 @@ membership, class/interface virtual dispatch, imported overload sets, and functi
 - The C23 HIR type resolver also recognizes the initial standard CFFI family: `std::cffi::CStr`, `std::cffi::CString`,
   `std::cffi::RawPtr<T>`, `std::cffi::NonNull<T>`, `std::cffi::Slice<T>`, `std::cffi::Handle<T>`, `std::cffi::Owned<T>`, `std::cffi::Borrowed<T>`,
   `std::cffi::Out<T>`, `std::cffi::DynamicLibrary`, `std::cffi::Symbol<T>`, `std::cffi::File`, and `std::cffi::VarArgs`.
-- X# uses nominal typing. HIR type identity for user-defined types is based on name/symbol identity; identical structural
+- Visual X# uses nominal typing. HIR type identity for user-defined types is based on name/symbol identity; identical structural
   shape does not imply compatibility.
 - HIR primitive metadata carries XLIL type mappings for primitive types with documented runtime layout.
 - `Str` is not mapped to an XLIL type yet because its runtime/ABI layout is incomplete.
@@ -534,7 +534,7 @@ Assignment still requires an addressable local-rooted place.
 The shared public C23 include tree now has an initial feature layer under `<xs/c23/*.h>`. `<xs/c23_features.h>` is its
 umbrella header. The current `trait.h` and `impl.h` macros define object-safe vtable contracts, translation-unit-local
 `impl ... for ...` bindings, erased trait objects, and checked C23 call syntax without compiler extensions. This is a small
-foundation rather than a claim that every X# trait rule is already available to C callers.
+foundation rather than a claim that every Visual X# trait rule is already available to C callers.
 The imported HIR body model now has explicit lexical blocks and distinguishes statement `if` from value-producing `if`.
 Both forms require a `Bool` condition during Rust type checking. Statement branches lower to MIR basic blocks with an
 explicit merge when control can continue. A directly returned `if` expression may lower each required value branch to its
@@ -559,7 +559,7 @@ For supported single-file and multi-file builds, this Rust path no longer stops 
 collects all function signatures before lowering any body, allowing same-module forward calls across files. It then
 borrow-checks and optimizes each lowered function, lowers the combined module to XLIL v1 text, and exposes that text through
 a borrowed C ABI view. The C23 driver parses it with the public `xs/lil.h` API, verifies the reconstructed module, and
-reuses the established LLVM IR, object, and native `.xse` emission path. This is the only source-body compilation route;
+reuses the established LLVM IR, object, and native `.vxse` emission path. This is the only source-body compilation route;
 unsupported source forms stop with a compiler diagnostic instead of entering a second fallback compiler. HIR and MIR
 remain independent of LLVM.
 
@@ -738,9 +738,9 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
 
 - The former experimental XGC model no longer lives in `xslang`. Managed-heap work belongs to the independent X Platform
   runtime as XPG.
-- XPI is a language-neutral register IL below language frontends. X# can lower `XLIL → XPI`; XPI itself does not inherit
-  X# nominal types, strings, ownership rules, or source semantics.
-- The current X# compiler remains on its ownership-oriented LLVM path. XPLR bytecode and XPJ are not implemented here.
+- XPI is a language-neutral register IL below language frontends. Visual X# can lower `XLIL → XPI`; XPI itself does not inherit
+  Visual X# nominal types, strings, ownership rules, or source semantics.
+- The current Visual X# compiler remains on its ownership-oriented LLVM path. XPLR bytecode and XPJ are not implemented here.
 
 ### LLVM backend infrastructure
 
@@ -758,7 +758,7 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
 - LLVM optimization pipelines from `default<O0>` through `default<O3>` can be configured.
 - LLVM module verification, LLVM IR text emission, and object file emission work.
 - `xs build --xlil -file <input.xlil>` parses and verifies XLIL v1 text through `xs_lil_module_parse_text`, then lowers to
-  LLVM IR, verifies and optimizes the LLVM module, and emits an object file and native `.xse` executable beside the input.
+  LLVM IR, verifies and optimizes the LLVM module, and emits an object file and native `.vxse` executable beside the input.
   Native direct XLIL requires exactly one defined
   `.func main : () -> i32`; its supported body subset includes `.param`, all fixed-width integer constants and operations,
   `const.f32`,
@@ -778,7 +778,7 @@ state machine generation, region/loan/move analysis, drop-point validation, or a
 - Direct executable linking uses the configured Clang driver with LLD for the native Linux ELF target. A configured
   cross-target still receives LLVM IR and object artifacts, then stops before executable linking; runtime and external
   library linking remain unconfigured.
-- `.xse` is the native executable artifact extension. The first output format under that extension is ELF; PE support comes
+- `.vxse` is the native executable artifact extension. The first output format under that extension is ELF; PE support comes
   later.
 - The linker can be invoked without a shell, with argument policy left to the upper layer.
 
@@ -786,7 +786,7 @@ Details: [LLVM_BACKEND.md](LLVM_BACKEND.md)
 
 ### XLIL target
 
-- `docs/XLIL.md` defines XLIL as the official low-level intermediate language for X#.
+- `docs/XLIL.md` defines XLIL as the official low-level intermediate language for Visual X#.
 - `.xhir`, `.xmir`, and `.xlil` are the extensions for HIR, MIR, and XLIL code. They are human-readable text formats, not
   binary or opaque serialized compiler state.
 - Their leading `version N` records are compiler input contracts for `xs build`; they select the supported XHIR/XMIR/XLIL

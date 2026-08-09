@@ -7,7 +7,11 @@
 
 #include "module_internal.h"
 
-#include <dirent.h>
+#ifdef _WIN32
+#    include <windows.h>
+#else
+#    include <dirent.h>
+#endif
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -234,6 +238,79 @@ const XsDiscoveredModule *xs_module_registry_find(const XsModuleRegistry *regist
 
 static bool discover_path(const char *path, XsModuleRegistry *registry, XsModuleIssues *issues)
 {
+#ifdef _WIN32
+    char *pattern = join_path(path, "*");
+    if(pattern == nullptr)
+    {
+        issues->allocation_failed = true;
+        return false;
+    }
+    WIN32_FIND_DATAA entry;
+    HANDLE search = FindFirstFileA(pattern, &entry);
+    free(pattern);
+    if(search == INVALID_HANDLE_VALUE)
+    {
+        append_issue(issues, path, 0, 0, "directory could not be opened");
+        return false;
+    }
+    bool success = true;
+    do
+    {
+        if(strcmp(entry.cFileName, ".") == 0 || strcmp(entry.cFileName, "..") == 0)
+            continue;
+        char *child = join_path(path, entry.cFileName);
+        if(child == nullptr)
+        {
+            issues->allocation_failed = true;
+            success = false;
+            break;
+        }
+        if((entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            success = discover_path(child, registry, issues) && success;
+        }
+        else if(has_suffix(child, ".xs"))
+        {
+            char *module_name = nullptr;
+            size_t start = 0;
+            size_t end = 0;
+            if(!scan_module_declaration(child, &module_name, &start, &end, issues))
+                success = false;
+            if(module_name != nullptr)
+            {
+                const XsDiscoveredModule *duplicate = xs_module_registry_find(registry, module_name);
+                if(duplicate != nullptr)
+                {
+                    char message[512];
+                    snprintf(message, sizeof(message), "duplicate module '%s'; first declared in %s", module_name,
+                             duplicate->source_path);
+                    append_issue(issues, child, start, end, message);
+                    free(module_name);
+                    success = false;
+                }
+                else
+                {
+                    XsDiscoveredModule module = {
+                        .module_name = module_name,
+                        .source_path = copy_text(child),
+                        .declaration_start = start,
+                        .declaration_end = end,
+                    };
+                    if(module.source_path == nullptr || !append_module(registry, module))
+                    {
+                        free(module.module_name);
+                        free(module.source_path);
+                        issues->allocation_failed = true;
+                        success = false;
+                    }
+                }
+            }
+        }
+        free(child);
+    } while(FindNextFileA(search, &entry) != 0);
+    (void)FindClose(search);
+    return success;
+#else
     DIR *directory = opendir(path);
     if(directory == nullptr)
     {
@@ -304,6 +381,7 @@ static bool discover_path(const char *path, XsModuleRegistry *registry, XsModule
     }
     closedir(directory);
     return success;
+#endif
 }
 
 bool xs_module_registry_discover(const char *project_root, XsModuleRegistry *registry, XsModuleIssues *issues)

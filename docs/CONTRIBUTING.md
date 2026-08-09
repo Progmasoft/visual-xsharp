@@ -9,11 +9,11 @@ This repository is compiler infrastructure. Prefer small, testable patches that 
 
 ## Core rules
 
-- Clang GNU++26 and Rust are the primary implementation languages. New native compiler components favor GNU++26, while
+- Clang C++23 Preview and Rust are the primary implementation languages. New native compiler components favor C++23 Preview, while
   target-independent semantic work continues in the isolated Rust `xslang` crate.
 - Existing C23 frontend and backend behavior is preserved during an incremental subsystem migration. Do not reinterpret
   the entire C tree as C++ in one change.
-- GNU++26 sources use `.cxx`/`.hxx`; directories use `snake_case` and filenames use `PascalCase`.
+- C++23 Preview sources use `.cpp`/`.hpp`; directories use `snake_case` and filenames use `PascalCase`.
 - Use `fmt` instead of iostreams. Prefer installed dependencies and add a Git submodule only when a required dependency
   is unavailable on supported systems. Do not add vcpkg or Conan.
 - Keep pinned third-party sources under `third_party/` unchanged. DIMCLI owns CLI schema parsing and generated help;
@@ -21,7 +21,7 @@ This repository is compiler infrastructure. Prefer small, testable patches that 
 - Shell scripts are not added as persistent project artifacts.
 - Use CMake 3.31 or newer; do not use Meson.
 - Stay within the documented Clang/LLVM build path and avoid assumptions that are not covered by the supported toolchain.
-- Files must not exceed 1000 lines. New or touched C, GNU++26, and header files should stay much smaller when practical.
+- Files must not exceed 1000 lines. New or touched C, C++23 Preview, and header files should stay much smaller when practical.
 - In new/touched C code, use `nullptr` instead of `NULL`, and C23 `bool` instead of `<stdbool.h>`.
 
 ## Patch size

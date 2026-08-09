@@ -63,5 +63,5 @@ void xs_module_issues_print(const XsModuleIssues *issues)
         fprintf(stderr, "%s:%zu: error: %s\n", issues->issues[i].source_path, issues->issues[i].start,
                 issues->issues[i].message);
     if(issues->allocation_failed)
-        fprintf(stderr, "xs: error: out of memory while resolving modules\n");
+        fprintf(stderr, "vxs: error: out of memory while resolving modules\n");
 }

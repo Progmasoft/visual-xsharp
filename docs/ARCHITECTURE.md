@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Compiler architecture
 
-The X# compiler is developed as a staged, testable pipeline. Each stage produces its own data model; later stages must not
+The Visual X# compiler is developed as a staged, testable pipeline. Each stage produces its own data model; later stages must not
 guess missing semantics inside the backend.
 
 ## Pipeline

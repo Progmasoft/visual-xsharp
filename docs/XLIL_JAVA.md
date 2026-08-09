@@ -16,7 +16,7 @@ The binding does not maintain a second XLIL implementation:
   snapshots through read-only C accessors;
 - `org.xsslang.ffi.c.CString` provides explicit NUL-terminated UTF-8 conversion for FFM callers.
 
-The X# Gradle platform integration selects `https://java.xsharp-lang.xyz/`, so application builds do not hard-code that
+The Visual X# Gradle platform integration selects `https://java.xsharp-lang.xyz/`, so application builds do not hard-code that
 repository URL. A consumer declares the platform plugin and dependency:
 
 ```kotlin

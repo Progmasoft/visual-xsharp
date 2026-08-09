@@ -92,17 +92,29 @@ private fun runKotlin(
       }
     wrapped.writeText("import org.xsslang.project.*\n" + script.readText() + suffix)
     val kotlin = System.getenv("XS_KOTLIN")?.takeIf(String::isNotBlank) ?: "kotlin"
-    val arguments =
+    val properties =
       mutableListOf(
-        kotlin,
-        "-J--enable-native-access=ALL-UNNAMED",
         "-Dxs.project.root=${root.absolutePath}",
         "-Dxs.project.output=$output",
       )
-    if (state != null) arguments += "-Dxs.project.state=$state"
-    if (sourcesOutput != null) arguments += "-Dxs.project.sources=$sourcesOutput"
+    if (state != null) properties += "-Dxs.project.state=$state"
+    if (sourcesOutput != null) properties += "-Dxs.project.sources=$sourcesOutput"
     System.getProperty("xs.project.moduleRoot")?.takeIf(String::isNotBlank)?.let { rootPath ->
-      arguments += "-Dxs.project.moduleRoot=$rootPath"
+      properties += "-Dxs.project.moduleRoot=$rootPath"
+    }
+    val arguments = mutableListOf<String>()
+    if (System.getProperty("os.name").startsWith("Windows") && kotlin.endsWith(".bat", ignoreCase = true)) {
+      val kotlinHome = File(kotlin).canonicalFile.parentFile.parentFile
+      arguments += File(System.getProperty("java.home"), "bin/java.exe").absolutePath
+      arguments += "--enable-native-access=ALL-UNNAMED"
+      arguments += properties
+      arguments += "-Dkotlin.home=${kotlinHome.absolutePath}"
+      arguments += "-cp"
+      arguments += kotlinHome.resolve("lib/kotlin-runner.jar").absolutePath
+      arguments += "org.jetbrains.kotlin.runner.Main"
+    } else {
+      arguments += kotlin
+      arguments += properties
     }
     arguments +=
       listOf(
@@ -137,6 +149,9 @@ internal fun evaluateWithKotlin(
   val files = discover(input)
   if (files.project != null && files.modules == null) {
     return runKotlin(files.project, files.root, output, null, sourcesOutput)
+  }
+  if (files.modules != null && moduleRoot == null) {
+    throw ProjectConfigurationException("xs.module.kts requires an explicit --module root")
   }
   val stateDirectory = Files.createTempDirectory("xs-project-state-")
   return try {

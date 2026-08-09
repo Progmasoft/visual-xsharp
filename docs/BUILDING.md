@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Build and test guide
 
-xs-project is built on GNU++26, Rust, C23, CMake, Ninja, Clang/LLVM, and LLD. The documented and tested build path uses
+xs-project is built on C++23 Preview, Rust, C23, CMake, Ninja, Clang/LLVM, and LLD. The documented and tested build path uses
 the Clang/LLVM toolchain.
 
 ## Required tools
@@ -33,7 +33,7 @@ Clone the repository with submodules, or initialize them before configuring:
 git submodule update --init --recursive
 ```
 
-The pinned DIMCLI source under `third_party/dimcli` implements the GNU++26 command schema and generated help for `xs`.
+The pinned DIMCLI source under `third_party/dimcli` implements the C++23 Preview command schema and generated help for `xs`.
 It is built directly by the project. Tests prefer a system Catch2 3 package and fall back to the pinned
 `third_party/catch2` source when the supported system does not provide one.
 
@@ -58,21 +58,21 @@ ctest --preset clang-debug --output-on-failure
 Preset details:
 
 - generator: Ninja
-- compilers: Clang for strict C23 and Clang++ for GNU++26
+- compilers: Clang for strict C23 and Clang++ for C++23 Preview
 - shared monorepo and LLVM toolchain policy: the root `CMakeLists.txt`
 - build directory: `build/clang-debug`
 - default project: `xs`
 
-The root build selects and validates Clang/Clang++, LLVM archive/object utilities, LLD, strict C23, GNU++26, and Ninja before project
+The root build selects and validates Clang/Clang++, LLVM archive/object utilities, LLD, strict C23, C++23 Preview, and Ninja before project
 targets are configured. The root build keeps project definitions separate from this tool selection. Test registration is
 likewise split by direct XLIL, source values/control flow/calls, Kotlin projects, and library-level suites under
 `cmake/XSTests*.cmake`.
 
-The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` static library. Its GNU++26 executable
+The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` static library. Its C++23 Preview executable
 entry and DIMCLI argument layer dispatch into the existing C23 compiler driver while subsystem migration continues.
-Monomorphization and codegen-unit planning are GNU++26-owned subsystems exposed through stable C entry points, so the
+Monomorphization and codegen-unit planning are C++23 Preview-owned subsystems exposed through stable C entry points, so the
 remaining C23 driver can consume them without a simultaneous frontend rewrite. C++ consumers may use the move-only
-`<xs/mono/Plan.hxx>` and `<xs/codegen/Plan.hxx>` views.
+`<xs/mono/Plan.hpp>` and `<xs/codegen/Plan.hpp>` views.
 
 ## Compiler installation layout
 

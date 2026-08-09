@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-//! Target-independent semantic analysis, HIR, MIR, and XLIL foundations for X#.
+//! Target-independent semantic analysis, HIR, MIR, and XLIL foundations for Visual X#.
 
 #![warn(missing_docs)]
 
@@ -30,7 +30,7 @@ pub mod compiler_core;
     reason = "existing HIR API documentation is being completed incrementally"
 )]
 pub mod hir;
-/// Compatibility queries for the native GNU++26 compiler-core bridge.
+/// Compatibility queries for the native C++23 Preview compiler-core bridge.
 pub mod interop;
 #[allow(
     missing_docs,

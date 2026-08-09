@@ -8,7 +8,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#ifdef _WIN32
+#    include <direct.h>
+#    include <windows.h>
+#else
+#    include <unistd.h>
+#endif
 
 static int failures = 0;
 
@@ -99,13 +104,30 @@ static void test_rejections(const char *directory)
 
 int main(void)
 {
+#ifdef _WIN32
+    char temporary_root[MAX_PATH] = {0};
+    char directory[MAX_PATH] = {0};
+    bool created = GetTempPathA(MAX_PATH, temporary_root) != 0 &&
+                   GetTempFileNameA(temporary_root, "xsp", 0, directory) != 0;
+    if(created)
+    {
+        (void)DeleteFileA(directory);
+        created = CreateDirectoryA(directory, nullptr) != 0;
+    }
+    check(created, "temporary package directory is created");
+#else
     char directory[] = "/tmp/xs-package-tests-XXXXXX";
     check(mkdtemp(directory) != nullptr, "temporary package directory is created");
+#endif
     if(failures == 0)
     {
         test_archive_roundtrip(directory);
         test_rejections(directory);
     }
+#ifdef _WIN32
+    check(_rmdir(directory) == 0, "temporary package directory is removed");
+#else
     check(rmdir(directory) == 0, "temporary package directory is removed");
+#endif
     return failures == 0 ? 0 : 1;
 }

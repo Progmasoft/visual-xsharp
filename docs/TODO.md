@@ -5,12 +5,12 @@ SPDX-License-Identifier: MPL-2.0
 
 # Public roadmap
 
-This page summarizes user-visible work that is still in progress for the X# compiler. It is intentionally short: detailed
+This page summarizes user-visible work that is still in progress for the Visual X# compiler. It is intentionally short: detailed
 implementation notes and internal design logs are not part of the public documentation set.
 
 ## Language and frontend
 
-- Complete structural AST coverage for the documented X# syntax.
+- Complete structural AST coverage for the documented Visual X# syntax.
 - Finish macro expansion from matched token fragments into AST declarations and statements.
 - Complete HIR symbol, type, generic, method, operator, and interface checks.
 - Complete expression type checking, mutability validation, and async/await validation.
@@ -35,7 +35,7 @@ implementation notes and internal design logs are not part of the public documen
 ## Backend and CLI
 
 - Extend XLIL-to-LLVM lowering from declarations and the initial body subset to full function bodies.
-- Emit object files and link project targets into native `.xse` executables, targeting ELF first and PE after ELF.
+- Emit object files and link project targets into native `.vxse` executables, targeting ELF first and PE after ELF.
 - Complete `xs build`, `xs check`, and `xs run` artifact handling and diagnostics.
 - Keep LLVM as the only advertised implementation until each planned backend satisfies the support gates in
   `docs/BACKENDS.md`.

@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 9,
   "cmakeMinimumRequired": {
     "major": 3,
     "minor": 31,
@@ -7,25 +7,37 @@
   },
   "configurePresets": [
     {
-      "name": "clang-debug",
-      "displayName": "Clang Debug",
+      "name": "clangcl-debug",
+      "displayName": "ClangCL Debug (Windows x64)",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/clang-debug",
+      "binaryDir": "${sourceDir}/build/clangcl-debug",
       "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe",
+        "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_RC_COMPILER": "rc.exe",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/build/clang-debug/vcpkg_installed/x64-windows;C:/LLVM-dev-msvc",
+        "LLVM_DIR": "C:/LLVM-dev-msvc/lib/cmake/llvm",
         "XS_ENABLE_PROJECTS": "xs",
         "XS_ENABLE_RUNTIMES": "xsrt"
       }
     },
     {
-      "name": "clang-sanitize",
-      "displayName": "Clang Sanitizers",
+      "name": "clangcl-sanitize",
+      "displayName": "ClangCL AddressSanitizer (Windows x64)",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/clang-sanitize",
+      "binaryDir": "${sourceDir}/build/clangcl-sanitize",
       "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe",
+        "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
+        "CMAKE_RC_COMPILER": "rc.exe",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/build/clang-debug/vcpkg_installed/x64-windows;C:/LLVM-dev-msvc",
+        "LLVM_DIR": "C:/LLVM-dev-msvc/lib/cmake/llvm",
         "XS_ENABLE_PROJECTS": "xs",
         "XS_ENABLE_RUNTIMES": "xsrt",
         "XS_ENABLE_SANITIZERS": "ON"
@@ -34,25 +46,25 @@
   ],
   "buildPresets": [
     {
-      "name": "clang-debug",
-      "configurePreset": "clang-debug"
+      "name": "clangcl-debug",
+      "configurePreset": "clangcl-debug"
     },
     {
-      "name": "clang-sanitize",
-      "configurePreset": "clang-sanitize"
+      "name": "clangcl-sanitize",
+      "configurePreset": "clangcl-sanitize"
     }
   ],
   "testPresets": [
     {
-      "name": "clang-debug",
-      "configurePreset": "clang-debug",
+      "name": "clangcl-debug",
+      "configurePreset": "clangcl-debug",
       "output": {
         "outputOnFailure": true
       }
     },
     {
-      "name": "clang-sanitize",
-      "configurePreset": "clang-sanitize",
+      "name": "clangcl-sanitize",
+      "configurePreset": "clangcl-sanitize",
       "output": {
         "outputOnFailure": true
       }

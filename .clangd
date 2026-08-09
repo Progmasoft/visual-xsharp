@@ -6,20 +6,19 @@ If:
   PathMatch: '.*\.h$'
 
 CompileFlags:
-  Compiler: /usr/bin/clang
-  CompilationDatabase: build/clang-debug
+  Compiler: C:/LLVM-dev-msvc/bin/clang-cl.exe
+  CompilationDatabase: build/clangcl-debug
   Remove:
+    - '/std:*'
     - '-std=*'
     - '-Werror'
     - '-D_GNU_SOURCE'
   Add:
-    - '-x'
-    - 'c-header'
-    - '-std=c23'
-    - '-Iinclude'
-    - '-Ixs/include'
-    - '-include'
-    - 'include/xs/compiler_check.h'
+    - '/TC'
+    - '/std:c23'
+    - '/Iinclude'
+    - '/Ixs/include'
+    - '/FIinclude/xs/compiler_check.h'
 
 Index:
   Background: Build
@@ -48,18 +47,18 @@ If:
   PathMatch: '.*\.c$'
 
 CompileFlags:
-  Compiler: /usr/bin/clang
-  CompilationDatabase: build/clang-debug
+  Compiler: C:/LLVM-dev-msvc/bin/clang-cl.exe
+  CompilationDatabase: build/clangcl-debug
   Remove:
+    - '/std:*'
     - '-std=*'
     - '-Werror'
     - '-D_GNU_SOURCE'
   Add:
-    - '-std=c23'
-    - '-Iinclude'
-    - '-Ixs/include'
-    - '-include'
-    - 'include/xs/compiler_check.h'
+    - '/std:c23'
+    - '/Iinclude'
+    - '/Ixs/include'
+    - '/FIinclude/xs/compiler_check.h'
 
 Index:
   Background: Build
@@ -86,18 +85,19 @@ Hover:
 
 ---
 If:
-  PathMatch: '.*\.(hxx|cxx)$'
+  PathMatch: '.*\.(hpp|cpp)$'
 
 CompileFlags:
-  Compiler: /usr/bin/clang++
-  CompilationDatabase: build/clang-debug
+  Compiler: C:/LLVM-dev-msvc/bin/clang-cl.exe
+  CompilationDatabase: build/clangcl-debug
   Remove:
+    - '/std:*'
     - '-std=*'
     - '-Werror'
   Add:
-    - '-std=gnu++26'
-    - '-Iinclude'
-    - '-Ixs/include'
+    - '/std:c++20'
+    - '/Iinclude'
+    - '/Ixs/include'
 
 Index:
   Background: Build

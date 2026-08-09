@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Project files and packages
 
-The modern X# project resolver is part of `/usr/bin/xs`. The unified package requires JRE 25 or newer and an external
+The modern Visual X# project resolver is part of `/usr/bin/xs`. The unified package requires JRE 25 or newer and an external
 `kotlin` command with the Kotlin scripting runtime. The JRE and Kotlin runtime are not embedded. Project scripts are trusted
 build code, not sandboxed input, and execution is delegated to the real Kotlin command; `xs` has no Kotlin interpreter.
 
@@ -130,7 +130,7 @@ effective plan for other backends. PGO is always active in the LLVM pipeline and
 currently records the compiler selection; the native driver continues to implement the AOT path while ORC execution is
 connected incrementally.
 
-Memory management is derived from the backend and has no independent switch: LLVM always uses the X# RAII model, while
+Memory management is derived from the backend and has no independent switch: LLVM always uses the Visual X# RAII model, while
 the future XPLR backend always uses XPG. `XGC_ENABLED` and `XPG_ENABLED` are rejected configuration keys.
 
 `PUBLISH` is a reserved single-boolean project variable and defaults to `false`. Use `set("PUBLISH", true)` only to
@@ -162,7 +162,7 @@ root. A requested `bin` without `main.<XS_EXTENSION>` requires `BINARY`; a reque
 ## External module lock
 
 Each successful KTS project evaluation writes `xs.lock.sqlite3` in the project root. `xs resolve` performs the same
-dependency resolution explicitly and atomically refreshes that lock without compiling X# sources. This is a real SQLite lock
+dependency resolution explicitly and atomically refreshes that lock without compiling Visual X# sources. This is a real SQLite lock
 file with format version `1`. Module names use `Publisher.Name`; stability is normalized to `STABLE`, `BETA`, or `ALPHA`,
 and versions are exact semantic versions. The `modules` table stores required and optional declarations, including the
 optional feature and whether it is active. The `features` table stores the complete enabled/disabled feature selection.
@@ -265,7 +265,7 @@ present it is ordered first. A registry without that file remains valid for non-
 
 ## Module registries
 
-X# source files do not contain a `module` declaration. Projects that need importable modules select a module source pool
+Visual X# source files do not contain a `module` declaration. Projects that need importable modules select a module source pool
 in `xs.project.kts` and assign every selected file in a sibling `xs.module.kts` file:
 
 When `module.include` is omitted, an existing project-root `Modules` directory is selected automatically. If that

@@ -16,7 +16,7 @@ foreach(source_fixture MissingMain NonLiteralMain OutOfRangeMain OutOfRangeByteM
                        TupleDeclarationArityMismatch TupleDeclarationTypeMismatch TupleDeclarationDuplicateBinding
                        UnknownGenericCall WrongGenericArity GenericTypeMismatch ExpandingGenericRecursion
                        UnsatisfiedGenericConstraint NonInterfaceGenericConstraint)
-  add_test(NAME source_native_invalid_${source_fixture} COMMAND xs build -file
+  add_test(NAME source_native_invalid_${source_fixture} COMMAND vxs build -file
                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/${source_fixture}.xs)
   set_tests_properties(source_native_invalid_${source_fixture} PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 endforeach()
@@ -39,8 +39,8 @@ xs_add_c_test(c23_features tests/c23_features_tests.c xs_lil)
 xs_add_c_test(xlil tests/xlil_tests.c xs_compiler)
 xs_add_c_test(lil_c_headers tests/lil_c_headers_tests.c xs_lil)
 xs_add_c_test(lil_c_producer tests/lil_c_producer_tests.c xs_lil)
-xs_add_cxx_test(lil_cpp tests/LilCppTests.cxx xs_lil_cpp)
-xs_add_cxx_test(planning_cpp tests/PlanningCppTests.cxx xs_compiler)
+xs_add_cxx_test(lil_cpp tests/LilCppTests.cpp xs_lil_cpp)
+xs_add_cxx_test(planning_cpp tests/PlanningCppTests.cpp xs_compiler)
 xs_add_c_test(mir tests/mir_tests.c xs_compiler)
 xs_add_c_test(mir_flow tests/mir_flow_tests.c xs_compiler)
 xs_add_c_test(syntax_ast tests/syntax_ast_tests.c xs_compiler)
@@ -58,7 +58,7 @@ foreach(spec_program IN LISTS XS_SPEC_PROGRAM_SOURCES)
   configure_file("${spec_program}" "${XS_SPEC_PROGRAM_FIXTURE_DIR}/${spec_program_name}" COPYONLY)
   list(APPEND XS_SPEC_PROGRAM_FIXTURES "tests/fixtures/spec_programs/${spec_program_name}")
   add_test(NAME spec_program_check_${spec_program_stem}
-           COMMAND xs check -file "${XS_SPEC_PROGRAM_FIXTURE_DIR}/${spec_program_name}")
+           COMMAND vxs check -file "${XS_SPEC_PROGRAM_FIXTURE_DIR}/${spec_program_name}")
   set_tests_properties(spec_program_check_${spec_program_stem} PROPERTIES TIMEOUT 5)
 endforeach()
 xs_add_c_test(spec_program_syntax tests/spec_program_syntax_tests.c xs_compiler ${XS_SPEC_PROGRAM_FIXTURES})

@@ -4,14 +4,19 @@
  */
 
 #include <errno.h>
-#include <spawn.h>
+#ifdef _WIN32
+#    include <process.h>
+#else
+#    include <spawn.h>
+#    include <sys/wait.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
-
+#ifndef _WIN32
 extern char **environ;
+#endif
 
 static int failures;
 
@@ -86,6 +91,15 @@ static bool parse_exit_code(const char *text, int *code)
 static bool run_and_check_exit(const char *path, int expected)
 {
     char *const arguments[] = {(char *)path, nullptr};
+#ifdef _WIN32
+    intptr_t result = _spawnv(_P_WAIT, path, (const char *const *)arguments);
+    if(result == -1)
+    {
+        fprintf(stderr, "could not run %s: %s\n", path, strerror(errno));
+        return false;
+    }
+    int actual = (int)result;
+#else
     pid_t process = 0;
     int spawn_status = posix_spawnp(&process, path, nullptr, nullptr, arguments, environ);
     if(spawn_status != 0)
@@ -102,6 +116,7 @@ static bool run_and_check_exit(const char *path, int expected)
     if(!WIFEXITED(status))
         return false;
     int actual = WEXITSTATUS(status);
+#endif
     if(actual != expected)
     {
         fprintf(stderr, "%s exited with %d, expected %d\n", path, actual, expected);
@@ -115,7 +130,7 @@ int main(int argc, char **argv)
     if(argc < 5)
     {
         fprintf(stderr,
-                "xse artifact test requires .ll, .o, .xse, expected exit-code, and optional IR text arguments\n");
+                "xse artifact test requires .ll, .obj, .vxse, expected exit-code, and optional IR text arguments\n");
         return 2;
     }
     int expected_exit = 0;
@@ -125,10 +140,11 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    static const uint8_t elf_magic[] = {0x7f, 'E', 'L', 'F'};
+    static const uint8_t coff_x64_magic[] = {0x64, 0x86};
+    static const uint8_t pe_dos_magic[] = {'M', 'Z'};
     CHECK(exists(argv[1]));
-    CHECK(has_magic(argv[2], elf_magic, sizeof(elf_magic)));
-    CHECK(has_magic(argv[3], elf_magic, sizeof(elf_magic)));
+    CHECK(has_magic(argv[2], coff_x64_magic, sizeof(coff_x64_magic)));
+    CHECK(has_magic(argv[3], pe_dos_magic, sizeof(pe_dos_magic)));
     CHECK(run_and_check_exit(argv[3], expected_exit));
     for(int index = 5; index < argc; ++index)
     {

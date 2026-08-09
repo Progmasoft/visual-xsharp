@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#ifndef XS_CODEGEN_PLAN_HXX
-#define XS_CODEGEN_PLAN_HXX
+#ifndef XS_CODEGEN_PLAN_HPP
+#define XS_CODEGEN_PLAN_HPP
 
 #include "xs/codegen/units.h"
 

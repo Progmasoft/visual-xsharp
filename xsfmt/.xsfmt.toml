@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
 # SPDX-License-Identifier: MPL-2.0
 
-# If an X# project does not provide this file, xsfmt uses the XS profile.
+# If an Visual X# project does not provide this file, xsfmt uses the XS profile.
 # The XS profile defaults are listed below.
 
 BasedOnStyle = "XS" # The settings below are the XS profile defaults. Writing BasedOnStyle = "XS" is equivalent to writing these values. Projects may override these defaults, for example BasedOnStyle = "Google" or BreakBeforeBraces = "Allman".

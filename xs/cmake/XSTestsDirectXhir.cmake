@@ -32,80 +32,80 @@ foreach(fixture MainGenericFunctions MainGenericRecursive MainGenericConstraint)
   configure_file(tests/fixtures/source/${fixture}.xs "${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs" COPYONLY)
 endforeach()
 
-add_test(NAME direct_xhir_MainGenericConstraint_output COMMAND xs build --hir -file
+add_test(NAME direct_xhir_MainGenericConstraint_output COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainGenericConstraint.xs)
 set_tests_properties(direct_xhir_MainGenericConstraint_output PROPERTIES TIMEOUT 5
   PASS_REGULAR_EXPRESSION "wrote XHIR")
 
-add_test(NAME direct_xhir_native_build COMMAND xs build --hir -file
+add_test(NAME direct_xhir_native_build COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/Supported.xhir)
 set_tests_properties(direct_xhir_native_build PROPERTIES TIMEOUT 5
   PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME direct_xhir_native_artifacts COMMAND xs_xse_artifact_tests
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/Supported.ll
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/Supported.o
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/Supported.xse 7 "ret i32 7")
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/Supported.obj
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/Supported.vxse 7 "ret i32 7")
 set_tests_properties(direct_xhir_native_artifacts PROPERTIES TIMEOUT 5 DEPENDS direct_xhir_native_build)
 
-add_test(NAME direct_xhir_rejects_wrong_return COMMAND xs build --hir -file
+add_test(NAME direct_xhir_rejects_wrong_return COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/InvalidReturn.xhir)
 set_tests_properties(direct_xhir_rejects_wrong_return PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
-add_test(NAME direct_xhir_source_output COMMAND xs build --hir -file
+add_test(NAME direct_xhir_source_output COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.xs)
 set_tests_properties(direct_xhir_source_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
-add_test(NAME direct_xhir_source_roundtrip COMMAND xs build --hir -file
+add_test(NAME direct_xhir_source_roundtrip COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.xhir)
 set_tests_properties(direct_xhir_source_roundtrip PROPERTIES TIMEOUT 5 DEPENDS direct_xhir_source_output
   PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME direct_xhir_source_artifacts COMMAND xs_xse_artifact_tests
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.ll
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.o
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.xse 7 "call i32 @Add")
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.obj
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainCall.vxse 7 "call i32 @Add")
 set_tests_properties(direct_xhir_source_artifacts PROPERTIES TIMEOUT 5 DEPENDS direct_xhir_source_roundtrip)
 
 foreach(fixture MainTupleCalls MainTupleDestructure MainFixedArray MainEnumFlow)
-  add_test(NAME direct_xhir_${fixture}_output COMMAND xs build --hir -file
+  add_test(NAME direct_xhir_${fixture}_output COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs)
   set_tests_properties(direct_xhir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
-  add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND xs build --hir -file
+  add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xhir)
   set_tests_properties(direct_xhir_${fixture}_roundtrip PROPERTIES TIMEOUT 5 DEPENDS direct_xhir_${fixture}_output
     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
   add_test(NAME direct_xhir_${fixture}_artifacts COMMAND xs_xse_artifact_tests
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.ll
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.o
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xse 7)
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.obj
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.vxse 7)
   set_tests_properties(direct_xhir_${fixture}_artifacts PROPERTIES TIMEOUT 5 DEPENDS direct_xhir_${fixture}_roundtrip)
 endforeach()
 
 foreach(fixture MainGenericFunctions MainGenericRecursive)
-  add_test(NAME direct_xhir_${fixture}_output COMMAND xs build --hir -file
+  add_test(NAME direct_xhir_${fixture}_output COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs)
   set_tests_properties(direct_xhir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
-  add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND xs build --hir -file
+  add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xhir)
   set_tests_properties(direct_xhir_${fixture}_roundtrip PROPERTIES TIMEOUT 5
     DEPENDS direct_xhir_${fixture}_output PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
   add_test(NAME direct_xhir_${fixture}_artifacts COMMAND xs_xse_artifact_tests
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.ll
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.o
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xse 7)
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.obj
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.vxse 7)
   set_tests_properties(direct_xhir_${fixture}_artifacts PROPERTIES TIMEOUT 5
     DEPENDS direct_xhir_${fixture}_roundtrip)
 endforeach()
 
-add_test(NAME direct_xhir_function_overloads_output COMMAND xs build --hir -file
+add_test(NAME direct_xhir_function_overloads_output COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.xs)
 set_tests_properties(direct_xhir_function_overloads_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
-add_test(NAME direct_xhir_function_overloads_roundtrip COMMAND xs build --hir -file
+add_test(NAME direct_xhir_function_overloads_roundtrip COMMAND vxs build --hir -file
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.xhir)
 set_tests_properties(direct_xhir_function_overloads_roundtrip PROPERTIES TIMEOUT 5
   DEPENDS direct_xhir_function_overloads_output PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
 add_test(NAME direct_xhir_function_overloads_artifacts COMMAND xs_xse_artifact_tests
   ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.ll
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.o
-  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.xse 10 "xs$fn$choose$0" "xs$fn$choose$1")
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.obj
+  ${XS_DIRECT_XHIR_FIXTURE_DIR}/MainFunctionOverloads.vxse 10 "xs$fn$choose$0" "xs$fn$choose$1")
 set_tests_properties(direct_xhir_function_overloads_artifacts PROPERTIES TIMEOUT 5
   DEPENDS direct_xhir_function_overloads_roundtrip)
 
@@ -126,16 +126,16 @@ foreach(fixture MainDataFields MainNestedDataFields MainDataInheritance MainData
   else()
     set(expected_exit 22)
   endif()
-  add_test(NAME direct_xhir_${fixture}_output COMMAND xs build --hir -file
+  add_test(NAME direct_xhir_${fixture}_output COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xs)
   set_tests_properties(direct_xhir_${fixture}_output PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "wrote XHIR")
-  add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND xs build --hir -file
+  add_test(NAME direct_xhir_${fixture}_roundtrip COMMAND vxs build --hir -file
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xhir)
   set_tests_properties(direct_xhir_${fixture}_roundtrip PROPERTIES TIMEOUT 5 DEPENDS direct_xhir_${fixture}_output
     PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
   add_test(NAME direct_xhir_${fixture}_artifacts COMMAND xs_xse_artifact_tests
     ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.ll
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.o
-    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.xse ${expected_exit})
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.obj
+    ${XS_DIRECT_XHIR_FIXTURE_DIR}/${fixture}.vxse ${expected_exit})
   set_tests_properties(direct_xhir_${fixture}_artifacts PROPERTIES TIMEOUT 5 DEPENDS direct_xhir_${fixture}_roundtrip)
 endforeach()

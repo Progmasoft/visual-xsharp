@@ -3,9 +3,9 @@ SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# X# specification examples
+# Visual X# specification examples
 
-The `Spec/` tree is the public language-example area for X#. It is intentionally example-driven: files show surface syntax,
+The `Spec/` tree is the public language-example area for Visual X#. It is intentionally example-driven: files show surface syntax,
 semantic intent, valid and invalid shapes, and larger complete-language sketches.
 
 The compiler is not expected to compile every example today. Examples may describe the completed language, but documented
@@ -13,7 +13,7 @@ syntax takes priority over ad-hoc implementation shortcuts.
 
 ## Language stability
 
-The documented X# syntax and semantics are frozen. Compiler work implements that contract rather than redesigning it.
+The documented Visual X# syntax and semantics are frozen. Compiler work implements that contract rather than redesigning it.
 Clarifications and defect fixes must preserve source meaning; intermediate-format and backend evolution remains
 independently versioned through XHIR, XMIR, and XLIL headers.
 
@@ -52,7 +52,7 @@ independently versioned through XHIR, XMIR, and XLIL headers.
   ordinary associated/static members.
 - Property bodies should use explicit backing fields such as `self._age`; referencing the property itself as `self.age`
   inside its own accessor is recursive and rejected.
-- X# evaluation is strict/eager. The language aims for referential transparency where practical, but standard-library APIs
+- Visual X# evaluation is strict/eager. The language aims for referential transparency where practical, but standard-library APIs
   are not globally guaranteed to be referentially transparent.
 - `fn Name(...) -> Type` declares an ordinary function. `op Name(...) -> Type` declares a referentially transparent
   operation for pure computation; operations are not just aliases for functions, and non-transparent operation bodies are
@@ -67,7 +67,7 @@ independently versioned through XHIR, XMIR, and XLIL headers.
   `format_args_nl!` are compiler-special and cannot be declared or shadowed through `macro_rules!`.
 - `print!`, `println!`, `eprint!`, `eprintln!`, `format!`, and the `std::fmt::*` API come from `Stdio`.
 - Attribute delimiter syntax is built in: `#[...]` applies to the following declaration/member, and `#![...]` applies to the
-  enclosing file/module form. Official X# attributes live under `std::attrs::*`; the compiler brings those names into
+  enclosing file/module form. Official Visual X# attributes live under `std::attrs::*`; the compiler brings those names into
   attribute scope automatically, so `import attrs;` is optional.
 - CFFI is explicit. The standard CFFI module is not automatically imported or placed in scope; source uses `import cffi;`
   before C foreign-function declarations and the canonical helper types under `std::cffi::*`.
@@ -76,8 +76,8 @@ independently versioned through XHIR, XMIR, and XLIL headers.
 - `Str` is an immutable borrowed UTF-32 code-point view with an implicit static lifetime. `String` is a distinct
   built-in owned, heap-backed UTF-32 string; it is not `Optional<Str>` sugar and does not implicitly borrow as `Str`.
   `Optional<Str>` and `Optional<String>` are distinct types, while `:=` string-literal inference produces `Str`.
-- X# uses `else` for placeholder/default positions. Type and lifetime placeholders are written as `Type<else, Foo>` and
-  `&'else T`; `_` placeholders are not canonical X# syntax.
+- Visual X# uses `else` for placeholder/default positions. Type and lifetime placeholders are written as `Type<else, Foo>` and
+  `&'else T`; `_` placeholders are not canonical Visual X# syntax.
 - Statement/expression separation follows Rust: `expression;` evaluates and discards the value, while the final expression
   in a block may omit `;` and becomes the block value. Function tail expressions are desugared as implicit returns when the
   function return type expects a value.
@@ -101,9 +101,9 @@ independently versioned through XHIR, XMIR, and XLIL headers.
   `std::fmt::*` API require `import stdio;`. A `using namespace` declaration does not import a module. The writer and
   formatting-argument built-ins do not require Stdio.
 - Macros are not prelude entries. A top-level macro marked `#[MacroExport]` enters an imported module's macro export
-  registry and is invoked by its unqualified name; X# has no qualified macro-call syntax.
+  registry and is invoked by its unqualified name; Visual X# has no qualified macro-call syntax.
 - Recoverable failures use `Result<()>`/`Result<T, E>` plus postfix `@` propagation. Exception declarations and
-  control-flow syntax are not part of X#.
+  control-flow syntax are not part of Visual X#.
 
 ## Program examples
 

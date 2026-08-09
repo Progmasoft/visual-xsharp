@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # xstidy
 
-Experimental X# linter project.
+Experimental Visual X# linter project.
 
 `xstidy` is intentionally isolated from the compiler implementation and uses
 Rust nightly with Serde-backed diagnostics and TOML configuration.

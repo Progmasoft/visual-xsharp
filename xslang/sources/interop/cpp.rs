@@ -7,7 +7,7 @@
 mod ffi
 {
     unsafe extern "C++" {
-        include!("xslang/interop/CompilerBridge.hxx");
+        include!("xslang/interop/CompilerBridge.hpp");
 
         #[cxx_name = "BridgeAbiVersion"]
         fn bridge_abi_version() -> u32;

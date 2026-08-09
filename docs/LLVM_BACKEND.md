@@ -21,12 +21,12 @@ design to x86-64; ARM64 compatibility must be preserved.
 - Explicit target triple or native target triple selection
 - Target data layout generation
 - Independent LLVM module per codegen unit
-- Numeric X# primitive type mapping to LLVM types
+- Numeric Visual X# primitive type mapping to LLVM types
 - Borrowed `Str` mapping to a `{ pointer, target-sized UTF-32 code-point count }` view
 - Body-less function declaration and signature lowering
 - XLIL type mapping for function declarations
 - Direct `.xlil` parser/model-driven `.extern`/`.func` lowering to verified and optimized LLVM IR, objects, and local
-  native `.xse` executable artifacts for `.func main : () -> i32`
+  native `.vxse` executable artifacts for `.func main : () -> i32`
 - Initial XLIL body lowering for parameters, constants including 16-bit character code units, i32 arithmetic/bitwise/shift/comparison, i64
   arithmetic/bitwise/shift/comparison, f32/f64 arithmetic and ordered comparisons, explicit UTF-32 string constants,
   typed stack-slot `load`/`store`,
@@ -73,9 +73,9 @@ immutable private `i32` array in the requested byte order and does not append a 
 Fixed-array constant indices lower to LLVM aggregate extraction. Calculated `Int` (`i64`) indices lower through temporary
 array storage and `getelementptr`; generated control flow checks both index bounds and traps on an invalid index before any
 element load or store. Runtime-sized `[T]` arrays lower as an element pointer plus an `i64` count. Their construction,
-checked reads/writes, `count`, same-module calls, and `for` iteration now reach native `.xse` output. This first storage
+checked reads/writes, `count`, same-module calls, and `for` iteration now reach native `.vxse` output. This first storage
 slice uses hosted allocation; ownership and reclamation remain later runtime work.
-Native objects use position-independent relocation so the view can safely refer to that static data from a PIE `.xse`.
+Native objects use position-independent relocation so the view can safely refer to that static data from a PIE `.vxse`.
 
 `Optional<Str>` is the canonical boxed, owned optional-string type. Its allocator, ownership, discriminant, and runtime
 layout remain deferred; the borrowed `Str` view does not invent those semantics.
@@ -135,7 +135,7 @@ Parameter values are read from the declared
 LLVM function; calls use declarations emitted for the same XLIL registry module. The backend emits declarations from the
 public C API and direct `.xlil` files after they are parsed into the XLIL C model, can write verified LLVM IR text for the
 current codegen unit, runs the configured LLVM verification/optimization pipeline, emits an object through LLVM, and invokes
-the configured Clang driver with LLD for a native-host direct XLIL `.xse` executable. Direct XLIL currently uses the O0 pipeline;
+the configured Clang driver with LLD for a native-host direct XLIL `.vxse` executable. Direct XLIL currently uses the O0 pipeline;
 no CLI optimization flag is exposed yet. It rejects unsupported body forms instead of inventing semantics. This prevents AST
 or unfinished HIR behavior from being lowered directly to LLVM IR. Cross-target direct builds stop after object emission, and
 runtime or external library resolution is not configured yet.

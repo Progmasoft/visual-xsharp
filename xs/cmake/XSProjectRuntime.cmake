@@ -2,13 +2,12 @@
 # SPDX-License-Identifier: MPL-2.0
 
 find_package(Java 25 REQUIRED COMPONENTS Runtime)
-find_program(XS_KOTLIN_EXECUTABLE NAMES kotlin REQUIRED)
 
 set(XS_PROJECT_RUNTIME_ROOT "${PROJECT_SOURCE_DIR}/xs_kts")
 set(XS_PROJECT_RUNTIME_DIST
     "${XS_PROJECT_RUNTIME_ROOT}/build/install/xs-project-runtime")
 set(XS_PROJECT_RUNTIME_LAUNCHER
-    "${XS_PROJECT_RUNTIME_DIST}/bin/xs-project-runtime")
+    "${XS_PROJECT_RUNTIME_DIST}/bin/xs-project-runtime.bat")
 
 file(GLOB_RECURSE XS_PROJECT_RUNTIME_SOURCES CONFIGURE_DEPENDS
   "${XS_PROJECT_RUNTIME_ROOT}/sources/main/kotlin/*.kt"
@@ -16,7 +15,7 @@ file(GLOB_RECURSE XS_PROJECT_RUNTIME_SOURCES CONFIGURE_DEPENDS
 
 add_custom_command(
   OUTPUT "${XS_PROJECT_RUNTIME_LAUNCHER}"
-  COMMAND "${XS_PROJECT_RUNTIME_ROOT}/gradlew" --daemon --build-cache
+  COMMAND "${XS_PROJECT_RUNTIME_ROOT}/gradlew.bat" --daemon --build-cache
           -p "${XS_PROJECT_RUNTIME_ROOT}" installDist
   DEPENDS
     ${XS_PROJECT_RUNTIME_SOURCES}
@@ -32,7 +31,7 @@ add_custom_target(xs_project_runtime ALL DEPENDS "${XS_PROJECT_RUNTIME_LAUNCHER}
 
 target_compile_definitions(xs_compiler PRIVATE
   XS_PROJECT_RUNTIME_BUILD="${XS_PROJECT_RUNTIME_LAUNCHER}"
-  XS_PROJECT_RUNTIME_DEFAULT="${CMAKE_INSTALL_PREFIX}/libexec/xs/project-runtime/bin/xs-project-runtime"
+  XS_PROJECT_RUNTIME_DEFAULT="${CMAKE_INSTALL_PREFIX}/libexec/xs/project-runtime/bin/xs-project-runtime.bat"
 )
 
 install(DIRECTORY "${XS_PROJECT_RUNTIME_DIST}/"

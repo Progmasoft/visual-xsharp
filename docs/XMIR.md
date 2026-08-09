@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # XMIR text format
 
-`.xmir` is the human-readable text form of X# MIR. It is not assembly-like, not binary, and not an opaque compiler
+`.xmir` is the human-readable text form of Visual X# MIR. It is not assembly-like, not binary, and not an opaque compiler
 serialization format.
 
 XMIR exists for ownership, borrow-checking, drop planning, async lowering, and optimization inspection. MIR
@@ -126,7 +126,7 @@ the statement names its result local, array local, and registry type before XLIL
 
 Resolved enum-data overloads use the ordinary target-independent aggregate registry. Field zero is the flattened `i32`
 tag. Each typed overload contributes one later field, in base-first resolution order. For example, `Code: Long`,
-`Code: Int`, and payload-free `Ready` produce `{ i32, i32, i64 }` because X# `Long` is `i32` and `Int` is `i64`:
+`Code: Int`, and payload-free `Ready` produce `{ i32, i32, i64 }` because Visual X# `Long` is `i32` and `Int` is `i64`:
 
 ```text
 types

@@ -86,7 +86,7 @@ bool xs_driver_emit_compiler_core_output(const char *output_path, const XsCompil
         return xs_diagnostics_add(diagnostics, XS_DIAGNOSTIC_ERROR, span,
                                   "intermediate output file could not be written") &&
                false;
-    printf("xs: wrote %s to %s\n", kind, output_path);
+    printf("vxs: wrote %s to %s\n", kind, output_path);
     return true;
 }
 

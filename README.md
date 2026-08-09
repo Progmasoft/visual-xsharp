@@ -5,8 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # xs-project
 
-`xs-project` is the LLVM-project-style monorepo root for the X# language and compiler family. The current focus is the
-single `xs` tool, which owns both X# compilation and programmable Kotlin project resolution.
+`xs-project` is the LLVM-project-style monorepo root for the Visual X# language and compiler family. The current focus is the
+single `xs` tool, which owns both Visual X# compilation and programmable Kotlin project resolution.
 
 This repository is experimental, but it is treated as serious compiler infrastructure: every step must remain buildable and
 testable, the HIR/MIR layers must not depend on LLVM, and the documented compilation flow must be preserved.
@@ -55,19 +55,19 @@ xs test
 ```
 
 Supported top-level `#[Test] fn name()` cases are compiled through the normal native pipeline and executed in isolated
-temporary `.xse` harnesses. `#[Ignore]` and `#[ShouldPanic]` are honored.
+temporary `.vxse` harnesses. `#[Ignore]` and `#[ShouldPanic]` are honored.
 
 ## Monorepo directories
 
 | Path | Status | Purpose |
 | --- | --- | --- |
 | `include/` | active | Shared public C headers across projects |
-| `xs/` | active | X# compiler, CLI, lexer/parser, AST, macro, HIR, MIR, XLIL, LLVM backend infrastructure |
+| `xs/` | active | Visual X# compiler, CLI, lexer/parser, AST, macro, HIR, MIR, XLIL, LLVM backend infrastructure |
 | `xs_kts/` | active | Mandatory Kotlin/JVM 25 project runtime bundled with `xs` and its programmable project DSL |
 | `xsrt/` | active | C23 runtime ABI boundary and boxed optional UTF-16 string support |
 | `xslang/` | active | Rust semantic compiler core linked into the C23 driver through a versioned bulk AST boundary |
 | `xlil-java/` | active | Official Java 25 FFM reader/writer binding for the stable XLIL C ABI |
-| `Spec/` | active source documentation | X# syntax and language behavior examples/spec files |
+| `Spec/` | active source documentation | Visual X# syntax and language behavior examples/spec files |
 | `docs/` | active documentation | Architecture, build, CLI, backend, roadmap, and implementation status |
 | `tests/` | active | C-based unit and integration tests |
 | `third_party/` | pinned dependencies | Source-pinned dependencies unavailable as required system packages |
@@ -107,7 +107,7 @@ the backend. HIR and MIR do not depend on the LLVM API; the backend entry langua
 - Shared public C23 feature headers under `<xs/c23/*.h>`, with `<xs/c23_features.h>` as the umbrella and an initial
   object-safe trait/implementation binding facility
 - Clang/LLVM-oriented CMake/toolchain checks
-- X# lexer and structural AST parser
+- Visual X# lexer and structural AST parser
 - Synthetic reparse and expanded-view infrastructure for declaration/statement macro expansion
 - HIR symbol table plus import/name/type resolution bootstrap
 - Primitive type metadata and nominal user-defined type resolution
@@ -130,14 +130,14 @@ example today.
 
 The project is now in the `0.2.8` development period. Supported source functions cross the C23 structural-AST boundary into
 Rust HIR (coordinated THIR and XHIR sides), verified and optimized MIR, and XLIL before the public C23 XLIL model drives
-LLVM native `.xse` emission.
+LLVM native `.vxse` emission.
 Rust compiler-core control flow now includes conditional loops, post-test `do`/`while` sugar, loop jumps, and statement
 and value-producing `match`; mutable locals and match results cross CFG edges through explicit target-independent MIR
 storage operations. Value-producing `if` expressions use the same target-independent merge-storage model in local
 initializers and call arguments. `Long` division, remainder, bitwise operations, and shifts now remain in that Rust
 HIR (THIR/XHIR), MIR, and XLIL route. Prefix and postfix
 increment/decrement preserve their distinct result values through the current native local-storage slice. It does not imply
-that the complete X# language is executable yet. Earlier releases are compiler infrastructure snapshots.
+that the complete Visual X# language is executable yet. Earlier releases are compiler infrastructure snapshots.
 
 Explicit top-level generic calls are monomorphized through a transitive specialization worklist. The current slice checks
 interface constraints, supports recursive calls to the same concrete instance, and rejects type-expanding polymorphic
@@ -147,12 +147,12 @@ The integer widths are fixed from `Byte`/`SByte` through `UInteger`/`Integer`. C
 including signed minimum values and full u128 values, now use the same Rust compiler-core route through XHIR, XMIR, XLIL,
 and LLVM native emission. The public C23 boundary carries 128-bit values with project-owned two-word types instead of a
 compiler extension. Arithmetic, bitwise, shifts, equality, and ordering now preserve every fixed integer width through
-native `.xse` emission, including signed/unsigned LLVM selection. Unary `+`/`-` for supported signed literals and logical
+native `.vxse` emission, including signed/unsigned LLVM selection. Unary `+`/`-` for supported signed literals and logical
 `!` for `Bool` use this route.
 Same-module `Int` helper functions also remain i64 through this route, including arithmetic, bitwise, signed-shift, and
 ordered-comparison operations. Native process entry remains `fn main() -> Long`.
 Supported project helpers may now live in separate source files: the Rust compiler core merges their expanded ASTs into a
-single program-wide signature, HIR, MIR, XLIL, and LLVM module before native `.xse` linking.
+single program-wide signature, HIR, MIR, XLIL, and LLVM module before native `.vxse` linking.
 Direct and mutually recursive same-module calls use that program-wide signature registry. Unit-returning helpers, including
 explicit `-> ()` functions, lower to result-free MIR/XLIL/LLVM calls; a value-returning call followed by `;` is evaluated
 and its typed result is discarded.
@@ -182,7 +182,7 @@ The argument-free `xs` project forms use the bundled project runtime to discover
 forms are direct single-file/intermediate input flows. `xs resolve` refreshes the binary SQLite dependency lock without
 compiling sources. Checked `.xs` input can emit real `.xhir`, `.xmir`, or `.xlil`
 program text. Supported `.xhir`, `.xmir`, `.xlil`, and source programs can continue through verified XLIL and LLVM to
-native `.xse` output.
+native `.vxse` output.
 Intermediate output extensions:
 
 - `.xhir`: human-readable XHIR text, intended for direct semantic inspection and review
@@ -197,18 +197,18 @@ as `.xlil module`, `.extern`, `.func`, `bb0.entry:`, `%r0:i64 = const.i64 42`, `
 
 ## Development rules
 
-- The primary implementation languages are Clang GNU++26 and Rust. New native compiler components favor GNU++26;
+- The primary implementation languages are Clang C++23 Preview and Rust. New native compiler components favor C++23 Preview;
   ownership-heavy target-independent analysis remains in the existing Rust `xslang` core.
 - The working C23 frontend and LLVM layers migrate subsystem by subsystem behind passing tests; they are not mechanically
   recompiled as C++ in one step.
-- Public C++ XLIL consumers use `<xs/lil/*.hxx>`. Stable language bindings and C consumers use the explicit
+- Public C++ XLIL consumers use `<xs/lil/*.hpp>`. Stable language bindings and C consumers use the explicit
   `<xs/lil-c/*.h>` C ABI.
 - Do not use `#include <stdbool.h>` in new/touched C code; use C23 `bool`.
 - Prefer `nullptr` over `NULL` in new/touched C code.
 - Use CMake; do not use Meson.
-- GNU++26 files use `.cxx` and `.hxx`; directories use `snake_case` and filenames use `PascalCase`.
+- C++23 Preview files use `.cpp` and `.hpp`; directories use `snake_case` and filenames use `PascalCase`.
 - Use `fmt` instead of iostreams. Do not add vcpkg or Conan.
-- Initialize Git submodules before configuring. The GNU++26 `xs` command schema uses the pinned DIMCLI source under
+- Initialize Git submodules before configuring. The C++23 Preview `xs` command schema uses the pinned DIMCLI source under
   `third_party/dimcli`; compiler execution remains behind the existing driver ABI.
 - The supported build path is Clang, Ninja, LLVM tools, and LLD.
 - Do not add persistent shell scripts; use Java source-file tools or D for automation.

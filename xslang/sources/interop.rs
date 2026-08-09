@@ -3,18 +3,18 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-//! Internal Rust and GNU++26 compiler-core interoperability.
+//! Internal Rust and C++23 Preview compiler-core interoperability.
 
 mod cpp;
 
-/// Returns the ABI version implemented by the linked GNU++26 bridge.
+/// Returns the ABI version implemented by the linked C++23 Preview bridge.
 #[must_use]
 pub fn bridge_abi_version() -> u32
 {
     cpp::bridge_abi_version()
 }
 
-/// Reports whether the linked GNU++26 bridge accepts an XLIL text version.
+/// Reports whether the linked C++23 Preview bridge accepts an XLIL text version.
 #[must_use]
 pub fn supports_xlil_version(version: u32) -> bool
 {

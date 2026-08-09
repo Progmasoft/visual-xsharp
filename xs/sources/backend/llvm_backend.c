@@ -270,7 +270,7 @@ XsBackendStatus xs_llvm_primitive_type(XsLlvmBackend *backend, XsPrimitiveType p
         break;
     }
     default:
-        return xs_llvm_set_error(error, XS_BACKEND_INVALID_ARGUMENT, "unknown X# primitive type");
+        return xs_llvm_set_error(error, XS_BACKEND_INVALID_ARGUMENT, "unknown Visual X# primitive type");
     }
     return XS_BACKEND_OK;
 }

@@ -6,13 +6,18 @@
 #include "xs/backend/linker.h"
 
 #include <errno.h>
-#include <spawn.h>
+#ifdef _WIN32
+#    include <process.h>
+#else
+#    include <spawn.h>
+#    include <sys/wait.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
-
+#ifndef _WIN32
 extern char **environ;
+#endif
 
 static XsBackendStatus linker_error(XsBackendError *error, XsBackendStatus status, const char *message)
 {
@@ -40,6 +45,13 @@ XsBackendStatus xs_linker_invoke(const XsLinkerInvocation *invocation, int *exit
     for(size_t i = 0; i < invocation->argument_count; ++i)
         arguments[i + 1] = (char *)invocation->arguments[i];
 
+#ifdef _WIN32
+    intptr_t result = _spawnvp(_P_WAIT, invocation->program, (const char *const *)arguments);
+    free(arguments);
+    if(result == -1)
+        return linker_error(error, XS_BACKEND_SYSTEM_ERROR, strerror(errno));
+    *exit_code = (int)result;
+#else
     pid_t process = 0;
     int spawn_status = posix_spawnp(&process, invocation->program, nullptr, nullptr, arguments, environ);
     free(arguments);
@@ -55,5 +67,6 @@ XsBackendStatus xs_linker_invoke(const XsLinkerInvocation *invocation, int *exit
         *exit_code = 128 + WTERMSIG(status);
     else
         *exit_code = 1;
+#endif
     return XS_BACKEND_OK;
 }

@@ -17,17 +17,17 @@ if(NOT install_status EQUAL 0)
 endif()
 
 set(required_files
-  bin/xs
-  libexec/xs/project-runtime/bin/xs-project-runtime
+  bin/vxs.exe
+  libexec/xs/project-runtime/bin/xs-project-runtime.bat
   include/xs/compiler_check.h
   include/xs/int128.h
   include/xs/compiler_core.h
   include/xs/lil.h
-  include/xs/lil.hxx
-  include/xs/lil/Module.hxx
+  include/xs/lil.hpp
+  include/xs/lil/Module.hpp
   include/xs/lil-c/aot.h
   include/xs/lil-c/model.h
-  lib/libxs_lil_cpp.a
+  lib/xs_lil_cpp.lib
   include/xs/backend/llvm_backend.h
   share/licenses/xs/LICENSE.txt
   share/licenses/xs/NOTICE.txt
@@ -39,12 +39,12 @@ foreach(relative_path IN LISTS required_files)
 endforeach()
 
 execute_process(
-  COMMAND "${XS_INSTALL_PREFIX}/bin/xs" --version
+  COMMAND "${XS_INSTALL_PREFIX}/bin/vxs.exe" --version
   RESULT_VARIABLE version_status
   OUTPUT_VARIABLE version_output
   ERROR_VARIABLE version_error
   OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-if(NOT version_status EQUAL 0 OR NOT version_output STREQUAL "xs ${XS_VERSION}")
-  message(FATAL_ERROR "installed xs version check failed: '${version_output}' ${version_error}")
+if(NOT version_status EQUAL 0 OR NOT version_output STREQUAL "vxs ${XS_VERSION}")
+  message(FATAL_ERROR "installed vxs version check failed: '${version_output}' ${version_error}")
 endif()

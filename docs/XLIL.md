@@ -5,13 +5,13 @@ SPDX-License-Identifier: MPL-2.0
 
 # XLIL
 
-XLIL, the X# Low-Level Intermediate Language, is the compiler project's official low-level intermediate language.
+XLIL, the Visual X# Low-Level Intermediate Language, is the compiler project's official low-level intermediate language.
 
 XLIL sits before LLVM IR and is designed as the shared input point for all native backends.
 
 ## Purpose
 
-- Provide a standard low-level intermediate language for X#.
+- Provide a standard low-level intermediate language for Visual X#.
 - Remove direct LLVM IR coupling from frontend and middle-end layers.
 - Give every backend a shared intermediate input.
 - Keep the compiler's target-independent IR boundary separate from LLVM APIs.
@@ -75,7 +75,7 @@ Format notes:
 - `bbN.<label>:` starts a basic block.
 - `%rN:type` names a typed SSA value.
 - `%rN:bool = const.bool true|false` creates a boolean SSA value.
-- `%rN:u32 = const.u32 0xXXXXXXXX` creates one unsigned 32-bit value. X# `Char` uses this record for one Unicode scalar;
+- `%rN:u32 = const.u32 0xXXXXXXXX` creates one unsigned 32-bit value. Visual X# `Char` uses this record for one Unicode scalar;
   the hexadecimal immediate always has exactly four digits.
 - `%rN:T = const.T 0x...` creates fixed-width integer bit patterns for `u8`, `i8`, `i16`, `u32`, `u64`, `u128`, and
   `i128`. The hexadecimal field has exactly two digits per byte. Signed records use two's-complement bits, so XLIL does
@@ -176,7 +176,7 @@ registry entry, while repeated uses of the same concrete type reuse one entry.
 canonical value but must not be observed. Postfix `@` becomes `extract` of the discriminant, `br_if`, extraction of the
 active payload, and `ret` of a reconstructed error Result on the failure edge. An exhaustive `Ok`/`Error` match uses the
 same records and extracts only the payload selected by control flow. This keeps the Result semantic model in HIR/MIR and
-keeps XLIL usable by non-X# producers.
+keeps XLIL usable by non-Visual X# producers.
 
 For example, the essential shape of forwarding a `Result<Long, Long>` is:
 
@@ -204,7 +204,7 @@ bb2.error:
 Register ids and block labels in compiler output depend on surrounding expressions, but the data and control-flow
 contract is stable within format version 1.
 
-MIR remains target-independent and writes string constants as `utf32 [0x0000004c, ...]`. XHIR remains closer to X#
+MIR remains target-independent and writes string constants as `utf32 [0x0000004c, ...]`. XHIR remains closer to Visual X#
 source and represents the same value as a quoted string literal. Similarly, XHIR preserves a source-like character
 literal, XMIR writes its 32-bit scalar value as `const.u32`, and XLIL carries that value as a target-independent `u32`
 register.
@@ -242,7 +242,7 @@ module verification, canonical owned-text emission, bounded v0/v1 text parsing, 
 inspection of every instruction payload. Signed integer constants may use decimal values or fixed-width hexadecimal
 two's-complement bit patterns; the C and Rust readers accept the canonical writer output. Direct
 `xs build --xlil -file <input.xlil>` uses the same parser and verifier
-before emitting optimized LLVM IR, an object file, and a native `.xse` executable for the supported local-target subset.
+before emitting optimized LLVM IR, an object file, and a native `.vxse` executable for the supported local-target subset.
 
 The model API is the precise layer; `XsLilBuilder` is the convenience layer. A builder keeps an insertion block, infers
 operand, field, array-element, and call-result types from the registry, resolves call signatures by name, accepts block
@@ -358,7 +358,7 @@ bb0.entry:
 .end
 ```
 
-The direct driver uses this function as the operating-system process entry point without generating an X# runtime wrapper.
-It runs the configured LLVM verification/optimization pipeline, then writes `.ll`, `.o`, and `.xse` executable artifacts next
+The direct driver uses this function as the operating-system process entry point without generating an Visual X# runtime wrapper.
+It runs the configured LLVM verification/optimization pipeline, then writes `.ll`, `.o`, and `.vxse` executable artifacts next
 to the input registry. The current direct XLIL path uses the backend O0 pipeline. Linking is limited to the local Linux ELF
-host and does not provide runtime or external-library resolution. PE `.xse` output is planned after ELF support.
+host and does not provide runtime or external-library resolution. PE `.vxse` output is planned after ELF support.

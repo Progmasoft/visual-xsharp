@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "xs/codegen/Plan.hxx"
-#include "xs/mono/Plan.hxx"
+#include "xs/codegen/Plan.hpp"
+#include "xs/mono/Plan.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -129,7 +129,7 @@ TEST_CASE("planning C ABI reports invalid inputs without throwing", "[planning][
     XsMonoPlan *mono = reinterpret_cast<XsMonoPlan *>(0x1);
     CHECK(xs_mono_plan_create_for_concrete_mir(nullptr, &mono, &mono_error) == XS_MONO_INVALID_ARGUMENT);
     CHECK(mono == nullptr);
-    CHECK(std::string_view{mono_error.message}.contains("valid MIR module"));
+    CHECK(std::string_view{mono_error.message}.find("valid MIR module") != std::string_view::npos);
     CHECK(xs_mono_plan_entry_count(nullptr) == 0U);
     CHECK(xs_mono_plan_entry_unit_name(nullptr, 0U) == nullptr);
 
@@ -137,7 +137,7 @@ TEST_CASE("planning C ABI reports invalid inputs without throwing", "[planning][
     XsCodegenPlan *codegen = reinterpret_cast<XsCodegenPlan *>(0x1);
     CHECK(xs_codegen_plan_create_from_mir(nullptr, &codegen, &codegen_error) == XS_CODEGEN_UNITS_INVALID_ARGUMENT);
     CHECK(codegen == nullptr);
-    CHECK(std::string_view{codegen_error.message}.contains("valid MIR module"));
+    CHECK(std::string_view{codegen_error.message}.find("valid MIR module") != std::string_view::npos);
     CHECK(xs_codegen_plan_unit_count(nullptr) == 0U);
     CHECK(xs_codegen_plan_unit_name(nullptr, 0U) == nullptr);
     CHECK(xs_codegen_plan_unit_function_count(nullptr, 0U) == 0U);
