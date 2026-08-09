@@ -19,3 +19,7 @@ website/
 x-platform/
 .idea/
 .vs/
+vcpkg-debug.log
+vcpkg_installed/
+xs_kts/sources/Tests/
+xs_kts/sources/main.xs
