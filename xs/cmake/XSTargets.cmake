@@ -1,6 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
+if(NOT LLVM_DIR AND DEFINED ENV{LLVM_DIR})
+  set(LLVM_DIR "$ENV{LLVM_DIR}")
+elseif(NOT LLVM_DIR AND DEFINED ENV{LLVM_ROOT})
+  list(PREPEND CMAKE_PREFIX_PATH "$ENV{LLVM_ROOT}")
+endif()
 find_package(LLVM REQUIRED CONFIG)
 find_package(LibArchive REQUIRED)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
@@ -47,6 +52,7 @@ if(WIN32)
 endif()
 
 add_library(xs_compiler
+  ../Visual/XSharp/Pipeline.cpp
   sources/ast.c
   sources/codegen/Plan.cpp
   sources/compiler_core/syntax_packet.c
@@ -149,7 +155,8 @@ add_library(xs_package
   sources/package/archive_writer.c
 )
 
-target_include_directories(xs_compiler PUBLIC "${PROJECT_SOURCE_DIR}/include" include PRIVATE ${LLVM_INCLUDE_DIRS})
+target_include_directories(xs_compiler PUBLIC "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/include" include
+                                      PRIVATE ${LLVM_INCLUDE_DIRS})
 target_include_directories(xs_lil PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
 target_include_directories(xs_package PUBLIC "${PROJECT_SOURCE_DIR}/include" include)
 target_compile_definitions(xs_lil PRIVATE XS_LIL_BUILDING_LIBRARY)

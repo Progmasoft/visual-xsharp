@@ -53,6 +53,12 @@ jobs:
           lld-link --version
           java --version
           kotlin -version
+          $llvmConfig = Get-ChildItem "$env:ProgramFiles\LLVM" -Filter LLVMConfig.cmake -Recurse |
+            Select-Object -First 1
+          if (-not $llvmConfig) {
+            throw "LLVMConfig.cmake was not found in the runner LLVM installation"
+          }
+          "LLVM_DIR=$($llvmConfig.Directory.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Restore native dependency cache
         uses: actions/cache@v4
@@ -76,7 +82,7 @@ jobs:
         run: |
           cmake --preset clangcl-debug `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+            -DLLVM_DIR="$env:LLVM_DIR"
 
       - name: Build debug configuration
         shell: pwsh
@@ -91,7 +97,7 @@ jobs:
         run: |
           cmake --preset clangcl-sanitize `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+            -DLLVM_DIR="$env:LLVM_DIR"
 
       - name: Build sanitizer configuration
         shell: pwsh

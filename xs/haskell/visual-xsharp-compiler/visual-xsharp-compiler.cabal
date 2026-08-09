@@ -13,8 +13,28 @@ build-type: Simple
 
 library
     exposed-modules:
+        Visual.XSharp.AST
+        Visual.XSharp.Core
+        Visual.XSharp.Core.CorePrep
+        Visual.XSharp.Core.Optimizer
+        Visual.XSharp.Desugarer
+        Visual.XSharp.Diagnostic
+        Visual.XSharp.Lexer
+        Visual.XSharp.Parser
         Visual.XSharp.Pipeline.Stage
+        Visual.XSharp.Resolver.NameResolution
+        Visual.XSharp.Resolver.Renamer
+        Visual.XSharp.TypeChecker
     hs-source-dirs: src
     build-depends:
         base >=4.20 && <4.23
+    default-language: GHC2021
+
+test-suite compiler-layer-tests
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+    hs-source-dirs: test
+    build-depends:
+        base >=4.20 && <4.23,
+        visual-xsharp-compiler
     default-language: GHC2021

@@ -12,13 +12,11 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/clangcl-debug",
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
-        "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
-        "CMAKE_RC_COMPILER": "rc.exe",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_RC_COMPILER": "rc",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/build/clang-debug/vcpkg_installed/x64-windows;C:/LLVM-dev-msvc",
-        "LLVM_DIR": "C:/LLVM-dev-msvc/lib/cmake/llvm",
         "XS_ENABLE_PROJECTS": "xs",
         "XS_ENABLE_RUNTIMES": "xsrt"
       }
@@ -29,13 +27,11 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/clangcl-sanitize",
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
-        "CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang-cl.exe",
-        "CMAKE_RC_COMPILER": "rc.exe",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_RC_COMPILER": "rc",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/build/clang-debug/vcpkg_installed/x64-windows;C:/LLVM-dev-msvc",
-        "LLVM_DIR": "C:/LLVM-dev-msvc/lib/cmake/llvm",
         "XS_ENABLE_PROJECTS": "xs",
         "XS_ENABLE_RUNTIMES": "xsrt",
         "XS_ENABLE_SANITIZERS": "ON"
