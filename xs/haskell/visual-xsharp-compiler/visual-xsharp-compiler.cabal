@@ -16,5 +16,5 @@ library
         Visual.XSharp.Pipeline.Stage
     hs-source-dirs: src
     build-depends:
-        base >=4.20 && <4.22
+        base >=4.20 && <4.23
     default-language: GHC2021
