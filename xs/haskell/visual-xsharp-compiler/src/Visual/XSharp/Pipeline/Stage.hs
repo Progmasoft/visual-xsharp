@@ -1,0 +1,28 @@
+-- SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+-- SPDX-License-Identifier: MPL-2.0
+
+module Visual.XSharp.Pipeline.Stage
+    ( Stage (..)
+    , artifactExtension
+    ) where
+
+-- | Stable stage names in the renewed Visual X# compiler pipeline.
+data Stage
+    = ParsedAst
+    | ResolvedAst
+    | TypedAst
+    | Core
+    | CorePrep
+    | Xpp
+    | Xmm
+    | LlvmBitcode
+    | Vpi
+    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+
+-- | Public file extension for stages that may be explicitly emitted.
+-- Other stages remain in-memory unless a later backend contract defines an artifact.
+artifactExtension :: Stage -> Maybe String
+artifactExtension Core = Just ".core"
+artifactExtension Xpp = Just ".xpp"
+artifactExtension Xmm = Just ".xmm"
+artifactExtension _ = Nothing

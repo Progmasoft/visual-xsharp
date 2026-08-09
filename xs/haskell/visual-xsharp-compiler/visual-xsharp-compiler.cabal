@@ -1,0 +1,20 @@
+cabal-version: 3.12
+name: visual-xsharp-compiler
+version: 0.1.0.0
+synopsis: Target-independent stages for the Visual X# compiler pipeline
+description:
+    Defines the stable stage vocabulary and emitted artifact extensions used by
+    the renewed Visual X# compiler pipeline.
+category: Development
+license: MPL-2.0
+author: Progmasoft
+maintainer: support@xsharp-lang.xyz
+build-type: Simple
+
+library
+    exposed-modules:
+        Visual.XSharp.Pipeline.Stage
+    hs-source-dirs: src
+    build-depends:
+        base >=4.20 && <4.22
+    default-language: GHC2021

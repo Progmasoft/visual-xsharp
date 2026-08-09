@@ -18,8 +18,8 @@ class Git
     static final String REMOTE = "origin";
 
     static final String[] GENERATED_PATHS =
-    {"build/", ".codex", "target/", "node_modules/", "dist/", "out/", "XS/", "Cargo.lock", ":(glob)**/build/**",
-            ":(glob)**/target/**", ":(glob)**/node_modules/**", ":(glob)**/dist/**", ":(glob)**/out/**",
+    {"build/", ".codex", "target/", "node_modules/", "dist/", "dist-newstyle/", "out/", "XS/", "Cargo.lock", ":(glob)**/build/**",
+            ":(glob)**/target/**", ":(glob)**/node_modules/**", ":(glob)**/dist/**", ":(glob)**/dist-newstyle/**", ":(glob)**/out/**",
             ":(glob)**/Cargo.lock"};
 
     enum Command
@@ -152,7 +152,7 @@ class Git
                           local generated files stay on disk and remain ignored
 
                         generated paths:
-                          build/, .codex/, target/, node_modules/, dist/, out/, Cargo.lock
+                          build/, .codex/, target/, node_modules/, dist/, dist-newstyle/, out/, Cargo.lock
 
                         update push:
                           git push -u origin <current-branch> --force-with-lease
@@ -224,6 +224,7 @@ class Git
     {
         return isGeneratedDirectory(path, "build") || isGeneratedDirectory(path, "target")
                 || isGeneratedDirectory(path, "node_modules") || isGeneratedDirectory(path, "dist")
+                || isGeneratedDirectory(path, "dist-newstyle")
                 || isGeneratedDirectory(path, "out") || path.equals(".codex") || path.startsWith(".codex/")
                 || path.equals("Cargo.lock") || path.endsWith("/Cargo.lock");
     }
@@ -271,8 +272,26 @@ class Git
         }
     }
 
+    static void normalizeWindowsSubmoduleFileModes() throws IOException, InterruptedException
+    {
+        String osName = System.getProperty("os.name", "").toLowerCase();
+
+        if(!osName.contains("windows"))
+        {
+            return;
+        }
+
+        int configCode = run("git", "submodule", "foreach", "--recursive", "git config core.filemode false");
+
+        if(configCode != 0)
+        {
+            exit(configCode, "error: Windows submodule filemode configuration failed");
+        }
+    }
+
     static void clean() throws IOException, InterruptedException
     {
+        normalizeWindowsSubmoduleFileModes();
         untrackGeneratedAndIgnoredFiles();
     }
 

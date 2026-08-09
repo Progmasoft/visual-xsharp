@@ -1,0 +1,24 @@
+-- SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+-- SPDX-License-Identifier: MPL-2.0
+
+packages:
+    haskell/visual-xsharp-compiler/visual-xsharp-compiler.cabal
+
+with-compiler: ghc
+optimization: 2
+tests: True
+benchmarks: False
+documentation: False
+write-ghc-environment-files: never
+
+package *
+    ghc-options:
+        -Wall
+        -Wcompat
+        -Widentities
+        -Wincomplete-record-updates
+        -Wincomplete-uni-patterns
+        -Wmissing-export-lists
+        -Wmissing-home-modules
+        -Wpartial-fields
+        -Wredundant-constraints
