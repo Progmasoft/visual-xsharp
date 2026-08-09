@@ -1,21 +1,10 @@
 {
-  "name": "xs-project",
-  "version": "0.2.8",
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "visual-xsharp",
+  "version-string": "0.3.0",
   "dependencies": [
     "fmt",
     "libarchive",
     "openssl"
-  ],
-  "features": {
-    "tests": {
-      "description": "Build the test suite",
-      "dependencies": [
-        {
-          "name": "catch2",
-          "version>=": "3.0.0"
-        }
-      ]
-    }
-  },
-  "builtin-baseline": "ea1a7396b05637a53bf23c078647ecc0edee4b80"
+  ]
 }
