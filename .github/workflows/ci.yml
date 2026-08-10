@@ -164,6 +164,11 @@ jobs:
         working-directory: xs
         run: cabal build all
 
+      - name: Test Haskell compiler layers
+        shell: pwsh
+        working-directory: xs
+        run: cabal test all
+
       - name: Check Haskell package metadata
         shell: pwsh
         working-directory: xs/haskell/visual-xsharp-compiler
