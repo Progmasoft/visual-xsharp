@@ -22,11 +22,6 @@ Recommended order for newcomers:
 7. [RUNTIME.md](RUNTIME.md): current runtime ABI boundary
 8. [IMPLEMENTATION.md](IMPLEMENTATION.md): stage-by-stage implementation status
 9. [SPEC.md](SPEC.md): guide to the `Spec/` language-example tree
-10. [XHIR.md](XHIR.md): human-readable XHIR text format direction
-11. [XMIR.md](XMIR.md): human-readable MIR text format direction
-12. [XLIL.md](XLIL.md): backend input text registry direction
-13. [XLIL_RUST.md](XLIL_RUST.md): official Rust model, typed builder, and producer macro
-14. [XLIL_JAVA.md](XLIL_JAVA.md): official Java 25 FFM binding
 15. [TODO.md](TODO.md): public roadmap
 16. [RELEASES.md](RELEASES.md): pre-1.0 release policy
 17. [BACKENDS.md](BACKENDS.md): current backend status and future backend contracts
@@ -38,8 +33,6 @@ Recommended order for newcomers:
 - For documented Visual X# syntax, `Spec/` has priority.
 - For how to read the example/spec tree, start with [SPEC.md](SPEC.md).
 - For project configuration, `PROJECT_FILES.md` and the `xs_kts/` DSL API have priority.
-- For XHIR/XMIR text-output behavior, read `docs/XHIR.md` and `docs/XMIR.md`.
-- For XLIL behavior, read `docs/XLIL.md` and `xs/include/xs/lil.h` together.
 - For implementation order, [IMPLEMENTATION.md](IMPLEMENTATION.md) is authoritative.
 - Public remaining work is summarized in [TODO.md](TODO.md).
 

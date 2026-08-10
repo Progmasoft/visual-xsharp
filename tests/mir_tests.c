@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/symbol_table.h"
-#include "xs/lil.h"
-#include "xs/mir.h"
-#include "xs/mir/borrow_checker.h"
-#include "xs/mir/hir_lowering.h"
-#include "xs/mir/jit.h"
-#include "xs/mir/optimizer.h"
-#include "xs/mir/xlil_lowering.h"
-#include "xs/syntax_parser.h"
+#include "Visual/XSharp/hir/symbol_table.h"
+#include "Visual/XSharp/lil.hh"
+#include "Visual/XSharp/mir.hh"
+#include "Visual/XSharp/mir/borrow_checker.hh"
+#include "Visual/XSharp/mir/hir_lowering.hh"
+#include "Visual/XSharp/mir/jit.hh"
+#include "Visual/XSharp/mir/optimizer.hh"
+#include "Visual/XSharp/mir/xlil_lowering.hh"
+#include "Visual/XSharp/syntax_parser.h"
 
 #include <stdio.h>
 #include <string.h>

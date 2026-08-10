@@ -6,7 +6,7 @@
 #ifndef XS_MACRO_INTERNAL_H
 #define XS_MACRO_INTERNAL_H
 
-#include "xs/macro.h"
+#include "Visual/XSharp/macro.h"
 
 bool xs_macro_text_equal(XsText left, XsText right);
 bool xs_macro_token_text_matches(const XsSyntaxNode *matcher, const XsSyntaxNode *argument);

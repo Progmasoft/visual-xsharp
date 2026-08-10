@@ -1,0 +1,108 @@
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+// SPDX-License-Identifier: MPL-2.0
+
+#include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
+
+#include <algorithm>
+#include <unordered_set>
+
+namespace visual_xsharp::core
+{
+namespace
+{
+auto issue(std::string code, std::string message, SymbolId function, BlockId block = 0) -> VerificationIssue
+{
+    return VerificationIssue{std::move(code), std::move(message), function, block};
+}
+
+auto atom_valid(const Atom &atom) -> bool
+{
+    if(atom.kind == Atom::Kind::Variable)
+        return atom.symbol != 0;
+    switch(atom.type)
+    {
+    case ValueType::Unit: return std::holds_alternative<std::monostate>(atom.literal);
+    case ValueType::Bool: return std::holds_alternative<bool>(atom.literal);
+    case ValueType::Int64: return std::holds_alternative<std::int64_t>(atom.literal);
+    case ValueType::Int32: return std::holds_alternative<std::int32_t>(atom.literal);
+    case ValueType::String: return std::holds_alternative<std::string>(atom.literal);
+    }
+    return false;
+}
+
+auto expected_arity(Operation operation) -> std::size_t
+{
+    switch(operation)
+    {
+    case Operation::Copy: return 1;
+    case Operation::Call: return 0;
+    case Operation::Negate:
+    case Operation::LogicalNot: return 1;
+    default: return 2;
+    }
+}
+
+void verify_instruction(const Instruction &instruction, SymbolId function, BlockId block,
+                        std::vector<VerificationIssue> &issues)
+{
+    if(instruction.kind != Instruction::Kind::Evaluate && instruction.destination == 0)
+        issues.push_back(issue("VXC1006", "defining instruction has no destination symbol", function, block));
+    if(instruction.operation != Operation::Call && instruction.operands.size() != expected_arity(instruction.operation))
+        issues.push_back(issue("VXC1007", "operation has the wrong operand count", function, block));
+    if(instruction.operation == Operation::Call && instruction.operands.empty())
+        issues.push_back(issue("VXC1008", "call operation has no callee operand", function, block));
+    if(std::any_of(instruction.operands.begin(), instruction.operands.end(), [](const Atom &atom) { return !atom_valid(atom); }))
+        issues.push_back(issue("VXC1009", "instruction contains an invalid typed atom", function, block));
+}
+
+void verify_terminator(const Terminator &terminator, const std::unordered_set<BlockId> &block_ids, SymbolId function,
+                       BlockId block, std::vector<VerificationIssue> &issues)
+{
+    if(terminator.kind == Terminator::Kind::Return && !atom_valid(terminator.value))
+        issues.push_back(issue("VXC1010", "return contains an invalid typed atom", function, block));
+    if(terminator.kind == Terminator::Kind::Branch)
+    {
+        if(!atom_valid(terminator.value) || terminator.value.type != ValueType::Bool)
+            issues.push_back(issue("VXC1011", "branch condition must be a valid bool atom", function, block));
+        if(!block_ids.contains(terminator.true_target) || !block_ids.contains(terminator.false_target))
+            issues.push_back(issue("VXC1012", "branch targets a missing block", function, block));
+    }
+    if(terminator.kind == Terminator::Kind::Jump && !block_ids.contains(terminator.true_target))
+        issues.push_back(issue("VXC1013", "jump targets a missing block", function, block));
+}
+} // namespace
+
+auto verify(const CorePrepModule &module) -> std::vector<VerificationIssue>
+{
+    std::vector<VerificationIssue> issues;
+    std::unordered_set<SymbolId> function_ids;
+    for(const auto &function : module.functions)
+    {
+        if(function.symbol == 0 || !function_ids.insert(function.symbol).second)
+            issues.push_back(issue("VXC1001", "function symbol is missing or duplicated", function.symbol));
+
+        std::unordered_set<BlockId> block_ids;
+        for(const auto &block : function.blocks)
+            if(!block_ids.insert(block.id).second)
+                issues.push_back(issue("VXC1002", "block id is duplicated", function.symbol, block.id));
+        if(!block_ids.contains(function.entry))
+            issues.push_back(issue("VXC1003", "entry block does not exist", function.symbol));
+
+        std::unordered_set<SymbolId> definitions;
+        for(const auto &parameter : function.parameters)
+            if(parameter.symbol == 0 || !definitions.insert(parameter.symbol).second)
+                issues.push_back(issue("VXC1004", "parameter symbol is missing or duplicated", function.symbol));
+        for(const auto &block : function.blocks)
+        {
+            for(const auto &instruction : block.instructions)
+            {
+                if(instruction.kind == Instruction::Kind::Bind && !definitions.insert(instruction.destination).second)
+                    issues.push_back(issue("VXC1005", "binding symbol is defined more than once", function.symbol, block.id));
+                verify_instruction(instruction, function.symbol, block.id, issues);
+            }
+            verify_terminator(block.terminator, block_ids, function.symbol, block.id, issues);
+        }
+    }
+    return issues;
+}
+} // namespace visual_xsharp::core

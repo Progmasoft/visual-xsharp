@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/mir/xlil_lowering.h"
+#include "Visual/XSharp/mir/xlil_lowering.hh"
 #include "model_internal.h"
 
 #include <stdint.h>

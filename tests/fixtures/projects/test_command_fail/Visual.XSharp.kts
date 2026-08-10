@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-project("FailingTestCommand", "BETA", "0.2.1")
-
-source {
-  include("Sources")
+project { name = "FailingTestCommand"; version = "0.2.1"; stability = Stability.BETA }
+sources {
+  main { srcDir = "Sources"; entry = "FailingTestCommand.Main"; exclude("Test/**") }
+  test { testDir = "Sources/Test"; framework = "tests" }
 }

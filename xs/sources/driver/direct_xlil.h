@@ -6,7 +6,7 @@
 #ifndef XS_DRIVER_DIRECT_XLIL_H
 #define XS_DRIVER_DIRECT_XLIL_H
 
-#include "xs/lil.h"
+#include "Visual/XSharp/lil.hh"
 
 #include <stddef.h>
 

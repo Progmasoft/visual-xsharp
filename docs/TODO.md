@@ -43,7 +43,7 @@ implementation notes and internal design logs are not part of the public documen
 
 ## Public APIs
 
-- Grow the XLIL C23 API under `#include <xs/lil.h>` for external frontends and language implementations.
+- Grow the XLIL C23 API under `#include <Visual/XSharp/lil.hh>` for external frontends and language implementations.
 - Add AOT/JIT-facing APIs only when their behavior is implemented and testable.
 
 ## Packages

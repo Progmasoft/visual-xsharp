@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/lil-c/api.h"
-#include "xs/lil-c/builder.h"
-#include "xs/lil-c/function.h"
-#include "xs/lil-c/instruction.h"
-#include "xs/lil-c/model.h"
-#include "xs/lil-c/module.h"
-#include "xs/lil-c/text.h"
+#include "Visual/XSharp/lil-c/api.hh"
+#include "Visual/XSharp/lil-c/builder.hh"
+#include "Visual/XSharp/lil-c/function.hh"
+#include "Visual/XSharp/lil-c/instruction.hh"
+#include "Visual/XSharp/lil-c/model.hh"
+#include "Visual/XSharp/lil-c/module.hh"
+#include "Visual/XSharp/lil-c/text.hh"
 
 int main(void)
 {

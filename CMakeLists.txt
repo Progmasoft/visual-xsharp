@@ -137,7 +137,7 @@ cmake_path(NORMAL_PATH XS_SOURCE_FROM_BINARY)
 if(XS_SOURCE_FROM_BINARY STREQUAL "")
   set(XS_SOURCE_FROM_BINARY ".")
 endif()
-set(XS_COMPILER_CHECK_HEADER "${XS_SOURCE_FROM_BINARY}/include/xs/compiler_check.h")
+set(XS_COMPILER_CHECK_HEADER "${XS_SOURCE_FROM_BINARY}/include/Visual/C23/compiler_check.h")
 set(XS_BACKEND_TEST_OBJECT "xs_backend_test.obj")
 
 set(CMAKE_C_STANDARD 23)

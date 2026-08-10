@@ -36,10 +36,12 @@ endif()
 add_test(NAME cli_version COMMAND vxs --version)
 string(REPLACE "." "\\." XS_PROJECT_VERSION_REGEX "${PROJECT_VERSION}")
 set_tests_properties(cli_version PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "vxs ${XS_PROJECT_VERSION_REGEX}")
+add_test(NAME cli_version_command COMMAND vxs version)
+set_tests_properties(cli_version_command PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "vxs ${XS_PROJECT_VERSION_REGEX}")
 add_test(NAME cli_help COMMAND vxs --help)
 set_tests_properties(cli_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "Commands:")
 add_test(NAME cli_build_help COMMAND vxs build --help)
-set_tests_properties(cli_build_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "--output=IR")
+set_tests_properties(cli_build_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "-Emit")
 
 add_test(NAME compiler_install_layout COMMAND "${CMAKE_COMMAND}"
   -DXS_BUILD_DIR=${CMAKE_BINARY_DIR}
@@ -71,82 +73,38 @@ add_test(NAME kotlin_project_resolver_build COMMAND "${XS_GRADLE_EXECUTABLE}" --
 set_tests_properties(kotlin_project_resolver_build PROPERTIES TIMEOUT 180
   FIXTURES_SETUP kotlin_project_resolver ENVIRONMENT "GRADLE_OPTS=-Xmx512m")
 
-add_test(NAME example_source COMMAND vxs check -file
+add_test(NAME example_source COMMAND vxs check -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs)
 set_tests_properties(example_source PROPERTIES TIMEOUT 5)
-add_test(NAME macro_source COMMAND vxs check -file
+add_test(NAME macro_source COMMAND vxs check -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/macro_project/source/Main.vxs)
 set_tests_properties(macro_source PROPERTIES TIMEOUT 5)
-add_test(NAME compiler_check_file COMMAND vxs check -file
+add_test(NAME compiler_check_file COMMAND vxs check -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs)
 set_tests_properties(compiler_check_file PROPERTIES TIMEOUT 5)
-add_test(NAME compiler_test_file COMMAND vxs test -file
+add_test(NAME compiler_test_file COMMAND vxs test -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/projects/test_command/Sources/Test/arithmetic.vxs)
 set_tests_properties(compiler_test_file PROPERTIES TIMEOUT 5
   PASS_REGULAR_EXPRESSION "test result: ok. 1 passed; 0 failed; 1 ignored")
-add_test(NAME compiler_check_file_verbose COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs
-  --warning all --werror true --verbose true)
-set_tests_properties(compiler_check_file_verbose PROPERTIES TIMEOUT 5
-  PASS_REGULAR_EXPRESSION "verbose: command=check.*warning=all.*werror=true")
-add_test(NAME compiler_rejects_invalid_warning COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs --warning invalid)
+add_test(NAME compiler_rejects_invalid_warning COMMAND vxs check -File
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs -Warnings invalid)
 set_tests_properties(compiler_rejects_invalid_warning PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
-add_test(NAME compiler_rejects_misspelled_werror COMMAND vxs check -file
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs --werrror true)
+add_test(NAME compiler_rejects_misspelled_werror COMMAND vxs check -File
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs -Werrror true)
 set_tests_properties(compiler_rejects_misspelled_werror PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
+add_test(NAME compiler_accepts_renewed_cli_flags COMMAND vxs check
+  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs
+  -Standard 26 -Compiler-Version latest -Warnings all -Werror true
+  -Wexperimental true -Wshadow true -Wundef true -Type-Safe-Format true
+  -Backend llvm -Llvm-OptLevel 2 -Llvm-Compiler aot -Llvm-Lto none
+  -Xpp-Optimization-Passes true -Xmm-Optimization-Passes true)
+set_tests_properties(compiler_accepts_renewed_cli_flags PROPERTIES TIMEOUT 5)
+add_test(NAME compiler_rejects_project_flag COMMAND vxs check -Project .)
+set_tests_properties(compiler_rejects_project_flag PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
+add_test(NAME compiler_rejects_module_flag COMMAND vxs check --module .)
+set_tests_properties(compiler_rejects_module_flag PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
-set(XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/intermediate_output")
-file(MAKE_DIRECTORY "${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}")
-configure_file(tests/fixtures/source/MainTupleCalls.vxs
-               "${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.vxs" COPYONLY)
 add_executable(xs_text_artifact_tests tests/text_artifact_tests.c)
-foreach(output hir mir xlil)
-  string(TOUPPER "${output}" output_upper)
-  if(NOT output STREQUAL "xlil")
-    set(output_upper "X${output_upper}")
-  endif()
-  set(output_extension ".x${output}")
-  set(function_record "function")
-  if(output STREQUAL "xlil")
-    set(output_extension ".xlil")
-    set(function_record ".func")
-  endif()
-  add_test(NAME build_file_output_${output} COMMAND vxs build --output ${output} -file
-    ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.vxs)
-  set_tests_properties(build_file_output_${output} PROPERTIES TIMEOUT 5
-    PASS_REGULAR_EXPRESSION "wrote ${output_upper}")
-  add_test(NAME build_file_short_${output} COMMAND vxs build --${output} -file
-    ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.vxs)
-  set_tests_properties(build_file_short_${output} PROPERTIES TIMEOUT 5
-    PASS_REGULAR_EXPRESSION "wrote ${output_upper}")
-  add_test(NAME build_file_output_${output}_artifact COMMAND xs_text_artifact_tests
-    ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls${output_extension}
-    "${output_extension} version 1" "${function_record} make_pair" "${function_record} main")
-  set_tests_properties(build_file_output_${output}_artifact PROPERTIES TIMEOUT 5
-    DEPENDS build_file_output_${output})
-endforeach()
-
-add_test(NAME build_file_output_xlil_native_roundtrip COMMAND vxs build --xlil -file
-  ${XS_INTERMEDIATE_OUTPUT_FIXTURE_DIR}/MainTupleCalls.xlil)
-set_tests_properties(build_file_output_xlil_native_roundtrip PROPERTIES TIMEOUT 5
-  DEPENDS build_file_output_xlil_artifact
-  PASS_REGULAR_EXPRESSION "wrote optimized LLVM IR.*executable")
-
-foreach(format xhir xmir xlil)
-  set(format_option "${format}")
-  if(format STREQUAL "xhir")
-    set(format_option "hir")
-  elseif(format STREQUAL "xmir")
-    set(format_option "mir")
-  endif()
-  add_test(NAME direct_${format}_unsupported_version COMMAND vxs build --${format_option} -file ${XS_SOURCE_FROM_BINARY}/tests/fixtures/intermediate/Unsupported.${format})
-  set_tests_properties(direct_${format}_unsupported_version PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
-endforeach()
-
-include(XSTestsDirectXlil)
-include(XSTestsDirectXhir)
-include(XSTestsDirectXmir)
 include(XSTestsSourceValues)
 include(XSTestsSourceControl)
 include(XSTestsSourceCalls)

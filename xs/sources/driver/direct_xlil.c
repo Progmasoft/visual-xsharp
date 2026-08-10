@@ -6,8 +6,8 @@
 #include "direct_xlil.h"
 #include "native_artifact.h"
 
-#include "xs/backend/linker.h"
-#include "xs/backend/llvm_backend.h"
+#include "Visual/XSharp/backend/linker.h"
+#include "Visual/XSharp/backend/llvm_backend.h"
 
 #include <llvm-c/TargetMachine.h>
 

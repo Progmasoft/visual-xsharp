@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/diagnostic.h"
-#include "xs/hir/expression_check.h"
-#include "xs/hir/symbol_table.h"
-#include "xs/hir/type_resolution.h"
-#include "xs/macro.h"
-#include "xs/syntax_parser.h"
+#include "Visual/C23/diagnostic.hh"
+#include "Visual/XSharp/hir/expression_check.h"
+#include "Visual/XSharp/hir/symbol_table.h"
+#include "Visual/XSharp/hir/type_resolution.h"
+#include "Visual/XSharp/macro.h"
+#include "Visual/XSharp/syntax_parser.h"
 
 #include <stdio.h>
 #include <string.h>

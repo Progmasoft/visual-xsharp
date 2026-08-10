@@ -6,9 +6,9 @@
 #ifndef XS_HIR_MODULE_INTERNAL_H
 #define XS_HIR_MODULE_INTERNAL_H
 
-#include "xs/diagnostic.h"
-#include "xs/hir/module_registry.h"
-#include "xs/lexer.h"
+#include "Visual/C23/diagnostic.hh"
+#include "Visual/XSharp/hir/module_registry.h"
+#include "Visual/XSharp/lexer.h"
 
 typedef struct
 {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/driver.h"
+#include "Visual/XSharp/driver.hh"
 
 int main(int argc, char **argv)
 {

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/macro.h"
-#include "xs/syntax_parser.h"
+#include "Visual/XSharp/macro.h"
+#include "Visual/XSharp/syntax_parser.h"
 
 #include <stdlib.h>
 #include <string.h>

@@ -7,7 +7,7 @@
 
 #include "direct_xlil.h"
 
-#include "xs/lil.h"
+#include "Visual/XSharp/lil.hh"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -41,53 +41,6 @@ bool xs_driver_append_compiler_core_diagnostics(const XsCompilerCoreSession *ses
         free(message);
     }
     return added;
-}
-
-bool xs_driver_emit_compiler_core_output(const char *output_path, const XsCompilerCoreSession *session,
-                                         XsBuildOutput output, XsDiagnostics *diagnostics, XsSpan span)
-{
-    uint64_t raw_length = 0;
-    const uint8_t *text = nullptr;
-    const char *kind = nullptr;
-    switch(output)
-    {
-    case XS_BUILD_OUTPUT_HIR:
-        text = xslang_compiler_core_session_xhir_text(session, &raw_length);
-        kind = "XHIR";
-        break;
-    case XS_BUILD_OUTPUT_MIR:
-        text = xslang_compiler_core_session_xmir_text(session, &raw_length);
-        kind = "XMIR";
-        break;
-    case XS_BUILD_OUTPUT_XLIL:
-        text = xslang_compiler_core_session_xlil_text(session, &raw_length);
-        kind = "XLIL";
-        break;
-    case XS_BUILD_OUTPUT_NONE:
-        return true;
-    }
-    if(text == nullptr || raw_length == 0 || raw_length > SIZE_MAX)
-    {
-        if(!xs_driver_append_compiler_core_diagnostics(session, diagnostics, span))
-            (void)xs_diagnostics_add(diagnostics, XS_DIAGNOSTIC_ERROR, span,
-                                     "compiler core did not produce the requested intermediate output");
-        return false;
-    }
-    FILE *file = fopen(output_path, "wb");
-    if(file == nullptr)
-        return xs_diagnostics_add(diagnostics, XS_DIAGNOSTIC_ERROR, span,
-                                  "intermediate output file could not be opened") &&
-               false;
-    size_t length = (size_t)raw_length;
-    bool success = fwrite(text, 1, length, file) == length;
-    if(fclose(file) != 0)
-        success = false;
-    if(!success)
-        return xs_diagnostics_add(diagnostics, XS_DIAGNOSTIC_ERROR, span,
-                                  "intermediate output file could not be written") &&
-               false;
-    printf("vxs: wrote %s to %s\n", kind, output_path);
-    return true;
 }
 
 bool xs_driver_build_compiler_core_native(const char *input_path, const XsCompilerCoreSession *session,

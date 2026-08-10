@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/expression_check.h"
+#include "Visual/XSharp/hir/expression_check.h"
 
 bool xs_hir_check_expression_types(const XsSyntaxTree *tree, XsDiagnostics *diagnostics)
 {

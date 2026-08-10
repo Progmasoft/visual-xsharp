@@ -19,16 +19,16 @@ endif()
 set(required_files
   bin/vxs.exe
   libexec/xs/project-runtime/bin/xs-project-runtime.bat
-  include/xs/compiler_check.h
-  include/xs/int128.h
-  include/xs/compiler_core.h
-  include/xs/lil.h
-  include/xs/lil.hpp
-  include/xs/lil/Module.hpp
-  include/xs/lil-c/aot.h
-  include/xs/lil-c/model.h
+  include/Visual/C23/compiler_check.h
+  include/Visual/C23/int128.hh
+  include/Visual/XSharp/compiler_core.hh
+  include/Visual/XSharp/lil.hh
+  include/Visual/XSharp/lil.hpp
+  include/Visual/XSharp/lil/Module.hpp
+  include/Visual/XSharp/lil-c/aot.hh
+  include/Visual/XSharp/lil-c/model.hh
   lib/xs_lil_cpp.lib
-  include/xs/backend/llvm_backend.h
+  include/Visual/XSharp/backend/llvm_backend.h
   share/licenses/xs/LICENSE.txt
   share/licenses/xs/NOTICE.txt
 )

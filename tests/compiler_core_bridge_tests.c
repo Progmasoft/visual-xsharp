@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/compiler_core.h"
-#include "xs/diagnostic.h"
-#include "xs/lil.h"
-#include "xs/macro.h"
-#include "xs/syntax_parser.h"
+#include "Visual/XSharp/compiler_core.hh"
+#include "Visual/C23/diagnostic.hh"
+#include "Visual/XSharp/lil.hh"
+#include "Visual/XSharp/macro.h"
+#include "Visual/XSharp/syntax_parser.h"
 
 #include <stdio.h>
 #include <string.h>

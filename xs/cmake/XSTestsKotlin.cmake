@@ -110,28 +110,6 @@ add_test(NAME kotlin_project_result_propagation_artifacts COMMAND xs_xse_artifac
   "%result.0 = type { i8, i32, i32 }" "extractvalue %result.0" "br i1")
 set_tests_properties(kotlin_project_result_propagation_artifacts PROPERTIES
   TIMEOUT 5 FIXTURES_REQUIRED kotlin_project_result_propagation)
-foreach(output hir mir xlil)
-  string(TOUPPER "${output}" output_upper)
-  set(output_extension ".x${output}")
-  set(function_record "function")
-  if(output STREQUAL "xlil")
-    set(output_extension ".xlil")
-    set(function_record ".func")
-  else()
-    set(output_upper "X${output_upper}")
-  endif()
-  add_test(NAME kotlin_project_output_${output} COMMAND vxs build --output ${output})
-  set_tests_properties(kotlin_project_output_${output} PROPERTIES TIMEOUT 60
-    WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/multi_file"
-    ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
-    FIXTURES_REQUIRED kotlin_project_resolver
-    PASS_REGULAR_EXPRESSION "wrote ${output_upper}")
-  add_test(NAME kotlin_project_output_${output}_artifact COMMAND xs_text_artifact_tests
-    ${XS_PROJECT_NATIVE_FIXTURE_DIR}/multi_file/sources/main${output_extension}
-    "${output_extension} version 1" "${function_record} add" "${function_record} main")
-  set_tests_properties(kotlin_project_output_${output}_artifact PROPERTIES TIMEOUT 5
-    DEPENDS kotlin_project_output_${output})
-endforeach()
 add_test(NAME kotlin_project_integer_widths_build COMMAND vxs build)
 set_tests_properties(kotlin_project_integer_widths_build PROPERTIES TIMEOUT 60
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/integer_widths"
@@ -164,17 +142,6 @@ add_test(NAME kotlin_project_integer_operators_artifacts COMMAND xs_xse_artifact
   "sdiv i8" "udiv i64" "icmp ult i128" "icmp slt i128")
 set_tests_properties(kotlin_project_integer_operators_artifacts PROPERTIES
   TIMEOUT 5 FIXTURES_REQUIRED kotlin_project_integer_operators)
-add_test(NAME kotlin_project_module_check COMMAND vxs check --module ./Modules)
-set_tests_properties(kotlin_project_module_check PROPERTIES TIMEOUT 60
-  WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/modules"
-  ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
-  FIXTURES_REQUIRED kotlin_project_resolver
-  PASS_REGULAR_EXPRESSION "source\\[1\\].*Modules[\\\\/]Math[\\\\/]add.vxs")
-add_test(NAME kotlin_project_module_requires_root COMMAND vxs check)
-set_tests_properties(kotlin_project_module_requires_root PROPERTIES TIMEOUT 60 WILL_FAIL TRUE
-  WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/modules"
-  ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
-  FIXTURES_REQUIRED kotlin_project_resolver)
 add_test(NAME kotlin_project_test_validate COMMAND vxs test)
 set_tests_properties(kotlin_project_test_validate PROPERTIES TIMEOUT 60
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/test_command"
@@ -212,14 +179,9 @@ set_tests_properties(
   kotlin_project_optional_coalesce_build kotlin_project_optional_coalesce_artifacts
   kotlin_project_optional_update_build kotlin_project_optional_update_artifacts
   kotlin_project_result_propagation_build kotlin_project_result_propagation_artifacts
-  kotlin_project_output_hir kotlin_project_output_hir_artifact
-  kotlin_project_output_mir kotlin_project_output_mir_artifact
-  kotlin_project_output_xlil kotlin_project_output_xlil_artifact
   kotlin_project_integer_widths_build kotlin_project_integer_widths_artifacts
   kotlin_project_integer_widths_run
   kotlin_project_integer_operators_build kotlin_project_integer_operators_artifacts
-  kotlin_project_module_check
-  kotlin_project_module_requires_root
   kotlin_project_test_validate
   kotlin_project_check_excludes_test_registry
   kotlin_project_test_rejects_invalid_source

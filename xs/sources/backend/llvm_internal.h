@@ -6,7 +6,7 @@
 #ifndef XS_BACKEND_LLVM_INTERNAL_H
 #define XS_BACKEND_LLVM_INTERNAL_H
 
-#include "xs/backend/llvm_backend.h"
+#include "Visual/XSharp/backend/llvm_backend.h"
 
 struct XsLlvmBackend
 {

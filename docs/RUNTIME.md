@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Runtime ABI
 
-`xsrt` is the buildable C23 runtime boundary. Its public umbrella header is `<xs/runtime.h>`, and ABI version 0 is
+`xsrt` is the buildable C23 runtime boundary. Its public umbrella header is `<Visual/C23/runtime.h>`, and ABI version 0 is
 declared by `XS_RUNTIME_ABI_VERSION`.
 
 The first implemented owned value is `Optional<Str>`. `Str` remains an immutable borrowed UTF-16 code-unit view with no

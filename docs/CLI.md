@@ -39,7 +39,7 @@ flag. A direct source invocation uses `-File path/to/file.vxs`.
 - `-Compiler-Version VERSION|latest`
 - `-Werror true|false`
 - `-Warnings all|medium|low|none`
-- `-Wexprimental true|false`
+- `-Wexperimental true|false`
 - `-Wshadow true|false`
 - `-Type-Safe-Format true|false`
 - `-Wundef true|false`
@@ -56,3 +56,4 @@ flag. A direct source invocation uses `-File path/to/file.vxs`.
 stage used to produce the final native executable. Core, Xpp, and Xmm artifacts use `.core`, `.xpp`, and `.xmm`.
 
 Intermediate representations stay in memory unless `-Emit` explicitly requests a file.
+Xmm optimization passes are enabled by default in both project and direct-file builds.

@@ -6,7 +6,7 @@
 #ifndef XS_XLIL_MODEL_INTERNAL_H
 #define XS_XLIL_MODEL_INTERNAL_H
 
-#include "xs/lil.h"
+#include "Visual/XSharp/lil.hh"
 
 typedef struct
 {

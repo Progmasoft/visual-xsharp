@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/macro.h"
+#include "Visual/XSharp/macro.h"
 
 static bool spans_equal(XsSpan span, const XsSyntaxNode *call)
 {

@@ -8,8 +8,8 @@
 #include "compiler_core_native.h"
 #include "native_artifact.h"
 
-#include "xs/diagnostic.h"
-#include "xs/source.h"
+#include "Visual/C23/diagnostic.hh"
+#include "Visual/C23/source.hh"
 
 #include <stddef.h>
 #include <stdint.h>

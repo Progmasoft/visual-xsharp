@@ -1,12 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-project("NativeCall", "BETA", "0.2.1")
+project { name = "NativeCall"; version = "0.2.1"; stability = Stability.BETA }
 
-dependencies {
-  addModule("XSharp.JSON", "STABLE", "0.1.0")
-}
-
-source {
-  include("sources")
-}
+sources { main { srcDir = "sources"; entry = "NativeCall.Main" } }

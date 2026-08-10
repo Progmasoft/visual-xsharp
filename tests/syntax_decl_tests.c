@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/diagnostic.h"
-#include "xs/syntax_ast.h"
-#include "xs/syntax_parser.h"
+#include "Visual/C23/diagnostic.hh"
+#include "Visual/XSharp/syntax_ast.hh"
+#include "Visual/XSharp/syntax_parser.h"
 
 #include <stdio.h>
 #include <string.h>

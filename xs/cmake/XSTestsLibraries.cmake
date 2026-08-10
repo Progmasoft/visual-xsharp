@@ -16,7 +16,7 @@ foreach(source_fixture MissingMain NonLiteralMain OutOfRangeMain OutOfRangeByteM
                        TupleDeclarationArityMismatch TupleDeclarationTypeMismatch TupleDeclarationDuplicateBinding
                        UnknownGenericCall WrongGenericArity GenericTypeMismatch ExpandingGenericRecursion
                        UnsatisfiedGenericConstraint NonInterfaceGenericConstraint)
-  add_test(NAME source_native_invalid_${source_fixture} COMMAND vxs build -file
+  add_test(NAME source_native_invalid_${source_fixture} COMMAND vxs build -File
                                                            ${XS_SOURCE_NATIVE_FIXTURE_DIR}/${source_fixture}.vxs)
   set_tests_properties(source_native_invalid_${source_fixture} PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 endforeach()

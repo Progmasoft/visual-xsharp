@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/lil-c/aot.h"
-#include "xs/lil.h"
+#include "Visual/XSharp/lil-c/aot.hh"
+#include "Visual/XSharp/lil.hh"
 
 #include <stdio.h>
 #include <stdlib.h>

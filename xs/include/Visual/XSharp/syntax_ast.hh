@@ -1,0 +1,231 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+ * SPDX-License-Identifier: MPL-2.0
+ * Shared C and C++ ABI surface.
+ *
+ */
+
+#ifndef XS_SYNTAX_AST_H
+#define XS_SYNTAX_AST_H
+
+#include "Visual/C23/source.hh"
+#include "Visual/XSharp/token.hh"
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct
+{
+    uint64_t file_id;
+    size_t start_offset;
+    size_t end_offset;
+    size_t start_line;
+    size_t start_column;
+    size_t end_line;
+    size_t end_column;
+} XsSourceSpan;
+
+typedef enum
+{
+    XS_SYNTAX_FILE,
+
+    XS_SYNTAX_DECL_MODULE,
+    XS_SYNTAX_DECL_IMPORT,
+    XS_SYNTAX_DECL_NAMESPACE,
+    XS_SYNTAX_DECL_FUNCTION,
+    XS_SYNTAX_DECL_CLASS,
+    XS_SYNTAX_DECL_INTERFACE,
+    XS_SYNTAX_DECL_ENUM,
+    XS_SYNTAX_DECL_DATA,
+    XS_SYNTAX_DECL_VARIABLE,
+    XS_SYNTAX_DECL_MACRO,
+    XS_SYNTAX_DECL_MACRO_CALL,
+    XS_SYNTAX_DECL_EXTERN_BLOCK,
+    XS_SYNTAX_ATTRIBUTE_LIST,
+    XS_SYNTAX_ATTRIBUTE,
+    XS_SYNTAX_CLASS_FIELD,
+    XS_SYNTAX_PROPERTY_ACCESSOR,
+    XS_SYNTAX_CLASS_CONSTRUCTOR,
+    XS_SYNTAX_CLASS_DESTRUCTOR,
+    XS_SYNTAX_ENUM_VARIANT,
+    XS_SYNTAX_DATA_FIELD,
+    XS_SYNTAX_PARAMETER,
+    XS_SYNTAX_GENERIC_PARAMETER,
+    XS_SYNTAX_IMPORT_NAME,
+
+    XS_SYNTAX_IDENTIFIER,
+    XS_SYNTAX_PATH,
+    XS_SYNTAX_VISIBILITY,
+
+    XS_SYNTAX_TYPE_NAMED,
+    XS_SYNTAX_TYPE_GENERIC,
+    XS_SYNTAX_TYPE_ARRAY,
+    XS_SYNTAX_TYPE_FIXED_ARRAY,
+    XS_SYNTAX_TYPE_POINTER,
+    XS_SYNTAX_TYPE_REFERENCE,
+    XS_SYNTAX_TYPE_MUTABLE_REFERENCE,
+    XS_SYNTAX_TYPE_TUPLE,
+    XS_SYNTAX_TYPE_FUNCTION,
+    XS_SYNTAX_TYPE_UNIT,
+    XS_SYNTAX_LIFETIME,
+
+    XS_SYNTAX_STMT_BLOCK,
+    XS_SYNTAX_STMT_EXPRESSION,
+    XS_SYNTAX_STMT_VARIABLE,
+    XS_SYNTAX_STMT_RETURN,
+    XS_SYNTAX_STMT_IF,
+    XS_SYNTAX_STMT_ELSE_IF,
+    XS_SYNTAX_STMT_FOR,
+    XS_SYNTAX_STMT_FOR_EACH,
+    XS_SYNTAX_STMT_WHILE,
+    XS_SYNTAX_STMT_MATCH,
+    XS_SYNTAX_MATCH_ARM,
+    XS_SYNTAX_STMT_BREAK,
+    XS_SYNTAX_STMT_CONTINUE,
+    XS_SYNTAX_RESERVED_51,
+    XS_SYNTAX_RESERVED_52,
+    XS_SYNTAX_RESERVED_53,
+    XS_SYNTAX_STMT_MACRO_CALL,
+    XS_SYNTAX_STMT_DISCARD,
+
+    XS_SYNTAX_EXPR_IDENTIFIER,
+    XS_SYNTAX_EXPR_LITERAL,
+    XS_SYNTAX_EXPR_BINARY,
+    XS_SYNTAX_EXPR_UNARY,
+    XS_SYNTAX_EXPR_ASSIGNMENT,
+    XS_SYNTAX_EXPR_CALL,
+    XS_SYNTAX_EXPR_METHOD_CALL,
+    XS_SYNTAX_EXPR_MEMBER_ACCESS,
+    XS_SYNTAX_EXPR_OPTIONAL_METHOD_CALL,
+    XS_SYNTAX_EXPR_OPTIONAL_MEMBER_ACCESS,
+    XS_SYNTAX_EXPR_OPTIONAL_FORGIVING,
+    XS_SYNTAX_EXPR_RESULT_PROPAGATION,
+    XS_SYNTAX_EXPR_INDEX,
+    XS_SYNTAX_EXPR_NEW,
+    XS_SYNTAX_EXPR_FUNCTION,
+    XS_SYNTAX_EXPR_AWAIT,
+    XS_SYNTAX_EXPR_MOVE,
+    XS_SYNTAX_EXPR_BORROW,
+    XS_SYNTAX_EXPR_MUTABLE_BORROW,
+    XS_SYNTAX_EXPR_DEREFERENCE,
+    XS_SYNTAX_EXPR_ARRAY_LITERAL,
+    XS_SYNTAX_EXPR_OBJECT_LITERAL,
+    XS_SYNTAX_OBJECT_FIELD,
+    XS_SYNTAX_EXPR_FIELD_SET,
+    XS_SYNTAX_EXPR_TUPLE,
+    XS_SYNTAX_EXPR_IF,
+    XS_SYNTAX_EXPR_MATCH,
+    XS_SYNTAX_EXPR_MACRO_CALL,
+
+    XS_SYNTAX_PATTERN_IDENTIFIER,
+    XS_SYNTAX_PATTERN_LITERAL,
+    XS_SYNTAX_PATTERN_ENUM_VARIANT,
+    XS_SYNTAX_PATTERN_TUPLE,
+    XS_SYNTAX_PATTERN_ELSE,
+
+    XS_SYNTAX_MACRO_RULE,
+    XS_SYNTAX_MACRO_MATCHER,
+    XS_SYNTAX_MACRO_MATCHER_TOKEN,
+    XS_SYNTAX_MACRO_MATCHER_FRAGMENT,
+    XS_SYNTAX_MACRO_MATCHER_REPETITION,
+    XS_SYNTAX_MACRO_EXPANSION,
+    XS_SYNTAX_MACRO_EXPANSION_TOKEN,
+    XS_SYNTAX_MACRO_EXPANSION_VARIABLE,
+    XS_SYNTAX_MACRO_EXPANSION_REPETITION,
+    XS_SYNTAX_MACRO_ARGUMENT,
+    XS_SYNTAX_TOKEN,
+    XS_SYNTAX_BASE_SPECIFIER,
+    XS_SYNTAX_EXPR_GENERIC_QUALIFIER,
+    XS_SYNTAX_EXPR_TYPED_OBJECT_LITERAL,
+    XS_SYNTAX_PATTERN_TYPED,
+    XS_SYNTAX_DECL_PATTERN_VARIABLE,
+    XS_SYNTAX_STMT_LOOP,
+    XS_SYNTAX_TYPE_MAP,
+    XS_SYNTAX_EXPR_MAP_LITERAL,
+    XS_SYNTAX_MAP_ENTRY,
+    XS_SYNTAX_EXPR_SET_LITERAL,
+    XS_SYNTAX_TUPLE_FIELD,
+} XsSyntaxKind;
+
+typedef enum
+{
+    XS_SYNTAX_VISIBILITY_DEFAULT,
+    XS_SYNTAX_VISIBILITY_PUBLIC,
+    XS_SYNTAX_VISIBILITY_PRIVATE,
+    XS_SYNTAX_VISIBILITY_PROTECTED,
+    XS_SYNTAX_VISIBILITY_INTERNAL,
+} XsSyntaxVisibility;
+
+enum
+{
+    XS_SYNTAX_FLAG_ASYNC = 1U << 0,
+    XS_SYNTAX_FLAG_STATIC = 1U << 1,
+    XS_SYNTAX_FLAG_INCOMPLETE = 1U << 2,
+    XS_SYNTAX_FLAG_DATA_ENUM = 1U << 3,
+    XS_SYNTAX_FLAG_IMMUTABLE = 1U << 4,
+    XS_SYNTAX_FLAG_CONSTANT = 1U << 5,
+    XS_SYNTAX_FLAG_STATIC_CONSTANT = 1U << 6,
+    XS_SYNTAX_FLAG_WILDCARD = 1U << 7,
+    XS_SYNTAX_FLAG_REPETITION_ONE_OR_MORE = 1U << 8,
+    XS_SYNTAX_FLAG_REPETITION_COMMA = 1U << 9,
+    XS_SYNTAX_FLAG_MOVE_CAPTURE = 1U << 10,
+    XS_SYNTAX_FLAG_RETURN_TYPE = 1U << 11,
+    XS_SYNTAX_FLAG_INFERRED_TYPE = 1U << 12,
+    XS_SYNTAX_FLAG_ENUM_VARIANT_OVERLOAD = 1U << 13,
+    XS_SYNTAX_FLAG_OPERATOR = 1U << 14,
+    XS_SYNTAX_FLAG_OVERLOAD = 1U << 15,
+    XS_SYNTAX_FLAG_INNER_ATTRIBUTE = 1U << 16,
+    XS_SYNTAX_FLAG_EXTERN = 1U << 17,
+    XS_SYNTAX_FLAG_USING = 1U << 18,
+    XS_SYNTAX_FLAG_USING_ALIAS = 1U << 19,
+    XS_SYNTAX_FLAG_REFERENTIAL_TRANSPARENT = 1U << 20,
+    XS_SYNTAX_FLAG_DISCARDED = 1U << 21,
+    XS_SYNTAX_FLAG_VIRTUAL = 1U << 22,
+    XS_SYNTAX_FLAG_OVERRIDE = 1U << 23,
+    XS_SYNTAX_FLAG_SEALED = 1U << 24,
+    XS_SYNTAX_FLAG_POST_TEST_LOOP = 1U << 25,
+    XS_SYNTAX_FLAG_PREFIX_UPDATE = 1U << 26,
+    XS_SYNTAX_FLAG_FOR_INITIALIZER = 1U << 27,
+    XS_SYNTAX_FLAG_FOR_CONDITION = 1U << 28,
+    XS_SYNTAX_FLAG_FOR_UPDATE = 1U << 29,
+    XS_SYNTAX_FLAG_BLOCK_NAMESPACE = 1U << 30,
+    XS_SYNTAX_FLAG_OPTIONAL_TYPE = 1U << 31,
+};
+
+typedef struct XsSyntaxNode XsSyntaxNode;
+
+struct XsSyntaxNode
+{
+    XsSyntaxKind kind;
+    XsSourceSpan span;
+    XsText text;
+    XsTokenKind token_kind;
+    XsSyntaxVisibility visibility;
+    uint32_t flags;
+    XsSyntaxNode **children;
+    size_t child_count;
+    size_t child_capacity;
+};
+
+typedef struct XsSyntaxArenaBlock XsSyntaxArenaBlock;
+
+typedef struct
+{
+    const XsSource *source;
+    uint64_t file_id;
+    XsSyntaxArenaBlock *arena;
+    XsSyntaxNode *root;
+    bool allocation_failed;
+} XsSyntaxTree;
+
+void xs_syntax_tree_init(XsSyntaxTree *tree, const XsSource *source, uint64_t file_id);
+void xs_syntax_tree_free(XsSyntaxTree *tree);
+XsSourceSpan xs_source_span(const XsSyntaxTree *tree, XsSpan span);
+XsSyntaxNode *xs_syntax_node_new(XsSyntaxTree *tree, XsSyntaxKind kind, XsSpan span);
+bool xs_syntax_node_add(XsSyntaxTree *tree, XsSyntaxNode *parent, XsSyntaxNode *child);
+XsSyntaxNode *xs_syntax_node_clone_shallow(XsSyntaxTree *tree, const XsSyntaxNode *node);
+XsSyntaxNode *xs_syntax_clone_subtree(XsSyntaxTree *tree, const XsSyntaxNode *node);
+const XsSyntaxNode *xs_syntax_find_first(const XsSyntaxNode *node, XsSyntaxKind kind);
+const char *xs_syntax_kind_name(XsSyntaxKind kind);
+
+#endif

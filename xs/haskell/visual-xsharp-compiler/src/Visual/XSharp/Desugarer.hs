@@ -24,12 +24,18 @@ lowerTop function@FunctionDeclaration{} = [lowerDeclaration function]
 lowerDeclaration :: Declaration ResolvedName Type -> CoreFunction
 lowerDeclaration declaration@FunctionDeclaration{} = CoreFunction (declarationName declaration)
     [(parameterName parameter, parameterAnnotation parameter) | parameter <- declarationParameters declaration]
-    returnType (lowerBlock (declarationBody declaration))
+    returnType (lowerFunctionBlock returnType (declarationBody declaration))
   where returnType = case declarationAnnotation declaration of FunctionType _ result -> result; value -> value
 lowerDeclaration TypeDeclaration{} = error "type declarations are lowered through lowerTop"
 
 lowerBlock :: Block ResolvedName Type -> [CoreStatement]
 lowerBlock (Block statements) = map lowerStatement statements
+
+lowerFunctionBlock :: Type -> Block ResolvedName Type -> [CoreStatement]
+lowerFunctionBlock returnType (Block statements) = case reverse statements of
+    ExpressionStatement _ expression False:remaining | returnType /= unitType ->
+        map lowerStatement (reverse remaining) ++ [CoreReturn (lowerExpression expression)]
+    _ -> map lowerStatement statements
 
 lowerStatement :: Statement ResolvedName Type -> CoreStatement
 lowerStatement statement = case statement of
@@ -37,7 +43,7 @@ lowerStatement statement = case statement of
     AssignmentStatement _ name _ value -> CoreAssign name (lowerExpression value)
     ReturnStatement _ value -> CoreReturn (maybe (CoreLiteral CoreUnit unitType) lowerExpression value)
     IfStatement _ condition trueBlock falseBlock -> CoreIf (lowerExpression condition) (lowerBlock trueBlock) (maybe [] lowerBlock falseBlock)
-    ExpressionStatement _ value -> CoreEvaluate (lowerExpression value)
+    ExpressionStatement _ value _ -> CoreEvaluate (lowerExpression value)
 
 lowerExpression :: Expression ResolvedName Type -> CoreExpression
 lowerExpression expression = case expression of

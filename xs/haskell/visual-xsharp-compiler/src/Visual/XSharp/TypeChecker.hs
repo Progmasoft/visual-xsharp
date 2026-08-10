@@ -46,7 +46,9 @@ checkDeclaration :: TypeEnvironment -> Declaration ResolvedName () -> (Declarati
 checkDeclaration globals declaration@FunctionDeclaration{} =
     let parameters = [(resolvedSymbol (parameterName parameter), (syntaxType (parameterTypeSyntax parameter), False)) | parameter <- declarationParameters declaration]
         expected = syntaxType (declarationReturnSyntax declaration)
-        (body, _, returns, problems) = checkBlock (parameters ++ globals) expected (declarationBody declaration)
+        (body, _, explicitReturns, problems) = checkBlock (parameters ++ globals) expected (declarationBody declaration)
+        finalReturn = finalExpressionType body
+        returns = explicitReturns ++ maybe [] (:[]) finalReturn
         inferred = inferReturn expected returns
         returnProblems = if expected /= ErrorType && any (not . compatible expected) returns
             then [Diagnostic TypeCheckerStage Error "VXT0001" (Just (declarationSpan declaration)) "return expression does not match the declared function type"] else []
@@ -110,9 +112,26 @@ checkStatement environment expected statement = case statement of
                 Just value -> let (block, _, returns, problems) = checkBlock environment expected value in (Just block, returns, problems)
         in (IfStatement spanValue typedCondition typedTrue typedFalse, environment, trueReturns ++ falseReturns,
             conditionProblems ++ conditionMismatch ++ trueProblems ++ falseProblems)
-    ExpressionStatement spanValue value ->
+    ExpressionStatement spanValue value terminated ->
         let (typedValue, _, problems) = checkExpression environment value
-        in (ExpressionStatement spanValue typedValue, environment, [], problems)
+            effectProblems = if terminated && not (effectCapable value)
+                then [problem spanValue "VXT0013" "pure value expression cannot be used as a statement"] else []
+        in (ExpressionStatement spanValue typedValue terminated, environment, [], problems ++ effectProblems)
+
+finalExpressionType :: Block ResolvedName Type -> Maybe Type
+finalExpressionType (Block statements) = case reverse statements of
+    ExpressionStatement _ expression False:_ -> Just (typedExpressionType expression)
+    _ -> Nothing
+
+typedExpressionType :: Expression name Type -> Type
+typedExpressionType expression = case expression of
+    NameExpression _ _ valueType -> valueType; LiteralExpression _ _ valueType -> valueType
+    CallExpression _ _ _ valueType -> valueType; UnaryExpression _ _ _ valueType -> valueType
+    BinaryExpression _ _ _ _ valueType -> valueType
+
+effectCapable :: Expression name annotation -> Bool
+effectCapable CallExpression{} = True
+effectCapable _ = False
 
 checkOptional :: TypeEnvironment -> Maybe (Expression ResolvedName ()) -> (Maybe (Expression ResolvedName Type), Type, [Diagnostic])
 checkOptional _ Nothing = (Nothing, unitType, [])

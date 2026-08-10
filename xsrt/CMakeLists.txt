@@ -25,8 +25,8 @@ install(
   RUNTIME DESTINATION bin
   COMPONENT runtime)
 install(
-  DIRECTORY include/xs/
-  DESTINATION include/xs
+  DIRECTORY include/Visual/C23/
+  DESTINATION include/Visual/C23
   COMPONENT runtime
   FILES_MATCHING
   PATTERN "*.h")

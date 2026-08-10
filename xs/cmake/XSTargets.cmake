@@ -53,10 +53,11 @@ endif()
 
 add_library(xs_compiler
   ../Visual/XSharp/Pipeline.cpp
-  sources/ast.c
+  ../Visual/XSharp/Core/CorePrep/Verifier.cpp
+  sources/Ast.cpp
   sources/codegen/Plan.cpp
   sources/compiler_core/syntax_packet.c
-  sources/diagnostic.c
+  sources/Diagnostic.cpp
   sources/driver/cli.c
   sources/driver/compiler_core_native.c
   sources/driver/DirectXhir.cpp

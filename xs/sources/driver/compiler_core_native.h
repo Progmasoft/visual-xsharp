@@ -8,14 +8,12 @@
 
 #include "options.h"
 
-#include "xs/compiler_core.h"
-#include "xs/diagnostic.h"
+#include "Visual/XSharp/compiler_core.hh"
+#include "Visual/C23/diagnostic.hh"
 
 bool xs_driver_compiler_core_native_available(const XsCompilerCoreSession *session);
 bool xs_driver_append_compiler_core_diagnostics(const XsCompilerCoreSession *session, XsDiagnostics *diagnostics,
                                                 XsSpan span);
-bool xs_driver_emit_compiler_core_output(const char *output_path, const XsCompilerCoreSession *session,
-                                         XsBuildOutput output, XsDiagnostics *diagnostics, XsSpan span);
 bool xs_driver_build_compiler_core_native(const char *input_path, const XsCompilerCoreSession *session,
                                           XsDiagnostics *diagnostics, XsSpan span);
 

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "xs/lil-c/model.h"
+#include "Visual/XSharp/lil-c/model.hh"
 
 #include <array>
 #include <cstddef>

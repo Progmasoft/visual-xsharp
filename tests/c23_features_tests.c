@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/c23_features.h"
+#include "Visual/C23/c23_features.h"
 
 typedef struct
 {

@@ -29,7 +29,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "invalid expected exit code '%s'\n", argv[3]);
         return 2;
     }
-    char *const arguments[] = {argv[1], "run", "-file", argv[2], nullptr};
+    char *const arguments[] = {argv[1], "run", "-File", argv[2], nullptr};
 #ifdef _WIN32
     intptr_t result = _spawnv(_P_WAIT, argv[1], (const char *const *)arguments);
     if(result == -1)

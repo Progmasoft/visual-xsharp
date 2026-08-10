@@ -70,7 +70,7 @@ data Statement name annotation
     | AssignmentStatement SourceSpan name annotation (Expression name annotation)
     | ReturnStatement SourceSpan (Maybe (Expression name annotation))
     | IfStatement SourceSpan (Expression name annotation) (Block name annotation) (Maybe (Block name annotation))
-    | ExpressionStatement SourceSpan (Expression name annotation)
+    | ExpressionStatement SourceSpan (Expression name annotation) Bool
     deriving (Eq, Ord, Read, Show)
 
 data Expression name annotation

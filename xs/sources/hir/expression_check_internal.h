@@ -6,7 +6,7 @@
 #ifndef XS_HIR_EXPRESSION_CHECK_INTERNAL_H
 #define XS_HIR_EXPRESSION_CHECK_INTERNAL_H
 
-#include "xs/hir/expression_check.h"
+#include "Visual/XSharp/hir/expression_check.h"
 
 bool xs_hir_check_result_constructor_call(const XsSyntaxNode *node, bool enclosing_returns_result,
                                           XsDiagnostics *diagnostics);

@@ -13,15 +13,18 @@
 typedef struct
 {
     char **paths;
-    char **module_names;
     size_t path_count;
     char **test_paths;
     size_t test_path_count;
+    char *entry;
+    char *compiler_version;
+    char *standard;
+    XsBuildOutput output;
     XsCompilerSettings settings;
 } XsResolvedProject;
 
-bool xs_driver_resolve_project(const char *module_path, XsResolvedProject *project);
-bool xs_driver_resolve_project_tests(const char *module_path, XsResolvedProject *project);
+bool xs_driver_resolve_project(XsResolvedProject *project);
+bool xs_driver_resolve_project_tests(XsResolvedProject *project);
 bool xs_driver_refresh_lock(void);
 void xs_driver_free_project(XsResolvedProject *project);
 

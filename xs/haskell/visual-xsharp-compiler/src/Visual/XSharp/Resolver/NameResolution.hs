@@ -53,7 +53,7 @@ resolveStatement statement = case statement of
             (resolvedTrue, trueProblems) = resolveBlock trueBlock
             (resolvedFalse, falseProblems) = case falseBlock of Nothing -> (Nothing, []); Just value -> let (block, problems) = resolveBlock value in (Just block, problems)
         in (IfStatement spanValue resolvedCondition resolvedTrue resolvedFalse, conditionProblems ++ trueProblems ++ falseProblems)
-    ExpressionStatement spanValue value -> let (resolved, problems) = resolveExpression value in (ExpressionStatement spanValue resolved, problems)
+    ExpressionStatement spanValue value terminated -> let (resolved, problems) = resolveExpression value in (ExpressionStatement spanValue resolved terminated, problems)
 
 resolveOptional :: Maybe (Expression RenamedName ()) -> (Maybe (Expression ResolvedName ()), [Diagnostic])
 resolveOptional Nothing = (Nothing, [])

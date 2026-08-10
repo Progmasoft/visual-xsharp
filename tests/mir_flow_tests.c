@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/lil.h"
-#include "xs/mir.h"
-#include "xs/mir/borrow_checker.h"
+#include "Visual/XSharp/lil.hh"
+#include "Visual/XSharp/mir.hh"
+#include "Visual/XSharp/mir/borrow_checker.hh"
 
 #include <stdio.h>
 

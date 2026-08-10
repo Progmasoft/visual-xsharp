@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/dump.h"
+#include "Visual/XSharp/hir/dump.h"
 
 static const char *visibility_name(XsSyntaxVisibility visibility)
 {

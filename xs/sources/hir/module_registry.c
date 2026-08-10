@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/module_registry.h"
+#include "Visual/XSharp/hir/module_registry.h"
 
 #include "module_internal.h"
 

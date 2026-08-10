@@ -112,7 +112,7 @@ blockSpan (Block statements) fallback = foldl mergeSpan fallback (map statementS
 statementSpan :: Statement name annotation -> SourceSpan
 statementSpan statement = case statement of
     BindingStatement value _ _ _ _ _ -> value; AssignmentStatement value _ _ _ -> value
-    ReturnStatement value _ -> value; IfStatement value _ _ _ -> value; ExpressionStatement value _ -> value
+    ReturnStatement value _ -> value; IfStatement value _ _ _ -> value; ExpressionStatement value _ _ -> value
 
 parseStatement :: P (Statement Identifier ())
 parseStatement = parseReturn <|?> parseIf <|?> parseBinding <|?> parseAssignmentOrExpression
@@ -150,7 +150,9 @@ parseAssignmentOrExpression = do
         NameExpression start name _ -> do value <- parseExpression; end <- optionalSemicolon
                                           pure (AssignmentStatement (mergeSpan start (maybe (expressionSpan value) tokenSpan end)) name () value)
         _ -> failAt (expressionSpan expression) "VXP0003" "assignment target must be a name"
-    else do end <- optionalSemicolon; pure (ExpressionStatement (maybe (expressionSpan expression) (mergeSpan (expressionSpan expression) . tokenSpan) end) expression)
+    else do
+        end <- optionalSemicolon
+        pure (ExpressionStatement (maybe (expressionSpan expression) (mergeSpan (expressionSpan expression) . tokenSpan) end) expression (maybe False (const True) end))
 
 parseExpression :: P (Expression Identifier ())
 parseExpression = parseLogicalOr

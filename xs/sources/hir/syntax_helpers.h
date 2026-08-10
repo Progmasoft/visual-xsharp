@@ -6,7 +6,7 @@
 #ifndef XS_HIR_SYNTAX_HELPERS_H
 #define XS_HIR_SYNTAX_HELPERS_H
 
-#include "xs/hir/symbol_table.h"
+#include "Visual/XSharp/hir/symbol_table.h"
 
 char *xs_hir_copy_text(XsText text);
 char *xs_hir_copy_cstr(const char *text);

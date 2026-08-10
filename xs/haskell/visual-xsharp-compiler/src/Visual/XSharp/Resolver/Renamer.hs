@@ -92,9 +92,9 @@ renameStatement environment next statement = case statement of
                 Nothing -> (Nothing, afterTrue, [])
                 Just value -> let (block, after, problems) = renameBlock environment afterTrue value in (Just block, after, problems)
         in (IfStatement spanValue renamedCondition renamedTrue renamedFalse, environment, afterFalse, conditionProblems ++ trueProblems ++ falseProblems)
-    ExpressionStatement spanValue value ->
+    ExpressionStatement spanValue value terminated ->
         let (renamedValue, after, problems) = renameExpression environment next value
-        in (ExpressionStatement spanValue renamedValue, environment, after, problems)
+        in (ExpressionStatement spanValue renamedValue terminated, environment, after, problems)
 
 renameOptional :: Environment -> Int -> Maybe (Expression Identifier ()) -> (Maybe (Expression RenamedName ()), Int, [Diagnostic])
 renameOptional _ next Nothing = (Nothing, next, [])

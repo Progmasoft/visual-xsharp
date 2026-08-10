@@ -8,6 +8,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
+import Visual.XSharp.Core.CorePrep.Verifier
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.Pipeline.Stage
 
@@ -15,6 +16,8 @@ main :: IO ()
 main = do
     check "full frontend compiles renewed declarations through CorePrep" fullPipeline
     check "operator precedence is preserved and constants fold" precedence
+    check "unterminated final expression supplies the function result" finalExpression
+    check "semicolon-terminated pure expression is rejected" pureExpressionStatement
     check "CorePrep atomizes calls and creates explicit control flow" preparedControlFlow
     check "project entry resolves namespace, class, and public static void Main" entryContract
     check "int Main is rejected for the selected project entry" wrongEntryReturn
@@ -25,6 +28,7 @@ main = do
     check "wrong call arity is rejected" wrongArity
     check "lexer rejects unsupported input" badCharacter
     check "renewed artifact extensions remain stable" (map artifactExtension [Core, CorePrep, Xpp, Xmm] == [Just ".core", Nothing, Just ".xpp", Just ".xmm"])
+    check "Haskell CorePrep verifier rejects duplicate blocks" invalidCorePrep
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure
@@ -67,6 +71,16 @@ precedence = case compile "class Math { public static int Calculate() { return 2
       [] -> False
     Left _ -> False
 
+finalExpression :: Bool
+finalExpression = case compile "class Math { auto Calculate() { 2 + 3 * 4 } }" of
+    Right artifacts -> case coreModuleFunctions (artifactOptimizedCore artifacts) of
+        function:_ -> case coreFunctionBody function of [CoreReturn (CoreLiteral (CoreInteger 14) _)] -> True; _ -> False
+        [] -> False
+    Left _ -> False
+
+pureExpressionStatement :: Bool
+pureExpressionStatement = hasCode "VXT0013" (compile "class App { void Run() { 42; } }")
+
 preparedControlFlow :: Bool
 preparedControlFlow = case compileEntryToCorePrep (QualifiedName [Identifier "Name", Identifier "Main"]) (CompilerInput "test.vxs" sample) of
     Right artifacts ->
@@ -102,3 +116,11 @@ wrongArity :: Bool
 wrongArity = hasCode "VXT0008" (compile "class App { int Sum(_ int a, _ int b) { return a+b; } void Run() { Sum(1); } }")
 badCharacter :: Bool
 badCharacter = case compile "class App { void Run() { @; } }" of Left problems -> any (isInfixOf "unsupported character" . diagnosticMessage) problems; Right _ -> False
+
+invalidCorePrep :: Bool
+invalidCorePrep = case compile sample of
+    Right artifacts -> case corePrepModuleFunctions (artifactCorePrep artifacts) of
+        function:rest -> hasCode "VXC0003" (verifyCorePrep (artifactCorePrep artifacts)
+            { corePrepModuleFunctions = function { corePrepFunctionBlocks = corePrepFunctionBlocks function ++ take 1 (corePrepFunctionBlocks function) } : rest })
+        [] -> False
+    Left _ -> False

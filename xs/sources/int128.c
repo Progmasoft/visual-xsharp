@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/int128.h"
+#include "Visual/C23/int128.hh"
 
 XsUInt128 xs_uint128_from_words(uint64_t high, uint64_t low)
 {

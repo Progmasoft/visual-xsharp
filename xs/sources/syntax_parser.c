@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/syntax_parser.h"
+#include "Visual/XSharp/syntax_parser.h"
 
 #include "syntax/parser_internal.h"
 

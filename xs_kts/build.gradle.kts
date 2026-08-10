@@ -11,7 +11,7 @@ plugins {
   application
 }
 
-group = "org.xsslang"
+group = "org.progmasoft.visual_xsharp"
 version = "0.2.8"
 
 repositories {
@@ -37,7 +37,7 @@ java {
 }
 
 application {
-  mainClass = "org.xsslang.project.MainKt"
+  mainClass = "org.progmasoft.visual_xsharp.project.MainKt"
   applicationName = "xs-project-runtime"
 }
 

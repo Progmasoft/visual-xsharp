@@ -6,8 +6,8 @@
 #ifndef XS_HIR_TYPE_RESOLUTION_INTERNAL_H
 #define XS_HIR_TYPE_RESOLUTION_INTERNAL_H
 
-#include "xs/macro.h"
-#include "xs/syntax_ast.h"
+#include "Visual/XSharp/macro.h"
+#include "Visual/XSharp/syntax_ast.hh"
 
 bool xs_hir_declaration_uses_expanded_member_view(const XsSyntaxNode *node,
                                                   const XsMacroDeclarationExpansionSet *macro_declarations);

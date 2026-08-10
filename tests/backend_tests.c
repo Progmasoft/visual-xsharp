@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/backend/linker.h"
-#include "xs/backend/llvm_backend.h"
+#include "Visual/XSharp/backend/linker.h"
+#include "Visual/XSharp/backend/llvm_backend.h"
 
 #include <llvm-c/Core.h>
 

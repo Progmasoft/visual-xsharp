@@ -6,7 +6,7 @@
 #ifndef XS_DRIVER_TEST_RUNNER_H
 #define XS_DRIVER_TEST_RUNNER_H
 
-#include "xs/compiler_core.h"
+#include "Visual/XSharp/compiler_core.hh"
 
 int xs_driver_run_compiler_core_tests(const XsCompilerCoreSession *session);
 

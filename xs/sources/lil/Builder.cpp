@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "xs/lil/Builder.hpp"
+#include "Visual/XSharp/lil/Builder.hpp"
 
-#include "xs/lil-c/builder.h"
-#include "xs/lil/Error.hpp"
+#include "Visual/XSharp/lil-c/builder.hh"
+#include "Visual/XSharp/lil/Error.hpp"
 
 #include <string>
 #include <utility>

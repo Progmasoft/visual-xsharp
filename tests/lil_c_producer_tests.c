@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/lil.h"
+#include "Visual/XSharp/lil.hh"
 
 #include <stdio.h>
 #include <string.h>

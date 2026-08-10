@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/source_include.h"
+#include "Visual/C23/source_include.h"
 
 #include <ctype.h>
 #include <stdint.h>

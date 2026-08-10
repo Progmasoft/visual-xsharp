@@ -6,6 +6,7 @@ module Visual.XSharp.Compiler
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
+import Visual.XSharp.Core.CorePrep.Verifier
 import Visual.XSharp.Core.Optimizer
 import Visual.XSharp.Desugarer
 import Visual.XSharp.Diagnostic
@@ -32,7 +33,7 @@ compileToCorePrep input = do
     typed <- runTypeChecker defaultTypeChecker resolved
     core <- runDesugarer defaultDesugarer typed
     optimized <- runCoreOptimizer defaultCoreOptimizer core
-    prepared <- prepareCore optimized
+    prepared <- prepareCore optimized >>= verifyCorePrep
     pure (FrontendArtifacts parsed renamed resolved typed core optimized prepared)
 
 compileEntryToCorePrep :: QualifiedName -> CompilerInput -> Either [Diagnostic] FrontendArtifacts

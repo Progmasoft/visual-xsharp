@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "Visual/XSharp/Core/CorePrep.hpp"
+#include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
 
@@ -44,6 +45,7 @@ auto prepared_module() -> visual_xsharp::core::CorePrepModule
 TEST_CASE("C++20 pipeline consumes Haskell-owned CorePrep")
 {
     const auto prepared = prepared_module();
+    REQUIRE(visual_xsharp::core::verify(prepared).empty());
     const auto lowered_xpp = visual_xsharp::xpp::lower(prepared);
     const auto xpp = visual_xsharp::xpp::optimize(lowered_xpp);
     const auto xmm = visual_xsharp::xmm::optimize(visual_xsharp::xmm::lower(xpp));
@@ -56,6 +58,18 @@ TEST_CASE("C++20 pipeline consumes Haskell-owned CorePrep")
     REQUIRE(xmm.functions.at(1).blocks.size() == 4);
     REQUIRE(xmm.functions.at(1).blocks.front().instructions.at(0).opcode == visual_xsharp::xmm::Opcode::Call);
     REQUIRE(xmm.functions.at(1).blocks.front().instructions.at(1).opcode == visual_xsharp::xmm::Opcode::CompareGreaterEqualI64);
+}
+
+TEST_CASE("CorePrep verifier rejects malformed control flow before Xpp lowering")
+{
+    auto prepared = prepared_module();
+    prepared.functions.at(1).blocks.front().terminator.true_target = 404;
+    prepared.functions.at(1).blocks.front().instructions.front().operands.clear();
+
+    const auto issues = visual_xsharp::core::verify(prepared);
+    REQUIRE(issues.size() == 2);
+    REQUIRE(issues.at(0).code == "VXC1008");
+    REQUIRE(issues.at(1).code == "VXC1012");
 }
 
 TEST_CASE("typed native lowering allocates stable virtual registers")

@@ -61,8 +61,8 @@ The documented compilation order is preserved:
 - XLIL is positioned before LLVM IR as the shared low-level vocabulary for HIR/MIR and the common input for backends.
 - LLVM IR generation is a separate backend layer; HIR/MIR/XLIL do not carry LLVM C API concepts.
 - Backend consumers lower typed, borrow-checked, monomorphized MIR to XLIL and then to their own target IR.
-- Planned public API surfaces are `#include <xs/hir/jit.h>` for the HIR baseline JIT, `#include <xs/mir/jit.h>` for the MIR
-  performance JIT, and `#include <xs/lil-c/aot.h>` for the XLIL AOT C ABI. These APIs must not make HIR/MIR depend on
+- Planned public API surfaces are `#include <Visual/XSharp/hir/jit.h>` for the HIR baseline JIT, `#include <Visual/XSharp/mir/jit.hh>` for the MIR
+  performance JIT, and `#include <Visual/XSharp/lil-c/aot.hh>` for the XLIL AOT C ABI. These APIs must not make HIR/MIR depend on
   the LLVM C API.
 - LLVM is the only currently implemented backend, but the architecture remains open to Cranelift, a C backend, an interpreter, or
   other targets.
@@ -77,8 +77,8 @@ The documented compilation order is preserved:
 - The compiler is built in strict ISO C23 mode with `-std=c23` and `CMAKE_C_EXTENSIONS OFF`.
 - The build uses strict ISO C23 rather than compiler-extension dialects.
 - Monomorphization and codegen-unit planning are implemented in C++23 Preview with `std::string`/`std::vector` ownership. Their
-  existing C functions remain ABI-compatible for the C23 driver, while `<xs/mono/Plan.hpp>` and
-  `<xs/codegen/Plan.hpp>` provide move-only RAII views for new C++ compiler code. This is the model for incremental
+  existing C functions remain ABI-compatible for the C23 driver, while `<Visual/XSharp/mono/Plan.hpp>` and
+  `<Visual/XSharp/codegen/Plan.hpp>` provide move-only RAII views for new C++ compiler code. This is the model for incremental
   subsystem migration: retain tested boundaries, replace internal ownership, and avoid a whole-tree language flip.
 
 ### Project system
@@ -100,10 +100,10 @@ The documented compilation order is preserved:
 
 ### Runtime and package boundary
 
-- `xsrt` is a selectable CMake runtime and exports ABI version 0 through `<xs/runtime.h>`.
+- `xsrt` is a selectable CMake runtime and exports ABI version 0 through `<Visual/C23/runtime.h>`.
 - The first runtime-owned model is boxed `Optional<Str>`: `None` is a null opaque box, while `Some` owns an immutable
   copied sequence of UTF-16 code units. Clone, borrow, and drop have explicit C23 APIs and tests.
-- `<xs/package.h>` exposes deterministic `.xspkg.tar.zst` writing and verification. The current container requires
+- `<Visual/XSharp/package.h>` exposes deterministic `.xspkg.tar.zst` writing and verification. The current container requires
   `xspkg.json`, rejects unsafe/non-regular/duplicate entries, enforces resource limits, and reports SHA-256 identity.
 - Package manifest schema validation, registry downloads, publication, and compiler-to-runtime owned-string lowering
   remain outside this first boundary.
@@ -531,7 +531,7 @@ and receiver expression for projections such as `make_point().position.x`. MIR r
 nominal registry and emits target-independent aggregate extraction; XLIL and LLVM preserve the same nested value projection.
 Assignment still requires an addressable local-rooted place.
 
-The shared public C23 include tree now has an initial feature layer under `<xs/c23/*.h>`. `<xs/c23_features.h>` is its
+The shared public C23 include tree now has an initial feature layer under `<xs/c23/*.h>`. `<Visual/C23/c23_features.h>` is its
 umbrella header. The current `trait.h` and `impl.h` macros define object-safe vtable contracts, translation-unit-local
 `impl ... for ...` bindings, erased trait objects, and checked C23 call syntax without compiler extensions. This is a small
 foundation rather than a claim that every Visual X# trait rule is already available to C callers.
@@ -802,8 +802,8 @@ Details: [LLVM_BACKEND.md](LLVM_BACKEND.md)
 - XLIL is not as high-level as CLR and not as low-level as assembly; it is an assembly-like but distinct
   target-independent mid/low-level registry language.
 - XLIL is not bytecode or a virtual-machine format.
-- The stable XLIL registry/generation C23 API target is documented as `#include <xs/lil.h>`.
-- The XLIL AOT C API target is separated as `#include <xs/lil-c/aot.h>`; until concrete object/link behavior exists, it only
+- The stable XLIL registry/generation C23 API target is documented as `#include <Visual/XSharp/lil.hh>`.
+- The XLIL AOT C API target is separated as `#include <Visual/XSharp/lil-c/aot.hh>`; until concrete object/link behavior exists, it only
   marks the planned public surface.
 - External frontends and tools can produce the supported XLIL v1 subset through the public C23 model and use the LLVM
   backend pipeline to produce native executables.

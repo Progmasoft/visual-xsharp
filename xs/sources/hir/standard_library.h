@@ -6,7 +6,7 @@
 #ifndef XS_HIR_STANDARD_LIBRARY_H
 #define XS_HIR_STANDARD_LIBRARY_H
 
-#include "xs/hir/symbol_table.h"
+#include "Visual/XSharp/hir/symbol_table.h"
 
 typedef struct
 {

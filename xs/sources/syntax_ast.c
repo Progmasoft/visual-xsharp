@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/syntax_ast.h"
+#include "Visual/XSharp/syntax_ast.hh"
 
 #include <stdalign.h>
 #include <stdlib.h>

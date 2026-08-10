@@ -8,7 +8,7 @@
 extern "C"
 {
 #include "direct_xlil.h"
-#include "xs/compiler_core.h"
+#include "Visual/XSharp/compiler_core.hh"
 }
 
 #include <cstddef>

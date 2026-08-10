@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "xs/mono/Plan.hpp"
+#include "Visual/XSharp/mono/Plan.hpp"
 
 #include <fmt/format.h>
 

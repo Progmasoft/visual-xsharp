@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/mir/hir_lowering.h"
+#include "Visual/XSharp/mir/hir_lowering.hh"
 
-#include "xs/hir/type_info.h"
+#include "Visual/XSharp/hir/type_info.h"
 
 #include <stdio.h>
 #include <stdlib.h>

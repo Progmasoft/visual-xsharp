@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/symbol_table.h"
+#include "Visual/XSharp/hir/symbol_table.h"
 
 #include "syntax_helpers.h"
 

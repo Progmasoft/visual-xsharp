@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/type_resolution.h"
+#include "Visual/XSharp/hir/type_resolution.h"
 #include "standard_library.h"
 #include "type_resolution_internal.h"
-#include "xs/hir/type_info.h"
+#include "Visual/XSharp/hir/type_info.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

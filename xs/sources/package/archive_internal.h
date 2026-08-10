@@ -6,7 +6,7 @@
 #ifndef XS_PACKAGE_ARCHIVE_INTERNAL_H
 #define XS_PACKAGE_ARCHIVE_INTERNAL_H
 
-#include <xs/package.h>
+#include <Visual/XSharp/package.h>
 
 #include <archive.h>
 

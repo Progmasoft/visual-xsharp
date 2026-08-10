@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/lexer.h"
+#include "Visual/XSharp/lexer.h"
 
 #include <ctype.h>
 

@@ -6,7 +6,7 @@
 #ifndef XS_MIR_MODEL_INTERNAL_H
 #define XS_MIR_MODEL_INTERNAL_H
 
-#include "xs/mir.h"
+#include "Visual/XSharp/mir.hh"
 
 typedef struct
 {

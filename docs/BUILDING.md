@@ -72,7 +72,7 @@ The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` 
 entry and DIMCLI argument layer dispatch into the existing C23 compiler driver while subsystem migration continues.
 Monomorphization and codegen-unit planning are C++23 Preview-owned subsystems exposed through stable C entry points, so the
 remaining C23 driver can consume them without a simultaneous frontend rewrite. C++ consumers may use the move-only
-`<xs/mono/Plan.hpp>` and `<xs/codegen/Plan.hpp>` views.
+`<Visual/XSharp/mono/Plan.hpp>` and `<Visual/XSharp/codegen/Plan.hpp>` views.
 
 ## Compiler installation layout
 
@@ -82,8 +82,9 @@ Install the compiler component into a staging prefix with:
 cmake --install build/clang-debug --prefix /tmp/xs-root --component compiler
 ```
 
-With the normal system prefix `/usr`, this component installs the native compiler command as `/usr/bin/xs`, merges the common
-`include/xs/` and compiler-owned `xs/include/xs/` public C23 headers under `/usr/include/xs/`, and installs
+With the normal system prefix `/usr`, this component installs the native compiler command as `/usr/bin/vxs`, places the
+remaining C23 migration headers under `/usr/include/Visual/C23/` and compiler-owned headers under
+`/usr/include/Visual/XSharp/`, and installs
 `LICENSE.txt` plus `NOTICE.txt` under `/usr/share/licenses/xs/`. Source-tree ownership remains separate even though the
 installed include surface is unified. CMake fails rather than silently replacing an identically named header from the two
 source trees.

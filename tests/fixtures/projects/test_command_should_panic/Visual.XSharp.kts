@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-project("ShouldPanicTestCommand", "BETA", "0.2.1")
-
-source {
-  include("Sources")
+project { name = "ShouldPanicTestCommand"; version = "0.2.1"; stability = Stability.BETA }
+sources {
+  main { srcDir = "Sources"; entry = "ShouldPanicTestCommand.Main"; exclude("Test/**") }
+  test { testDir = "Sources/Test"; framework = "tests" }
 }

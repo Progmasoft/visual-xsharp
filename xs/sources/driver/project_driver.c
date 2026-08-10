@@ -26,7 +26,7 @@
 extern char **environ;
 #endif
 
-static const char *const REGISTRY_VERSION = "xs-project-sources-v5";
+static const char *const REGISTRY_VERSION = "visual-xsharp-sources-v1";
 
 #ifndef XS_PROJECT_RUNTIME_DEFAULT
 #    define XS_PROJECT_RUNTIME_DEFAULT "xs-project-runtime"
@@ -102,10 +102,10 @@ static const char *project_runtime_program(void)
     return XS_PROJECT_RUNTIME_DEFAULT;
 }
 
-static bool run_resolver(const char *mode, const char *project_root, const char *output_path, const char *module_path)
+static bool run_resolver(const char *mode, const char *project_root, const char *output_path)
 {
     const char *program = project_runtime_program();
-    const char *arguments[] = {program, mode, project_root, output_path, module_path, nullptr};
+    const char *arguments[] = {program, mode, project_root, output_path, nullptr};
     int result = run_program(program, arguments);
     if(result < 0)
     {
@@ -160,15 +160,14 @@ void xs_driver_free_project(XsResolvedProject *project)
     if(project == nullptr)
         return;
     for(size_t i = 0; i < project->path_count; ++i)
-    {
         free(project->paths[i]);
-        free(project->module_names[i]);
-    }
     free(project->paths);
-    free(project->module_names);
     for(size_t i = 0; i < project->test_path_count; ++i)
         free(project->test_paths[i]);
     free(project->test_paths);
+    free(project->entry);
+    free(project->compiler_version);
+    free(project->standard);
     *project = (XsResolvedProject){0};
 }
 
@@ -211,40 +210,106 @@ static char *next_record(char *record)
     return record + strlen(record) + 1U;
 }
 
-static bool parse_header(char *data, size_t record_count, size_t *source_count, size_t *module_count,
-                         size_t *test_count, XsCompilerSettings *settings)
+static bool parse_output_record(const char *text, XsBuildOutput *output)
 {
-    *settings = xs_cli_default_compiler_settings();
-    if(strcmp(data, REGISTRY_VERSION) != 0 || record_count < 7U)
+    const char *names[] = {"binary", "object", "core", "xpp", "xmm", "assembly", "llvm_ll", "llvm_bc"};
+    for(size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
+    {
+        if(strcmp(text, names[i]) == 0)
+        {
+            *output = (XsBuildOutput)i;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool parse_header(char *data, size_t record_count, size_t *source_count, size_t *test_count,
+                         XsResolvedProject *project)
+{
+    const size_t header_count = 20U;
+    if(strcmp(data, REGISTRY_VERSION) != 0 || record_count < header_count)
         return false;
-    char *warning = next_record(data);
-    char *werror = next_record(warning);
-    char *verbose = next_record(werror);
-    char *sources = next_record(verbose);
-    char *modules = next_record(sources);
-    char *tests = next_record(modules);
+    project->settings = xs_cli_default_compiler_settings();
+    char *record = next_record(data);
+    project->entry = copy_record(record);
+    record = next_record(record);
+    project->compiler_version = copy_record(record);
+    record = next_record(record);
+    project->standard = copy_record(record);
+    record = next_record(record);
+    bool valid = project->entry != nullptr && project->compiler_version != nullptr && project->standard != nullptr;
+    valid = valid && strcmp(record, "llvm") == 0;
+    record = next_record(record);
+    valid = valid && (strcmp(record, "debug") == 0 || strcmp(record, "release") == 0);
+    record = next_record(record);
+    valid = valid && parse_output_record(record, &project->output);
+    record = next_record(record);
     bool parsed_warning = false;
     for(XsWarningLevel level = XS_WARNING_NONE; level <= XS_WARNING_ALL; ++level)
     {
-        if(strcmp(warning, xs_cli_warning_level_name(level)) == 0)
+        if(strcmp(record, xs_cli_warning_level_name(level)) == 0)
         {
-            settings->warning_level = level;
+            project->settings.warning_level = level;
             parsed_warning = true;
             break;
         }
     }
-    if(!parsed_warning || !parse_bool_record(werror, &settings->warnings_as_errors) ||
-       !parse_bool_record(verbose, &settings->verbose) || !parse_size_record(sources, source_count) ||
-       !parse_size_record(modules, module_count) || !parse_size_record(tests, test_count))
-        return false;
-    if(*source_count > SIZE_MAX - 7U || *test_count > SIZE_MAX - 7U - *source_count ||
-       *module_count > (SIZE_MAX - 7U - *source_count - *test_count) / 2U)
-        return false;
-    return record_count == 7U + *source_count + (*module_count * 2U) + *test_count;
+    valid = valid && parsed_warning;
+    record = next_record(record);
+    valid = valid && parse_bool_record(record, &project->settings.warnings_as_errors);
+    record = next_record(record);
+    valid = valid && parse_bool_record(record, &project->settings.experimental_warnings);
+    record = next_record(record);
+    valid = valid && parse_bool_record(record, &project->settings.shadow_warnings);
+    record = next_record(record);
+    valid = valid && parse_bool_record(record, &project->settings.undefined_warnings);
+    record = next_record(record);
+    valid = valid && parse_bool_record(record, &project->settings.type_safe_format);
+    record = next_record(record);
+    valid = valid && parse_bool_record(record, &project->settings.xpp_optimization_passes);
+    record = next_record(record);
+    valid = valid && parse_bool_record(record, &project->settings.xmm_optimization_passes);
+    record = next_record(record);
+    if(strcmp(record, "0") == 0)
+        project->settings.llvm_opt_level = XS_LLVM_OPT_0;
+    else if(strcmp(record, "1") == 0)
+        project->settings.llvm_opt_level = XS_LLVM_OPT_1;
+    else if(strcmp(record, "2") == 0)
+        project->settings.llvm_opt_level = XS_LLVM_OPT_2;
+    else if(strcmp(record, "3") == 0)
+        project->settings.llvm_opt_level = XS_LLVM_OPT_3;
+    else if(strcmp(record, "g") == 0)
+        project->settings.llvm_opt_level = XS_LLVM_OPT_G;
+    else
+        valid = false;
+    record = next_record(record);
+    if(strcmp(record, "aot") == 0)
+        project->settings.llvm_compiler = XS_LLVM_COMPILER_AOT;
+    else if(strcmp(record, "orc") == 0)
+        project->settings.llvm_compiler = XS_LLVM_COMPILER_ORC;
+    else
+        valid = false;
+    record = next_record(record);
+    if(strcmp(record, "none") == 0)
+        project->settings.llvm_lto = XS_LLVM_LTO_NONE;
+    else if(strcmp(record, "fat") == 0)
+        project->settings.llvm_lto = XS_LLVM_LTO_FAT;
+    else if(strcmp(record, "thin") == 0)
+        project->settings.llvm_lto = XS_LLVM_LTO_THIN;
+    else
+        valid = false;
+    record = next_record(record);
+    valid = valid && parse_size_record(record, source_count);
+    record = next_record(record);
+    valid = valid && parse_size_record(record, test_count);
+    return valid && *source_count <= SIZE_MAX - header_count &&
+           *test_count <= SIZE_MAX - header_count - *source_count &&
+           record_count == header_count + *source_count + *test_count;
 }
 
-static bool resolve_project_registry(const char *mode, const char *project_root, const char *module_path,
-                                     bool require_sources, XsResolvedProject *project)
+static bool resolve_project_registry(const char *mode, const char *project_root, bool require_sources,
+                                     XsResolvedProject *project)
 {
     if(project == nullptr)
         return false;
@@ -267,7 +332,7 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
 #ifndef _WIN32
     close(registry);
 #endif
-    bool success = run_resolver(mode, project_root, registry_path, module_path);
+    bool success = run_resolver(mode, project_root, registry_path);
     size_t length = 0;
     char *data = success ? read_registry(registry_path, &length) : nullptr;
     (void)remove(registry_path);
@@ -282,21 +347,19 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
     for(size_t i = 0; i < length; ++i)
         count += data[i] == '\0';
     size_t source_count = 0;
-    size_t module_count = 0;
     size_t test_count = 0;
-    if(count == 0U || !parse_header(data, count, &source_count, &module_count, &test_count, &project->settings) ||
+    if(count == 0U || !parse_header(data, count, &source_count, &test_count, project) ||
        (require_sources && source_count == 0U))
     {
         free(data);
         fprintf(stderr, "vxs: bundled project runtime returned an invalid compiler/source registry\n");
         return false;
     }
-    size_t path_count = source_count + module_count;
+    size_t path_count = source_count;
     project->paths = calloc(path_count, sizeof(*project->paths));
-    project->module_names = calloc(path_count, sizeof(*project->module_names));
     project->test_paths = test_count == 0U ? nullptr : calloc(test_count, sizeof(*project->test_paths));
     project->test_path_count = test_count;
-    if((path_count != 0U && (project->paths == nullptr || project->module_names == nullptr)) ||
+    if((path_count != 0U && project->paths == nullptr) ||
        (test_count != 0U && project->test_paths == nullptr))
     {
         free(data);
@@ -305,7 +368,7 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
     }
     project->path_count = path_count;
     char *record = data;
-    for(size_t i = 0; i < 7U; ++i)
+    for(size_t i = 0; i < 20U; ++i)
         record = next_record(record);
     for(size_t i = 0; i < source_count; ++i)
     {
@@ -317,20 +380,6 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
             return false;
         }
         record = next_record(record);
-    }
-    for(size_t i = 0; i < module_count; ++i)
-    {
-        size_t index = source_count + i;
-        project->module_names[index] = copy_record(record);
-        record = next_record(record);
-        project->paths[index] = copy_record(record);
-        record = next_record(record);
-        if(project->module_names[index] == nullptr || project->paths[index] == nullptr)
-        {
-            free(data);
-            xs_driver_free_project(project);
-            return false;
-        }
     }
     for(size_t i = 0; i < test_count; ++i)
     {
@@ -347,12 +396,12 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
     return true;
 }
 
-bool xs_driver_resolve_project(const char *module_path, XsResolvedProject *project)
+bool xs_driver_resolve_project(XsResolvedProject *project)
 {
-    return resolve_project_registry("sources0", ".", module_path, true, project);
+    return resolve_project_registry("sources0", ".", true, project);
 }
 
-bool xs_driver_resolve_project_tests(const char *module_path, XsResolvedProject *project)
+bool xs_driver_resolve_project_tests(XsResolvedProject *project)
 {
-    return resolve_project_registry("sources0", ".", module_path, false, project);
+    return resolve_project_registry("sources0", ".", false, project);
 }

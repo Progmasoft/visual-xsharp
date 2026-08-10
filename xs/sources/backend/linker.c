@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/backend/linker.h"
+#include "Visual/XSharp/backend/linker.h"
 
 #include <errno.h>
 #ifdef _WIN32

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/token.h"
+#include "Visual/XSharp/token.hh"
 
 #include <string.h>
 

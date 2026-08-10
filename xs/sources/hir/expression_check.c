@@ -5,7 +5,7 @@
 
 #include "expression_check_internal.h"
 
-#include "xs/hir/type_info.h"
+#include "Visual/XSharp/hir/type_info.h"
 
 #include <stdio.h>
 #include <stdlib.h>

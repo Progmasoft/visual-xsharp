@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/cffi.h"
+#include "Visual/XSharp/hir/cffi.h"
 #include "syntax_helpers.h"
 
 #include <stdlib.h>

@@ -6,7 +6,7 @@
 #ifndef XS_DRIVER_OPTIONS_H
 #define XS_DRIVER_OPTIONS_H
 
-#include "xs/diagnostic.h"
+#include "Visual/C23/diagnostic.hh"
 
 #include <stdio.h>
 
@@ -17,29 +17,88 @@ extern "C"
 
     typedef enum
     {
-        XS_BUILD_OUTPUT_NONE,
-        XS_BUILD_OUTPUT_HIR,
-        XS_BUILD_OUTPUT_MIR,
-        XS_BUILD_OUTPUT_XLIL,
+        XS_BUILD_OUTPUT_BINARY,
+        XS_BUILD_OUTPUT_NONE = XS_BUILD_OUTPUT_BINARY,
+        XS_BUILD_OUTPUT_OBJECT,
+        XS_BUILD_OUTPUT_CORE,
+        XS_BUILD_OUTPUT_XPP,
+        XS_BUILD_OUTPUT_XMM,
+        XS_BUILD_OUTPUT_ASSEMBLY,
+        XS_BUILD_OUTPUT_LLVM_LL,
+        XS_BUILD_OUTPUT_LLVM_BC,
     } XsBuildOutput;
+
+    typedef enum
+    {
+        XS_BUILD_INPUT_VXS,
+        XS_BUILD_INPUT_OBJECT,
+        XS_BUILD_INPUT_CORE,
+        XS_BUILD_INPUT_XPP,
+        XS_BUILD_INPUT_XMM,
+        XS_BUILD_INPUT_LLVM_LL,
+        XS_BUILD_INPUT_LLVM_BC,
+    } XsBuildInput;
+
+    typedef enum
+    {
+        XS_LLVM_OPT_0,
+        XS_LLVM_OPT_1,
+        XS_LLVM_OPT_2,
+        XS_LLVM_OPT_3,
+        XS_LLVM_OPT_G,
+    } XsLlvmOptLevel;
+
+    typedef enum
+    {
+        XS_LLVM_COMPILER_AOT,
+        XS_LLVM_COMPILER_ORC,
+    } XsLlvmCompiler;
+
+    typedef enum
+    {
+        XS_LLVM_LTO_NONE,
+        XS_LLVM_LTO_FAT,
+        XS_LLVM_LTO_THIN,
+    } XsLlvmLto;
 
     typedef struct
     {
         XsWarningLevel warning_level;
         bool warnings_as_errors;
-        bool verbose;
+        bool experimental_warnings;
+        bool shadow_warnings;
+        bool undefined_warnings;
+        bool type_safe_format;
+        bool xpp_optimization_passes;
+        bool xmm_optimization_passes;
+        XsLlvmOptLevel llvm_opt_level;
+        XsLlvmCompiler llvm_compiler;
+        XsLlvmLto llvm_lto;
     } XsCompilerSettings;
 
     typedef struct
     {
         const char *command;
         const char *file_path;
-        const char *module_path;
+        const char *package_name;
+        const char *compiler_version;
+        const char *standard;
         XsBuildOutput output;
+        XsBuildInput input;
         XsCompilerSettings compiler;
+        bool global_install;
+        bool output_override;
         bool warning_override;
         bool werror_override;
-        bool verbose_override;
+        bool experimental_override;
+        bool shadow_override;
+        bool undef_override;
+        bool type_safe_format_override;
+        bool xpp_optimization_override;
+        bool xmm_optimization_override;
+        bool llvm_opt_override;
+        bool llvm_compiler_override;
+        bool llvm_lto_override;
     } XsCliOptions;
 
     typedef enum

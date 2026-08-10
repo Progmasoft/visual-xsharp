@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/parser.h"
+#include "Visual/XSharp/parser.h"
 
 static void advance(XsParser *parser)
 {

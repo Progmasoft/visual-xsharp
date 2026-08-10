@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/diagnostic.h"
+#include "Visual/C23/diagnostic.hh"
 
 #include <stdio.h>
 

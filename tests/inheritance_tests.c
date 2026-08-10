@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/inheritance.h"
-#include "xs/hir/type_resolution.h"
-#include "xs/syntax_parser.h"
+#include "Visual/XSharp/hir/inheritance.h"
+#include "Visual/XSharp/hir/type_resolution.h"
+#include "Visual/XSharp/syntax_parser.h"
 
 #include <stdio.h>
 #include <string.h>

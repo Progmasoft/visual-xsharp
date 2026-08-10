@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/diagnostic.h"
-#include "xs/lexer.h"
+#include "Visual/C23/diagnostic.hh"
+#include "Visual/XSharp/lexer.h"
 
 #include <stdio.h>
 #include <string.h>

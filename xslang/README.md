@@ -10,7 +10,7 @@ monomorphization and codegen-unit models, and the human-readable XLIL v1 registr
 
 The public `xslang::xlil` API lets Rust tools and third-party language implementations construct, parse, verify, optimize,
 and write XLIL without depending on LLVM. The corresponding C23 API is maintained in the xs-project repository under
-`<xs/lil.h>` and `<xs/lil-c/*.h>`.
+`<Visual/XSharp/lil.hh>` and `<Visual/XSharp/lil-c/*.hh>`.
 
 ### Typed producer facade
 

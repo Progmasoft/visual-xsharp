@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/mir/optimizer.h"
+#include "Visual/XSharp/mir/optimizer.hh"
 #include "model_internal.h"
 
 #include <stdint.h>

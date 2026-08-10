@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-#include "xs/hir/inheritance.h"
+#include "Visual/XSharp/hir/inheritance.h"
 
 #include "syntax_helpers.h"
 

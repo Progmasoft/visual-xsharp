@@ -6,9 +6,9 @@
 #ifndef XS_SYNTAX_PARSER_INTERNAL_H
 #define XS_SYNTAX_PARSER_INTERNAL_H
 
-#include "xs/diagnostic.h"
-#include "xs/lexer.h"
-#include "xs/syntax_ast.h"
+#include "Visual/C23/diagnostic.hh"
+#include "Visual/XSharp/lexer.h"
+#include "Visual/XSharp/syntax_ast.hh"
 
 #include <stddef.h>
 #include <stdint.h>

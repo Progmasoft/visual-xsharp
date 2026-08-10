@@ -16,6 +16,7 @@ library
         Visual.XSharp.AST
         Visual.XSharp.Core
         Visual.XSharp.Core.CorePrep
+        Visual.XSharp.Core.CorePrep.Verifier
         Visual.XSharp.Core.Optimizer
         Visual.XSharp.Compiler
         Visual.XSharp.Desugarer

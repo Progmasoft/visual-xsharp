@@ -3,59 +3,82 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-project("Example", "BETA", "0.1.0")
-
-set("XS_VERSION", "0.2.8")
-set("XS_BACKEND", "LLVM")
-set("XS_LLVM_COMPILER", "AOT")
-set("PUBLISH", false)
-set("BUILD_MODE", "Release")
-set("RELEASE_OUTDIR", "build/release")
-set("DEBUG_OUTDIR", "build/debug")
-
-set(
-  "TARGET",
-  "x86_64-unknown-linux-gnu",
-  "x86_64-unknown-linux-musl",
-  "aarch64-unknown-linux-gnu",
-  "armv7h-unknown-linux-gnueabihf",
-  "riscv64gc-unknown-linux-gnu",
-  "x86_64-apple-darwin",
-  "aarch64-apple-darwin",
-  "x86_64-pc-windows-msvc",
-  "aarch64-pc-windows-msvc",
-  "x86_64-unknown-freebsd",
-  "aarch64-unknown-freebsd",
-)
-
-println("Target: ${get("TARGET")}")
-println("Project: ${get("PROJECT")}")
-println("X# version: ${get("XS_VERSION")}")
-println("Backend: ${get("XS_BACKEND")}")
-
-authors(
-  arrayOf("Leitwolf", "leitwolf@example.me"),
-  arrayOf("Helmut", "helmut@example.me"),
-)
-
-dependencies {
-  addModule("XSharp.JSON", "STABLE", "0.1.0")
-  addModule("XSharp.XML", "STABLE", "0.1.0")
-  addOptionalModule("TLS", "XSharp.Network", "BETA", "0.1.0")
-}
-
-source {
-  include("Sources")
-  exclude("Sources/Tests/**")
-}
-
-test {
-  include("Sources/Tests")
-  framework("xs-test")
+project {
+  name = "Example"
+  version = "0.3.0"
+  stability = Stability.BETA
 }
 
 compiler {
-  warnings("all")
-  werror(true)
-  verbose(false)
+  version = "0.3.0"
+  standard = "26"
+  backend = Backend.LLVM
+  buildMode = BuildMode.RELEASE
+  emit = Emit.BINARY
+  warningsAsErrors = true
+  warnings = Warnings.ALL
+  experimentalWarnings = false
+  shadowWarnings = true
+  undefinedWarnings = true
+
+  unsafe {
+    xppOptimizationPasses = true
+    xmmOptimizationPasses = true
+    typeSafeFormat = true
+  }
+
+  llvm {
+    optLevel = LlvmOptLevel.O3
+    compiler = LlvmCompiler.AOT
+    lto = LlvmLto.THIN
+  }
+}
+
+outdirs {
+  release = "build/release"
+  debug = "build/debug"
+}
+
+targets {
+  target(
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+  )
+}
+
+authors {
+  author("Leitwolf", "leitwolf@example.me")
+  author("Helmut", "helmut@example.me")
+}
+
+pml {
+  enabled = true
+}
+
+dependencies {
+  dependency("Publisher") {
+    name = "Name"
+    version = "0.1.0"
+    stability = Stability.STABLE
+  }
+}
+
+sources {
+  viget {
+    publish = false
+    exclude("build/**")
+  }
+
+  main {
+    srcDir = "Sources"
+    entry = "Example.Main"
+    exclude("Tests/**")
+  }
+
+  test {
+    testDir = "Tests"
+    framework = "tests"
+  }
 }
