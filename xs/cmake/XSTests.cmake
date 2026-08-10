@@ -54,15 +54,17 @@ xs_add_c_test(lexer tests/lexer_tests.c xs_compiler)
 xs_add_c_test(parser tests/parser_tests.c xs_compiler)
 xs_add_c_test(diagnostic tests/diagnostic_tests.c xs_compiler)
 xs_add_c_test(package_archive tests/package_archive_tests.c xs_package)
-if(WIN32)
+if(WIN32 AND CMAKE_PREFIX_PATH)
   list(GET CMAKE_PREFIX_PATH 0 XS_DEPENDENCY_PREFIX)
   file(GLOB XS_TEST_RUNTIME_DLLS CONFIGURE_DEPENDS "${XS_DEPENDENCY_PREFIX}/debug/bin/*.dll")
-  add_custom_command(TARGET xs_package_archive_tests POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            ${XS_TEST_RUNTIME_DLLS} $<TARGET_FILE_DIR:xs_package_archive_tests>
-    COMMAND_EXPAND_LISTS
-    COMMENT "Copying archive and compression runtime DLLs"
-  )
+  if(XS_TEST_RUNTIME_DLLS)
+    add_custom_command(TARGET xs_package_archive_tests POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+              ${XS_TEST_RUNTIME_DLLS} $<TARGET_FILE_DIR:xs_package_archive_tests>
+      COMMAND_EXPAND_LISTS
+      COMMENT "Copying archive and compression runtime DLLs"
+    )
+  endif()
 endif()
 
 set(XS_GRADLE_EXECUTABLE "${CMAKE_SOURCE_DIR}/xs_kts/gradlew.bat")
