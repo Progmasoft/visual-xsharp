@@ -367,10 +367,26 @@ static XsCompilerCoreSession *merge_compiler_core_sessions(CompilationUnit *unit
     return status == XS_COMPILER_CORE_FFI_OK ? merged : nullptr;
 }
 
+static size_t project_entry_unit_index(const CompilationUnit *units, size_t unit_count,
+                                       const XsHirSymbolTable *symbols, const char *entry)
+{
+    if(entry == nullptr)
+        return 0U;
+    const XsHirSymbol *entry_symbol = xs_hir_symbol_table_find(symbols, entry);
+    if(entry_symbol == nullptr || entry_symbol->kind != XS_HIR_SYMBOL_CLASS)
+        return 0U;
+    for(size_t i = 0; i < unit_count; ++i)
+        if(units[i].tree.file_id == entry_symbol->span.file_id)
+            return i;
+    return 0U;
+}
+
 static bool check_project_sources(const char *root, const char *const *direct, size_t direct_count,
                                   XsBuildOutput output, bool build_native, bool run_tests,
-                                  const XsCompilerSettings *settings)
+                                  const XsCompilerSettings *settings, const char *entry, char **artifact_source)
 {
+    if(artifact_source != nullptr)
+        *artifact_source = nullptr;
     if(build_native && direct_count == 0U)
     {
         fprintf(stderr, "vxs: project native build requires at least one selected source\n");
@@ -417,6 +433,7 @@ static bool check_project_sources(const char *root, const char *const *direct, s
     {
         success = parse_compilation_unit(&units[i], file_id++, &symbols, settings) && success;
     }
+    const size_t primary = project_entry_unit_index(units, unit_count, &symbols, entry);
     if(success)
     {
         for(size_t i = 0; i < unit_count; ++i)
@@ -444,33 +461,43 @@ static bool check_project_sources(const char *root, const char *const *direct, s
     }
     if(success && output != XS_BUILD_OUTPUT_NONE)
     {
-        XsSpan span = {.start = units[0].tree.root->span.start_offset, .end = units[0].tree.root->span.end_offset};
-        success = emit_requested_output(output, program_session, units[0].path, &units[0].diagnostics, span);
+        XsSpan span = {.start = units[primary].tree.root->span.start_offset,
+                       .end = units[primary].tree.root->span.end_offset};
+        success = emit_requested_output(output, program_session, units[primary].path, &units[primary].diagnostics, span);
     }
     if(success && build_native)
     {
         if(xs_driver_compiler_core_native_available(program_session))
         {
-            XsSpan span = {.start = units[0].tree.root->span.start_offset, .end = units[0].tree.root->span.end_offset};
-            success = xs_driver_build_compiler_core_native(units[0].path, program_session, &units[0].diagnostics, span);
+            XsSpan span = {.start = units[primary].tree.root->span.start_offset,
+                           .end = units[primary].tree.root->span.end_offset};
+            success = xs_driver_build_compiler_core_native(units[primary].path, program_session,
+                                                           &units[primary].diagnostics, span);
         }
         else
         {
-            XsSpan span = {.start = units[0].tree.root->span.start_offset, .end = units[0].tree.root->span.end_offset};
-            if(!xs_driver_append_compiler_core_diagnostics(program_session, &units[0].diagnostics, span))
+            XsSpan span = {.start = units[primary].tree.root->span.start_offset,
+                           .end = units[primary].tree.root->span.end_offset};
+            if(!xs_driver_append_compiler_core_diagnostics(program_session, &units[primary].diagnostics, span))
                 (void)xs_diagnostics_add(
-                    &units[0].diagnostics, XS_DIAGNOSTIC_ERROR, span,
+                    &units[primary].diagnostics, XS_DIAGNOSTIC_ERROR, span,
                     "Rust compiler core does not yet support this project body for native emission");
             success = false;
         }
     }
     if(success && run_tests)
     {
-        XsSpan span = {.start = units[0].tree.root->span.start_offset, .end = units[0].tree.root->span.end_offset};
-        if(xs_driver_append_compiler_core_diagnostics(program_session, &units[0].diagnostics, span))
+        XsSpan span = {.start = units[primary].tree.root->span.start_offset,
+                       .end = units[primary].tree.root->span.end_offset};
+        if(xs_driver_append_compiler_core_diagnostics(program_session, &units[primary].diagnostics, span))
             success = false;
         else
             success = xs_driver_run_compiler_core_tests(program_session) == 0;
+    }
+    if(success && artifact_source != nullptr)
+    {
+        *artifact_source = copy_text(units[primary].path);
+        success = *artifact_source != nullptr;
     }
     xslang_compiler_core_session_free(merged);
     for(size_t i = 0; i < unit_count; ++i)
@@ -521,17 +548,21 @@ static int run_project_command(const XsCliOptions *options)
     }
     bool build_native = (strcmp(options->command, "build") == 0 || strcmp(options->command, "run") == 0) &&
                         output == XS_BUILD_OUTPUT_BINARY;
+    bool running = strcmp(options->command, "run") == 0;
+    char *artifact_source = nullptr;
     bool success = check_project_sources(".", direct, selected_count, output, build_native, testing,
-                                         &resolved.settings);
+                                         &resolved.settings, resolved.entry, running ? &artifact_source : nullptr);
     if(success && testing && selected_count == 0U)
         fprintf(stderr, "vxs: test result: ok. 0 passed; 0 failed; 0 ignored\n");
-    if(success && strcmp(options->command, "run") == 0)
+    if(success && running)
     {
-        int exit_code = xs_driver_run_native_artifact(resolved.paths[0]);
+        int exit_code = xs_driver_run_native_artifact(artifact_source);
+        free(artifact_source);
         free(direct);
         xs_driver_free_project(&resolved);
         return exit_code;
     }
+    free(artifact_source);
     free(direct);
     xs_driver_free_project(&resolved);
     return success ? 0 : 1;

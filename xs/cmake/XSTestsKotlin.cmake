@@ -188,3 +188,22 @@ set_tests_properties(
   kotlin_project_test_honors_should_panic
   kotlin_project_test_reports_runtime_failure
   PROPERTIES LABELS jvm)
+
+set_tests_properties(
+  kotlin_project_resolve
+  kotlin_project_call_build
+  kotlin_project_recursive_build
+  kotlin_project_generic_functions_build
+  kotlin_project_multi_file_native_build
+  kotlin_project_optional_coalesce_build
+  kotlin_project_optional_update_build
+  kotlin_project_result_propagation_build
+  kotlin_project_integer_widths_build
+  kotlin_project_integer_widths_run
+  kotlin_project_integer_operators_build
+  kotlin_project_test_validate
+  kotlin_project_check_excludes_test_registry
+  kotlin_project_test_rejects_invalid_source
+  kotlin_project_test_honors_should_panic
+  kotlin_project_test_reports_runtime_failure
+  PROPERTIES RESOURCE_LOCK kotlin_script_runner TIMEOUT 120)
