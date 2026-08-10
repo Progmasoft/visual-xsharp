@@ -26,21 +26,13 @@ Required core tools:
 Default debug build:
 
 ```text
-cmake --preset clang-debug
-cmake --build --preset clang-debug
-ctest --preset clang-debug --output-on-failure
+cmake --preset clangcl-debug
+cmake --build --preset clangcl-debug
+ctest --preset clangcl-debug --output-on-failure
 ```
 
-On machines with prior OOM issues, use a 2GB virtual memory limit for build/test runs:
-
-```text
-cmake --build --preset clang-debug --target xs_project_runtime
-ulimit -v 2097152
-cmake --build --preset clang-debug
-ctest --preset clang-debug --output-on-failure -LE jvm -FA kotlin_project_resolver
-```
-
-Run the JVM-labelled project tests separately without a virtual-memory limit.
+Run these commands from a Visual Studio 2026 developer terminal. JVM-labelled project tests require JRE 25 and the Kotlin
+script runner on `PATH`.
 
 Check a source file:
 

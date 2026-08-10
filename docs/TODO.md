@@ -5,49 +5,42 @@ SPDX-License-Identifier: MPL-2.0
 
 # Public roadmap
 
-This page summarizes user-visible work that is still in progress for the Visual X# compiler. It is intentionally short: detailed
-implementation notes and internal design logs are not part of the public documentation set.
+## Haskell frontend through CorePrep
 
-## Language and frontend
+- Complete the source/span and diagnostic infrastructure shared by all frontend passes.
+- Complete `Visual.XSharp.Lexer` and `Visual.XSharp.Parser` for the current public language specification.
+- Complete the distinct parsed, resolved, and typed AST models.
+- Complete renaming and namespace/member name resolution.
+- Complete type checking, overload selection, conversions, and generic validation.
+- Complete desugaring, Core construction, Core optimizations, and CorePrep.
+- Preserve class-based `public static void Main()` entry semantics through CorePrep.
 
-- Complete structural AST coverage for the documented Visual X# syntax.
-- Finish macro expansion from matched token fragments into AST declarations and statements.
-- Complete HIR symbol, type, generic, method, operator, and interface checks.
-- Complete expression type checking, mutability validation, and async/await validation.
+## C++20 middle end
 
-## Middle end
+- Finalize the owned CorePrep-to-Xpp interface.
+- Complete Xpp construction, verification, optimization, and explicit `.xpp` emission.
+- Complete Xmm lowering, verification, default optimization, and explicit `.xmm` emission.
+- Keep Core, Xpp, and Xmm target independent and free of LLVM handles.
+- Connect verified Xmm to LLVM bitcode and VPI outputs.
 
-- Complete MIR lowering for statements, expressions, calls, Result propagation, async state machines, and drops.
-- Extend implemented enum-data match lowering with ownership-aware payload moves once the heap ABI and drop elaboration
-  are finalized.
-- Extend the implemented tuple declaration and for-each patterns to tuple patterns in `match` arms.
-- Finish borrow checking and drop-point validation.
-- Grow MIR optimizations while preserving observable control flow, drop behavior, and diagnostics.
-- Complete monomorphization and codegen-unit planning for generic functions and types.
+## C retirement
 
-## Intermediate formats
+- Delete compatibility lexer/parser, semantic, and intermediate compiler subsystems after their Haskell/C++ replacements
+  pass the relevant fixtures.
+- Move remaining compiler-owned driver, package, and backend implementation to C++20 where appropriate.
+- Keep only small, intentional C ABI/runtime surfaces after implementation ownership has moved.
+- Convert or replace C tests as their owning subsystem migrates.
 
-- Keep `.xhir`, `.xmir`, and `.xlil` as deterministic, human-readable text formats.
-- Keep XHIR and XMIR independent from LLVM while aligned with the XLIL type/data vocabulary.
-- Keep XLIL as the public backend input registry format; it is text-only and not bytecode.
-- Extend the v0 parsers/writers/verifiers as new records and instructions are implemented.
+## CLI and project system
 
-## Backend and CLI
+- Keep the CLI and `Visual.XSharp.kts` on one configuration model without retired aliases or compatibility setters.
+- Complete `-Emit core|xpp|xmm` artifact handling while keeping intermediate data in memory by default.
+- Keep Xmm optimization enabled by default for direct-file and project builds.
+- Complete package resolution, lockfile, update, publication, and yank workflows.
 
-- Extend XLIL-to-LLVM lowering from declarations and the initial body subset to full function bodies.
-- Emit object files and link project targets into native `.vxse` executables, targeting ELF first and PE after ELF.
-- Complete `xs build`, `xs check`, and `xs run` artifact handling and diagnostics.
-- Keep LLVM as the only advertised implementation until each planned backend satisfies the support gates in
-  `docs/BACKENDS.md`.
-- Specify the C23, JavaScript, and WebAssembly artifact and ABI contracts before registering their selectors as supported.
+## Backend and runtime
 
-## Public APIs
-
-- Grow the XLIL C23 API under `#include <Visual/XSharp/lil.hh>` for external frontends and language implementations.
-- Add AOT/JIT-facing APIs only when their behavior is implemented and testable.
-
-## Packages
-
-- Implement the TLS registry service and GitHub identity exchange without retaining GitHub personal access tokens.
-- Connect `xs login`, `xs publish`, `xs update`, and `xs yank` to the versioned registry and SQLite lock contracts.
-- Add content-addressed artifact storage, integrity verification, namespace policy, and independent encrypted backups.
+- Complete Xmm-to-LLVM lowering for the full supported language surface.
+- Complete object, assembly, LLVM bitcode, VPI, and native `.vxse` artifact routes.
+- Specify ownership, unwinding, strings, collections, async, and FFI at the runtime boundary.
+- Advertise additional backends only after their verifier, artifact contract, diagnostics, and CI gates exist.

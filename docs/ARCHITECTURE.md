@@ -5,90 +5,90 @@ SPDX-License-Identifier: MPL-2.0
 
 # Compiler architecture
 
-The Visual X# compiler is developed as a staged, testable pipeline. Each stage produces its own data model; later stages must not
-guess missing semantics inside the backend.
+Visual X# uses a staged, target-independent compiler pipeline. The frontend through CorePrep is implemented in Haskell;
+Xpp, Xmm, and the native backend boundary are implemented in C++20. Rust components remain available during the migration
+and continue to own the compiler services already assigned to them.
 
 ## Pipeline
 
 ```text
-.vxs sources
-    → lexer
-    → parser
-    → structural AST
-    → macro validation and expansion view
-    → semantic analysis and type checking
-    → HIR (THIR + XHIR)
-    → MIR
-    → borrow checker
-    → MIR optimization
-    → monomorphization
-    → codegen unit planning
-    → XLIL
-    → LLVM IR lowering
-    → object emission
-    → link
+.vxs source
+    → Visual.XSharp.Lexer
+    → Visual.XSharp.Parser
+    → Visual.XSharp.AST.Parsed
+    → Visual.XSharp.Resolver.Renamer
+    → Visual.XSharp.Resolver.NameResolution
+    → Visual.XSharp.AST.Resolved
+    → Visual.XSharp.TypeChecker
+    → Visual.XSharp.AST.Typed
+    → Visual.XSharp.Desugarer
+    → Visual.XSharp.Core
+    → Core optimizations
+    → Visual.XSharp.Core.CorePrep
+    → Xpp
+    → Xpp optimizations
+    → Xmm
+    → Xmm optimizations
+    → LLVM bitcode or VPI
 ```
 
-## Layer boundaries
+Core, CorePrep, Xpp, and Xmm are independent of LLVM. Intermediate representations remain binary and in memory unless an
+explicit `-Emit` option requests a file. Their explicit artifact suffixes are `.core`, `.xpp`, and `.xmm`.
 
-### Frontend
+## Frontend ownership
 
-The frontend owns `.vxs` source text, tokens, parsing, and the structural AST. The parser produces syntax; it must not invent
-LLVM or MIR behavior for unfinished semantics.
+The Haskell frontend owns source decoding, tokenization, parsing, name resolution, type checking, desugaring, Core, and
+CorePrep. Its public module boundaries deliberately keep the major compiler responsibilities separate:
 
-### Macro layer
+- `Visual.XSharp.Lexer` produces tokens with source spans and diagnostics.
+- `Visual.XSharp.Parser` produces only parsed syntax; it does not resolve names or types.
+- `Visual.XSharp.AST.Parsed`, `.Resolved`, and `.Typed` are distinct models.
+- `Visual.XSharp.Resolver.Renamer` assigns stable identities without deciding type semantics.
+- `Visual.XSharp.Resolver.NameResolution` resolves namespaces, imports, declarations, and references.
+- `Visual.XSharp.TypeChecker` records checked types, overload choices, and required conversions.
+- `Visual.XSharp.Desugarer` removes surface syntax before Core is formed.
+- `Visual.XSharp.Core.CorePrep` prepares target-independent Core for the native middle end.
 
-The macro system currently provides validation, token expansion, synthetic reparse, and expanded views. In-place AST
-replacement is not complete yet. HIR consumers read macro-call replacements through expanded-view APIs.
+Diagnostics retain source ownership throughout these stages. A later stage must not reconstruct information discarded by
+an earlier stage or silently invent semantics for an unsupported language form.
 
-### HIR
+## Native middle end
 
-HIR has two coordinated parts rather than two unrelated intermediate representations:
+The C++20 middle end receives verified CorePrep data through an explicit owned boundary.
 
-- THIR is its typed, source-oriented semantic side. It retains the structure needed for diagnostics and records resolved
-  symbols, nominal types, overload choices, generic substitutions, and checked expressions.
-- XHIR is its normalized operational side. It makes the checked operations needed by MIR lowering explicit while remaining
-  high-level and target-independent.
+- Xpp preserves high-level operations needed for whole-program planning and optimization.
+- Xmm is the lower, target-independent machine model consumed by native backends.
+- Xpp and Xmm each have their own verifier and optimization pipeline.
+- Readers, writers, verifiers, optimizers, lowering code, and tests change together when an IR contract changes.
 
-HIR construction is responsible for:
+The compiler does not use serialized intermediate files to pass ordinary builds between stages. Serialization is a tooling
+and debugging feature selected with `-Emit`.
 
-- module/namespace/import resolution
-- symbol table generation
-- visibility checks
-- user-defined and primitive type resolution
-- generic arity and constraint resolution
-- early expression/mutability diagnostics
+## Backend boundary
 
-`.xhir` is the versioned, human-readable text representation of the XHIR side. It is not a THIR dump. HIR does not depend on
-the LLVM API. Type information remains target-independent and may reference the XLIL type vocabulary when needed.
+LLVM is a backend, not a frontend dependency. LLVM context, target machine, data layout, module construction, verification,
+optimization, object emission, and LLD invocation remain behind the backend boundary. VPI is the alternative output boundary
+for Visual Plataforma integration.
 
-### MIR
+The backend never accepts parsed or typed AST nodes directly. It receives verified Xmm and reports failures through the
+compiler diagnostic model.
 
-MIR is lowered from HIR's XHIR side and is the control-flow, local/place/value, and terminator model. The borrow checker and
-MIR optimizer operate on this model.
-MIR does not yet provide complete statement/expression lowering or async state-machine generation.
+## Entry point
 
-### XLIL
+A project names the namespace and class containing its entry point. An executable entry point is a class member such as
+`public static void Main()`; top-level functions are not entry points. File names may help diagnostics and project discovery,
+but they do not define language semantics.
 
-XLIL is the shared input language for backends. `.xlil` is a text registry format and will not be binary. Third-party
-frontends will eventually be able to generate XLIL through the `xs/lil.h` public C23 API.
+## Migration boundary
 
-### Backend
+The current tree contains a tested compatibility implementation while the renewed pipeline is connected. That code is a
+temporary bridge, not the architecture for new compiler features. Migration follows stage ownership:
 
-The LLVM backend is separate from the frontend. LLVM context, target machine, module, data layout, function declaration
-lowering, optimization pipeline, object emission, and linker invocation live here. HIR/MIR/XLIL headers do not expose LLVM C
-API concepts.
+1. establish and test the Haskell frontend through CorePrep;
+2. connect the owned CorePrep-to-Xpp boundary;
+3. complete the C++20 Xpp/Xmm and backend route;
+4. remove the replaced C compiler subsystems instead of translating obsolete designs line by line;
+5. retain only intentional C ABI/runtime surfaces, each isolated behind a public boundary.
 
-## Major unfinished pieces
-
-- Full AST macro replacement
-- General expression type inference and overload resolution
-- Nominal interface membership validation
-- Send/Sync, async/await, and Result propagation checks
-- MIR statement/expression lowering
-- Full borrow-checker region/loan/drop model
-- Monomorphization and incremental cache
-- XLIL → LLVM function body lowering
-- End-to-end `xs build` / `xs run` executable generation
-
-These gaps are summarized in [IMPLEMENTATION.md](IMPLEMENTATION.md) and [TODO.md](TODO.md).
+New language behavior belongs in the renewed pipeline. Compatibility code may receive correctness and migration fixes, but
+it must not become a second permanent frontend.

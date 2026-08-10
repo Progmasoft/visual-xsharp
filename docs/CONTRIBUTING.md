@@ -5,71 +5,59 @@ SPDX-License-Identifier: MPL-2.0
 
 # Contribution and workflow rules
 
-This repository is compiler infrastructure. Prefer small, testable patches that preserve architecture boundaries.
+Visual X# is compiler infrastructure. Changes should preserve the renewed stage boundaries and leave an integrated,
+testable system.
 
-## Core rules
+## Architecture rules
 
-- Clang C++23 Preview and Rust are the primary implementation languages. New native compiler components favor C++23 Preview, while
-  target-independent semantic work continues in the isolated Rust `xslang` crate.
-- Existing C23 frontend and backend behavior is preserved during an incremental subsystem migration. Do not reinterpret
-  the entire C tree as C++ in one change.
-- C++23 Preview sources use `.cpp`/`.hpp`; directories use `snake_case` and filenames use `PascalCase`.
-- Use `fmt` instead of iostreams. Prefer installed dependencies and add a Git submodule only when a required dependency
-  is unavailable on supported systems. Do not add vcpkg or Conan.
-- Keep pinned third-party sources under `third_party/` unchanged. DIMCLI owns CLI schema parsing and generated help;
-  compiler execution remains behind the existing driver boundary. Catch2 is a test-only system-package fallback.
-- Shell scripts are not added as persistent project artifacts.
-- Use CMake 3.31 or newer; do not use Meson.
-- Stay within the documented Clang/LLVM build path and avoid assumptions that are not covered by the supported toolchain.
-- Files must not exceed 1000 lines. New or touched C, C++23 Preview, and header files should stay much smaller when practical.
-- In new/touched C code, use `nullptr` instead of `NULL`, and C23 `bool` instead of `<stdbool.h>`.
+- Haskell owns the lexer, parser, parsed/resolved/typed ASTs, renamer, name resolution, type checker, desugarer, Core, Core
+  optimizations, and CorePrep.
+- C++20 owns Xpp, Xmm, their optimization passes, and native backend integration.
+- Rust components remain in place unless an explicit design decision replaces their responsibility.
+- New language behavior is implemented in the renewed pipeline, not added to a compatibility frontend.
+- Replaced C compiler subsystems are deleted; they are not mechanically renamed or translated when their design is obsolete.
+- Intentional public C ABI shims remain isolated from compiler ownership and use C-only headers.
+- LLVM concepts do not appear in AST, Core, Xpp, or Xmm public models.
 
-## Patch size
+## Source rules
 
-Do not try to finish an entire compiler stage in one huge patch. Preferred shape:
+- C++20 files use `.cpp` and `.hpp`; C-only headers use `.h`; intentional shared C/C++ headers use `.hh`.
+- Use `fmt` for native formatting rather than iostreams.
+- Use CMake and Ninja on the supported ClangCL/LLVM path.
+- Do not add persistent Unix shell scripts for the Windows development workflow.
+- Do not add machine-specific absolute paths to tracked configuration.
+- Keep implementation, test, build, configuration, and internal files at or below 1500 lines. Public `Spec/`, generated
+  files, and third-party code are exempt.
+- Do not rename public APIs as a side effect of moving an implementation between languages.
 
-1. add the data model
-2. connect parser/HIR/MIR
-3. add focused tests
-4. update documentation
-5. pass build/test
+## Change shape
 
-## Tests
+A compiler-stage change should be coherent enough to prove its boundary. Include the model, pass behavior, verifier,
+integration, tests, and public documentation needed for the selected slice. Avoid placeholder-only modules and avoid a long
+series of tiny commits that leave the pipeline disconnected.
 
-Every change should at least pass the touched subsystem’s tests. Run the full test suite when practical:
+When an intermediate model changes, update its reader/writer, verifier, optimizer, lowering code, and tests in the same
+change. Invalid fixtures should identify the expected rejection; valid fixtures should exercise the integrated route.
 
-```text
-ulimit -v 2097152
-cmake --build --preset clang-debug
-ctest --preset clang-debug --output-on-failure
-```
+## Verification
 
-For docs-only changes, a build is not required, but `git diff --check` should be run.
-
-Run both language-specific static analyzers before submitting compiler changes:
+Run checks in proportion to the changed layer, followed by the integrated native presets:
 
 ```text
-cargo +nightly-2026-07-10 clippy --manifest-path xslang/Cargo.toml --all-targets -- -D warnings
-run-clang-tidy -j 1 -p build/clang-debug -warnings-as-errors='*'
+cmake --preset clangcl-debug
+cmake --build --preset clangcl-debug
+ctest --preset clangcl-debug --output-on-failure
+
+cmake --preset clangcl-sanitize
+cmake --build --preset clangcl-sanitize
+ctest --preset clangcl-sanitize --output-on-failure
 ```
 
-The Rust crate treats the stable `clippy::all` group as its warning contract. The opt-in `pedantic` and `nursery`
-suggestion collections are disabled globally; suitable checks from those groups should be enabled individually instead
-of imposing conflicting style heuristics on all existing IR code.
+Run Cabal tests for Haskell frontend work, Cargo formatting/tests for Rust work, and Gradle/Kotlin integration tests for DSL
+or resolver work. Always run `git diff --check` before publishing.
 
 ## Documentation
 
-If code behavior changes, the relevant documentation changes too. Every user-visible change is summarized in the root
-`CHANGELOG.md`.
-
-## Commits
-
-Do not commit generated artifacts:
-
-- `build/`
-- `target/`
-- `node_modules/`
-- `dist/`
-- `out/`
-
-Preserve user changes; do not revert unrelated files.
+Public documentation and code examples are written in English. Keep current architecture and current implementation status
+separate: an intended stage is not described as implemented until tests exercise it. Historical compatibility names are not
+part of the current public compiler catalog.

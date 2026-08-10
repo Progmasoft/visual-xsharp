@@ -13,6 +13,12 @@ find_package(Threads REQUIRED)
 find_package(fmt REQUIRED CONFIG)
 find_program(XS_CARGO_EXECUTABLE NAMES cargo REQUIRED)
 
+if(XS_ENABLE_SANITIZERS)
+  # fmt's C++ objects cross project ownership boundaries. Windows ASan uses
+  # the release DLL CRT, so do not mix the package's /MDd binary into it.
+  set_property(TARGET fmt::fmt PROPERTY MAP_IMPORTED_CONFIG_DEBUG Release)
+endif()
+
 # Some dependency package files alter this directory-scoped default.  Keep every
 # Visual X# target on the DLL CRT so objects can safely cross shared-library
 # boundaries and match the test executables.

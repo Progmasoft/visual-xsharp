@@ -149,7 +149,28 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(XS_ENABLE_SANITIZERS "Enable Clang address and undefined behavior sanitizers" OFF)
 if(XS_ENABLE_SANITIZERS)
   add_compile_options(/fsanitize=address /Oy-)
-  add_link_options(/fsanitize=address)
+  # Rust/CXX and binary dependencies are not ASan-instrumented. Keep the MSVC
+  # STL fail-if-mismatch contract uniform while instrumenting our own code.
+  add_compile_definitions(_DISABLE_STL_ANNOTATION)
+  execute_process(
+    COMMAND "${CMAKE_C_COMPILER}" /clang:-print-resource-dir
+    OUTPUT_VARIABLE XS_CLANG_RESOURCE_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY
+  )
+  file(TO_CMAKE_PATH "${XS_CLANG_RESOURCE_DIR}/lib/windows" XS_ASAN_RUNTIME_DIR)
+  find_library(XS_ASAN_DYNAMIC_RUNTIME NAMES clang_rt.asan_dynamic-x86_64
+               HINTS "${XS_ASAN_RUNTIME_DIR}" NO_DEFAULT_PATH REQUIRED)
+  find_library(XS_ASAN_DYNAMIC_RUNTIME_THUNK NAMES clang_rt.asan_dynamic_runtime_thunk-x86_64
+               HINTS "${XS_ASAN_RUNTIME_DIR}" NO_DEFAULT_PATH REQUIRED)
+  find_file(XS_ASAN_DYNAMIC_DLL NAMES clang_rt.asan_dynamic-x86_64.dll
+            HINTS "${XS_ASAN_RUNTIME_DIR}" NO_DEFAULT_PATH REQUIRED)
+  add_link_options("${XS_ASAN_DYNAMIC_RUNTIME}"
+                   "/include:__asan_seh_interceptor"
+                   "/wholearchive:${XS_ASAN_DYNAMIC_RUNTIME_THUNK}"
+                   "/INCREMENTAL:NO")
+  file(COPY_FILE "${XS_ASAN_DYNAMIC_DLL}"
+       "${CMAKE_BINARY_DIR}/clang_rt.asan_dynamic-x86_64.dll" ONLY_IF_DIFFERENT)
 endif()
 
 include(CTest)

@@ -15,7 +15,7 @@ The checkout/root concept is `xs-project`. The top-level CMake project name is `
 Top-level CMake selection:
 
 ```text
-cmake --preset clang-debug -DXS_ENABLE_PROJECTS=xs
+cmake --preset clangcl-debug -DXS_ENABLE_PROJECTS=xs
 ```
 
 The default value is `xs`. The value `all` selects all stable projects.
@@ -37,7 +37,7 @@ Shared public C headers live under root `include/`. `xs` C sources live under `x
 Top-level runtime selection:
 
 ```text
-cmake --preset clang-debug -DXS_ENABLE_RUNTIMES=xsrt
+cmake --preset clangcl-debug -DXS_ENABLE_RUNTIMES=xsrt
 ```
 
 `xsrt` is the first buildable runtime project. It currently defines runtime ABI version 0 and the ownership boundary for

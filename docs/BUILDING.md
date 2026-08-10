@@ -5,156 +5,106 @@ SPDX-License-Identifier: MPL-2.0
 
 # Build and test guide
 
-xs-project is built on C++23 Preview, Rust, C23, CMake, Ninja, Clang/LLVM, and LLD. The documented and tested build path uses
-the Clang/LLVM toolchain.
+The supported native build uses Windows, the Visual Studio 2026 developer environment, ClangCL, CMake, Ninja, LLVM, and
+LLD. Compiler code is being renewed as Haskell through CorePrep and C++20 from Xpp onward. Rust and Kotlin toolchains build
+their existing monorepo components.
 
 ## Required tools
 
-- `cmake` 3.31 or newer
-- `ninja`
-- `clang`
-- LLVM tools:
-  - `llvm-ar`
-  - `llvm-ranlib`
-  - `llvm-nm`
-  - `llvm-objcopy`
-  - `llvm-objdump`
-  - `llvm-strip`
-- `ld.lld`
-- libarchive development headers and library
-- OpenSSL development headers and Crypto library
-- fmt development headers and library
-- `rustup` and `cargo`; the pinned `xslang/rust-toolchain.toml` toolchain must be installed
-- JRE 25, Gradle 9.6.1 or newer, and the Kotlin 2.4.0 `kotlin` script runner for the `jvm` project-test label
+- Visual Studio 2026 with the MSVC SDK and developer command environment
+- CMake 3.31 or newer and Ninja
+- ClangCL and a matching LLVM development archive, including LLVM CMake package files and LLD
+- libarchive, zstd, and fmt development packages
+- Rustup and Cargo with the toolchain selected by `xslang/rust-toolchain.toml`
+- GHC and Cabal for the Haskell workspace
+- JRE 25 and the Kotlin script runner for project-system tests
 
-Clone the repository with submodules, or initialize them before configuring:
+Clone or initialize the pinned dependencies before configuring:
 
 ```text
 git submodule update --init --recursive
 ```
 
-The pinned DIMCLI source under `third_party/dimcli` implements the C++23 Preview command schema and generated help for `xs`.
-It is built directly by the project. Tests prefer a system Catch2 3 package and fall back to the pinned
-`third_party/catch2` source when the supported system does not provide one.
+Dependency roots are supplied through CMake discovery variables or the environment. Repository presets do not contain
+machine-specific absolute installation paths. A local vcpkg installation may provide small binary dependencies, but LLVM is
+discovered from an installed development archive rather than built through vcpkg.
 
-Useful helper tools:
+## Debug build
 
-- `fd`
-- `rg`
-- `bat -p`
-- `sd`
-- `busybox wc`
-- `tokei`
-- `uutils-coreutils` tools
-
-## Default build
+Run these commands in a Visual Studio 2026 developer terminal:
 
 ```text
-cmake --preset clang-debug
-cmake --build --preset clang-debug
-ctest --preset clang-debug --output-on-failure
+cmake --preset clangcl-debug
+cmake --build --preset clangcl-debug
+ctest --preset clangcl-debug --output-on-failure
 ```
 
-Preset details:
+The preset selects Ninja, `clang-cl` for C and C++, Debug configuration, the `xs` project, and the `xsrt` runtime. The build
+directory is `build/clangcl-debug`.
 
-- generator: Ninja
-- compilers: Clang for strict C23 and Clang++ for C++23 Preview
-- shared monorepo and LLVM toolchain policy: the root `CMakeLists.txt`
-- build directory: `build/clang-debug`
-- default project: `xs`
+If LLVM or another package is installed outside the default search locations, pass its prefix at configure time or define a
+stable environment root. Do not add a workstation path to `CMakePresets.json` or a tracked CMake file.
 
-The root build selects and validates Clang/Clang++, LLVM archive/object utilities, LLD, strict C23, C++23 Preview, and Ninja before project
-targets are configured. The root build keeps project definitions separate from this tool selection. Test registration is
-likewise split by direct XLIL, source values/control flow/calls, Kotlin projects, and library-level suites under
-`cmake/XSTests*.cmake`.
+## AddressSanitizer build
 
-The `xs` target builds `/usr/bin/xs` package payload code and the Rust `xslang` static library. Its C++23 Preview executable
-entry and DIMCLI argument layer dispatch into the existing C23 compiler driver while subsystem migration continues.
-Monomorphization and codegen-unit planning are C++23 Preview-owned subsystems exposed through stable C entry points, so the
-remaining C23 driver can consume them without a simultaneous frontend rewrite. C++ consumers may use the move-only
-`<Visual/XSharp/mono/Plan.hpp>` and `<Visual/XSharp/codegen/Plan.hpp>` views.
+```text
+cmake --preset clangcl-sanitize
+cmake --build --preset clangcl-sanitize
+ctest --preset clangcl-sanitize --output-on-failure
+```
 
-## Compiler installation layout
+The sanitizer configuration derives the Clang resource directory from the selected compiler. It links the matching dynamic
+AddressSanitizer runtime and places the runtime DLL beside test executables. Windows ASan uses the release DLL CRT, so the
+imported fmt C++ target uses its Release binary even though project-owned code retains Debug symbols and checks. Because
+Rust/CXX and binary dependencies are not instrumented by this CMake option, the build disables MSVC STL container annotations
+uniformly while retaining ASan instrumentation for project-owned C and C++ code.
+
+Do not impose a small virtual-memory limit on an AddressSanitizer run; its shadow-memory reservation is intentionally large.
+
+## Haskell frontend
+
+The Haskell workspace is rooted by `xs/cabal.project`. Use the pinned package plan and run the component tests when a module
+from the lexer through CorePrep changes. Native integration is still required after Haskell-only tests pass because the final
+contract crosses into C++20 Xpp.
+
+## Kotlin project system
+
+The project system evaluates one `Visual.XSharp.kts` per project. The Gradle wrapper builds its JVM distribution and tests:
+
+```text
+xs_kts\gradlew.bat --daemon --build-cache -p xs_kts test installDist
+```
+
+JVM-labelled CTests require JRE 25 and the Kotlin script runner on `PATH`. They are serialized when they share the script
+runner to avoid startup races on constrained CI workers.
+
+## Installation layout
 
 Install the compiler component into a staging prefix with:
 
 ```text
-cmake --install build/clang-debug --prefix /tmp/xs-root --component compiler
+cmake --install build/clangcl-debug --prefix C:\Temp\visual-xsharp --component compiler
 ```
 
-With the normal system prefix `/usr`, this component installs the native compiler command as `/usr/bin/vxs`, places the
-remaining C23 migration headers under `/usr/include/Visual/C23/` and compiler-owned headers under
-`/usr/include/Visual/XSharp/`, and installs
-`LICENSE.txt` plus `NOTICE.txt` under `/usr/share/licenses/xs/`. Source-tree ownership remains separate even though the
-installed include surface is unified. CMake fails rather than silently replacing an identically named header from the two
-source trees.
-
-The mandatory Kotlin project runtime included in the `xs` package is built with Gradle:
-
-```text
-./xs_kts/gradlew --daemon --build-cache -p xs_kts test installDist
-```
-
-It targets JVM 25 and runs on JRE 25 or newer. Runtime project evaluation also requires an external `kotlin` command with
-scripting support; neither is embedded. The native executable does not link a JVM, but JRE 25 and Kotlin are mandatory
-runtime dependencies of the unified `xs` package.
-
-## OOM-safe workflow
-
-Parser/compiler tests have previously triggered OOM conditions. Use a 2GB virtual memory limit for native tests, excluding
-the JVM-labelled Kotlin project integration tests:
-
-```text
-cmake --build --preset clang-debug --target xs_project_runtime
-ulimit -v 2097152
-cmake --build --preset clang-debug
-ctest --preset clang-debug --output-on-failure -LE jvm -FA kotlin_project_resolver
-```
-
-Then run the real `Visual.XSharp.kts` integration tests outside that virtual-address-space limit. A JVM reserves more virtual
-address space than its live heap, so applying `ulimit -v 2097152` to this step is not valid:
-
-```text
-ctest --preset clang-debug --output-on-failure -L jvm
-```
-
-Tests are expected to run quickly. If a test suddenly consumes a lot of memory, treat it as a possible infinite loop, parser
-progress bug, or runaway macro expansion.
-
-## Sanitizer build
-
-AddressSanitizer and UndefinedBehaviorSanitizer are available through the separate Clang preset:
-
-```text
-cmake --preset clang-sanitize
-cmake --build --preset clang-sanitize
-ctest --preset clang-sanitize --output-on-failure
-```
-
-Do not apply the 2GB virtual-memory limit to AddressSanitizer runs: its required shadow-memory reservation exceeds that
-limit even when the program's real memory use is small.
+The component contains `vxs`, compiler-owned public headers, intentional C ABI headers, license notices, and the runtime
+files required by the selected configuration. CMake rejects colliding public-header destinations.
 
 ## Project selection
 
-Stable projects:
-
 ```text
-cmake --preset clang-debug -DXS_ENABLE_PROJECTS=xs
-cmake --preset clang-debug -DXS_ENABLE_PROJECTS=all
+cmake --preset clangcl-debug -DXS_ENABLE_PROJECTS=xs
+cmake --preset clangcl-debug -DXS_ENABLE_PROJECTS=all
 ```
 
-Future projects (`xsfmt`, `xstidy`, and `xs-analyzer`) intentionally produce CMake errors for now.
+Projects that are not yet buildable fail configuration explicitly instead of silently producing an incomplete package.
 
-## Useful checks
+## Repository checks
 
 ```text
 git diff --check
-rg -n "\bNULL\b|#include <stdbool\.h>" xs xsrt tests include
-busybox wc -l <file.c> <file.h>
+rg -n "\\bNULL\\b|#include <stdbool\\.h>" xs xsrt tests include
 ```
 
-Files must not exceed 1000 lines. New or touched C code should use `nullptr` and C23 `bool`.
-
-## Build outputs
-
-`build/` is a generated area. It may look dirty after build/test runs and should not be included in normal commits.
+Implementation, test, build, configuration, and internal files must not exceed 1500 lines. `Spec/`, third-party sources, and
+generated files are outside this limit. Build directories and installed dependency trees are generated state and must not be
+committed.
