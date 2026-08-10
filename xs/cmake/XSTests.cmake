@@ -107,6 +107,7 @@ add_test(NAME compiler_rejects_module_flag COMMAND vxs check --module .)
 set_tests_properties(compiler_rejects_module_flag PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
 add_executable(xs_text_artifact_tests tests/text_artifact_tests.c)
+add_executable(xs_xse_artifact_tests tests/xse_artifact_tests.c)
 include(XSTestsSourceValues)
 include(XSTestsSourceControl)
 include(XSTestsSourceCalls)

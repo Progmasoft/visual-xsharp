@@ -57,6 +57,23 @@ private fun existingClasspath(): String =
     .filter { entry -> File(entry).exists() }
     .joinToString(File.pathSeparator)
 
+internal fun kotlinCommand(
+  environment: Map<String, String> = System.getenv(),
+  osName: String = System.getProperty("os.name"),
+): String {
+  environment.entries.firstOrNull { it.key.equals("XS_KOTLIN", ignoreCase = true) }?.value?.takeIf(String::isNotBlank)
+    ?.let { return it }
+  if (!osName.startsWith("Windows")) return "kotlin"
+  val path = environment.entries.firstOrNull { it.key.equals("PATH", ignoreCase = true) }?.value ?: return "kotlin"
+  return path
+    .split(File.pathSeparatorChar)
+    .asSequence()
+    .map { directory -> File(directory, "kotlin.bat") }
+    .firstOrNull(File::isFile)
+    ?.absolutePath
+    ?: "kotlin"
+}
+
 private fun runKotlin(
   script: File,
   root: File,
@@ -68,7 +85,7 @@ private fun runKotlin(
     val wrapped = directory.resolve(script.name)
     val suffix = "\nemitProject()\n"
     wrapped.writeText("import org.progmasoft.visual_xsharp.project.*\n" + script.readText() + suffix)
-    val kotlin = System.getenv("XS_KOTLIN")?.takeIf(String::isNotBlank) ?: "kotlin"
+    val kotlin = kotlinCommand()
     val properties =
       mutableListOf(
         "-Dxs.project.root=${root.absolutePath}",
