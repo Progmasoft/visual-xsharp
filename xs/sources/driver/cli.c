@@ -373,11 +373,32 @@ static size_t project_entry_unit_index(const CompilationUnit *units, size_t unit
     if(entry == nullptr)
         return 0U;
     const XsHirSymbol *entry_symbol = xs_hir_symbol_table_find(symbols, entry);
-    if(entry_symbol == nullptr || entry_symbol->kind != XS_HIR_SYMBOL_CLASS)
-        return 0U;
+    if(entry_symbol != nullptr && entry_symbol->kind == XS_HIR_SYMBOL_CLASS)
+    {
+        for(size_t i = 0; i < unit_count; ++i)
+            if(units[i].tree.file_id == entry_symbol->span.file_id)
+                return i;
+    }
+    const char *entry_name = strrchr(entry, '.');
+    entry_name = entry_name == nullptr ? entry : entry_name + 1;
+    const size_t entry_length = strlen(entry_name);
     for(size_t i = 0; i < unit_count; ++i)
-        if(units[i].tree.file_id == entry_symbol->span.file_id)
+    {
+        const char *slash = strrchr(units[i].path, '/');
+        const char *backslash = strrchr(units[i].path, '\\');
+        const char *name = slash == nullptr || (backslash != nullptr && backslash > slash) ? backslash : slash;
+        name = name == nullptr ? units[i].path : name + 1;
+        const char *dot = strrchr(name, '.');
+        const size_t stem_length = dot == nullptr ? strlen(name) : (size_t)(dot - name);
+        if(stem_length != entry_length)
+            continue;
+        bool equal = true;
+        for(size_t character = 0; character < stem_length; ++character)
+            if(tolower((unsigned char)name[character]) != tolower((unsigned char)entry_name[character]))
+                equal = false;
+        if(equal)
             return i;
+    }
     return 0U;
 }
 
