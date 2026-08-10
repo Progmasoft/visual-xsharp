@@ -1,36 +1,56 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
-
 #pragma once
 
-#include "Visual/XSharp/Core.hpp"
 #include "Visual/XSharp/Core/CorePrep.hpp"
-
+#include <cstdint>
 #include <string>
 #include <vector>
 
 namespace visual_xsharp::xpp
 {
+using SymbolId = core::SymbolId;
+using BlockId = core::BlockId;
 
+enum class Opcode : std::uint8_t
+{
+    Copy, Call, Add, Subtract, Multiply, Divide, FloorDivide, Remainder,
+    CompareLess, CompareLessEqual, CompareGreater, CompareGreaterEqual, CompareEqual, CompareNotEqual,
+    LogicalAnd, LogicalOr, Negate, LogicalNot
+};
+struct Operand final
+{
+    enum class Kind : std::uint8_t { Symbol, Literal } kind{Kind::Literal};
+    core::ValueType type{core::ValueType::Unit};
+    SymbolId symbol{};
+    core::Literal literal{};
+};
 struct Instruction final
 {
-    std::string opcode;
-    std::vector<SymbolId> operands;
+    enum class Effect : std::uint8_t { Define, Store, Discard } effect{Effect::Discard};
+    Opcode opcode{Opcode::Copy};
+    SymbolId destination{};
+    core::ValueType result_type{core::ValueType::Unit};
+    std::vector<Operand> operands;
 };
-
-struct Block final
+struct Terminator final
 {
-    std::string label;
-    std::vector<Instruction> instructions;
+    enum class Kind : std::uint8_t { Return, Branch, Jump, Unreachable } kind{Kind::Unreachable};
+    Operand value{};
+    BlockId true_target{};
+    BlockId false_target{};
 };
-
-struct Module final
+struct Block final { BlockId id{}; std::vector<Instruction> instructions; Terminator terminator; };
+struct Function final
 {
-    std::string name;
+    SymbolId symbol{};
+    std::vector<core::Parameter> parameters;
+    core::ValueType return_type{core::ValueType::Unit};
+    BlockId entry{};
     std::vector<Block> blocks;
 };
+struct Module final { std::string name; std::vector<Function> functions; };
 
 [[nodiscard]] auto lower(const core::CorePrepModule &module) -> Module;
 [[nodiscard]] auto optimize(Module module) -> Module;
-
 } // namespace visual_xsharp::xpp

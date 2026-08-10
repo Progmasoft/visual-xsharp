@@ -1,37 +1,113 @@
 -- SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 -- SPDX-License-Identifier: MPL-2.0
-
 module Visual.XSharp.Core.CorePrep
-    ( CorePrepAtom (..)
-    , CorePrepExpression (..)
-    , CorePrepBinding (..)
-    , CorePrepModule (..)
-    ) where
+    ( CorePrepAtom (..), CorePrepOperation (..), CorePrepInstruction (..), CorePrepTerminator (..)
+    , CorePrepBlock (..), CorePrepFunction (..), CorePrepModule (..), prepareCore ) where
 
-import Visual.XSharp.AST (QualifiedName, ResolvedName, Type)
-import Visual.XSharp.Core (CoreLiteral)
+import Visual.XSharp.AST
+import Visual.XSharp.Core
+import Visual.XSharp.Diagnostic
 
--- | CorePrep atoms make evaluation order explicit before Xpp lowering.
-data CorePrepAtom
-    = CorePrepVariable ResolvedName
-    | CorePrepLiteral CoreLiteral
+data CorePrepAtom = CorePrepVariable ResolvedName Type | CorePrepLiteral CoreLiteral Type
     deriving (Eq, Ord, Read, Show)
-
-data CorePrepExpression
-    = CorePrepAtom CorePrepAtom
+data CorePrepOperation
+    = CorePrepCopy CorePrepAtom
     | CorePrepCall CorePrepAtom [CorePrepAtom]
-    | CorePrepLet CorePrepBinding CorePrepExpression
+    | CorePrepPrimitive CorePrimitive [CorePrepAtom]
     deriving (Eq, Ord, Read, Show)
-
-data CorePrepBinding = CorePrepBinding
-    { corePrepBindingName :: ResolvedName
-    , corePrepBindingType :: Type
-    , corePrepBindingValue :: CorePrepExpression
-    }
+data CorePrepInstruction
+    = CorePrepBind ResolvedName Type Bool CorePrepOperation
+    | CorePrepAssign ResolvedName CorePrepAtom
+    | CorePrepEvaluate CorePrepOperation
     deriving (Eq, Ord, Read, Show)
-
+data CorePrepTerminator
+    = CorePrepReturn CorePrepAtom
+    | CorePrepBranch CorePrepAtom Int Int
+    | CorePrepJump Int
+    | CorePrepUnreachable
+    deriving (Eq, Ord, Read, Show)
+data CorePrepBlock = CorePrepBlock
+    { corePrepBlockId :: Int, corePrepBlockInstructions :: [CorePrepInstruction], corePrepBlockTerminator :: CorePrepTerminator }
+    deriving (Eq, Ord, Read, Show)
+data CorePrepFunction = CorePrepFunction
+    { corePrepFunctionName :: ResolvedName, corePrepFunctionParameters :: [(ResolvedName, Type)]
+    , corePrepFunctionReturnType :: Type, corePrepFunctionEntry :: Int, corePrepFunctionBlocks :: [CorePrepBlock] }
+    deriving (Eq, Ord, Read, Show)
 data CorePrepModule = CorePrepModule
-    { corePrepModuleName :: QualifiedName
-    , corePrepModuleBindings :: [CorePrepBinding]
-    }
+    { corePrepModuleName :: QualifiedName, corePrepModuleFunctions :: [CorePrepFunction] }
     deriving (Eq, Ord, Read, Show)
+
+data PrepState = PrepState { nextTemporary :: Int, nextBlock :: Int }
+
+prepareCore :: CoreModule -> Either [Diagnostic] CorePrepModule
+prepareCore moduleValue = Right (CorePrepModule (coreModuleName moduleValue) (map prepareFunction (coreModuleFunctions moduleValue)))
+
+prepareFunction :: CoreFunction -> CorePrepFunction
+prepareFunction function =
+    let seed = 1 + maximum (0 : symbolIds function)
+        (blocks, _) = prepareStatements (PrepState seed 1) 0 [] (coreFunctionBody function)
+    in CorePrepFunction (coreFunctionName function) (coreFunctionParameters function) (coreFunctionReturnType function) 0 blocks
+
+symbolIds :: CoreFunction -> [Int]
+symbolIds function = symbolIdValue (resolvedSymbol (coreFunctionName function)) : map (symbolIdValue . resolvedSymbol . fst) (coreFunctionParameters function)
+
+prepareStatements :: PrepState -> Int -> [CorePrepInstruction] -> [CoreStatement] -> ([CorePrepBlock], PrepState)
+prepareStatements state blockId instructions [] = ([CorePrepBlock blockId instructions CorePrepUnreachable], state)
+prepareStatements state blockId instructions (statement:remaining) = case statement of
+    CoreBind binding ->
+        let (prefix, operation, after) = atomizeOperation state (coreBindingValue binding)
+            instruction = CorePrepBind (coreBindingName binding) (coreBindingType binding) (coreBindingMutable binding) operation
+        in prepareStatements after blockId (instructions ++ prefix ++ [instruction]) remaining
+    CoreAssign name value ->
+        let (prefix, atom, after) = atomize state value
+        in prepareStatements after blockId (instructions ++ prefix ++ [CorePrepAssign name atom]) remaining
+    CoreEvaluate value ->
+        let (prefix, operation, after) = atomizeOperation state value
+        in prepareStatements after blockId (instructions ++ prefix ++ [CorePrepEvaluate operation]) remaining
+    CoreReturn value ->
+        let (prefix, atom, after) = atomize state value
+        in ([CorePrepBlock blockId (instructions ++ prefix) (CorePrepReturn atom)], after)
+    CoreIf condition trueBranch falseBranch ->
+        let (conditionPrefix, conditionAtom, afterCondition) = atomize state condition
+            trueId = nextBlock afterCondition
+            falseId = trueId + 1
+            joinId = falseId + 1
+            branchState = afterCondition { nextBlock = joinId + 1 }
+            (trueBlocks, afterTrue) = prepareBranch branchState trueId joinId trueBranch
+            (falseBlocks, afterFalse) = prepareBranch afterTrue falseId joinId falseBranch
+            header = CorePrepBlock blockId (instructions ++ conditionPrefix) (CorePrepBranch conditionAtom trueId falseId)
+            (tailBlocks, final) = prepareStatements afterFalse joinId [] remaining
+        in (header : trueBlocks ++ falseBlocks ++ tailBlocks, final)
+
+prepareBranch :: PrepState -> Int -> Int -> [CoreStatement] -> ([CorePrepBlock], PrepState)
+prepareBranch state blockId joinId statements =
+    let (blocks, after) = prepareStatements state blockId [] statements
+    in (map addJump blocks, after)
+  where addJump block | corePrepBlockTerminator block == CorePrepUnreachable = block { corePrepBlockTerminator = CorePrepJump joinId }; addJump block = block
+
+atomize :: PrepState -> CoreExpression -> ([CorePrepInstruction], CorePrepAtom, PrepState)
+atomize state expression = case expression of
+    CoreVariable name valueType -> ([], CorePrepVariable name valueType, state)
+    CoreLiteral literal valueType -> ([], CorePrepLiteral literal valueType, state)
+    _ -> let (prefix, operation, afterOperation) = atomizeOperation state expression
+             temporary = ResolvedName (SymbolId (nextTemporary afterOperation)) (Identifier ("$coreprep" ++ show (nextTemporary afterOperation)))
+             valueType = expressionType expression
+             instruction = CorePrepBind temporary valueType False operation
+         in (prefix ++ [instruction], CorePrepVariable temporary valueType, afterOperation { nextTemporary = nextTemporary afterOperation + 1 })
+
+atomizeOperation :: PrepState -> CoreExpression -> ([CorePrepInstruction], CorePrepOperation, PrepState)
+atomizeOperation state expression = case expression of
+    CoreVariable name valueType -> ([], CorePrepCopy (CorePrepVariable name valueType), state)
+    CoreLiteral literal valueType -> ([], CorePrepCopy (CorePrepLiteral literal valueType), state)
+    CoreApply callee arguments _ ->
+        let (calleePrefix, calleeAtom, afterCallee) = atomize state callee
+            (argumentPrefix, argumentAtoms, afterArguments) = atomizeMany afterCallee arguments
+        in (calleePrefix ++ argumentPrefix, CorePrepCall calleeAtom argumentAtoms, afterArguments)
+    CorePrimitive primitive arguments _ ->
+        let (prefix, atoms, after) = atomizeMany state arguments in (prefix, CorePrepPrimitive primitive atoms, after)
+
+atomizeMany :: PrepState -> [CoreExpression] -> ([CorePrepInstruction], [CorePrepAtom], PrepState)
+atomizeMany state [] = ([], [], state)
+atomizeMany state (value:remaining) =
+    let (prefix, atom, after) = atomize state value; (laterPrefix, atoms, final) = atomizeMany after remaining
+    in (prefix ++ laterPrefix, atom:atoms, final)
