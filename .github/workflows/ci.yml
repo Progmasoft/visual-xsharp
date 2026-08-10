@@ -44,6 +44,33 @@ jobs:
         with:
           gradle-version: "9.6.1"
 
+      - name: Restore LLVM development package
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}\llvm-dev-22.1.6
+          key: llvm-dev-22.1.6-x86_64-windows-msvc
+
+      - name: Install LLVM development package
+        shell: pwsh
+        run: |
+          $llvmRoot = Join-Path $env:RUNNER_TOOL_CACHE "llvm-dev-22.1.6"
+          $llvmConfig = Join-Path $llvmRoot "lib\cmake\llvm\LLVMConfig.cmake"
+          if (-not (Test-Path $llvmConfig)) {
+            New-Item -ItemType Directory -Force $llvmRoot | Out-Null
+            $archive = Join-Path $env:RUNNER_TEMP "llvm-dev.tar.xz"
+            curl.exe -L --fail --retry 4 --retry-delay 5 `
+              -o $archive `
+              "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.6/clang%2Bllvm-22.1.6-x86_64-pc-windows-msvc.tar.xz"
+            tar.exe -xf $archive -C $llvmRoot --strip-components=1
+          }
+          if (-not (Test-Path $llvmConfig)) {
+            throw "The official LLVM development archive does not contain LLVMConfig.cmake"
+          }
+          "LLVM_ROOT=$llvmRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "LLVM_DIR=$([System.IO.Path]::GetDirectoryName($llvmConfig))" |
+            Out-File -FilePath $env:GITHUB_ENV -Append
+          (Join-Path $llvmRoot "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
+
       - name: Verify Windows toolchain
         shell: pwsh
         run: |
@@ -53,12 +80,9 @@ jobs:
           lld-link --version
           java --version
           kotlin -version
-          $llvmConfig = Get-ChildItem "$env:ProgramFiles\LLVM" -Filter LLVMConfig.cmake -Recurse |
-            Select-Object -First 1
-          if (-not $llvmConfig) {
-            throw "LLVMConfig.cmake was not found in the runner LLVM installation"
+          if (-not (Test-Path (Join-Path $env:LLVM_DIR "LLVMConfig.cmake"))) {
+            throw "LLVMConfig.cmake was not activated from the development package"
           }
-          "LLVM_DIR=$($llvmConfig.Directory.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Restore native dependency cache
         uses: actions/cache@v4
