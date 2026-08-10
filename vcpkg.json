@@ -4,7 +4,10 @@
   "version-string": "0.3.0",
   "dependencies": [
     "fmt",
-    "libarchive",
-    "openssl"
+    {
+      "name": "libarchive",
+      "default-features": false,
+      "features": ["zstd"]
+    }
   ]
 }

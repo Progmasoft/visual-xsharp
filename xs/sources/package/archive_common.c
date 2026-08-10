@@ -5,9 +5,11 @@
 
 #include "archive_internal.h"
 
-#include <openssl/evp.h>
+#include <windows.h>
+#include <bcrypt.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -57,22 +59,34 @@ XsPackageStatus xs_package_archive_digest(const char *path, XsPackageArchiveInfo
     if(stream == nullptr)
         return xs_package_error(error, XS_PACKAGE_IO_ERROR, "package artifact cannot be opened for hashing");
 
-    EVP_MD_CTX *context = EVP_MD_CTX_new();
-    if(context == nullptr)
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    PUCHAR hash_object = nullptr;
+    ULONG hash_object_size = 0;
+    ULONG result_size = 0;
+    NTSTATUS native_status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+    if(native_status >= 0)
+        native_status = BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH, (PUCHAR)&hash_object_size,
+                                          (ULONG)sizeof(hash_object_size), &result_size, 0);
+    if(native_status >= 0)
+        hash_object = (PUCHAR)malloc(hash_object_size);
+    if(native_status >= 0 && hash_object == nullptr)
     {
+        BCryptCloseAlgorithmProvider(algorithm, 0);
         (void)fclose(stream);
         return xs_package_error(error, XS_PACKAGE_OUT_OF_MEMORY, "SHA-256 context allocation failed");
     }
-
     XsPackageStatus status = XS_PACKAGE_OK;
-    if(EVP_DigestInit_ex(context, EVP_sha256(), nullptr) != 1)
+    if(native_status >= 0)
+        native_status = BCryptCreateHash(algorithm, &hash, hash_object, hash_object_size, nullptr, 0, 0);
+    if(native_status < 0)
         status = xs_package_error(error, XS_PACKAGE_IO_ERROR, "SHA-256 initialization failed");
 
     unsigned char buffer[16384];
     while(status == XS_PACKAGE_OK)
     {
         const size_t count = fread(buffer, 1U, sizeof(buffer), stream);
-        if(count != 0U && EVP_DigestUpdate(context, buffer, count) != 1)
+        if(count != 0U && BCryptHashData(hash, buffer, (ULONG)count, 0) < 0)
             status = xs_package_error(error, XS_PACKAGE_IO_ERROR, "SHA-256 update failed");
         if(count != sizeof(buffer))
         {
@@ -82,12 +96,13 @@ XsPackageStatus xs_package_archive_digest(const char *path, XsPackageArchiveInfo
         }
     }
 
-    unsigned int digest_size = 0;
-    if(status == XS_PACKAGE_OK &&
-       (EVP_DigestFinal_ex(context, info->sha256, &digest_size) != 1 || digest_size != XS_PACKAGE_SHA256_SIZE))
+    if(status == XS_PACKAGE_OK && BCryptFinishHash(hash, info->sha256, XS_PACKAGE_SHA256_SIZE, 0) < 0)
         status = xs_package_error(error, XS_PACKAGE_IO_ERROR, "SHA-256 finalization failed");
-
-    EVP_MD_CTX_free(context);
+    if(hash != nullptr)
+        BCryptDestroyHash(hash);
+    free(hash_object);
+    if(algorithm != nullptr)
+        BCryptCloseAlgorithmProvider(algorithm, 0);
     if(fclose(stream) != 0 && status == XS_PACKAGE_OK)
         status = xs_package_error(error, XS_PACKAGE_IO_ERROR, "package artifact close failed");
 
