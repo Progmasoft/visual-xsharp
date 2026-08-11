@@ -56,7 +56,7 @@ Visual X# uses Haskell through CorePrep, then C++20 for the target-independent n
 ```text
 .vxs → Lexer → Parser → Parsed AST → Renamer → Name Resolution
      → Type Checker → Typed AST → Desugarer → Core → CorePrep
-     → Xpp → Xmm → LLVM bitcode or VPI
+     → Xpp → Xmm → LLVM bitcode
 ```
 
 Core, Xpp, and Xmm remain target independent. Intermediate representations stay in memory unless requested explicitly.

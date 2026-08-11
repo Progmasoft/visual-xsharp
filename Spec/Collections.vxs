@@ -225,7 +225,7 @@ values[0] = 100;
 -- Example 25: 17. Indexing
 -- Demonstrates: Example:
 
-for (index() : values.Indicies()) {
+for (index() : values.Indices()) {
     Console.Println(index());
 }
 
@@ -383,10 +383,10 @@ values.LastIndex(
 );
 
 -- ============================================================================
--- Example 44: 25. Enumarated()
+-- Example 44: 25. Enumerated()
 -- Demonstrates: All are available on [T] and [T; N].
 
-for ((index(), value()) : values.Enumarated()) {
+for ((index(), value()) : values.Enumerated()) {
     Console.Println(
         index(),
         value()

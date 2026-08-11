@@ -30,7 +30,7 @@ pub mod compiler_core;
     reason = "existing HIR API documentation is being completed incrementally"
 )]
 pub mod hir;
-/// Compatibility queries for the native C++23 Preview compiler-core bridge.
+/// Compatibility queries for the native C++20 compiler-core bridge.
 pub mod interop;
 #[allow(
     missing_docs,

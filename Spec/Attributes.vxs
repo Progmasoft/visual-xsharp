@@ -481,7 +481,7 @@ class Child : Base {
 
 -- ============================================================================
 -- Example 58: 25. inherited
--- Demonstrates: For overrideable members, inherited: true follows the override chain.
+-- Demonstrates: For overridable members, inherited: true follows the override chain.
 
 class Base {
     [Marker("Base.Run")]

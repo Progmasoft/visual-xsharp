@@ -194,7 +194,7 @@ bool absent = Files.NotExists(path);
 Files.Is(regularFile: path)
 Files.Is(directory: path)
 Files.Is(readable: path)
-Files.Is(writeable: path)
+Files.Is(writable: path)
 Files.Is(executable: path)
 Files.Is(hidden: path)
 Files.Is(symbolicLink: path)

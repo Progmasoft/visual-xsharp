@@ -16,7 +16,6 @@ data Stage
     | Xpp
     | Xmm
     | LlvmBitcode
-    | Vpi
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | Public file extension for stages that may be explicitly emitted.

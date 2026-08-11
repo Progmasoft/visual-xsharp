@@ -11,7 +11,7 @@
 -- Example 1: Visual X# — Command
 -- Demonstrates: Typical import:
 
-import System.Diagnoatics;
+using System.Diagnostics;
 
 -- ============================================================================
 -- Example 2: 2. Basic command creation
@@ -407,7 +407,7 @@ handle.Is(failure:)
 -- Example 43: 26. Complete inherited-I/O example
 -- Demonstrates: It is a normal completed-process result observed through:
 
-import System.Diagnoatics;
+using System.Diagnostics;
 
 CommandHandle command =
         new CommandBuilder(
@@ -437,7 +437,7 @@ else {
 -- Example 44: 27. Complete pipe example
 -- Demonstrates: git commit -m 'Initial commit'
 
-import System.Diagnoatics;
+using System.Diagnostics;
 
 CommandHandle command =
         new CommandBuilder(
