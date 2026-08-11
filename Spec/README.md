@@ -1,14 +1,17 @@
-# Visual X# executable specifications
+# Visual X# specification examples
 
-The `.vxs` files in this directory are explanatory Visual X# example suites. Their location under `Spec/`, numbered examples, and explicit expectation comments distinguish specification fragments from application sources.
+The `.vxs` files in this directory are topic-oriented language design examples. Each numbered fragment is independent and
+includes context that explains the intended rule, whether the fragment is valid or invalid, and which surrounding declarations
+may be omitted for brevity.
 
-Each example records:
+These files are not concatenated programs. Repeated declarations, incomplete context, and deliberately rejected examples are
+intentional. A file may therefore be useful as a design reference without being directly compilable as one application.
 
-- the renewed design section it illustrates;
-- the rule or behavior demonstrated by the fragment;
-- whether the fragment is expected to compile or be rejected; and
-- whether omitted declarations are required to supply the surrounding context.
+The directory records current language intent; it is not an implementation-completeness claim. The production compiler is
+still moving to the Haskell-through-CorePrep and C++20 Xpp/Xmm architecture, so some examples describe behavior that has not
+yet reached the production `vxs` route.
 
-The files are not concatenated programs. Repeated declarations and deliberately invalid fragments are intentional because every numbered example is an independent specification case.
+When a language rule is implemented, it should gain a focused compiler test in addition to its explanatory example here.
+Compiler behavior must not be inferred from historical fixtures when it conflicts with the current examples.
 
-Implementation work should use these `.vxs` examples together with the completed normative language documents, rather than infer semantics from historical source examples.
+See [the specification guide](../docs/SPECIFICATION.md) for the topic map and maintenance rules.

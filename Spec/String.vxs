@@ -1,11 +1,11 @@
 -- SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 -- SPDX-License-Identifier: MPL-2.0
 
--- Visual X# executable specification: 26. Design rule
+-- Visual X# language design examples: Strings and Comments
 --
--- This file is an explanatory example suite derived from the renewed normative design.
+-- This file is a topic-oriented language design example suite.
 -- Each fragment states its intent explicitly; fragments marked INVALID are expected to be rejected.
--- The normative rule is restated here only through focused, independently readable examples.
+-- Examples record intended behavior; they do not claim complete compiler support.
 
 -- ============================================================================
 -- Example 1: 2. Single-line normal comment

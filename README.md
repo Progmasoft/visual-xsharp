@@ -3,114 +3,141 @@ SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# xs-project
+# Visual X#
 
-`xs-project` is the LLVM-project-style monorepo root for the Visual X# language and compiler family. The current focus is the
-single `xs` tool, which owns both Visual X# compilation and programmable Kotlin project resolution.
+Visual X# is an experimental native programming language and compiler project. This repository contains the compiler,
+project DSL, runtime components, language examples, tests, and supporting developer tools.
 
-This repository is experimental, but it is treated as serious compiler infrastructure: every step must remain buildable and
-testable, the HIR/MIR layers must not depend on LLVM, and the documented compilation flow must be preserved.
+The repository is under an architectural transition. The production `vxs` executable currently combines the established
+Rust compiler core with C23 and C++20 components. In parallel, a tested Haskell frontend through CorePrep and a C++20
+CorePrep-to-Xpp-to-Xmm slice are being developed and connected. The new route is real code, but it is not yet the sole
+production compilation path.
 
-## Quick start
-
-Required core tools:
-
-- CMake 3.31 or newer
-- Ninja
-- Clang / LLVM tools
-- LLD
-- Rustup and Cargo; `xslang/rust-toolchain.toml` selects the pinned nightly compiler core toolchain
-- JRE 25 or newer plus the `kotlin` scripting command
-- Optional helper tools such as `fd`, `rg`, `bat -p`, `sd`, and `busybox wc` are useful for development
-
-Default debug build:
+## Intended compiler pipeline
 
 ```text
-cmake --preset clangcl-debug
-cmake --build --preset clangcl-debug
-ctest --preset clangcl-debug --output-on-failure
+.vxs source
+→ Haskell Lexer
+→ Haskell Parser
+→ Parsed AST
+→ Renamer
+→ Name Resolution
+→ Resolved AST
+→ Type Checker
+→ Typed AST
+→ Desugarer
+→ Core
+→ Core optimizations
+→ CorePrep
+→ C++20 Xpp
+→ Xpp optimizations
+→ C++20 Xmm
+→ Xmm optimizations
+→ LLVM bitcode
+→ native object and .vxse executable
 ```
 
-Run these commands from a Visual Studio 2026 developer terminal. JVM-labelled project tests require JRE 25 and the Kotlin
-script runner on `PATH`.
+Core, CorePrep, Xpp, and Xmm are target-independent. Their public artifact extensions are `.core`, `.xpp`, and `.xmm`;
+normal compilation keeps intermediate data in memory unless explicit emission is requested.
 
-Check a source file:
+## Supported development environment
 
-```text
-./build/clangcl-debug/vxs check -File tests/fixtures/example_project/source/Main.vxs
+The supported native build is Windows with:
+
+- Visual Studio 2026 developer environment;
+- ClangCL for C23 and C++20;
+- LLD and Ninja;
+- CMake 3.31 or newer;
+- an LLVM development package containing `LLVMConfig.cmake`;
+- Rustup and Cargo;
+- GHC 9.10 and Cabal for the Haskell frontend;
+- JDK 25 and the Kotlin runner for the project DSL; and
+- vcpkg for the small native dependency set declared by `vcpkg.json`.
+
+Repository configuration does not contain a machine-specific LLVM installation path. Set `LLVM_ROOT` or `LLVM_DIR`, or
+make the LLVM CMake package discoverable through the normal CMake prefix search.
+
+## Build
+
+Initialize the recursive submodules first:
+
+```powershell
+git submodule update --init --recursive
 ```
 
-Validate the test registry of a modern Kotlin project from its project directory:
+Install the manifest dependencies using an existing vcpkg installation:
 
-```text
-vxs test
+```powershell
+& "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows --x-manifest-root .
 ```
 
-Supported top-level `#[Test] fn name()` cases are compiled through the normal native pipeline and executed in isolated
-temporary `.vxse` harnesses. `#[Ignore]` and `#[ShouldPanic]` are honored.
+Configure, build, and test from a Visual Studio 2026 developer terminal:
 
-## Compiler pipeline
-
-Visual X# uses Haskell through CorePrep, then C++20 for the target-independent native pipeline:
-
-```text
-.vxs → Lexer → Parser → Parsed AST → Renamer → Name Resolution
-     → Type Checker → Typed AST → Desugarer → Core → CorePrep
-     → Xpp → Xmm → LLVM bitcode
+```powershell
+cmake --preset clangcl-debug `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+cmake --build --preset clangcl-debug --parallel 4
+ctest --preset clangcl-debug --output-on-failure --parallel 2
 ```
 
-Core, Xpp, and Xmm remain target independent. Intermediate representations stay in memory unless requested explicitly.
-The Rust semantic implementation remains in the repository while the renewed pipeline is connected incrementally.
+The preset intentionally uses tool names and environment-based discovery rather than absolute installation paths.
 
-## Project and CLI
+## Command-line status
 
-Each project has exactly one `Visual.XSharp.kts`. The DSL has no module scripts, split state, compatibility setters, or
-implicit dependency aliases. `sources.main.entry` identifies the namespace and class containing `public static void Main()`.
+The compiler executable is `vxs`. The current parser recognizes `check`, `build`, `run`, `test`, `resolve`, `update`,
+`install`, `viget`, and `version`. Some commands and renewed intermediate input/output selections are registered before their
+production implementation is complete. In particular, explicit Core/Xpp/Xmm emission and non-source `-Build` inputs are not
+yet connected to the renewed pipeline, while package publication requires a ViGet client that is not linked into the current
+compiler build.
 
-```text
-vxs check
-vxs build
-vxs run
-vxs test
-vxs resolve
-vxs build -File Main.vxs
-vxs build -Emit xmm
+The reliable single-file validation form is:
+
+```powershell
+.\build\clangcl-debug\vxs.exe check -File .\path\to\Main.vxs
 ```
 
-See [docs/CLI.md](docs/CLI.md) and [docs/PROJECT_FILES.md](docs/PROJECT_FILES.md) for the current public contract.
+See [CLI](docs/CLI.md) for the exact accepted surface and implementation status.
 
-## Development rules
+## Project files
 
-- The renewed frontend through CorePrep is Haskell. Xpp and later native stages use C++20.
-- Existing C23 layers migrate subsystem by subsystem behind passing tests; the Rust implementation remains available.
-- Do not use `#include <stdbool.h>` in new/touched C code; use C23 `bool`.
-- Prefer `nullptr` over `NULL` in new/touched C code.
-- Use CMake; do not use Meson.
-- C++20 files use `.cpp` and `.hpp`; C-only headers use `.h`, and shared C/C++ headers use `.hh`.
-- Use `fmt` instead of iostreams. Do not add vcpkg or Conan.
-- Initialize Git submodules before configuring. The `vxs` command schema uses the pinned DIMCLI source under
-  `third_party/dimcli`; compiler execution remains behind the existing driver ABI.
-- The supported build path is Clang, Ninja, LLVM tools, and LLD.
-- Do not add persistent shell scripts; use Java source-file tools or D for automation.
-- Keep implementation, test, build, configuration, and internal files at or below 1500 lines. Public `Spec/` examples are
-  exempt from this implementation limit.
+A Visual X# project uses one `Visual.XSharp.kts` file. `sources.main.entry` names a namespace-qualified class. The selected
+class must provide a parameterless `public static void Main()` method; a top-level runtime function is not an entry point.
 
-For broader contribution and workflow rules, see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)
+```kotlin
+project {
+  name = "Example"
+  version = "0.1.0"
+  stability = Stability.DEV
+}
 
-## Documentation map
+sources {
+  main {
+    srcDir = "Sources"
+    entry = "Example.Main"
+  }
+}
+```
 
-- [docs/README.md](docs/README.md): documentation entry point
-- [docs/BUILDING.md](docs/BUILDING.md): build, test, toolchain, and OOM notes
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): compiler architecture and stage boundaries
-- [docs/CLI.md](docs/CLI.md): CLI contract and current status
-- [docs/PACKAGES.md](docs/PACKAGES.md): package registry commands and availability
-- [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md): detailed implementation status
-- [docs/SPEC.md](docs/SPEC.md): guide to the `Spec/` language examples
-- [docs/TODO.md](docs/TODO.md): public roadmap
-- [docs/MONOREPO.md](docs/MONOREPO.md): monorepo selection model
-- [docs/LLVM_BACKEND.md](docs/LLVM_BACKEND.md): LLVM backend infrastructure
-- [docs/BACKENDS.md](docs/BACKENDS.md): implemented and planned backend architecture
+See [Project files](docs/PROJECT_FILES.md) for the current Kotlin DSL.
+
+## Language specification examples
+
+The [Spec](Spec/README.md) directory contains 24 topic-oriented `.vxs` example suites. They record current language design
+intent, including valid and invalid fragments, but they are not concatenated applications and must not be treated as a claim
+that every rule is already implemented by `vxs`.
+
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Implementation status](docs/IMPLEMENTATION.md)
+- [Building and testing](docs/BUILDING.md)
+- [CLI](docs/CLI.md)
+- [Project files](docs/PROJECT_FILES.md)
+- [Specification guide](docs/SPECIFICATION.md)
+- [Repository layout](docs/MONOREPO.md)
+- [Contributing](docs/CONTRIBUTING.md)
 
 ## License
 
-For license and notice information, see the root `LICENSE.txt` and `NOTICE.txt` files.
+See `LICENSE.txt` and `NOTICE.txt`.
