@@ -47,8 +47,10 @@ and terminators. A verifier rejects malformed symbols, blocks, branch targets, a
 Xpp is a target-independent typed representation consumed from verified CorePrep. Xmm lowers Xpp into a lower-level virtual
 register model. Both stages have optimization boundaries and remain independent of LLVM.
 
-The final production transfer from Haskell-owned CorePrep into C++20 is not complete. Existing C++20 tests construct the
-transfer model directly, so passing those tests proves the native slice itself, not a complete end-to-end production route.
+CorePrep crosses the Haskell/C++20 boundary through the versioned `VXCP` binary contract. Both implementations enforce byte,
+collection, string, and recursive-type limits. The native consumer decodes and verifies the complete module before creating
+Xpp or Xmm. Normal compilation retains the transfer in memory; `.core` files are read or written only through explicit
+artifact operations.
 
 ## Backend
 
@@ -77,4 +79,5 @@ The current public artifact names are:
 ```
 
 Normal compilation keeps these representations in memory. The CLI already reserves explicit emission selections, but the
-production path for emitting them is not connected yet.
+production path for emitting them is not connected yet. Explicit `.core` input is connected; Xpp/Xmm input and intermediate
+artifact writers remain later work.

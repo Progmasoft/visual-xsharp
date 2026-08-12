@@ -7,8 +7,8 @@ route.
 
 The current `vxs` executable builds from C23, C++20, and Rust components. It can validate supported `.vxs` source behavior and
 produce native artifacts for the subset handled by the Rust compiler core and LLVM backend. The Haskell frontend and C++20
-Xpp/Xmm implementation exist and are tested independently, but Haskell-owned CorePrep is not yet the sole input to production
-native compilation.
+Xpp/Xmm implementation exists and consumes a decoded, verified CorePrep module. The compatibility compiler remains the source
+route used by existing production `.vxs` builds, so Haskell-owned CorePrep is not yet the sole production frontend.
 
 ## Haskell frontend
 
@@ -31,15 +31,17 @@ It does not yet implement the complete language catalog in `Spec/`.
 
 The repository contains:
 
-- a C++20 CorePrep transfer model;
-- a native CorePrep verifier;
+- matching bounded Haskell and C++20 CorePrep wire codecs;
+- recursive type, symbol spelling, qualified-name, and UTF-32 string preservation;
+- explicit `.core` artifact I/O that remains separate from ordinary in-memory compilation;
+- structural and semantic native CorePrep verifiers;
 - CorePrep-to-Xpp lowering;
 - Xpp control-flow and self-copy optimization;
 - Xpp-to-Xmm lowering; and
 - Xmm virtual-register move optimization.
 
-The missing production boundary is an owned, validated, versioned transfer from Haskell CorePrep to the C++20 consumer and
-its connection to the `vxs` driver.
+The versioned Haskell-to-C++20 boundary is implemented. The remaining integration work is to make the Haskell frontend the
+source route selected by the production driver and to connect explicit Core/Xpp/Xmm writers and later-stage readers.
 
 ## Rust compiler core
 
@@ -62,7 +64,8 @@ entry selection, compiler settings, dependency declarations, and the SQLite lock
 Known gaps include:
 
 - explicit Core/Xpp/Xmm emission is registered but not connected;
-- non-source `-Build` inputs are registered but not connected;
+- `.core` input is connected to verified in-memory Xpp/Xmm lowering;
+- other non-source `-Build` inputs are registered but not connected;
 - package publication and installation require a ViGet client not linked into this build; and
 - the production source route does not yet use the Haskell frontend as its sole owner.
 

@@ -86,9 +86,9 @@ The preset intentionally uses tool names and environment-based discovery rather 
 
 The compiler executable is `vxs`. The current parser recognizes `check`, `build`, `run`, `test`, `resolve`, `update`,
 `install`, `viget`, and `version`. Some commands and renewed intermediate input/output selections are registered before their
-production implementation is complete. In particular, explicit Core/Xpp/Xmm emission and non-source `-Build` inputs are not
-yet connected to the renewed pipeline, while package publication requires a ViGet client that is not linked into the current
-compiler build.
+production implementation is complete. Version `0.3.0` connects explicit `.core` input to bounded decoding, verification,
+and the in-memory Xpp/Xmm route. Explicit Core/Xpp/Xmm emission and the remaining non-source `-Build` inputs are not yet
+connected, while package publication requires a ViGet client that is not linked into the current compiler build.
 
 The reliable single-file validation form is:
 

@@ -129,7 +129,7 @@ if(NOT XS_BUILD_PROJECT_XS)
   message(FATAL_ERROR "This checkout currently has one buildable compiler project: 'xs'.")
 endif()
 
-project(xs_project VERSION 0.2.8 LANGUAGES C CXX)
+project(xs_project VERSION 0.3.0 LANGUAGES C CXX)
 xs_validate_llvm_toolchain()
 
 file(RELATIVE_PATH XS_SOURCE_FROM_BINARY "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")

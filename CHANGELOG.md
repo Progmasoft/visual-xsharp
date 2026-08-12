@@ -5,6 +5,15 @@ SPDX-License-Identifier: MPL-2.0
 
 # Changelog
 
+## 0.3.0 - 2026-08-12
+
+- Added a versioned, bounded CorePrep binary contract shared by the Haskell frontend and C++20 native pipeline.
+- Preserved recursive type information, symbol spellings, qualified names, and UTF-32 string values across the compiler boundary.
+- Connected verified CorePrep input to the in-memory Xpp and Xmm lowering route.
+- Added explicit `.core` artifact I/O without introducing intermediate files into normal compilation.
+- Added cross-language golden bytes, malformed-input rejection, semantic verification, and ClangCL sanitizer coverage.
+- Enabled `vxs build -Build core -File PATH.core` and `vxs check -Build core -File PATH.core`.
+
 This file summarizes user-visible and developer-visible changes in the xs-project repository.
 
 The 0.0.x development period is the pre-1.0 xs-project compiler infrastructure line. It does not imply a complete X#

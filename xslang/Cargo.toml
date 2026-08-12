@@ -3,7 +3,7 @@
 
 [package]
 name = "xslang"
-version = "0.2.8"
+version = "0.3.0"
 edition = "2024"
 build = "build.rs"
 authors = ["Leitwolf <support@xsharp-lang.xyz>"]
@@ -43,7 +43,7 @@ bitflags = "2.13"
 camino = "1.2"
 lasso = "0.7"
 cxx = "1.0"
-xslang-proc-macros = { version = "=0.2.7", path = "proc-macros/xlil-create", optional = true }
+xslang-proc-macros = { version = "=0.3.0", path = "proc-macros/xlil-create", optional = true }
 
 [build-dependencies]
 cxx-build = "1.0"

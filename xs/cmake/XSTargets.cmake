@@ -69,6 +69,7 @@ add_library(xs_compiler
   sources/compiler_core/syntax_packet.c
   sources/Diagnostic.cpp
   sources/driver/cli.c
+  sources/driver/CorePrepDriver.cpp
   sources/driver/compiler_core_native.c
   sources/driver/DirectXhir.cpp
   sources/driver/DirectXmir.cpp

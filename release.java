@@ -30,7 +30,7 @@ class Release
                   help    Show this help.
 
                 examples:
-                  java --source=21 release.java check 0.2.8
+                  java --source=21 release.java check 0.3.0
                 """);
     }
 
@@ -57,18 +57,18 @@ class Release
 
     static Check xsVersion(String version) throws IOException, InterruptedException
     {
-        Path binary = Path.of("build/clang-debug/xs");
+        Path binary = Path.of("build/clangcl-debug/vxs.exe");
         if(!Files.isExecutable(binary))
         {
-            return new Check("xs --version", true, "build/clang-debug/xs is not built; skipped runtime version check");
+            return new Check("vxs --version", true, "build/clangcl-debug/vxs.exe is not built; skipped runtime version check");
         }
 
         Process process = new ProcessBuilder(binary.toString(), "--version")
                 .redirectError(ProcessBuilder.Redirect.INHERIT).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
         int code = process.waitFor();
-        boolean ok = code == 0 && output.equals("xs " + version);
-        return new Check("xs --version", ok, ok ? output : "expected 'xs " + version + "', got '" + output + "'");
+        boolean ok = code == 0 && output.equals("vxs " + version);
+        return new Check("vxs --version", ok, ok ? output : "expected 'vxs " + version + "', got '" + output + "'");
     }
 
     static int check(String version) throws IOException, InterruptedException
@@ -77,9 +77,12 @@ class Release
         checks.add(contains(Path.of("CMakeLists.txt"), "project(xs_project VERSION " + version + " LANGUAGES C CXX)",
                 "CMake project version"));
         checks.add(containsOnce(Path.of("CHANGELOG.md"), "## " + version + " - ", "CHANGELOG heading"));
-        checks.add(contains(Path.of("docs/RELEASES.md"), "Current project version: `" + version + "`", "release docs"));
-        checks.add(contains(Path.of("docs/CLI.md"),
-                "`xs --version` prints the compiler version, such as `xs " + version + "`", "CLI version docs"));
+        checks.add(contains(Path.of("xs/haskell/visual-xsharp-compiler/visual-xsharp-compiler.cabal"),
+                "version: " + version, "Haskell compiler version"));
+        checks.add(contains(Path.of("xs_kts/build.gradle.kts"), "version = \"" + version + "\"",
+                "Kotlin project runtime version"));
+        checks.add(contains(Path.of("xslang/Cargo.toml"), "version = \"" + version + "\"",
+                "Rust compiler core version"));
         checks.add(xsVersion(version));
 
         boolean ok = true;

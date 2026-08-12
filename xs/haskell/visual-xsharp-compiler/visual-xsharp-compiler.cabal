@@ -1,6 +1,6 @@
 cabal-version: 3.12
 name: visual-xsharp-compiler
-version: 0.1.0.0
+version: 0.3.0
 synopsis: Target-independent stages for the Visual X# compiler pipeline
 description:
     Defines the stable stage vocabulary and emitted artifact extensions used by
