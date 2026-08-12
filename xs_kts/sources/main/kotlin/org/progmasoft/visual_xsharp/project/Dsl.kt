@@ -161,11 +161,18 @@ class LlvmCompilerScope internal constructor(private val settings: CompilerSetti
 
 class ProjectContext internal constructor(val host: Host = detectHost()) {
   private var identity: ProjectIdentity? = null
-  private val variables = mutableMapOf("XS_EXTENSION" to listOf("vxs"))
   private val authors = mutableListOf<Author>()
   private val dependencies = mutableListOf<PackageDependency>()
   private val optionalDependencies = mutableListOf<OptionalPackageDependency>()
   private val dependencyFeatures = mutableListOf<PackageFeatureSelection>()
+  private var entry: String? = null
+  private var releaseOutputDirectory = "build/release"
+  private var debugOutputDirectory = "build/debug"
+  private val targets = mutableListOf<String>()
+  private val workspaces = mutableListOf<Workspace>()
+  private var pmlEnabled = true
+  private var publishSources = false
+  private val publishExcludes = mutableListOf<String>()
   private val sourceIncludes = mutableListOf<String>()
   private val sourceExcludes = mutableListOf<String>("*/**")
   private val testIncludes = mutableListOf<String>()
@@ -187,33 +194,29 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
       )
   }
 
-  internal fun configureVariable(
-    name: String,
-    vararg values: Any,
-  ) {
-    if (values.isEmpty()) throw ProjectConfigurationException("internal project value requires at least one item")
-    val key = requireText(name, "variable name")
-    val flattened =
-      if (values.size == 1 && values.single() is List<*>) {
-        (values.single() as List<*>).also {
-          if (it.isEmpty()) throw ProjectConfigurationException("internal project value requires at least one item")
-        }
-      } else {
-        values.toList()
-      }
-    if (key == "PUBLISH" && (flattened.size != 1 || flattened.single() !is Boolean)) {
-      throw ProjectConfigurationException("PUBLISH must be exactly one boolean")
-    }
-    val normalized =
-      flattened.map { value ->
-        when (value) {
-          is String -> requireText(value, "variable value")
-          is Boolean -> value.toString()
-          else -> throw ProjectConfigurationException("project variable values must be strings or booleans")
-        }
-      }
-    validateReservedVariable(key, normalized)
-    variables[key] = normalized
+  internal fun configureEntry(value: String) { entry = requireText(value, "sources.main.entry") }
+
+  internal fun configureOutputDirectories(release: String, debug: String) {
+    releaseOutputDirectory = requireText(release, "release output directory")
+    debugOutputDirectory = requireText(debug, "debug output directory")
+  }
+
+  internal fun configureTargets(values: List<String>) {
+    targets.clear()
+    targets += values.distinct()
+  }
+
+  internal fun configureWorkspaces(values: List<Workspace>) {
+    workspaces.clear()
+    workspaces += values.distinctBy(Workspace::name)
+  }
+
+  internal fun configurePml(enabled: Boolean) { pmlEnabled = enabled }
+
+  internal fun configurePublishing(publish: Boolean, excludes: List<String>) {
+    publishSources = publish
+    publishExcludes.clear()
+    publishExcludes += excludes.distinct()
   }
 
   internal fun configureAuthors(vararg entries: Array<String>) {
@@ -225,17 +228,17 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
 
   fun dependencies(block: DependenciesScope.() -> Unit) {
     val scope = DependenciesScope().apply(block)
-    val resolved = resolveDependencies(
+    val validated = validateDependencies(
       dependencies + scope.required,
       optionalDependencies + scope.optional,
       dependencyFeatures + scope.selections,
     )
     dependencies.clear()
-    dependencies += resolved.required
+    dependencies += validated.required
     optionalDependencies.clear()
-    optionalDependencies += resolved.optional
+    optionalDependencies += validated.optional
     dependencyFeatures.clear()
-    dependencyFeatures += resolved.features
+    dependencyFeatures += validated.features
   }
 
   internal fun configureMainSources(block: SourcesScope.() -> Unit) {
@@ -262,23 +265,28 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   }
 
   fun build(): ProjectPlan {
-    val entry = variables["XS_ENTRY"]?.singleOrNull()
+    val configuredEntry = entry
       ?: throw ProjectConfigurationException("sources.main.entry is required")
-    if (!entry.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+"))) {
-      throw ProjectConfigurationException("sources.main.entry must be a qualified type name: $entry")
+    if (!configuredEntry.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+"))) {
+      throw ProjectConfigurationException("sources.main.entry must be a qualified type name: $configuredEntry")
     }
     val project = identity
-    val resolvedDependencies = resolveDependencies(dependencies, optionalDependencies, dependencyFeatures)
+    val dependencyManifest = validateDependencies(dependencies, optionalDependencies, dependencyFeatures)
     val effectiveSourceIncludes = sourceIncludes.ifEmpty { listOf("Sources") }
-    val effectiveVariables = variables.toSortedMap()
     return ProjectPlan(
       project,
-      effectiveVariables,
       authors.toList(),
-      resolvedDependencies.required,
-      resolvedDependencies.activePackages,
-      resolvedDependencies.optional,
-      resolvedDependencies.features,
+      dependencyManifest.required,
+      dependencyManifest.optional,
+      dependencyManifest.features,
+      configuredEntry,
+      releaseOutputDirectory,
+      debugOutputDirectory,
+      targets.toList(),
+      workspaces.toList(),
+      pmlEnabled,
+      publishSources,
+      publishExcludes.toList(),
       effectiveSourceIncludes.distinct(),
       sourceExcludes.distinct(),
       testIncludes.distinct(),
@@ -286,63 +294,6 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
       testFramework,
       compilerSettings,
     )
-  }
-}
-
-private fun validateReservedVariable(
-  key: String,
-  values: List<String>,
-) {
-  when (key) {
-    "XGC_ENABLED", "XPG_ENABLED" -> {
-      throw ProjectConfigurationException(
-        "$key is not configurable; LLVM always uses RAII and XPLR always uses XPG",
-      )
-    }
-
-    "BUILD_MODE" -> {
-      if (values.size != 1 || values.single() !in setOf("Release", "Debug")) {
-        throw ProjectConfigurationException("BUILD_MODE must be exactly Release or Debug")
-      }
-    }
-
-    "RELEASE_OUTDIR", "DEBUG_OUTDIR" -> {
-      if (values.size != 1) throw ProjectConfigurationException("$key must be exactly one path")
-    }
-
-    "XS_BACKEND" -> {
-      if (values.size != 1 || values.single() !in setOf("LLVM", "XPLR")) {
-        throw ProjectConfigurationException("XS_BACKEND must be exactly LLVM or XPLR")
-      }
-    }
-
-    "XS_LLVM_LTO" -> {
-      if (values.size != 1 || values.single() !in setOf("true", "false")) {
-        throw ProjectConfigurationException("XS_LLVM_LTO must be exactly true or false")
-      }
-    }
-
-    "XS_LLVM_COMPILER" -> {
-      if (values.size != 1 || values.single() !in setOf("AOT", "ORC")) {
-        throw ProjectConfigurationException("XS_LLVM_COMPILER must be exactly AOT or ORC")
-      }
-    }
-
-    "XS_LLVM_OPT_LEVEL" -> {
-      if (values.size != 1 || values.single() !in setOf("0", "1", "2", "3")) {
-        throw ProjectConfigurationException("XS_LLVM_OPT_LEVEL must be exactly 0, 1, 2, or 3")
-      }
-    }
-
-    "XSPKG_TYPE" -> {
-      val supported = setOf("xlib", "dylib", "staticlib", "cdylib", "bin")
-      if (values.any { value -> value !in supported }) {
-        throw ProjectConfigurationException("XSPKG_TYPE values must be xlib, dylib, staticlib, cdylib, or bin")
-      }
-      if (values.distinct().size != values.size) {
-        throw ProjectConfigurationException("XSPKG_TYPE cannot contain duplicate values")
-      }
-    }
   }
 }
 
@@ -378,10 +329,19 @@ internal object ProjectRuntime {
     version: String,
   ) = context.configureIdentity(name, channel, version)
 
-  fun configureVariable(
-    name: String,
-    vararg values: Any,
-  ) = context.configureVariable(name, *values)
+  fun configureEntry(value: String) = context.configureEntry(value)
+
+  fun configureOutputDirectories(release: String, debug: String) =
+    context.configureOutputDirectories(release, debug)
+
+  fun configureTargets(values: List<String>) = context.configureTargets(values)
+
+  fun configureWorkspaces(values: List<Workspace>) = context.configureWorkspaces(values)
+
+  fun configurePml(enabled: Boolean) = context.configurePml(enabled)
+
+  fun configurePublishing(publish: Boolean, excludes: List<String>) =
+    context.configurePublishing(publish, excludes)
 
   fun configureAuthors(vararg entries: Array<String>) = context.configureAuthors(*entries)
 

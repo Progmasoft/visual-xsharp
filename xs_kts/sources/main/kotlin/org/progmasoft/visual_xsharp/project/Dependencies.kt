@@ -5,8 +5,6 @@
 
 package org.progmasoft.visual_xsharp.project
 
-import java.util.Locale
-
 @XsProjectDsl
 class DependenciesScope internal constructor() {
   internal val required = mutableListOf<PackageDependency>()
@@ -20,37 +18,40 @@ class DependenciesScope internal constructor() {
   internal fun addOptional(feature: String, dependency: PackageDependency, enabled: Boolean) {
     val normalizedFeature = requireFeatureName(feature)
     optional += OptionalPackageDependency(normalizedFeature, dependency)
-    selections += PackageFeatureSelection(dependency.name, normalizedFeature, enabled)
+    selections += PackageFeatureSelection(dependency.coordinate, normalizedFeature, enabled)
   }
 }
 
-internal fun resolveDependencies(
+// Validate and canonicalize only what the project declared. This deliberately does not
+// fetch registry metadata, choose transitive versions or claim to be a package solver.
+internal fun validateDependencies(
   required: List<PackageDependency>,
   optional: List<OptionalPackageDependency>,
   selections: List<PackageFeatureSelection>,
-): DependencyResolution {
+): DependencyManifest {
   val requiredByName = linkedMapOf<String, PackageDependency>()
   required.forEach { dependency ->
-    val normalized = normalizeCoordinate(dependency)
-    val previous = requiredByName[normalized.name]
+    val normalized = normalizeDependency(dependency)
+    val coordinate = normalized.coordinate
+    val previous = requiredByName[coordinate]
     if (previous != null && previous != normalized) {
-      throw ProjectConfigurationException("package '${normalized.name}' has conflicting coordinates")
+      throw ProjectConfigurationException("package '$coordinate' has conflicting declarations")
     }
-    requiredByName[normalized.name] = normalized
+    requiredByName[coordinate] = normalized
   }
 
   val optionalByKey = linkedMapOf<Pair<String, String>, OptionalPackageDependency>()
   optional.forEach { declaration ->
-    val dependency = normalizeCoordinate(declaration.dependency)
+    val dependency = normalizeDependency(declaration.dependency)
     val feature = requireFeatureName(declaration.feature)
-    if (dependency.name in requiredByName) {
-      throw ProjectConfigurationException("package '${dependency.name}' cannot be both required and optional")
+    if (dependency.coordinate in requiredByName) {
+      throw ProjectConfigurationException("package '${dependency.coordinate}' cannot be both required and optional")
     }
-    val key = dependency.name to feature
+    val key = dependency.coordinate to feature
     val previous = optionalByKey[key]
     val normalized = OptionalPackageDependency(feature, dependency)
     if (previous != null && previous != normalized) {
-      throw ProjectConfigurationException("optional package '${dependency.name}' has conflicting coordinates")
+      throw ProjectConfigurationException("optional package '${dependency.coordinate}' has conflicting declarations")
     }
     optionalByKey[key] = normalized
   }
@@ -58,7 +59,7 @@ internal fun resolveDependencies(
   val selectedByKey = linkedMapOf<Pair<String, String>, PackageFeatureSelection>()
   selections.forEach { selection ->
     val normalized = PackageFeatureSelection(
-      requirePackageCoordinate(selection.packageName),
+      requireDependencyCoordinate(selection.packageName),
       requireFeatureName(selection.feature),
       selection.enabled,
     )
@@ -74,10 +75,10 @@ internal fun resolveDependencies(
   val completeSelections = optionalByKey.keys
     .map { key -> selectedByKey[key] ?: PackageFeatureSelection(key.first, key.second, false) }
     .sortedWith(compareBy(PackageFeatureSelection::packageName, PackageFeatureSelection::feature))
-  return DependencyResolution(
+  return DependencyManifest(
     requiredByName.values.sortedWith(packageDependencyOrder),
     optionalByKey.values.sortedWith(
-      compareBy<OptionalPackageDependency> { it.dependency.name }
+      compareBy<OptionalPackageDependency> { it.dependency.coordinate }
         .thenBy(OptionalPackageDependency::feature)
         .thenBy { it.dependency.stability }
         .thenBy { it.dependency.version },
@@ -86,21 +87,37 @@ internal fun resolveDependencies(
   )
 }
 
-internal fun packageCoordinate(name: String, stability: Stability, version: String) =
-  PackageDependency(requirePackageCoordinate(name), stability.name, requirePackageVersion(version))
-
-private fun normalizeCoordinate(dependency: PackageDependency) =
+internal fun packageDependency(publisher: String, name: String, stability: Stability, version: String) =
   PackageDependency(
-    requirePackageCoordinate(dependency.name),
-    normalizeStability(dependency.stability),
-    requirePackageVersion(dependency.version),
+    requirePackageSegment(publisher, "dependency publisher"),
+    requirePackageSegment(name, "dependency name"),
+    requirePackageVersion(version),
+    stability,
   )
 
-internal fun requirePackageCoordinate(value: String): String {
-  val name = requireText(value, "package name")
-  val segment = "[A-Za-z][A-Za-z0-9_]*"
-  if (!name.matches(Regex("$segment\\.$segment"))) {
-    throw ProjectConfigurationException("package name must use Publisher.Name coordinates: $name")
+private fun normalizeDependency(dependency: PackageDependency) =
+  PackageDependency(
+    requirePackageSegment(dependency.publisher, "dependency publisher"),
+    requirePackageSegment(dependency.name, "dependency name"),
+    requirePackageVersion(dependency.version),
+    dependency.stability,
+  )
+
+internal val PackageDependency.coordinate: String
+  get() = "$publisher.$name"
+
+internal fun requireDependencyCoordinate(value: String): String {
+  val parts = requireText(value, "package coordinate").split('.')
+  if (parts.size != 2) throw ProjectConfigurationException("package coordinate must be Publisher.Name: $value")
+  val publisher = requirePackageSegment(parts[0], "dependency publisher")
+  val name = requirePackageSegment(parts[1], "dependency name")
+  return "$publisher.$name"
+}
+
+internal fun requirePackageSegment(value: String, field: String): String {
+  val name = requireText(value, field)
+  if (!name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {
+    throw ProjectConfigurationException("$field must be one package identifier: $name")
   }
   return name
 }
@@ -111,14 +128,6 @@ internal fun requireFeatureName(value: String): String {
     throw ProjectConfigurationException("dependency feature must be one identifier: $name")
   }
   return name
-}
-
-internal fun normalizeStability(value: String): String {
-  val stability = requireText(value, "dependency stability").uppercase(Locale.ROOT)
-  if (stability !in Stability.entries.map(Stability::name)) {
-    throw ProjectConfigurationException("dependency stability is not recognized: $stability")
-  }
-  return stability
 }
 
 internal fun requirePackageVersion(value: String): String {

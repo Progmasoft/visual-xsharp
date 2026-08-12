@@ -37,7 +37,7 @@ class ProjectDslTest {
 
     assertNull(plan.identity)
     assertEquals(listOf("Sources"), plan.sourceIncludes)
-    assertEquals("Demo.Main", plan.variables.getValue("XS_ENTRY").single())
+    assertEquals("Demo.Main", plan.entry)
     assertEquals(BuildMode.DEBUG, plan.compiler.buildMode)
     assertEquals(LlvmOptLevel.O0, effectiveOptLevel(plan.compiler))
     assertTrue(plan.compiler.xppOptimizationPasses)
@@ -97,10 +97,11 @@ class ProjectDslTest {
     assertEquals(Emit.XMM, plan.compiler.emit)
     assertEquals(LlvmCompiler.ORC, plan.compiler.llvmCompiler)
     assertEquals(LlvmLto.THIN, plan.compiler.llvmLto)
-    assertEquals(listOf("x86_64-pc-windows-msvc", "aarch64-apple-darwin"), plan.variables["TARGET"])
-    assertEquals(listOf("core:./Core"), plan.variables["WORKSPACE"])
-    assertEquals(listOf("false"), plan.variables["PML_ENABLED"])
-    assertEquals(listOf("build/**"), plan.variables["PUBLISH_EXCLUDE"])
+    assertEquals(listOf("x86_64-pc-windows-msvc", "aarch64-apple-darwin"), plan.targets)
+    assertEquals(listOf(Workspace("core", "./Core")), plan.workspaces)
+    assertFalse(plan.pmlEnabled)
+    assertTrue(plan.publishSources)
+    assertEquals(listOf("build/**"), plan.publishExcludes)
     assertEquals(listOf("Generated/**"), plan.sourceExcludes)
     assertEquals(listOf("Fixtures/**"), plan.testExcludes)
   }
@@ -126,7 +127,7 @@ class ProjectDslTest {
     assertTrue(text.contains("\"entry\":\"Plan.Main\""))
     assertTrue(text.contains("\"xmmOptimizationPasses\":true"))
     assertFalse(text.contains("module"))
-    assertFalse(text.contains("XS_BACKEND"))
+    assertFalse(text.contains("\"variables\""))
     assertFalse(text.contains("XLIL"))
   }
 

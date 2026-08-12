@@ -16,8 +16,8 @@ object ProjectLockFile {
   const val FILE_NAME = "Visual.XSharp.Lockfile.sqlite3"
   private const val FORMAT_VERSION = 1
 
-  fun write(root: Path, resolution: DependencyResolution) {
-    val resolved = resolveDependencies(resolution.required, resolution.optional, resolution.features)
+  fun write(root: Path, manifest: DependencyManifest) {
+    val validated = validateDependencies(manifest.required, manifest.optional, manifest.features)
     Files.createDirectories(root)
     val temporary = Files.createTempFile(root, ".visual-xsharp-lock-", ".sqlite3")
     try {
@@ -26,8 +26,8 @@ object ProjectLockFile {
         try {
           createSchema(connection)
           writeMetadata(connection)
-          writePackages(connection, resolved)
-          writeFeatures(connection, resolved.features)
+          writePackages(connection, validated)
+          writeFeatures(connection, validated.features)
           connection.commit()
         } catch (error: Exception) {
           connection.rollback()
@@ -40,7 +40,7 @@ object ProjectLockFile {
     }
   }
 
-  fun read(path: Path): DependencyResolution =
+  fun read(path: Path): DependencyManifest =
     DriverManager.getConnection("jdbc:sqlite:${path.toAbsolutePath()}").use { connection ->
       val version = connection.prepareStatement("SELECT value FROM metadata WHERE key = 'format_version'").use { statement ->
         statement.executeQuery().use { rows -> if (rows.next()) rows.getString(1).toIntOrNull() else null }
@@ -84,21 +84,21 @@ object ProjectLockFile {
     }
   }
 
-  private fun writePackages(connection: Connection, resolution: DependencyResolution) {
+  private fun writePackages(connection: Connection, manifest: DependencyManifest) {
     connection.prepareStatement(
       "INSERT INTO packages(name, stability, version, optional_feature, required) VALUES (?, ?, ?, ?, ?)",
     ).use { statement ->
-      resolution.required.forEach { dependency ->
-        statement.setString(1, dependency.name)
-        statement.setString(2, dependency.stability)
+      manifest.required.forEach { dependency ->
+        statement.setString(1, dependency.coordinate)
+        statement.setString(2, dependency.stability.name)
         statement.setString(3, dependency.version)
         statement.setString(4, "")
         statement.setInt(5, 1)
         statement.addBatch()
       }
-      resolution.optional.forEach { declaration ->
-        statement.setString(1, declaration.dependency.name)
-        statement.setString(2, declaration.dependency.stability)
+      manifest.optional.forEach { declaration ->
+        statement.setString(1, declaration.dependency.coordinate)
+        statement.setString(2, declaration.dependency.stability.name)
         statement.setString(3, declaration.dependency.version)
         statement.setString(4, declaration.feature)
         statement.setInt(5, 0)
@@ -122,7 +122,7 @@ object ProjectLockFile {
     }
   }
 
-  private fun readPackages(connection: Connection): DependencyResolution {
+  private fun readPackages(connection: Connection): DependencyManifest {
     val required = mutableListOf<PackageDependency>()
     val optional = mutableListOf<OptionalPackageDependency>()
     connection.prepareStatement(
@@ -130,7 +130,8 @@ object ProjectLockFile {
     ).use { statement ->
       statement.executeQuery().use { rows ->
         while (rows.next()) {
-          val dependency = PackageDependency(rows.getString(1), rows.getString(2), rows.getString(3))
+          val coordinate = requireDependencyCoordinate(rows.getString(1)).split('.')
+          val dependency = PackageDependency(coordinate[0], coordinate[1], rows.getString(3), Stability.valueOf(rows.getString(2)))
           if (rows.getInt(5) == 1) required += dependency
           else optional += OptionalPackageDependency(rows.getString(4), dependency)
         }
@@ -145,7 +146,7 @@ object ProjectLockFile {
         }
       }
     }
-    return resolveDependencies(required, optional, features)
+    return validateDependencies(required, optional, features)
   }
 
   private fun replace(source: Path, target: Path) {

@@ -39,10 +39,10 @@ object PlanWriter {
       append(",\"lto\":").quoted(plan.compiler.llvmLto.name.lowercase())
       append("}}")
       append(",\"outdirs\":{")
-      append("\"release\":").quoted(plan.variables.singleValue("RELEASE_OUTDIR", "build/release"))
-      append(",\"debug\":").quoted(plan.variables.singleValue("DEBUG_OUTDIR", "build/debug"))
+      append("\"release\":").quoted(plan.releaseOutputDirectory)
+      append(",\"debug\":").quoted(plan.debugOutputDirectory)
       append('}')
-      arrayField("targets", plan.variables["TARGET"].orEmpty())
+      arrayField("targets", plan.targets)
       append(",\"authors\":[")
       plan.authors.forEachIndexed { index, author ->
         if (index > 0) append(',')
@@ -51,7 +51,7 @@ object PlanWriter {
       }
       append(']')
       append(",\"pml\":{")
-      append("\"enabled\":${plan.variables.singleValue("PML_ENABLED", "true") == "true"}}")
+      append("\"enabled\":${plan.pmlEnabled}}")
       append(",\"dependencies\":[")
       plan.requiredDependencies.forEachIndexed { index, dependency ->
         if (index > 0) append(',')
@@ -60,27 +60,24 @@ object PlanWriter {
       plan.optionalDependencies.forEach { declaration ->
         if (plan.requiredDependencies.isNotEmpty() || declaration != plan.optionalDependencies.first()) append(',')
         val enabled = plan.dependencyFeatures.any {
-          it.packageName == declaration.dependency.name && it.feature == declaration.feature && it.enabled
+          it.packageName == declaration.dependency.coordinate && it.feature == declaration.feature && it.enabled
         }
         dependency(declaration.dependency, declaration.feature, enabled)
       }
       append(']')
       append(",\"workspaces\":[")
-      plan.variables["WORKSPACE"].orEmpty().forEachIndexed { index, coordinate ->
+      plan.workspaces.forEachIndexed { index, workspace ->
         if (index > 0) append(',')
-        val separator = coordinate.indexOf(':')
-        val name = if (separator < 0) coordinate else coordinate.substring(0, separator)
-        val path = if (separator < 0) "" else coordinate.substring(separator + 1)
-        append("{\"name\":").quoted(name).append(",\"path\":").quoted(path).append('}')
+        append("{\"name\":").quoted(workspace.name).append(",\"path\":").quoted(workspace.path).append('}')
       }
       append(']')
       append(",\"sources\":{")
-      append("\"viget\":{\"publish\":${plan.variables.singleValue("PUBLISH", "false") == "true"}")
-      arrayField("exclude", plan.variables["PUBLISH_EXCLUDE"].orEmpty())
+      append("\"viget\":{\"publish\":${plan.publishSources}")
+      arrayField("exclude", plan.publishExcludes)
       append('}')
       append(",\"main\":{")
       append("\"srcDir\":").quoted(plan.sourceIncludes.singleOrNull() ?: "Sources")
-      append(",\"entry\":").quoted(plan.variables.singleValue("XS_ENTRY", ""))
+      append(",\"entry\":").quoted(plan.entry)
       arrayField("exclude", plan.sourceExcludes)
       append('}')
       append(",\"test\":{")
@@ -96,13 +93,10 @@ object PlanWriter {
     feature: String?,
     enabled: Boolean,
   ) {
-    val separator = packageDependency.name.indexOf('.')
-    val publisher = if (separator < 0) packageDependency.name else packageDependency.name.substring(0, separator)
-    val name = if (separator < 0) "" else packageDependency.name.substring(separator + 1)
-    append("{\"publisher\":").quoted(publisher)
-    append(",\"name\":").quoted(name)
+    append("{\"publisher\":").quoted(packageDependency.publisher)
+    append(",\"name\":").quoted(packageDependency.name)
     append(",\"version\":").quoted(packageDependency.version)
-    append(",\"stability\":").quoted(packageDependency.stability)
+    append(",\"stability\":").quoted(packageDependency.stability.name)
     if (feature != null) {
       append(",\"optional\":").quoted(feature)
       append(",\"features\":{").quoted(feature).append(":$enabled}")
@@ -118,9 +112,6 @@ object PlanWriter {
     }
     append(']')
   }
-
-  private fun Map<String, List<String>>.singleValue(name: String, default: String): String =
-    this[name]?.singleOrNull() ?: default
 
   private fun StringBuilder.quoted(value: String): StringBuilder {
     append('"')

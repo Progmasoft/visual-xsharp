@@ -93,6 +93,11 @@ data class Author(
   val email: String,
 ) : Serializable
 
+data class Workspace(
+  val name: String,
+  val path: String,
+) : Serializable
+
 data class CompilerSettings(
   var warningLevel: WarningLevel = WarningLevel.MEDIUM,
   var warningsAsErrors: Boolean = false,
@@ -113,9 +118,10 @@ data class CompilerSettings(
 ) : Serializable
 
 data class PackageDependency(
+  val publisher: String,
   val name: String,
-  val stability: String,
   val version: String,
+  val stability: Stability,
 ) : Serializable
 
 data class OptionalPackageDependency(
@@ -129,28 +135,28 @@ data class PackageFeatureSelection(
   val enabled: Boolean,
 ) : Serializable
 
-data class DependencyResolution(
+// This is the validated project declaration, not a solved registry graph. Transitive
+// versions, artifact identities and repository metadata belong to the future resolver.
+data class DependencyManifest(
   val required: List<PackageDependency>,
   val optional: List<OptionalPackageDependency>,
   val features: List<PackageFeatureSelection>,
-) : Serializable {
-  val activePackages: List<PackageDependency>
-    get() {
-      val enabled = features.filter(PackageFeatureSelection::enabled).mapTo(mutableSetOf()) { it.packageName to it.feature }
-      return (required + optional.filter { (it.dependency.name to it.feature) in enabled }.map(OptionalPackageDependency::dependency))
-        .distinctBy(PackageDependency::name)
-        .sortedWith(packageDependencyOrder)
-    }
-}
+) : Serializable
 
 data class ProjectPlan(
   val identity: ProjectIdentity?,
-  val variables: Map<String, List<String>>,
   val authors: List<Author>,
   val requiredDependencies: List<PackageDependency>,
-  val activeDependencies: List<PackageDependency>,
   val optionalDependencies: List<OptionalPackageDependency>,
   val dependencyFeatures: List<PackageFeatureSelection>,
+  val entry: String,
+  val releaseOutputDirectory: String,
+  val debugOutputDirectory: String,
+  val targets: List<String>,
+  val workspaces: List<Workspace>,
+  val pmlEnabled: Boolean,
+  val publishSources: Boolean,
+  val publishExcludes: List<String>,
   val sourceIncludes: List<String>,
   val sourceExcludes: List<String>,
   val testIncludes: List<String>,
@@ -160,7 +166,7 @@ data class ProjectPlan(
 )
 
 internal val packageDependencyOrder =
-  compareBy(PackageDependency::name, PackageDependency::stability, PackageDependency::version)
+  compareBy(PackageDependency::publisher, PackageDependency::name, PackageDependency::stability, PackageDependency::version)
 
 class ProjectConfigurationException(
   message: String,

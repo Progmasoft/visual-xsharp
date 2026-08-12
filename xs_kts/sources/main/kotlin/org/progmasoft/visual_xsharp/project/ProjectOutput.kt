@@ -18,7 +18,7 @@ object ProjectOutput {
     val resolved = resolveSources(root, plan)
     ProjectLockFile.write(
       root,
-      resolveDependencies(plan.requiredDependencies, plan.optionalDependencies, plan.dependencyFeatures),
+      validateDependencies(plan.requiredDependencies, plan.optionalDependencies, plan.dependencyFeatures),
     )
     when (System.getProperty("xs.project.output", "plan")) {
       "plan" -> println(PlanWriter.write(plan))
@@ -31,7 +31,7 @@ object ProjectOutput {
   private data class ResolvedProject(val sources: List<Path>, val tests: List<Path>)
 
   private fun resolveSources(root: Path, plan: ProjectPlan): ResolvedProject {
-    val extension = sourceExtension(plan.variables)
+    val extension = "vxs"
     val testRoots = if (plan.testIncludes.isEmpty()) defaultTestRoots(root) else plan.testIncludes
     val tests = collectRoots(root, testRoots, extension, plan.testExcludes)
     val testSet = tests.toSet()
@@ -88,7 +88,7 @@ object ProjectOutput {
         ?: if (compiler.buildMode == BuildMode.DEBUG) LlvmOptLevel.O0 else LlvmOptLevel.O3
       listOf(
         REGISTRY_VERSION,
-        plan.variables.getValue("XS_ENTRY").single(),
+        plan.entry,
         compiler.version,
         compiler.standard,
         compiler.backend.name.lowercase(),
@@ -114,14 +114,6 @@ object ProjectOutput {
     } finally {
       if (configuredOutput != null) output.close()
     }
-  }
-
-  private fun sourceExtension(variables: Map<String, List<String>>): String {
-    val values = variables["XS_EXTENSION"] ?: listOf("vxs")
-    if (values.size != 1 || !values.single().matches(Regex("[A-Za-z0-9]+"))) {
-      throw ProjectConfigurationException("source extension must be one value without a leading dot")
-    }
-    return values.single()
   }
 
   private fun defaultTestRoots(root: Path): List<String> =

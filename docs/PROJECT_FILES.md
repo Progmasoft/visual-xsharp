@@ -94,9 +94,10 @@ dependencies {
 }
 ```
 
-Optional dependencies name a feature and record whether that feature is enabled. The current runtime validates and normalizes
-declared coordinates, detects conflicts, and writes the resulting direct dependency set to the lock database. A complete
-transitive package solver and network package client are separate implementation work.
+Optional dependencies name a feature and record whether that feature is enabled. The current runtime validates the typed
+publisher, package name, stability, and exact version declarations, detects conflicts, and writes that direct manifest to the
+lock database. It does not call this a resolved dependency graph. A complete transitive package solver and network package
+client are separate implementation work.
 
 Standard-library namespaces are not repeated as package dependencies.
 

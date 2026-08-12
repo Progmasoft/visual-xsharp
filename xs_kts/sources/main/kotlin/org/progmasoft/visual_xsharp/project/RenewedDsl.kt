@@ -77,7 +77,7 @@ class ProjectSourcesScope internal constructor() {
   internal fun apply() {
     val mainSources = main ?: throw ProjectConfigurationException("sources.main is required")
     val entry = mainSources.entry ?: throw ProjectConfigurationException("sources.main.entry is required")
-    ProjectRuntime.configureVariable("XS_ENTRY", requireText(entry, "sources.main.entry"))
+    ProjectRuntime.configureEntry(entry)
     ProjectRuntime.configureMainSources {
       include(requireText(mainSources.srcDir, "sources.main.srcDir"))
       exclude(*mainSources.excludes.toTypedArray())
@@ -90,10 +90,7 @@ class ProjectSourcesScope internal constructor() {
       }
     }
     viget?.let { publishing ->
-      ProjectRuntime.configureVariable("PUBLISH", publishing.publish)
-      if (publishing.excludes.isNotEmpty()) {
-        ProjectRuntime.configureVariable("PUBLISH_EXCLUDE", publishing.excludes)
-      }
+      ProjectRuntime.configurePublishing(publishing.publish, publishing.excludes)
     }
   }
 }
@@ -104,8 +101,7 @@ class OutputDirectoriesScope internal constructor() {
   var debug: String = "build/debug"
 
   internal fun apply() {
-    ProjectRuntime.configureVariable("RELEASE_OUTDIR", requireText(release, "release output directory"))
-    ProjectRuntime.configureVariable("DEBUG_OUTDIR", requireText(debug, "debug output directory"))
+    ProjectRuntime.configureOutputDirectories(release, debug)
   }
 }
 
@@ -124,7 +120,7 @@ class TargetsScope internal constructor() {
   }
 
   internal fun apply() {
-    if (values.isNotEmpty()) ProjectRuntime.configureVariable("TARGET", values.distinct())
+    ProjectRuntime.configureTargets(values)
   }
 }
 
@@ -146,7 +142,7 @@ class PmlScope internal constructor() {
   var enabled: Boolean = true
 
   internal fun apply() {
-    ProjectRuntime.configureVariable("PML_ENABLED", enabled)
+    ProjectRuntime.configurePml(enabled)
   }
 }
 
@@ -154,23 +150,23 @@ class PmlScope internal constructor() {
 class WorkspaceScope internal constructor(private val name: String) {
   var path: String? = null
 
-  internal fun coordinate(): String {
+  internal fun build(): Workspace {
     val configuredPath = path ?: throw ProjectConfigurationException("workspace '$name' requires path")
-    return "$name:${requireText(configuredPath, "workspace path")}" 
+    return Workspace(name, requireText(configuredPath, "workspace path"))
   }
 }
 
 @XsProjectDsl
 class WorkspacesScope internal constructor() {
-  private val values = mutableListOf<String>()
+  private val values = mutableListOf<Workspace>()
 
   fun workspace(name: String, block: WorkspaceScope.() -> Unit) {
     val normalized = requireModuleSegment(name, "workspace name")
-    values += WorkspaceScope(normalized).apply(block).coordinate()
+    values += WorkspaceScope(normalized).apply(block).build()
   }
 
   internal fun apply() {
-    if (values.isNotEmpty()) ProjectRuntime.configureVariable("WORKSPACE", values)
+    ProjectRuntime.configureWorkspaces(values)
   }
 }
 
@@ -191,14 +187,13 @@ class DependencyDeclarationScope internal constructor(
 
   internal fun applyTo(scope: DependenciesScope) {
     val packageName = requireModuleSegment(name ?: throw ProjectConfigurationException("dependency requires name"), "dependency name")
-    val coordinate = "${requireModuleSegment(publisher, "dependency publisher")}.$packageName"
     val packageVersion = requirePackageVersion(version ?: throw ProjectConfigurationException("dependency requires version"))
     val optionalFeature = optional
     if (optionalFeature == null) {
-      scope.add(packageCoordinate(coordinate, stability, packageVersion))
+      scope.add(packageDependency(publisher, packageName, stability, packageVersion))
     } else {
       val feature = requireFeatureName(optionalFeature)
-      val dependency = packageCoordinate(coordinate, stability, packageVersion)
+      val dependency = packageDependency(publisher, packageName, stability, packageVersion)
       val enabled = features[feature] ?: false
       scope.addOptional(feature, dependency, enabled)
     }

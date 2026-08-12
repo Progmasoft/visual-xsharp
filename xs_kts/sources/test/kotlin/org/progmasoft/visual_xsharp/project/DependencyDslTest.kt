@@ -31,8 +31,8 @@ class DependencyDslTest {
     }
     sources { main { entry = "Demo.Main" } }
 
-    val dependency = ProjectRuntime.build().activeDependencies.single()
-    assertEquals(PackageDependency("Publisher.Name", "STABLE", "1.2.3"), dependency)
+    val dependency = ProjectRuntime.build().requiredDependencies.single()
+    assertEquals(PackageDependency("Publisher", "Name", "1.2.3", Stability.STABLE), dependency)
   }
 
   @Test
@@ -47,7 +47,7 @@ class DependencyDslTest {
         }
       }
       sources { main { entry = "Demo.Main" } }
-      assertEquals(stability.name, ProjectRuntime.build().activeDependencies.single().stability)
+      assertEquals(stability, ProjectRuntime.build().requiredDependencies.single().stability)
     }
   }
 
@@ -64,13 +64,13 @@ class DependencyDslTest {
     sources { main { entry = "Demo.Main" } }
     val plan = ProjectRuntime.build()
 
-    assertTrue(plan.activeDependencies.isEmpty())
-    assertEquals("Publisher.Toml", plan.optionalDependencies.single().dependency.name)
+    assertTrue(plan.requiredDependencies.isEmpty())
+    assertEquals("Publisher.Toml", plan.optionalDependencies.single().dependency.coordinate)
     assertFalse(plan.dependencyFeatures.single().enabled)
   }
 
   @Test
-  fun activatesOptionalDependencyThroughItsFeature() {
+  fun recordsEnabledOptionalFeatureWithoutPretendingToSolveRegistryGraph() {
     dependencies {
       dependency("Publisher") {
         name = "Toml"
@@ -82,7 +82,7 @@ class DependencyDslTest {
     sources { main { entry = "Demo.Main" } }
     val plan = ProjectRuntime.build()
 
-    assertEquals("Publisher.Toml", plan.activeDependencies.single().name)
+    assertEquals("Publisher.Toml", plan.optionalDependencies.single().dependency.coordinate)
     assertTrue(plan.dependencyFeatures.single().enabled)
   }
 
@@ -120,7 +120,7 @@ class DependencyDslTest {
       }
       sources { main { entry = "Demo.Main" } }
       val plan = ProjectRuntime.build()
-      ProjectLockFile.write(root, resolveDependencies(plan.requiredDependencies, plan.optionalDependencies, plan.dependencyFeatures))
+      ProjectLockFile.write(root, validateDependencies(plan.requiredDependencies, plan.optionalDependencies, plan.dependencyFeatures))
       val lock = root.resolve(ProjectLockFile.FILE_NAME)
 
       assertTrue(Files.isRegularFile(lock))
@@ -134,6 +134,8 @@ class DependencyDslTest {
           }
         }
       }
+      val restored = ProjectLockFile.read(lock)
+      assertEquals(PackageDependency("Publisher", "Name", "1.0.0", Stability.STABLE), restored.required.single())
     } finally {
       root.toFile().deleteRecursively()
     }
