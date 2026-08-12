@@ -106,6 +106,7 @@ jobs:
         run: |
           cmake --preset clangcl-debug `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_APPLOCAL_DEPS=OFF `
             -DLLVM_DIR="$env:LLVM_DIR"
 
       - name: Build debug configuration
@@ -121,6 +122,7 @@ jobs:
         run: |
           cmake --preset clangcl-sanitize `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_APPLOCAL_DEPS=OFF `
             -DLLVM_DIR="$env:LLVM_DIR"
 
       - name: Build sanitizer configuration
