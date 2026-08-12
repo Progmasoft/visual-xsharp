@@ -4,10 +4,14 @@
 #include "Visual/XSharp/Core/CorePrep.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
 #include "Visual/XSharp/Core/CorePrep/Wire.hpp"
+#include "Visual/XSharp/Pipeline.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
+#include <ranges>
+#include <string_view>
 
 namespace
 {
@@ -43,6 +47,11 @@ auto prepared_module() -> visual_xsharp::core::CorePrepModule
                    {99, {}, {Terminator::Kind::Unreachable, {}, 0, 0}}}};
     return CorePrepModule{{U"Name"}, {sum, main}};
 }
+
+auto has_issue(const std::vector<visual_xsharp::core::VerificationIssue> &issues, std::string_view code) -> bool
+{
+    return std::ranges::any_of(issues, [code](const auto &issue) { return issue.code == code; });
+}
 } // namespace
 
 TEST_CASE("C++20 pipeline consumes Haskell-owned CorePrep")
@@ -70,9 +79,9 @@ TEST_CASE("CorePrep verifier rejects malformed control flow before Xpp lowering"
     prepared.functions.at(1).blocks.front().instructions.front().operands.clear();
 
     const auto issues = visual_xsharp::core::verify(prepared);
-    REQUIRE(issues.size() == 2);
-    REQUIRE(issues.at(0).code == "VXC1008");
-    REQUIRE(issues.at(1).code == "VXC1012");
+    REQUIRE(has_issue(issues, "VXC1008"));
+    REQUIRE(has_issue(issues, "VXC1012"));
+    REQUIRE(has_issue(issues, "VXC1024"));
 }
 
 TEST_CASE("typed native lowering allocates stable virtual registers")
@@ -168,4 +177,84 @@ TEST_CASE("CorePrep wire codec enforces resource and Unicode limits")
         REQUIRE_FALSE(encoded);
         REQUIRE(encoded.error->kind == visual_xsharp::core::wire::ErrorKind::InvalidSymbol);
     }
+}
+
+TEST_CASE("RAM pipeline decodes verifies and lowers CorePrep to optimized Xmm")
+{
+    const auto encoded = visual_xsharp::core::wire::encode(prepared_module());
+    REQUIRE(encoded);
+
+    const auto result = visual_xsharp::consume_coreprep(encoded.bytes);
+    REQUIRE(result);
+    REQUIRE(result.core_prep.has_value());
+    REQUIRE(result.xpp.has_value());
+    REQUIRE(result.xmm.has_value());
+    REQUIRE_FALSE(result.wire_error.has_value());
+    REQUIRE(result.verification_issues.empty());
+    REQUIRE(result.core_prep->functions.at(1).blocks.size() == 5);
+    REQUIRE(result.xpp->functions.at(1).blocks.size() == 4);
+    REQUIRE(result.xmm->functions.at(1).blocks.size() == 4);
+}
+
+TEST_CASE("RAM pipeline keeps optimization choices explicit")
+{
+    const auto encoded = visual_xsharp::core::wire::encode(prepared_module());
+    REQUIRE(encoded);
+    visual_xsharp::PipelineOptions options;
+    options.optimize_xpp = false;
+    options.optimize_xmm = false;
+
+    const auto result = visual_xsharp::consume_coreprep(encoded.bytes, options);
+    REQUIRE(result);
+    REQUIRE(result.xpp->functions.at(1).blocks.size() == 5);
+    REQUIRE(result.xmm->functions.at(1).blocks.size() == 5);
+}
+
+TEST_CASE("RAM pipeline never lowers malformed wire input")
+{
+    const std::vector<std::uint8_t> malformed{'N', 'O', 'P', 'E'};
+    const auto result = visual_xsharp::consume_coreprep(malformed);
+    REQUIRE_FALSE(result);
+    REQUIRE(result.wire_error.has_value());
+    REQUIRE(result.wire_error->kind == visual_xsharp::core::wire::ErrorKind::InvalidMagic);
+    REQUIRE_FALSE(result.core_prep.has_value());
+    REQUIRE_FALSE(result.xpp.has_value());
+    REQUIRE_FALSE(result.xmm.has_value());
+}
+
+TEST_CASE("RAM pipeline never lowers semantically invalid CorePrep")
+{
+    auto prepared = prepared_module();
+    prepared.functions.at(1).blocks.at(1).instructions.back().destination = {22, U"condition"};
+    const auto encoded = visual_xsharp::core::wire::encode(prepared);
+    REQUIRE(encoded);
+
+    const auto result = visual_xsharp::consume_coreprep(encoded.bytes);
+    REQUIRE_FALSE(result);
+    REQUIRE(result.core_prep.has_value());
+    REQUIRE(has_issue(result.verification_issues, "VXC1036"));
+    REQUIRE_FALSE(result.xpp.has_value());
+    REQUIRE_FALSE(result.xmm.has_value());
+}
+
+TEST_CASE("semantic verifier rejects mismatched calls assignments and returns")
+{
+    auto prepared = prepared_module();
+    auto &main = prepared.functions.at(1);
+    main.blocks.at(0).instructions.at(0).operands.at(1).type = visual_xsharp::core::Type::boolean();
+    main.blocks.at(2).instructions.at(0).operands.front().type = visual_xsharp::core::Type::boolean();
+    main.blocks.at(3).terminator.value = visual_xsharp::core::Atom::constant(std::int64_t{1}, visual_xsharp::core::Type::int64());
+
+    const auto issues = visual_xsharp::core::verify(prepared);
+    REQUIRE(has_issue(issues, "VXC1027"));
+    REQUIRE(has_issue(issues, "VXC1037"));
+    REQUIRE(has_issue(issues, "VXC1038"));
+}
+
+TEST_CASE("semantic verifier rejects inconsistent symbol spelling")
+{
+    auto prepared = prepared_module();
+    prepared.functions.at(0).blocks.at(0).instructions.at(0).operands.at(0).symbol.spelling = U"different";
+    const auto issues = visual_xsharp::core::verify(prepared);
+    REQUIRE(has_issue(issues, "VXC1014"));
 }

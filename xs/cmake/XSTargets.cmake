@@ -58,7 +58,9 @@ endif()
 
 add_library(xs_compiler
   ../Visual/XSharp/Pipeline.cpp
+  ../Visual/XSharp/Pipeline/Driver.cpp
   ../Visual/XSharp/Core/CorePrep/Verifier.cpp
+  ../Visual/XSharp/Core/CorePrep/Verifier/Semantics.cpp
   ../Visual/XSharp/Core/CorePrep/Wire/Decode.cpp
   ../Visual/XSharp/Core/CorePrep/Wire/Encode.cpp
   sources/Ast.cpp

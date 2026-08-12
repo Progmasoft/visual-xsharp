@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
+#include "Visual/XSharp/Core/CorePrep/Verifier/Semantics.hpp"
 
 #include <algorithm>
 #include <unordered_set>
@@ -106,6 +107,9 @@ auto verify(const CorePrepModule &module) -> std::vector<VerificationIssue>
             verify_terminator(block.terminator, block_ids, function.symbol.id, block.id, issues);
         }
     }
+    auto semantic_issues = verify_semantics(module);
+    issues.insert(issues.end(), std::make_move_iterator(semantic_issues.begin()),
+                  std::make_move_iterator(semantic_issues.end()));
     return issues;
 }
 } // namespace visual_xsharp::core
