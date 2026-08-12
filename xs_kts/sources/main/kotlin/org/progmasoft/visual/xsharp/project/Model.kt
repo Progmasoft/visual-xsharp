@@ -3,13 +3,11 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-package org.progmasoft.visual_xsharp.project
+package org.progmasoft.visual.xsharp.project
 
 import java.io.Serializable
 
-class OperatingSystem private constructor(
-  val name: String,
-) {
+class OperatingSystem private constructor(val name: String) {
   override fun toString() = name
 
   companion object {
@@ -37,33 +35,87 @@ enum class OperatingSystemFamily {
   companion object {
     internal fun forOperatingSystem(os: OperatingSystem) =
       when (os) {
-        OperatingSystem.FREEBSD, OperatingSystem.OPENBSD, OperatingSystem.NETBSD -> BSD
-        OperatingSystem.LINUX, OperatingSystem.MACOS -> UNIX
-        OperatingSystem.WINDOWS, OperatingSystem.REACTOS_HOST -> WINDOWS
+        OperatingSystem.FREEBSD,
+        OperatingSystem.OPENBSD,
+        OperatingSystem.NETBSD -> BSD
+        OperatingSystem.LINUX,
+        OperatingSystem.MACOS -> UNIX
+        OperatingSystem.WINDOWS,
+        OperatingSystem.REACTOS_HOST -> WINDOWS
         else -> UNKNOWN
       }
   }
 }
 
-enum class Architecture { X86_64, AARCH64, ARMV7H, RISCV64, UNKNOWN }
+enum class Architecture {
+  X86_64,
+  AARCH64,
+  ARMV7H,
+  RISCV64,
+  UNKNOWN,
+}
 
-enum class WarningLevel { ALL, MEDIUM, LOW, NONE }
+enum class WarningLevel {
+  ALL,
+  MEDIUM,
+  LOW,
+  NONE,
+}
 
-enum class Stability { STABLE, UNSTABLE, BETA, NIGHTLY, ALPHA, DEV }
+enum class Stability {
+  STABLE,
+  UNSTABLE,
+  BETA,
+  NIGHTLY,
+  ALPHA,
+  DEV,
+}
 
-enum class Backend { LLVM }
+enum class Backend {
+  LLVM
+}
 
-enum class BuildMode { DEBUG, RELEASE }
+enum class BuildMode {
+  DEBUG,
+  RELEASE,
+}
 
-enum class Emit { BINARY, OBJECT, CORE, XPP, XMM, ASSEMBLY, LLVM_LL, LLVM_BC }
+enum class Emit {
+  BINARY,
+  OBJECT,
+  CORE,
+  XPP,
+  XMM,
+  ASSEMBLY,
+  LLVM_LL,
+  LLVM_BC,
+}
 
-enum class Warnings { ALL, MEDIUM, LOW, NONE }
+enum class Warnings {
+  ALL,
+  MEDIUM,
+  LOW,
+  NONE,
+}
 
-enum class LlvmOptLevel { O0, O1, O2, O3, OG }
+enum class LlvmOptLevel {
+  O0,
+  O1,
+  O2,
+  O3,
+  OG,
+}
 
-enum class LlvmCompiler { AOT, ORC }
+enum class LlvmCompiler {
+  AOT,
+  ORC,
+}
 
-enum class LlvmLto { FAT, THIN, NONE }
+enum class LlvmLto {
+  FAT,
+  THIN,
+  NONE,
+}
 
 data class Host(
   val os: OperatingSystem,
@@ -155,15 +207,16 @@ data class ProjectPlan(
 )
 
 internal val packageDependencyOrder =
-  compareBy(PackageDependency::publisher, PackageDependency::name, PackageDependency::stability, PackageDependency::version)
+  compareBy(
+    PackageDependency::publisher,
+    PackageDependency::name,
+    PackageDependency::stability,
+    PackageDependency::version,
+  )
 
-class ProjectConfigurationException(
-  message: String,
-) : IllegalArgumentException(message)
+class ProjectConfigurationException(message: String) : IllegalArgumentException(message)
 
-class ProjectAbort(
-  message: String,
-) : RuntimeException(message)
+class ProjectAbort(message: String) : RuntimeException(message)
 
 internal fun operatingSystemFromName(name: String): OperatingSystem {
   val osName = name.lowercase()
@@ -185,9 +238,13 @@ internal fun detectHost(): Host {
   val family = OperatingSystemFamily.forOperatingSystem(os)
   val architecture =
     when (architectureName) {
-      "amd64", "x86_64" -> Architecture.X86_64
-      "aarch64", "arm64" -> Architecture.AARCH64
-      "arm", "armv7", "armv7h" -> Architecture.ARMV7H
+      "amd64",
+      "x86_64" -> Architecture.X86_64
+      "aarch64",
+      "arm64" -> Architecture.AARCH64
+      "arm",
+      "armv7",
+      "armv7h" -> Architecture.ARMV7H
       "riscv64" -> Architecture.RISCV64
       else -> Architecture.UNKNOWN
     }

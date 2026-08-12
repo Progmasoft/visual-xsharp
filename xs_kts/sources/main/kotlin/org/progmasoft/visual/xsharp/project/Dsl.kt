@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-package org.progmasoft.visual_xsharp.project
+package org.progmasoft.visual.xsharp.project
 
 import java.util.Locale
 
-@DslMarker
-annotation class XsProjectDsl
+@DslMarker annotation class XsProjectDsl
 
 @XsProjectDsl
 class SourcesScope internal constructor() {
@@ -28,7 +27,6 @@ class SourcesScope internal constructor() {
     excludesConfigured = true
     patterns.forEach { pattern -> excludes += requireText(pattern, "source exclude") }
   }
-
 }
 
 @XsProjectDsl
@@ -57,12 +55,12 @@ class TestScope internal constructor() {
 }
 
 @XsProjectDsl
-class CompilerScope internal constructor(
-  private val settings: CompilerSettings,
-) {
+class CompilerScope internal constructor(private val settings: CompilerSettings) {
   var version: String
     get() = settings.version
-    set(value) { settings.version = requireText(value, "compiler version") }
+    set(value) {
+      settings.version = requireText(value, "compiler version")
+    }
 
   var standard: String
     get() = settings.standard
@@ -76,35 +74,51 @@ class CompilerScope internal constructor(
 
   var backend: Backend
     get() = settings.backend
-    set(value) { settings.backend = value }
+    set(value) {
+      settings.backend = value
+    }
 
   var buildMode: BuildMode
     get() = settings.buildMode
-    set(value) { settings.buildMode = value }
+    set(value) {
+      settings.buildMode = value
+    }
 
   var emit: Emit
     get() = settings.emit
-    set(value) { settings.emit = value }
+    set(value) {
+      settings.emit = value
+    }
 
   var warningsAsErrors: Boolean
     get() = settings.warningsAsErrors
-    set(value) { settings.warningsAsErrors = value }
+    set(value) {
+      settings.warningsAsErrors = value
+    }
 
   var warnings: Warnings
-    get() = org.progmasoft.visual_xsharp.project.Warnings.valueOf(settings.warningLevel.name)
-    set(value) { settings.warningLevel = WarningLevel.valueOf(value.name) }
+    get() = org.progmasoft.visual.xsharp.project.Warnings.valueOf(settings.warningLevel.name)
+    set(value) {
+      settings.warningLevel = WarningLevel.valueOf(value.name)
+    }
 
   var experimentalWarnings: Boolean
     get() = settings.experimentalWarnings
-    set(value) { settings.experimentalWarnings = value }
+    set(value) {
+      settings.experimentalWarnings = value
+    }
 
   var shadowWarnings: Boolean
     get() = settings.shadowWarnings
-    set(value) { settings.shadowWarnings = value }
+    set(value) {
+      settings.shadowWarnings = value
+    }
 
   var undefinedWarnings: Boolean
     get() = settings.undefinedWarnings
-    set(value) { settings.undefinedWarnings = value }
+    set(value) {
+      settings.undefinedWarnings = value
+    }
 
   fun unsafe(block: UnsafeCompilerScope.() -> Unit) {
     UnsafeCompilerScope(settings).apply(block)
@@ -126,37 +140,50 @@ class CompilerScope internal constructor(
   internal fun werror(enabled: Boolean) {
     settings.warningsAsErrors = enabled
   }
-
 }
 
 @XsProjectDsl
 class UnsafeCompilerScope internal constructor(private val settings: CompilerSettings) {
   var xppOptimizationPasses: Boolean
     get() = settings.xppOptimizationPasses
-    set(value) { settings.xppOptimizationPasses = value }
+    set(value) {
+      settings.xppOptimizationPasses = value
+    }
 
   var xmmOptimizationPasses: Boolean
     get() = settings.xmmOptimizationPasses
-    set(value) { settings.xmmOptimizationPasses = value }
+    set(value) {
+      settings.xmmOptimizationPasses = value
+    }
 
   var typeSafeFormat: Boolean
     get() = settings.typeSafeFormat
-    set(value) { settings.typeSafeFormat = value }
+    set(value) {
+      settings.typeSafeFormat = value
+    }
 }
 
 @XsProjectDsl
 class LlvmCompilerScope internal constructor(private val settings: CompilerSettings) {
   var optLevel: LlvmOptLevel
-    get() = settings.llvmOptLevel ?: if (settings.buildMode == BuildMode.DEBUG) LlvmOptLevel.O0 else LlvmOptLevel.O3
-    set(value) { settings.llvmOptLevel = value }
+    get() =
+      settings.llvmOptLevel
+        ?: if (settings.buildMode == BuildMode.DEBUG) LlvmOptLevel.O0 else LlvmOptLevel.O3
+    set(value) {
+      settings.llvmOptLevel = value
+    }
 
   var compiler: LlvmCompiler
     get() = settings.llvmCompiler
-    set(value) { settings.llvmCompiler = value }
+    set(value) {
+      settings.llvmCompiler = value
+    }
 
   var lto: LlvmLto
     get() = settings.llvmLto
-    set(value) { settings.llvmLto = value }
+    set(value) {
+      settings.llvmLto = value
+    }
 }
 
 class ProjectContext internal constructor(val host: Host = detectHost()) {
@@ -194,9 +221,14 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
       )
   }
 
-  internal fun configureEntry(value: String) { entry = requireText(value, "sources.main.entry") }
+  internal fun configureEntry(value: String) {
+    entry = requireText(value, "sources.main.entry")
+  }
 
-  internal fun configureOutputDirectories(release: String, debug: String) {
+  internal fun configureOutputDirectories(
+    release: String,
+    debug: String,
+  ) {
     releaseOutputDirectory = requireText(release, "release output directory")
     debugOutputDirectory = requireText(debug, "debug output directory")
   }
@@ -211,9 +243,14 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
     workspaces += values.distinctBy(Workspace::name)
   }
 
-  internal fun configurePml(enabled: Boolean) { pmlEnabled = enabled }
+  internal fun configurePml(enabled: Boolean) {
+    pmlEnabled = enabled
+  }
 
-  internal fun configurePublishing(publish: Boolean, excludes: List<String>) {
+  internal fun configurePublishing(
+    publish: Boolean,
+    excludes: List<String>,
+  ) {
     publishSources = publish
     publishExcludes.clear()
     publishExcludes += excludes.distinct()
@@ -221,18 +258,20 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
 
   internal fun configureAuthors(vararg entries: Array<String>) {
     entries.forEach { entry ->
-      if (entry.size != 2) throw ProjectConfigurationException("each author requires a name and email")
+      if (entry.size != 2)
+        throw ProjectConfigurationException("each author requires a name and email")
       authors += Author(requireText(entry[0], "author name"), requireText(entry[1], "author email"))
     }
   }
 
   fun dependencies(block: DependenciesScope.() -> Unit) {
     val scope = DependenciesScope().apply(block)
-    val validated = validateDependencies(
-      dependencies + scope.required,
-      optionalDependencies + scope.optional,
-      dependencyFeatures + scope.selections,
-    )
+    val validated =
+      validateDependencies(
+        dependencies + scope.required,
+        optionalDependencies + scope.optional,
+        dependencyFeatures + scope.selections,
+      )
     dependencies.clear()
     dependencies += validated.required
     optionalDependencies.clear()
@@ -265,13 +304,16 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   }
 
   fun build(): ProjectPlan {
-    val configuredEntry = entry
-      ?: throw ProjectConfigurationException("sources.main.entry is required")
+    val configuredEntry =
+      entry ?: throw ProjectConfigurationException("sources.main.entry is required")
     if (!configuredEntry.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+"))) {
-      throw ProjectConfigurationException("sources.main.entry must be a qualified type name: $configuredEntry")
+      throw ProjectConfigurationException(
+        "sources.main.entry must be a qualified type name: $configuredEntry"
+      )
     }
     val project = identity
-    val dependencyManifest = validateDependencies(dependencies, optionalDependencies, dependencyFeatures)
+    val dependencyManifest =
+      validateDependencies(dependencies, optionalDependencies, dependencyFeatures)
     val effectiveSourceIncludes = sourceIncludes.ifEmpty { listOf("Sources") }
     return ProjectPlan(
       project,
@@ -331,8 +373,10 @@ internal object ProjectRuntime {
 
   fun configureEntry(value: String) = context.configureEntry(value)
 
-  fun configureOutputDirectories(release: String, debug: String) =
-    context.configureOutputDirectories(release, debug)
+  fun configureOutputDirectories(
+    release: String,
+    debug: String,
+  ) = context.configureOutputDirectories(release, debug)
 
   fun configureTargets(values: List<String>) = context.configureTargets(values)
 
@@ -340,8 +384,10 @@ internal object ProjectRuntime {
 
   fun configurePml(enabled: Boolean) = context.configurePml(enabled)
 
-  fun configurePublishing(publish: Boolean, excludes: List<String>) =
-    context.configurePublishing(publish, excludes)
+  fun configurePublishing(
+    publish: Boolean,
+    excludes: List<String>,
+  ) = context.configurePublishing(publish, excludes)
 
   fun configureAuthors(vararg entries: Array<String>) = context.configureAuthors(*entries)
 
@@ -355,24 +401,40 @@ internal object ProjectRuntime {
 
   fun build() = context.build()
 
-  val host get() = context.host
+  val host
+    get() = context.host
 }
 
-val OS get() = ProjectRuntime.host.os
-val FAMILY get() = ProjectRuntime.host.family
-val ARCH get() = ProjectRuntime.host.architecture
-val LINUX get() = OperatingSystem.LINUX
-val MACOS get() = OperatingSystem.MACOS
-val WINDOWS: Any get() = OperatingSystem.WINDOWS
-val FREEBSD get() = OperatingSystem.FREEBSD
-val OPENBSD get() = OperatingSystem.OPENBSD
-val NETBSD get() = OperatingSystem.NETBSD
-val UNIX get() = OperatingSystemFamily.UNIX
-val BSD get() = OperatingSystemFamily.BSD
-val X86_64 get() = Architecture.X86_64
-val AARCH64 get() = Architecture.AARCH64
-val ARMV7H get() = Architecture.ARMV7H
-val RISCV64 get() = Architecture.RISCV64
+val OS
+  get() = ProjectRuntime.host.os
+val FAMILY
+  get() = ProjectRuntime.host.family
+val ARCH
+  get() = ProjectRuntime.host.architecture
+val LINUX
+  get() = OperatingSystem.LINUX
+val MACOS
+  get() = OperatingSystem.MACOS
+val WINDOWS: Any
+  get() = OperatingSystem.WINDOWS
+val FREEBSD
+  get() = OperatingSystem.FREEBSD
+val OPENBSD
+  get() = OperatingSystem.OPENBSD
+val NETBSD
+  get() = OperatingSystem.NETBSD
+val UNIX
+  get() = OperatingSystemFamily.UNIX
+val BSD
+  get() = OperatingSystemFamily.BSD
+val X86_64
+  get() = Architecture.X86_64
+val AARCH64
+  get() = Architecture.AARCH64
+val ARMV7H
+  get() = Architecture.ARMV7H
+val RISCV64
+  get() = Architecture.RISCV64
 
 fun cfg(condition: Boolean) = condition
 

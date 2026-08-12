@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-package org.progmasoft.visual_xsharp.project
+package org.progmasoft.visual.xsharp.project
 
 import java.io.File
 import java.nio.file.Files
@@ -44,15 +44,16 @@ private fun discover(input: File): ProjectFiles {
   }
   var root: File? = input.canonicalFile
   while (root != null) {
-    filesAt(root)?.let { files -> return files }
+    filesAt(root)?.let { files ->
+      return files
+    }
     root = root.parentFile
   }
   throw ProjectConfigurationException("no X# Kotlin project file found from ${input.canonicalFile}")
 }
 
 private fun existingClasspath(): String =
-  System
-    .getProperty("java.class.path")
+  System.getProperty("java.class.path")
     .split(File.pathSeparator)
     .filter { entry -> File(entry).exists() }
     .joinToString(File.pathSeparator)
@@ -61,17 +62,23 @@ internal fun kotlinCommand(
   environment: Map<String, String> = System.getenv(),
   osName: String = System.getProperty("os.name"),
 ): String {
-  environment.entries.firstOrNull { it.key.equals("XS_KOTLIN", ignoreCase = true) }?.value?.takeIf(String::isNotBlank)
-    ?.let { return it }
+  environment.entries
+    .firstOrNull { it.key.equals("XS_KOTLIN", ignoreCase = true) }
+    ?.value
+    ?.takeIf(String::isNotBlank)
+    ?.let {
+      return it
+    }
   if (!osName.startsWith("Windows")) return "kotlin"
-  val path = environment.entries.firstOrNull { it.key.equals("PATH", ignoreCase = true) }?.value ?: return "kotlin"
+  val path =
+    environment.entries.firstOrNull { it.key.equals("PATH", ignoreCase = true) }?.value
+      ?: return "kotlin"
   return path
     .split(File.pathSeparatorChar)
     .asSequence()
     .map { directory -> File(directory, "kotlin.bat") }
     .firstOrNull(File::isFile)
-    ?.absolutePath
-    ?: "kotlin"
+    ?.absolutePath ?: "kotlin"
 }
 
 private fun runKotlin(
@@ -84,7 +91,9 @@ private fun runKotlin(
   return try {
     val wrapped = directory.resolve(script.name)
     val suffix = "\nemitProject()\n"
-    wrapped.writeText("import org.progmasoft.visual_xsharp.project.*\n" + script.readText() + suffix)
+    wrapped.writeText(
+      "import org.progmasoft.visual.xsharp.project.*\n" + script.readText() + suffix
+    )
     val kotlin = kotlinCommand()
     val properties =
       mutableListOf(
@@ -93,7 +102,10 @@ private fun runKotlin(
       )
     if (sourcesOutput != null) properties += "-Dxs.project.sources=$sourcesOutput"
     val arguments = mutableListOf<String>()
-    if (System.getProperty("os.name").startsWith("Windows") && kotlin.endsWith(".bat", ignoreCase = true)) {
+    if (
+      System.getProperty("os.name").startsWith("Windows") &&
+        kotlin.endsWith(".bat", ignoreCase = true)
+    ) {
       val kotlinHome = File(kotlin).canonicalFile.parentFile.parentFile
       arguments += File(System.getProperty("java.home"), "bin/java.exe").absolutePath
       arguments += "--enable-native-access=ALL-UNNAMED"
@@ -121,7 +133,9 @@ private fun runKotlin(
         .start()
         .waitFor()
     } catch (error: java.io.IOException) {
-      throw ProjectConfigurationException("kotlin is required and could not be started: ${error.message}")
+      throw ProjectConfigurationException(
+        "kotlin is required and could not be started: ${error.message}"
+      )
     }
   } finally {
     directory.toFile().deleteRecursively()

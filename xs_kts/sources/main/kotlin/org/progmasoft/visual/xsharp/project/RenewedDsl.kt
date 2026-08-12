@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-package org.progmasoft.visual_xsharp.project
+package org.progmasoft.visual.xsharp.project
 
 @XsProjectDsl
 class ProjectScope internal constructor() {
@@ -15,7 +15,9 @@ class ProjectScope internal constructor() {
     val configured = listOf(name, version, stability).count { it != null }
     if (configured == 0) return
     if (configured != 3) {
-      throw ProjectConfigurationException("project name, version, and stability must be configured together")
+      throw ProjectConfigurationException(
+        "project name, version, and stability must be configured together"
+      )
     }
     ProjectRuntime.configureIdentity(name!!, stability!!.name, version!!)
   }
@@ -60,23 +62,27 @@ class ProjectSourcesScope internal constructor() {
   private var viget: ViGetSourcesScope? = null
 
   fun main(block: MainSourcesScope.() -> Unit) {
-    if (main != null) throw ProjectConfigurationException("sources.main may be configured only once")
+    if (main != null)
+      throw ProjectConfigurationException("sources.main may be configured only once")
     main = MainSourcesScope().apply(block)
   }
 
   fun test(block: TestSourcesScope.() -> Unit) {
-    if (test != null) throw ProjectConfigurationException("sources.test may be configured only once")
+    if (test != null)
+      throw ProjectConfigurationException("sources.test may be configured only once")
     test = TestSourcesScope().apply(block)
   }
 
   fun viget(block: ViGetSourcesScope.() -> Unit) {
-    if (viget != null) throw ProjectConfigurationException("sources.viget may be configured only once")
+    if (viget != null)
+      throw ProjectConfigurationException("sources.viget may be configured only once")
     viget = ViGetSourcesScope().apply(block)
   }
 
   internal fun apply() {
     val mainSources = main ?: throw ProjectConfigurationException("sources.main is required")
-    val entry = mainSources.entry ?: throw ProjectConfigurationException("sources.main.entry is required")
+    val entry =
+      mainSources.entry ?: throw ProjectConfigurationException("sources.main.entry is required")
     ProjectRuntime.configureEntry(entry)
     ProjectRuntime.configureMainSources {
       include(requireText(mainSources.srcDir, "sources.main.srcDir"))
@@ -128,7 +134,10 @@ class TargetsScope internal constructor() {
 class AuthorsScope internal constructor() {
   private val values = mutableListOf<Array<String>>()
 
-  fun author(name: String, email: String) {
+  fun author(
+    name: String,
+    email: String,
+  ) {
     values += arrayOf(requireText(name, "author name"), requireText(email, "author email"))
   }
 
@@ -151,7 +160,8 @@ class WorkspaceScope internal constructor(private val name: String) {
   var path: String? = null
 
   internal fun build(): Workspace {
-    val configuredPath = path ?: throw ProjectConfigurationException("workspace '$name' requires path")
+    val configuredPath =
+      path ?: throw ProjectConfigurationException("workspace '$name' requires path")
     return Workspace(name, requireText(configuredPath, "workspace path"))
   }
 }
@@ -160,7 +170,10 @@ class WorkspaceScope internal constructor(private val name: String) {
 class WorkspacesScope internal constructor() {
   private val values = mutableListOf<Workspace>()
 
-  fun workspace(name: String, block: WorkspaceScope.() -> Unit) {
+  fun workspace(
+    name: String,
+    block: WorkspaceScope.() -> Unit,
+  ) {
     val normalized = requireModuleSegment(name, "workspace name")
     values += WorkspaceScope(normalized).apply(block).build()
   }
@@ -171,23 +184,31 @@ class WorkspacesScope internal constructor() {
 }
 
 @XsProjectDsl
-class DependencyDeclarationScope internal constructor(
-  private val publisher: String,
-) {
+class DependencyDeclarationScope internal constructor(private val publisher: String) {
   var name: String? = null
   var version: String? = null
   var stability: Stability = Stability.STABLE
   var optional: String? = null
   private val features = linkedMapOf<String, Boolean>()
 
-  fun feature(name: String, block: DependencyFeatureDeclarationScope.() -> Unit) {
+  fun feature(
+    name: String,
+    block: DependencyFeatureDeclarationScope.() -> Unit,
+  ) {
     val normalized = requireFeatureName(name)
     features[normalized] = DependencyFeatureDeclarationScope().apply(block).enabled
   }
 
   internal fun applyTo(scope: DependenciesScope) {
-    val packageName = requireModuleSegment(name ?: throw ProjectConfigurationException("dependency requires name"), "dependency name")
-    val packageVersion = requirePackageVersion(version ?: throw ProjectConfigurationException("dependency requires version"))
+    val packageName =
+      requireModuleSegment(
+        name ?: throw ProjectConfigurationException("dependency requires name"),
+        "dependency name",
+      )
+    val packageVersion =
+      requirePackageVersion(
+        version ?: throw ProjectConfigurationException("dependency requires version")
+      )
     val optionalFeature = optional
     if (optionalFeature == null) {
       scope.add(packageDependency(publisher, packageName, stability, packageVersion))
@@ -209,7 +230,8 @@ fun project(block: ProjectScope.() -> Unit) = ProjectScope().apply(block).apply(
 
 fun sources(block: ProjectSourcesScope.() -> Unit) = ProjectSourcesScope().apply(block).apply()
 
-fun outdirs(block: OutputDirectoriesScope.() -> Unit) = OutputDirectoriesScope().apply(block).apply()
+fun outdirs(block: OutputDirectoriesScope.() -> Unit) =
+  OutputDirectoriesScope().apply(block).apply()
 
 fun targets(block: TargetsScope.() -> Unit) = TargetsScope().apply(block).apply()
 

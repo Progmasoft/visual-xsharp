@@ -8,10 +8,11 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
   kotlin("jvm") version "2.4.0"
+  id("com.diffplug.spotless") version "8.9.0"
   application
 }
 
-group = "org.progmasoft.visual_xsharp"
+group = "org.progmasoft.visual.xsharp"
 version = "0.3.0"
 
 repositories {
@@ -37,13 +38,28 @@ java {
 }
 
 application {
-  mainClass = "org.progmasoft.visual_xsharp.project.MainKt"
+  mainClass = "org.progmasoft.visual.xsharp.project.MainKt"
   applicationName = "xs-project-runtime"
 }
 
 sourceSets {
   main { kotlin.srcDir("sources/main/kotlin") }
   test { kotlin.srcDir("sources/test/kotlin") }
+}
+
+spotless {
+  kotlin {
+    target("sources/**/*.kt")
+    ktfmt().googleStyle()
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
+  kotlinGradle {
+    target("*.gradle.kts")
+    ktlint()
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
 }
 
 tasks.test {

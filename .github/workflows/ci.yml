@@ -157,9 +157,9 @@ jobs:
         shell: pwsh
         run: rustup toolchain install nightly-2026-07-10 --profile default
 
-      - name: Test Kotlin project runtime
+      - name: Check Kotlin project runtime
         shell: pwsh
-        run: .\xs_kts\gradlew.bat -p xs_kts test
+        run: .\xs_kts\gradlew.bat -p xs_kts check
 
       - name: Build Haskell compiler layers
         shell: pwsh

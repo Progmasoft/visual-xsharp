@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-package org.progmasoft.visual_xsharp.project
+package org.progmasoft.visual.xsharp.project
 
 import java.nio.file.Files
 import java.sql.DriverManager
@@ -47,7 +47,10 @@ class DependencyDslTest {
         }
       }
       sources { main { entry = "Demo.Main" } }
-      assertEquals(stability, ProjectRuntime.build().requiredDependencies.single().stability)
+      assertEquals(
+        stability,
+        ProjectRuntime.build().requiredDependencies.single().stability,
+      )
     }
   }
 
@@ -65,7 +68,10 @@ class DependencyDslTest {
     val plan = ProjectRuntime.build()
 
     assertTrue(plan.requiredDependencies.isEmpty())
-    assertEquals("Publisher.Toml", plan.optionalDependencies.single().dependency.coordinate)
+    assertEquals(
+      "Publisher.Toml",
+      plan.optionalDependencies.single().dependency.coordinate,
+    )
     assertFalse(plan.dependencyFeatures.single().enabled)
   }
 
@@ -82,22 +88,40 @@ class DependencyDslTest {
     sources { main { entry = "Demo.Main" } }
     val plan = ProjectRuntime.build()
 
-    assertEquals("Publisher.Toml", plan.optionalDependencies.single().dependency.coordinate)
+    assertEquals(
+      "Publisher.Toml",
+      plan.optionalDependencies.single().dependency.coordinate,
+    )
     assertTrue(plan.dependencyFeatures.single().enabled)
   }
 
   @Test
   fun validatesDependencyCoordinatesAndVersions() {
     assertFailsWith<ProjectConfigurationException> {
-      dependencies { dependency("bad.publisher") { name = "Name"; version = "1.0.0" } }
+      dependencies {
+        dependency("bad.publisher") {
+          name = "Name"
+          version = "1.0.0"
+        }
+      }
     }
     ProjectRuntime.reset()
     assertFailsWith<ProjectConfigurationException> {
-      dependencies { dependency("Publisher") { name = "bad-name"; version = "1.0.0" } }
+      dependencies {
+        dependency("Publisher") {
+          name = "bad-name"
+          version = "1.0.0"
+        }
+      }
     }
     ProjectRuntime.reset()
     assertFailsWith<ProjectConfigurationException> {
-      dependencies { dependency("Publisher") { name = "Name"; version = "latest" } }
+      dependencies {
+        dependency("Publisher") {
+          name = "Name"
+          version = "latest"
+        }
+      }
     }
   }
 
@@ -105,8 +129,14 @@ class DependencyDslTest {
   fun rejectsConflictingCoordinates() {
     assertFailsWith<ProjectConfigurationException> {
       dependencies {
-        dependency("Publisher") { name = "Name"; version = "1.0.0" }
-        dependency("Publisher") { name = "Name"; version = "2.0.0" }
+        dependency("Publisher") {
+          name = "Name"
+          version = "1.0.0"
+        }
+        dependency("Publisher") {
+          name = "Name"
+          version = "2.0.0"
+        }
       }
     }
   }
@@ -116,11 +146,21 @@ class DependencyDslTest {
     val root = Files.createTempDirectory("visual-xsharp-lock-")
     try {
       dependencies {
-        dependency("Publisher") { name = "Name"; version = "1.0.0" }
+        dependency("Publisher") {
+          name = "Name"
+          version = "1.0.0"
+        }
       }
       sources { main { entry = "Demo.Main" } }
       val plan = ProjectRuntime.build()
-      ProjectLockFile.write(root, validateDependencies(plan.requiredDependencies, plan.optionalDependencies, plan.dependencyFeatures))
+      ProjectLockFile.write(
+        root,
+        validateDependencies(
+          plan.requiredDependencies,
+          plan.optionalDependencies,
+          plan.dependencyFeatures,
+        ),
+      )
       val lock = root.resolve(ProjectLockFile.FILE_NAME)
 
       assertTrue(Files.isRegularFile(lock))
@@ -135,7 +175,10 @@ class DependencyDslTest {
         }
       }
       val restored = ProjectLockFile.read(lock)
-      assertEquals(PackageDependency("Publisher", "Name", "1.0.0", Stability.STABLE), restored.required.single())
+      assertEquals(
+        PackageDependency("Publisher", "Name", "1.0.0", Stability.STABLE),
+        restored.required.single(),
+      )
     } finally {
       root.toFile().deleteRecursively()
     }
@@ -144,7 +187,11 @@ class DependencyDslTest {
   @Test
   fun planContainsViGetDependencyShape() {
     dependencies {
-      dependency("Publisher") { name = "Name"; version = "0.1.0"; stability = Stability.BETA }
+      dependency("Publisher") {
+        name = "Name"
+        version = "0.1.0"
+        stability = Stability.BETA
+      }
     }
     sources { main { entry = "Demo.Main" } }
     val text = PlanWriter.write(ProjectRuntime.build())

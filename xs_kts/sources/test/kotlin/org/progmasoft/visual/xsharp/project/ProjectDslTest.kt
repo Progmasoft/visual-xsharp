@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-package org.progmasoft.visual_xsharp.project
+package org.progmasoft.visual.xsharp.project
 
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -81,15 +81,29 @@ class ProjectDslTest {
         lto = LlvmLto.THIN
       }
     }
-    outdirs { release = "out/release"; debug = "out/debug" }
+    outdirs {
+      release = "out/release"
+      debug = "out/debug"
+    }
     targets { target("x86_64-pc-windows-msvc", "aarch64-apple-darwin") }
     authors { author("Leitwolf", "leitwolf@example.me") }
     pml { enabled = false }
     workspaces { workspace("core") { path = "./Core" } }
     sources {
-      viget { publish = true; exclude("build/**") }
-      main { srcDir = "Source"; exclude("Generated/**"); entry = "Compiler.Main" }
-      test { testDir = "Tests"; exclude("Fixtures/**"); framework = "tests" }
+      viget {
+        publish = true
+        exclude("build/**")
+      }
+      main {
+        srcDir = "Source"
+        exclude("Generated/**")
+        entry = "Compiler.Main"
+      }
+      test {
+        testDir = "Tests"
+        exclude("Fixtures/**")
+        framework = "tests"
+      }
     }
 
     val plan = ProjectRuntime.build()
@@ -119,7 +133,11 @@ class ProjectDslTest {
 
   @Test
   fun planWriterPublishesOnlyRenewedCatalog() {
-    project { name = "Plan"; version = "1.0.0"; stability = Stability.STABLE }
+    project {
+      name = "Plan"
+      version = "1.0.0"
+      stability = Stability.STABLE
+    }
     sources { main { entry = "Plan.Main" } }
     val text = PlanWriter.write(ProjectRuntime.build())
 
@@ -138,7 +156,10 @@ class ProjectDslTest {
     try {
       Files.createDirectories(root.resolve("Sources"))
       Files.createDirectories(root.resolve("Tests"))
-      Files.writeString(root.resolve("Sources/main.vxs"), "namespace Demo; public class Main { public static void Main() {} }")
+      Files.writeString(
+        root.resolve("Sources/main.vxs"),
+        "namespace Demo; public class Main { public static void Main() {} }",
+      )
       Files.writeString(root.resolve("Tests/smoke.vxs"), "namespace Demo; class Tests {}")
       sources {
         main { entry = "Demo.Main" }
@@ -154,7 +175,9 @@ class ProjectDslTest {
       assertEquals("Demo.Main", records[1])
       assertEquals("1", records[18])
       assertEquals("1", records[19])
-      assertTrue(records.any { it.endsWith("Sources\\main.vxs") || it.endsWith("Sources/main.vxs") })
+      assertTrue(
+        records.any { it.endsWith("Sources\\main.vxs") || it.endsWith("Sources/main.vxs") }
+      )
       assertTrue(records.any { it.endsWith("Tests\\smoke.vxs") || it.endsWith("Tests/smoke.vxs") })
     } finally {
       root.toFile().deleteRecursively()
@@ -169,17 +192,18 @@ class ProjectDslTest {
     assertTrue(OS.toString().isNotBlank())
     assertTrue(FAMILY.toString().isNotBlank())
     assertTrue(ARCH.toString().isNotBlank())
-    assertEquals(OperatingSystemFamily.BSD, Host(OperatingSystem.FREEBSD, OperatingSystemFamily.BSD, Architecture.X86_64).family)
+    assertEquals(
+      OperatingSystemFamily.BSD,
+      Host(OperatingSystem.FREEBSD, OperatingSystemFamily.BSD, Architecture.X86_64).family,
+    )
     assertFalse(OperatingSystemFamily.BSD == OperatingSystemFamily.UNIX)
     assertTrue(setOf(OperatingSystemFamily.BSD, OperatingSystemFamily.UNIX).size == 2)
   }
 
   private fun effectiveOptLevel(settings: CompilerSettings): LlvmOptLevel =
-    settings.llvmOptLevel ?: if (settings.buildMode == BuildMode.DEBUG) LlvmOptLevel.O0 else LlvmOptLevel.O3
+    settings.llvmOptLevel
+      ?: if (settings.buildMode == BuildMode.DEBUG) LlvmOptLevel.O0 else LlvmOptLevel.O3
 
   private fun readRecords(path: java.nio.file.Path): List<String> =
-    Files.readAllBytes(path)
-      .toString(Charsets.UTF_8)
-      .split('\u0000')
-      .dropLastWhile(String::isEmpty)
+    Files.readAllBytes(path).toString(Charsets.UTF_8).split('\u0000').dropLastWhile(String::isEmpty)
 }
