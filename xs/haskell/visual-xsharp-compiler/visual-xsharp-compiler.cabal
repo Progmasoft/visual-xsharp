@@ -38,7 +38,7 @@ library
     build-depends:
         base >=4.20 && <4.23,
         bytestring >=0.12 && <0.14,
-        containers >=0.7 && <0.8,
+        containers >=0.7 && <0.9,
         filepath >=1.5 && <1.6
     default-language: GHC2021
 
