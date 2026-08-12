@@ -24,6 +24,9 @@ namespace Visual::XSharp::Backend::LLVM
 using namespace ::visual_xsharp;
 namespace
 {
+// The LLVM C API exposes independent ownership rules for contexts, modules, builders,
+// buffers and messages. Keeping each handle in a tiny owner makes every early error
+// return safe and prevents LLVM implementation details from escaping the backend.
 struct ContextOwner final
 {
     LLVMContextRef value{LLVMContextCreate()};
@@ -90,6 +93,9 @@ struct MessageOwner final
 
 [[nodiscard]] auto AppendUtf8(std::string &result, char32_t point) -> bool
 {
+    // UTF-8 is used here only for LLVM identifiers and diagnostic-facing metadata.
+    // It is not the in-memory representation of Visual X# String values; those retain
+    // their Unicode-scalar ABI and are lowered separately by StringLiteral.
     const auto value = static_cast<std::uint32_t>(point);
     if(value > 0x10ffffU || (value >= 0xd800U && value <= 0xdfffU))
         return false;
@@ -161,6 +167,9 @@ struct TypeLowerer final
 
     explicit TypeLowerer(LLVMContextRef llvmContext) : context(llvmContext)
     {
+        // String is { pointer-to-Unicode-scalar, scalar-count }. The count is i64 so
+        // indexing capacity is target-independent, and it excludes the sentinel used
+        // to make debugger inspection convenient.
         std::array<LLVMTypeRef, 2> fields{LLVMPointerType(LLVMInt32TypeInContext(context), 0),
                                           LLVMInt64TypeInContext(context)};
         string_type = LLVMStructTypeInContext(context, fields.data(), static_cast<unsigned>(fields.size()), false);
@@ -199,6 +208,9 @@ struct TypeLowerer final
 
 struct FunctionState final
 {
+    // Xmm virtual registers model typed mutable storage, not LLVM SSA definitions.
+    // Slots preserve assignments across control-flow joins without manufacturing phi
+    // nodes whose semantics have not yet been established by an Xmm analysis pass.
     const xmm::Function *source{};
     LLVMValueRef value{};
     LLVMTypeRef type{};
@@ -238,6 +250,9 @@ struct Generator final
 
     [[nodiscard]] auto DeclareFunctions(const xmm::Module &source) -> bool
     {
+        // Declare every function before emitting any body. Calls therefore resolve by
+        // stable symbol id regardless of source order, and direct recursion needs no
+        // special case during instruction lowering.
         for(const auto &function : source.functions)
         {
             const auto name = SymbolName(source, function);
@@ -271,6 +286,9 @@ struct Generator final
 
     [[nodiscard]] auto CreateBlocksAndSlots(FunctionState &state) -> bool
     {
+        // All allocas belong to the entry block even when the first write appears in a
+        // later block. This gives each Xmm register one address for the whole function
+        // and lets LLVM's optimization pipeline promote eligible slots back to SSA.
         for(const auto &block : state.source->blocks)
         {
             const auto blockName = "block." + std::to_string(block.id);
@@ -308,6 +326,9 @@ struct Generator final
 
     [[nodiscard]] auto StringLiteral(const std::u32string &text) -> LLVMValueRef
     {
+        // Store one i32 per Unicode scalar. Visual X# String is intentionally not UTF-8:
+        // scalar indexing must not depend on the encoded byte width of earlier text.
+        // A trailing zero is storage convenience only and is excluded from the length.
         auto *i32 = LLVMInt32TypeInContext(context);
         std::vector<LLVMValueRef> units;
         units.reserve(text.size() + 1U);
@@ -374,6 +395,9 @@ struct Generator final
 
     [[nodiscard]] auto LowerFloorDiv(LLVMBuilderRef builder, LLVMValueRef left, LLVMValueRef right) -> LLVMValueRef
     {
+        // LLVM sdiv truncates toward zero. Visual X# floor division rounds toward
+        // negative infinity, so a non-exact quotient with unlike operand signs must be
+        // reduced by one. XOR lets us test sign disagreement without branching.
         auto *quotient = LLVMBuildSDiv(builder, left, right, "floor.quotient");
         auto *remainder = LLVMBuildSRem(builder, left, right, "floor.remainder");
         auto *zero = LLVMConstNull(LLVMTypeOf(left));
@@ -388,6 +412,9 @@ struct Generator final
     [[nodiscard]] auto LowerCall(LLVMBuilderRef builder, FunctionState &state,
                                   const xmm::Instruction &instruction) -> LLVMValueRef
     {
+        // Operand zero is a function identity, not a virtual register containing a
+        // raw address. Resolving the preserved symbol id here keeps calls deterministic
+        // and leaves room for a later linkage/mangling policy without changing Xmm.
         const auto target = functions.find(instruction.operands.front().symbol);
         if(target == functions.end())
             return nullptr;
@@ -523,6 +550,9 @@ struct Generator final
 
 auto Lower(const Xmm::Module &source, const Options &options) -> Result
 {
+    // Reject malformed Xmm before allocating LLVM state. Besides clearer diagnostics,
+    // this keeps the construction code free to rely on verified block, type and symbol
+    // invariants instead of duplicating defensive checks at every C API call.
     auto issues = Verify(source);
     if(!issues.empty())
     {
@@ -557,6 +587,8 @@ auto Lower(const Xmm::Module &source, const Options &options) -> Result
 
     if(options.verify_module)
     {
+        // LLVM verification runs before optimization so a backend construction defect
+        // cannot be hidden or transformed into a less useful pass-manager failure.
         char *rawMessage{};
         if(LLVMVerifyModule(module.value, LLVMReturnStatusAction, &rawMessage) != 0)
         {
@@ -588,6 +620,9 @@ auto Lower(const Xmm::Module &source, const Options &options) -> Result
     const auto *start = reinterpret_cast<const std::uint8_t *>(LLVMGetBufferStart(bitcode.value));
     const auto size = LLVMGetBufferSize(bitcode.value);
     Artifact artifact;
+    // Copy both products before the local owners dispose the memory buffer, module and
+    // context. Artifact consequently has ordinary C++ value semantics and no LLVM ABI
+    // or lifetime obligation is imposed on CLI, tests or future object emitters.
     artifact.llvm_ir = printed.value;
     artifact.bitcode.assign(start, start + size);
     artifact.target_triple = std::move(triple);

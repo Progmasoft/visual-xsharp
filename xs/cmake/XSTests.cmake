@@ -54,6 +54,10 @@ xs_add_c_test(lexer tests/lexer_tests.c xs_compiler)
 xs_add_c_test(parser tests/parser_tests.c xs_compiler)
 xs_add_c_test(diagnostic tests/diagnostic_tests.c xs_compiler)
 xs_add_c_test(package_archive tests/package_archive_tests.c xs_package)
+# Archive coverage performs real compression and filesystem round trips. A cold Windows
+# runner can legitimately exceed the five-second unit-test default while another test is
+# starting Gradle, so give this integration-shaped test the same budget as install layout.
+set_tests_properties(package_archive PROPERTIES TIMEOUT 15)
 if(WIN32 AND CMAKE_PREFIX_PATH)
   list(GET CMAKE_PREFIX_PATH 0 XS_DEPENDENCY_PREFIX)
   file(GLOB XS_TEST_RUNTIME_DLLS CONFIGURE_DEPENDS "${XS_DEPENDENCY_PREFIX}/debug/bin/*.dll")

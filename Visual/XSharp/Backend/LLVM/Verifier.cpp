@@ -14,6 +14,9 @@ namespace Visual::XSharp::Backend::LLVM
 using namespace ::visual_xsharp;
 namespace
 {
+// Context records the exact source location while validation walks the module. Keeping
+// diagnostics as data (rather than printing here) lets the CLI, tests and embedding
+// tools choose their own presentation without weakening the verifier.
 struct Context final
 {
     std::vector<Issue> issues;
@@ -29,6 +32,8 @@ struct Context final
 
 [[nodiscard]] auto SupportedType(const core::Type &type) -> bool
 {
+    // Named and polymorphic types must be resolved before Xmm reaches LLVM. Guessing a
+    // layout here would turn an incomplete front-end decision into a platform ABI.
     switch(type.kind)
     {
     case core::Type::Kind::Unit:
@@ -150,6 +155,9 @@ void VerifyInstruction(Context &context, const xmm::Instruction &instruction,
 
     if(instruction.opcode == xmm::Opcode::Call)
     {
+        // A function type stores parameters followed by its result. The instruction
+        // stores the function operand first, followed by actual arguments; therefore
+        // operand count equals signature component count even though their roles differ.
         if(instruction.operands.empty() || instruction.operands.front().kind != xmm::Value::Kind::Function)
             context.add(IssueKind::InvalidCall, "VXL1015", "call must begin with a function-symbol operand");
         else if(instruction.operands.front().type.kind == core::Type::Kind::Function)
@@ -209,6 +217,9 @@ void VerifyInstruction(Context &context, const xmm::Instruction &instruction,
             context.add(IssueKind::InvalidFunction, "VXL1025", "result-producing instruction has register zero");
         else if(const auto [found, inserted] = registers.emplace(instruction.destination, instruction.result_type);
                 !inserted && found->second != instruction.result_type)
+            // Rewriting a virtual register is legal because Xmm registers are storage.
+            // Changing its established type is not: one LLVM alloca cannot safely serve
+            // two unrelated layouts on different control-flow paths.
             context.add(IssueKind::RegisterRedefinition, "VXL1026",
                         "virtual register is written with a type that differs from its established storage type");
     }
@@ -249,8 +260,13 @@ auto Verify(const Xmm::Module &module) -> std::vector<Issue>
         context.add(IssueKind::InvalidModuleName, "VXL1002", "Xmm module name must contain non-empty components");
 
     std::unordered_map<core::SymbolId, const xmm::Function *> functions;
+    // Build the complete symbol catalog before checking bodies. Forward calls and
+    // recursion then validate exactly like calls to functions declared earlier.
     for(const auto &function : module.functions)
     {
+        // Parameter types seed the register storage table. Instruction results may add
+        // registers or rewrite them with the same type; every later read is checked
+        // against this table before LLVM lowering assumes a matching slot exists.
         if(function.symbol.id == 0 || function.symbol.spelling.empty())
         {
             context.function = function.symbol.id;

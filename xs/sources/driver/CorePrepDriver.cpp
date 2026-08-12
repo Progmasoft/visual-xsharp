@@ -52,6 +52,8 @@ auto LlvmOptions(const XsCompilerSettings &settings) -> Visual::XSharp::Backend:
 
 auto OutputPath(const std::filesystem::path &input, XsBuildOutput output) -> std::filesystem::path
 {
+    // Explicit diagnostic artifacts sit beside the input. Normal compilation keeps
+    // LLVM IR and bitcode in memory; choosing -Emit is the only path that writes them.
     auto path = input;
     path.replace_extension(output == XS_BUILD_OUTPUT_LLVM_LL ? ".ll" : ".bc");
     return path;
@@ -89,6 +91,9 @@ extern "C" int xs_driver_build_coreprep(const XsCliOptions *options_pointer)
         return 1;
     }
     const auto encoded = visual_xsharp::core::wire::encode(*loaded.module);
+    // Re-encode the decoded artifact before entering the shared RAM pipeline. This
+    // makes CLI input obey the same wire limits and verification boundary as a future
+    // in-process Haskell producer instead of introducing a privileged shortcut.
     if(!encoded)
     {
         std::fprintf(stderr, "vxs: decoded CorePrep module could not be retained in the RAM pipeline: %s\n",

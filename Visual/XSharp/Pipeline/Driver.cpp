@@ -8,6 +8,8 @@ namespace visual_xsharp
 auto consume_coreprep(std::span<const std::uint8_t> bytes, const PipelineOptions &options) -> PipelineResult
 {
     PipelineResult result;
+    // Decode from bounded wire bytes even for in-process callers. A single entry path
+    // keeps size/depth limits identical for files, Haskell output and embedded hosts.
     auto decoded = core::wire::decode(bytes, options.wire_limits);
     if(!decoded)
     {
@@ -16,15 +18,21 @@ auto consume_coreprep(std::span<const std::uint8_t> bytes, const PipelineOptions
     }
 
     result.core_prep = std::move(decoded.module);
+    // Semantic verification precedes every lowering stage. Partial state is retained in
+    // result, but no downstream IR is fabricated from an invalid CorePrep module.
     result.verification_issues = core::verify(*result.core_prep);
     if(!result.verification_issues.empty())
         return result;
 
     auto lowered_xpp = xpp::lower(*result.core_prep);
+    // Optimization toggles select identity-vs-optimized forms; they never skip a stage.
+    // Xmm therefore receives the same typed Xpp contract in debug and release modes.
     result.xpp = options.optimize_xpp ? xpp::optimize(std::move(lowered_xpp)) : std::move(lowered_xpp);
     auto lowered_xmm = xmm::lower(*result.xpp);
     result.xmm = options.optimize_xmm ? xmm::optimize(std::move(lowered_xmm)) : std::move(lowered_xmm);
     auto loweredLlvm = ::Visual::XSharp::Backend::LLVM::Lower(*result.xmm, options.llvm);
+    // LLVM failures stay structured instead of being flattened into a pipeline boolean.
+    // Frontends can render VXL diagnostics while still inspecting the verified Xmm.
     if(!loweredLlvm)
     {
         result.llvm_error = std::move(loweredLlvm.error);

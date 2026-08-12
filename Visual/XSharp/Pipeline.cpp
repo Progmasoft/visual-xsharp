@@ -17,6 +17,8 @@ namespace
 {
 auto lower_operand(const core::Atom &atom) -> Operand
 {
+    // CorePrep has already resolved names, so the numeric symbol is authoritative here.
+    // Spelling remains on declarations for diagnostics and eventual external mangling.
     return Operand{atom.kind == core::Atom::Kind::Variable ? Operand::Kind::Symbol : Operand::Kind::Literal,
                    atom.type, atom.symbol.id, atom.literal};
 }
@@ -50,6 +52,8 @@ auto lower_operation(core::Operation operation) -> Opcode
 auto lower_instruction(const core::Instruction &instruction) -> Instruction
 {
     Instruction lowered{};
+    // Preserve Bind/Assign/Discard as an explicit effect. Collapsing them into opcode
+    // alone would lose the difference between defining storage and mutating it.
     lowered.effect = instruction.kind == core::Instruction::Kind::Bind
                          ? Instruction::Effect::Define
                          : instruction.kind == core::Instruction::Kind::Assign ? Instruction::Effect::Store
@@ -75,6 +79,8 @@ auto lower_terminator(const core::Terminator &terminator) -> Terminator
 
 auto reachable_blocks(const Function &function) -> std::unordered_set<BlockId>
 {
+    // Reachability is intentionally structural and side-effect free. It follows only
+    // terminators and does not speculate about constant conditions at this stage.
     std::unordered_set<BlockId> reachable;
     std::vector<BlockId> pending{function.entry};
     while(!pending.empty())
@@ -146,6 +152,9 @@ namespace
 {
 struct RegisterMap final
 {
+    // Allocate deterministically on first encounter while preserving one register for
+    // each resolved symbol across all blocks in the function. Register zero is reserved
+    // as the invalid/default value used by the verifier.
     std::unordered_map<xpp::SymbolId, VirtualRegister> registers;
     VirtualRegister next{1};
 
@@ -191,6 +200,8 @@ auto lower_value(const xpp::Operand &operand, RegisterMap &map) -> Value
     if(operand.kind == xpp::Operand::Kind::Symbol)
     {
         if(operand.type.kind == core::Type::Kind::Function)
+            // Direct callees retain symbol identity and never consume a data register.
+            // This distinction is what lets the backend resolve forward/recursive calls.
             return Value{Value::Kind::Function, operand.type, 0, operand.symbol, {}};
         return Value{Value::Kind::Register, operand.type, map.get(operand.symbol), 0, {}};
     }
@@ -244,6 +255,8 @@ auto lower(const xpp::Module &module) -> Module
 
 auto optimize(Module module) -> Module
 {
+    // This pass removes only storage no-ops. More aggressive propagation needs a real
+    // control-flow/data-flow proof and must not be approximated by local rewriting.
     for(auto &function : module.functions)
     {
         for(auto &block : function.blocks)

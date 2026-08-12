@@ -25,6 +25,9 @@ namespace
 
 auto WriteLlvmIr(const std::filesystem::path &path, std::string_view llvmIr) -> std::optional<Error>
 {
+    // The extension check is part of the public writer contract, not cosmetic naming.
+    // It prevents a caller from labelling textual IR as bitcode (or an object file) and
+    // handing a misleading artifact to later toolchain stages.
     if(path.extension() != ".ll")
         return ExtensionError(path, ".ll");
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
@@ -48,6 +51,9 @@ auto WriteBitcode(const std::filesystem::path &path, const std::vector<std::uint
     if(!stream)
         return FileError(path, "open");
     stream.write(reinterpret_cast<const char *>(bitcode.data()), static_cast<std::streamsize>(bitcode.size()));
+    // Explicit close catches delayed Windows filesystem errors while the path is still
+    // available for a useful diagnostic. Relying only on the destructor would discard
+    // that failure and could report a truncated artifact as successful.
     if(!stream)
         return FileError(path, "write");
     stream.close();

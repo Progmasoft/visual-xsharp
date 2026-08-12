@@ -153,10 +153,8 @@ data class ProjectPlan(
   val dependencyFeatures: List<PackageFeatureSelection>,
   val sourceIncludes: List<String>,
   val sourceExcludes: List<String>,
-  val sourceFilters: List<String>?,
   val testIncludes: List<String>,
   val testExcludes: List<String>,
-  val testFilters: List<String>?,
   val testFramework: String?,
   val compiler: CompilerSettings,
 )

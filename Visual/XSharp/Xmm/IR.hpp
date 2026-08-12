@@ -19,6 +19,8 @@ enum class Opcode : std::uint8_t
 };
 struct Value final
 {
+    // Function values preserve callable identity separately from data registers. This
+    // prevents a direct call from being mistaken for a load from mutable Xmm storage.
     enum class Kind : std::uint8_t { Register, Immediate, Function } kind{Kind::Immediate};
     core::Type type{core::Type::unit()};
     VirtualRegister reg{};
@@ -29,6 +31,8 @@ struct Instruction final
 {
     Opcode opcode{Opcode::Move};
     VirtualRegister destination{};
+    // result_type is retained even when the result is discarded: verification and call
+    // lowering still need the operation's semantic type.
     core::Type result_type{core::Type::unit()};
     std::vector<Value> operands;
     bool has_result{};
@@ -45,6 +49,8 @@ struct Function final
 {
     core::SymbolName symbol{};
     std::vector<VirtualRegister> parameter_registers;
+    // Registers alone cannot reconstruct an ABI. Keep parameter types in declaration
+    // order so the LLVM function signature never depends on first-use inference.
     std::vector<core::Type> parameter_types;
     core::Type return_type{core::Type::unit()};
     BlockId entry{};

@@ -15,7 +15,6 @@ class SourcesScope internal constructor() {
   internal val includes = mutableListOf<String>()
   internal val excludes = mutableListOf<String>()
   internal var excludesConfigured = false
-  internal var filters: List<String>? = null
 
   fun include(pattern: String) {
     val root = requireText(pattern, "source include")
@@ -30,9 +29,6 @@ class SourcesScope internal constructor() {
     patterns.forEach { pattern -> excludes += requireText(pattern, "source exclude") }
   }
 
-  fun filter(paths: List<String>) {
-    filters = paths.map { path -> requireText(path, "source filter") }
-  }
 }
 
 @XsProjectDsl
@@ -40,7 +36,6 @@ class TestScope internal constructor() {
   internal val includes = mutableListOf<String>()
   internal val excludes = mutableListOf<String>()
   internal var excludesConfigured = false
-  internal var filters: List<String>? = null
   internal var framework: String? = null
 
   fun include(path: String) {
@@ -54,10 +49,6 @@ class TestScope internal constructor() {
   fun exclude(vararg patterns: String) {
     excludesConfigured = true
     patterns.forEach { pattern -> excludes += requireText(pattern, "test exclude") }
-  }
-
-  fun filter(paths: List<String>) {
-    filters = paths.map { path -> requireText(path, "test filter") }
   }
 
   fun framework(name: String) {
@@ -177,10 +168,8 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   private val dependencyFeatures = mutableListOf<PackageFeatureSelection>()
   private val sourceIncludes = mutableListOf<String>()
   private val sourceExcludes = mutableListOf<String>("*/**")
-  private var sourceFilters: List<String>? = null
   private val testIncludes = mutableListOf<String>()
   private val testExcludes = mutableListOf<String>("*/**")
-  private var testFilters: List<String>? = null
   private var testFramework: String? = null
   private val compilerSettings = CompilerSettings()
 
@@ -256,7 +245,6 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
       sourceExcludes.clear()
       sourceExcludes += scope.excludes
     }
-    if (scope.filters != null) sourceFilters = scope.filters
   }
 
   internal fun configureTestSources(block: TestScope.() -> Unit) {
@@ -266,7 +254,6 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
       testExcludes.clear()
       testExcludes += scope.excludes
     }
-    if (scope.filters != null) testFilters = scope.filters
     testFramework = scope.framework
   }
 
@@ -294,10 +281,8 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
       resolvedDependencies.features,
       effectiveSourceIncludes.distinct(),
       sourceExcludes.distinct(),
-      sourceFilters?.distinct(),
       testIncludes.distinct(),
       testExcludes.distinct(),
-      testFilters?.distinct(),
       testFramework,
       compilerSettings,
     )

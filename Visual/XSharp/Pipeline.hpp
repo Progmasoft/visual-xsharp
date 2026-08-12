@@ -25,6 +25,9 @@ struct PipelineOptions final
 
 struct PipelineResult final
 {
+    // Successful intermediate stages remain available when a later stage fails. This
+    // is intentional: diagnostics and compiler tests can inspect the last valid form
+    // without rerunning or weakening the end-to-end pipeline contract.
     std::optional<core::CorePrepModule> core_prep;
     std::optional<xpp::Module> xpp;
     std::optional<xmm::Module> xmm;
@@ -33,6 +36,8 @@ struct PipelineResult final
     std::optional<core::wire::Error> wire_error;
     std::vector<core::VerificationIssue> verification_issues;
 
+    // Pipeline success means a verified, owned LLVM artifact exists; merely reaching
+    // CorePrep, Xpp or Xmm is a partial result rather than a successful compilation.
     [[nodiscard]] explicit operator bool() const noexcept { return llvm.has_value(); }
 };
 
