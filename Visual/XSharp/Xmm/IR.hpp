@@ -20,7 +20,7 @@ enum class Opcode : std::uint8_t
 struct Value final
 {
     enum class Kind : std::uint8_t { Register, Immediate } kind{Kind::Immediate};
-    core::ValueType type{core::ValueType::Unit};
+    core::Type type{core::Type::unit()};
     VirtualRegister reg{};
     core::Literal immediate{};
 };
@@ -43,11 +43,11 @@ struct Function final
 {
     xpp::SymbolId symbol{};
     std::vector<VirtualRegister> parameter_registers;
-    core::ValueType return_type{core::ValueType::Unit};
+    core::Type return_type{core::Type::unit()};
     BlockId entry{};
     std::vector<Block> blocks;
 };
-struct Module final { std::string name; std::vector<Function> functions; };
+struct Module final { std::vector<std::u32string> name; std::vector<Function> functions; };
 
 [[nodiscard]] auto lower(const xpp::Module &module) -> Module;
 [[nodiscard]] auto optimize(Module module) -> Module;

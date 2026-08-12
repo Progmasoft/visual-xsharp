@@ -18,7 +18,7 @@ namespace
 auto lower_operand(const core::Atom &atom) -> Operand
 {
     return Operand{atom.kind == core::Atom::Kind::Variable ? Operand::Kind::Symbol : Operand::Kind::Literal,
-                   atom.type, atom.symbol, atom.literal};
+                   atom.type, atom.symbol.id, atom.literal};
 }
 
 auto lower_operation(core::Operation operation) -> Opcode
@@ -55,7 +55,7 @@ auto lower_instruction(const core::Instruction &instruction) -> Instruction
                          : instruction.kind == core::Instruction::Kind::Assign ? Instruction::Effect::Store
                                                                                : Instruction::Effect::Discard;
     lowered.opcode = lower_operation(instruction.operation);
-    lowered.destination = instruction.destination;
+    lowered.destination = instruction.destination.id;
     lowered.result_type = instruction.type;
     lowered.operands.reserve(instruction.operands.size());
     for(const auto &operand : instruction.operands)
@@ -112,7 +112,7 @@ auto lower(const core::CorePrepModule &module) -> Module
     lowered.functions.reserve(module.functions.size());
     for(const auto &function : module.functions)
     {
-        Function lowered_function{function.symbol, function.parameters, function.return_type, function.entry, {}};
+        Function lowered_function{function.symbol.id, function.parameters, function.return_type, function.entry, {}};
         lowered_function.blocks.reserve(function.blocks.size());
         for(const auto &block : function.blocks)
         {
@@ -159,7 +159,7 @@ struct RegisterMap final
     }
 };
 
-auto lower_opcode(xpp::Opcode opcode, core::ValueType type) -> Opcode
+auto lower_opcode(xpp::Opcode opcode, const core::Type &type) -> Opcode
 {
     switch(opcode)
     {
@@ -209,7 +209,7 @@ auto lower(const xpp::Module &module) -> Module
         RegisterMap register_map;
         Function lowered_function{function.symbol, {}, function.return_type, function.entry, {}};
         for(const auto &parameter : function.parameters)
-            lowered_function.parameter_registers.push_back(register_map.get(parameter.symbol));
+            lowered_function.parameter_registers.push_back(register_map.get(parameter.symbol.id));
         lowered_function.blocks.reserve(function.blocks.size());
         for(const auto &block : function.blocks)
         {

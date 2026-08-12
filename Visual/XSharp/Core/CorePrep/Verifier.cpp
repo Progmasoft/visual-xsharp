@@ -18,14 +18,17 @@ auto issue(std::string code, std::string message, SymbolId function, BlockId blo
 auto atom_valid(const Atom &atom) -> bool
 {
     if(atom.kind == Atom::Kind::Variable)
-        return atom.symbol != 0;
-    switch(atom.type)
+        return atom.symbol.id != 0;
+    switch(atom.type.kind)
     {
-    case ValueType::Unit: return std::holds_alternative<std::monostate>(atom.literal);
-    case ValueType::Bool: return std::holds_alternative<bool>(atom.literal);
-    case ValueType::Int64: return std::holds_alternative<std::int64_t>(atom.literal);
-    case ValueType::Int32: return std::holds_alternative<std::int32_t>(atom.literal);
-    case ValueType::String: return std::holds_alternative<std::string>(atom.literal);
+    case Type::Kind::Unit: return std::holds_alternative<std::monostate>(atom.literal);
+    case Type::Kind::Bool: return std::holds_alternative<bool>(atom.literal);
+    case Type::Kind::Int64: return std::holds_alternative<std::int64_t>(atom.literal);
+    case Type::Kind::Int32: return std::holds_alternative<std::int32_t>(atom.literal);
+    case Type::Kind::String: return std::holds_alternative<std::u32string>(atom.literal);
+    case Type::Kind::Function:
+    case Type::Kind::Named:
+    case Type::Kind::TypeVariable: return false;
     }
     return false;
 }
@@ -45,7 +48,7 @@ auto expected_arity(Operation operation) -> std::size_t
 void verify_instruction(const Instruction &instruction, SymbolId function, BlockId block,
                         std::vector<VerificationIssue> &issues)
 {
-    if(instruction.kind != Instruction::Kind::Evaluate && instruction.destination == 0)
+    if(instruction.kind != Instruction::Kind::Evaluate && instruction.destination.id == 0)
         issues.push_back(issue("VXC1006", "defining instruction has no destination symbol", function, block));
     if(instruction.operation != Operation::Call && instruction.operands.size() != expected_arity(instruction.operation))
         issues.push_back(issue("VXC1007", "operation has the wrong operand count", function, block));
@@ -62,7 +65,7 @@ void verify_terminator(const Terminator &terminator, const std::unordered_set<Bl
         issues.push_back(issue("VXC1010", "return contains an invalid typed atom", function, block));
     if(terminator.kind == Terminator::Kind::Branch)
     {
-        if(!atom_valid(terminator.value) || terminator.value.type != ValueType::Bool)
+        if(!atom_valid(terminator.value) || terminator.value.type.kind != Type::Kind::Bool)
             issues.push_back(issue("VXC1011", "branch condition must be a valid bool atom", function, block));
         if(!block_ids.contains(terminator.true_target) || !block_ids.contains(terminator.false_target))
             issues.push_back(issue("VXC1012", "branch targets a missing block", function, block));
@@ -78,29 +81,29 @@ auto verify(const CorePrepModule &module) -> std::vector<VerificationIssue>
     std::unordered_set<SymbolId> function_ids;
     for(const auto &function : module.functions)
     {
-        if(function.symbol == 0 || !function_ids.insert(function.symbol).second)
-            issues.push_back(issue("VXC1001", "function symbol is missing or duplicated", function.symbol));
+        if(function.symbol.id == 0 || !function_ids.insert(function.symbol.id).second)
+            issues.push_back(issue("VXC1001", "function symbol is missing or duplicated", function.symbol.id));
 
         std::unordered_set<BlockId> block_ids;
         for(const auto &block : function.blocks)
             if(!block_ids.insert(block.id).second)
-                issues.push_back(issue("VXC1002", "block id is duplicated", function.symbol, block.id));
+            issues.push_back(issue("VXC1002", "block id is duplicated", function.symbol.id, block.id));
         if(!block_ids.contains(function.entry))
-            issues.push_back(issue("VXC1003", "entry block does not exist", function.symbol));
+            issues.push_back(issue("VXC1003", "entry block does not exist", function.symbol.id));
 
         std::unordered_set<SymbolId> definitions;
         for(const auto &parameter : function.parameters)
-            if(parameter.symbol == 0 || !definitions.insert(parameter.symbol).second)
-                issues.push_back(issue("VXC1004", "parameter symbol is missing or duplicated", function.symbol));
+            if(parameter.symbol.id == 0 || !definitions.insert(parameter.symbol.id).second)
+                issues.push_back(issue("VXC1004", "parameter symbol is missing or duplicated", function.symbol.id));
         for(const auto &block : function.blocks)
         {
             for(const auto &instruction : block.instructions)
             {
-                if(instruction.kind == Instruction::Kind::Bind && !definitions.insert(instruction.destination).second)
-                    issues.push_back(issue("VXC1005", "binding symbol is defined more than once", function.symbol, block.id));
-                verify_instruction(instruction, function.symbol, block.id, issues);
+                if(instruction.kind == Instruction::Kind::Bind && !definitions.insert(instruction.destination.id).second)
+                    issues.push_back(issue("VXC1005", "binding symbol is defined more than once", function.symbol.id, block.id));
+                verify_instruction(instruction, function.symbol.id, block.id, issues);
             }
-            verify_terminator(block.terminator, block_ids, function.symbol, block.id, issues);
+            verify_terminator(block.terminator, block_ids, function.symbol.id, block.id, issues);
         }
     }
     return issues;

@@ -3,6 +3,7 @@
 
 #include "Visual/XSharp/Core/CorePrep.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
+#include "Visual/XSharp/Core/CorePrep/Wire.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
 
@@ -13,32 +14,34 @@ namespace
 auto prepared_module() -> visual_xsharp::core::CorePrepModule
 {
     using namespace visual_xsharp::core;
-    const auto int_constant = [](std::int64_t value) { return Atom::constant(value, ValueType::Int64); };
-    const auto variable = [](SymbolId symbol, ValueType type) { return Atom::variable(symbol, type); };
+    const auto int_constant = [](std::int64_t value) { return Atom::constant(value, Type::int64()); };
+    const auto variable = [](SymbolId symbol, Type type) { return Atom::variable(symbol, std::move(type)); };
 
-    Function sum{10, {{11, ValueType::Int64}, {12, ValueType::Int64}}, ValueType::Int64, 0,
+    Function sum{{10, U"Sum"}, {{{11, U"left"}, Type::int64()}, {{12, U"right"}, Type::int64()}}, Type::int64(), 0,
                  {{0,
-                   {{Instruction::Kind::Bind, 13, ValueType::Int64, false, Operation::Add,
-                     {variable(11, ValueType::Int64), variable(12, ValueType::Int64)}}},
-                   {Terminator::Kind::Return, variable(13, ValueType::Int64), 0, 0}}}};
+                   {{Instruction::Kind::Bind, {13, U"result"}, Type::int64(), false, Operation::Add,
+                     {variable(11, Type::int64()), variable(12, Type::int64())}}},
+                   {Terminator::Kind::Return, variable(13, Type::int64()), 0, 0}}}};
 
-    Function main{20, {}, ValueType::Unit, 0,
+    Function main{{20, U"Main"}, {}, Type::unit(), 0,
                   {{0,
-                    {{Instruction::Kind::Bind, 21, ValueType::Int64, true, Operation::Call,
-                      {variable(10, ValueType::Int64), int_constant(20), int_constant(22)}},
-                     {Instruction::Kind::Bind, 22, ValueType::Bool, false, Operation::GreaterEqual,
-                      {variable(21, ValueType::Int64), int_constant(40)}}},
-                    {Terminator::Kind::Branch, variable(22, ValueType::Bool), 1, 2}},
+                    {{Instruction::Kind::Bind, {21, U"value"}, Type::int64(), true, Operation::Call,
+                      {variable(10, Type::function({Type::int64(), Type::int64()}, Type::int64())), int_constant(20), int_constant(22)}},
+                     {Instruction::Kind::Bind, {22, U"condition"}, Type::boolean(), false, Operation::GreaterEqual,
+                      {variable(21, Type::int64()), int_constant(40)}}},
+                    {Terminator::Kind::Branch, variable(22, Type::boolean()), 1, 2}},
                    {1,
-                    {{Instruction::Kind::Assign, 21, ValueType::Int64, true, Operation::Add,
-                      {variable(21, ValueType::Int64), int_constant(1)}}},
+                    {{Instruction::Kind::Bind, {23, U"$coreprep23"}, Type::int64(), false, Operation::Add,
+                      {variable(21, Type::int64()), int_constant(1)}},
+                     {Instruction::Kind::Assign, {21, U"value"}, Type::int64(), false, Operation::Copy,
+                      {variable(23, Type::int64())}}},
                     {Terminator::Kind::Jump, {}, 3, 0}},
                    {2,
-                    {{Instruction::Kind::Assign, 21, ValueType::Int64, true, Operation::Copy, {int_constant(0)}}},
+                    {{Instruction::Kind::Assign, {21, U"value"}, Type::int64(), false, Operation::Copy, {int_constant(0)}}},
                     {Terminator::Kind::Jump, {}, 3, 0}},
-                   {3, {}, {Terminator::Kind::Return, Atom::constant({}, ValueType::Unit), 0, 0}},
+                   {3, {}, {Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}},
                    {99, {}, {Terminator::Kind::Unreachable, {}, 0, 0}}}};
-    return CorePrepModule{"Name", {sum, main}};
+    return CorePrepModule{{U"Name"}, {sum, main}};
 }
 } // namespace
 
@@ -80,4 +83,89 @@ TEST_CASE("typed native lowering allocates stable virtual registers")
     REQUIRE(sum.parameter_registers[0] != sum.parameter_registers[1]);
     REQUIRE(sum.blocks.front().instructions.front().destination != 0);
     REQUIRE(sum.blocks.front().terminator.value.kind == visual_xsharp::xmm::Value::Kind::Register);
+}
+
+TEST_CASE("C++20 CorePrep wire codec preserves the complete typed CFG")
+{
+    const auto prepared = prepared_module();
+    const auto encoded = visual_xsharp::core::wire::encode(prepared);
+    REQUIRE(encoded);
+    REQUIRE(encoded.bytes.size() > 8);
+    REQUIRE(encoded.bytes.at(0) == 'V');
+    REQUIRE(encoded.bytes.at(1) == 'X');
+    REQUIRE(encoded.bytes.at(2) == 'C');
+    REQUIRE(encoded.bytes.at(3) == 'P');
+
+    const auto decoded = visual_xsharp::core::wire::decode(encoded.bytes);
+    REQUIRE(decoded);
+    REQUIRE(decoded.module.value() == prepared);
+    REQUIRE(visual_xsharp::core::verify(decoded.module.value()).empty());
+}
+
+TEST_CASE("CorePrep wire decoder rejects malformed document boundaries")
+{
+    const auto encoded = visual_xsharp::core::wire::encode(prepared_module());
+    REQUIRE(encoded);
+
+    SECTION("invalid magic")
+    {
+        auto bytes = encoded.bytes;
+        bytes.front() = 'N';
+        const auto decoded = visual_xsharp::core::wire::decode(bytes);
+        REQUIRE_FALSE(decoded);
+        REQUIRE(decoded.error->kind == visual_xsharp::core::wire::ErrorKind::InvalidMagic);
+    }
+    SECTION("truncation")
+    {
+        auto bytes = encoded.bytes;
+        bytes.pop_back();
+        const auto decoded = visual_xsharp::core::wire::decode(bytes);
+        REQUIRE_FALSE(decoded);
+        REQUIRE(decoded.error->kind == visual_xsharp::core::wire::ErrorKind::TruncatedInput);
+    }
+    SECTION("trailing data")
+    {
+        auto bytes = encoded.bytes;
+        bytes.push_back(0xff);
+        const auto decoded = visual_xsharp::core::wire::decode(bytes);
+        REQUIRE_FALSE(decoded);
+        REQUIRE(decoded.error->kind == visual_xsharp::core::wire::ErrorKind::TrailingInput);
+    }
+    SECTION("unsupported version")
+    {
+        auto bytes = encoded.bytes;
+        bytes.at(4) = 2;
+        const auto decoded = visual_xsharp::core::wire::decode(bytes);
+        REQUIRE_FALSE(decoded);
+        REQUIRE(decoded.error->kind == visual_xsharp::core::wire::ErrorKind::UnsupportedVersion);
+    }
+}
+
+TEST_CASE("CorePrep wire codec enforces resource and Unicode limits")
+{
+    using namespace visual_xsharp::core;
+    auto prepared = prepared_module();
+
+    SECTION("function count")
+    {
+        visual_xsharp::core::wire::Limits limits;
+        limits.maximum_functions = 1;
+        const auto encoded = visual_xsharp::core::wire::encode(prepared, limits);
+        REQUIRE_FALSE(encoded);
+        REQUIRE(encoded.error->kind == visual_xsharp::core::wire::ErrorKind::LimitExceeded);
+    }
+    SECTION("invalid Unicode scalar")
+    {
+        prepared.name = {std::u32string(1, static_cast<char32_t>(0xd800))};
+        const auto encoded = visual_xsharp::core::wire::encode(prepared);
+        REQUIRE_FALSE(encoded);
+        REQUIRE(encoded.error->kind == visual_xsharp::core::wire::ErrorKind::InvalidCodePoint);
+    }
+    SECTION("zero symbol")
+    {
+        prepared.functions.front().symbol.id = 0;
+        const auto encoded = visual_xsharp::core::wire::encode(prepared);
+        REQUIRE_FALSE(encoded);
+        REQUIRE(encoded.error->kind == visual_xsharp::core::wire::ErrorKind::InvalidSymbol);
+    }
 }

@@ -21,7 +21,7 @@ enum class Opcode : std::uint8_t
 struct Operand final
 {
     enum class Kind : std::uint8_t { Symbol, Literal } kind{Kind::Literal};
-    core::ValueType type{core::ValueType::Unit};
+    core::Type type{core::Type::unit()};
     SymbolId symbol{};
     core::Literal literal{};
 };
@@ -30,7 +30,7 @@ struct Instruction final
     enum class Effect : std::uint8_t { Define, Store, Discard } effect{Effect::Discard};
     Opcode opcode{Opcode::Copy};
     SymbolId destination{};
-    core::ValueType result_type{core::ValueType::Unit};
+    core::Type result_type{core::Type::unit()};
     std::vector<Operand> operands;
 };
 struct Terminator final
@@ -45,11 +45,11 @@ struct Function final
 {
     SymbolId symbol{};
     std::vector<core::Parameter> parameters;
-    core::ValueType return_type{core::ValueType::Unit};
+    core::Type return_type{core::Type::unit()};
     BlockId entry{};
     std::vector<Block> blocks;
 };
-struct Module final { std::string name; std::vector<Function> functions; };
+struct Module final { std::vector<std::u32string> name; std::vector<Function> functions; };
 
 [[nodiscard]] auto lower(const core::CorePrepModule &module) -> Module;
 [[nodiscard]] auto optimize(Module module) -> Module;
