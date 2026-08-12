@@ -3,11 +3,16 @@
 module Main (main) where
 
 import Data.List (isInfixOf)
+import Control.Exception (finally)
+import Data.Word (Word8)
+import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
+import System.FilePath ((</>))
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
+import Visual.XSharp.Core.CorePrep.Artifact
 import Visual.XSharp.Core.CorePrep.Verifier
 import Visual.XSharp.Core.CorePrep.Wire
 import Visual.XSharp.Diagnostic
@@ -35,9 +40,15 @@ main = do
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
     check "CorePrep wire codec rejects unsupported types" wireRejectsUnsupportedType
     check "CorePrep wire codec preserves Unicode scalar values" wirePreservesUnicode
+    check "CorePrep wire v1 golden bytes remain stable" wireGoldenDocument
+    checkIO "explicit .core artifact round-trips through binary I/O" artifactRoundTrip
+    checkIO "artifact API rejects a non-.core path" artifactRejectsExtension
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure
+
+checkIO :: String -> IO Bool -> IO ()
+checkIO label action = action >>= check label
 
 compile :: String -> Either [Diagnostic] FrontendArtifacts
 compile = compileToCorePrep . CompilerInput "test.vxs"
@@ -178,3 +189,43 @@ wirePreservesUnicode =
     in case encodeCorePrep prepared >>= decodeCorePrep of
         Right decoded -> decoded == prepared
         Left _ -> False
+
+goldenModule :: CorePrepModule
+goldenModule =
+    let mainName = ResolvedName (SymbolId 1) (Identifier "Main")
+        mainBlock = CorePrepBlock 0 [] (CorePrepReturn (CorePrepLiteral CoreUnit unitType))
+        mainFunction = CorePrepFunction mainName [] unitType 0 [mainBlock]
+    in CorePrepModule (QualifiedName [Identifier "Demo"]) [mainFunction]
+
+goldenBytes :: [Word8]
+goldenBytes =
+    [ 0x56, 0x58, 0x43, 0x50, 0x01, 0x00, 0x00, 0x00
+    , 0x01, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00
+    , 0x44, 0x00, 0x00, 0x00, 0x65, 0x00, 0x00, 0x00
+    , 0x6d, 0x00, 0x00, 0x00, 0x6f, 0x00, 0x00, 0x00
+    , 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+    , 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00
+    , 0x4d, 0x00, 0x00, 0x00, 0x61, 0x00, 0x00, 0x00
+    , 0x69, 0x00, 0x00, 0x00, 0x6e, 0x00, 0x00, 0x00
+    , 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    , 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    , 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00
+    ]
+
+wireGoldenDocument :: Bool
+wireGoldenDocument = encodeCorePrep goldenModule == Right goldenBytes
+    && decodeCorePrep goldenBytes == Right goldenModule
+
+artifactRoundTrip :: IO Bool
+artifactRoundTrip = do
+    temporary <- getTemporaryDirectory
+    let path = temporary </> "visual-xsharp-coreprep-wire-v1.core"
+        cleanup = doesFileExist path >>= \exists -> if exists then removeFile path else pure ()
+    (do written <- writeCorePrepArtifact path goldenModule
+        loaded <- readCorePrepArtifact path
+        pure (written == Right () && loaded == Right goldenModule)) `finally` cleanup
+
+artifactRejectsExtension :: IO Bool
+artifactRejectsExtension = do
+    result <- writeCorePrepArtifact "invalid.xpp" goldenModule
+    pure (result == Left (InvalidArtifactPath "invalid.xpp"))

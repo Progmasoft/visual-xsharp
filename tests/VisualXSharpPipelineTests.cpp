@@ -4,13 +4,17 @@
 #include "Visual/XSharp/Core/CorePrep.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
 #include "Visual/XSharp/Core/CorePrep/Wire.hpp"
+#include "Visual/XSharp/Core/CorePrep/Artifact.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <ranges>
+#include <sstream>
 #include <string_view>
 
 namespace
@@ -46,6 +50,32 @@ auto prepared_module() -> visual_xsharp::core::CorePrepModule
                    {3, {}, {Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}},
                    {99, {}, {Terminator::Kind::Unreachable, {}, 0, 0}}}};
     return CorePrepModule{{U"Name"}, {sum, main}};
+}
+
+auto golden_module() -> visual_xsharp::core::CorePrepModule
+{
+    using namespace visual_xsharp::core;
+    Function main{{1, U"Main"}, {}, Type::unit(), 0,
+                  {{0, {}, {Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}}}};
+    return CorePrepModule{{U"Demo"}, {std::move(main)}};
+}
+
+auto read_golden_hex() -> std::vector<std::uint8_t>
+{
+    std::ifstream stream(XS_COREPREP_GOLDEN_PATH);
+    REQUIRE(stream);
+    std::vector<std::uint8_t> bytes;
+    std::string line;
+    while(std::getline(stream, line))
+    {
+        if(const auto comment = line.find('#'); comment != std::string::npos)
+            line.erase(comment);
+        std::istringstream tokens(line);
+        std::string token;
+        while(tokens >> token)
+            bytes.push_back(static_cast<std::uint8_t>(std::stoul(token, nullptr, 16)));
+    }
+    return bytes;
 }
 
 auto has_issue(const std::vector<visual_xsharp::core::VerificationIssue> &issues, std::string_view code) -> bool
@@ -257,4 +287,50 @@ TEST_CASE("semantic verifier rejects inconsistent symbol spelling")
     prepared.functions.at(0).blocks.at(0).instructions.at(0).operands.at(0).symbol.spelling = U"different";
     const auto issues = visual_xsharp::core::verify(prepared);
     REQUIRE(has_issue(issues, "VXC1014"));
+}
+
+TEST_CASE("shared wire-v1 golden document decodes to the canonical CorePrep module")
+{
+    const auto golden = read_golden_hex();
+    const auto decoded = visual_xsharp::core::wire::decode(golden);
+    REQUIRE(decoded);
+    REQUIRE(decoded.module.value() == golden_module());
+
+    const auto encoded = visual_xsharp::core::wire::encode(golden_module());
+    REQUIRE(encoded);
+    REQUIRE(encoded.bytes == golden);
+}
+
+TEST_CASE("explicit native .core artifact I/O round-trips without changing normal RAM flow")
+{
+    const auto path = std::filesystem::temp_directory_path() / "visual-xsharp-native-wire-v1.core";
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+
+    const auto write_error = visual_xsharp::core::write_coreprep_artifact(path, golden_module());
+    REQUIRE_FALSE(write_error.has_value());
+    const auto loaded = visual_xsharp::core::read_coreprep_artifact(path);
+    REQUIRE(loaded);
+    REQUIRE(loaded.module.value() == golden_module());
+    REQUIRE(std::filesystem::remove(path));
+}
+
+TEST_CASE("explicit native artifact API rejects wrong extensions and malformed content")
+{
+    const auto temporary = std::filesystem::temp_directory_path();
+    const auto wrong_extension = temporary / "visual-xsharp-native-wire-v1.xpp";
+    const auto extension_error = visual_xsharp::core::write_coreprep_artifact(wrong_extension, golden_module());
+    REQUIRE(extension_error.has_value());
+    REQUIRE(extension_error->kind == visual_xsharp::core::ArtifactErrorKind::InvalidExtension);
+
+    const auto malformed_path = temporary / "visual-xsharp-native-malformed.core";
+    {
+        std::ofstream malformed(malformed_path, std::ios::binary | std::ios::trunc);
+        malformed << "not-coreprep";
+    }
+    const auto loaded = visual_xsharp::core::read_coreprep_artifact(malformed_path);
+    REQUIRE_FALSE(loaded);
+    REQUIRE(loaded.error->kind == visual_xsharp::core::ArtifactErrorKind::WireError);
+    REQUIRE(loaded.error->wire_error.has_value());
+    REQUIRE(std::filesystem::remove(malformed_path));
 }

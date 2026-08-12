@@ -42,6 +42,8 @@ xs_add_c_test(lil_c_producer tests/lil_c_producer_tests.c xs_lil)
 xs_add_cxx_test(lil_cpp tests/LilCppTests.cpp xs_lil_cpp)
 xs_add_cxx_test(planning_cpp tests/PlanningCppTests.cpp xs_compiler)
 xs_add_cxx_test(visual_xsharp_pipeline tests/VisualXSharpPipelineTests.cpp xs_compiler)
+target_compile_definitions(xs_VisualXSharpPipelineTests PRIVATE
+  XS_COREPREP_GOLDEN_PATH="${PROJECT_SOURCE_DIR}/tests/fixtures/coreprep/wire-v1.hex")
 xs_add_c_test(mir tests/mir_tests.c xs_compiler)
 xs_add_c_test(mir_flow tests/mir_flow_tests.c xs_compiler)
 xs_add_c_test(syntax_ast tests/syntax_ast_tests.c xs_compiler)
