@@ -85,35 +85,24 @@ vxs build -File .\Sources\Main.vxs
 Success depends on the source body being supported by that route. This command does not prove that the intended Haskell to
 CorePrep to Xpp/Xmm pipeline is already the production owner.
 
-## Connected CorePrep input
+## Core input status
 
-Version `0.3.0` supports explicit CorePrep artifacts:
+The CLI reserves the real Core artifact commands:
 
 ```powershell
 vxs check -Build core -File module.core
 vxs build -Build core -File module.core
 ```
 
-The driver validates the `.core` extension, applies bounded wire decoding and semantic verification, then creates Xpp, Xmm,
-LLVM IR, and LLVM bitcode in memory. `-Xpp-Optimization-Passes` and `-Xmm-Optimization-Passes` control the middle-end passes;
-both default to `true`. `-Llvm-OptLevel` selects the backend pass pipeline.
-
-The build command can explicitly persist either final LLVM representation beside the input artifact:
-
-```powershell
-vxs build -Build core -File module.core -Emit llvmll
-vxs build -Build core -File module.core -Emit llvmbc
-```
-
-These commands write `module.ll` and `module.bc`, respectively. `check` always remains non-emitting and rejects `-Emit`.
+Version `0.3.0` defines the Haskell `VXCR` `.core` codec, bounded reader/writer, and semantic verifier, but the C++20 consumer
+for that format is not connected yet. These commands therefore fail explicitly. The older `VXCP` CorePrep transport remains
+an internal Haskell-to-C++20 boundary and is not accepted as a `.core` file.
 
 ## Registered but not connected
 
 The CLI reserves the renewed artifact vocabulary before all routes are implemented:
 
-- explicit `-Emit` requests other than `llvmll` and `llvmbc` from `.core` input report that the selected writer is not
-  connected;
-- `-Build` inputs other than `vxs` and `core` currently report that the selected input is not connected; and
+- all explicit `.core`, `.xpp`, and `.xmm` input routes currently report that the selected input is not connected;
 - `install` and `viget` report that the ViGet client is not linked into the compiler build.
 
 `resolve` and `update` evaluate the project configuration and refresh `Visual.XSharp.Lockfile.sqlite3`.

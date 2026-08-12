@@ -4,14 +4,12 @@
 #include "Visual/XSharp/Core/CorePrep.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
 #include "Visual/XSharp/Core/CorePrep/Wire.hpp"
-#include "Visual/XSharp/Core/CorePrep/Artifact.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
 
-#include <catch2/catch_test_macros.hpp>
 #include <algorithm>
-#include <filesystem>
+#include <catch2/catch_test_macros.hpp>
 #include <fstream>
 #include <ranges>
 #include <sstream>
@@ -25,37 +23,68 @@ auto prepared_module() -> visual_xsharp::core::CorePrepModule
     const auto int_constant = [](std::int64_t value) { return Atom::constant(value, Type::int64()); };
     const auto variable = [](SymbolId symbol, Type type) { return Atom::variable(symbol, std::move(type)); };
 
-    Function sum{{10, U"Sum"}, {{{11, U"left"}, Type::int64()}, {{12, U"right"}, Type::int64()}}, Type::int64(), 0,
+    Function sum{{10, U"Sum"},
+                 {{{11, U"left"}, Type::int64()}, {{12, U"right"}, Type::int64()}},
+                 Type::int64(),
+                 0,
                  {{0,
-                   {{Instruction::Kind::Bind, {13, U"result"}, Type::int64(), false, Operation::Add,
+                   {{Instruction::Kind::Bind,
+                     {13, U"result"},
+                     Type::int64(),
+                     false,
+                     Operation::Add,
                      {variable(11, Type::int64()), variable(12, Type::int64())}}},
                    {Terminator::Kind::Return, variable(13, Type::int64()), 0, 0}}}};
 
-    Function main{{20, U"Main"}, {}, Type::unit(), 0,
-                  {{0,
-                    {{Instruction::Kind::Bind, {21, U"value"}, Type::int64(), true, Operation::Call,
-                      {variable(10, Type::function({Type::int64(), Type::int64()}, Type::int64())), int_constant(20), int_constant(22)}},
-                     {Instruction::Kind::Bind, {22, U"condition"}, Type::boolean(), false, Operation::GreaterEqual,
-                      {variable(21, Type::int64()), int_constant(40)}}},
-                    {Terminator::Kind::Branch, variable(22, Type::boolean()), 1, 2}},
-                   {1,
-                    {{Instruction::Kind::Bind, {23, U"$coreprep23"}, Type::int64(), false, Operation::Add,
-                      {variable(21, Type::int64()), int_constant(1)}},
-                     {Instruction::Kind::Assign, {21, U"value"}, Type::int64(), false, Operation::Copy,
-                      {variable(23, Type::int64())}}},
-                    {Terminator::Kind::Jump, {}, 3, 0}},
-                   {2,
-                    {{Instruction::Kind::Assign, {21, U"value"}, Type::int64(), false, Operation::Copy, {int_constant(0)}}},
-                    {Terminator::Kind::Jump, {}, 3, 0}},
-                   {3, {}, {Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}},
-                   {99, {}, {Terminator::Kind::Unreachable, {}, 0, 0}}}};
+    Function main{
+        {20, U"Main"},
+        {},
+        Type::unit(),
+        0,
+        {{0,
+          {{Instruction::Kind::Bind,
+            {21, U"value"},
+            Type::int64(),
+            true,
+            Operation::Call,
+            {variable(10, Type::function({Type::int64(), Type::int64()}, Type::int64())), int_constant(20),
+             int_constant(22)}},
+           {Instruction::Kind::Bind,
+            {22, U"condition"},
+            Type::boolean(),
+            false,
+            Operation::GreaterEqual,
+            {variable(21, Type::int64()), int_constant(40)}}},
+          {Terminator::Kind::Branch, variable(22, Type::boolean()), 1, 2}},
+         {1,
+          {{Instruction::Kind::Bind,
+            {23, U"$coreprep23"},
+            Type::int64(),
+            false,
+            Operation::Add,
+            {variable(21, Type::int64()), int_constant(1)}},
+           {Instruction::Kind::Assign,
+            {21, U"value"},
+            Type::int64(),
+            false,
+            Operation::Copy,
+            {variable(23, Type::int64())}}},
+          {Terminator::Kind::Jump, {}, 3, 0}},
+         {2,
+          {{Instruction::Kind::Assign, {21, U"value"}, Type::int64(), false, Operation::Copy, {int_constant(0)}}},
+          {Terminator::Kind::Jump, {}, 3, 0}},
+         {3, {}, {Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}},
+         {99, {}, {Terminator::Kind::Unreachable, {}, 0, 0}}}};
     return CorePrepModule{{U"Name"}, {sum, main}};
 }
 
 auto golden_module() -> visual_xsharp::core::CorePrepModule
 {
     using namespace visual_xsharp::core;
-    Function main{{1, U"Main"}, {}, Type::unit(), 0,
+    Function main{{1, U"Main"},
+                  {},
+                  Type::unit(),
+                  0,
                   {{0, {}, {Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}}}};
     return CorePrepModule{{U"Demo"}, {std::move(main)}};
 }
@@ -99,7 +128,8 @@ TEST_CASE("C++20 pipeline consumes Haskell-owned CorePrep")
     REQUIRE(xmm.functions.size() == 2);
     REQUIRE(xmm.functions.at(1).blocks.size() == 4);
     REQUIRE(xmm.functions.at(1).blocks.front().instructions.at(0).opcode == visual_xsharp::xmm::Opcode::Call);
-    REQUIRE(xmm.functions.at(1).blocks.front().instructions.at(1).opcode == visual_xsharp::xmm::Opcode::CompareGreaterEqualI64);
+    REQUIRE(xmm.functions.at(1).blocks.front().instructions.at(1).opcode ==
+            visual_xsharp::xmm::Opcode::CompareGreaterEqualI64);
 }
 
 TEST_CASE("CorePrep verifier rejects malformed control flow before Xpp lowering")
@@ -277,7 +307,8 @@ TEST_CASE("semantic verifier rejects mismatched calls assignments and returns")
     auto &main = prepared.functions.at(1);
     main.blocks.at(0).instructions.at(0).operands.at(1).type = visual_xsharp::core::Type::boolean();
     main.blocks.at(2).instructions.at(0).operands.front().type = visual_xsharp::core::Type::boolean();
-    main.blocks.at(3).terminator.value = visual_xsharp::core::Atom::constant(std::int64_t{1}, visual_xsharp::core::Type::int64());
+    main.blocks.at(3).terminator.value =
+        visual_xsharp::core::Atom::constant(std::int64_t{1}, visual_xsharp::core::Type::int64());
 
     const auto issues = visual_xsharp::core::verify(prepared);
     REQUIRE(has_issue(issues, "VXC1027"));
@@ -303,38 +334,4 @@ TEST_CASE("shared wire-v1 golden document decodes to the canonical CorePrep modu
     const auto encoded = visual_xsharp::core::wire::encode(golden_module());
     REQUIRE(encoded);
     REQUIRE(encoded.bytes == golden);
-}
-
-TEST_CASE("explicit native .core artifact I/O round-trips without changing normal RAM flow")
-{
-    const auto path = std::filesystem::temp_directory_path() / "visual-xsharp-native-wire-v1.core";
-    std::error_code ignored;
-    std::filesystem::remove(path, ignored);
-
-    const auto write_error = visual_xsharp::core::write_coreprep_artifact(path, golden_module());
-    REQUIRE_FALSE(write_error.has_value());
-    const auto loaded = visual_xsharp::core::read_coreprep_artifact(path);
-    REQUIRE(loaded);
-    REQUIRE(loaded.module.value() == golden_module());
-    REQUIRE(std::filesystem::remove(path));
-}
-
-TEST_CASE("explicit native artifact API rejects wrong extensions and malformed content")
-{
-    const auto temporary = std::filesystem::temp_directory_path();
-    const auto wrong_extension = temporary / "visual-xsharp-native-wire-v1.xpp";
-    const auto extension_error = visual_xsharp::core::write_coreprep_artifact(wrong_extension, golden_module());
-    REQUIRE(extension_error.has_value());
-    REQUIRE(extension_error->kind == visual_xsharp::core::ArtifactErrorKind::InvalidExtension);
-
-    const auto malformed_path = temporary / "visual-xsharp-native-malformed.core";
-    {
-        std::ofstream malformed(malformed_path, std::ios::binary | std::ios::trunc);
-        malformed << "not-coreprep";
-    }
-    const auto loaded = visual_xsharp::core::read_coreprep_artifact(malformed_path);
-    REQUIRE_FALSE(loaded);
-    REQUIRE(loaded.error->kind == visual_xsharp::core::ArtifactErrorKind::WireError);
-    REQUIRE(loaded.error->wire_error.has_value());
-    REQUIRE(std::filesystem::remove(malformed_path));
 }

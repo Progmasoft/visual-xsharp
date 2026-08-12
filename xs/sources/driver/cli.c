@@ -11,7 +11,6 @@
 #include "project_driver.h"
 #include "test_runner.h"
 
-#include "coreprep_driver.h"
 
 #include "Visual/XSharp/compiler_core.hh"
 #include "Visual/C23/diagnostic.hh"
@@ -594,7 +593,12 @@ static int run_project_command(const XsCliOptions *options)
 static int run_file_command(const XsCliOptions *options)
 {
     if(options->input == XS_BUILD_INPUT_CORE)
-        return xs_driver_build_coreprep(options);
+    {
+        fprintf(stderr,
+                "vxs: real Core artifact input is not connected to the native pipeline yet; "
+                "CorePrep wire data is not accepted as .core\n");
+        return 1;
+    }
     if(options->input != XS_BUILD_INPUT_VXS)
     {
         fprintf(stderr, "vxs: selected -Build input is not connected to the renewed pipeline yet\n");

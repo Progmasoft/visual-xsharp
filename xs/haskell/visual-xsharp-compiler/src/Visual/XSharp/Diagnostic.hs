@@ -16,6 +16,7 @@ data DiagnosticStage
     | NameResolutionStage
     | TypeCheckerStage
     | DesugarerStage
+    | CoreStage
     | CoreOptimizerStage
     | CorePrepStage
     | XppLoweringStage

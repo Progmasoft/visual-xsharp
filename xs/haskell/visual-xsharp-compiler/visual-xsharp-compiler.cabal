@@ -15,14 +15,16 @@ library
     exposed-modules:
         Visual.XSharp.AST
         Visual.XSharp.Core
+        Visual.XSharp.Core.Artifact
         Visual.XSharp.Core.CorePrep
-        Visual.XSharp.Core.CorePrep.Artifact
         Visual.XSharp.Core.CorePrep.Verifier
         Visual.XSharp.Core.CorePrep.Wire
         Visual.XSharp.Core.CorePrep.Wire.Decode
         Visual.XSharp.Core.CorePrep.Wire.Encode
         Visual.XSharp.Core.CorePrep.Wire.Format
         Visual.XSharp.Core.Optimizer
+        Visual.XSharp.Core.Verifier
+        Visual.XSharp.Core.Wire
         Visual.XSharp.Compiler
         Visual.XSharp.Desugarer
         Visual.XSharp.Diagnostic
@@ -36,6 +38,7 @@ library
     build-depends:
         base >=4.20 && <4.23,
         bytestring >=0.12 && <0.14,
+        containers >=0.7 && <0.8,
         filepath >=1.5 && <1.6
     default-language: GHC2021
 

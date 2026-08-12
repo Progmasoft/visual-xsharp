@@ -86,9 +86,11 @@ The preset intentionally uses tool names and environment-based discovery rather 
 
 The compiler executable is `vxs`. The current parser recognizes `check`, `build`, `run`, `test`, `resolve`, `update`,
 `install`, `viget`, and `version`. Some commands and renewed intermediate input/output selections are registered before their
-production implementation is complete. Version `0.3.0` connects explicit `.core` input to bounded decoding, verification,
-and the in-memory Xpp/Xmm/LLVM route. `.core` builds can explicitly emit LLVM IR or bitcode; Core/Xpp/Xmm emission and the remaining non-source `-Build` inputs are not yet
-connected, while package publication requires a ViGet client that is not linked into the current compiler build.
+production implementation is complete. Version `0.3.0` defines verified Haskell Core and a distinct bounded `VXCR` `.core`
+artifact contract. Native `.core` consumption remains deliberately disconnected until that contract reaches the C++20
+CorePrep boundary; CorePrep wire bytes are never accepted under the public `.core` extension. Core/Xpp/Xmm emission and
+non-source `-Build` inputs are not yet connected, while package publication requires a ViGet client that is not linked into
+the current compiler build.
 
 The reliable single-file validation form is:
 

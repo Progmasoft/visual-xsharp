@@ -49,8 +49,7 @@ void verify_symbol_spelling(const SymbolName &symbol, const Function &function, 
 }
 
 void verify_type(const Type &type, const Function &function, BlockId block, std::size_t depth,
-                 std::unordered_map<SymbolId, std::u32string> &spellings,
-                 std::vector<VerificationIssue> &issues)
+                 std::unordered_map<SymbolId, std::u32string> &spellings, std::vector<VerificationIssue> &issues)
 {
     if(depth > 128U)
     {
@@ -96,8 +95,7 @@ auto is_integer(const Type &type) -> bool
 }
 
 void verify_atom(const Atom &atom, const Function &function, BlockId block, const Definitions &definitions,
-                 std::unordered_map<SymbolId, std::u32string> &spellings,
-                 std::vector<VerificationIssue> &issues)
+                 std::unordered_map<SymbolId, std::u32string> &spellings, std::vector<VerificationIssue> &issues)
 {
     verify_type(atom.type, function, block, 0, spellings, issues);
     if(atom.kind == Atom::Kind::Variable)
@@ -115,7 +113,8 @@ auto expected_primitive_result(Operation operation, const std::vector<Atom> &ope
 {
     switch(operation)
     {
-    case Operation::Copy: return operands.empty() ? std::nullopt : std::optional<Type>(operands.front().type);
+    case Operation::Copy:
+        return operands.empty() ? std::nullopt : std::optional<Type>(operands.front().type);
     case Operation::Call:
         if(operands.empty() || operands.front().type.kind != Type::Kind::Function ||
            operands.front().type.components.empty())
@@ -129,14 +128,16 @@ auto expected_primitive_result(Operation operation, const std::vector<Atom> &ope
     case Operation::NotEqual:
     case Operation::LogicalAnd:
     case Operation::LogicalOr:
-    case Operation::LogicalNot: return Type::boolean();
+    case Operation::LogicalNot:
+        return Type::boolean();
     case Operation::Add:
     case Operation::Subtract:
     case Operation::Multiply:
     case Operation::Divide:
     case Operation::FloorDivide:
     case Operation::Remainder:
-    case Operation::Negate: return operands.empty() ? std::nullopt : std::optional<Type>(operands.front().type);
+    case Operation::Negate:
+        return operands.empty() ? std::nullopt : std::optional<Type>(operands.front().type);
     }
     return std::nullopt;
 }
@@ -171,11 +172,13 @@ void verify_operation(const Instruction &instruction, const Function &function, 
             const auto &signature = instruction.operands.front().type.components;
             const auto parameter_count = signature.size() - 1U;
             if(arity - 1U != parameter_count)
-                issues.push_back(issue("VXC1026", "call argument count differs from the callee signature", function, block));
+                issues.push_back(
+                    issue("VXC1026", "call argument count differs from the callee signature", function, block));
             const auto comparable = std::min(parameter_count, arity - 1U);
             for(std::size_t index = 0; index < comparable; ++index)
                 if(instruction.operands[index + 1U].type != signature[index])
-                    issues.push_back(issue("VXC1027", "call argument type differs from the callee signature", function, block));
+                    issues.push_back(
+                        issue("VXC1027", "call argument type differs from the callee signature", function, block));
         }
         break;
     case Operation::Negate:
@@ -208,7 +211,8 @@ void verify_operation(const Instruction &instruction, const Function &function, 
     default:
         if(arity != 2U || !is_integer(instruction.operands.front().type) ||
            instruction.operands.front().type != instruction.operands.back().type)
-            issues.push_back(issue("VXC1033", "arithmetic operation requires two equal integer types", function, block));
+            issues.push_back(
+                issue("VXC1033", "arithmetic operation requires two equal integer types", function, block));
         break;
     }
 
@@ -268,7 +272,8 @@ void verify_function(const CorePrepModule &module, const Function &function, std
                     issues.push_back(issue("VXC1036", "assignment targets an immutable symbol", function, block.id));
                 if(instruction.operands.size() == 1U && target != definitions.end() &&
                    target->second.type != instruction.operands.front().type)
-                    issues.push_back(issue("VXC1037", "assignment value type differs from its target", function, block.id));
+                    issues.push_back(
+                        issue("VXC1037", "assignment value type differs from its target", function, block.id));
             }
             verify_operation(instruction, function, block.id, definitions, spellings, issues);
         }
@@ -278,13 +283,15 @@ void verify_function(const CorePrepModule &module, const Function &function, std
         case Terminator::Kind::Return:
             verify_atom(block.terminator.value, function, block.id, definitions, spellings, issues);
             if(block.terminator.value.type != function.return_type)
-                issues.push_back(issue("VXC1038", "return atom type differs from the function result", function, block.id));
+                issues.push_back(
+                    issue("VXC1038", "return atom type differs from the function result", function, block.id));
             break;
         case Terminator::Kind::Branch:
             verify_atom(block.terminator.value, function, block.id, definitions, spellings, issues);
             break;
         case Terminator::Kind::Jump:
-        case Terminator::Kind::Unreachable: break;
+        case Terminator::Kind::Unreachable:
+            break;
         }
     }
 }

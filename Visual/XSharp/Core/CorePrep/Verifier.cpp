@@ -22,14 +22,20 @@ auto atom_valid(const Atom &atom) -> bool
         return atom.symbol.id != 0;
     switch(atom.type.kind)
     {
-    case Type::Kind::Unit: return std::holds_alternative<std::monostate>(atom.literal);
-    case Type::Kind::Bool: return std::holds_alternative<bool>(atom.literal);
-    case Type::Kind::Int64: return std::holds_alternative<std::int64_t>(atom.literal);
-    case Type::Kind::Int32: return std::holds_alternative<std::int32_t>(atom.literal);
-    case Type::Kind::String: return std::holds_alternative<std::u32string>(atom.literal);
+    case Type::Kind::Unit:
+        return std::holds_alternative<std::monostate>(atom.literal);
+    case Type::Kind::Bool:
+        return std::holds_alternative<bool>(atom.literal);
+    case Type::Kind::Int64:
+        return std::holds_alternative<std::int64_t>(atom.literal);
+    case Type::Kind::Int32:
+        return std::holds_alternative<std::int32_t>(atom.literal);
+    case Type::Kind::String:
+        return std::holds_alternative<std::u32string>(atom.literal);
     case Type::Kind::Function:
     case Type::Kind::Named:
-    case Type::Kind::TypeVariable: return false;
+    case Type::Kind::TypeVariable:
+        return false;
     }
     return false;
 }
@@ -38,11 +44,15 @@ auto expected_arity(Operation operation) -> std::size_t
 {
     switch(operation)
     {
-    case Operation::Copy: return 1;
-    case Operation::Call: return 0;
+    case Operation::Copy:
+        return 1;
+    case Operation::Call:
+        return 0;
     case Operation::Negate:
-    case Operation::LogicalNot: return 1;
-    default: return 2;
+    case Operation::LogicalNot:
+        return 1;
+    default:
+        return 2;
     }
 }
 
@@ -55,7 +65,8 @@ void verify_instruction(const Instruction &instruction, SymbolId function, Block
         issues.push_back(issue("VXC1007", "operation has the wrong operand count", function, block));
     if(instruction.operation == Operation::Call && instruction.operands.empty())
         issues.push_back(issue("VXC1008", "call operation has no callee operand", function, block));
-    if(std::any_of(instruction.operands.begin(), instruction.operands.end(), [](const Atom &atom) { return !atom_valid(atom); }))
+    if(std::any_of(instruction.operands.begin(), instruction.operands.end(),
+                   [](const Atom &atom) { return !atom_valid(atom); }))
         issues.push_back(issue("VXC1009", "instruction contains an invalid typed atom", function, block));
 }
 
@@ -88,7 +99,7 @@ auto verify(const CorePrepModule &module) -> std::vector<VerificationIssue>
         std::unordered_set<BlockId> block_ids;
         for(const auto &block : function.blocks)
             if(!block_ids.insert(block.id).second)
-            issues.push_back(issue("VXC1002", "block id is duplicated", function.symbol.id, block.id));
+                issues.push_back(issue("VXC1002", "block id is duplicated", function.symbol.id, block.id));
         if(!block_ids.contains(function.entry))
             issues.push_back(issue("VXC1003", "entry block does not exist", function.symbol.id));
 
@@ -100,8 +111,10 @@ auto verify(const CorePrepModule &module) -> std::vector<VerificationIssue>
         {
             for(const auto &instruction : block.instructions)
             {
-                if(instruction.kind == Instruction::Kind::Bind && !definitions.insert(instruction.destination.id).second)
-                    issues.push_back(issue("VXC1005", "binding symbol is defined more than once", function.symbol.id, block.id));
+                if(instruction.kind == Instruction::Kind::Bind &&
+                   !definitions.insert(instruction.destination.id).second)
+                    issues.push_back(
+                        issue("VXC1005", "binding symbol is defined more than once", function.symbol.id, block.id));
                 verify_instruction(instruction, function.symbol.id, block.id, issues);
             }
             verify_terminator(block.terminator, block_ids, function.symbol.id, block.id, issues);

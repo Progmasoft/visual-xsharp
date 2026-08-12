@@ -49,10 +49,10 @@ register model. Function identities, signatures, instruction result types, and t
 ordinary registers remain explicit across both stages. Both stages have optimization boundaries and remain independent of
 LLVM.
 
-CorePrep crosses the Haskell/C++20 boundary through the versioned `VXCP` binary contract. Both implementations enforce byte,
-collection, string, and recursive-type limits. The native consumer decodes and verifies the complete module before creating
-Xpp or Xmm. Normal compilation retains the transfer in memory; `.core` files are read or written only through explicit
-artifact operations.
+Core has its own versioned `VXCR` binary contract, semantic verifier, and explicit `.core` artifact layer in Haskell.
+CorePrep crosses the Haskell/C++20 boundary through the separate internal `VXCP` contract. Both transports enforce byte,
+collection, string, and recursive-type limits. CorePrep is an adapting stage from Core to Xpp and exists only in RAM; it has
+no file extension, artifact API, CLI input, or emit option.
 
 ## Backend
 
@@ -85,6 +85,6 @@ The current public artifact names are:
 .xmm
 ```
 
-Normal compilation keeps these representations in memory. Explicit `.core` input reaches verified Xpp, Xmm, LLVM IR, and
-LLVM bitcode. `-Emit llvmll` and `-Emit llvmbc` write the final backend representation only when requested. Core, Xpp, and Xmm
-writers and Xpp/Xmm readers remain later work.
+Normal compilation keeps these representations in memory. The real `.core` writer and reader exist in the Haskell layer,
+but native `.core` input remains disconnected until the C++20 side consumes `VXCR` and lowers verified Core into CorePrep.
+Xpp/Xmm readers and their public artifact writers remain later work.

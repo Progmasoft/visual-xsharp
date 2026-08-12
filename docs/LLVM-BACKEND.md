@@ -66,7 +66,8 @@ artifact APIs:
 - `WriteLlvmIr` accepts only a `.ll` path; and
 - `WriteBitcode` accepts only a `.bc` path.
 
-For `.core` input, `vxs build -Emit llvmll` writes the sibling `.ll` file and `vxs build -Emit llvmbc` writes the sibling `.bc`
+After native `VXCR` Core input is connected, `vxs build -Emit llvmll` will write the sibling `.ll` file and
+`vxs build -Emit llvmbc` will write the sibling `.bc`
 file. `vxs check` never emits. Object, assembly, executable, Core, Xpp, and Xmm writers are not implied by this connection.
 
 The compatibility source route continues to own object and executable production until the Haskell frontend is connected as

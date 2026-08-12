@@ -31,9 +31,10 @@ It does not yet implement the complete language catalog in `Spec/`.
 
 The repository contains:
 
-- matching bounded Haskell and C++20 CorePrep wire codecs;
+- a verified Haskell Core model with a distinct bounded `VXCR` `.core` codec and artifact layer;
+- matching bounded Haskell and C++20 internal CorePrep wire codecs;
 - recursive type, symbol spelling, qualified-name, and UTF-32 string preservation;
-- explicit `.core` artifact I/O that remains separate from ordinary in-memory compilation;
+- RAM-only CorePrep transport; no CorePrep file extension, reader, writer, CLI input, or emit option exists;
 - structural and semantic native CorePrep verifiers;
 - CorePrep-to-Xpp lowering;
 - Xpp control-flow and self-copy optimization;
@@ -69,8 +70,7 @@ entry selection, compiler settings, dependency declarations, and the SQLite lock
 Known gaps include:
 
 - explicit Core/Xpp/Xmm emission is registered but not connected;
-- `.core` input is connected through verified in-memory Xpp/Xmm and LLVM lowering;
-- `.core` builds can explicitly emit `llvmll` or `llvmbc`;
+- `.core` input remains disconnected until the native consumer implements the real `VXCR` Core contract;
 - other non-source `-Build` inputs are registered but not connected;
 - package publication and installation require a ViGet client not linked into this build; and
 - the production source route does not yet use the Haskell frontend as its sole owner.
