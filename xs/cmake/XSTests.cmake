@@ -58,13 +58,24 @@ xs_add_c_test(package_archive tests/package_archive_tests.c xs_package)
 # runner can legitimately exceed the five-second unit-test default while another test is
 # starting Gradle, so give this integration-shaped test the same budget as install layout.
 set_tests_properties(package_archive PROPERTIES TIMEOUT 15)
-if(WIN32 AND CMAKE_PREFIX_PATH)
-  list(GET CMAKE_PREFIX_PATH 0 XS_DEPENDENCY_PREFIX)
-  file(GLOB XS_TEST_RUNTIME_DLLS CONFIGURE_DEPENDS "${XS_DEPENDENCY_PREFIX}/debug/bin/*.dll")
-  if(XS_TEST_RUNTIME_DLLS)
+if(WIN32)
+  # LibArchive is linked through a static xs_package target, so TARGET_RUNTIME_DLLS
+  # cannot see through to the imported DLL graph. Locate the bin directory matching the
+  # import library CMake actually selected; mixing lib with debug/bin loads the wrong ABI.
+  set(XS_ARCHIVE_RUNTIME_DLLS)
+  foreach(XS_DEPENDENCY_PREFIX IN LISTS CMAKE_PREFIX_PATH)
+    if(EXISTS "${XS_DEPENDENCY_PREFIX}/lib/archive.lib")
+      file(GLOB XS_PREFIX_RUNTIME_DLLS CONFIGURE_DEPENDS "${XS_DEPENDENCY_PREFIX}/bin/*.dll")
+      list(APPEND XS_ARCHIVE_RUNTIME_DLLS ${XS_PREFIX_RUNTIME_DLLS})
+    elseif(EXISTS "${XS_DEPENDENCY_PREFIX}/debug/lib/archive.lib")
+      file(GLOB XS_PREFIX_RUNTIME_DLLS CONFIGURE_DEPENDS "${XS_DEPENDENCY_PREFIX}/debug/bin/*.dll")
+      list(APPEND XS_ARCHIVE_RUNTIME_DLLS ${XS_PREFIX_RUNTIME_DLLS})
+    endif()
+  endforeach()
+  if(XS_ARCHIVE_RUNTIME_DLLS)
     add_custom_command(TARGET xs_package_archive_tests POST_BUILD
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-              ${XS_TEST_RUNTIME_DLLS} $<TARGET_FILE_DIR:xs_package_archive_tests>
+              ${XS_ARCHIVE_RUNTIME_DLLS} $<TARGET_FILE_DIR:xs_package_archive_tests>
       COMMAND_EXPAND_LISTS
       COMMENT "Copying archive and compression runtime DLLs"
     )
