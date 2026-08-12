@@ -17,6 +17,10 @@ library
         Visual.XSharp.Core
         Visual.XSharp.Core.CorePrep
         Visual.XSharp.Core.CorePrep.Verifier
+        Visual.XSharp.Core.CorePrep.Wire
+        Visual.XSharp.Core.CorePrep.Wire.Decode
+        Visual.XSharp.Core.CorePrep.Wire.Encode
+        Visual.XSharp.Core.CorePrep.Wire.Format
         Visual.XSharp.Core.Optimizer
         Visual.XSharp.Compiler
         Visual.XSharp.Desugarer

@@ -9,6 +9,7 @@ import Visual.XSharp.Compiler
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
 import Visual.XSharp.Core.CorePrep.Verifier
+import Visual.XSharp.Core.CorePrep.Wire
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.Pipeline.Stage
 
@@ -29,6 +30,11 @@ main = do
     check "lexer rejects unsupported input" badCharacter
     check "renewed artifact extensions remain stable" (map artifactExtension [Core, CorePrep, Xpp, Xmm] == [Just ".core", Nothing, Just ".xpp", Just ".xmm"])
     check "Haskell CorePrep verifier rejects duplicate blocks" invalidCorePrep
+    check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
+    check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
+    check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
+    check "CorePrep wire codec rejects unsupported types" wireRejectsUnsupportedType
+    check "CorePrep wire codec preserves Unicode scalar values" wirePreservesUnicode
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure
@@ -124,3 +130,51 @@ invalidCorePrep = case compile sample of
             { corePrepModuleFunctions = function { corePrepFunctionBlocks = corePrepFunctionBlocks function ++ take 1 (corePrepFunctionBlocks function) } : rest })
         [] -> False
     Left _ -> False
+
+wireRoundTrip :: Bool
+wireRoundTrip = case compile sample of
+    Right artifacts -> case encodeCorePrep (artifactCorePrep artifacts) >>= decodeCorePrep of
+        Right decoded -> decoded == artifactCorePrep artifacts
+        Left _ -> False
+    Left _ -> False
+
+wireRejectsTruncation :: Bool
+wireRejectsTruncation = case compile sample of
+    Right artifacts -> case encodeCorePrep (artifactCorePrep artifacts) of
+        Right bytes -> case decodeCorePrep (take (length bytes - 1) bytes) of
+            Left problem -> wireErrorKind problem == TruncatedInput
+            Right _ -> False
+        Left _ -> False
+    Left _ -> False
+
+wireRejectsTrailingInput :: Bool
+wireRejectsTrailingInput = case compile sample of
+    Right artifacts -> case encodeCorePrep (artifactCorePrep artifacts) of
+        Right bytes -> case decodeCorePrep (bytes ++ [0]) of
+            Left problem -> wireErrorKind problem == TrailingInput
+            Right _ -> False
+        Left _ -> False
+    Left _ -> False
+
+wireRejectsUnsupportedType :: Bool
+wireRejectsUnsupportedType = case compile sample of
+    Right artifacts ->
+        let prepared = artifactCorePrep artifacts
+        in case corePrepModuleFunctions prepared of
+            function:remaining ->
+                let changed = prepared { corePrepModuleFunctions = function { corePrepFunctionReturnType = ErrorType } : remaining }
+                in case encodeCorePrep changed of
+                    Left problem -> wireErrorKind problem == UnsupportedType
+                    Right _ -> False
+            [] -> False
+    Left _ -> False
+
+wirePreservesUnicode :: Bool
+wirePreservesUnicode =
+    let name = ResolvedName (SymbolId 1) (Identifier "Text")
+        literal = CorePrepLiteral (CoreString "Visual X# λ 😀") stringType
+        function = CorePrepFunction name [] stringType 0 [CorePrepBlock 0 [] (CorePrepReturn literal)]
+        prepared = CorePrepModule (QualifiedName [Identifier "Unicode"]) [function]
+    in case encodeCorePrep prepared >>= decodeCorePrep of
+        Right decoded -> decoded == prepared
+        Left _ -> False
