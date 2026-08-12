@@ -24,31 +24,20 @@ class OperatingSystem private constructor(
   }
 }
 
-class OperatingSystemFamily private constructor(
-  private val membership: Int,
-  private val displayName: String,
-) {
-  override fun equals(other: Any?) =
-    when {
-      other is OperatingSystemFamily -> membership and other.membership != 0
-      other === OperatingSystem.WINDOWS -> membership and 0b0100 != 0
-      else -> false
-    }
-
-  override fun hashCode() = 0
-
-  override fun toString() = displayName
+// Families are exclusive values. The previous overlapping bit-mask equality made BSD
+// compare equal to both BSD and UNIX, which violates equality transitivity and forced a
+// constant hash code. Platform capabilities shared by UNIX-like systems belong in an
+// explicit capability predicate when one is added, not in object equality.
+enum class OperatingSystemFamily {
+  UNIX,
+  BSD,
+  WINDOWS,
+  UNKNOWN;
 
   companion object {
-    val UNIX = OperatingSystemFamily(0b0001, "UNIX")
-    val BSD = OperatingSystemFamily(0b0010, "BSD")
-    val WINDOWS = OperatingSystemFamily(0b0100, "WINDOWS")
-    val UNKNOWN = OperatingSystemFamily(0b1000, "UNKNOWN")
-
     internal fun forOperatingSystem(os: OperatingSystem) =
       when (os) {
-        OperatingSystem.FREEBSD, OperatingSystem.OPENBSD, OperatingSystem.NETBSD ->
-          OperatingSystemFamily(0b0011, "BSD")
+        OperatingSystem.FREEBSD, OperatingSystem.OPENBSD, OperatingSystem.NETBSD -> BSD
         OperatingSystem.LINUX, OperatingSystem.MACOS -> UNIX
         OperatingSystem.WINDOWS, OperatingSystem.REACTOS_HOST -> WINDOWS
         else -> UNKNOWN

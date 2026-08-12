@@ -169,6 +169,9 @@ class ProjectDslTest {
     assertTrue(OS.toString().isNotBlank())
     assertTrue(FAMILY.toString().isNotBlank())
     assertTrue(ARCH.toString().isNotBlank())
+    assertEquals(OperatingSystemFamily.BSD, Host(OperatingSystem.FREEBSD, OperatingSystemFamily.BSD, Architecture.X86_64).family)
+    assertFalse(OperatingSystemFamily.BSD == OperatingSystemFamily.UNIX)
+    assertTrue(setOf(OperatingSystemFamily.BSD, OperatingSystemFamily.UNIX).size == 2)
   }
 
   private fun effectiveOptLevel(settings: CompilerSettings): LlvmOptLevel =
