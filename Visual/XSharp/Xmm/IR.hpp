@@ -19,15 +19,17 @@ enum class Opcode : std::uint8_t
 };
 struct Value final
 {
-    enum class Kind : std::uint8_t { Register, Immediate } kind{Kind::Immediate};
+    enum class Kind : std::uint8_t { Register, Immediate, Function } kind{Kind::Immediate};
     core::Type type{core::Type::unit()};
     VirtualRegister reg{};
+    xpp::SymbolId symbol{};
     core::Literal immediate{};
 };
 struct Instruction final
 {
     Opcode opcode{Opcode::Move};
     VirtualRegister destination{};
+    core::Type result_type{core::Type::unit()};
     std::vector<Value> operands;
     bool has_result{};
 };
@@ -41,8 +43,9 @@ struct Terminator final
 struct Block final { BlockId id{}; std::vector<Instruction> instructions; Terminator terminator; };
 struct Function final
 {
-    xpp::SymbolId symbol{};
+    core::SymbolName symbol{};
     std::vector<VirtualRegister> parameter_registers;
+    std::vector<core::Type> parameter_types;
     core::Type return_type{core::Type::unit()};
     BlockId entry{};
     std::vector<Block> blocks;

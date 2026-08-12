@@ -112,7 +112,7 @@ auto lower(const core::CorePrepModule &module) -> Module
     lowered.functions.reserve(module.functions.size());
     for(const auto &function : module.functions)
     {
-        Function lowered_function{function.symbol.id, function.parameters, function.return_type, function.entry, {}};
+        Function lowered_function{function.symbol, function.parameters, function.return_type, function.entry, {}};
         lowered_function.blocks.reserve(function.blocks.size());
         for(const auto &block : function.blocks)
         {
@@ -189,8 +189,12 @@ auto lower_opcode(xpp::Opcode opcode, const core::Type &type) -> Opcode
 auto lower_value(const xpp::Operand &operand, RegisterMap &map) -> Value
 {
     if(operand.kind == xpp::Operand::Kind::Symbol)
-        return Value{Value::Kind::Register, operand.type, map.get(operand.symbol), {}};
-    return Value{Value::Kind::Immediate, operand.type, 0, operand.literal};
+    {
+        if(operand.type.kind == core::Type::Kind::Function)
+            return Value{Value::Kind::Function, operand.type, 0, operand.symbol, {}};
+        return Value{Value::Kind::Register, operand.type, map.get(operand.symbol), 0, {}};
+    }
+    return Value{Value::Kind::Immediate, operand.type, 0, 0, operand.literal};
 }
 
 auto lower_terminator(const xpp::Terminator &terminator, RegisterMap &map) -> Terminator
@@ -207,9 +211,12 @@ auto lower(const xpp::Module &module) -> Module
     for(const auto &function : module.functions)
     {
         RegisterMap register_map;
-        Function lowered_function{function.symbol, {}, function.return_type, function.entry, {}};
+        Function lowered_function{function.symbol, {}, {}, function.return_type, function.entry, {}};
         for(const auto &parameter : function.parameters)
+        {
             lowered_function.parameter_registers.push_back(register_map.get(parameter.symbol.id));
+            lowered_function.parameter_types.push_back(parameter.type);
+        }
         lowered_function.blocks.reserve(function.blocks.size());
         for(const auto &block : function.blocks)
         {
@@ -220,6 +227,7 @@ auto lower(const xpp::Module &module) -> Module
                 Instruction lowered_instruction{};
                 lowered_instruction.opcode = lower_opcode(instruction.opcode, instruction.result_type);
                 lowered_instruction.has_result = instruction.effect != xpp::Instruction::Effect::Discard;
+                lowered_instruction.result_type = instruction.result_type;
                 if(lowered_instruction.has_result)
                     lowered_instruction.destination = register_map.get(instruction.destination);
                 for(const auto &operand : instruction.operands)

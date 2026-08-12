@@ -10,7 +10,7 @@ project DSL, runtime components, language examples, tests, and supporting develo
 
 The repository is under an architectural transition. The production `vxs` executable currently combines the established
 Rust compiler core with C23 and C++20 components. In parallel, a tested Haskell frontend through CorePrep and a C++20
-CorePrep-to-Xpp-to-Xmm slice are being developed and connected. The new route is real code, but it is not yet the sole
+CorePrep-to-Xpp-to-Xmm-to-LLVM-bitcode slice are being developed and connected. The new route is real code, but it is not yet the sole
 production compilation path.
 
 ## Intended compiler pipeline
@@ -87,7 +87,7 @@ The preset intentionally uses tool names and environment-based discovery rather 
 The compiler executable is `vxs`. The current parser recognizes `check`, `build`, `run`, `test`, `resolve`, `update`,
 `install`, `viget`, and `version`. Some commands and renewed intermediate input/output selections are registered before their
 production implementation is complete. Version `0.3.0` connects explicit `.core` input to bounded decoding, verification,
-and the in-memory Xpp/Xmm route. Explicit Core/Xpp/Xmm emission and the remaining non-source `-Build` inputs are not yet
+and the in-memory Xpp/Xmm/LLVM route. `.core` builds can explicitly emit LLVM IR or bitcode; Core/Xpp/Xmm emission and the remaining non-source `-Build` inputs are not yet
 connected, while package publication requires a ViGet client that is not linked into the current compiler build.
 
 The reliable single-file validation form is:

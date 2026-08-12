@@ -24,6 +24,9 @@
 - Headers shared by C and C++ use `.hh`.
 - C++-only headers use `.hpp`.
 - C++ implementation files use `.cpp` and compile as C++20.
+- C++ namespaces, classes, and functions use PascalCase. The canonical C++ root is `Visual::XSharp`; `visual_xsharp` is the
+  Rust naming convention and must not be introduced as the target namespace for renewed C++ code.
+- C++ local variables use camelCase, constants use `kPascalCase`, and macros use `UPPER_SNAKE_CASE`.
 - New or retained C implementation files compile as strict C23 until migrated.
 
 ## Size and decomposition

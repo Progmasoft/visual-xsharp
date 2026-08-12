@@ -45,7 +45,9 @@ and terminators. A verifier rejects malformed symbols, blocks, branch targets, a
 ## Native middle end
 
 Xpp is a target-independent typed representation consumed from verified CorePrep. Xmm lowers Xpp into a lower-level virtual
-register model. Both stages have optimization boundaries and remain independent of LLVM.
+register model. Function identities, signatures, instruction result types, and the distinction between function symbols and
+ordinary registers remain explicit across both stages. Both stages have optimization boundaries and remain independent of
+LLVM.
 
 CorePrep crosses the Haskell/C++20 boundary through the versioned `VXCP` binary contract. Both implementations enforce byte,
 collection, string, and recursive-type limits. The native consumer decodes and verifies the complete module before creating
@@ -54,8 +56,13 @@ artifact operations.
 
 ## Backend
 
-LLVM is the compiler backend. The build discovers LLVM through its CMake package and links the LLVM C API. Native output is
-linked with LLD through the Windows ClangCL toolchain.
+LLVM is the compiler backend. The C++20 backend verifies Xmm before constructing an LLVM module, lowers supported scalar and
+control-flow operations, runs the selected LLVM optimization pipeline, verifies the resulting module, and serializes LLVM IR
+and bitcode in memory. Visual X# `String` constants are represented as Unicode scalar (`i32`) storage plus a 64-bit scalar
+count; they are not encoded as UTF-8 byte strings. LLVM types and handles do not escape the backend API.
+
+The build discovers LLVM through its CMake package and links the LLVM C API. The compatibility route still owns object-file
+and executable production. Connecting verified Xmm bitcode to object emission and LLD is separate work.
 
 ## Entry point
 
@@ -78,6 +85,6 @@ The current public artifact names are:
 .xmm
 ```
 
-Normal compilation keeps these representations in memory. The CLI already reserves explicit emission selections, but the
-production path for emitting them is not connected yet. Explicit `.core` input is connected; Xpp/Xmm input and intermediate
-artifact writers remain later work.
+Normal compilation keeps these representations in memory. Explicit `.core` input reaches verified Xpp, Xmm, LLVM IR, and
+LLVM bitcode. `-Emit llvmll` and `-Emit llvmbc` write the final backend representation only when requested. Core, Xpp, and Xmm
+writers and Xpp/Xmm readers remain later work.

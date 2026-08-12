@@ -219,11 +219,13 @@ TEST_CASE("RAM pipeline decodes verifies and lowers CorePrep to optimized Xmm")
     REQUIRE(result.core_prep.has_value());
     REQUIRE(result.xpp.has_value());
     REQUIRE(result.xmm.has_value());
+    REQUIRE(result.llvm.has_value());
     REQUIRE_FALSE(result.wire_error.has_value());
     REQUIRE(result.verification_issues.empty());
     REQUIRE(result.core_prep->functions.at(1).blocks.size() == 5);
     REQUIRE(result.xpp->functions.at(1).blocks.size() == 4);
     REQUIRE(result.xmm->functions.at(1).blocks.size() == 4);
+    REQUIRE_FALSE(result.llvm->bitcode.empty());
 }
 
 TEST_CASE("RAM pipeline keeps optimization choices explicit")
@@ -250,6 +252,7 @@ TEST_CASE("RAM pipeline never lowers malformed wire input")
     REQUIRE_FALSE(result.core_prep.has_value());
     REQUIRE_FALSE(result.xpp.has_value());
     REQUIRE_FALSE(result.xmm.has_value());
+    REQUIRE_FALSE(result.llvm.has_value());
 }
 
 TEST_CASE("RAM pipeline never lowers semantically invalid CorePrep")
@@ -265,6 +268,7 @@ TEST_CASE("RAM pipeline never lowers semantically invalid CorePrep")
     REQUIRE(has_issue(result.verification_issues, "VXC1036"));
     REQUIRE_FALSE(result.xpp.has_value());
     REQUIRE_FALSE(result.xmm.has_value());
+    REQUIRE_FALSE(result.llvm.has_value());
 }
 
 TEST_CASE("semantic verifier rejects mismatched calls assignments and returns")

@@ -43,7 +43,7 @@ struct Terminator final
 struct Block final { BlockId id{}; std::vector<Instruction> instructions; Terminator terminator; };
 struct Function final
 {
-    SymbolId symbol{};
+    core::SymbolName symbol{};
     std::vector<core::Parameter> parameters;
     core::Type return_type{core::Type::unit()};
     BlockId entry{};

@@ -38,7 +38,12 @@ The repository contains:
 - CorePrep-to-Xpp lowering;
 - Xpp control-flow and self-copy optimization;
 - Xpp-to-Xmm lowering; and
-- Xmm virtual-register move optimization.
+- Xmm virtual-register move optimization;
+- an Xmm verifier with register, signature, call, operand, result, and control-flow diagnostics;
+- C++20 Xmm-to-LLVM lowering for the implemented scalar, call, branch, jump, and return operations;
+- LLVM O0/O1/O2/O3 pass-pipeline selection followed by module verification;
+- Unicode-scalar `String` constant storage; and
+- in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The versioned Haskell-to-C++20 boundary is implemented. The remaining integration work is to make the Haskell frontend the
 source route selected by the production driver and to connect explicit Core/Xpp/Xmm writers and later-stage readers.
@@ -64,7 +69,8 @@ entry selection, compiler settings, dependency declarations, and the SQLite lock
 Known gaps include:
 
 - explicit Core/Xpp/Xmm emission is registered but not connected;
-- `.core` input is connected to verified in-memory Xpp/Xmm lowering;
+- `.core` input is connected through verified in-memory Xpp/Xmm and LLVM lowering;
+- `.core` builds can explicitly emit `llvmll` or `llvmbc`;
 - other non-source `-Build` inputs are registered but not connected;
 - package publication and installation require a ViGet client not linked into this build; and
 - the production source route does not yet use the Haskell frontend as its sole owner.

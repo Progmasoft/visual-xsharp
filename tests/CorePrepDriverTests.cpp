@@ -22,11 +22,15 @@ auto module() -> visual_xsharp::core::CorePrepModule
 struct TemporaryCore final
 {
     std::filesystem::path path = std::filesystem::temp_directory_path() / "visual-xsharp-driver-test.core";
+    std::filesystem::path llvm_ir = std::filesystem::temp_directory_path() / "visual-xsharp-driver-test.ll";
+    std::filesystem::path bitcode = std::filesystem::temp_directory_path() / "visual-xsharp-driver-test.bc";
 
     TemporaryCore()
     {
         std::error_code ignored;
         std::filesystem::remove(path, ignored);
+        std::filesystem::remove(llvm_ir, ignored);
+        std::filesystem::remove(bitcode, ignored);
         REQUIRE_FALSE(visual_xsharp::core::write_coreprep_artifact(path, module()).has_value());
     }
 
@@ -34,6 +38,8 @@ struct TemporaryCore final
     {
         std::error_code ignored;
         std::filesystem::remove(path, ignored);
+        std::filesystem::remove(llvm_ir, ignored);
+        std::filesystem::remove(bitcode, ignored);
     }
 };
 
@@ -102,4 +108,49 @@ TEST_CASE("CorePrep CLI driver reports malformed artifact input")
     auto options = options_for("build", path_text.c_str());
     REQUIRE(xs_driver_build_coreprep(&options) == 1);
     REQUIRE(std::filesystem::remove(path));
+}
+
+TEST_CASE("CorePrep CLI driver explicitly emits LLVM text and bitcode")
+{
+    TemporaryCore artifact;
+    const auto path = artifact.path.string();
+
+    SECTION("llvmll")
+    {
+        auto options = options_for("build", path.c_str());
+        options.output_override = true;
+        options.output = XS_BUILD_OUTPUT_LLVM_LL;
+        options.compiler.llvm_opt_level = XS_LLVM_OPT_G;
+        REQUIRE(xs_driver_build_coreprep(&options) == 0);
+        REQUIRE(std::filesystem::exists(artifact.llvm_ir));
+        std::ifstream stream(artifact.llvm_ir, std::ios::binary);
+        const std::string text{std::istreambuf_iterator<char>{stream}, {}};
+        REQUIRE(text.find("Driver.Main.1") != std::string::npos);
+        REQUIRE(text.find("define void") != std::string::npos);
+    }
+    SECTION("llvmbc")
+    {
+        auto options = options_for("build", path.c_str());
+        options.output_override = true;
+        options.output = XS_BUILD_OUTPUT_LLVM_BC;
+        options.compiler.llvm_opt_level = XS_LLVM_OPT_3;
+        REQUIRE(xs_driver_build_coreprep(&options) == 0);
+        REQUIRE(std::filesystem::file_size(artifact.bitcode) > 100);
+        std::ifstream stream(artifact.bitcode, std::ios::binary);
+        char magic[2]{};
+        stream.read(magic, 2);
+        REQUIRE(magic[0] == 'B');
+        REQUIRE(magic[1] == 'C');
+    }
+}
+
+TEST_CASE("CorePrep check command cannot create LLVM artifacts")
+{
+    TemporaryCore artifact;
+    const auto path = artifact.path.string();
+    auto options = options_for("check", path.c_str());
+    options.output_override = true;
+    options.output = XS_BUILD_OUTPUT_LLVM_LL;
+    REQUIRE(xs_driver_build_coreprep(&options) == 2);
+    REQUIRE_FALSE(std::filesystem::exists(artifact.llvm_ir));
 }

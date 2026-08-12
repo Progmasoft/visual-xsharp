@@ -57,6 +57,9 @@ if(WIN32)
 endif()
 
 add_library(xs_compiler
+  ../Visual/XSharp/Backend/LLVM/Artifact.cpp
+  ../Visual/XSharp/Backend/LLVM/Codegen.cpp
+  ../Visual/XSharp/Backend/LLVM/Verifier.cpp
   ../Visual/XSharp/Pipeline.cpp
   ../Visual/XSharp/Pipeline/Driver.cpp
   ../Visual/XSharp/Core/CorePrep/Verifier.cpp
@@ -176,7 +179,7 @@ get_target_property(XS_LIL_LIBRARY_TYPE xs_lil TYPE)
 if(XS_LIL_LIBRARY_TYPE STREQUAL "SHARED_LIBRARY")
   target_compile_definitions(xs_lil PUBLIC XS_LIL_SHARED)
 endif()
-target_link_libraries(xs_compiler PUBLIC xs_lil PRIVATE xslang_compiler_core xs_dimcli fmt::fmt)
+target_link_libraries(xs_compiler PUBLIC xs_lil PRIVATE xslang_compiler_core xs_dimcli fmt::fmt ${XS_LLVM_LIBRARY})
 target_link_libraries(xs_package PRIVATE LibArchive::LibArchive bcrypt)
 target_compile_definitions(xs_compiler PRIVATE XS_PROJECT_VERSION="${PROJECT_VERSION}"
                                             XS_CLANG_EXECUTABLE="${CMAKE_C_COMPILER}")
