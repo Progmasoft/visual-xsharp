@@ -87,8 +87,16 @@ add_test(NAME kotlin_project_resolver_build COMMAND "${XS_GRADLE_EXECUTABLE}" --
 set_tests_properties(kotlin_project_resolver_build PROPERTIES TIMEOUT 180
   FIXTURES_SETUP kotlin_project_resolver ENVIRONMENT "GRADLE_OPTS=-Xmx512m")
 
+# Emission tests must never write generated artifacts into the source checkout.
+# Copy the small source fixture to a configuration-owned directory so sibling
+# `.core`, `.ll`, or `.bc` outputs remain disposable build products.
+set(XS_HASKELL_SOURCE_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/haskell_frontend")
+file(MAKE_DIRECTORY "${XS_HASKELL_SOURCE_FIXTURE_DIR}")
+configure_file("${PROJECT_SOURCE_DIR}/tests/fixtures/haskell_frontend/Main.vxs"
+               "${XS_HASKELL_SOURCE_FIXTURE_DIR}/Main.vxs" COPYONLY)
+
 add_test(NAME compiler_check_file COMMAND vxs check -File
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs)
+  ${XS_HASKELL_SOURCE_FIXTURE_DIR}/Main.vxs)
 set_tests_properties(compiler_check_file PROPERTIES TIMEOUT 15)
 add_test(NAME compiler_rejects_invalid_warning COMMAND vxs check -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs -Warnings invalid)
@@ -97,7 +105,7 @@ add_test(NAME compiler_rejects_misspelled_werror COMMAND vxs check -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs -Werrror true)
 set_tests_properties(compiler_rejects_misspelled_werror PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 add_test(NAME compiler_accepts_renewed_cli_flags COMMAND vxs check
-  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs
+  -File ${XS_HASKELL_SOURCE_FIXTURE_DIR}/Main.vxs
   -Standard 26 -Compiler-Version latest -Warnings all -Werror true
   -Wexperimental true -Wshadow true -Wundef true -Type-Safe-Format true
   -Backend llvm -Llvm-OptLevel 2 -Llvm-Compiler aot -Llvm-Lto none
@@ -109,17 +117,17 @@ add_test(NAME compiler_rejects_module_flag COMMAND vxs check --module .)
 set_tests_properties(compiler_rejects_module_flag PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
 add_test(NAME compiler_emits_core_from_haskell COMMAND vxs build -File
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs -Emit core)
+  ${XS_HASKELL_SOURCE_FIXTURE_DIR}/Main.vxs -Emit core)
 set_tests_properties(compiler_emits_core_from_haskell PROPERTIES TIMEOUT 15)
 
 # Schema checks guard command scope, arity, and duplicate policy independently
 # from frontend compilation. These are intentional parse failures.
 add_test(NAME cli_rejects_duplicate_option COMMAND vxs check
-  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs
-  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs)
+  -File ${XS_HASKELL_SOURCE_FIXTURE_DIR}/Main.vxs
+  -File ${XS_HASKELL_SOURCE_FIXTURE_DIR}/Main.vxs)
 set_tests_properties(cli_rejects_duplicate_option PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 add_test(NAME cli_rejects_wrong_command_scope COMMAND vxs check -Emit core
-  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs)
+  -File ${XS_HASKELL_SOURCE_FIXTURE_DIR}/Main.vxs)
 set_tests_properties(cli_rejects_wrong_command_scope PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 add_test(NAME cli_rejects_missing_value COMMAND vxs build -File)
 set_tests_properties(cli_rejects_missing_value PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
