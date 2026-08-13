@@ -12,23 +12,26 @@ const val PROJECT_PLUGIN_API_VERSION = 1
 
 data class PluginRequest(
   val publisher: String,
-  val name: String,
+  val name: String?,
   val version: String?,
-  val stability: Stability?,
+  val path: String? = null,
 ) : Serializable {
   val coordinate: String
-    get() = "$publisher.$name"
+    get() = if (isLocal) "local:$path" else "$publisher.$name"
+
+  val isLocal: Boolean
+    get() = publisher == "local"
 }
 
 data class ResolvedPlugin(
   val publisher: String,
   val name: String,
   val version: String,
-  val stability: Stability,
   val apiVersion: Int,
   val sha256: String,
   val imports: List<String>,
   val artifact: Path,
+  val requestCoordinate: String = "$publisher.$name",
 ) {
   val coordinate: String
     get() = "$publisher.$name"
@@ -38,7 +41,6 @@ data class PluginPlanEntry(
   val publisher: String,
   val name: String,
   val version: String,
-  val stability: Stability,
   val apiVersion: Int,
   val sha256: String,
   val extensions: List<String>,

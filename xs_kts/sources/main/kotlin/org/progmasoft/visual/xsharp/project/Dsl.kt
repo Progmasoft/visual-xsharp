@@ -190,6 +190,7 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   private val dependencies = mutableListOf<PackageDependency>()
   private val optionalDependencies = mutableListOf<OptionalPackageDependency>()
   private val dependencyFeatures = mutableListOf<PackageFeatureSelection>()
+  private val localDependencies = mutableListOf<LocalPackageDependency>()
   private var entry: String? = null
   private var releaseOutputDirectory = "build/release"
   private var debugOutputDirectory = "build/debug"
@@ -264,6 +265,7 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
         dependencies + scope.required,
         optionalDependencies + scope.optional,
         dependencyFeatures + scope.selections,
+        localDependencies + scope.local,
       )
     dependencies.clear()
     dependencies += validated.required
@@ -271,6 +273,8 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
     optionalDependencies += validated.optional
     dependencyFeatures.clear()
     dependencyFeatures += validated.features
+    localDependencies.clear()
+    localDependencies += validated.local
   }
 
   internal fun configureMainSources(block: SourcesScope.() -> Unit) {
@@ -300,7 +304,12 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
     }
     val project = identity
     val dependencyManifest =
-      validateDependencies(dependencies, optionalDependencies, dependencyFeatures)
+      validateDependencies(
+        dependencies,
+        optionalDependencies,
+        dependencyFeatures,
+        localDependencies,
+      )
     val effectiveSourceIncludes = sourceIncludes.ifEmpty { listOf("Sources") }
     val plan =
       ProjectPlan(
@@ -309,6 +318,7 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
         dependencyManifest.required,
         dependencyManifest.optional,
         dependencyManifest.features,
+        dependencyManifest.local,
         configuredEntry,
         releaseOutputDirectory,
         debugOutputDirectory,

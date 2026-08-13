@@ -23,11 +23,11 @@ object PluginManifest {
             plugin.publisher,
             plugin.name,
             plugin.version,
-            plugin.stability.name,
             plugin.apiVersion.toString(),
             plugin.sha256,
             plugin.imports.joinToString(","),
             plugin.artifact.toString(),
+            plugin.requestCoordinate,
           )
           .joinToString("\t", transform = ::encode)
       },
@@ -53,25 +53,19 @@ object PluginManifest {
     val publisher = requireModuleSegment(fields[0], "plugin publisher")
     val name = requireModuleSegment(fields[1], "plugin name")
     val version = requirePackageVersion(fields[2])
-    val stability =
-      try {
-        Stability.valueOf(fields[3])
-      } catch (_: IllegalArgumentException) {
-        throw ProjectConfigurationException("plugin '$publisher.$name' has invalid stability")
-      }
-    val apiVersion = fields[4].toIntOrNull()
+    val apiVersion = fields[3].toIntOrNull()
     if (apiVersion != PROJECT_PLUGIN_API_VERSION) {
       throw ProjectConfigurationException(
-        "plugin '$publisher.$name' requires API ${fields[4]}; runtime provides $PROJECT_PLUGIN_API_VERSION"
+        "plugin '$publisher.$name' requires API ${fields[3]}; runtime provides $PROJECT_PLUGIN_API_VERSION"
       )
     }
-    val expectedDigest = fields[5].lowercase()
+    val expectedDigest = fields[4].lowercase()
     if (!expectedDigest.matches(Regex("[0-9a-f]{64}"))) {
       throw ProjectConfigurationException("plugin '$publisher.$name' has an invalid SHA-256 digest")
     }
-    val imports = fields[6].split(',').filter(String::isNotEmpty)
+    val imports = fields[5].split(',').filter(String::isNotEmpty)
     imports.forEach(::requireManifestImport)
-    val artifact = Path.of(fields[7]).toAbsolutePath().normalize()
+    val artifact = Path.of(fields[6]).toAbsolutePath().normalize()
     if (!Files.isRegularFile(artifact) || Files.isSymbolicLink(artifact)) {
       throw ProjectConfigurationException("plugin artifact is not a regular file: $artifact")
     }
@@ -82,11 +76,11 @@ object PluginManifest {
       publisher,
       name,
       version,
-      stability,
       apiVersion,
       expectedDigest,
       imports.distinct(),
       artifact,
+      fields[7],
     )
   }
 
@@ -171,18 +165,13 @@ object PluginRuntime {
   fun declare(request: PluginRequest) {
     checkPhase(Phase.CONFIGURING, "plugins may be declared only while the project is configuring")
     val plugin =
-      resolved.singleOrNull { it.coordinate == request.coordinate }
+      resolved.singleOrNull { it.requestCoordinate == request.coordinate }
         ?: throw ProjectConfigurationException(
           "plugin '${request.coordinate}' was not resolved by the host"
         )
     if (request.version != null && request.version != plugin.version) {
       throw ProjectConfigurationException(
         "plugin '${request.coordinate}' resolved to an unexpected version"
-      )
-    }
-    if (request.stability != null && request.stability != plugin.stability) {
-      throw ProjectConfigurationException(
-        "plugin '${request.coordinate}' resolved to an unexpected stability"
       )
     }
     if (!declared.add(request.coordinate)) {
@@ -211,7 +200,7 @@ object PluginRuntime {
   internal fun finish(plan: ProjectPlan): ProjectPlan {
     if (phase == Phase.EMPTY) return plan
     checkPhase(Phase.CONFIGURING, "plugin runtime cannot finalize from phase $phase")
-    val missing = resolved.map(ResolvedPlugin::coordinate).filterNot(declared::contains)
+    val missing = resolved.map(ResolvedPlugin::requestCoordinate).filterNot(declared::contains)
     if (missing.isNotEmpty()) {
       throw ProjectConfigurationException(
         "resolved plugins were not declared by the script: ${missing.joinToString()}"
@@ -232,7 +221,6 @@ object PluginRuntime {
         plugin.publisher,
         plugin.name,
         plugin.version,
-        plugin.stability,
         plugin.apiVersion,
         plugin.sha256,
         extensions.filterValues { it == plugin.coordinate }.keys.sorted(),

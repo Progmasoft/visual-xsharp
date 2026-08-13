@@ -22,6 +22,7 @@ object ProjectOutput {
         plan.requiredDependencies,
         plan.optionalDependencies,
         plan.dependencyFeatures,
+        plan.localDependencies,
       ),
       plan.plugins,
     )

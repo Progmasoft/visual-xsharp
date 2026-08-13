@@ -8,7 +8,7 @@ package org.progmasoft.visual.xsharp.project
 import kotlinx.serialization.Serializable
 
 private const val PROJECT_PLAN_FORMAT = "visual-xsharp-project-plan"
-private const val PROJECT_PLAN_VERSION = 2
+private const val PROJECT_PLAN_VERSION = 3
 
 /**
  * Stable wire representation of [ProjectPlan]. Keeping the transport schema separate from the
@@ -49,7 +49,11 @@ internal data class ProjectPlanDocument(
       )
 
     private fun dependenciesFrom(plan: ProjectPlan): List<DependencyDocument> =
-      buildList(plan.requiredDependencies.size + plan.optionalDependencies.size) {
+      buildList(
+        plan.requiredDependencies.size +
+          plan.optionalDependencies.size +
+          plan.localDependencies.size
+      ) {
         plan.requiredDependencies.mapTo(this, DependencyDocument::required)
         plan.optionalDependencies.mapTo(this) { declaration ->
           val enabled =
@@ -60,6 +64,7 @@ internal data class ProjectPlanDocument(
             }
           DependencyDocument.optional(declaration, enabled)
         }
+        plan.localDependencies.mapTo(this, DependencyDocument::local)
       }
   }
 }
@@ -152,15 +157,20 @@ internal data class AuthorDocument(val user: String, val mail: String) {
 
 @Serializable
 internal data class DependencyDocument(
-  val publisher: String,
-  val name: String,
-  val version: String,
-  val stability: String,
+  val source: String,
+  val publisher: String? = null,
+  val name: String? = null,
+  val version: String? = null,
+  val stability: String? = null,
+  val path: String? = null,
   val optional: String? = null,
   val features: Map<String, Boolean> = emptyMap(),
 ) {
   companion object {
     fun required(dependency: PackageDependency) = from(dependency)
+
+    fun local(dependency: LocalPackageDependency) =
+      DependencyDocument(source = "local", path = dependency.path)
 
     fun optional(declaration: OptionalPackageDependency, enabled: Boolean) =
       from(
@@ -175,6 +185,7 @@ internal data class DependencyDocument(
       features: Map<String, Boolean> = emptyMap(),
     ) =
       DependencyDocument(
+        source = "viget",
         publisher = dependency.publisher,
         name = dependency.name,
         version = dependency.version,
@@ -190,7 +201,6 @@ internal data class PluginDocument(
   val publisher: String,
   val name: String,
   val version: String,
-  val stability: String,
   val apiVersion: Int,
   val sha256: String,
   val extensions: List<String>,
@@ -202,7 +212,6 @@ internal data class PluginDocument(
         publisher = plugin.publisher,
         name = plugin.name,
         version = plugin.version,
-        stability = plugin.stability.name,
         apiVersion = plugin.apiVersion,
         sha256 = plugin.sha256,
         extensions = plugin.extensions.sorted(),

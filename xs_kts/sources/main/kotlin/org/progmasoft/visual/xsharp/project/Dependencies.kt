@@ -5,11 +5,16 @@
 
 package org.progmasoft.visual.xsharp.project
 
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
+import kotlin.io.path.extension
+
 @XsProjectDsl
 class DependenciesScope internal constructor() {
   internal val required = mutableListOf<PackageDependency>()
   internal val optional = mutableListOf<OptionalPackageDependency>()
   internal val selections = mutableListOf<PackageFeatureSelection>()
+  internal val local = mutableListOf<LocalPackageDependency>()
 
   internal fun add(dependency: PackageDependency) {
     required += dependency
@@ -24,6 +29,11 @@ class DependenciesScope internal constructor() {
     optional += OptionalPackageDependency(normalizedFeature, dependency)
     selections += PackageFeatureSelection(dependency.coordinate, normalizedFeature, enabled)
   }
+
+  internal fun addLocal(path: String) {
+    local +=
+      LocalPackageDependency(requireLocalArtifactPath(path, "vipkg", "local dependency path"))
+  }
 }
 
 // Validate and canonicalize only what the project declared. This deliberately does not
@@ -32,6 +42,7 @@ internal fun validateDependencies(
   required: List<PackageDependency>,
   optional: List<OptionalPackageDependency>,
   selections: List<PackageFeatureSelection>,
+  local: List<LocalPackageDependency> = emptyList(),
 ): DependencyManifest {
   val requiredByName = linkedMapOf<String, PackageDependency>()
   required.forEach { dependency ->
@@ -94,7 +105,34 @@ internal fun validateDependencies(
         .thenBy { it.dependency.version }
     ),
     completeSelections,
+    local
+      .map {
+        LocalPackageDependency(requireLocalArtifactPath(it.path, "vipkg", "local dependency path"))
+      }
+      .distinct()
+      .sortedBy(LocalPackageDependency::path),
   )
+}
+
+internal fun requireLocalArtifactPath(
+  value: String?,
+  extension: String,
+  field: String,
+): String {
+  val text = requireText(value ?: throw ProjectConfigurationException("$field is required"), field)
+  val path =
+    try {
+      Path.of(text)
+    } catch (_: InvalidPathException) {
+      throw ProjectConfigurationException("$field is not a valid path: $text")
+    }
+  if (path.isAbsolute || path.any { it.toString() == ".." }) {
+    throw ProjectConfigurationException("$field must stay inside the project root: $text")
+  }
+  if (!path.extension.equals(extension, ignoreCase = true)) {
+    throw ProjectConfigurationException("$field must use the .$extension extension: $text")
+  }
+  return path.normalize().joinToString("/")
 }
 
 internal fun packageDependency(

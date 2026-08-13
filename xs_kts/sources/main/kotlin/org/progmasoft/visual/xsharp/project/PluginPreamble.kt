@@ -142,32 +142,21 @@ object PluginPreamble {
         expect("{")
         var name: String? = null
         var version: String? = null
-        var stability: Stability? = null
+        var path: String? = null
         while (!accept("}")) {
           val field = next().text
           expect("=")
           when (field) {
             "name" -> name = string()
             "version" -> version = string()
-            "stability" -> stability = parseStability()
+            "path" -> path = string()
             else -> throw ProjectConfigurationException("unknown plugin declaration field '$field'")
           }
           accept(";")
         }
-        requests += validateRequest(publisher, name, version, stability)
+        requests += validateRequest(publisher, name, version, path)
       }
       return requests.also(::rejectDuplicates)
-    }
-
-    private fun parseStability(): Stability {
-      expect("Stability")
-      expect(".")
-      val value = next().text
-      return try {
-        Stability.valueOf(value)
-      } catch (_: IllegalArgumentException) {
-        throw ProjectConfigurationException("unknown plugin stability '$value'")
-      }
     }
 
     private fun string(): String {
@@ -195,8 +184,23 @@ object PluginPreamble {
     publisher: String,
     name: String?,
     version: String?,
-    stability: Stability?,
+    path: String?,
   ): PluginRequest {
+    if (publisher == "local") {
+      if (name != null || version != null) {
+        throw ProjectConfigurationException(
+          "local plugin accepts only path; name and version come from its JAR descriptor"
+        )
+      }
+      return PluginRequest(
+        publisher = "local",
+        name = null,
+        version = null,
+        path = requireLocalArtifactPath(path, "jar", "local plugin path"),
+      )
+    }
+    if (path != null)
+      throw ProjectConfigurationException("hosted plugin does not accept a local path")
     val validPublisher = requireModuleSegment(publisher, "plugin publisher")
     val validName =
       requireModuleSegment(
@@ -204,7 +208,7 @@ object PluginPreamble {
         "plugin name",
       )
     val validVersion = version?.let(::requirePackageVersion)
-    return PluginRequest(validPublisher, validName, validVersion, stability)
+    return PluginRequest(validPublisher, validName, validVersion)
   }
 
   private fun rejectDuplicates(requests: List<PluginRequest>) {

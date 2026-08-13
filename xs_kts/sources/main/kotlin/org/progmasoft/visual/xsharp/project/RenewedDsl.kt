@@ -189,6 +189,7 @@ class DependencyDeclarationScope internal constructor(private val publisher: Str
   var version: String? = null
   var stability: Stability = Stability.STABLE
   var optional: String? = null
+  var path: String? = null
   private val features = linkedMapOf<String, Boolean>()
 
   fun feature(
@@ -200,6 +201,18 @@ class DependencyDeclarationScope internal constructor(private val publisher: Str
   }
 
   internal fun applyTo(scope: DependenciesScope) {
+    if (publisher == "local") {
+      if (name != null || version != null || optional != null || features.isNotEmpty()) {
+        throw ProjectConfigurationException(
+          "local dependency accepts only path; package identity comes from the .vipkg manifest"
+        )
+      }
+      scope.addLocal(requireLocalArtifactPath(path, "vipkg", "local dependency path"))
+      return
+    }
+    if (path != null) {
+      throw ProjectConfigurationException("ViGet dependency does not accept a local path")
+    }
     val packageName =
       requireModuleSegment(
         name ?: throw ProjectConfigurationException("dependency requires name"),

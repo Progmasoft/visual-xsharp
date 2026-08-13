@@ -142,6 +142,52 @@ class DependencyDslTest {
   }
 
   @Test
+  fun recordsLocalViPkgWithoutTreatingItAsAViGetCoordinate() {
+    dependencies { dependency("local") { path = "packages/dependency.vipkg" } }
+    sources { main { entry = "Demo.Program" } }
+    val plan = ProjectRuntime.build()
+
+    assertTrue(plan.requiredDependencies.isEmpty())
+    assertEquals("packages/dependency.vipkg", plan.localDependencies.single().path)
+    val document = PlanWriter.write(plan)
+    assertTrue(document.contains("\"source\":\"local\""))
+    assertTrue(document.contains("\"path\":\"packages/dependency.vipkg\""))
+
+    val root = Files.createTempDirectory("visual-xsharp-local-lock-")
+    try {
+      ProjectLockFile.write(
+        root,
+        DependencyManifest(emptyList(), emptyList(), emptyList(), plan.localDependencies),
+      )
+      assertEquals(
+        plan.localDependencies,
+        ProjectLockFile.read(root.resolve(ProjectLockFile.FILE_NAME)).local,
+      )
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun rejectsUnsafeOrMismatchedLocalDependencyPaths() {
+    assertFailsWith<ProjectConfigurationException> {
+      dependencies { dependency("local") { path = "../dependency.vipkg" } }
+    }
+    assertFailsWith<ProjectConfigurationException> {
+      dependencies { dependency("local") { path = "dependency.jar" } }
+    }
+    assertFailsWith<ProjectConfigurationException> {
+      dependencies {
+        dependency("Publisher") {
+          name = "Name"
+          version = "1.0.0"
+          path = "dependency.vipkg"
+        }
+      }
+    }
+  }
+
+  @Test
   fun writesBinaryLockfileWithoutDump() {
     val root = Files.createTempDirectory("visual-xsharp-lock-")
     try {

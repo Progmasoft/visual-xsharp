@@ -15,14 +15,15 @@ import java.sql.DriverManager
 
 object ProjectLockFile {
   const val FILE_NAME = "Visual.XSharp.Lockfile.sqlite3"
-  private const val FORMAT_VERSION = 2
+  private const val FORMAT_VERSION = 3
 
   fun write(
     root: Path,
     manifest: DependencyManifest,
     plugins: List<PluginPlanEntry> = emptyList(),
   ) {
-    val validated = validateDependencies(manifest.required, manifest.optional, manifest.features)
+    val validated =
+      validateDependencies(manifest.required, manifest.optional, manifest.features, manifest.local)
     Files.createDirectories(root)
     val temporary = Files.createTempFile(root, ".visual-xsharp-lock-", ".sqlite3")
     try {
@@ -33,6 +34,7 @@ object ProjectLockFile {
           writeMetadata(connection)
           writePackages(connection, validated)
           writeFeatures(connection, validated.features)
+          writeLocalPackages(connection, validated.local)
           writePlugins(connection, plugins)
           connection.commit()
         } catch (error: Exception) {
@@ -59,7 +61,7 @@ object ProjectLockFile {
       requireFormatVersion(connection)
       connection
         .prepareStatement(
-          "SELECT publisher, name, version, stability, api_version, sha256 FROM plugins ORDER BY publisher, name"
+          "SELECT publisher, name, version, api_version, sha256 FROM plugins ORDER BY publisher, name"
         )
         .use { statement ->
           statement.executeQuery().use { rows ->
@@ -70,9 +72,8 @@ object ProjectLockFile {
                     rows.getString(1),
                     rows.getString(2),
                     rows.getString(3),
-                    Stability.valueOf(rows.getString(4)),
-                    rows.getInt(5),
-                    rows.getString(6),
+                    rows.getInt(4),
+                    rows.getString(5),
                     emptyList(),
                     emptyMap(),
                   )
@@ -85,6 +86,7 @@ object ProjectLockFile {
 
   private fun createSchema(connection: Connection) {
     connection.createStatement().use { statement ->
+      statement.execute("CREATE TABLE local_packages (path TEXT PRIMARY KEY) WITHOUT ROWID")
       statement.execute(
         "CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID"
       )
@@ -94,7 +96,6 @@ object ProjectLockFile {
           publisher TEXT NOT NULL,
           name TEXT NOT NULL,
           version TEXT NOT NULL,
-          stability TEXT NOT NULL,
           api_version INTEGER NOT NULL,
           sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
           PRIMARY KEY(publisher, name)
@@ -182,22 +183,34 @@ object ProjectLockFile {
       }
   }
 
+  private fun writeLocalPackages(
+    connection: Connection,
+    dependencies: List<LocalPackageDependency>,
+  ) {
+    connection.prepareStatement("INSERT INTO local_packages(path) VALUES (?)").use { statement ->
+      dependencies.forEach { dependency ->
+        statement.setString(1, dependency.path)
+        statement.addBatch()
+      }
+      statement.executeBatch()
+    }
+  }
+
   private fun writePlugins(
     connection: Connection,
     plugins: List<PluginPlanEntry>,
   ) {
     connection
       .prepareStatement(
-        "INSERT INTO plugins(publisher, name, version, stability, api_version, sha256) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO plugins(publisher, name, version, api_version, sha256) VALUES (?, ?, ?, ?, ?)"
       )
       .use { statement ->
         plugins.sortedBy(PluginPlanEntry::coordinate).forEach { plugin ->
           statement.setString(1, plugin.publisher)
           statement.setString(2, plugin.name)
           statement.setString(3, plugin.version)
-          statement.setString(4, plugin.stability.name)
-          statement.setInt(5, plugin.apiVersion)
-          statement.setString(6, plugin.sha256)
+          statement.setInt(4, plugin.apiVersion)
+          statement.setString(5, plugin.sha256)
           statement.addBatch()
         }
         statement.executeBatch()
@@ -244,7 +257,16 @@ object ProjectLockFile {
             }
           }
         }
-    return validateDependencies(required, optional, features)
+    val local =
+      connection.prepareStatement("SELECT path FROM local_packages ORDER BY path").use { statement
+        ->
+        statement.executeQuery().use { rows ->
+          buildList {
+            while (rows.next()) add(LocalPackageDependency(rows.getString(1)))
+          }
+        }
+      }
+    return validateDependencies(required, optional, features, local)
   }
 
   private fun replace(source: Path, target: Path) {

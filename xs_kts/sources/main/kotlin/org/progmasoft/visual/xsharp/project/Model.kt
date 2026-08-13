@@ -176,12 +176,15 @@ data class PackageFeatureSelection(
   val enabled: Boolean,
 ) : Serializable
 
+data class LocalPackageDependency(val path: String) : Serializable
+
 // This is the validated project declaration, not a solved registry graph. Transitive
 // versions, artifact identities and repository metadata belong to the future resolver.
 data class DependencyManifest(
   val required: List<PackageDependency>,
   val optional: List<OptionalPackageDependency>,
   val features: List<PackageFeatureSelection>,
+  val local: List<LocalPackageDependency> = emptyList(),
 ) : Serializable
 
 data class ProjectPlan(
@@ -190,6 +193,7 @@ data class ProjectPlan(
   val requiredDependencies: List<PackageDependency>,
   val optionalDependencies: List<OptionalPackageDependency>,
   val dependencyFeatures: List<PackageFeatureSelection>,
+  val localDependencies: List<LocalPackageDependency>,
   val entry: String,
   val releaseOutputDirectory: String,
   val debugOutputDirectory: String,

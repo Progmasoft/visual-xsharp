@@ -163,7 +163,7 @@ class ProjectDslTest {
     sources { main { entry = "Plan.Main" } }
     val text = PlanWriter.write(ProjectRuntime.build())
 
-    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":2"))
+    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":3"))
     assertTrue(text.contains("\"entry\":\"Plan.Main\""))
     assertTrue(text.contains("\"xmmOptimizationPasses\":true"))
     assertFalse(text.contains("module"))
@@ -179,7 +179,6 @@ class ProjectDslTest {
         publisher = "Progmasoft",
         name = "Codec",
         version = "1.0.0",
-        stability = Stability.STABLE,
         apiVersion = PROJECT_PLUGIN_API_VERSION,
         sha256 = "b".repeat(64),
         extensions = listOf("zeta", "alpha"),
@@ -202,6 +201,7 @@ class ProjectDslTest {
         .content,
     )
     val encodedPlugin = document.getValue("plugins").jsonArray.single().jsonObject
+    assertFalse("stability" in encodedPlugin)
     assertEquals(
       listOf("alpha", "zeta"),
       encodedPlugin.getValue("extensions").jsonArray.map { it.jsonPrimitive.content },

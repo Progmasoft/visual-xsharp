@@ -27,10 +27,36 @@ object PluginResolver {
     val cache = root.resolve(".visual-xsharp/plugins").toAbsolutePath().normalize()
     val candidates =
       if (Files.isDirectory(cache)) index(cache).groupBy(ResolvedPlugin::coordinate) else emptyMap()
-    return requests.map { request -> select(request, candidates[request.coordinate].orEmpty()) }
+    return requests.map { request ->
+      if (request.isLocal) resolveLocal(root, request)
+      else select(request, candidates[request.coordinate].orEmpty())
+    }
   }
 
   internal fun clearCache() = indexCache.clear()
+
+  private fun resolveLocal(root: Path, request: PluginRequest): ResolvedPlugin {
+    val projectRoot = root.toAbsolutePath().normalize()
+    val artifact = projectRoot.resolve(request.path!!).normalize()
+    if (!artifact.startsWith(projectRoot)) {
+      throw ProjectConfigurationException(
+        "local plugin path escapes the project root: ${request.path}"
+      )
+    }
+    if (
+      !Files.isRegularFile(artifact, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(artifact)
+    ) {
+      throw ProjectConfigurationException("local plugin JAR does not exist: ${request.path}")
+    }
+    val realRoot = projectRoot.toRealPath()
+    val realArtifact = artifact.toRealPath()
+    if (!realArtifact.startsWith(realRoot)) {
+      throw ProjectConfigurationException(
+        "local plugin path escapes the project root: ${request.path}"
+      )
+    }
+    return inspect(realRoot, realArtifact).copy(requestCoordinate = request.coordinate)
+  }
 
   private fun index(root: Path): List<ResolvedPlugin> {
     val fingerprint = directoryFingerprint(root)
@@ -83,12 +109,6 @@ object PluginResolver {
       requireModuleSegment(properties.required("publisher", artifact), "plugin publisher")
     val name = requireModuleSegment(properties.required("name", artifact), "plugin name")
     val version = requirePackageVersion(properties.required("version", artifact))
-    val stability =
-      try {
-        Stability.valueOf(properties.getProperty("stability", Stability.STABLE.name))
-      } catch (_: IllegalArgumentException) {
-        throw ProjectConfigurationException("plugin '$publisher.$name' has invalid stability")
-      }
     val apiVersion =
       properties.required("apiVersion", artifact).toIntOrNull()
         ?: throw ProjectConfigurationException("plugin '$publisher.$name' has invalid API version")
@@ -111,7 +131,6 @@ object PluginResolver {
       publisher,
       name,
       version,
-      stability,
       apiVersion,
       digest,
       imports,
@@ -124,8 +143,7 @@ object PluginResolver {
     candidates: List<ResolvedPlugin>,
   ): ResolvedPlugin {
     val matching = candidates.filter { plugin ->
-      (request.version == null || plugin.version == request.version) &&
-        (request.stability == null || plugin.stability == request.stability)
+      request.version == null || plugin.version == request.version
     }
     if (matching.isEmpty()) {
       val requestedVersion = request.version?.let { " version $it" }.orEmpty()
@@ -133,10 +151,13 @@ object PluginResolver {
         "plugin '${request.coordinate}'$requestedVersion is not installed in the project plugin cache"
       )
     }
-    return matching.maxWithOrNull { left, right ->
-      val versionOrder = compareVersions(left.version, right.version)
-      if (versionOrder != 0) versionOrder else left.sha256.compareTo(right.sha256)
-    }!!
+    val selected =
+      matching.maxWithOrNull { left, right ->
+        val versionOrder = compareVersions(left.version, right.version)
+        if (versionOrder != 0) versionOrder else left.sha256.compareTo(right.sha256)
+      }!!
+    return if (selected.requestCoordinate == request.coordinate) selected
+    else selected.copy(requestCoordinate = request.coordinate)
   }
 
   private fun compareVersions(

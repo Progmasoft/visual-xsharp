@@ -93,7 +93,6 @@ plugins {
   plugin("Progmasoft") {
     name = "CMake"
     version = "0.1.0"
-    stability = Stability.STABLE
   }
 }
 ```
@@ -104,13 +103,29 @@ yet connected to this runtime. ViGet is the only remote source; there is no conf
 loads installed artifacts from the project-local `.visual-xsharp/plugins` cache, which is not another repository. A plugin
 JAR contains
 `META-INF/visual-xsharp-plugin.properties` and exactly one matching `ProjectPlugin` service. The runtime validates the
-coordinate, exact requested version and stability, plugin API version, safe Kotlin imports, and SHA-256 identity before
+coordinate, exact requested version, plugin API version, safe Kotlin imports, and SHA-256 identity before
 activation. An adjacent `<plugin.jar>.sha256` file makes the expected digest explicit; the digest is checked again in the
 Kotlin process before service loading.
 
 Plugins can register named DSL extensions, contribute deterministic plan metadata, and run finalization hooks. Extension
 name collisions and descriptor/service identity mismatches are errors. Plugins are trusted build logic with full JVM and
 filesystem access; this infrastructure intentionally does not sandbox or restrict them.
+
+A project can explicitly load a local Kotlin plugin JAR without introducing another repository:
+
+```kotlin
+plugins {
+  plugin("local") {
+    path = "plugin.jar"
+  }
+}
+```
+
+The path is project-relative, must remain inside the project root, and must end in `.jar`. Publisher, name, version, and API
+identity still come from the verified JAR descriptor rather than the file name or project declaration.
+
+DSL plugins do not have a stability field. `stability` is neither optional nor accepted in hosted or local plugin
+declarations, descriptors, plans, or lockfiles.
 
 ## Dependencies
 
@@ -132,6 +147,19 @@ lock database. It does not call this a resolved dependency graph. A complete tra
 client are separate implementation work.
 
 Standard-library namespaces are not repeated as package dependencies.
+
+A local Visual X# package is an explicit file source, not a repository coordinate:
+
+```kotlin
+dependencies {
+  dependency("local") {
+    path = "dependency.vipkg"
+  }
+}
+```
+
+The project-relative path must stay inside the project root and use `.vipkg`. The declaration is preserved separately in the
+plan and lockfile; it is not misreported as a solved or downloaded ViGet dependency.
 
 Visual X# packages are distinct from Kotlin DSL plugins. They are Visual X#-authored `.vipkg` artifacts catalogued under
 `https://viget.xsharp-lang.xyz/<Publisher>/<Name>/`; dependency solving and registry transport remain separate work.

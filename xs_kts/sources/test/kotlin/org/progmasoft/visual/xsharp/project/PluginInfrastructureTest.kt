@@ -8,6 +8,7 @@ package org.progmasoft.visual.xsharp.project
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.sql.DriverManager
 import java.util.jar.JarEntry
 import java.util.jar.JarOutputStream
 import kotlin.io.path.outputStream
@@ -16,6 +17,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertSame
 
 class PluginInfrastructureTest {
@@ -45,7 +47,6 @@ class PluginInfrastructureTest {
           plugin("Progmasoft") {
             name = "CMake"
             version = "1.2.3"
-            stability = Stability.BETA
           }
         }
         panic("must not execute")
@@ -54,7 +55,7 @@ class PluginInfrastructureTest {
       )
 
     assertEquals(
-      PluginRequest("Progmasoft", "CMake", "1.2.3", Stability.BETA),
+      PluginRequest("Progmasoft", "CMake", "1.2.3"),
       requests.single(),
     )
   }
@@ -69,6 +70,52 @@ class PluginInfrastructureTest {
     assertFailsWith<ProjectConfigurationException> {
       PluginPreamble.parse("plugins { plugin(\"../bad\") { name=\"CMake\" } }")
     }
+    assertFailsWith<ProjectConfigurationException> {
+      PluginPreamble.parse(
+        "plugins { plugin(\"Progmasoft\") { name=\"CMake\"; stability=Stability.STABLE } }"
+      )
+    }
+  }
+
+  @Test
+  fun resolvesExplicitLocalPluginJarByItsVerifiedDescriptor() {
+    val root = Files.createTempDirectory("visual-xsharp-local-plugin-")
+    try {
+      val artifact = createPluginJar(root)
+      val request = PluginRequest("local", null, null, artifact.fileName.toString())
+      val resolved = PluginResolver.resolve(root, listOf(request)).single()
+
+      assertEquals("Progmasoft.Fixture", resolved.coordinate)
+      assertEquals("local:${artifact.fileName}", resolved.requestCoordinate)
+      assertEquals(
+        request,
+        PluginPreamble.parse("plugins { plugin(\"local\") { path = \"${artifact.fileName}\" } }")
+          .single(),
+      )
+      val manifest = root.resolve("plugins.manifest")
+      PluginManifest.write(manifest, listOf(resolved))
+      assertEquals(
+        resolved.requestCoordinate,
+        PluginManifest.read(manifest).single().requestCoordinate,
+      )
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
+  fun rejectsUnsafeOrMismatchedLocalPluginPaths() {
+    assertFailsWith<ProjectConfigurationException> {
+      PluginPreamble.parse("plugins { plugin(\"local\") { path = \"../plugin.jar\" } }")
+    }
+    assertFailsWith<ProjectConfigurationException> {
+      PluginPreamble.parse("plugins { plugin(\"local\") { path = \"plugin.vipkg\" } }")
+    }
+    assertFailsWith<ProjectConfigurationException> {
+      PluginPreamble.parse(
+        "plugins { plugin(\"Progmasoft\") { name = \"CMake\"; path = \"plugin.jar\" } }"
+      )
+    }
   }
 
   @Test
@@ -82,7 +129,7 @@ class PluginInfrastructureTest {
       val resolved =
         PluginResolver.resolve(
           root,
-          listOf(PluginRequest("Progmasoft", "Fixture", "1.2.3", Stability.STABLE)),
+          listOf(PluginRequest("Progmasoft", "Fixture", "1.2.3")),
         )
 
       assertEquals("Progmasoft.Fixture", resolved.single().coordinate)
@@ -92,7 +139,7 @@ class PluginInfrastructureTest {
         resolved.single(),
         PluginResolver.resolve(
             root,
-            listOf(PluginRequest("Progmasoft", "Fixture", "1.2.3", Stability.STABLE)),
+            listOf(PluginRequest("Progmasoft", "Fixture", "1.2.3")),
           )
           .single(),
       )
@@ -109,14 +156,14 @@ class PluginInfrastructureTest {
       val artifact = createPluginJar(directory)
       Files.writeString(artifact.resolveSibling("${artifact.fileName}.sha256"), "0".repeat(64))
       assertFailsWith<ProjectConfigurationException> {
-        PluginResolver.resolve(root, listOf(PluginRequest("Progmasoft", "Fixture", null, null)))
+        PluginResolver.resolve(root, listOf(PluginRequest("Progmasoft", "Fixture", null)))
       }
       Files.delete(artifact.resolveSibling("${artifact.fileName}.sha256"))
       Files.delete(artifact)
       createPluginJar(directory, apiVersion = 99)
       PluginResolver.clearCache()
       assertFailsWith<ProjectConfigurationException> {
-        PluginResolver.resolve(root, listOf(PluginRequest("Progmasoft", "Fixture", null, null)))
+        PluginResolver.resolve(root, listOf(PluginRequest("Progmasoft", "Fixture", null)))
       }
     } finally {
       root.toFile().deleteRecursively()
@@ -142,7 +189,7 @@ class PluginInfrastructureTest {
 
       ProjectRuntime.reset()
       PluginRuntime.activate(listOf(first), listOf(firstPlugin), root)
-      PluginRuntime.declare(PluginRequest("Progmasoft", "First", "1.0.0", Stability.STABLE))
+      PluginRuntime.declare(PluginRequest("Progmasoft", "First", "1.0.0"))
       sources { main { entry = "Demo.Main" } }
       val plan = ProjectRuntime.build()
       assertEquals(listOf("native"), plan.plugins.single().extensions)
@@ -161,7 +208,6 @@ class PluginInfrastructureTest {
           "Progmasoft",
           "CMake",
           "1.0.0",
-          Stability.STABLE,
           PROJECT_PLUGIN_API_VERSION,
           "a".repeat(64),
           listOf("cmake"),
@@ -175,6 +221,17 @@ class PluginInfrastructureTest {
       val restored = ProjectLockFile.readPlugins(root.resolve(ProjectLockFile.FILE_NAME)).single()
       assertEquals(plugin.coordinate, restored.coordinate)
       assertEquals(plugin.sha256, restored.sha256)
+      DriverManager.getConnection("jdbc:sqlite:${root.resolve(ProjectLockFile.FILE_NAME)}").use {
+        connection ->
+        connection.createStatement().use { statement ->
+          statement.executeQuery("PRAGMA table_info(plugins)").use { rows ->
+            val columns = buildList {
+              while (rows.next()) add(rows.getString("name"))
+            }
+            assertFalse("stability" in columns)
+          }
+        }
+      }
     } finally {
       root.toFile().deleteRecursively()
     }
@@ -189,7 +246,7 @@ class PluginInfrastructureTest {
       val resolved =
         PluginResolver.resolve(
           root,
-          listOf(PluginRequest("Progmasoft", "Fixture", null, null)),
+          listOf(PluginRequest("Progmasoft", "Fixture", null)),
         )
       val manifest = root.resolve("plugins.manifest")
       PluginManifest.write(manifest, resolved)
@@ -214,7 +271,6 @@ class PluginInfrastructureTest {
         publisher=Progmasoft
         name=Fixture
         version=$version
-        stability=STABLE
         apiVersion=$apiVersion
         imports=org.progmasoft.visual.xsharp.project.*
         """
@@ -234,7 +290,6 @@ class PluginInfrastructureTest {
       "Progmasoft",
       name,
       "1.0.0",
-      Stability.STABLE,
       PROJECT_PLUGIN_API_VERSION,
       "a".repeat(64),
       emptyList(),

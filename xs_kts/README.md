@@ -10,6 +10,10 @@ the `plugins` preamble before evaluating the script, verifies descriptor compati
 `ProjectPlugin` services. Plugins are trusted project code and run with full JVM access; the runtime does not impose a
 sandbox or permission model.
 
+Explicit `plugin("local") { path = "plugin.jar" }` declarations load a project-relative JAR while retaining descriptor and
+digest verification. Explicit `dependency("local") { path = "dependency.vipkg" }` declarations record a project-relative
+Visual X# package separately from ViGet coordinates.
+
 Split project scripts and separate module scripts are not supported. Project discovery walks from the requested path toward
 the filesystem root until it finds `Visual.XSharp.kts`.
 
