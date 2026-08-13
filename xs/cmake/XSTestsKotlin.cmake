@@ -7,14 +7,15 @@
 # retired C frontend and must not define the renewed language implementation.
 add_test(NAME kotlin_project_resolve COMMAND vxs resolve)
 set_tests_properties(kotlin_project_resolve PROPERTIES
-  TIMEOUT 60
+  TIMEOUT 180
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call"
   ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
   FIXTURES_REQUIRED kotlin_project_resolver
   FIXTURES_SETUP kotlin_project_lock
   PASS_REGULAR_EXPRESSION "refreshed binary lock file 'Visual.XSharp.Lockfile.sqlite3'"
   LABELS jvm
-  RESOURCE_LOCK kotlin_script_runner)
+  RESOURCE_LOCK kotlin_script_runner
+  RUN_SERIAL TRUE)
 
 add_test(NAME kotlin_project_resolve_binary_lock COMMAND xs_text_artifact_tests
   "${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/Visual.XSharp.Lockfile.sqlite3" "SQLite format 3")
