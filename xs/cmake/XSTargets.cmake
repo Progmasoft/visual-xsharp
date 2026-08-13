@@ -62,6 +62,10 @@ add_library(xs_compiler
   ../Visual/XSharp/Backend/LLVM/Verifier.cpp
   ../Visual/XSharp/Pipeline.cpp
   ../Visual/XSharp/Pipeline/Driver.cpp
+  ../Visual/XSharp/Core/IR.cpp
+  ../Visual/XSharp/Core/Verifier.cpp
+  ../Visual/XSharp/Core/Wire.cpp
+  ../Visual/XSharp/Core/CorePrep/Prepare.cpp
   ../Visual/XSharp/Core/CorePrep/Verifier.cpp
   ../Visual/XSharp/Core/CorePrep/Verifier/Semantics.cpp
   ../Visual/XSharp/Core/CorePrep/Wire/Decode.cpp
@@ -72,6 +76,7 @@ add_library(xs_compiler
   sources/Diagnostic.cpp
   sources/driver/cli.c
   sources/driver/compiler_core_native.c
+  sources/driver/CorePipeline.cpp
   sources/driver/DirectXhir.cpp
   sources/driver/DirectXmir.cpp
   sources/driver/direct_xlil.c

@@ -56,8 +56,8 @@ struct ParsedValues
 
 [[nodiscard]] const char *command_name(std::string_view command)
 {
-    static constexpr std::string_view commands[] = {"build", "check", "install", "resolve", "run",
-                                                     "test",  "update", "version", "viget"};
+    static constexpr std::string_view commands[] = {"build", "check",  "install", "resolve", "run",
+                                                    "test",  "update", "version", "viget"};
     for(const auto candidate : commands)
         if(command == candidate)
             return candidate.data();
@@ -93,10 +93,10 @@ struct ParsedValues
 [[nodiscard]] bool parse_emit(std::string_view text, XsBuildOutput &output)
 {
     static const std::unordered_map<std::string_view, XsBuildOutput> outputs = {
-        {"binary", XS_BUILD_OUTPUT_BINARY},   {"object", XS_BUILD_OUTPUT_OBJECT},
-        {"core", XS_BUILD_OUTPUT_CORE},       {"xpp", XS_BUILD_OUTPUT_XPP},
-        {"xmm", XS_BUILD_OUTPUT_XMM},         {"assembly", XS_BUILD_OUTPUT_ASSEMBLY},
-        {"llvmll", XS_BUILD_OUTPUT_LLVM_LL},  {"llvmbc", XS_BUILD_OUTPUT_LLVM_BC},
+        {"binary", XS_BUILD_OUTPUT_BINARY},  {"object", XS_BUILD_OUTPUT_OBJECT},
+        {"core", XS_BUILD_OUTPUT_CORE},      {"xpp", XS_BUILD_OUTPUT_XPP},
+        {"xmm", XS_BUILD_OUTPUT_XMM},        {"assembly", XS_BUILD_OUTPUT_ASSEMBLY},
+        {"llvmll", XS_BUILD_OUTPUT_LLVM_LL}, {"llvmbc", XS_BUILD_OUTPUT_LLVM_BC},
     };
     const auto found = outputs.find(text);
     if(found == outputs.end())
@@ -108,9 +108,8 @@ struct ParsedValues
 [[nodiscard]] bool parse_build(std::string_view text, XsBuildInput &input)
 {
     static const std::unordered_map<std::string_view, XsBuildInput> inputs = {
-        {"vxs", XS_BUILD_INPUT_VXS},       {"object", XS_BUILD_INPUT_OBJECT},
-        {"core", XS_BUILD_INPUT_CORE},     {"xpp", XS_BUILD_INPUT_XPP},
-        {"xmm", XS_BUILD_INPUT_XMM},       {"llvmll", XS_BUILD_INPUT_LLVM_LL},
+        {"vxs", XS_BUILD_INPUT_VXS},        {"object", XS_BUILD_INPUT_OBJECT}, {"core", XS_BUILD_INPUT_CORE},
+        {"xpp", XS_BUILD_INPUT_XPP},        {"xmm", XS_BUILD_INPUT_XMM},       {"llvmll", XS_BUILD_INPUT_LLVM_LL},
         {"llvmbc", XS_BUILD_INPUT_LLVM_BC},
     };
     const auto found = inputs.find(text);
@@ -123,15 +122,24 @@ struct ParsedValues
 void normalize_visual_flags(std::vector<std::string> &arguments)
 {
     static const std::unordered_map<std::string_view, std::string_view> names = {
-        {"-Standard", "--standard"}, {"-Compiler-Version", "--compiler-version"},
-        {"-Werror", "--werror"}, {"-Warnings", "--warnings"},
+        {"-Standard", "--standard"},
+        {"-Compiler-Version", "--compiler-version"},
+        {"-Werror", "--werror"},
+        {"-Warnings", "--warnings"},
         {"-Wexperimental", "--wexperimental"},
-        {"-Wshadow", "--wshadow"}, {"-Wundef", "--wundef"},
-        {"-Type-Safe-Format", "--type-safe-format"}, {"-Backend", "--backend"},
-        {"-Llvm-OptLevel", "--llvm-opt-level"}, {"-Llvm-Compiler", "--llvm-compiler"},
-        {"-Llvm-Lto", "--llvm-lto"}, {"-Xpp-Optimization-Passes", "--xpp-optimization-passes"},
+        {"-Wshadow", "--wshadow"},
+        {"-Wundef", "--wundef"},
+        {"-Type-Safe-Format", "--type-safe-format"},
+        {"-Backend", "--backend"},
+        {"-Llvm-OptLevel", "--llvm-opt-level"},
+        {"-Llvm-Compiler", "--llvm-compiler"},
+        {"-Llvm-Lto", "--llvm-lto"},
+        {"-Xpp-Optimization-Passes", "--xpp-optimization-passes"},
         {"-Xmm-Optimization-Passes", "--xmm-optimization-passes"},
-        {"-Emit", "--emit"}, {"-Build", "--build"}, {"-File", "--file"}, {"-Global", "--global"},
+        {"-Emit", "--emit"},
+        {"-Build", "--build"},
+        {"-File", "--file"},
+        {"-Global", "--global"},
     };
     for(auto &argument : arguments)
     {
@@ -144,9 +152,13 @@ void normalize_visual_flags(std::vector<std::string> &arguments)
 void add_compiler_options(Dim::Cli &cli, ParsedValues &values, bool allow_file)
 {
     if(allow_file)
-        cli.opt(&values.file, "file").valueDesc("PATH").desc("Compile one .vxs file; projects are discovered automatically.");
+        cli.opt(&values.file, "file")
+            .valueDesc("PATH")
+            .desc("Compile one .vxs file; projects are discovered automatically.");
     cli.opt(&values.standard, "standard").valueDesc("26|latest").desc("Select the Visual X# language standard.");
-    cli.opt(&values.compiler_version, "compiler-version").valueDesc("VERSION|latest").desc("Select the compiler version.");
+    cli.opt(&values.compiler_version, "compiler-version")
+        .valueDesc("VERSION|latest")
+        .desc("Select the compiler version.");
     cli.opt(&values.werror, "werror").valueDesc("BOOL").desc("Treat warnings as errors.");
     cli.opt(&values.warning, "warnings").valueDesc("LEVEL").desc("Select all, medium, low, or none.");
     cli.opt(&values.experimental, "wexperimental").valueDesc("BOOL").desc("Enable experimental warnings.");
@@ -157,8 +169,12 @@ void add_compiler_options(Dim::Cli &cli, ParsedValues &values, bool allow_file)
     cli.opt(&values.llvm_opt, "llvm-opt-level").valueDesc("1|2|3|g").desc("Select LLVM optimization level.");
     cli.opt(&values.llvm_compiler, "llvm-compiler").valueDesc("aot|orc").desc("Select LLVM AOT or ORC compilation.");
     cli.opt(&values.llvm_lto, "llvm-lto").valueDesc("fat|thin|none").desc("Select LLVM link-time optimization.");
-    cli.opt(&values.xpp_optimization, "xpp-optimization-passes").valueDesc("BOOL").desc("Enable Xpp optimization passes.");
-    cli.opt(&values.xmm_optimization, "xmm-optimization-passes").valueDesc("BOOL").desc("Enable Xmm optimization passes.");
+    cli.opt(&values.xpp_optimization, "xpp-optimization-passes")
+        .valueDesc("BOOL")
+        .desc("Enable Xpp optimization passes.");
+    cli.opt(&values.xmm_optimization, "xmm-optimization-passes")
+        .valueDesc("BOOL")
+        .desc("Enable Xmm optimization passes.");
 }
 
 void configure_cli(Dim::Cli &cli, ParsedValues &values)
@@ -169,11 +185,18 @@ void configure_cli(Dim::Cli &cli, ParsedValues &values)
 
     cli.command("check").desc("Check a project or one Visual X# source file without emitting artifacts.");
     add_compiler_options(cli, values, true);
+    cli.opt(&values.build, "build")
+        .valueDesc("INPUT")
+        .desc("Read object, vxs, core, xpp, xmm, llvmll, or llvmbc input.");
 
     cli.command("build").desc("Build a project or one file through the renewed compiler pipeline.");
     add_compiler_options(cli, values, true);
-    cli.opt(&values.emit, "emit").valueDesc("FORMAT").desc("Emit binary, object, core, xpp, xmm, assembly, llvmll, or llvmbc.");
-    cli.opt(&values.build, "build").valueDesc("INPUT").desc("Read object, vxs, core, xpp, xmm, llvmll, or llvmbc input.");
+    cli.opt(&values.emit, "emit")
+        .valueDesc("FORMAT")
+        .desc("Emit binary, object, core, xpp, xmm, assembly, llvmll, or llvmbc.");
+    cli.opt(&values.build, "build")
+        .valueDesc("INPUT")
+        .desc("Read object, vxs, core, xpp, xmm, llvmll, or llvmbc input.");
     cli.command("run").desc("Build and run a Visual X# executable.");
     add_compiler_options(cli, values, true);
 
@@ -228,6 +251,8 @@ void print_help(std::string_view command)
         if(command == "build")
             fmt::print("  -Emit binary|object|core|xpp|xmm|assembly|llvmll|llvmbc\n"
                        "  -Build object|vxs|core|xpp|xmm|llvmll|llvmbc\n");
+        else if(command == "check")
+            fmt::print("  -Build object|vxs|core|xpp|xmm|llvmll|llvmbc\n");
     }
     else if(command == "install")
         fmt::print("  -Global\n  PACKAGE uses Publisher.Name coordinates.\n");

@@ -49,10 +49,12 @@ register model. Function identities, signatures, instruction result types, and t
 ordinary registers remain explicit across both stages. Both stages have optimization boundaries and remain independent of
 LLVM.
 
-Core has its own versioned `VXCR` binary contract, semantic verifier, and explicit `.core` artifact layer in Haskell.
-CorePrep crosses the Haskell/C++20 boundary through the separate internal `VXCP` contract. Both transports enforce byte,
-collection, string, and recursive-type limits. CorePrep is an adapting stage from Core to Xpp and exists only in RAM; it has
-no file extension, artifact API, CLI input, or emit option.
+Core has a shared versioned `VXCR` binary contract and equivalent semantic verifiers in Haskell and C++20. The native reader
+decodes a bounded `.core` document, verifies it, and applies a dedicated Core-to-CorePrep adapter before Xpp lowering. The
+adapter atomizes nested calls and primitive expressions, creates deterministic temporary symbols, and makes branches and
+joins explicit without optimizing or reconstructing types. CorePrep can also cross the in-process frontend boundary through
+the separate internal `VXCP` contract. Both transports enforce resource and Unicode-scalar limits. CorePrep exists only in
+RAM and has no file extension, artifact API, CLI input, or emit option.
 
 ## Backend
 
@@ -85,6 +87,6 @@ The current public artifact names are:
 .xmm
 ```
 
-Normal compilation keeps these representations in memory. The real `.core` writer and reader exist in the Haskell layer,
-but native `.core` input remains disconnected until the C++20 side consumes `VXCR` and lowers verified Core into CorePrep.
-Xpp/Xmm readers and their public artifact writers remain later work.
+Normal compilation keeps these representations in memory. Haskell writes real `.core` artifacts and C++20 consumes them
+through the full verified pipeline. Explicit `.ll` and `.bc` emission is available after Core input. Native object/linking
+from that route and Xpp/Xmm readers and writers remain later work.

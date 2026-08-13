@@ -44,6 +44,9 @@ xs_add_cxx_test(planning_cpp tests/PlanningCppTests.cpp xs_compiler)
 xs_add_cxx_test(visual_xsharp_pipeline tests/VisualXSharpPipelineTests.cpp xs_compiler)
 target_compile_definitions(xs_VisualXSharpPipelineTests PRIVATE
   XS_COREPREP_GOLDEN_PATH="${PROJECT_SOURCE_DIR}/tests/fixtures/coreprep/wire-v1.hex")
+xs_add_cxx_test(core_pipeline tests/CorePipelineTests.cpp xs_compiler)
+target_compile_definitions(xs_CorePipelineTests PRIVATE
+  XS_CORE_GOLDEN_PATH="${PROJECT_SOURCE_DIR}/tests/fixtures/core/wire-v1.hex")
 xs_add_cxx_test(llvm_backend_cpp tests/LLVMBackendTests.cpp xs_compiler)
 xs_add_c_test(mir tests/mir_tests.c xs_compiler)
 xs_add_c_test(mir_flow tests/mir_flow_tests.c xs_compiler)

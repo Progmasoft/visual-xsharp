@@ -6,14 +6,15 @@
 #include "Visual/XSharp/driver.hh"
 
 #include "compiler_core_native.h"
+#include "core_pipeline.h"
 #include "native_artifact.h"
 #include "options.h"
 #include "project_driver.h"
 #include "test_runner.h"
 
-
-#include "Visual/XSharp/compiler_core.hh"
 #include "Visual/C23/diagnostic.hh"
+#include "Visual/C23/source_include.h"
+#include "Visual/XSharp/compiler_core.hh"
 #include "Visual/XSharp/hir/cffi.h"
 #include "Visual/XSharp/hir/expression_check.h"
 #include "Visual/XSharp/hir/inheritance.h"
@@ -21,7 +22,6 @@
 #include "Visual/XSharp/hir/symbol_table.h"
 #include "Visual/XSharp/hir/type_resolution.h"
 #include "Visual/XSharp/macro.h"
-#include "Visual/C23/source_include.h"
 #include "Visual/XSharp/syntax_ast.hh"
 #include "Visual/XSharp/syntax_parser.h"
 
@@ -368,8 +368,8 @@ static XsCompilerCoreSession *merge_compiler_core_sessions(CompilationUnit *unit
     return status == XS_COMPILER_CORE_FFI_OK ? merged : nullptr;
 }
 
-static size_t project_entry_unit_index(const CompilationUnit *units, size_t unit_count,
-                                       const XsHirSymbolTable *symbols, const char *entry)
+static size_t project_entry_unit_index(const CompilationUnit *units, size_t unit_count, const XsHirSymbolTable *symbols,
+                                       const char *entry)
 {
     if(entry == nullptr)
         return 0U;
@@ -485,7 +485,8 @@ static bool check_project_sources(const char *root, const char *const *direct, s
     {
         XsSpan span = {.start = units[primary].tree.root->span.start_offset,
                        .end = units[primary].tree.root->span.end_offset};
-        success = emit_requested_output(output, program_session, units[primary].path, &units[primary].diagnostics, span);
+        success =
+            emit_requested_output(output, program_session, units[primary].path, &units[primary].diagnostics, span);
     }
     if(success && build_native)
     {
@@ -572,8 +573,8 @@ static int run_project_command(const XsCliOptions *options)
                         output == XS_BUILD_OUTPUT_BINARY;
     bool running = strcmp(options->command, "run") == 0;
     char *artifact_source = nullptr;
-    bool success = check_project_sources(".", direct, selected_count, output, build_native, testing,
-                                         &resolved.settings, resolved.entry, running ? &artifact_source : nullptr);
+    bool success = check_project_sources(".", direct, selected_count, output, build_native, testing, &resolved.settings,
+                                         resolved.entry, running ? &artifact_source : nullptr);
     if(success && testing && selected_count == 0U)
         fprintf(stderr, "vxs: test result: ok. 0 passed; 0 failed; 0 ignored\n");
     if(success && running)
@@ -594,10 +595,15 @@ static int run_file_command(const XsCliOptions *options)
 {
     if(options->input == XS_BUILD_INPUT_CORE)
     {
-        fprintf(stderr,
-                "vxs: real Core artifact input is not connected to the native pipeline yet; "
-                "CorePrep wire data is not accepted as .core\n");
-        return 1;
+        if(!has_suffix(options->file_path, ".core"))
+        {
+            fprintf(stderr, "vxs: Core artifact '%s' must use the '.core' extension\n", options->file_path);
+            return 2;
+        }
+        XsCompilerSettings settings = xs_cli_default_compiler_settings();
+        xs_cli_apply_compiler_overrides(options, &settings);
+        return xs_driver_process_core_artifact(options->file_path, options->command, options->output, &settings) ? 0
+                                                                                                                 : 1;
     }
     if(options->input != XS_BUILD_INPUT_VXS)
     {

@@ -91,18 +91,22 @@ The CLI reserves the real Core artifact commands:
 
 ```powershell
 vxs check -Build core -File module.core
-vxs build -Build core -File module.core
+vxs build -Build core -Emit llvmll -File module.core
+vxs build -Build core -Emit llvmbc -File module.core
 ```
 
-Version `0.3.0` defines the Haskell `VXCR` `.core` codec, bounded reader/writer, and semantic verifier, but the C++20 consumer
-for that format is not connected yet. These commands therefore fail explicitly. The older `VXCP` CorePrep transport remains
-an internal Haskell-to-C++20 boundary and is not accepted as a `.core` file.
+The native C++20 route reads the Haskell `VXCR` v1 contract with byte, collection, text, type-depth, and expression-depth
+limits. It verifies Core semantics before adapting nested expressions and source control flow to CorePrep, then runs the
+existing verified CorePrep → Xpp → Xmm → LLVM pipeline entirely in memory. `check` writes nothing. The two `build` examples
+write a sibling `.ll` or `.bc` file. Native object/executable output from Core and public Xpp/Xmm artifact codecs are not
+connected yet. The older `VXCP` transport remains internal and is rejected when supplied as `.core`.
 
 ## Registered but not connected
 
 The CLI reserves the renewed artifact vocabulary before all routes are implemented:
 
-- all explicit `.core`, `.xpp`, and `.xmm` input routes currently report that the selected input is not connected;
+- `.xpp` and `.xmm` input routes report that the selected input is not connected;
+- Core input does not yet emit native objects, executables, `.xpp`, or `.xmm` files;
 - `install` and `viget` report that the ViGet client is not linked into the compiler build.
 
 `resolve` and `update` evaluate the project configuration and refresh `Visual.XSharp.Lockfile.sqlite3`.

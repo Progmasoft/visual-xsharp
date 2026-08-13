@@ -31,7 +31,8 @@ It does not yet implement the complete language catalog in `Spec/`.
 
 The repository contains:
 
-- a verified Haskell Core model with a distinct bounded `VXCR` `.core` codec and artifact layer;
+- verified Haskell and C++20 Core models with a shared bounded `VXCR` `.core` codec contract;
+- a native Core semantic verifier and Core-to-CorePrep adapter that atomizes expressions and constructs explicit CFGs;
 - matching bounded Haskell and C++20 internal CorePrep wire codecs;
 - recursive type, symbol spelling, qualified-name, and UTF-32 string preservation;
 - RAM-only CorePrep transport; no CorePrep file extension, reader, writer, CLI input, or emit option exists;
@@ -46,8 +47,9 @@ The repository contains:
 - Unicode-scalar `String` constant storage; and
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
-The versioned Haskell-to-C++20 boundary is implemented. The remaining integration work is to make the Haskell frontend the
-source route selected by the production driver and to connect explicit Core/Xpp/Xmm writers and later-stage readers.
+The versioned Haskell-to-C++20 boundaries are implemented for both public VXCR Core input and internal VXCP CorePrep input.
+The remaining integration work is to make the Haskell frontend the production `.vxs` source route, connect Core input to
+native object/link production, and add explicit Xpp/Xmm writers and later-stage readers.
 
 ## Rust compiler core
 
@@ -69,9 +71,9 @@ entry selection, compiler settings, dependency declarations, and the SQLite lock
 
 Known gaps include:
 
-- explicit Core/Xpp/Xmm emission is registered but not connected;
-- `.core` input remains disconnected until the native consumer implements the real `VXCR` Core contract;
-- other non-source `-Build` inputs are registered but not connected;
+- Core input can be checked through LLVM and can emit `.ll` or `.bc`, but not yet a native object or executable;
+- explicit Core emission from source and Xpp/Xmm emission are registered but not connected;
+- Xpp/Xmm and other later non-source `-Build` inputs are registered but not connected;
 - package publication and installation require a ViGet client not linked into this build; and
 - the production source route does not yet use the Haskell frontend as its sole owner.
 

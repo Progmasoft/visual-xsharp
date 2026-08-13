@@ -48,6 +48,7 @@ main = do
     check "Core wire rejects trailing bytes" coreWireRejectsTrailingInput
     check "Core wire rejects unresolved types" coreWireRejectsUnresolvedType
     check "Core wire preserves Unicode scalar values" coreWirePreservesUnicode
+    check "Core wire v1 golden bytes remain stable" coreWireGoldenDocument
     check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
     check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
@@ -254,6 +255,93 @@ coreWirePreservesUnicode =
         value = CoreLiteral (CoreString "Visual X# λ 😀") stringType
         moduleValue = CoreModule (QualifiedName [Identifier "Unicode"]) [CoreFunction functionName [] stringType [CoreReturn value]]
      in (encodeCore defaultCoreWireLimits moduleValue >>= decodeCore defaultCoreWireLimits) == Right moduleValue
+
+coreWireGoldenDocument :: Bool
+coreWireGoldenDocument =
+    let mainName = ResolvedName (SymbolId 1) (Identifier "Main")
+        mainFunction = CoreFunction mainName [] unitType [CoreReturn (CoreLiteral CoreUnit unitType)]
+        moduleValue = CoreModule (QualifiedName [Identifier "Demo"]) [mainFunction]
+        bytes =
+            [ 0x56
+            , 0x58
+            , 0x43
+            , 0x52
+            , 0x01
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x01
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x04
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x44
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x65
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x6d
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x6f
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x01
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x01
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x04
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x4d
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x61
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x69
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x6e
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x01
+            , 0x00
+            , 0x00
+            , 0x00
+            , 0x02
+            , 0x01
+            , 0x00
+            , 0x00
+            ]
+     in encodeCore defaultCoreWireLimits moduleValue == Right bytes
+            && decodeCore defaultCoreWireLimits bytes == Right moduleValue
 
 wireRoundTrip :: Bool
 wireRoundTrip = case compile sample of
