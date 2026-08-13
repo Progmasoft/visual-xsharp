@@ -98,9 +98,13 @@ plugins {
 }
 ```
 
-The host searches the project-local `.visual-xsharp/plugins` directory and the directories in `XS_PLUGIN_PATH`. A plugin JAR
-contains `META-INF/visual-xsharp-plugin.properties` and exactly one matching `ProjectPlugin` service. The runtime validates
-the coordinate, exact requested version and stability, plugin API version, safe Kotlin imports, and SHA-256 identity before
+Production Kotlin DSL plugin JARs use
+`https://viget.xsharp-lang.xyz/dslplugins/<Publisher>/<Name>/`. The catalogue's version-index and JAR filename layout are not
+yet connected to this runtime. ViGet is the only remote source; there is no configurable repository list. The host currently
+loads installed artifacts from the project-local `.visual-xsharp/plugins` cache, which is not another repository. A plugin
+JAR contains
+`META-INF/visual-xsharp-plugin.properties` and exactly one matching `ProjectPlugin` service. The runtime validates the
+coordinate, exact requested version and stability, plugin API version, safe Kotlin imports, and SHA-256 identity before
 activation. An adjacent `<plugin.jar>.sha256` file makes the expected digest explicit; the digest is checked again in the
 Kotlin process before service loading.
 
@@ -128,6 +132,9 @@ lock database. It does not call this a resolved dependency graph. A complete tra
 client are separate implementation work.
 
 Standard-library namespaces are not repeated as package dependencies.
+
+Visual X# packages are distinct from Kotlin DSL plugins. They are Visual X#-authored `.vipkg` artifacts catalogued under
+`https://viget.xsharp-lang.xyz/<Publisher>/<Name>/`; dependency solving and registry transport remain separate work.
 
 ## Lock file
 

@@ -5,7 +5,6 @@
 
 package org.progmasoft.visual.xsharp.project
 
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -23,33 +22,15 @@ object PluginResolver {
   fun resolve(
     root: Path,
     requests: List<PluginRequest>,
-    environment: Map<String, String> = System.getenv(),
   ): List<ResolvedPlugin> {
     if (requests.isEmpty()) return emptyList()
-    val roots = pluginRoots(root, environment)
-    val candidates = roots.flatMap(::index).groupBy(ResolvedPlugin::coordinate)
+    val cache = root.resolve(".visual-xsharp/plugins").toAbsolutePath().normalize()
+    val candidates =
+      if (Files.isDirectory(cache)) index(cache).groupBy(ResolvedPlugin::coordinate) else emptyMap()
     return requests.map { request -> select(request, candidates[request.coordinate].orEmpty()) }
   }
 
   internal fun clearCache() = indexCache.clear()
-
-  private fun pluginRoots(
-    projectRoot: Path,
-    environment: Map<String, String>,
-  ): List<Path> {
-    val configured =
-      environment.entries
-        .firstOrNull { it.key.equals("XS_PLUGIN_PATH", ignoreCase = true) }
-        ?.value
-        .orEmpty()
-        .split(File.pathSeparatorChar)
-        .filter(String::isNotBlank)
-        .map(Path::of)
-    return (listOf(projectRoot.resolve(".visual-xsharp/plugins")) + configured)
-      .map { it.toAbsolutePath().normalize() }
-      .filter(Files::isDirectory)
-      .distinct()
-  }
 
   private fun index(root: Path): List<ResolvedPlugin> {
     val fingerprint = directoryFingerprint(root)
@@ -149,7 +130,7 @@ object PluginResolver {
     if (matching.isEmpty()) {
       val requestedVersion = request.version?.let { " version $it" }.orEmpty()
       throw ProjectConfigurationException(
-        "plugin '${request.coordinate}'$requestedVersion was not found in XS_PLUGIN_PATH or .visual-xsharp/plugins"
+        "plugin '${request.coordinate}'$requestedVersion is not installed in the project plugin cache"
       )
     }
     return matching.maxWithOrNull { left, right ->

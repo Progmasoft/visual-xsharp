@@ -83,7 +83,6 @@ class PluginInfrastructureTest {
         PluginResolver.resolve(
           root,
           listOf(PluginRequest("Progmasoft", "Fixture", "1.2.3", Stability.STABLE)),
-          emptyMap(),
         )
 
       assertEquals("Progmasoft.Fixture", resolved.single().coordinate)
@@ -94,7 +93,6 @@ class PluginInfrastructureTest {
         PluginResolver.resolve(
             root,
             listOf(PluginRequest("Progmasoft", "Fixture", "1.2.3", Stability.STABLE)),
-            emptyMap(),
           )
           .single(),
       )
@@ -186,12 +184,12 @@ class PluginInfrastructureTest {
   fun manifestRejectsArtifactChangedAfterResolution() {
     val root = Files.createTempDirectory("visual-xsharp-plugin-manifest-")
     try {
-      val artifact = createPluginJar(root)
+      val directory = Files.createDirectories(root.resolve(".visual-xsharp/plugins"))
+      val artifact = createPluginJar(directory)
       val resolved =
         PluginResolver.resolve(
           root,
           listOf(PluginRequest("Progmasoft", "Fixture", null, null)),
-          mapOf("XS_PLUGIN_PATH" to root.toString()),
         )
       val manifest = root.resolve("plugins.manifest")
       PluginManifest.write(manifest, resolved)
