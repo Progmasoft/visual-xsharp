@@ -5,21 +5,18 @@ SPDX-License-Identifier: MPL-2.0
 
 # Changelog
 
-## 0.3.0 - 2026-08-12
-
-- Added a versioned, bounded CorePrep binary contract shared by the Haskell frontend and C++20 native pipeline.
-- Preserved recursive type information, symbol spellings, qualified names, and UTF-32 string values across the compiler boundary.
-- Connected verified CorePrep input to the in-memory Xpp and Xmm lowering route.
-- Added explicit `.core` artifact I/O without introducing intermediate files into normal compilation.
-- Added cross-language golden bytes, malformed-input rejection, semantic verification, and ClangCL sanitizer coverage.
-- Enabled `vxs build -Build core -File PATH.core` and `vxs check -Build core -File PATH.core`.
-
 This file summarizes user-visible and developer-visible changes in the xs-project repository.
 
 The 0.0.x development period is the pre-1.0 xs-project compiler infrastructure line. It does not imply a complete X#
 source-to-native executable pipeline.
 
-## Unreleased
+## 0.3.1 - 2026-08-13
+
+- Replaced the C lexer/parser and compatibility semantic route with the Haskell frontend as the sole `.vxs` source owner.
+- Rewrote the public driver around a typed C++20 command schema and removed DIMCLI.
+- Connected `.vxs` checking and explicit Core/LLVM emission through the bounded Core boundary and C++20 backend pipeline.
+- Removed unreachable C AST, macro, HIR/MIR, compiler-core bridge code and the obsolete Rust direct-IR FFI session wrapper;
+  retained Rust IR models, algorithms, and tests.
 
 - Simplified Kotlin dependency features: optional features now remain disabled by default and are activated only with
   `feature(name)` or `enable(name)`; the redundant `disable(name)` DSL operation was removed.
@@ -34,6 +31,15 @@ source-to-native executable pipeline.
   conditional branches, selected payload-slot extraction, and exhaustive-final-arm fallthrough.
 - Split conditional lowering from the growing MIR control-flow module and added verifier plus canonical-text regression
   coverage for payload-bearing, payload-free, overloaded, and inherited enum-data matches.
+
+## 0.3.0 - 2026-08-12
+
+- Added a versioned, bounded CorePrep binary contract shared by the Haskell frontend and C++20 native pipeline.
+- Preserved recursive type information, symbol spellings, qualified names, and UTF-32 string values across the compiler boundary.
+- Connected verified CorePrep input to the in-memory Xpp and Xmm lowering route.
+- Added explicit `.core` artifact I/O without introducing intermediate files into normal compilation.
+- Added cross-language golden bytes, malformed-input rejection, semantic verification, and ClangCL sanitizer coverage.
+- Enabled `vxs build -Build core -File PATH.core` and `vxs check -Build core -File PATH.core`.
 
 ## 0.2.8 - 2026-08-02
 

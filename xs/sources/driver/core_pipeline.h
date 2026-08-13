@@ -15,6 +15,8 @@ extern "C"
 #endif
     bool xs_driver_process_core_artifact(const char *path, const char *command, XsBuildOutput output,
                                          const XsCompilerSettings *settings);
+    bool xs_driver_process_core_artifact_as(const char *path, const char *artifact_base_path, const char *command,
+                                            XsBuildOutput output, const XsCompilerSettings *settings);
 #ifdef __cplusplus
 }
 #endif

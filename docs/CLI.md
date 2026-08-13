@@ -76,14 +76,16 @@ Single-file validation:
 vxs check -File .\Sources\Main.vxs
 ```
 
-Single-file native build is available for the source subset supported by the current Rust compiler core and LLVM backend:
+The Haskell frontend can emit verified Core or continue to LLVM text/bitcode:
 
 ```powershell
-vxs build -File .\Sources\Main.vxs
+vxs build -File .\Sources\Main.vxs -Emit core
+vxs build -File .\Sources\Main.vxs -Emit llvmll
+vxs build -File .\Sources\Main.vxs -Emit llvmbc
 ```
 
-Success depends on the source body being supported by that route. This command does not prove that the intended Haskell to
-CorePrep to Xpp/Xmm pipeline is already the production owner.
+The accepted source subset is the subset implemented by the Haskell frontend. Native object, link, `run`, and `test`
+reconnection remains pending; the CLI rejects those routes instead of falling back to the removed compatibility frontend.
 
 ## Core input status
 
@@ -113,5 +115,5 @@ The CLI reserves the renewed artifact vocabulary before all routes are implement
 
 ## Exit behavior
 
-Command parsing errors return a nonzero status. Compilation diagnostics are printed to standard error. `run` returns the
-native program's exit status after a successful build.
+Command parsing errors return a nonzero status. Compilation diagnostics are printed to standard error. `run` currently
+fails with an explicit migration diagnostic because native object/link production is not connected.

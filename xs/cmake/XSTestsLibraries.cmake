@@ -1,46 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
-foreach(source_fixture MissingMain NonLiteralMain OutOfRangeMain OutOfRangeByteMain OutOfRangeUIntegerMain
-                       ParameterizedMain WrongReturnMain UnknownCallMain
-                       WrongCallArityMain NonLongReturnCallMain
-                       BoolCallAsLongMain UnitCallAsLongMain InvalidLogicalOperands ImmutableLocalReassignment
-                       InvalidCoalesceLeft InvalidOptionalForcedLong InvalidOptionalAssignImmutable
-                       InvalidOptionalAssignNonOptional InvalidOptionalAssignType
-                       InvalidResultPropagationOutside InvalidResultErrorMismatch InvalidResultOkPayload
-                       InvalidResultConstructorOutside InvalidResultMatchDuplicate InvalidResultMatchVariant
-                       MatchMissingElse MatchPatternTypeMismatch RecursiveDataParameter
-                       AmbiguousInheritedDataField IncompleteDataConstructor LegacyDataConstructorCall DuplicateDataMethod
-                       ForEachNonArray ForEachBindingMismatch TupleUnknownMember TupleAssignmentMismatch
-                       TuplePatternArityMismatch TuplePatternTypeMismatch TuplePatternDuplicateBinding
-                       TupleDeclarationArityMismatch TupleDeclarationTypeMismatch TupleDeclarationDuplicateBinding
-                       UnknownGenericCall WrongGenericArity GenericTypeMismatch ExpandingGenericRecursion
-                       UnsatisfiedGenericConstraint NonInterfaceGenericConstraint)
-  add_test(NAME source_native_invalid_${source_fixture} COMMAND vxs build -File
-                                                           ${XS_SOURCE_NATIVE_FIXTURE_DIR}/${source_fixture}.vxs)
-  set_tests_properties(source_native_invalid_${source_fixture} PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
-endforeach()
-
 add_executable(xs_backend_tests tests/backend_tests.c)
 target_link_libraries(xs_backend_tests PRIVATE xs_backend_llvm)
 add_test(NAME backend COMMAND xs_backend_tests ${XS_BACKEND_TEST_OBJECT} ${XS_LLD_EXECUTABLE})
 set_tests_properties(backend PROPERTIES TIMEOUT 10)
 
-xs_add_c_test(modules tests/module_tests.c xs_compiler ${XS_SOURCE_FROM_BINARY}/tests/fixtures/module_project
-              ${XS_SOURCE_FROM_BINARY}/tests/fixtures/duplicate_modules)
-xs_add_c_test(hir tests/hir_tests.c xs_compiler)
-xs_add_c_test(hir_members tests/hir_member_tests.c xs_compiler)
-xs_add_c_test(hir_macro tests/hir_macro_tests.c xs_compiler)
-xs_add_c_test(hir_types tests/hir_type_tests.c xs_compiler)
-xs_add_c_test(hir_expressions tests/hir_expression_tests.c xs_compiler)
-xs_add_c_test(inheritance tests/inheritance_tests.c xs_compiler)
 xs_add_c_test(int128 tests/int128_tests.c xs_lil)
 xs_add_c_test(c23_features tests/c23_features_tests.c xs_lil)
-xs_add_c_test(xlil tests/xlil_tests.c xs_compiler)
+xs_add_c_test(xlil tests/xlil_tests.c xs_lil)
 xs_add_c_test(lil_c_headers tests/lil_c_headers_tests.c xs_lil)
 xs_add_c_test(lil_c_producer tests/lil_c_producer_tests.c xs_lil)
 xs_add_cxx_test(lil_cpp tests/LilCppTests.cpp xs_lil_cpp)
-xs_add_cxx_test(planning_cpp tests/PlanningCppTests.cpp xs_compiler)
 xs_add_cxx_test(visual_xsharp_pipeline tests/VisualXSharpPipelineTests.cpp xs_compiler)
 target_compile_definitions(xs_VisualXSharpPipelineTests PRIVATE
   XS_COREPREP_GOLDEN_PATH="${PROJECT_SOURCE_DIR}/tests/fixtures/coreprep/wire-v1.hex")
@@ -48,15 +19,3 @@ xs_add_cxx_test(core_pipeline tests/CorePipelineTests.cpp xs_compiler)
 target_compile_definitions(xs_CorePipelineTests PRIVATE
   XS_CORE_GOLDEN_PATH="${PROJECT_SOURCE_DIR}/tests/fixtures/core/wire-v1.hex")
 xs_add_cxx_test(llvm_backend_cpp tests/LLVMBackendTests.cpp xs_compiler)
-xs_add_c_test(mir tests/mir_tests.c xs_compiler)
-xs_add_c_test(mir_flow tests/mir_flow_tests.c xs_compiler)
-xs_add_c_test(syntax_ast tests/syntax_ast_tests.c xs_compiler)
-xs_add_c_test(syntax_decl tests/syntax_decl_tests.c xs_compiler)
-xs_add_c_test(syntax_macro tests/syntax_macro_tests.c xs_compiler)
-xs_add_c_test(source_include tests/source_include_tests.c xs_compiler)
-xs_add_c_test(native_artifact_path tests/native_artifact_path_tests.c xs_compiler)
-xs_add_c_test(syntax_macro_view tests/syntax_macro_view_tests.c xs_compiler)
-add_executable(xs_compiler_core_bridge_tests tests/compiler_core_bridge_tests.c)
-target_link_libraries(xs_compiler_core_bridge_tests PRIVATE xs_compiler xslang_compiler_core)
-add_test(NAME compiler_core_bridge COMMAND xs_compiler_core_bridge_tests)
-set_tests_properties(compiler_core_bridge PROPERTIES TIMEOUT 5)

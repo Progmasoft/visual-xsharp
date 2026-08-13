@@ -1,365 +1,365 @@
-/*
- * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
- * SPDX-License-Identifier: MPL-2.0
- */
+// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+// SPDX-License-Identifier: MPL-2.0
 
 #include "options.h"
 
-#include "dimcli/cli.h"
-
-#include <fmt/format.h>
-
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <string>
+#include <optional>
 #include <string_view>
-#include <unordered_map>
-#include <vector>
+#include <utility>
+
+#ifndef XS_PROJECT_VERSION
+#    define XS_PROJECT_VERSION "0.3.1"
+#endif
 
 namespace
 {
-struct ParsedValues
+using namespace std::literals;
+
+enum class Command : unsigned
 {
-    std::string file;
-    std::string package;
-    std::string viget_action;
-    std::string standard;
-    std::string compiler_version;
-    std::string warning;
-    std::string werror;
-    std::string experimental;
-    std::string shadow;
-    std::string undef;
-    std::string type_safe_format;
-    std::string backend;
-    std::string llvm_opt;
-    std::string llvm_compiler;
-    std::string llvm_lto;
-    std::string xpp_optimization;
-    std::string xmm_optimization;
-    std::string emit;
-    std::string build;
-    bool global_install = false;
-    bool version_option = false;
+    Build,
+    Check,
+    Install,
+    Resolve,
+    Run,
+    Test,
+    Update,
+    Version,
+    ViGet,
+    Count,
 };
 
-[[nodiscard]] char *copy_string(const std::string &value)
+enum class Option : unsigned
 {
-    if(value.empty())
-        return nullptr;
-    auto *copy = static_cast<char *>(std::malloc(value.size() + 1U));
-    if(copy != nullptr)
-        std::memcpy(copy, value.c_str(), value.size() + 1U);
-    return copy;
+    File,
+    Standard,
+    CompilerVersion,
+    Emit,
+    Build,
+    Warnings,
+    Werror,
+    Wexperimental,
+    Wshadow,
+    Wundef,
+    TypeSafeFormat,
+    Backend,
+    LlvmOptLevel,
+    LlvmCompiler,
+    LlvmLto,
+    XppOptimization,
+    XmmOptimization,
+    Global,
+    Count,
+};
+
+using CommandMask = unsigned;
+
+constexpr CommandMask Bit(Command command)
+{
+    return 1U << static_cast<unsigned>(command);
 }
 
-[[nodiscard]] const char *command_name(std::string_view command)
+constexpr CommandMask kCompilerCommands =
+    Bit(Command::Build) | Bit(Command::Check) | Bit(Command::Run) | Bit(Command::Test);
+
+struct CommandSpec
 {
-    static constexpr std::string_view commands[] = {"build", "check",  "install", "resolve", "run",
-                                                    "test",  "update", "version", "viget"};
-    for(const auto candidate : commands)
-        if(command == candidate)
-            return candidate.data();
+    std::string_view name;
+    Command command;
+    bool acceptsPositional;
+};
+
+struct OptionSpec
+{
+    std::string_view spelling;
+    Option option;
+    CommandMask commands;
+    bool requiresValue;
+};
+
+// The schema is the single authority for option spelling, arity, and command
+// scope. Parsing cannot accidentally make a build-only flag valid for install.
+constexpr CommandSpec kCommands[] = {
+    {"build", Command::Build, false},     {"check", Command::Check, false},     {"install", Command::Install, true},
+    {"resolve", Command::Resolve, false}, {"run", Command::Run, false},         {"test", Command::Test, false},
+    {"update", Command::Update, false},   {"version", Command::Version, false}, {"viget", Command::ViGet, true},
+};
+
+constexpr OptionSpec kOptions[] = {
+    {"-File", Option::File, kCompilerCommands, true},
+    {"-Standard", Option::Standard, kCompilerCommands, true},
+    {"-Compiler-Version", Option::CompilerVersion, kCompilerCommands, true},
+    {"-Emit", Option::Emit, Bit(Command::Build), true},
+    {"-Build", Option::Build, Bit(Command::Build) | Bit(Command::Check), true},
+    {"-Warnings", Option::Warnings, kCompilerCommands, true},
+    {"-Werror", Option::Werror, kCompilerCommands, true},
+    {"-Wexperimental", Option::Wexperimental, kCompilerCommands, true},
+    {"-Wshadow", Option::Wshadow, kCompilerCommands, true},
+    {"-Wundef", Option::Wundef, kCompilerCommands, true},
+    {"-Type-Safe-Format", Option::TypeSafeFormat, kCompilerCommands, true},
+    {"-Backend", Option::Backend, kCompilerCommands, true},
+    {"-Llvm-OptLevel", Option::LlvmOptLevel, kCompilerCommands, true},
+    {"-Llvm-Compiler", Option::LlvmCompiler, kCompilerCommands, true},
+    {"-Llvm-Lto", Option::LlvmLto, kCompilerCommands, true},
+    {"-Xpp-Optimization-Passes", Option::XppOptimization, kCompilerCommands, true},
+    {"-Xmm-Optimization-Passes", Option::XmmOptimization, kCompilerCommands, true},
+    {"-Global", Option::Global, Bit(Command::Install), false},
+};
+
+[[nodiscard]] std::optional<CommandSpec> FindCommand(std::string_view spelling)
+{
+    for(const auto &spec : kCommands)
+        if(spec.name == spelling)
+            return spec;
+    return std::nullopt;
+}
+
+[[nodiscard]] const OptionSpec *FindOption(std::string_view spelling)
+{
+    for(const auto &spec : kOptions)
+        if(spec.spelling == spelling)
+            return &spec;
     return nullptr;
 }
 
-[[nodiscard]] bool parse_bool(std::string_view text, bool &value)
+[[nodiscard]] char *Copy(std::string_view value)
 {
-    if(text == "true")
-        value = true;
-    else if(text == "false")
-        value = false;
-    else
-        return false;
-    return true;
+    auto *result = static_cast<char *>(std::malloc(value.size() + 1U));
+    if(result == nullptr)
+        return nullptr;
+    std::memcpy(result, value.data(), value.size());
+    result[value.size()] = '\0';
+    return result;
 }
 
-[[nodiscard]] bool parse_warning(std::string_view text, XsWarningLevel &level)
+void Release(XsCliOptions &options)
 {
-    if(text == "all")
-        level = XS_WARNING_ALL;
-    else if(text == "medium")
-        level = XS_WARNING_MEDIUM;
-    else if(text == "low")
-        level = XS_WARNING_LOW;
-    else if(text == "none")
-        level = XS_WARNING_NONE;
-    else
-        return false;
-    return true;
+    std::free(const_cast<char *>(options.file_path));
+    std::free(const_cast<char *>(options.package_name));
+    std::free(const_cast<char *>(options.compiler_version));
+    std::free(const_cast<char *>(options.standard));
+    options = {};
 }
 
-[[nodiscard]] bool parse_emit(std::string_view text, XsBuildOutput &output)
+[[nodiscard]] XsCliParseResult Fail(XsCliOptions &options, std::string_view message)
 {
-    static const std::unordered_map<std::string_view, XsBuildOutput> outputs = {
-        {"binary", XS_BUILD_OUTPUT_BINARY},  {"object", XS_BUILD_OUTPUT_OBJECT},
-        {"core", XS_BUILD_OUTPUT_CORE},      {"xpp", XS_BUILD_OUTPUT_XPP},
-        {"xmm", XS_BUILD_OUTPUT_XMM},        {"assembly", XS_BUILD_OUTPUT_ASSEMBLY},
-        {"llvmll", XS_BUILD_OUTPUT_LLVM_LL}, {"llvmbc", XS_BUILD_OUTPUT_LLVM_BC},
-    };
-    const auto found = outputs.find(text);
-    if(found == outputs.end())
-        return false;
-    output = found->second;
-    return true;
-}
-
-[[nodiscard]] bool parse_build(std::string_view text, XsBuildInput &input)
-{
-    static const std::unordered_map<std::string_view, XsBuildInput> inputs = {
-        {"vxs", XS_BUILD_INPUT_VXS},        {"object", XS_BUILD_INPUT_OBJECT}, {"core", XS_BUILD_INPUT_CORE},
-        {"xpp", XS_BUILD_INPUT_XPP},        {"xmm", XS_BUILD_INPUT_XMM},       {"llvmll", XS_BUILD_INPUT_LLVM_LL},
-        {"llvmbc", XS_BUILD_INPUT_LLVM_BC},
-    };
-    const auto found = inputs.find(text);
-    if(found == inputs.end())
-        return false;
-    input = found->second;
-    return true;
-}
-
-void normalize_visual_flags(std::vector<std::string> &arguments)
-{
-    static const std::unordered_map<std::string_view, std::string_view> names = {
-        {"-Standard", "--standard"},
-        {"-Compiler-Version", "--compiler-version"},
-        {"-Werror", "--werror"},
-        {"-Warnings", "--warnings"},
-        {"-Wexperimental", "--wexperimental"},
-        {"-Wshadow", "--wshadow"},
-        {"-Wundef", "--wundef"},
-        {"-Type-Safe-Format", "--type-safe-format"},
-        {"-Backend", "--backend"},
-        {"-Llvm-OptLevel", "--llvm-opt-level"},
-        {"-Llvm-Compiler", "--llvm-compiler"},
-        {"-Llvm-Lto", "--llvm-lto"},
-        {"-Xpp-Optimization-Passes", "--xpp-optimization-passes"},
-        {"-Xmm-Optimization-Passes", "--xmm-optimization-passes"},
-        {"-Emit", "--emit"},
-        {"-Build", "--build"},
-        {"-File", "--file"},
-        {"-Global", "--global"},
-    };
-    for(auto &argument : arguments)
-    {
-        const auto found = names.find(argument);
-        if(found != names.end())
-            argument = found->second;
-    }
-}
-
-void add_compiler_options(Dim::Cli &cli, ParsedValues &values, bool allow_file)
-{
-    if(allow_file)
-        cli.opt(&values.file, "file")
-            .valueDesc("PATH")
-            .desc("Compile one .vxs file; projects are discovered automatically.");
-    cli.opt(&values.standard, "standard").valueDesc("26|latest").desc("Select the Visual X# language standard.");
-    cli.opt(&values.compiler_version, "compiler-version")
-        .valueDesc("VERSION|latest")
-        .desc("Select the compiler version.");
-    cli.opt(&values.werror, "werror").valueDesc("BOOL").desc("Treat warnings as errors.");
-    cli.opt(&values.warning, "warnings").valueDesc("LEVEL").desc("Select all, medium, low, or none.");
-    cli.opt(&values.experimental, "wexperimental").valueDesc("BOOL").desc("Enable experimental warnings.");
-    cli.opt(&values.shadow, "wshadow").valueDesc("BOOL").desc("Enable shadowing warnings.");
-    cli.opt(&values.undef, "wundef").valueDesc("BOOL").desc("Enable undefined-name warnings.");
-    cli.opt(&values.type_safe_format, "type-safe-format").valueDesc("BOOL").desc("Enable type-safe format checking.");
-    cli.opt(&values.backend, "backend").valueDesc("llvm").desc("Select the compiler backend.");
-    cli.opt(&values.llvm_opt, "llvm-opt-level").valueDesc("1|2|3|g").desc("Select LLVM optimization level.");
-    cli.opt(&values.llvm_compiler, "llvm-compiler").valueDesc("aot|orc").desc("Select LLVM AOT or ORC compilation.");
-    cli.opt(&values.llvm_lto, "llvm-lto").valueDesc("fat|thin|none").desc("Select LLVM link-time optimization.");
-    cli.opt(&values.xpp_optimization, "xpp-optimization-passes")
-        .valueDesc("BOOL")
-        .desc("Enable Xpp optimization passes.");
-    cli.opt(&values.xmm_optimization, "xmm-optimization-passes")
-        .valueDesc("BOOL")
-        .desc("Enable Xmm optimization passes.");
-}
-
-void configure_cli(Dim::Cli &cli, ParsedValues &values)
-{
-    cli.responseFiles(false);
-    cli.header("Visual X# compiler, project, and ViGet command-line interface.");
-    cli.before([](Dim::Cli &, std::vector<std::string> &arguments) { normalize_visual_flags(arguments); });
-
-    cli.command("check").desc("Check a project or one Visual X# source file without emitting artifacts.");
-    add_compiler_options(cli, values, true);
-    cli.opt(&values.build, "build")
-        .valueDesc("INPUT")
-        .desc("Read object, vxs, core, xpp, xmm, llvmll, or llvmbc input.");
-
-    cli.command("build").desc("Build a project or one file through the renewed compiler pipeline.");
-    add_compiler_options(cli, values, true);
-    cli.opt(&values.emit, "emit")
-        .valueDesc("FORMAT")
-        .desc("Emit binary, object, core, xpp, xmm, assembly, llvmll, or llvmbc.");
-    cli.opt(&values.build, "build")
-        .valueDesc("INPUT")
-        .desc("Read object, vxs, core, xpp, xmm, llvmll, or llvmbc input.");
-    cli.command("run").desc("Build and run a Visual X# executable.");
-    add_compiler_options(cli, values, true);
-
-    cli.command("test").desc("Build and run project tests.");
-    add_compiler_options(cli, values, true);
-
-    cli.command("resolve").desc("Resolve project dependencies and refresh Visual.XSharp.Lockfile.sqlite3.");
-    cli.command("update").desc("Update system and project dependencies.");
-
-    cli.command("install").desc("Install a ViGet package into the project or system.");
-    cli.opt(&values.global_install, "global.").desc("Install the package for the current system.");
-    cli.opt(&values.package, "<PACKAGE>").valueDesc("Publisher.Name");
-
-    cli.command("viget").desc("Publish or update a ViPkg in ViGet.");
-    cli.opt(&values.viget_action, "<ACTION>").valueDesc("push|update");
-
-    cli.command("version").desc("Show the compiler version.");
-    cli.command("");
-    cli.opt(&values.version_option, "version.").desc("Show the compiler version.");
-}
-
-[[nodiscard]] XsCliParseResult error(std::string_view message)
-{
-    fmt::print(stderr, "vxs: {}\n", message);
+    std::fprintf(stderr, "vxs: %.*s\n", static_cast<int>(message.size()), message.data());
+    Release(options);
     return XS_CLI_PARSE_ERROR;
 }
 
-void print_help(std::string_view command)
+void PrintHelp(std::string_view command)
 {
     if(command.empty())
     {
-        fmt::print("Visual X# compiler, project, and ViGet command-line interface.\n\n"
-                   "Usage: vxs <command> [options]\n\n"
-                   "Commands:\n"
-                   "  check  build  run  test  resolve  update  install  viget  version\n"
-                   "Run 'vxs <command> --help' for command options.\n");
+        std::puts("Visual X# compiler, project, and ViGet command-line interface.\n\n"
+                  "Usage: vxs <command> [options]\n\n"
+                  "Commands:\n"
+                  "  check  build  run  test  resolve  update  install  viget  version\n"
+                  "Run 'vxs <command> --help' for command options.");
         return;
     }
-    fmt::print("Usage: vxs {} [options]\n\n", command);
-    if(command == "check" || command == "run" || command == "test" || command == "build")
-    {
-        fmt::print("Compiler options:\n"
-                   "  -File PATH\n"
-                   "  -Standard 26|latest\n"
-                   "  -Compiler-Version VERSION|latest\n"
-                   "  -Warnings all|medium|low|none\n"
-                   "  -Werror BOOL  -Wexperimental BOOL  -Wshadow BOOL  -Wundef BOOL\n"
-                   "  -Type-Safe-Format BOOL  -Backend llvm\n"
-                   "  -Llvm-OptLevel 1|2|3|g  -Llvm-Compiler aot|orc\n"
-                   "  -Llvm-Lto fat|thin|none\n"
-                   "  -Xpp-Optimization-Passes BOOL  -Xmm-Optimization-Passes BOOL\n");
-        if(command == "build")
-            fmt::print("  -Emit binary|object|core|xpp|xmm|assembly|llvmll|llvmbc\n"
-                       "  -Build object|vxs|core|xpp|xmm|llvmll|llvmbc\n");
-        else if(command == "check")
-            fmt::print("  -Build object|vxs|core|xpp|xmm|llvmll|llvmbc\n");
-    }
-    else if(command == "install")
-        fmt::print("  -Global\n  PACKAGE uses Publisher.Name coordinates.\n");
-    else if(command == "viget")
-        fmt::print("  ACTION is push or update.\n");
+    std::printf("Usage: vxs %.*s [options]\n", static_cast<int>(command.size()), command.data());
+    if(command == "check" || command == "build" || command == "run" || command == "test")
+        std::puts("\nCompiler options:\n"
+                  "  -File PATH\n"
+                  "  -Build vxs|core\n"
+                  "  -Emit core|llvmll|llvmbc\n"
+                  "  -Standard 26|latest  -Compiler-Version VERSION|latest\n"
+                  "  -Warnings all|medium|low|none  -Werror BOOL\n"
+                  "  -Wexperimental BOOL  -Wshadow BOOL  -Wundef BOOL\n"
+                  "  -Type-Safe-Format BOOL  -Backend llvm\n"
+                  "  -Llvm-OptLevel 1|2|3|g  -Llvm-Compiler aot|orc  -Llvm-Lto fat|thin|none\n"
+                  "  -Xpp-Optimization-Passes BOOL  -Xmm-Optimization-Passes BOOL");
 }
 
-[[nodiscard]] bool parse_compiler_values(const ParsedValues &values, XsCliOptions &options)
+[[nodiscard]] bool ParseBool(std::string_view value, bool &output)
 {
-    auto boolean = [](const std::string &text, bool &value, bool &overridden)
-    {
-        if(text.empty())
-            return true;
-        overridden = true;
-        return parse_bool(text, value);
-    };
-    if(!values.standard.empty() && values.standard != "26" && values.standard != "latest")
+    if(value == "true")
+        output = true;
+    else if(value == "false")
+        output = false;
+    else
         return false;
-    if(!values.backend.empty() && values.backend != "llvm")
-        return false;
-    if(!values.warning.empty())
-    {
-        options.warning_override = true;
-        if(!parse_warning(values.warning, options.compiler.warning_level))
-            return false;
-    }
-    if(!boolean(values.werror, options.compiler.warnings_as_errors, options.werror_override) ||
-       !boolean(values.experimental, options.compiler.experimental_warnings, options.experimental_override) ||
-       !boolean(values.shadow, options.compiler.shadow_warnings, options.shadow_override) ||
-       !boolean(values.undef, options.compiler.undefined_warnings, options.undef_override) ||
-       !boolean(values.type_safe_format, options.compiler.type_safe_format, options.type_safe_format_override) ||
-       !boolean(values.xpp_optimization, options.compiler.xpp_optimization_passes, options.xpp_optimization_override) ||
-       !boolean(values.xmm_optimization, options.compiler.xmm_optimization_passes, options.xmm_optimization_override))
-        return false;
-    if(!values.llvm_opt.empty())
-    {
-        options.llvm_opt_override = true;
-        if(values.llvm_opt == "1")
-            options.compiler.llvm_opt_level = XS_LLVM_OPT_1;
-        else if(values.llvm_opt == "2")
-            options.compiler.llvm_opt_level = XS_LLVM_OPT_2;
-        else if(values.llvm_opt == "3")
-            options.compiler.llvm_opt_level = XS_LLVM_OPT_3;
-        else if(values.llvm_opt == "g")
-            options.compiler.llvm_opt_level = XS_LLVM_OPT_G;
-        else
-            return false;
-    }
-    if(!values.llvm_compiler.empty())
-    {
-        options.llvm_compiler_override = true;
-        if(values.llvm_compiler == "aot")
-            options.compiler.llvm_compiler = XS_LLVM_COMPILER_AOT;
-        else if(values.llvm_compiler == "orc")
-            options.compiler.llvm_compiler = XS_LLVM_COMPILER_ORC;
-        else
-            return false;
-    }
-    if(!values.llvm_lto.empty())
-    {
-        options.llvm_lto_override = true;
-        if(values.llvm_lto == "none")
-            options.compiler.llvm_lto = XS_LLVM_LTO_NONE;
-        else if(values.llvm_lto == "fat")
-            options.compiler.llvm_lto = XS_LLVM_LTO_FAT;
-        else if(values.llvm_lto == "thin")
-            options.compiler.llvm_lto = XS_LLVM_LTO_THIN;
-        else
-            return false;
-    }
     return true;
+}
+
+template <typename Enum, std::size_t Size>
+[[nodiscard]] bool ParseEnum(std::string_view value, Enum &output,
+                             const std::array<std::pair<std::string_view, Enum>, Size> &values)
+{
+    for(const auto &[spelling, parsed] : values)
+    {
+        if(value == spelling)
+        {
+            output = parsed;
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool ParseOutput(std::string_view value, XsBuildOutput &output)
+{
+    constexpr std::array values = {
+        std::pair{"binary"sv, XS_BUILD_OUTPUT_BINARY},  std::pair{"object"sv, XS_BUILD_OUTPUT_OBJECT},
+        std::pair{"core"sv, XS_BUILD_OUTPUT_CORE},      std::pair{"xpp"sv, XS_BUILD_OUTPUT_XPP},
+        std::pair{"xmm"sv, XS_BUILD_OUTPUT_XMM},        std::pair{"assembly"sv, XS_BUILD_OUTPUT_ASSEMBLY},
+        std::pair{"llvmll"sv, XS_BUILD_OUTPUT_LLVM_LL}, std::pair{"llvmbc"sv, XS_BUILD_OUTPUT_LLVM_BC},
+    };
+    return ParseEnum(value, output, values);
+}
+
+[[nodiscard]] bool ParseInput(std::string_view value, XsBuildInput &input)
+{
+    constexpr std::array values = {
+        std::pair{"vxs"sv, XS_BUILD_INPUT_VXS},        std::pair{"core"sv, XS_BUILD_INPUT_CORE},
+        std::pair{"object"sv, XS_BUILD_INPUT_OBJECT},  std::pair{"xpp"sv, XS_BUILD_INPUT_XPP},
+        std::pair{"xmm"sv, XS_BUILD_INPUT_XMM},        std::pair{"llvmll"sv, XS_BUILD_INPUT_LLVM_LL},
+        std::pair{"llvmbc"sv, XS_BUILD_INPUT_LLVM_BC},
+    };
+    return ParseEnum(value, input, values);
+}
+
+[[nodiscard]] bool Assign(char const *&destination, std::string_view value)
+{
+    destination = Copy(value);
+    return destination != nullptr;
+}
+
+[[nodiscard]] bool ApplyBoolean(Option option, std::string_view value, XsCliOptions &options)
+{
+    bool *destination{};
+    bool *overrideFlag{};
+    switch(option)
+    {
+    case Option::Werror:
+        destination = &options.compiler.warnings_as_errors;
+        overrideFlag = &options.werror_override;
+        break;
+    case Option::Wexperimental:
+        destination = &options.compiler.experimental_warnings;
+        overrideFlag = &options.experimental_override;
+        break;
+    case Option::Wshadow:
+        destination = &options.compiler.shadow_warnings;
+        overrideFlag = &options.shadow_override;
+        break;
+    case Option::Wundef:
+        destination = &options.compiler.undefined_warnings;
+        overrideFlag = &options.undef_override;
+        break;
+    case Option::TypeSafeFormat:
+        destination = &options.compiler.type_safe_format;
+        overrideFlag = &options.type_safe_format_override;
+        break;
+    case Option::XppOptimization:
+        destination = &options.compiler.xpp_optimization_passes;
+        overrideFlag = &options.xpp_optimization_override;
+        break;
+    case Option::XmmOptimization:
+        destination = &options.compiler.xmm_optimization_passes;
+        overrideFlag = &options.xmm_optimization_override;
+        break;
+    default:
+        return false;
+    }
+    if(!ParseBool(value, *destination))
+        return false;
+    *overrideFlag = true;
+    return true;
+}
+
+// Values become typed at this boundary. The rest of the driver never interprets
+// raw argv text or carries compatibility aliases into project configuration.
+[[nodiscard]] bool ApplyOption(Option option, std::string_view value, XsCliOptions &options)
+{
+    switch(option)
+    {
+    case Option::File:
+        return !value.empty() && Assign(options.file_path, value);
+    case Option::Standard:
+        return (value == "26" || value == "latest") && Assign(options.standard, value);
+    case Option::CompilerVersion:
+        return !value.empty() && Assign(options.compiler_version, value);
+    case Option::Emit:
+        options.output_override = ParseOutput(value, options.output);
+        return options.output_override;
+    case Option::Build:
+        return ParseInput(value, options.input);
+    case Option::Warnings:
+    {
+        constexpr std::array values = {
+            std::pair{"all"sv, XS_WARNING_ALL},
+            std::pair{"medium"sv, XS_WARNING_MEDIUM},
+            std::pair{"low"sv, XS_WARNING_LOW},
+            std::pair{"none"sv, XS_WARNING_NONE},
+        };
+        options.warning_override = ParseEnum(value, options.compiler.warning_level, values);
+        return options.warning_override;
+    }
+    case Option::Backend:
+        return value == "llvm";
+    case Option::LlvmOptLevel:
+    {
+        constexpr std::array values = {
+            std::pair{"1"sv, XS_LLVM_OPT_1},
+            std::pair{"2"sv, XS_LLVM_OPT_2},
+            std::pair{"3"sv, XS_LLVM_OPT_3},
+            std::pair{"g"sv, XS_LLVM_OPT_G},
+        };
+        options.llvm_opt_override = ParseEnum(value, options.compiler.llvm_opt_level, values);
+        return options.llvm_opt_override;
+    }
+    case Option::LlvmCompiler:
+    {
+        constexpr std::array values = {std::pair{"aot"sv, XS_LLVM_COMPILER_AOT},
+                                       std::pair{"orc"sv, XS_LLVM_COMPILER_ORC}};
+        options.llvm_compiler_override = ParseEnum(value, options.compiler.llvm_compiler, values);
+        return options.llvm_compiler_override;
+    }
+    case Option::LlvmLto:
+    {
+        constexpr std::array values = {
+            std::pair{"none"sv, XS_LLVM_LTO_NONE},
+            std::pair{"fat"sv, XS_LLVM_LTO_FAT},
+            std::pair{"thin"sv, XS_LLVM_LTO_THIN},
+        };
+        options.llvm_lto_override = ParseEnum(value, options.compiler.llvm_lto, values);
+        return options.llvm_lto_override;
+    }
+    case Option::Global:
+        options.global_install = true;
+        return true;
+    default:
+        return ApplyBoolean(option, value, options);
+    }
 }
 } // namespace
 
 extern "C" XsCompilerSettings xs_cli_default_compiler_settings(void)
 {
-    return XsCompilerSettings{.warning_level = XS_WARNING_MEDIUM,
-                              .warnings_as_errors = false,
-                              .experimental_warnings = false,
-                              .shadow_warnings = false,
-                              .undefined_warnings = true,
-                              .type_safe_format = true,
-                              .xpp_optimization_passes = true,
-                              .xmm_optimization_passes = true,
-                              .llvm_opt_level = XS_LLVM_OPT_2,
-                              .llvm_compiler = XS_LLVM_COMPILER_AOT,
-                              .llvm_lto = XS_LLVM_LTO_NONE};
-}
-
-extern "C" const char *xs_cli_warning_level_name(XsWarningLevel level)
-{
-    switch(level)
-    {
-    case XS_WARNING_ALL:
-        return "all";
-    case XS_WARNING_MEDIUM:
-        return "medium";
-    case XS_WARNING_LOW:
-        return "low";
-    case XS_WARNING_NONE:
-        return "none";
-    }
-    return "medium";
+    return {.warning_level = XS_WARNING_MEDIUM,
+            .warnings_as_errors = false,
+            .experimental_warnings = false,
+            .shadow_warnings = false,
+            .undefined_warnings = true,
+            .type_safe_format = true,
+            .xpp_optimization_passes = true,
+            .xmm_optimization_passes = true,
+            .llvm_opt_level = XS_LLVM_OPT_2,
+            .llvm_compiler = XS_LLVM_COMPILER_AOT,
+            .llvm_lto = XS_LLVM_LTO_NONE};
 }
 
 extern "C" void xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsCompilerSettings *settings)
 {
+    // Project settings are the base layer. Only command-line fields explicitly
+    // present in the schema override them, so defaults never erase DSL choices.
     if(options->warning_override)
         settings->warning_level = options->compiler.warning_level;
     if(options->werror_override)
@@ -384,120 +384,104 @@ extern "C" void xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsC
         settings->llvm_lto = options->compiler.llvm_lto;
 }
 
+extern "C" const char *xs_cli_warning_level_name(XsWarningLevel level)
+{
+    constexpr const char *names[] = {"all", "medium", "low", "none"};
+    const auto index = static_cast<unsigned>(level);
+    return index < 4U ? names[index] : "medium";
+}
+
 extern "C" const char *xs_cli_output_extension(XsBuildOutput output)
 {
-    switch(output)
-    {
-    case XS_BUILD_OUTPUT_BINARY:
-        return ".vxse";
-    case XS_BUILD_OUTPUT_OBJECT:
-        return ".obj";
-    case XS_BUILD_OUTPUT_CORE:
-        return ".core";
-    case XS_BUILD_OUTPUT_XPP:
-        return ".xpp";
-    case XS_BUILD_OUTPUT_XMM:
-        return ".xmm";
-    case XS_BUILD_OUTPUT_ASSEMBLY:
-        return ".asm";
-    case XS_BUILD_OUTPUT_LLVM_LL:
-        return ".ll";
-    case XS_BUILD_OUTPUT_LLVM_BC:
-        return ".bc";
-    }
-    return "";
+    constexpr const char *extensions[] = {".vxse", ".obj", ".core", ".xpp", ".xmm", ".asm", ".ll", ".bc"};
+    const auto index = static_cast<unsigned>(output);
+    return index < 8U ? extensions[index] : "";
 }
 
 extern "C" XsCliParseResult xs_cli_parse(int argc, char **argv, XsCliOptions *options)
 {
-    *options = XsCliOptions{};
+    *options = {};
     options->compiler = xs_cli_default_compiler_settings();
     options->input = XS_BUILD_INPUT_VXS;
-    for(int index = 1; index < argc; ++index)
+    if(argc == 2 && std::string_view(argv[1]) == "--version")
     {
-        const std::string_view argument{argv[index]};
-        if(argument == "--help")
-        {
-            print_help(index > 1 ? std::string_view{argv[1]} : std::string_view{});
-            return XS_CLI_PARSE_EXIT;
-        }
-        if(argument == "--version")
-        {
-            fmt::print("vxs {}\n", XS_PROJECT_VERSION);
-            return XS_CLI_PARSE_EXIT;
-        }
-        if(argument.starts_with("--"))
-        {
-            fmt::print(stderr, "vxs: legacy long option '{}' is not supported\n", argument);
-            return XS_CLI_PARSE_ERROR;
-        }
-    }
-    ParsedValues values;
-    Dim::CliLocal cli;
-    configure_cli(cli, values);
-    std::vector<std::string> arguments;
-    for(int index = 0; index < argc; ++index)
-    {
-        arguments.emplace_back(argv[index]);
-    }
-    if(!cli.parse(std::move(arguments)))
-    {
-        if(cli.exitCode() == Dim::kExitOk)
-            return XS_CLI_PARSE_EXIT;
-        std::string parse_error;
-        cli.printError(&parse_error);
-        fmt::print(stderr, "{}", parse_error);
-        return XS_CLI_PARSE_ERROR;
-    }
-    const auto matched = std::string_view{cli.commandMatched()};
-    if(values.version_option || matched == "version")
-    {
-        fmt::print("vxs {}\n", XS_PROJECT_VERSION);
+        std::printf("vxs %s\n", XS_PROJECT_VERSION);
         return XS_CLI_PARSE_EXIT;
     }
-    options->command = command_name(matched);
-    if(options->command == nullptr)
-        return error("a command is required");
-    if(!parse_compiler_values(values, *options))
-        return error("a compiler option has an invalid value");
-    if(!values.emit.empty() && !parse_emit(values.emit, options->output))
-        return error("-Emit expects binary, object, core, xpp, xmm, assembly, llvmll, or llvmbc");
-    options->output_override = !values.emit.empty();
-    if(!values.build.empty() && !parse_build(values.build, options->input))
-        return error("-Build expects object, vxs, core, xpp, xmm, llvmll, or llvmbc");
+    if(argc < 2 || std::string_view(argv[1]) == "--help")
+    {
+        PrintHelp({});
+        return argc < 2 ? XS_CLI_PARSE_ERROR : XS_CLI_PARSE_EXIT;
+    }
 
-    if(matched == "install")
+    const auto command = FindCommand(argv[1]);
+    if(!command)
+        return Fail(*options, "unknown command");
+    if(command->command == Command::Version)
     {
-        options->global_install = values.global_install;
-        options->package_name = copy_string(values.package);
+        if(argc != 2)
+            return Fail(*options, "version does not accept arguments");
+        std::printf("vxs %s\n", XS_PROJECT_VERSION);
+        return XS_CLI_PARSE_EXIT;
     }
-    else if(matched == "viget")
+    options->command = argv[1];
+
+    std::array<bool, static_cast<unsigned>(Option::Count)> seen{};
+    bool positionalSeen = false;
+    for(int index = 2; index < argc; ++index)
     {
-        if(values.viget_action != "push" && values.viget_action != "update")
-            return error("viget expects push or update");
-        options->package_name = copy_string(values.viget_action);
+        const std::string_view argument(argv[index]);
+        if(argument == "--help")
+        {
+            PrintHelp(command->name);
+            Release(*options);
+            return XS_CLI_PARSE_EXIT;
+        }
+        if(!argument.starts_with('-'))
+        {
+            if(!command->acceptsPositional || positionalSeen)
+                return Fail(*options, "unexpected positional argument");
+            if(!Assign(options->package_name, argument))
+                return Fail(*options, "out of memory while retaining the positional argument");
+            positionalSeen = true;
+            continue;
+        }
+
+        const OptionSpec *spec = FindOption(argument);
+        if(spec == nullptr)
+            return Fail(*options, "unknown option");
+        if((spec->commands & Bit(command->command)) == 0U)
+            return Fail(*options, "option is not valid for this command");
+        const auto optionIndex = static_cast<unsigned>(spec->option);
+        if(seen[optionIndex])
+            return Fail(*options, "option was specified more than once");
+        seen[optionIndex] = true;
+
+        std::string_view value;
+        if(spec->requiresValue)
+        {
+            if(index + 1 >= argc || std::string_view(argv[index + 1]).starts_with('-'))
+                return Fail(*options, "option requires a value");
+            value = argv[++index];
+        }
+        if(!ApplyOption(spec->option, value, *options))
+            return Fail(*options, "option value is invalid");
     }
-    options->file_path = copy_string(values.file);
-    options->compiler_version = copy_string(values.compiler_version.empty() ? "latest" : values.compiler_version);
-    options->standard = copy_string(values.standard.empty() ? "latest" : values.standard);
-    if((!values.file.empty() && options->file_path == nullptr) || options->compiler_version == nullptr ||
-       options->standard == nullptr || (matched == "install" && options->package_name == nullptr) ||
-       (matched == "viget" && options->package_name == nullptr))
-    {
-        xs_cli_options_free(options);
-        return error("out of memory while retaining command-line arguments");
-    }
+
+    if(command->acceptsPositional && !positionalSeen)
+        return Fail(*options, "command requires a positional argument");
+    if(command->command == Command::ViGet && options->package_name != nullptr &&
+       std::string_view(options->package_name) != "push" && std::string_view(options->package_name) != "update")
+        return Fail(*options, "viget expects push or update");
+    if(options->standard == nullptr && !Assign(options->standard, "latest"))
+        return Fail(*options, "out of memory while applying defaults");
+    if(options->compiler_version == nullptr && !Assign(options->compiler_version, "latest"))
+        return Fail(*options, "out of memory while applying defaults");
     return XS_CLI_PARSE_READY;
 }
 
 extern "C" void xs_cli_options_free(XsCliOptions *options)
 {
-    std::free(const_cast<char *>(options->file_path));
-    std::free(const_cast<char *>(options->package_name));
-    std::free(const_cast<char *>(options->compiler_version));
-    std::free(const_cast<char *>(options->standard));
-    options->file_path = nullptr;
-    options->package_name = nullptr;
-    options->compiler_version = nullptr;
-    options->standard = nullptr;
+    if(options != nullptr)
+        Release(*options);
 }

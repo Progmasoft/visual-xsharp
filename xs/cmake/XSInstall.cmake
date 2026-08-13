@@ -19,6 +19,13 @@ install(TARGETS vxs
   COMPONENT compiler
 )
 
+# The Haskell frontend is a private sibling executable discovered relative to vxs.
+# Installing both into the same directory preserves that location invariant.
+install(PROGRAMS "${XS_HASKELL_FRONTEND}"
+  TYPE BIN
+  COMPONENT compiler
+)
+
 install(TARGETS xs_lil xs_lil_cpp xs_package
   ARCHIVE DESTINATION "lib" COMPONENT compiler
   LIBRARY DESTINATION "lib" COMPONENT compiler NAMELINK_COMPONENT compiler

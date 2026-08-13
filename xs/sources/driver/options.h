@@ -6,14 +6,23 @@
 #ifndef XS_DRIVER_OPTIONS_H
 #define XS_DRIVER_OPTIONS_H
 
-#include "Visual/C23/diagnostic.hh"
-
 #include <stdio.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+    // Warning policy belongs to compiler configuration, not to the retired C
+    // diagnostic container. Keep the stable numeric ordering consumed by the
+    // Kotlin project registry while moving ownership into the driver model.
+    typedef enum
+    {
+        XS_WARNING_ALL,
+        XS_WARNING_MEDIUM,
+        XS_WARNING_LOW,
+        XS_WARNING_NONE,
+    } XsWarningLevel;
 
     typedef enum
     {

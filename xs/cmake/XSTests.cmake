@@ -50,9 +50,6 @@ add_test(NAME compiler_install_layout COMMAND "${CMAKE_COMMAND}"
   -P ${PROJECT_SOURCE_DIR}/tests/cmake/install_layout.cmake)
 set_tests_properties(compiler_install_layout PROPERTIES TIMEOUT 15)
 
-xs_add_c_test(lexer tests/lexer_tests.c xs_compiler)
-xs_add_c_test(parser tests/parser_tests.c xs_compiler)
-xs_add_c_test(diagnostic tests/diagnostic_tests.c xs_compiler)
 xs_add_c_test(package_archive tests/package_archive_tests.c xs_package)
 # Archive coverage performs real compression and filesystem round trips. A cold Windows
 # runner can legitimately exceed the five-second unit-test default while another test is
@@ -90,19 +87,9 @@ add_test(NAME kotlin_project_resolver_build COMMAND "${XS_GRADLE_EXECUTABLE}" --
 set_tests_properties(kotlin_project_resolver_build PROPERTIES TIMEOUT 180
   FIXTURES_SETUP kotlin_project_resolver ENVIRONMENT "GRADLE_OPTS=-Xmx512m")
 
-add_test(NAME example_source COMMAND vxs check -File
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs)
-set_tests_properties(example_source PROPERTIES TIMEOUT 5)
-add_test(NAME macro_source COMMAND vxs check -File
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/macro_project/source/Main.vxs)
-set_tests_properties(macro_source PROPERTIES TIMEOUT 5)
 add_test(NAME compiler_check_file COMMAND vxs check -File
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs)
-set_tests_properties(compiler_check_file PROPERTIES TIMEOUT 5)
-add_test(NAME compiler_test_file COMMAND vxs test -File
-  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/projects/test_command/Sources/Test/arithmetic.vxs)
-set_tests_properties(compiler_test_file PROPERTIES TIMEOUT 5
-  PASS_REGULAR_EXPRESSION "test result: ok. 1 passed; 0 failed; 1 ignored")
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs)
+set_tests_properties(compiler_check_file PROPERTIES TIMEOUT 15)
 add_test(NAME compiler_rejects_invalid_warning COMMAND vxs check -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs -Warnings invalid)
 set_tests_properties(compiler_rejects_invalid_warning PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
@@ -110,7 +97,7 @@ add_test(NAME compiler_rejects_misspelled_werror COMMAND vxs check -File
   ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs -Werrror true)
 set_tests_properties(compiler_rejects_misspelled_werror PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 add_test(NAME compiler_accepts_renewed_cli_flags COMMAND vxs check
-  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/example_project/source/Main.vxs
+  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs
   -Standard 26 -Compiler-Version latest -Warnings all -Werror true
   -Wexperimental true -Wshadow true -Wundef true -Type-Safe-Format true
   -Backend llvm -Llvm-OptLevel 2 -Llvm-Compiler aot -Llvm-Lto none
@@ -121,10 +108,31 @@ set_tests_properties(compiler_rejects_project_flag PROPERTIES TIMEOUT 5 WILL_FAI
 add_test(NAME compiler_rejects_module_flag COMMAND vxs check --module .)
 set_tests_properties(compiler_rejects_module_flag PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
 
+add_test(NAME compiler_emits_core_from_haskell COMMAND vxs build -File
+  ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs -Emit core)
+set_tests_properties(compiler_emits_core_from_haskell PROPERTIES TIMEOUT 15)
+
+# Schema checks guard command scope, arity, and duplicate policy independently
+# from frontend compilation. These are intentional parse failures.
+add_test(NAME cli_rejects_duplicate_option COMMAND vxs check
+  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs
+  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs)
+set_tests_properties(cli_rejects_duplicate_option PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
+add_test(NAME cli_rejects_wrong_command_scope COMMAND vxs check -Emit core
+  -File ${XS_SOURCE_FROM_BINARY}/tests/fixtures/haskell_frontend/Main.vxs)
+set_tests_properties(cli_rejects_wrong_command_scope PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
+add_test(NAME cli_rejects_missing_value COMMAND vxs build -File)
+set_tests_properties(cli_rejects_missing_value PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
+add_test(NAME cli_requires_install_coordinate COMMAND vxs install)
+set_tests_properties(cli_requires_install_coordinate PROPERTIES TIMEOUT 5 WILL_FAIL TRUE)
+
 add_executable(xs_text_artifact_tests tests/text_artifact_tests.c)
-add_executable(xs_xse_artifact_tests tests/xse_artifact_tests.c)
-include(XSTestsSourceValues)
-include(XSTestsSourceControl)
-include(XSTestsSourceCalls)
+
+# Kotlin project tests still exercise the project-runtime boundary independently
+# from the retired C source frontend. Keep their copied workspaces owned here so
+# removing a source-compiler test suite cannot silently erase this fixture root.
+set(XS_PROJECT_NATIVE_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/projects")
+file(COPY "${PROJECT_SOURCE_DIR}/tests/fixtures/projects/"
+     DESTINATION "${XS_PROJECT_NATIVE_FIXTURE_DIR}")
 include(XSTestsKotlin)
 include(XSTestsLibraries)

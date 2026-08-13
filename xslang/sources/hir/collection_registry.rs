@@ -121,38 +121,6 @@ pub(crate) fn build(module: &declarations::Module, aggregates: &AggregateRegistr
     registry
 }
 
-pub(crate) fn build_functions_with_nominals(
-    nominal_types: &[super::declarations::NominalType],
-    functions: &[super::type_check::Function],
-    aggregates: &AggregateRegistry,
-) -> CollectionRegistry
-{
-    let mut registry = CollectionRegistry::default();
-    for function in functions
-    {
-        if let Some(return_type) = &function.return_type
-        {
-            let _ = registry.visit_type(return_type, aggregates);
-        }
-        for local in &function.locals
-        {
-            let _ = registry.visit_type(&local.ty, aggregates);
-        }
-        visit_statements(&mut registry, &function.body, aggregates);
-    }
-    for nominal in nominal_types
-    {
-        for field in &nominal.fields
-        {
-            if let Some(field_type) = declarations::type_ref_to_checked(&field.ty)
-            {
-                let _ = registry.visit_type(&field_type, aggregates);
-            }
-        }
-    }
-    registry
-}
-
 fn visit_statements(registry: &mut CollectionRegistry, statements: &[Statement], aggregates: &AggregateRegistry)
 {
     for statement in statements

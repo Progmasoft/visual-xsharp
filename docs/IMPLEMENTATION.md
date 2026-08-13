@@ -2,13 +2,9 @@
 
 ## Summary
 
-Visual X# has a working compatibility compiler and a tested slice of the intended architecture. These are not yet the same
-route.
-
-The current `vxs` executable builds from C23, C++20, and Rust components. It can validate supported `.vxs` source behavior and
-produce native artifacts for the subset handled by the Rust compiler core and LLVM backend. The Haskell frontend and C++20
-Xpp/Xmm implementation exists and consumes a decoded, verified CorePrep module. The compatibility compiler remains the source
-route used by existing production `.vxs` builds, so Haskell-owned CorePrep is not yet the sole production frontend.
+Visual X# now has one production source route for the implemented language subset. The C++20 `vxs` driver starts the private
+Haskell frontend, receives bounded verified Core, and continues through CorePrep, Xpp, Xmm, and LLVM. The old C lexer/parser,
+macro, HIR/MIR, and C-to-Rust syntax-packet route has been removed rather than retained as a fallback.
 
 ## Haskell frontend
 
@@ -47,35 +43,35 @@ The repository contains:
 - Unicode-scalar `String` constant storage; and
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
-The versioned Haskell-to-C++20 boundaries are implemented for both public VXCR Core input and internal VXCP CorePrep input.
-The remaining integration work is to make the Haskell frontend the production `.vxs` source route, connect Core input to
-native object/link production, and add explicit Xpp/Xmm writers and later-stage readers.
+The production process boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
+contract coverage, but the CLI does not expose CorePrep. Remaining work is native object/link production, multi-unit Haskell
+name resolution, and explicit Xpp/Xmm writers and readers.
 
 ## Rust compiler core
 
-Rust remains an active compiler implementation asset and is built into the native compiler. It provides substantial semantic,
-lowering, verification, and test coverage. Migration does not mean deleting Rust or copying its implementation wholesale into
-another language. Useful algorithms and tested behavior should be adapted to the target architecture without restoring old
-public format names.
+Rust remains an active implementation and test asset with substantial semantic, lowering, verification, and IR coverage. It
+is no longer linked into the native driver, and its obsolete direct-IR C FFI session wrapper has been removed. The underlying
+Rust HIR, MIR, XLIL models, algorithms, and tests remain available for selective adaptation.
 
 ## C23 migration
 
-C23 is the implementation layer scheduled for gradual removal. Each subsystem must first acquire an owner in Haskell, C++20,
-Rust, or a deliberately retained C ABI shim. The old implementation is removed only after replacement tests, Debug tests, and
-sanitizer tests pass.
+The C language frontend and duplicate semantic/middle-end implementation have been removed. Retained C code is limited to
+still-used compatibility/package surfaces and is migrated only when a tested replacement exists.
 
 ## CLI and project runtime
 
-The native CLI parser and Kotlin project runtime implement the current command and configuration vocabulary. Source discovery,
-entry selection, compiler settings, dependency declarations, and the SQLite lock file have concrete implementations.
+The native C++20 CLI uses a declarative typed schema for command scope, option arity, duplicate rejection, defaults, and value
+conversion. It has no DIMCLI dependency. The Kotlin project runtime continues to own source discovery, configuration, and the
+SQLite lock file.
 
 Known gaps include:
 
 - Core input can be checked through LLVM and can emit `.ll` or `.bc`, but not yet a native object or executable;
-- explicit Core emission from source and Xpp/Xmm emission are registered but not connected;
+- explicit Core emission from source is connected; Xpp/Xmm emission is not;
 - Xpp/Xmm and other later non-source `-Build` inputs are registered but not connected;
-- package publication and installation require a ViGet client not linked into this build; and
-- the production source route does not yet use the Haskell frontend as its sole owner.
+- package publication and installation require a ViGet client not linked into this build;
+- multi-file project compilation waits for a module-aware Haskell merge; and
+- native object/link, `run`, and `test` are intentionally unavailable rather than routed through the removed frontend.
 
 ## Verification
 

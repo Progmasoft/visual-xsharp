@@ -1,9 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "visual-xsharp",
-  "version-string": "0.3.0",
+  "version-string": "0.3.1",
   "dependencies": [
-    "fmt",
     {
       "name": "libarchive",
       "default-features": false,

@@ -2,8 +2,8 @@
 
 ## Supported host
 
-The supported native development host is Windows in a Visual Studio 2026 developer environment. Both C and C++ are compiled
-with `clang-cl`; C uses C23 and C++ uses C++20. Ninja is the supported CMake generator and LLD is the linker.
+The supported native development host is Windows in a Visual Studio 2026 developer environment. Retained C compatibility
+libraries and C++20 code are compiled with `clang-cl`. Ninja is the supported CMake generator and LLD is the linker.
 
 Required tools:
 
@@ -35,11 +35,11 @@ Initialize all nested dependencies before configuring:
 git submodule update --init --recursive
 ```
 
-The native CLI uses DIMCLI and the C++ test suite can use Catch2 from `third_party/`.
+The native CLI uses its own typed C++20 command schema. Catch2 remains the only native test submodule.
 
 ## Native dependencies
 
-The vcpkg manifest contains `fmt` and a minimal LibArchive build with zstd support. LLVM is not built through vcpkg.
+The vcpkg manifest provides a minimal LibArchive build with zstd support. LLVM is not built through vcpkg.
 
 ```powershell
 & "$env:VCPKG_ROOT\vcpkg.exe" install `

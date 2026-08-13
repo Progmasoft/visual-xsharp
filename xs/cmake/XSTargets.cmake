@@ -9,52 +9,12 @@ endif()
 find_package(LLVM REQUIRED CONFIG)
 find_package(LibArchive REQUIRED)
 find_library(XS_LLVM_LIBRARY NAMES LLVM-C HINTS ${LLVM_LIBRARY_DIRS} REQUIRED)
-find_package(Threads REQUIRED)
-find_package(fmt REQUIRED CONFIG)
-find_program(XS_CARGO_EXECUTABLE NAMES cargo REQUIRED)
-
-if(XS_ENABLE_SANITIZERS)
-  # fmt's C++ objects cross project ownership boundaries. Windows ASan uses
-  # the release DLL CRT, so do not mix the package's /MDd binary into it.
-  set_property(TARGET fmt::fmt PROPERTY MAP_IMPORTED_CONFIG_DEBUG Release)
-endif()
+find_program(XS_CABAL_EXECUTABLE NAMES cabal REQUIRED)
 
 # Some dependency package files alter this directory-scoped default.  Keep every
 # Visual X# target on the DLL CRT so objects can safely cross shared-library
 # boundaries and match the test executables.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
-
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/third_party/dimcli/libs/dimcli/cli.cpp")
-  message(FATAL_ERROR "DIMCLI is missing; initialize dependencies with: git submodule update --init --recursive")
-endif()
-add_library(xs_dimcli STATIC
-  "${PROJECT_SOURCE_DIR}/third_party/dimcli/libs/dimcli/cli.cpp"
-)
-target_include_directories(xs_dimcli SYSTEM PUBLIC "${PROJECT_SOURCE_DIR}/third_party/dimcli/libs")
-target_compile_options(xs_dimcli PRIVATE /clang:-Wno-deprecated-declarations)
-
-set(XS_XSLANG_TARGET_DIR "${PROJECT_BINARY_DIR}/xslang-target")
-set(XS_XSLANG_STATIC_LIBRARY "${XS_XSLANG_TARGET_DIR}/debug/xslang.lib")
-file(GLOB_RECURSE XS_XSLANG_RUST_SOURCES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/xslang/sources/*.rs")
-add_custom_command(
-  OUTPUT "${XS_XSLANG_STATIC_LIBRARY}"
-  COMMAND "${CMAKE_COMMAND}" -E env "RUSTFLAGS=-C target-feature=-crt-static"
-          "${XS_CARGO_EXECUTABLE}" build --lib --target-dir "${XS_XSLANG_TARGET_DIR}"
-  DEPENDS ${XS_XSLANG_RUST_SOURCES} "${PROJECT_SOURCE_DIR}/xslang/Cargo.toml"
-          "${PROJECT_SOURCE_DIR}/xslang/build.rs"
-          "${PROJECT_SOURCE_DIR}/xslang/rust-toolchain.toml"
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/xslang"
-  COMMENT "Building the Rust compiler core"
-  VERBATIM
-)
-add_custom_target(xslang_compiler_core_build DEPENDS "${XS_XSLANG_STATIC_LIBRARY}")
-add_library(xslang_compiler_core STATIC IMPORTED GLOBAL)
-set_target_properties(xslang_compiler_core PROPERTIES IMPORTED_LOCATION "${XS_XSLANG_STATIC_LIBRARY}")
-add_dependencies(xslang_compiler_core xslang_compiler_core_build)
-target_link_libraries(xslang_compiler_core INTERFACE Threads::Threads ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES})
-if(WIN32)
-  target_link_libraries(xslang_compiler_core INTERFACE bcrypt ntdll userenv ws2_32)
-endif()
 
 add_library(xs_compiler
   ../Visual/XSharp/Backend/LLVM/Artifact.cpp
@@ -70,63 +30,10 @@ add_library(xs_compiler
   ../Visual/XSharp/Core/CorePrep/Verifier/Semantics.cpp
   ../Visual/XSharp/Core/CorePrep/Wire/Decode.cpp
   ../Visual/XSharp/Core/CorePrep/Wire/Encode.cpp
-  sources/Ast.cpp
-  sources/codegen/Plan.cpp
-  sources/compiler_core/syntax_packet.c
-  sources/Diagnostic.cpp
-  sources/driver/cli.c
-  sources/driver/compiler_core_native.c
+  sources/driver/Cli.cpp
   sources/driver/CorePipeline.cpp
-  sources/driver/DirectXhir.cpp
-  sources/driver/DirectXmir.cpp
-  sources/driver/direct_xlil.c
-  sources/driver/native_artifact.c
   sources/driver/Options.cpp
   sources/driver/project_driver.c
-  sources/driver/test_runner.c
-  sources/lexer.c
-  sources/macro/expanded_view.c
-  sources/macro/expansion.c
-  sources/macro/fragment.c
-  sources/macro/reparse.c
-  sources/macro/rewrite.c
-  sources/macro/validation.c
-  sources/mir/borrow_checker.c
-  sources/mir/hir_lowering.c
-  sources/mir/model_blocks.c
-  sources/mir/model.c
-  sources/mir/model_writer.c
-  sources/mir/optimizer.c
-  sources/mir/xlil_lowering.c
-  sources/mono/Plan.cpp
-  sources/hir/cffi.c
-  sources/hir/dump.c
-  sources/hir/expression_check.c
-  sources/hir/expression_check_api.c
-  sources/hir/expression_check_string.c
-  sources/hir/result_constructor.c
-  sources/hir/standard_library.c
-  sources/hir/module_graph.c
-  sources/hir/module_model.c
-  sources/hir/module_registry.c
-  sources/hir/import_resolver.c
-  sources/hir/inheritance.c
-  sources/hir/name_resolution.c
-  sources/hir/symbol_table.c
-  sources/hir/syntax_helpers.c
-  sources/hir/type_info.c
-  sources/hir/type_resolution.c
-  sources/hir/type_resolution_macro_view.c
-  sources/parser.c
-  sources/source_include.c
-  sources/syntax_ast.c
-  sources/syntax_parser.c
-  sources/syntax/parser_macro.c
-  sources/syntax/parser_declaration.c
-  sources/syntax/parser_expression.c
-  sources/syntax/parser_statement.c
-  sources/syntax/parser_type.c
-  sources/token.c
 )
 
 add_library(xs_lil SHARED
@@ -182,7 +89,7 @@ get_target_property(XS_LIL_LIBRARY_TYPE xs_lil TYPE)
 if(XS_LIL_LIBRARY_TYPE STREQUAL "SHARED_LIBRARY")
   target_compile_definitions(xs_lil PUBLIC XS_LIL_SHARED)
 endif()
-target_link_libraries(xs_compiler PUBLIC xs_lil PRIVATE xslang_compiler_core xs_dimcli fmt::fmt ${XS_LLVM_LIBRARY})
+target_link_libraries(xs_compiler PRIVATE ${XS_LLVM_LIBRARY})
 target_link_libraries(xs_package PRIVATE LibArchive::LibArchive bcrypt)
 target_compile_definitions(xs_compiler PRIVATE XS_PROJECT_VERSION="${PROJECT_VERSION}"
                                             XS_CLANG_EXECUTABLE="${CMAKE_C_COMPILER}")
@@ -205,6 +112,34 @@ elseif(UNIX)
 endif()
 target_link_libraries(vxs PRIVATE xs_compiler)
 
+# The public driver is native C++, while the language-owned frontend is a small
+# Haskell process. Keeping this as an explicit build artifact makes the boundary
+# visible and avoids embedding a second runtime into the C++ executable.
+file(GLOB_RECURSE XS_HASKELL_FRONTEND_SOURCES CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/xs/haskell/visual-xsharp-compiler/src/*.hs"
+  "${PROJECT_SOURCE_DIR}/xs/haskell/visual-xsharp-compiler/app/*.hs")
+execute_process(
+  COMMAND "${XS_CABAL_EXECUTABLE}" list-bin exe:vxs-frontend
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/xs"
+  OUTPUT_VARIABLE XS_HASKELL_FRONTEND_BUILT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  COMMAND_ERROR_IS_FATAL ANY
+)
+set(XS_HASKELL_FRONTEND "${PROJECT_BINARY_DIR}/vxs-frontend${CMAKE_EXECUTABLE_SUFFIX}")
+add_custom_command(
+  OUTPUT "${XS_HASKELL_FRONTEND}"
+  COMMAND "${XS_CABAL_EXECUTABLE}" build exe:vxs-frontend
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${XS_HASKELL_FRONTEND_BUILT}" "${XS_HASKELL_FRONTEND}"
+  DEPENDS ${XS_HASKELL_FRONTEND_SOURCES}
+          "${PROJECT_SOURCE_DIR}/xs/haskell/visual-xsharp-compiler/visual-xsharp-compiler.cabal"
+          "${PROJECT_SOURCE_DIR}/xs/cabal.project"
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/xs"
+  COMMENT "Building the Haskell Visual X# frontend"
+  VERBATIM
+)
+add_custom_target(vxs_haskell_frontend ALL DEPENDS "${XS_HASKELL_FRONTEND}")
+add_dependencies(vxs vxs_haskell_frontend)
+
 add_library(xs_backend_llvm
   sources/backend/linker.c
   sources/backend/llvm_backend.c
@@ -217,12 +152,3 @@ target_include_directories(xs_backend_llvm PUBLIC "${PROJECT_SOURCE_DIR}/include
 target_link_libraries(xs_backend_llvm PUBLIC xs_lil PRIVATE ${XS_LLVM_LIBRARY})
 target_compile_options(xs_backend_llvm PRIVATE /W4 /clang:-Wconversion /clang:-Wshadow)
 target_compile_options(xs_backend_llvm PUBLIC "$<$<COMPILE_LANGUAGE:C>:/FI${XS_COMPILER_CHECK_HEADER}>")
-target_link_libraries(vxs PRIVATE xs_backend_llvm)
-if(WIN32)
-  add_custom_command(TARGET vxs POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:vxs> $<TARGET_FILE_DIR:vxs>
-    COMMAND_EXPAND_LISTS
-    COMMENT "Copying the Visual X# runtime DLLs"
-  )
-endif()

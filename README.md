@@ -8,10 +8,10 @@ SPDX-License-Identifier: MPL-2.0
 Visual X# is an experimental native programming language and compiler project. This repository contains the compiler,
 project DSL, runtime components, language examples, tests, and supporting developer tools.
 
-The repository is under an architectural transition. The production `vxs` executable currently combines the established
-Rust compiler core with C23 and C++20 components. In parallel, a tested Haskell frontend through CorePrep and a C++20
-CorePrep-to-Xpp-to-Xmm-to-LLVM-bitcode slice are being developed and connected. The new route is real code, but it is not yet the sole
-production compilation path.
+The repository is under an architectural transition. The production `.vxs` route now uses the Haskell lexer-through-Core
+frontend and hands a verified `VXCR` Core artifact to the C++20 CorePrep-to-Xpp-to-Xmm-to-LLVM pipeline. The previous C
+lexer/parser, semantic tree, macro, HIR/MIR duplicate, Rust FFI session bridge, and DIMCLI dependency have been removed.
+The retained Rust compiler core remains an implementation and test asset, but it is no longer linked into `vxs`.
 
 ## Intended compiler pipeline
 
@@ -45,7 +45,7 @@ normal compilation keeps intermediate data in memory unless explicit emission is
 The supported native build is Windows with:
 
 - Visual Studio 2026 developer environment;
-- ClangCL for C23 and C++20;
+- ClangCL for retained C components and C++20;
 - LLD and Ninja;
 - CMake 3.31 or newer;
 - an LLVM development package containing `LLVMConfig.cmake`;
@@ -84,13 +84,11 @@ The preset intentionally uses tool names and environment-based discovery rather 
 
 ## Command-line status
 
-The compiler executable is `vxs`. The current parser recognizes `check`, `build`, `run`, `test`, `resolve`, `update`,
-`install`, `viget`, and `version`. Some commands and renewed intermediate input/output selections are registered before their
-production implementation is complete. Version `0.3.0` defines a shared bounded `VXCR` `.core` contract. The C++20 consumer
-decodes and verifies real Core, adapts it to internal CorePrep, and continues through Xpp, Xmm, and LLVM. `check -Build core`
-validates that complete in-memory path; `build -Build core -Emit llvmll|llvmbc` writes an explicit LLVM artifact. Native
-object/executable production and public Xpp/Xmm readers and writers remain later work. CorePrep wire bytes are never accepted
-under the public `.core` extension. Package publication still requires a ViGet client that is not linked into this build.
+The compiler executable is `vxs`. Its C++20 command parser uses one typed schema for command scope, option arity, duplicate
+rejection, defaults, and value conversion; it has no third-party CLI dependency. For `.vxs`, `check` runs the Haskell
+frontend and the complete in-memory Core/CorePrep/Xpp/Xmm/LLVM validation route. `build -Emit core|llvmll|llvmbc` writes the
+selected sibling artifact. Native object/executable production and public Xpp/Xmm readers and writers remain later work.
+CorePrep wire bytes are never accepted under the public `.core` extension.
 
 The reliable single-file validation form is:
 

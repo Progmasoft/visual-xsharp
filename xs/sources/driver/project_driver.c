@@ -246,7 +246,10 @@ static bool parse_header(char *data, size_t record_count, size_t *source_count, 
     valid = valid && parse_output_record(record, &project->output);
     record = next_record(record);
     bool parsed_warning = false;
-    for(XsWarningLevel level = XS_WARNING_NONE; level <= XS_WARNING_ALL; ++level)
+    // The public enum is ordered from the most diagnostic output to none.
+    // Iterate by its declared numeric range; spelling lookup remains centralized
+    // in the C++ option schema shared with direct command-line parsing.
+    for(XsWarningLevel level = XS_WARNING_ALL; level <= XS_WARNING_NONE; ++level)
     {
         if(strcmp(record, xs_cli_warning_level_name(level)) == 0)
         {
@@ -359,8 +362,7 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
     project->paths = calloc(path_count, sizeof(*project->paths));
     project->test_paths = test_count == 0U ? nullptr : calloc(test_count, sizeof(*project->test_paths));
     project->test_path_count = test_count;
-    if((path_count != 0U && project->paths == nullptr) ||
-       (test_count != 0U && project->test_paths == nullptr))
+    if((path_count != 0U && project->paths == nullptr) || (test_count != 0U && project->test_paths == nullptr))
     {
         free(data);
         xs_driver_free_project(project);

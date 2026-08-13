@@ -80,6 +80,7 @@ pub(crate) fn build_module(module: &declarations::Module) -> Option<AggregateReg
     Some(registry)
 }
 
+#[cfg(test)]
 pub(crate) fn build_functions_with_nominals(
     nominal_types: &[NominalType],
     functions: &[super::type_check::Function],

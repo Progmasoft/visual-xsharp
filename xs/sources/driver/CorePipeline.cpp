@@ -1,10 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
-#include "core_pipeline.h"
-#include "native_artifact.h"
-
 #include "Visual/XSharp/Pipeline.hpp"
+#include "core_pipeline.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -65,14 +63,8 @@ void PrintFailure(const visual_xsharp::PipelineResult &result)
 [[nodiscard]] auto WriteArtifact(const char *inputPath, XsBuildOutput output, const Llvm::Artifact &artifact) -> bool
 {
     const char *extension = output == XS_BUILD_OUTPUT_LLVM_LL ? ".ll" : ".bc";
-    char *rawPath = xs_driver_native_artifact_path(inputPath, extension);
-    if(rawPath == nullptr)
-    {
-        std::fprintf(stderr, "vxs: out of memory while preparing Core output path\n");
-        return false;
-    }
-    const std::filesystem::path path(rawPath);
-    std::free(rawPath);
+    auto path = std::filesystem::path(inputPath);
+    path.replace_extension(extension);
     const auto error = output == XS_BUILD_OUTPUT_LLVM_LL ? Llvm::WriteLlvmIr(path, artifact.llvm_ir)
                                                          : Llvm::WriteBitcode(path, artifact.bitcode);
     if(error)
@@ -86,10 +78,10 @@ void PrintFailure(const visual_xsharp::PipelineResult &result)
 }
 } // namespace
 
-extern "C" bool xs_driver_process_core_artifact(const char *path, const char *command, XsBuildOutput output,
-                                                const XsCompilerSettings *settings)
+extern "C" bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, const char *command,
+                                                   XsBuildOutput output, const XsCompilerSettings *settings)
 {
-    if(path == nullptr || command == nullptr || settings == nullptr)
+    if(path == nullptr || artifactBasePath == nullptr || command == nullptr || settings == nullptr)
         return false;
     std::error_code sizeError;
     const auto fileSize = std::filesystem::file_size(path, sizeError);
@@ -123,9 +115,15 @@ extern "C" bool xs_driver_process_core_artifact(const char *path, const char *co
         return true;
     }
     if(output == XS_BUILD_OUTPUT_LLVM_LL || output == XS_BUILD_OUTPUT_LLVM_BC)
-        return WriteArtifact(path, output, *result.llvm);
+        return WriteArtifact(artifactBasePath, output, *result.llvm);
     std::fprintf(stderr,
                  "vxs: Core input currently emits llvmll or llvmbc; native object/link and Xpp/Xmm artifact writers "
                  "are separate pipeline work\n");
     return false;
+}
+
+extern "C" bool xs_driver_process_core_artifact(const char *path, const char *command, XsBuildOutput output,
+                                                const XsCompilerSettings *settings)
+{
+    return xs_driver_process_core_artifact_as(path, path, command, output, settings);
 }
