@@ -130,8 +130,8 @@ data class ProjectIdentity(
 ) : Serializable
 
 data class Author(
-  val name: String,
-  val email: String,
+  val user: String,
+  val mail: String,
 ) : Serializable
 
 data class Workspace(
@@ -197,13 +197,14 @@ data class ProjectPlan(
   val workspaces: List<Workspace>,
   val pmlEnabled: Boolean,
   val publishSources: Boolean,
-  val publishExcludes: List<String>,
+  val publishExcludes: List<String>?,
   val sourceIncludes: List<String>,
-  val sourceExcludes: List<String>,
+  val sourceExcludes: List<String>?,
   val testIncludes: List<String>,
-  val testExcludes: List<String>,
+  val testExcludes: List<String>?,
   val testFramework: String?,
   val compiler: CompilerSettings,
+  val plugins: List<PluginPlanEntry>,
 )
 
 internal val packageDependencyOrder =

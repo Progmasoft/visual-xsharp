@@ -15,9 +15,13 @@ import java.sql.DriverManager
 
 object ProjectLockFile {
   const val FILE_NAME = "Visual.XSharp.Lockfile.sqlite3"
-  private const val FORMAT_VERSION = 1
+  private const val FORMAT_VERSION = 2
 
-  fun write(root: Path, manifest: DependencyManifest) {
+  fun write(
+    root: Path,
+    manifest: DependencyManifest,
+    plugins: List<PluginPlanEntry> = emptyList(),
+  ) {
     val validated = validateDependencies(manifest.required, manifest.optional, manifest.features)
     Files.createDirectories(root)
     val temporary = Files.createTempFile(root, ".visual-xsharp-lock-", ".sqlite3")
@@ -29,6 +33,7 @@ object ProjectLockFile {
           writeMetadata(connection)
           writePackages(connection, validated)
           writeFeatures(connection, validated.features)
+          writePlugins(connection, plugins)
           connection.commit()
         } catch (error: Exception) {
           connection.rollback()
@@ -44,27 +49,58 @@ object ProjectLockFile {
   fun read(path: Path): DependencyManifest {
     val connectionUrl = "jdbc:sqlite:${path.toAbsolutePath()}"
     return DriverManager.getConnection(connectionUrl).use { connection ->
-      val version =
-        connection
-          .prepareStatement("SELECT value FROM metadata WHERE key = 'format_version'")
-          .use { statement ->
-            statement.executeQuery().use { rows ->
-              if (rows.next()) rows.getString(1).toIntOrNull() else null
-            }
-          }
-      if (version != FORMAT_VERSION) {
-        throw ProjectConfigurationException(
-          "unsupported Visual.XSharp.Lockfile.sqlite3 format version '$version'"
-        )
-      }
+      requireFormatVersion(connection)
       readPackages(connection)
     }
   }
+
+  fun readPlugins(path: Path): List<PluginPlanEntry> =
+    DriverManager.getConnection("jdbc:sqlite:${path.toAbsolutePath()}").use { connection ->
+      requireFormatVersion(connection)
+      connection
+        .prepareStatement(
+          "SELECT publisher, name, version, stability, api_version, sha256 FROM plugins ORDER BY publisher, name"
+        )
+        .use { statement ->
+          statement.executeQuery().use { rows ->
+            buildList {
+              while (rows.next()) {
+                add(
+                  PluginPlanEntry(
+                    rows.getString(1),
+                    rows.getString(2),
+                    rows.getString(3),
+                    Stability.valueOf(rows.getString(4)),
+                    rows.getInt(5),
+                    rows.getString(6),
+                    emptyList(),
+                    emptyMap(),
+                  )
+                )
+              }
+            }
+          }
+        }
+    }
 
   private fun createSchema(connection: Connection) {
     connection.createStatement().use { statement ->
       statement.execute(
         "CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID"
+      )
+      statement.execute(
+        """
+        CREATE TABLE plugins (
+          publisher TEXT NOT NULL,
+          name TEXT NOT NULL,
+          version TEXT NOT NULL,
+          stability TEXT NOT NULL,
+          api_version INTEGER NOT NULL,
+          sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+          PRIMARY KEY(publisher, name)
+        ) WITHOUT ROWID
+        """
+          .trimIndent()
       )
       statement.execute(
         """
@@ -146,6 +182,28 @@ object ProjectLockFile {
       }
   }
 
+  private fun writePlugins(
+    connection: Connection,
+    plugins: List<PluginPlanEntry>,
+  ) {
+    connection
+      .prepareStatement(
+        "INSERT INTO plugins(publisher, name, version, stability, api_version, sha256) VALUES (?, ?, ?, ?, ?, ?)"
+      )
+      .use { statement ->
+        plugins.sortedBy(PluginPlanEntry::coordinate).forEach { plugin ->
+          statement.setString(1, plugin.publisher)
+          statement.setString(2, plugin.name)
+          statement.setString(3, plugin.version)
+          statement.setString(4, plugin.stability.name)
+          statement.setInt(5, plugin.apiVersion)
+          statement.setString(6, plugin.sha256)
+          statement.addBatch()
+        }
+        statement.executeBatch()
+      }
+  }
+
   private fun readPackages(connection: Connection): DependencyManifest {
     val required = mutableListOf<PackageDependency>()
     val optional = mutableListOf<OptionalPackageDependency>()
@@ -194,6 +252,21 @@ object ProjectLockFile {
       Files.move(source, target, ATOMIC_MOVE, REPLACE_EXISTING)
     } catch (_: AtomicMoveNotSupportedException) {
       Files.move(source, target, REPLACE_EXISTING)
+    }
+  }
+
+  private fun requireFormatVersion(connection: Connection) {
+    val version =
+      connection.prepareStatement("SELECT value FROM metadata WHERE key = 'format_version'").use {
+        statement ->
+        statement.executeQuery().use { rows ->
+          if (rows.next()) rows.getString(1).toIntOrNull() else null
+        }
+      }
+    if (version != FORMAT_VERSION) {
+      throw ProjectConfigurationException(
+        "unsupported Visual.XSharp.Lockfile.sqlite3 format version '$version'"
+      )
     }
   }
 }

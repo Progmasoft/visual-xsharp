@@ -8,6 +8,7 @@ package org.progmasoft.visual.xsharp.project
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.writeText
 import kotlin.system.exitProcess
 
@@ -52,11 +53,36 @@ private fun discover(input: File): ProjectFiles {
   throw ProjectConfigurationException("no X# Kotlin project file found from ${input.canonicalFile}")
 }
 
-private fun existingClasspath(): String =
+private val runtimeClasspath: String by lazy {
   System.getProperty("java.class.path")
     .split(File.pathSeparator)
     .filter { entry -> File(entry).exists() }
     .joinToString(File.pathSeparator)
+}
+
+private data class CachedProjectScript(
+  val size: Long,
+  val modified: Long,
+  val source: String,
+  val requests: List<PluginRequest>,
+)
+
+private val projectScriptCache = ConcurrentHashMap<Path, CachedProjectScript>()
+
+private fun prepareScript(script: File): CachedProjectScript {
+  val path = script.toPath().toAbsolutePath().normalize()
+  val size = Files.size(path)
+  val modified = Files.getLastModifiedTime(path).toMillis()
+  projectScriptCache[path]
+    ?.takeIf { it.size == size && it.modified == modified }
+    ?.let {
+      return it
+    }
+  val source = script.readText()
+  val prepared = CachedProjectScript(size, modified, source, PluginPreamble.parse(source))
+  projectScriptCache[path] = prepared
+  return prepared
+}
 
 internal fun kotlinCommand(
   environment: Map<String, String> = System.getenv(),
@@ -89,16 +115,29 @@ private fun runKotlin(
 ): Int {
   val directory = Files.createTempDirectory("xs-project-kts-")
   return try {
+    val prepared = prepareScript(script)
+    val resolvedPlugins = PluginResolver.resolve(root.toPath(), prepared.requests)
+    val pluginManifest = directory.resolve("plugins.manifest")
+    PluginManifest.write(pluginManifest, resolvedPlugins)
     val wrapped = directory.resolve(script.name)
     val suffix = "\nemitProject()\n"
+    val imports =
+      resolvedPlugins.flatMap(ResolvedPlugin::imports).distinct().joinToString("") { importName ->
+        "import $importName\n"
+      }
     wrapped.writeText(
-      "import org.progmasoft.visual.xsharp.project.*\n" + script.readText() + suffix
+      "import org.progmasoft.visual.xsharp.project.*\n" +
+        imports +
+        "PluginRuntime.activate()\n" +
+        prepared.source +
+        suffix
     )
     val kotlin = kotlinCommand()
     val properties =
       mutableListOf(
         "-Dxs.project.root=${root.absolutePath}",
         "-Dxs.project.output=$output",
+        "-Dxs.project.pluginManifest=$pluginManifest",
       )
     if (sourcesOutput != null) properties += "-Dxs.project.sources=$sourcesOutput"
     val arguments = mutableListOf<String>()
@@ -121,7 +160,9 @@ private fun runKotlin(
     arguments +=
       listOf(
         "-classpath",
-        existingClasspath(),
+        (listOf(runtimeClasspath) + resolvedPlugins.map { it.artifact.toString() }).joinToString(
+          File.pathSeparator
+        ),
         "-howtorun",
         "script",
         wrapped.toString(),

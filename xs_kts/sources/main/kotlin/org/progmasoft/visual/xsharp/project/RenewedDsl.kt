@@ -27,10 +27,11 @@ class ProjectScope internal constructor() {
 class MainSourcesScope internal constructor() {
   var srcDir: String = "Sources"
   var entry: String? = null
-  internal val excludes = mutableListOf<String>()
+  internal var excludes: MutableList<String>? = null
 
   fun exclude(vararg patterns: String) {
-    patterns.forEach { excludes += requireText(it, "main source exclude") }
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { configured += requireText(it, "main source exclude") }
   }
 }
 
@@ -38,20 +39,22 @@ class MainSourcesScope internal constructor() {
 class TestSourcesScope internal constructor() {
   var testDir: String = "Tests"
   var framework: String? = null
-  internal val excludes = mutableListOf<String>()
+  internal var excludes: MutableList<String>? = null
 
   fun exclude(vararg patterns: String) {
-    patterns.forEach { excludes += requireText(it, "test source exclude") }
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { configured += requireText(it, "test source exclude") }
   }
 }
 
 @XsProjectDsl
 class ViGetSourcesScope internal constructor() {
   var publish: Boolean = false
-  internal val excludes = mutableListOf<String>()
+  internal var excludes: MutableList<String>? = null
 
   fun exclude(vararg patterns: String) {
-    patterns.forEach { excludes += requireText(it, "ViGet source exclude") }
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { configured += requireText(it, "ViGet source exclude") }
   }
 }
 
@@ -86,12 +89,12 @@ class ProjectSourcesScope internal constructor() {
     ProjectRuntime.configureEntry(entry)
     ProjectRuntime.configureMainSources {
       include(requireText(mainSources.srcDir, "sources.main.srcDir"))
-      exclude(*mainSources.excludes.toTypedArray())
+      mainSources.excludes?.let { exclude(*it.toTypedArray()) }
     }
     test?.let { testSources ->
       ProjectRuntime.configureTestSources {
         include(requireText(testSources.testDir, "sources.test.testDir"))
-        exclude(*testSources.excludes.toTypedArray())
+        testSources.excludes?.let { exclude(*it.toTypedArray()) }
         testSources.framework?.let(::framework)
       }
     }
@@ -132,17 +135,14 @@ class TargetsScope internal constructor() {
 
 @XsProjectDsl
 class AuthorsScope internal constructor() {
-  private val values = mutableListOf<Array<String>>()
+  private val values = mutableListOf<Author>()
 
-  fun author(
-    name: String,
-    email: String,
-  ) {
-    values += arrayOf(requireText(name, "author name"), requireText(email, "author email"))
+  fun author(user: String, mail: String) {
+    values += Author(requireText(user, "author user"), requireText(mail, "author mail"))
   }
 
   internal fun apply() {
-    if (values.isNotEmpty()) ProjectRuntime.configureAuthors(*values.toTypedArray())
+    if (values.isNotEmpty()) ProjectRuntime.configureAuthors(values)
   }
 }
 

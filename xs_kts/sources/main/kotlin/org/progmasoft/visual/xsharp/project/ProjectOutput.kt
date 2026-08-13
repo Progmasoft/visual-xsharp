@@ -23,6 +23,7 @@ object ProjectOutput {
         plan.optionalDependencies,
         plan.dependencyFeatures,
       ),
+      plan.plugins,
     )
     when (System.getProperty("xs.project.output", "plan")) {
       "plan" -> println(PlanWriter.write(plan))
@@ -61,7 +62,7 @@ object ProjectOutput {
     root: Path,
     configuredRoots: List<String>,
     extension: String,
-    exclusions: List<String>,
+    exclusions: List<String>?,
   ): List<Path> =
     configuredRoots
       .flatMap { configured ->
@@ -80,7 +81,7 @@ object ProjectOutput {
           paths
             .filter { path -> Files.isRegularFile(path) }
             .filter { it.fileName.toString().endsWith(".$extension") }
-            .filter { path -> !excluded(root, directory, path, exclusions) }
+            .filter { path -> !excluded(root, directory, path, exclusions.orEmpty()) }
             .toList()
         }
       }

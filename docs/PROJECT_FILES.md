@@ -22,8 +22,10 @@ sources {
 }
 ```
 
-`sources.main` and `sources.main.entry` are required. The entry is a namespace-qualified class, not a function name. The class
-must declare a parameterless `public static void Main()` method.
+`sources.main` and `sources.main.entry` are required. The entry is a namespace-qualified class, not a function name. The final
+segment is the class name and is not restricted to `Main` or `Program`: `Namespace.Program`, `Namespace.Namespace.Program`,
+and `Company.Tool.Bootstrap` are valid. A trailing namespace such as `Namespace.` is invalid. The selected class must declare
+a parameterless `public static void Main()` method.
 
 ## Compiler settings
 
@@ -78,7 +80,33 @@ sources {
 ```
 
 Source paths must stay inside the project root. The default source extension is `.vxs`. Exclusions accept project-relative
-glob patterns.
+glob patterns. `sources.main.exclude`, `sources.test.exclude`, and `sources.viget.exclude` have no implicit pattern: their
+plan value is `null` until an `exclude(...)` declaration is present.
+
+## Project plugins
+
+Plugins are declared in a top-level preamble so the host can resolve them before Kotlin compiles the rest of the project
+script:
+
+```kotlin
+plugins {
+  plugin("Progmasoft") {
+    name = "CMake"
+    version = "0.1.0"
+    stability = Stability.STABLE
+  }
+}
+```
+
+The host searches the project-local `.visual-xsharp/plugins` directory and the directories in `XS_PLUGIN_PATH`. A plugin JAR
+contains `META-INF/visual-xsharp-plugin.properties` and exactly one matching `ProjectPlugin` service. The runtime validates
+the coordinate, exact requested version and stability, plugin API version, safe Kotlin imports, and SHA-256 identity before
+activation. An adjacent `<plugin.jar>.sha256` file makes the expected digest explicit; the digest is checked again in the
+Kotlin process before service loading.
+
+Plugins can register named DSL extensions, contribute deterministic plan metadata, and run finalization hooks. Extension
+name collisions and descriptor/service identity mismatches are errors. Plugins are trusted build logic with full JVM and
+filesystem access; this infrastructure intentionally does not sandbox or restrict them.
 
 ## Dependencies
 
@@ -114,3 +142,11 @@ The DSL also supports:
 - `authors` for publication metadata;
 - `pml` for PML enablement; and
 - `workspaces` for named project paths.
+
+Author declarations take exactly two values named `user` and `mail`; the function is not variadic:
+
+```kotlin
+authors {
+  author("Leitwolf", "leitwolf@example.me")
+}
+```

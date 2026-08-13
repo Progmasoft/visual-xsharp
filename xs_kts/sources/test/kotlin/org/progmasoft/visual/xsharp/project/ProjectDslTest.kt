@@ -14,6 +14,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class ProjectDslTest {
   @BeforeTest
@@ -29,7 +33,7 @@ class ProjectDslTest {
   }
 
   @Test
-  fun requiresOnlyQualifiedMainEntry() {
+  fun acceptsAnyNamespaceQualifiedEntryClassName() {
     sources {
       main { entry = "Demo.Main" }
     }
@@ -42,6 +46,13 @@ class ProjectDslTest {
     assertEquals(LlvmOptLevel.O0, effectiveOptLevel(plan.compiler))
     assertTrue(plan.compiler.xppOptimizationPasses)
     assertTrue(plan.compiler.xmmOptimizationPasses)
+
+    listOf("Namespace.Program", "Namespace.Namespace.Program", "Company.Tool.Bootstrap").forEach {
+      entry ->
+      ProjectRuntime.reset()
+      sources { main { this.entry = entry } }
+      assertEquals(entry, ProjectRuntime.build().entry)
+    }
   }
 
   @Test
@@ -49,6 +60,10 @@ class ProjectDslTest {
     assertFailsWith<ProjectConfigurationException> { ProjectRuntime.build() }
 
     sources { main { entry = "Main" } }
+    assertFailsWith<ProjectConfigurationException> { ProjectRuntime.build() }
+
+    ProjectRuntime.reset()
+    sources { main { entry = "Namespace." } }
     assertFailsWith<ProjectConfigurationException> { ProjectRuntime.build() }
   }
 
@@ -141,12 +156,69 @@ class ProjectDslTest {
     sources { main { entry = "Plan.Main" } }
     val text = PlanWriter.write(ProjectRuntime.build())
 
-    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":1"))
+    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":2"))
     assertTrue(text.contains("\"entry\":\"Plan.Main\""))
     assertTrue(text.contains("\"xmmOptimizationPasses\":true"))
     assertFalse(text.contains("module"))
     assertFalse(text.contains("\"variables\""))
     assertFalse(text.contains("XLIL"))
+  }
+
+  @Test
+  fun planWriterUsesTypedJsonEncodingAndDeterministicPluginMaps() {
+    sources { main { entry = "Codec.Main" } }
+    val plugin =
+      PluginPlanEntry(
+        publisher = "Progmasoft",
+        name = "Codec",
+        version = "1.0.0",
+        stability = Stability.STABLE,
+        apiVersion = PROJECT_PLUGIN_API_VERSION,
+        sha256 = "b".repeat(64),
+        extensions = listOf("zeta", "alpha"),
+        contributions = linkedMapOf("zeta" to "last", "alpha" to "first"),
+      )
+    val plan =
+      ProjectRuntime.build().copy(entry = "Quoted.\"Main\"\nClass", plugins = listOf(plugin))
+    val text = PlanWriter.write(plan)
+    val document = Json.parseToJsonElement(text).jsonObject
+
+    assertEquals(
+      "Quoted.\"Main\"\nClass",
+      document
+        .getValue("sources")
+        .jsonObject
+        .getValue("main")
+        .jsonObject
+        .getValue("entry")
+        .jsonPrimitive
+        .content,
+    )
+    val encodedPlugin = document.getValue("plugins").jsonArray.single().jsonObject
+    assertEquals(
+      listOf("alpha", "zeta"),
+      encodedPlugin.getValue("extensions").jsonArray.map { it.jsonPrimitive.content },
+    )
+    assertEquals(
+      listOf("alpha", "zeta"),
+      encodedPlugin.getValue("contributions").jsonObject.keys.toList(),
+    )
+    assertEquals(text, PlanWriter.write(plan))
+  }
+
+  @Test
+  fun excludeDefaultsRemainNullAcrossEverySourceSection() {
+    sources { main { entry = "Defaults.Main" } }
+    val plan = ProjectRuntime.build()
+
+    assertNull(plan.publishExcludes)
+    assertNull(plan.sourceExcludes)
+    assertNull(plan.testExcludes)
+    val sourceDocument =
+      Json.parseToJsonElement(PlanWriter.write(plan)).jsonObject.getValue("sources").jsonObject
+    assertEquals("null", sourceDocument.getValue("viget").jsonObject.getValue("exclude").toString())
+    assertEquals("null", sourceDocument.getValue("main").jsonObject.getValue("exclude").toString())
+    assertEquals("null", sourceDocument.getValue("test").jsonObject.getValue("exclude").toString())
   }
 
   @Test

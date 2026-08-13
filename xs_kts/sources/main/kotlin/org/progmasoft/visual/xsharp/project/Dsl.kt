@@ -12,8 +12,7 @@ import java.util.Locale
 @XsProjectDsl
 class SourcesScope internal constructor() {
   internal val includes = mutableListOf<String>()
-  internal val excludes = mutableListOf<String>()
-  internal var excludesConfigured = false
+  internal var excludes: MutableList<String>? = null
 
   fun include(pattern: String) {
     val root = requireText(pattern, "source include")
@@ -24,16 +23,15 @@ class SourcesScope internal constructor() {
   }
 
   fun exclude(vararg patterns: String) {
-    excludesConfigured = true
-    patterns.forEach { pattern -> excludes += requireText(pattern, "source exclude") }
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { pattern -> configured += requireText(pattern, "source exclude") }
   }
 }
 
 @XsProjectDsl
 class TestScope internal constructor() {
   internal val includes = mutableListOf<String>()
-  internal val excludes = mutableListOf<String>()
-  internal var excludesConfigured = false
+  internal var excludes: MutableList<String>? = null
   internal var framework: String? = null
 
   fun include(path: String) {
@@ -45,8 +43,8 @@ class TestScope internal constructor() {
   }
 
   fun exclude(vararg patterns: String) {
-    excludesConfigured = true
-    patterns.forEach { pattern -> excludes += requireText(pattern, "test exclude") }
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { pattern -> configured += requireText(pattern, "test exclude") }
   }
 
   fun framework(name: String) {
@@ -199,11 +197,11 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   private val workspaces = mutableListOf<Workspace>()
   private var pmlEnabled = true
   private var publishSources = false
-  private val publishExcludes = mutableListOf<String>()
+  private var publishExcludes: List<String>? = null
   private val sourceIncludes = mutableListOf<String>()
-  private val sourceExcludes = mutableListOf<String>("*/**")
+  private var sourceExcludes: List<String>? = null
   private val testIncludes = mutableListOf<String>()
-  private val testExcludes = mutableListOf<String>("*/**")
+  private var testExcludes: List<String>? = null
   private var testFramework: String? = null
   private val compilerSettings = CompilerSettings()
 
@@ -249,19 +247,14 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
 
   internal fun configurePublishing(
     publish: Boolean,
-    excludes: List<String>,
+    excludes: List<String>?,
   ) {
     publishSources = publish
-    publishExcludes.clear()
-    publishExcludes += excludes.distinct()
+    publishExcludes = excludes?.distinct()
   }
 
-  internal fun configureAuthors(vararg entries: Array<String>) {
-    entries.forEach { entry ->
-      if (entry.size != 2)
-        throw ProjectConfigurationException("each author requires a name and email")
-      authors += Author(requireText(entry[0], "author name"), requireText(entry[1], "author email"))
-    }
+  internal fun configureAuthors(entries: List<Author>) {
+    authors += entries
   }
 
   fun dependencies(block: DependenciesScope.() -> Unit) {
@@ -283,19 +276,13 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   internal fun configureMainSources(block: SourcesScope.() -> Unit) {
     val scope = SourcesScope().apply(block)
     sourceIncludes += scope.includes
-    if (scope.excludesConfigured) {
-      sourceExcludes.clear()
-      sourceExcludes += scope.excludes
-    }
+    scope.excludes?.let { sourceExcludes = it.distinct() }
   }
 
   internal fun configureTestSources(block: TestScope.() -> Unit) {
     val scope = TestScope().apply(block)
     testIncludes += scope.includes
-    if (scope.excludesConfigured) {
-      testExcludes.clear()
-      testExcludes += scope.excludes
-    }
+    scope.excludes?.let { testExcludes = it.distinct() }
     testFramework = scope.framework
   }
 
@@ -315,27 +302,30 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
     val dependencyManifest =
       validateDependencies(dependencies, optionalDependencies, dependencyFeatures)
     val effectiveSourceIncludes = sourceIncludes.ifEmpty { listOf("Sources") }
-    return ProjectPlan(
-      project,
-      authors.toList(),
-      dependencyManifest.required,
-      dependencyManifest.optional,
-      dependencyManifest.features,
-      configuredEntry,
-      releaseOutputDirectory,
-      debugOutputDirectory,
-      targets.toList(),
-      workspaces.toList(),
-      pmlEnabled,
-      publishSources,
-      publishExcludes.toList(),
-      effectiveSourceIncludes.distinct(),
-      sourceExcludes.distinct(),
-      testIncludes.distinct(),
-      testExcludes.distinct(),
-      testFramework,
-      compilerSettings,
-    )
+    val plan =
+      ProjectPlan(
+        project,
+        authors.toList(),
+        dependencyManifest.required,
+        dependencyManifest.optional,
+        dependencyManifest.features,
+        configuredEntry,
+        releaseOutputDirectory,
+        debugOutputDirectory,
+        targets.toList(),
+        workspaces.toList(),
+        pmlEnabled,
+        publishSources,
+        publishExcludes,
+        effectiveSourceIncludes.distinct(),
+        sourceExcludes,
+        testIncludes.distinct(),
+        testExcludes,
+        testFramework,
+        compilerSettings,
+        emptyList(),
+      )
+    return PluginRuntime.finish(plan)
   }
 }
 
@@ -362,6 +352,7 @@ internal object ProjectRuntime {
   private var context = ProjectContext()
 
   fun reset() {
+    PluginRuntime.reset()
     context = ProjectContext()
   }
 
@@ -386,10 +377,10 @@ internal object ProjectRuntime {
 
   fun configurePublishing(
     publish: Boolean,
-    excludes: List<String>,
+    excludes: List<String>?,
   ) = context.configurePublishing(publish, excludes)
 
-  fun configureAuthors(vararg entries: Array<String>) = context.configureAuthors(*entries)
+  fun configureAuthors(entries: List<Author>) = context.configureAuthors(entries)
 
   fun dependencies(block: DependenciesScope.() -> Unit) = context.dependencies(block)
 

@@ -102,8 +102,9 @@ See [CLI](docs/CLI.md) for the exact accepted surface and implementation status.
 
 ## Project files
 
-A Visual X# project uses one `Visual.XSharp.kts` file. `sources.main.entry` names a namespace-qualified class. The selected
-class must provide a parameterless `public static void Main()` method; a top-level runtime function is not an entry point.
+A Visual X# project uses one `Visual.XSharp.kts` file. `sources.main.entry` names a namespace-qualified class; its final
+segment is a class name and need not be `Main` or `Program`. The selected class must provide a parameterless
+`public static void Main()` method; a top-level runtime function is not an entry point.
 
 ```kotlin
 project {
