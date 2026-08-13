@@ -18,8 +18,10 @@ endif()
 
 set(required_files
   bin/vxs.exe
+  bin/vxdc.bat
   bin/vxs-frontend.exe
   libexec/xs/project-runtime/bin/xs-project-runtime.bat
+  libexec/xs/project-runtime/bin/vxdc.bat
   include/Visual/C23/compiler_check.h
   include/Visual/C23/int128.hh
   include/Visual/XSharp/lil.hh

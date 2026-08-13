@@ -14,9 +14,9 @@ import kotlin.system.exitProcess
 
 private const val MINIMUM_JAVA = 25
 
-private data class ProjectFiles(
+internal data class ProjectFiles(
   val root: File,
-  val project: File?,
+  val project: File,
 )
 
 private fun usage() =
@@ -38,7 +38,7 @@ private fun filesAt(root: File): ProjectFiles? {
   return ProjectFiles(root, project)
 }
 
-private fun discover(input: File): ProjectFiles {
+internal fun discoverProject(input: File): ProjectFiles {
   if (input.isFile) {
     return filesAt(input.absoluteFile.parentFile.canonicalFile)
       ?: throw ProjectConfigurationException("no X# Kotlin project file found beside $input")
@@ -189,8 +189,8 @@ internal fun evaluateWithKotlin(
   sourcesOutput: Path? = null,
 ): Int {
   requireSupportedJava()
-  val files = discover(input)
-  return runKotlin(files.project!!, files.root, output, sourcesOutput)
+  val files = discoverProject(input)
+  return runKotlin(files.project, files.root, output, sourcesOutput)
 }
 
 fun main(args: Array<String>) {

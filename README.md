@@ -124,6 +124,9 @@ sources {
 
 See [Project files](docs/PROJECT_FILES.md) for the current Kotlin DSL.
 
+The binary project lockfile can be inspected without changing the normal project-evaluation output. The separate `vxdc`
+tool evaluates `Visual.XSharp.kts` and writes a deterministic, replayable `.sqlite3.dump` SQL document.
+
 ## Language specification examples
 
 The [Spec](Spec/README.md) directory contains 24 topic-oriented `.vxs` example suites. They record current language design

@@ -277,7 +277,7 @@ object ProjectLockFile {
     }
   }
 
-  private fun requireFormatVersion(connection: Connection) {
+  internal fun requireFormatVersion(connection: Connection) {
     val version =
       connection.prepareStatement("SELECT value FROM metadata WHERE key = 'format_version'").use {
         statement ->

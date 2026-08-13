@@ -4,6 +4,7 @@
  */
 
 import org.gradle.api.JavaVersion
+import org.gradle.jvm.application.tasks.CreateStartScripts
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -42,7 +43,34 @@ java {
 application {
   mainClass = "org.progmasoft.visual.xsharp.project.MainKt"
   applicationName = "xs-project-runtime"
+  applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
+
+// VXDC shares the project evaluator and SQLite driver with the runtime, but it is
+// intentionally exposed as a separate command. Keeping both launchers in one
+// distribution avoids shipping two copies of the Kotlin runtime and JDBC driver.
+val vxdcStartScripts =
+  tasks.register<CreateStartScripts>("vxdcStartScripts") {
+    applicationName = "vxdc"
+    mainClass = "org.progmasoft.visual.xdc.VxdcKt"
+    defaultJvmOpts = application.applicationDefaultJvmArgs
+    outputDir =
+      layout.buildDirectory
+        .dir("vxdc-start-scripts")
+        .get()
+        .asFile
+    classpath = files(tasks.named("jar"), configurations.runtimeClasspath)
+  }
+
+distributions {
+  main {
+    contents {
+      from(vxdcStartScripts) { into("bin") }
+    }
+  }
+}
+
+tasks.named("installDist") { dependsOn(vxdcStartScripts) }
 
 sourceSets {
   main { kotlin.srcDir("sources/main/kotlin") }

@@ -8,13 +8,14 @@ set(XS_PROJECT_RUNTIME_DIST
     "${XS_PROJECT_RUNTIME_ROOT}/build/install/xs-project-runtime")
 set(XS_PROJECT_RUNTIME_LAUNCHER
     "${XS_PROJECT_RUNTIME_DIST}/bin/xs-project-runtime.bat")
+set(XS_VXDC_LAUNCHER "${XS_PROJECT_RUNTIME_DIST}/bin/vxdc.bat")
 
 file(GLOB_RECURSE XS_PROJECT_RUNTIME_SOURCES CONFIGURE_DEPENDS
   "${XS_PROJECT_RUNTIME_ROOT}/sources/main/kotlin/*.kt"
 )
 
 add_custom_command(
-  OUTPUT "${XS_PROJECT_RUNTIME_LAUNCHER}"
+  OUTPUT "${XS_PROJECT_RUNTIME_LAUNCHER}" "${XS_VXDC_LAUNCHER}"
   COMMAND "${XS_PROJECT_RUNTIME_ROOT}/gradlew.bat" --daemon --build-cache
           -p "${XS_PROJECT_RUNTIME_ROOT}" installDist
   DEPENDS
@@ -27,7 +28,10 @@ add_custom_command(
   VERBATIM
 )
 
-add_custom_target(xs_project_runtime ALL DEPENDS "${XS_PROJECT_RUNTIME_LAUNCHER}")
+add_custom_target(xs_project_runtime ALL DEPENDS
+  "${XS_PROJECT_RUNTIME_LAUNCHER}"
+  "${XS_VXDC_LAUNCHER}"
+)
 
 target_compile_definitions(xs_compiler PRIVATE
   XS_PROJECT_RUNTIME_BUILD="${XS_PROJECT_RUNTIME_LAUNCHER}"
@@ -38,4 +42,14 @@ install(DIRECTORY "${XS_PROJECT_RUNTIME_DIST}/"
   DESTINATION "libexec/xs/project-runtime"
   COMPONENT compiler
   USE_SOURCE_PERMISSIONS
+)
+
+# The generated launcher must remain beside its runtime libraries under libexec.
+# This small public wrapper keeps `vxdc` on PATH without copying or duplicating
+# the Kotlin/JDBC distribution into the installation's native library directory.
+configure_file("${CMAKE_CURRENT_LIST_DIR}/vxdc.bat.in"
+               "${PROJECT_BINARY_DIR}/vxdc.bat" @ONLY)
+install(PROGRAMS "${PROJECT_BINARY_DIR}/vxdc.bat"
+  DESTINATION "bin"
+  COMPONENT compiler
 )

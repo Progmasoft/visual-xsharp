@@ -170,6 +170,16 @@ Visual X# packages are distinct from Kotlin DSL plugins. They are Visual X#-auth
 ## Lock file
 
 Project evaluation writes `Visual.XSharp.Lockfile.sqlite3`. It is a binary SQLite database, not a text or JSON lock file.
+Ordinary evaluation never emits a textual copy. Use the separate Visual XSharp Dumpfile Creator when a reviewable or
+replayable SQL representation is needed:
+
+```powershell
+vxdc -Projectfile .\Visual.XSharp.kts -Output .\Project.sqlite3.dump
+```
+
+VXDC evaluates the named project, refreshes its binary lockfile, validates the lockfile format, and writes deterministic
+UTF-8 SQL. The output contains schema and quoted row data inside a transaction and can be replayed by SQLite. Its name must
+end in `.sqlite3.dump`; VXDC refuses to overwrite the binary lockfile with text.
 
 ## Additional blocks
 

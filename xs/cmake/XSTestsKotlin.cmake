@@ -23,3 +23,25 @@ set_tests_properties(kotlin_project_resolve_binary_lock PROPERTIES
   TIMEOUT 5
   FIXTURES_REQUIRED kotlin_project_lock
   LABELS jvm)
+
+set(XS_VXDC_TEST_OUTPUT
+    "${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/NativeCall.sqlite3.dump")
+file(REMOVE "${XS_VXDC_TEST_OUTPUT}")
+add_test(NAME vxdc_project_dump COMMAND "${XS_VXDC_TEST_DRIVER}"
+  -Projectfile "${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call/Visual.XSharp.kts"
+  -Output "${XS_VXDC_TEST_OUTPUT}")
+set_tests_properties(vxdc_project_dump PROPERTIES
+  TIMEOUT 180
+  FIXTURES_REQUIRED kotlin_project_resolver
+  FIXTURES_SETUP vxdc_project_dump
+  PASS_REGULAR_EXPRESSION "vxdc: wrote"
+  LABELS jvm
+  RESOURCE_LOCK kotlin_script_runner
+  RUN_SERIAL TRUE)
+
+add_test(NAME vxdc_project_dump_is_sql COMMAND xs_text_artifact_tests
+  "${XS_VXDC_TEST_OUTPUT}" "BEGIN TRANSACTION;")
+set_tests_properties(vxdc_project_dump_is_sql PROPERTIES
+  TIMEOUT 5
+  FIXTURES_REQUIRED vxdc_project_dump
+  LABELS jvm)

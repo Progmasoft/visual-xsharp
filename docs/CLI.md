@@ -113,6 +113,13 @@ The CLI reserves the renewed artifact vocabulary before all routes are implement
 
 `resolve` and `update` evaluate the project configuration and refresh `Visual.XSharp.Lockfile.sqlite3`.
 
+Lockfile text export is deliberately not a `vxs` command. The separately installed `vxdc` tool evaluates an exact
+`Visual.XSharp.kts` and creates a deterministic SQL dump:
+
+```powershell
+vxdc -Projectfile .\Visual.XSharp.kts -Output .\Project.sqlite3.dump
+```
+
 ## Exit behavior
 
 Command parsing errors return a nonzero status. Compilation diagnostics are printed to standard error. `run` currently
