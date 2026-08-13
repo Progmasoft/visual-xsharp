@@ -179,7 +179,8 @@ vxdc -Projectfile .\Visual.XSharp.kts -Output .\Project.sqlite3.dump
 
 VXDC evaluates the named project, refreshes its binary lockfile, validates the lockfile format, and writes deterministic
 UTF-8 SQL. The output contains schema and quoted row data inside a transaction and can be replayed by SQLite. Its name must
-end in `.sqlite3.dump`; VXDC refuses to overwrite the binary lockfile with text.
+be supplied explicitly, but VXDC does not impose a filename extension. It refuses to overwrite the binary lockfile with
+text.
 
 ## Additional blocks
 

@@ -14,8 +14,7 @@ import org.progmasoft.visual.xsharp.project.discoverProject
 import org.progmasoft.visual.xsharp.project.evaluateWithKotlin
 import org.progmasoft.visual.xsharp.project.requireSupportedJava
 
-private const val VXDC_USAGE =
-  "usage: vxdc -Projectfile Visual.XSharp.kts -Output <name>.sqlite3.dump"
+private const val VXDC_USAGE = "usage: vxdc -Projectfile Visual.XSharp.kts -Output <file>"
 
 internal data class VxdcCommand(
   val projectFile: File,
@@ -60,9 +59,6 @@ internal fun parseVxdcCommand(args: Array<String>): VxdcCommand {
       ?: throw ProjectConfigurationException("missing required VXDC option '-Output'\n$VXDC_USAGE")
   if (project.name != "Visual.XSharp.kts" || !project.isFile) {
     throw ProjectConfigurationException("-Projectfile must name an existing Visual.XSharp.kts file")
-  }
-  if (!destination.fileName.toString().endsWith(".sqlite3.dump")) {
-    throw ProjectConfigurationException("-Output must end with '.sqlite3.dump'")
   }
   return VxdcCommand(project.canonicalFile, destination)
 }

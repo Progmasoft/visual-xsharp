@@ -88,19 +88,27 @@ class LockfileDumpTest {
   }
 
   @Test
-  fun parsesTheDocumentedVxdcCommandWithoutInferringAnotherProjectName() {
+  fun parsesCaseSensitiveOptionsWithoutRestrictingTheOutputExtension() {
     val root = Files.createTempDirectory("visual-xsharp-vxdc-command-")
     try {
       val project = root.resolve("Visual.XSharp.kts")
       Files.writeString(project, "sources { main { entry = \"Example.Main\" } }")
       val command =
         parseVxdcCommand(
-          arrayOf("-Projectfile", project.toString(), "-Output", "Example.sqlite3.dump")
+          arrayOf("-Projectfile", project.toString(), "-Output", "Example.lock-report")
         )
       assertEquals(project.toFile().canonicalFile, command.projectFile)
-      assertEquals("Example.sqlite3.dump", command.output.toString())
-      assertFailsWith<ProjectConfigurationException> {
+      assertEquals("Example.lock-report", command.output.toString())
+      assertEquals(
+        "dump.json",
         parseVxdcCommand(arrayOf("-Projectfile", project.toString(), "-Output", "dump.json"))
+          .output
+          .toString(),
+      )
+      assertFailsWith<ProjectConfigurationException> {
+        parseVxdcCommand(
+          arrayOf("-projectfile", project.toString(), "-Output", "Example.lock-report")
+        )
       }
     } finally {
       root.toFile().deleteRecursively()
