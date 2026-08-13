@@ -7,7 +7,10 @@ function(xs_add_c_test test_name source_file library_name)
   add_executable(xs_${target_stem}_tests "${source_file}")
   target_link_libraries(xs_${target_stem}_tests PRIVATE "${library_name}")
   add_test(NAME "${test_name}" COMMAND xs_${target_stem}_tests ${ARGN})
-  set_tests_properties("${test_name}" PROPERTIES TIMEOUT 5)
+  # GitHub's Windows images can spend several seconds in first-launch DLL and
+  # Defender scanning even for tiny native binaries. Thirty seconds still
+  # catches hangs promptly without turning cold process startup into a failure.
+  set_tests_properties("${test_name}" PROPERTIES TIMEOUT 30)
 endfunction()
 
 function(xs_add_cxx_test test_name source_file library_name)
@@ -15,7 +18,7 @@ function(xs_add_cxx_test test_name source_file library_name)
   add_executable(xs_${target_stem} "${source_file}")
   target_link_libraries(xs_${target_stem} PRIVATE "${library_name}" Catch2::Catch2WithMain)
   add_test(NAME "${test_name}" COMMAND xs_${target_stem})
-  set_tests_properties("${test_name}" PROPERTIES TIMEOUT 5)
+  set_tests_properties("${test_name}" PROPERTIES TIMEOUT 30)
 endfunction()
 
 if(NOT XS_BUILD_PROJECT_XS)
