@@ -21,6 +21,10 @@ extern "C"
         size_t path_count;
         char **test_paths;
         size_t test_path_count;
+        char **source_excludes;
+        size_t source_exclude_count;
+        char **test_excludes;
+        size_t test_exclude_count;
         char *entry;
         char *compiler_version;
         char *standard;

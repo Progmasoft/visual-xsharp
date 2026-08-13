@@ -25,7 +25,8 @@ sources {
 `sources.main` and `sources.main.entry` are required. The entry is a namespace-qualified class, not a function name. The final
 segment is the class name and is not restricted to `Main` or `Program`: `Namespace.Program`, `Namespace.Namespace.Program`,
 and `Company.Tool.Bootstrap` are valid. A trailing namespace such as `Namespace.` is invalid. The selected class must declare
-a parameterless `public static void Main()` method.
+a parameterless `public static void Main()` method. Entry resolution uses namespace and type identity; it never derives a
+file path from the entry. File names and directory layout do not have to match namespace segments.
 
 ## Compiler settings
 
@@ -79,9 +80,11 @@ sources {
 }
 ```
 
-Source paths must stay inside the project root. The default source extension is `.vxs`. Exclusions accept project-relative
-glob patterns. `sources.main.exclude`, `sources.test.exclude`, and `sources.viget.exclude` have no implicit pattern: their
-plan value is `null` until an `exclude(...)` declaration is present.
+Source roots must stay inside the project root. The Kotlin runtime validates the configured roots and forwards them with
+their exclusion policy; it does not walk the roots or create a `.vxs` file list. Source discovery and namespace-based entry
+resolution belong to the compiler. Exclusions accept project-relative glob patterns. `sources.main.exclude`,
+`sources.test.exclude`, and `sources.viget.exclude` have no implicit pattern: their plan value is `null` until an
+`exclude(...)` declaration is present.
 
 ## Project plugins
 

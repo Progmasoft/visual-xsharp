@@ -229,17 +229,17 @@ class ProjectDslTest {
   }
 
   @Test
-  fun emitsRenewedSourceRegistryFromMainAndTestRoots() {
+  fun emitsSourceRootsWithoutSearchingForEntryFile() {
     val root = Files.createTempDirectory("visual-xsharp-project-")
     val output = Files.createTempFile("visual-xsharp-sources-", ".bin")
     try {
       Files.createDirectories(root.resolve("Sources"))
       Files.createDirectories(root.resolve("Tests"))
+      Files.createDirectories(root.resolve("Sources/Unrelated/Layout"))
       Files.writeString(
-        root.resolve("Sources/main.vxs"),
-        "namespace Demo; public class Main { public static void Main() {} }",
+        root.resolve("Sources/Unrelated/Layout/not-the-entry-name.txt"),
+        "not source",
       )
-      Files.writeString(root.resolve("Tests/smoke.vxs"), "namespace Demo; class Tests {}")
       sources {
         main { entry = "Demo.Main" }
         test { framework = "tests" }
@@ -250,14 +250,15 @@ class ProjectDslTest {
 
       ProjectOutput.emit(ProjectRuntime.build())
       val records = readRecords(output)
-      assertEquals("visual-xsharp-sources-v1", records[0])
+      assertEquals("visual-xsharp-sources-v2", records[0])
       assertEquals("Demo.Main", records[1])
       assertEquals("1", records[18])
       assertEquals("1", records[19])
-      assertTrue(
-        records.any { it.endsWith("Sources\\main.vxs") || it.endsWith("Sources/main.vxs") }
-      )
-      assertTrue(records.any { it.endsWith("Tests\\smoke.vxs") || it.endsWith("Tests/smoke.vxs") })
+      assertEquals("0", records[20])
+      assertEquals("0", records[21])
+      assertTrue(records[22].endsWith("Sources"))
+      assertTrue(records[23].endsWith("Tests"))
+      assertFalse(records.any { it.endsWith(".vxs") })
     } finally {
       root.toFile().deleteRecursively()
       Files.deleteIfExists(output)

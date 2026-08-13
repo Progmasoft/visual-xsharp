@@ -26,7 +26,7 @@
 extern char **environ;
 #endif
 
-static const char *const REGISTRY_VERSION = "visual-xsharp-sources-v1";
+static const char *const REGISTRY_VERSION = "visual-xsharp-sources-v2";
 
 #ifndef XS_PROJECT_RUNTIME_DEFAULT
 #    define XS_PROJECT_RUNTIME_DEFAULT "xs-project-runtime"
@@ -165,6 +165,12 @@ void xs_driver_free_project(XsResolvedProject *project)
     for(size_t i = 0; i < project->test_path_count; ++i)
         free(project->test_paths[i]);
     free(project->test_paths);
+    for(size_t i = 0; i < project->source_exclude_count; ++i)
+        free(project->source_excludes[i]);
+    free(project->source_excludes);
+    for(size_t i = 0; i < project->test_exclude_count; ++i)
+        free(project->test_excludes[i]);
+    free(project->test_excludes);
     free(project->entry);
     free(project->compiler_version);
     free(project->standard);
@@ -224,11 +230,11 @@ static bool parse_output_record(const char *text, XsBuildOutput *output)
     return false;
 }
 
-static bool parse_header(char *data, size_t record_count, size_t *source_count, size_t *test_count,
-                         XsResolvedProject *project)
+static bool parse_header(char *data, size_t recordCount, size_t *sourceCount, size_t *testCount,
+                         size_t *sourceExcludeCount, size_t *testExcludeCount, XsResolvedProject *project)
 {
-    const size_t header_count = 20U;
-    if(strcmp(data, REGISTRY_VERSION) != 0 || record_count < header_count)
+    const size_t headerCount = 22U;
+    if(strcmp(data, REGISTRY_VERSION) != 0 || recordCount < headerCount)
         return false;
     project->settings = xs_cli_default_compiler_settings();
     char *record = next_record(data);
@@ -303,12 +309,18 @@ static bool parse_header(char *data, size_t record_count, size_t *source_count, 
     else
         valid = false;
     record = next_record(record);
-    valid = valid && parse_size_record(record, source_count);
+    valid = valid && parse_size_record(record, sourceCount);
     record = next_record(record);
-    valid = valid && parse_size_record(record, test_count);
-    return valid && *source_count <= SIZE_MAX - header_count &&
-           *test_count <= SIZE_MAX - header_count - *source_count &&
-           record_count == header_count + *source_count + *test_count;
+    valid = valid && parse_size_record(record, testCount);
+    record = next_record(record);
+    valid = valid && parse_size_record(record, sourceExcludeCount);
+    record = next_record(record);
+    valid = valid && parse_size_record(record, testExcludeCount);
+    if(!valid || *sourceCount > SIZE_MAX - headerCount || *testCount > SIZE_MAX - headerCount - *sourceCount ||
+       *sourceExcludeCount > SIZE_MAX - headerCount - *sourceCount - *testCount)
+        return false;
+    const size_t knownCount = headerCount + *sourceCount + *testCount + *sourceExcludeCount;
+    return *testExcludeCount <= SIZE_MAX - knownCount && recordCount == knownCount + *testExcludeCount;
 }
 
 static bool resolve_project_registry(const char *mode, const char *project_root, bool require_sources,
@@ -351,7 +363,10 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
         count += data[i] == '\0';
     size_t source_count = 0;
     size_t test_count = 0;
-    if(count == 0U || !parse_header(data, count, &source_count, &test_count, project) ||
+    size_t sourceExcludeCount = 0;
+    size_t testExcludeCount = 0;
+    if(count == 0U ||
+       !parse_header(data, count, &source_count, &test_count, &sourceExcludeCount, &testExcludeCount, project) ||
        (require_sources && source_count == 0U))
     {
         free(data);
@@ -362,7 +377,15 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
     project->paths = calloc(path_count, sizeof(*project->paths));
     project->test_paths = test_count == 0U ? nullptr : calloc(test_count, sizeof(*project->test_paths));
     project->test_path_count = test_count;
-    if((path_count != 0U && project->paths == nullptr) || (test_count != 0U && project->test_paths == nullptr))
+    project->source_excludes =
+        sourceExcludeCount == 0U ? nullptr : calloc(sourceExcludeCount, sizeof(*project->source_excludes));
+    project->source_exclude_count = sourceExcludeCount;
+    project->test_excludes =
+        testExcludeCount == 0U ? nullptr : calloc(testExcludeCount, sizeof(*project->test_excludes));
+    project->test_exclude_count = testExcludeCount;
+    if((path_count != 0U && project->paths == nullptr) || (test_count != 0U && project->test_paths == nullptr) ||
+       (sourceExcludeCount != 0U && project->source_excludes == nullptr) ||
+       (testExcludeCount != 0U && project->test_excludes == nullptr))
     {
         free(data);
         xs_driver_free_project(project);
@@ -370,7 +393,7 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
     }
     project->path_count = path_count;
     char *record = data;
-    for(size_t i = 0; i < 20U; ++i)
+    for(size_t i = 0; i < 22U; ++i)
         record = next_record(record);
     for(size_t i = 0; i < source_count; ++i)
     {
@@ -388,6 +411,28 @@ static bool resolve_project_registry(const char *mode, const char *project_root,
         project->test_paths[i] = copy_record(record);
         record = next_record(record);
         if(project->test_paths[i] == nullptr)
+        {
+            free(data);
+            xs_driver_free_project(project);
+            return false;
+        }
+    }
+    for(size_t i = 0; i < sourceExcludeCount; ++i)
+    {
+        project->source_excludes[i] = copy_record(record);
+        record = next_record(record);
+        if(project->source_excludes[i] == nullptr)
+        {
+            free(data);
+            xs_driver_free_project(project);
+            return false;
+        }
+    }
+    for(size_t i = 0; i < testExcludeCount; ++i)
+    {
+        project->test_excludes[i] = copy_record(record);
+        record = next_record(record);
+        if(project->test_excludes[i] == nullptr)
         {
             free(data);
             xs_driver_free_project(project);

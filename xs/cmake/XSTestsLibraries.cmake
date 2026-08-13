@@ -4,7 +4,7 @@
 add_executable(xs_backend_tests tests/backend_tests.c)
 target_link_libraries(xs_backend_tests PRIVATE xs_backend_llvm)
 add_test(NAME backend COMMAND xs_backend_tests ${XS_BACKEND_TEST_OBJECT} ${XS_LLD_EXECUTABLE})
-set_tests_properties(backend PROPERTIES TIMEOUT 30)
+set_tests_properties(backend PROPERTIES TIMEOUT 15)
 
 xs_add_c_test(int128 tests/int128_tests.c xs_lil)
 xs_add_c_test(c23_features tests/c23_features_tests.c xs_lil)

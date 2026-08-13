@@ -103,6 +103,9 @@ See [CLI](docs/CLI.md) for the exact accepted surface and implementation status.
 A Visual X# project uses one `Visual.XSharp.kts` file. `sources.main.entry` names a namespace-qualified class; its final
 segment is a class name and need not be `Main` or `Program`. The selected class must provide a parameterless
 `public static void Main()` method; a top-level runtime function is not an entry point.
+The entry is resolved from namespace and type identity. It does not name a source file, and source file names or directory
+layout do not have to mirror the namespace. The Kotlin runtime passes source roots and exclusions to the compiler without
+walking the project for `.vxs` files.
 
 ```kotlin
 project {

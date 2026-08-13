@@ -8,14 +8,13 @@ package org.progmasoft.visual.xsharp.project
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.streams.toList
 
 object ProjectOutput {
-  private const val REGISTRY_VERSION = "visual-xsharp-sources-v1"
+  private const val REGISTRY_VERSION = "visual-xsharp-sources-v2"
 
   fun emit(plan: ProjectPlan) {
     val root = projectRoot()
-    val resolved = resolveSources(root, plan)
+    val resolved = resolveRoots(root, plan)
     ProjectLockFile.write(
       root,
       validateDependencies(
@@ -34,78 +33,46 @@ object ProjectOutput {
     }
   }
 
-  private data class ResolvedProject(
+  private data class ResolvedRoots(
     val sources: List<Path>,
     val tests: List<Path>,
   )
 
-  private fun resolveSources(
+  private fun resolveRoots(
     root: Path,
     plan: ProjectPlan,
-  ): ResolvedProject {
-    val extension = "vxs"
+  ): ResolvedRoots {
     val testRoots = if (plan.testIncludes.isEmpty()) defaultTestRoots(root) else plan.testIncludes
-    val tests = collectRoots(root, testRoots, extension, plan.testExcludes)
-    val testSet = tests.toSet()
-    val sources =
-      collectRoots(root, plan.sourceIncludes, extension, plan.sourceExcludes)
-        .filterNot(testSet::contains)
-        .sortedBy(Path::toString)
-    if (sources.isEmpty()) {
-      throw ProjectConfigurationException(
-        "sources.main.srcDir contains no .$extension source files"
-      )
-    }
-    return ResolvedProject(sources, tests)
+    return ResolvedRoots(
+      validateRoots(root, plan.sourceIncludes, "sources.main.srcDir"),
+      validateRoots(root, testRoots, "sources.test.testDir"),
+    )
   }
 
-  private fun collectRoots(
+  private fun validateRoots(
     root: Path,
     configuredRoots: List<String>,
-    extension: String,
-    exclusions: List<String>?,
+    setting: String,
   ): List<Path> =
     configuredRoots
-      .flatMap { configured ->
+      .map { configured ->
         val normalized = configured.replace('\\', '/')
         val relative = Path.of(normalized)
         if (relative.isAbsolute || normalized.split('/').any { it == ".." }) {
-          throw ProjectConfigurationException(
-            "source directory escapes the project root: $configured"
-          )
+          throw ProjectConfigurationException("$setting escapes the project root: $configured")
         }
         val directory = root.resolve(relative).normalize()
         if (!directory.startsWith(root) || !Files.isDirectory(directory)) {
-          throw ProjectConfigurationException("source directory does not exist: $directory")
+          throw ProjectConfigurationException("$setting directory does not exist: $directory")
         }
-        Files.walk(directory).use { paths ->
-          paths
-            .filter { path -> Files.isRegularFile(path) }
-            .filter { it.fileName.toString().endsWith(".$extension") }
-            .filter { path -> !excluded(root, directory, path, exclusions.orEmpty()) }
-            .toList()
-        }
+        directory
       }
       .distinct()
       .sortedBy(Path::toString)
 
-  private fun excluded(
-    root: Path,
-    sourceRoot: Path,
-    path: Path,
-    exclusions: List<String>,
-  ): Boolean {
-    val projectRelative = relative(root, path)
-    val sourceRelative = relative(sourceRoot, path)
-    return exclusions.any { pattern ->
-      val matcher = globRegex(pattern.replace('\\', '/').trimEnd('/'))
-      matcher.matches(projectRelative) || matcher.matches(sourceRelative)
-    }
-  }
-
   private fun writeRegistry(
     plan: ProjectPlan,
-    project: ResolvedProject,
+    project: ResolvedRoots,
   ) {
     val configuredOutput = System.getProperty("xs.project.sources")?.takeIf(String::isNotBlank)
     val output = configuredOutput?.let { Files.newOutputStream(Path.of(it)) } ?: System.out
@@ -114,6 +81,9 @@ object ProjectOutput {
       val optLevel =
         compiler.llvmOptLevel
           ?: if (compiler.buildMode == BuildMode.DEBUG) LlvmOptLevel.O0 else LlvmOptLevel.O3
+      // The DSL exports roots and exclusion policy, not a snapshot of .vxs files.
+      // Namespace resolution and source discovery are compiler responsibilities;
+      // neither file names nor directory layout define the entry type.
       listOf(
           REGISTRY_VERSION,
           plan.entry,
@@ -135,10 +105,14 @@ object ProjectOutput {
           compiler.llvmLto.name.lowercase(),
           project.sources.size.toString(),
           project.tests.size.toString(),
+          plan.sourceExcludes.orEmpty().size.toString(),
+          plan.testExcludes.orEmpty().size.toString(),
         )
         .forEach { writeRecord(output, it) }
       project.sources.forEach { writeRecord(output, it.toString()) }
       project.tests.forEach { writeRecord(output, it.toString()) }
+      plan.sourceExcludes.orEmpty().forEach { writeRecord(output, it) }
+      plan.testExcludes.orEmpty().forEach { writeRecord(output, it) }
       output.flush()
     } finally {
       if (configuredOutput != null) output.close()
@@ -161,37 +135,5 @@ object ProjectOutput {
   ) {
     stream.write(value.toByteArray(StandardCharsets.UTF_8))
     stream.write(0)
-  }
-
-  private fun relative(
-    root: Path,
-    path: Path,
-  ): String = root.relativize(path).toString().replace('\\', '/')
-
-  private fun globRegex(pattern: String): Regex {
-    val regex = StringBuilder("^")
-    var index = 0
-    while (index < pattern.length) {
-      when (val character = pattern[index]) {
-        '*' -> {
-          if (index + 1 < pattern.length && pattern[index + 1] == '*') {
-            regex.append(".*")
-            index++
-          } else {
-            regex.append("[^/]*")
-          }
-        }
-
-        '?' -> {
-          regex.append("[^/]")
-        }
-
-        else -> {
-          regex.append(Regex.escape(character.toString()))
-        }
-      }
-      index++
-    }
-    return Regex(regex.append("$").toString())
   }
 }

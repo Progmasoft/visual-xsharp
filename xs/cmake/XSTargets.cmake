@@ -62,7 +62,8 @@ add_library(xs_lil SHARED
   sources/xlil/writer.c
 )
 set_target_properties(xs_lil PROPERTIES VERSION "${PROJECT_VERSION}" SOVERSION 1
-                                        WINDOWS_EXPORT_ALL_SYMBOLS ON)
+                                        WINDOWS_EXPORT_ALL_SYMBOLS ON
+                                        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 add_library(xs_lil_cpp STATIC
   sources/lil/Builder.cpp

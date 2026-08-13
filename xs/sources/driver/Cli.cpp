@@ -222,24 +222,15 @@ private:
     const bool resolved = testing ? xs_driver_resolve_project_tests(&project) : xs_driver_resolve_project(&project);
     if(!resolved)
         return 1;
-    XsCompilerSettings settings = project.settings;
-    xs_cli_apply_compiler_overrides(&options, &settings);
-    // Multi-unit linking requires a real Haskell module graph and symbol merge.
-    // Reject it explicitly instead of concatenating separately resolved Core and
-    // risking symbol-id collisions or order-dependent name resolution.
-    if(project.path_count != 1U || (testing && project.test_path_count != 0U))
-    {
-        std::fputs("vxs: the Haskell frontend currently accepts one project compilation unit at a time\n", stderr);
-        xs_driver_free_project(&project);
-        return 1;
-    }
-    XsCliOptions effective = options;
-    effective.file_path = project.paths[0];
-    if(!options.output_override)
-        effective.output = project.output;
-    const bool success = ProcessSource(project.paths[0], effective, settings);
+    // Kotlin deliberately returns source roots and exclusion policy without
+    // walking Visual X# files. The Haskell module loader must discover units and
+    // resolve `entry` by namespace/type identity; interpreting a root or entry as
+    // a file path here would reintroduce the retired layout convention.
+    std::fprintf(stderr,
+                 "vxs: project compilation requires the Haskell source-root loader; entry '%s' is not a file path\n",
+                 project.entry);
     xs_driver_free_project(&project);
-    return success ? 0 : 1;
+    return 1;
 }
 } // namespace
 
