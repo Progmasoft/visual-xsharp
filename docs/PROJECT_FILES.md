@@ -143,6 +143,10 @@ The DSL also supports:
 - `pml` for PML enablement; and
 - `workspaces` for named project paths.
 
+`panic("message")` immediately aborts project-script evaluation. Because the runtime emits the plan, source registry, and
+lock only after the script returns normally, a panic does not start Visual X# compilation and does not emit partial project
+state.
+
 Author declarations take exactly two values named `user` and `mail`; the function is not variadic:
 
 ```kotlin

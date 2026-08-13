@@ -68,6 +68,13 @@ class ProjectDslTest {
   }
 
   @Test
+  fun panicAbortsProjectEvaluationBeforeEmission() {
+    val abort = assertFailsWith<ProjectAbort> { panic("unsupported host configuration") }
+
+    assertEquals("unsupported host configuration", abort.message)
+  }
+
+  @Test
   fun configuresRenewedProjectAndCompilerSurface() {
     project {
       name = "Compiler"
