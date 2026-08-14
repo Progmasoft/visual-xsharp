@@ -12,7 +12,7 @@
 -- Demonstrates: Visual X# source files use UTF-8.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 String text = "Türkçe";
 
 -- ============================================================================
@@ -26,7 +26,7 @@ using System;
 -- Demonstrates: Sub-namespaces are not imported recursively.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 String text = "Wolf";
 Integer age = 26;
 
@@ -35,7 +35,7 @@ Integer age = 26;
 -- Demonstrates: Sub-namespaces are not imported recursively.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 System.String text = "Wolf";
 System.Integer age = 26;
 
@@ -45,21 +45,21 @@ System.Integer age = 26;
 --   Other logical copies remain unchanged.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 int first = 26;
 int second = first;
 
 second += 1;
 
-// first  == 26
-// second == 27
+-- first  == 26
+-- second == 27
 
 -- ============================================================================
 -- Example 6: Value Types
 -- Demonstrates: Value types cannot contain null as their value.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 int age = null;
 
 -- ============================================================================
@@ -67,7 +67,7 @@ int age = null;
 -- Demonstrates: All reference types are nullable.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 String name = null;
 Integer age = null;
 Object value = null;
@@ -77,7 +77,7 @@ Object value = null;
 -- Demonstrates: Value types have no inheritance, subtype, or identity relationship with System.Object.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 Object value = 26;
 
 -- ============================================================================
@@ -85,7 +85,7 @@ Object value = 26;
 -- Demonstrates: A corresponding System wrapper is a separate reference type.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Integer boxed = 26;
 Object value = boxed;
 
@@ -94,7 +94,7 @@ Object value = boxed;
 -- Demonstrates: The value argument is named. The positional form is invalid.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Integer age = Integer.Of(value: 26);
 
 -- ============================================================================
@@ -102,7 +102,7 @@ Integer age = Integer.Of(value: 26);
 -- Demonstrates: The value argument is named. The positional form is invalid.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 Integer age = Integer.Of(26);
 
 -- ============================================================================
@@ -137,7 +137,7 @@ String.Of(value: "Wolf");
 --   Of(value: ...) operation.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Integer age = 26;
 
 -- ============================================================================
@@ -151,7 +151,7 @@ Integer.Of(value: 26)
 -- Demonstrates: The compiler lowers the initializer as:
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 String animal = "Wolf";
 
 -- ============================================================================
@@ -166,7 +166,7 @@ String.Of(value: "Wolf")
 --   the accepted value type for that factory.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 long number = 3;
 Long boxed = Long.Of(value: number);
 
@@ -176,7 +176,7 @@ Long boxed = Long.Of(value: number);
 --   the accepted value type for that factory.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 Integer number = 3;
 Long boxed = Long.Of(value: number);
 
@@ -185,7 +185,7 @@ Long boxed = Long.Of(value: number);
 -- Demonstrates: Numeric zero means false. A nonzero numeric value means true.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 bool disabled = 0;
 bool enabled = 1;
 bool negative = -1;
@@ -195,7 +195,7 @@ bool negative = -1;
 -- Demonstrates: Numeric zero means false. A nonzero numeric value means true.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Boolean enabled = 1;
 
 -- ============================================================================
@@ -209,7 +209,7 @@ Boolean.Of(value: 1)
 -- Demonstrates: A numeric condition uses the same rule.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID: condition is true
+-- VALID: condition is true
 if (1) {
 }
 
@@ -218,7 +218,7 @@ if (1) {
 -- Demonstrates: A numeric condition uses the same rule.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID: condition is false
+-- VALID: condition is false
 if (0) {
 }
 
@@ -227,7 +227,7 @@ if (0) {
 -- Demonstrates: Every value type is non-nullable.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Integer age = null;
 String name = null;
 
@@ -236,7 +236,7 @@ String name = null;
 -- Demonstrates: Every value type is non-nullable.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 int age = null;
 char letter = null;
 bool enabled = null;
@@ -246,7 +246,7 @@ bool enabled = null;
 -- Demonstrates: Visual X# provides ?? and ??=.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Integer age = null;
 int otherAge = age ?? 0;
 
@@ -255,7 +255,7 @@ int otherAge = age ?? 0;
 -- Demonstrates: Visual X# provides ?? and ??=.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Integer age = null;
 age ??= 26;
 
@@ -264,7 +264,7 @@ age ??= 26;
 -- Demonstrates: nullable type suffix ?; - null-conditional access ?.; - null-forgiving postfix !.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 Integer? age = null;
 
 -- ============================================================================
@@ -272,7 +272,7 @@ Integer? age = null;
 -- Demonstrates: nullable type suffix ?; - null-conditional access ?.; - null-forgiving postfix !.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 String city = user?.Address;
 
 -- ============================================================================
@@ -280,7 +280,7 @@ String city = user?.Address;
 -- Demonstrates: nullable type suffix ?; - null-conditional access ?.; - null-forgiving postfix !.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 int age = boxedAge!;
 
 -- ============================================================================
@@ -290,14 +290,14 @@ int age = boxedAge!;
 
 Integer age = null;
 int otherAge = age;
-// Throws System.NullPointerException.
+-- Throws System.NullPointerException.
 
 -- ============================================================================
 -- Example 32: Null
 -- Demonstrates: The standard null-argument guard is available:
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 ArgumentNullException.ThrowIfNull(value);
 
 -- ============================================================================
@@ -305,8 +305,8 @@ ArgumentNullException.ThrowIfNull(value);
 -- Demonstrates: The binding that directly receives a newly produced object becomes the main owner.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf"; // text is the main owner.
+-- VALID
+String text = "Wolf"; -- text is the main owner.
 
 -- ============================================================================
 -- Example 34: Reference Main Owner and Aliases
@@ -314,27 +314,27 @@ String text = "Wolf"; // text is the main owner.
 --   and does not move main ownership.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf"; // main owner
-String other = text;  // alias
-String third = text;  // alias
+-- VALID
+String text = "Wolf"; -- main owner
+String other = text;  -- alias
+String third = text;  -- alias
 
 -- ============================================================================
 -- Example 35: Reference Main Owner and Aliases
 -- Demonstrates: A normal function argument creates a temporary alias. It does not transfer the main
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf"; // main owner
-Use(value: text);     // parameter is an alias during the call
+-- VALID
+String text = "Wolf"; -- main owner
+Use(value: text);     -- parameter is an alias during the call
 
 -- ============================================================================
 -- Example 36: Reference Main Owner and Aliases
 -- Demonstrates: A newly produced return value makes the receiving binding the main owner.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = Create(); // text owns the newly produced object
+-- VALID
+String text = Create(); -- text owns the newly produced object
 
 -- ============================================================================
 -- Example 37: Reference Main Owner and Aliases
@@ -342,9 +342,9 @@ String text = Create(); // text owns the newly produced object
 --   receives that reference becomes an alias.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf";      // main owner
-String echoed = Echo(value: text); // echoed is an alias
+-- VALID
+String text = "Wolf";      -- main owner
+String echoed = Echo(value: text); -- echoed is an alias
 
 -- ============================================================================
 -- Example 38: Reference Main Owner and Aliases
@@ -352,17 +352,17 @@ String echoed = Echo(value: text); // echoed is an alias
 --   be the main owner.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-holder.value = "Wolf"; // holder.value owns the newly produced String
+-- VALID
+holder.value = "Wolf"; -- holder.value owns the newly produced String
 
 -- ============================================================================
 -- Example 39: Reference Main Owner and Aliases
 -- Demonstrates: Assigning an existing reference to a field or indexed location creates an alias.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf"; // main owner
-holder.value = text;  // alias
+-- VALID
+String text = "Wolf"; -- main owner
+holder.value = text;  -- alias
 
 -- ============================================================================
 -- Example 40: Reference Main Owner and Aliases
@@ -370,9 +370,9 @@ holder.value = text;  // alias
 --   take ownership from the storage location.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = holder.value; // alias
-String item = items[index]; // alias
+-- VALID
+String text = holder.value; -- alias
+String item = items[index]; -- alias
 
 -- ============================================================================
 -- Example 41: Reference Main Owner and Aliases
@@ -381,12 +381,12 @@ String item = items[index]; // alias
 --   observable as a language-level ordering guarantee.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf"; // main owner
-String other = text;  // alias
+-- VALID
+String text = "Wolf"; -- main owner
+String other = text;  -- alias
 
 text = null;
-// other becomes the main owner atomically.
+-- other becomes the main owner atomically.
 
 -- ============================================================================
 -- Example 42: Owner-sensitive Reference Transformations
@@ -394,39 +394,39 @@ text = null;
 --   continue to refer to that same object and observe the transformed state.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf"; // main owner
-String other = text;  // alias
+-- VALID
+String text = "Wolf"; -- main owner
+String other = text;  -- alias
 
 text = text.ToUpper();
 
-// text and other still refer to the same object.
-// text  == "WOLF"
-// other == "WOLF"
+-- text and other still refer to the same object.
+-- text  == "WOLF"
+-- other == "WOLF"
 
 -- ============================================================================
 -- Example 43: Owner-sensitive Reference Transformations
 -- Demonstrates: Assigning the result to a different binding produces a separate object for that
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "WOLF";          // main owner
-String result = text.ToUpper(); // separate object
+-- VALID
+String text = "WOLF";          -- main owner
+String result = text.ToUpper(); -- separate object
 
 -- ============================================================================
 -- Example 44: Owner-sensitive Reference Transformations
 -- Demonstrates: An alias separates when it receives a transformation result whose source is the main
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = "Wolf"; // main owner
-String other = text;  // alias
+-- VALID
+String text = "Wolf"; -- main owner
+String other = text;  -- alias
 
 other = text.ToUpper();
 
-// text and other now refer to different objects.
-// text  == "Wolf"
-// other == "WOLF"
+-- text and other now refer to different objects.
+-- text  == "Wolf"
+-- other == "WOLF"
 
 -- ============================================================================
 -- Example 45: StaticCast
@@ -434,7 +434,7 @@ other = text.ToUpper();
 --   information.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID: long is i32, int is i64.
+-- VALID: long is i32, int is i64.
 long source = 42;
 int target = StaticCast<int>(source);
 
@@ -444,7 +444,7 @@ int target = StaticCast<int>(source);
 --   information.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 short source = 42;
 long target = StaticCast<long>(source);
 
@@ -454,7 +454,7 @@ long target = StaticCast<long>(source);
 --   information.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID: int does not fit completely in long.
+-- INVALID: int does not fit completely in long.
 int source = 42;
 long target = StaticCast<long>(source);
 
@@ -464,7 +464,7 @@ long target = StaticCast<long>(source);
 --   information.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID: signed values may be negative.
+-- INVALID: signed values may be negative.
 int source = 42;
 uint target = StaticCast<uint>(source);
 
@@ -473,7 +473,7 @@ uint target = StaticCast<uint>(source);
 -- Demonstrates: Floating-point widening inside the floating family is valid.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 sfloat source = 1.5;
 float target = StaticCast<float>(source);
 
@@ -483,7 +483,7 @@ float target = StaticCast<float>(source);
 --   floating-point target has a large numeric range.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 int source = 9'000'000'000;
 float target = StaticCast<float>(source);
 
@@ -492,7 +492,7 @@ float target = StaticCast<float>(source);
 -- Demonstrates: DynamicCast<Target>(value) performs a runtime-checked reference conversion.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Animal animal = dog;
 Dog result = DynamicCast<Dog>(animal);
 
@@ -501,10 +501,10 @@ Dog result = DynamicCast<Dog>(animal);
 -- Demonstrates: A null source produces null when the target is a reference type.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 Animal animal = null;
 Dog result = DynamicCast<Dog>(animal);
-// result == null
+-- result == null
 
 -- ============================================================================
 -- Example 53: DynamicCast
@@ -512,14 +512,14 @@ Dog result = DynamicCast<Dog>(animal);
 
 Animal animal = cat;
 Dog result = DynamicCast<Dog>(animal);
-// Throws System.InvalidCastException when the object is not compatible with Dog.
+-- Throws System.InvalidCastException when the object is not compatible with Dog.
 
 -- ============================================================================
 -- Example 54: Identifiers
 -- Demonstrates: Emoji and Unicode punctuation are not identifier characters.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 name
 _name
 __value
@@ -535,7 +535,7 @@ á
 -- Demonstrates: Emoji and Unicode punctuation are not identifier characters.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 _
 user🙂
 user.name
@@ -556,7 +556,7 @@ área
 -- Demonstrates: is a separate token and is interpreted as an operator where valid.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 result = left - right;
 value = -26;
 
@@ -565,7 +565,7 @@ value = -26;
 -- Demonstrates: Octal integer literals do not exist.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 26
 1'000'000
 0xFF
@@ -578,7 +578,7 @@ value = -26;
 -- Demonstrates: Octal integer literals do not exist.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 0o377
 
 -- ============================================================================
@@ -587,7 +587,7 @@ value = -26;
 --   literal's radix.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 1'000
 0xAB'CD
 0b1010'1100
@@ -598,7 +598,7 @@ value = -26;
 --   literal's radix.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 '1000
 1000'
 1''000
@@ -610,7 +610,7 @@ value = -26;
 -- Demonstrates: A target integer type may interpret the literal directly when the value fits that
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 byte small = 100;
 long normal = 2'000'000'000;
 int wide = 9'000'000'000;
@@ -621,7 +621,7 @@ longint huge = 9'223'372'036'854'775'808;
 -- Demonstrates: A target integer type may interpret the literal directly when the value fits that
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID: value does not fit byte.
+-- INVALID: value does not fit byte.
 byte small = 1'000;
 
 -- ============================================================================
@@ -629,7 +629,7 @@ byte small = 1'000;
 -- Demonstrates: is not part of an integer literal. It is unary negation.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 int value = -26;
 
 -- ============================================================================
@@ -638,7 +638,7 @@ int value = -26;
 --   representable signed value is valid even when its positive magnitude would not fit the same signed
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 int minimum = -9'223'372'036'854'775'808;
 
 -- ============================================================================
@@ -646,7 +646,7 @@ int minimum = -9'223'372'036'854'775'808;
 -- Demonstrates: A target floating-point type directly controls the literal type.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 sfloat a = 1.5;
 lfloat b = 1.5;
 float c = 1.5;
@@ -657,7 +657,7 @@ double d = 1.5;
 -- Demonstrates: Scientific notation uses e or E.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 1e3
 1.5e2
 2E-4
@@ -668,7 +668,7 @@ double d = 1.5;
 --   It is not allowed in the exponent.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 1'000.250'000
 1.5e100
 
@@ -678,7 +678,7 @@ double d = 1.5;
 --   It is not allowed in the exponent.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 1'.5
 1.'5
 1.5e1'00
@@ -688,7 +688,7 @@ double d = 1.5;
 -- Demonstrates: The packed result must fit in u32.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 char a = 'A';
 char pair = 'AB';
 char triple = 'ABC';
@@ -708,7 +708,7 @@ char four = 'ABCD';
 -- Demonstrates: The following values are normative:
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID: packed value does not fit u32.
+-- INVALID: packed value does not fit u32.
 char value = 'ABCDE';
 
 -- ============================================================================
@@ -717,7 +717,7 @@ char value = 'ABCDE';
 --   the full u32 range.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 char newline = '\n';
 char escape = '\e';
 char letter = '\u0041';
@@ -729,7 +729,7 @@ String text = "first\nsecond";
 --   the full u32 range.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-// INVALID
+-- INVALID
 char value = '\q';
 
 -- ============================================================================
@@ -738,7 +738,7 @@ char value = '\q';
 --   left-to-right packing rule.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 char value = 'A\n';
 
 -- ============================================================================
@@ -747,7 +747,7 @@ char value = 'A\n';
 --   String is required.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 String text = "Wolf";
 
 -- ============================================================================
@@ -762,26 +762,26 @@ String.Of(value: "Wolf")
 --   \n contributes a newline.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
+-- VALID
 String text = "first
 second\nthird";
 
 -- ============================================================================
 -- Example 79: String Literals
--- Demonstrates: Raw strings use triple double quotes.
+-- Demonstrates: Raw strings use the shared long-bracket delimiter family.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = """first
+-- VALID
+String text = [[first
 second
-third""";
+third]];
 
 -- ============================================================================
 -- Example 80: String Literals
 -- Demonstrates: Raw-string escape sequences are not processed. Physical line breaks are preserved.
 -- Expected result: accepted when the referenced declarations are available.
 
-// VALID
-String text = """first\nsecond""";
+-- VALID
+String text = [[first\nsecond]];
 
-// The content contains the two characters '\\' and 'n'.
+-- The content contains the two characters '\\' and 'n'.

@@ -18,6 +18,8 @@ import Visual.XSharp.Core.CorePrep.Wire
 import Visual.XSharp.Core.Verifier
 import Visual.XSharp.Core.Wire
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.Lexer
+import Visual.XSharp.Parser (Token (..), TokenKind (..))
 import Visual.XSharp.Pipeline.Stage
 
 main :: IO ()
@@ -35,6 +37,14 @@ main = do
     check "wrong condition types are rejected" wrongCondition
     check "wrong call arity is rejected" wrongArity
     check "lexer rejects unsupported input" badCharacter
+    check "String comment forms obey long-bracket levels" stringCommentForms
+    check "raw strings preserve content and trim boundary newlines" rawStringBoundaries
+    check "higher raw-string levels admit lower closing delimiters" rawStringLevels
+    check "raw strings do not decode escapes or interpolation" rawStringIsLiteral
+    check "normal string line breaks become spaces and escapes decode" normalStringSemantics
+    check "comments and raw strings pass through the frontend pipeline" stringPipeline
+    check "legacy C comments are not recognized as comments" legacyCommentsRemoved
+    check "unterminated raw strings report a lexer diagnostic" unterminatedRawString
     check
         "renewed artifact extensions remain stable"
         (map artifactExtension [Core, CorePrep, Xpp, Xmm] == [Just ".core", Nothing, Just ".xpp", Just ".xmm"])
@@ -157,6 +167,86 @@ badCharacter :: Bool
 badCharacter = case compile "class App { void Run() { @; } }" of
     Left problems -> any (isInfixOf "unsupported character" . diagnosticMessage) problems
     Right _ -> False
+
+lexTokens :: String -> Either [Diagnostic] [Token]
+lexTokens = runLexer defaultLexer . LexerInput "string-test.vxs"
+
+lexicalText :: String -> Either [Diagnostic] [String]
+lexicalText source =
+    map tokenText . filter ((/= EndOfFileToken) . tokenKind) <$> lexTokens source
+
+singleStringValue :: String -> Either [Diagnostic] String
+singleStringValue source = do
+    tokens <- lexTokens source
+    case [tokenText value | value <- tokens, tokenKind value == StringToken] of
+        [value] -> Right value
+        _ -> Left []
+
+stringCommentForms :: Bool
+stringCommentForms =
+    lexicalText
+        ( "int first; -- ordinary\r\n"
+            ++ "--| declaration documentation\n"
+            ++ "--! namespace documentation\n"
+            ++ "--[=[ long comment containing ]] and --[[ text ]=]\n"
+            ++ "--[==[! namespace long comment containing ]=] ]==]\n"
+            ++ "int second;"
+        )
+        == Right ["int", "first", ";", "int", "second", ";"]
+
+rawStringBoundaries :: Bool
+rawStringBoundaries =
+    singleStringValue "[[\r\nHello\nWorld\r\n]]" == Right "Hello\nWorld"
+        && singleStringValue "[[Hello\nWorld]]" == Right "Hello\nWorld"
+        && singleStringValue "[[\nHello\n\n]]" == Right "Hello\n"
+
+rawStringLevels :: Bool
+rawStringLevels =
+    singleStringValue "[==[\nThis ]] and this ]=] remain content.\n]==]"
+        == Right "This ]] and this ]=] remain content."
+
+rawStringIsLiteral :: Bool
+rawStringIsLiteral =
+    singleStringValue "[=[\\n\\t${value}]=]" == Right "\\n\\t${value}"
+
+normalStringSemantics :: Bool
+normalStringSemantics =
+    singleStringValue "\"first\r\nsecond\\nthird\\u0021\\x000000000041\"" == Right "first second\nthird!A"
+
+stringPipeline :: Bool
+stringPipeline = case compile source of
+    Right artifacts -> case coreModuleFunctions (artifactOptimizedCore artifacts) of
+        [function] -> case coreFunctionBody function of
+            [CoreBind (CoreBinding _ _ _ (CoreLiteral (CoreString text) _)), CoreReturn (CoreLiteral (CoreInteger 1) _)] ->
+                text == "-- remains raw\n[=[ remains raw"
+            _ -> False
+        _ -> False
+    Left _ -> False
+    where
+        source =
+            unlines
+                [ "--! Pipeline namespace documentation"
+                , "namespace Text;"
+                , "class App {"
+                , "  --[=[ ordinary long comment containing ]] ]=]"
+                , "  --| Returns a value after exercising a raw literal."
+                , "  int Value() {"
+                , "    auto text = [["
+                , "-- remains raw"
+                , "[=[ remains raw"
+                , "]] ;"
+                , "    return 1;"
+                , "  }"
+                , "}"
+                ]
+
+legacyCommentsRemoved :: Bool
+legacyCommentsRemoved =
+    lexicalText "int quotient = left // right; /* legacy */"
+        == Right ["int", "quotient", "=", "left", "//", "right", ";", "/", "*", "legacy", "*", "/"]
+
+unterminatedRawString :: Bool
+unterminatedRawString = hasCode "VXL0005" (lexTokens "[=[never closed")
 
 invalidCorePrep :: Bool
 invalidCorePrep = case compile sample of
