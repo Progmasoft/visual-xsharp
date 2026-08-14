@@ -48,7 +48,7 @@ set_tests_properties(cli_check_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION
 add_test(NAME cli_install_help COMMAND vxs install --help)
 set_tests_properties(cli_install_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "Publisher.Name")
 
-add_executable(xs_cli_parser_tests tests/CliParserTests.cpp sources/driver/Options.cpp)
+add_executable(xs_cli_parser_tests tests/CliParserTests.cpp xs/sources/driver/Options.cpp)
 target_include_directories(xs_cli_parser_tests PRIVATE "${PROJECT_SOURCE_DIR}")
 target_compile_definitions(xs_cli_parser_tests PRIVATE XS_PROJECT_VERSION="${PROJECT_VERSION}")
 target_compile_options(xs_cli_parser_tests PRIVATE /W4 /clang:-Wconversion /clang:-Wshadow)
