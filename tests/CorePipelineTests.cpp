@@ -5,7 +5,7 @@
 #include "Visual/XSharp/Core/Verifier.hpp"
 #include "Visual/XSharp/Core/Wire.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
-#include "xs/sources/driver/core_pipeline.h"
+#include "xs/sources/driver/CorePipeline.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
@@ -228,8 +228,10 @@ TEST_CASE("Core artifact driver validates and emits explicit LLVM artifacts")
                      static_cast<std::streamsize>(encoded.bytes.size()));
     }
     const auto settings = xs_cli_default_compiler_settings();
-    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), "check", XS_BUILD_OUTPUT_NONE, &settings));
-    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), "build", XS_BUILD_OUTPUT_LLVM_LL, &settings));
+    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_CHECK, XS_BUILD_OUTPUT_NONE,
+                                            &settings));
+    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_LLVM_LL,
+                                            &settings));
     REQUIRE(std::filesystem::file_size(llvmPath) > 0U);
     std::filesystem::remove_all(directory);
 }

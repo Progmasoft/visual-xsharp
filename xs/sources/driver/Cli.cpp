@@ -3,9 +3,9 @@
 
 #include "Visual/XSharp/driver.hh"
 
+#include "CorePipeline.hpp"
+#include "Options.hpp"
 #include "ProjectDriver.hpp"
-#include "core_pipeline.h"
-#include "options.h"
 
 #include <fmt/format.h>
 
@@ -216,11 +216,6 @@ private:
     return RunFrontend(arguments);
 }
 
-[[nodiscard]] bool HasSuffix(std::string_view value, std::string_view suffix)
-{
-    return value.size() >= suffix.size() && value.substr(value.size() - suffix.size()) == suffix;
-}
-
 [[nodiscard]] std::filesystem::path OutputPath(const std::filesystem::path &input, std::string_view extension)
 {
     // Artifact naming is a filesystem operation, not a C string manipulation
@@ -245,9 +240,10 @@ private:
     return true;
 }
 
-[[nodiscard]] bool ProcessSource(const char *source, const XsCliOptions &options, XsCompilerSettings settings)
+[[nodiscard]] bool ProcessSource(const std::filesystem::path &source, const XsCliOptions &options,
+                                 XsCompilerSettings settings)
 {
-    if(source == nullptr || !HasSuffix(source, ".vxs"))
+    if(source.extension() != ".vxs")
     {
         std::fputs("vxs: Haskell frontend input must be a .vxs file\n", stderr);
         return false;
@@ -260,12 +256,13 @@ private:
     }
     if(RunFileFrontend(core.Path(), source) != 0)
         return false;
+    const auto sourceText = PathText(source);
     // Every source command crosses the same verified Core consumer. `check` and
     // artifact emission therefore cannot drift into separate validation paths.
-    if(std::string_view(options.command) == "check")
-        return xs_driver_process_core_artifact_as(core.Path().string().c_str(), source, "check", options.output,
-                                                  &settings);
-    if(std::string_view(options.command) != "build")
+    if(options.command == XS_CLI_COMMAND_CHECK)
+        return xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command,
+                                                  options.output, &settings);
+    if(options.command != XS_CLI_COMMAND_BUILD)
     {
         std::fputs("vxs: run and test will be reconnected after native object/link ownership moves to C++20\n", stderr);
         return false;
@@ -273,8 +270,8 @@ private:
     if(options.output == XS_BUILD_OUTPUT_CORE)
         return CopyCore(core.Path(), source);
     if(options.output == XS_BUILD_OUTPUT_LLVM_LL || options.output == XS_BUILD_OUTPUT_LLVM_BC)
-        return xs_driver_process_core_artifact_as(core.Path().string().c_str(), source, "build", options.output,
-                                                  &settings);
+        return xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command,
+                                                  options.output, &settings);
     std::fputs("vxs: source builds currently emit core, llvmll, or llvmbc during the frontend migration\n", stderr);
     return false;
 }
@@ -285,24 +282,25 @@ private:
     xs_cli_apply_compiler_overrides(&options, &settings);
     if(options.input == XS_BUILD_INPUT_CORE)
     {
-        if(options.file_path == nullptr || !HasSuffix(options.file_path, ".core"))
+        if(!options.filePath || options.filePath->extension() != ".core")
         {
             std::fputs("vxs: -Build core requires a .core -File\n", stderr);
             return 2;
         }
-        return xs_driver_process_core_artifact(options.file_path, options.command, options.output, &settings) ? 0 : 1;
+        const auto fileText = PathText(*options.filePath);
+        return xs_driver_process_core_artifact(fileText.c_str(), options.command, options.output, &settings) ? 0 : 1;
     }
     if(options.input != XS_BUILD_INPUT_VXS)
     {
         std::fputs("vxs: only vxs and core inputs belong to the renewed pipeline\n", stderr);
         return 2;
     }
-    return ProcessSource(options.file_path, options, settings) ? 0 : 1;
+    return options.filePath && ProcessSource(*options.filePath, options, settings) ? 0 : 1;
 }
 
 [[nodiscard]] int RunProject(const XsCliOptions &options)
 {
-    const bool testing = std::string_view(options.command) == "test";
+    const bool testing = options.command == XS_CLI_COMMAND_TEST;
     auto project = Visual::XSharp::Driver::ResolveProject(!testing);
     if(!project)
         return 1;
@@ -337,13 +335,12 @@ private:
     const auto artifactBase = workingDirectory / className;
     const auto corePathText = core.Path().string();
     const auto artifactBaseText = artifactBase.string();
-    const std::string_view command(options.command);
-    if(command == "check")
-        return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), "check",
+    if(options.command == XS_CLI_COMMAND_CHECK)
+        return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), options.command,
                                                   options.output, &settings)
                    ? 0
                    : 1;
-    if(command != "build")
+    if(options.command != XS_CLI_COMMAND_BUILD)
     {
         std::fputs("vxs: run will be reconnected after native object/link ownership moves to C++20\n", stderr);
         return 1;
@@ -351,7 +348,7 @@ private:
     if(options.output == XS_BUILD_OUTPUT_CORE)
         return CopyCore(core.Path(), artifactBase) ? 0 : 1;
     if(options.output == XS_BUILD_OUTPUT_LLVM_LL || options.output == XS_BUILD_OUTPUT_LLVM_BC)
-        return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), "build",
+        return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), options.command,
                                                   options.output, &settings)
                    ? 0
                    : 1;
@@ -363,22 +360,34 @@ private:
 
 extern "C" int xs_driver_main(int argc, char **argv)
 {
-    XsCliOptions options{};
-    const auto parsed = xs_cli_parse(argc, argv, &options);
-    if(parsed != XS_CLI_PARSE_READY)
-        return parsed == XS_CLI_PARSE_EXIT ? 0 : 2;
-    int result{};
-    const std::string_view command(options.command);
-    if(command == "resolve" || command == "update")
-        result = Visual::XSharp::Driver::RefreshProjectLock() ? 0 : 1;
-    else if(command == "install" || command == "viget")
+    auto parsed = ParseCommandLine(argc, argv);
+    if(parsed.result == XS_CLI_PARSE_HELP)
     {
-        std::fprintf(stderr, "vxs: %.*s requires the ViGet client, which is not linked into this build yet\n",
-                     static_cast<int>(command.size()), command.data());
+        PrintCliHelp(parsed.helpCommand);
+        return 0;
+    }
+    if(parsed.result == XS_CLI_PARSE_VERSION)
+    {
+        PrintCliVersion();
+        return 0;
+    }
+    if(parsed.result == XS_CLI_PARSE_ERROR)
+    {
+        fmt::print(stderr, "vxs: {}\n", parsed.diagnostic);
+        return 2;
+    }
+    const auto &options = parsed.options;
+    int result{};
+    if(options.command == XS_CLI_COMMAND_RESOLVE || options.command == XS_CLI_COMMAND_UPDATE)
+        result = Visual::XSharp::Driver::RefreshProjectLock() ? 0 : 1;
+    else if(options.command == XS_CLI_COMMAND_INSTALL || options.command == XS_CLI_COMMAND_VIGET)
+    {
+        const char *commandName = options.command == XS_CLI_COMMAND_INSTALL ? "install" : "viget";
+        std::fprintf(stderr, "vxs: %s requires the ViGet client, which is not linked into this build yet\n",
+                     commandName);
         result = 1;
     }
     else
-        result = options.file_path == nullptr ? RunProject(options) : RunFile(options);
-    xs_cli_options_free(&options);
+        result = options.filePath ? RunFile(options) : RunProject(options);
     return result;
 }

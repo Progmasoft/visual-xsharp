@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 // SPDX-License-Identifier: MPL-2.0
 
+#include "CorePipeline.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
-#include "core_pipeline.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -78,10 +78,10 @@ void PrintFailure(const visual_xsharp::PipelineResult &result)
 }
 } // namespace
 
-extern "C" bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, const char *command,
-                                                   XsBuildOutput output, const XsCompilerSettings *settings)
+bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command,
+                                        XsBuildOutput output, const XsCompilerSettings *settings)
 {
-    if(path == nullptr || artifactBasePath == nullptr || command == nullptr || settings == nullptr)
+    if(path == nullptr || artifactBasePath == nullptr || settings == nullptr)
         return false;
     std::error_code sizeError;
     const auto fileSize = std::filesystem::file_size(path, sizeError);
@@ -109,7 +109,7 @@ extern "C" bool xs_driver_process_core_artifact_as(const char *path, const char 
         PrintFailure(result);
         return false;
     }
-    if(std::string_view(command) == "check")
+    if(command == XS_CLI_COMMAND_CHECK)
     {
         std::fprintf(stderr, "vxs: Core artifact '%s' is valid through the LLVM boundary\n", path);
         return true;
@@ -122,8 +122,8 @@ extern "C" bool xs_driver_process_core_artifact_as(const char *path, const char 
     return false;
 }
 
-extern "C" bool xs_driver_process_core_artifact(const char *path, const char *command, XsBuildOutput output,
-                                                const XsCompilerSettings *settings)
+bool xs_driver_process_core_artifact(const char *path, XsCliCommand command, XsBuildOutput output,
+                                     const XsCompilerSettings *settings)
 {
     return xs_driver_process_core_artifact_as(path, path, command, output, settings);
 }

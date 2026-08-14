@@ -19,6 +19,13 @@ version
 `check`, `build`, `run`, and `test` accept either a discovered `Visual.XSharp.kts` project or a `.vxs` file selected with
 `-File`.
 
+Package commands use typed positional forms:
+
+```text
+vxs install [-Global] Publisher.Name
+vxs viget push|update
+```
+
 ## Canonical options
 
 ```text
@@ -39,7 +46,7 @@ version
 -Xmm-Optimization-Passes true|false
 ```
 
-`build` additionally parses:
+`build` additionally parses `-Emit`. `build` and `check` parse `-Build` for an explicit input artifact:
 
 ```text
 -Emit binary|object|core|xpp|xmm|assembly|llvmll|llvmbc
@@ -48,6 +55,20 @@ version
 
 Canonical compiler settings use one leading hyphen and the displayed capitalization. `--help` and `--version` are special
 driver controls; other legacy long options are rejected.
+
+## Parser model
+
+The parser converts raw process arguments into typed command, input, output, warning, Boolean, LLVM, and ViGet-action
+values before dispatch. Its owning C++20 result separates ready, help, version, and error outcomes; parsing itself does not
+write process output. The driver renders the selected outcome. Later compiler stages do not compare command strings or
+reinterpret option values.
+
+One declarative schema owns canonical spelling, value domain, arity, command scope, defaults, and help descriptions.
+Consequently, `vxs check --help` shows `check` options but not build-only `-Emit`, while `vxs build --help` includes it.
+Option and value spelling is case-sensitive.
+
+An explicit non-source `-Build` always requires `-File`. For example, `vxs check -Build core` is rejected rather than
+silently discovering a project; use `vxs check -Build core -File Module.core`.
 
 ## Defaults
 
@@ -124,3 +145,7 @@ vxdc -Projectfile .\Visual.XSharp.kts -Output .\Project.sqlite3.dump
 
 Command parsing errors return a nonzero status. Compilation diagnostics are printed to standard error. `run` currently
 fails with an explicit migration diagnostic because native object/link production is not connected.
+
+Parse diagnostics retain context. Unknown commands/options name the rejected spelling; invalid typed values name the
+option and its accepted domain; duplicate, missing-value, wrong-command-scope, positional, and invalid process-vector
+errors are reported independently.

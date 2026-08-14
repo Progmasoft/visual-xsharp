@@ -12,6 +12,9 @@ source-to-native executable pipeline.
 
 ## 0.3.1 - 2026-08-13
 
+- Strengthened the C++20 CLI parser around one declarative command/option schema: command dispatch, artifact kinds,
+  warnings, booleans, LLVM choices, and ViGet actions become typed values at the argv boundary; command-specific help is
+  generated from the same domains and parse failures identify the rejected option and expected values.
 - Connected Kotlin project source roots to a compiler-owned Haskell source-set loader with strict UTF-8 decoding,
   deterministic recursive discovery, project-relative glob exclusions, overlapping-root de-duplication, and root/link
   escape diagnostics.

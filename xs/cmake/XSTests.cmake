@@ -42,6 +42,19 @@ add_test(NAME cli_help COMMAND vxs --help)
 set_tests_properties(cli_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "Commands:")
 add_test(NAME cli_build_help COMMAND vxs build --help)
 set_tests_properties(cli_build_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "-Emit")
+add_test(NAME cli_check_help COMMAND vxs check --help)
+set_tests_properties(cli_check_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "-Build"
+  FAIL_REGULAR_EXPRESSION "-Emit")
+add_test(NAME cli_install_help COMMAND vxs install --help)
+set_tests_properties(cli_install_help PROPERTIES TIMEOUT 5 PASS_REGULAR_EXPRESSION "Publisher.Name")
+
+add_executable(xs_cli_parser_tests tests/CliParserTests.cpp sources/driver/Options.cpp)
+target_include_directories(xs_cli_parser_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+target_compile_definitions(xs_cli_parser_tests PRIVATE XS_PROJECT_VERSION="${PROJECT_VERSION}")
+target_compile_options(xs_cli_parser_tests PRIVATE /W4 /clang:-Wconversion /clang:-Wshadow)
+target_link_libraries(xs_cli_parser_tests PRIVATE Catch2::Catch2WithMain)
+add_test(NAME cli_parser_model COMMAND xs_cli_parser_tests)
+set_tests_properties(cli_parser_model PROPERTIES TIMEOUT 15)
 
 add_test(NAME compiler_install_layout COMMAND "${CMAKE_COMMAND}"
   -DXS_BUILD_DIR=${CMAKE_BINARY_DIR}
