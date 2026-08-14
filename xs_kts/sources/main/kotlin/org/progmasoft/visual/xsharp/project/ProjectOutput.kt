@@ -10,7 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 object ProjectOutput {
-  private const val REGISTRY_VERSION = "visual-xsharp-sources-v2"
+  private const val REGISTRY_VERSION = "visual-xsharp-sources-v3"
 
   fun emit(plan: ProjectPlan) {
     val root = projectRoot()
@@ -35,17 +35,27 @@ object ProjectOutput {
 
   private data class ResolvedRoots(
     val sources: List<Path>,
-    val tests: List<Path>,
+    val tests: List<ResolvedTestSuite>,
+  )
+
+  private data class ResolvedTestSuite(
+    val declaration: TestSuite,
+    val root: Path,
   )
 
   private fun resolveRoots(
     root: Path,
     plan: ProjectPlan,
   ): ResolvedRoots {
-    val testRoots = if (plan.testIncludes.isEmpty()) defaultTestRoots(root) else plan.testIncludes
     return ResolvedRoots(
       validateRoots(root, plan.sourceIncludes, "sources.main.srcDir"),
-      validateRoots(root, testRoots, "sources.test.testDir"),
+      plan.testSuites.map { suite ->
+        ResolvedTestSuite(
+          suite,
+          validateRoots(root, listOf(suite.testDir), "sources.test('${suite.name}').testDir")
+            .single(),
+        )
+      },
     )
   }
 
@@ -104,23 +114,24 @@ object ProjectOutput {
           compiler.llvmCompiler.name.lowercase(),
           compiler.llvmLto.name.lowercase(),
           project.sources.size.toString(),
-          project.tests.size.toString(),
           plan.sourceExcludes.orEmpty().size.toString(),
-          plan.testExcludes.orEmpty().size.toString(),
+          project.tests.size.toString(),
         )
         .forEach { writeRecord(output, it) }
       project.sources.forEach { writeRecord(output, it.toString()) }
-      project.tests.forEach { writeRecord(output, it.toString()) }
       plan.sourceExcludes.orEmpty().forEach { writeRecord(output, it) }
-      plan.testExcludes.orEmpty().forEach { writeRecord(output, it) }
+      project.tests.forEach { suite ->
+        writeRecord(output, suite.declaration.name)
+        writeRecord(output, suite.declaration.framework.orEmpty())
+        writeRecord(output, suite.root.toString())
+        writeRecord(output, suite.declaration.exclude.orEmpty().size.toString())
+        suite.declaration.exclude.orEmpty().forEach { writeRecord(output, it) }
+      }
       output.flush()
     } finally {
       if (configuredOutput != null) output.close()
     }
   }
-
-  private fun defaultTestRoots(root: Path): List<String> =
-    if (Files.isDirectory(root.resolve("Tests"))) listOf("Tests") else emptyList()
 
   private fun projectRoot(): Path {
     val configured =

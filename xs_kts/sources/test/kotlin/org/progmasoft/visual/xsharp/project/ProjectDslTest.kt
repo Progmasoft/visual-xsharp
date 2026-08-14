@@ -5,6 +5,8 @@
 
 package org.progmasoft.visual.xsharp.project
 
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -121,11 +123,12 @@ class ProjectDslTest {
         exclude("Generated/**")
         entry = "Compiler.Main"
       }
-      test {
-        testDir = "Tests"
+      test("unit") {
+        testDir = "Tests/Unit"
         exclude("Fixtures/**")
         framework = "tests"
       }
+      test("integration") { framework = "integration-tests" }
     }
 
     val plan = ProjectRuntime.build()
@@ -139,7 +142,13 @@ class ProjectDslTest {
     assertTrue(plan.publishSources)
     assertEquals(listOf("build/**"), plan.publishExcludes)
     assertEquals(listOf("Generated/**"), plan.sourceExcludes)
-    assertEquals(listOf("Fixtures/**"), plan.testExcludes)
+    assertEquals(
+      listOf(
+        TestSuite("unit", "Tests/Unit", "tests", listOf("Fixtures/**")),
+        TestSuite("integration", "Tests/integration", "integration-tests", null),
+      ),
+      plan.testSuites,
+    )
   }
 
   @Test
@@ -163,7 +172,7 @@ class ProjectDslTest {
     sources { main { entry = "Plan.Main" } }
     val text = PlanWriter.write(ProjectRuntime.build())
 
-    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":3"))
+    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":4"))
     assertTrue(text.contains("\"entry\":\"Plan.Main\""))
     assertTrue(text.contains("\"xmmOptimizationPasses\":true"))
     assertFalse(text.contains("module"))
@@ -220,12 +229,69 @@ class ProjectDslTest {
 
     assertNull(plan.publishExcludes)
     assertNull(plan.sourceExcludes)
-    assertNull(plan.testExcludes)
+    assertTrue(plan.testSuites.isEmpty())
     val sourceDocument =
       Json.parseToJsonElement(PlanWriter.write(plan)).jsonObject.getValue("sources").jsonObject
     assertEquals("null", sourceDocument.getValue("viget").jsonObject.getValue("exclude").toString())
     assertEquals("null", sourceDocument.getValue("main").jsonObject.getValue("exclude").toString())
-    assertEquals("null", sourceDocument.getValue("test").jsonObject.getValue("exclude").toString())
+    assertEquals(emptyList(), sourceDocument.getValue("tests").jsonArray)
+  }
+
+  @Test
+  fun testSuitesKeepIndependentIdentityFrameworkRootsAndNullableExcludes() {
+    sources {
+      main { entry = "Suites.Main" }
+      test("unit") {
+        framework = "tests"
+        exclude("Fixtures/**", "Generated/**")
+      }
+      test("integration") { testDir = "Verification/Integration" }
+    }
+
+    assertEquals(
+      listOf(
+        TestSuite("unit", "Tests/unit", "tests", listOf("Fixtures/**", "Generated/**")),
+        TestSuite("integration", "Verification/Integration", null, null),
+      ),
+      ProjectRuntime.build().testSuites,
+    )
+  }
+
+  @Test
+  fun rejectsDuplicateOrInvalidTestSuiteNames() {
+    assertFailsWith<ProjectConfigurationException> {
+      sources {
+        main { entry = "Suites.Main" }
+        test("unit") {}
+        test("unit") {}
+      }
+    }
+
+    ProjectRuntime.reset()
+    assertFailsWith<ProjectConfigurationException> {
+      sources {
+        main { entry = "Suites.Main" }
+        test("unit tests") {}
+      }
+    }
+  }
+
+  @Test
+  fun stderrHelpersPreservePrintAndPrintlnSemantics() {
+    val output = ByteArrayOutputStream()
+    val previous = System.err
+    try {
+      System.setErr(PrintStream(output, true, Charsets.UTF_8))
+      eprint("problem")
+      eprintln(7)
+      eprintln(null)
+    } finally {
+      System.setErr(previous)
+    }
+    assertEquals(
+      "problem7${System.lineSeparator()}null${System.lineSeparator()}",
+      output.toString(Charsets.UTF_8),
+    )
   }
 
   @Test
@@ -234,7 +300,8 @@ class ProjectDslTest {
     val output = Files.createTempFile("visual-xsharp-sources-", ".bin")
     try {
       Files.createDirectories(root.resolve("Sources"))
-      Files.createDirectories(root.resolve("Tests"))
+      Files.createDirectories(root.resolve("Tests/Unit"))
+      Files.createDirectories(root.resolve("Tests/Integration"))
       Files.createDirectories(root.resolve("Sources/Unrelated/Layout"))
       Files.writeString(
         root.resolve("Sources/Unrelated/Layout/not-the-entry-name.txt"),
@@ -242,7 +309,12 @@ class ProjectDslTest {
       )
       sources {
         main { entry = "Demo.Main" }
-        test { framework = "tests" }
+        test("unit") {
+          testDir = "Tests/Unit"
+          framework = "tests"
+          exclude("Fixtures/**")
+        }
+        test("integration") { testDir = "Tests/Integration" }
       }
       System.setProperty("xs.project.root", root.toString())
       System.setProperty("xs.project.output", "sources0")
@@ -250,14 +322,23 @@ class ProjectDslTest {
 
       ProjectOutput.emit(ProjectRuntime.build())
       val records = readRecords(output)
-      assertEquals("visual-xsharp-sources-v2", records[0])
+      assertEquals("visual-xsharp-sources-v3", records[0])
       assertEquals("Demo.Main", records[1])
       assertEquals("1", records[18])
-      assertEquals("1", records[19])
-      assertEquals("0", records[20])
-      assertEquals("0", records[21])
-      assertTrue(records[22].endsWith("Sources"))
-      assertTrue(records[23].endsWith("Tests"))
+      assertEquals("0", records[19])
+      assertEquals("2", records[20])
+      assertTrue(records[21].endsWith("Sources"))
+      assertEquals("unit", records[22])
+      assertEquals("tests", records[23])
+      assertTrue(records[24].endsWith("Tests\\Unit") || records[24].endsWith("Tests/Unit"))
+      assertEquals("1", records[25])
+      assertEquals("Fixtures/**", records[26])
+      assertEquals("integration", records[27])
+      assertEquals("", records[28])
+      assertTrue(
+        records[29].endsWith("Tests\\Integration") || records[29].endsWith("Tests/Integration")
+      )
+      assertEquals("0", records[30])
       assertFalse(records.any { it.endsWith(".vxs") })
     } finally {
       root.toFile().deleteRecursively()

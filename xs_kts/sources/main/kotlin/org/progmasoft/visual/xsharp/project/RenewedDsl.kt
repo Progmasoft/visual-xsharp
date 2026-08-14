@@ -36,8 +36,8 @@ class MainSourcesScope internal constructor() {
 }
 
 @XsProjectDsl
-class TestSourcesScope internal constructor() {
-  var testDir: String = "Tests"
+class TestSourcesScope internal constructor(private val suiteName: String) {
+  var testDir: String = "Tests/$suiteName"
   var framework: String? = null
   internal var excludes: MutableList<String>? = null
 
@@ -61,7 +61,7 @@ class ViGetSourcesScope internal constructor() {
 @XsProjectDsl
 class ProjectSourcesScope internal constructor() {
   private var main: MainSourcesScope? = null
-  private var test: TestSourcesScope? = null
+  private val tests = linkedMapOf<String, TestSourcesScope>()
   private var viget: ViGetSourcesScope? = null
 
   fun main(block: MainSourcesScope.() -> Unit) {
@@ -70,10 +70,15 @@ class ProjectSourcesScope internal constructor() {
     main = MainSourcesScope().apply(block)
   }
 
-  fun test(block: TestSourcesScope.() -> Unit) {
-    if (test != null)
-      throw ProjectConfigurationException("sources.test may be configured only once")
-    test = TestSourcesScope().apply(block)
+  fun test(
+    name: String,
+    block: TestSourcesScope.() -> Unit,
+  ) {
+    val suiteName = requireModuleSegment(name, "test suite name")
+    if (suiteName in tests) {
+      throw ProjectConfigurationException("test suite '$suiteName' may be configured only once")
+    }
+    tests[suiteName] = TestSourcesScope(suiteName).apply(block)
   }
 
   fun viget(block: ViGetSourcesScope.() -> Unit) {
@@ -91,13 +96,17 @@ class ProjectSourcesScope internal constructor() {
       include(requireText(mainSources.srcDir, "sources.main.srcDir"))
       mainSources.excludes?.let { exclude(*it.toTypedArray()) }
     }
-    test?.let { testSources ->
-      ProjectRuntime.configureTestSources {
-        include(requireText(testSources.testDir, "sources.test.testDir"))
-        testSources.excludes?.let { exclude(*it.toTypedArray()) }
-        testSources.framework?.let(::framework)
+    ProjectRuntime.configureTestSuites(
+      tests.map { (name, suite) ->
+        TestSuite(
+          name = name,
+          testDir = requireText(suite.testDir, "sources.test('$name').testDir"),
+          framework = suite.framework?.let { requireText(it, "test suite '$name' framework") },
+          exclude =
+            suite.excludes?.map { requireText(it, "test suite '$name' exclude") }?.distinct(),
+        )
       }
-    }
+    )
     viget?.let { publishing ->
       ProjectRuntime.configurePublishing(publishing.publish, publishing.excludes)
     }

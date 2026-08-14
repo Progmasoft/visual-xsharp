@@ -2,5 +2,5 @@
 # SPDX-License-Identifier: MPL-2.0
 
 include(cmake/XSTargets.cmake)
-include(cmake/XSProjectRuntime.cmake)
+include(cmake/XSProjectEvaluator.cmake)
 include(cmake/XSInstall.cmake)

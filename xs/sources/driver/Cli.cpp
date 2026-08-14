@@ -3,9 +3,11 @@
 
 #include "Visual/XSharp/driver.hh"
 
+#include "ProjectDriver.hpp"
 #include "core_pipeline.h"
 #include "options.h"
-#include "project_driver.h"
+
+#include <fmt/format.h>
 
 #include <cerrno>
 #include <cstdio>
@@ -14,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #ifdef _WIN32
@@ -108,7 +111,8 @@ private:
     const wchar_t *arguments[] = {frontend.c_str(), L"--output", outputText.c_str(), sourceText.c_str(), nullptr};
     const intptr_t status = _wspawnv(_P_WAIT, frontend.c_str(), arguments);
     if(status == -1)
-        std::fprintf(stderr, "vxs: could not start Haskell frontend: %s\n", std::strerror(errno));
+        fmt::print(stderr, "vxs: could not start Haskell frontend: {}\n",
+                   std::error_code(errno, std::generic_category()).message());
     return static_cast<int>(status);
 #else
     const auto frontend = *directory / "vxs-frontend";
@@ -217,10 +221,9 @@ private:
 
 [[nodiscard]] int RunProject(const XsCliOptions &options)
 {
-    XsResolvedProject project{};
     const bool testing = std::string_view(options.command) == "test";
-    const bool resolved = testing ? xs_driver_resolve_project_tests(&project) : xs_driver_resolve_project(&project);
-    if(!resolved)
+    auto project = Visual::XSharp::Driver::ResolveProject(!testing);
+    if(!project)
         return 1;
     // Kotlin deliberately returns source roots and exclusion policy without
     // walking Visual X# files. The Haskell module loader must discover units and
@@ -228,8 +231,7 @@ private:
     // a file path here would reintroduce the retired layout convention.
     std::fprintf(stderr,
                  "vxs: project compilation requires the Haskell source-root loader; entry '%s' is not a file path\n",
-                 project.entry);
-    xs_driver_free_project(&project);
+                 project->entry.c_str());
     return 1;
 }
 } // namespace
@@ -243,7 +245,7 @@ extern "C" int xs_driver_main(int argc, char **argv)
     int result{};
     const std::string_view command(options.command);
     if(command == "resolve" || command == "update")
-        result = xs_driver_refresh_lock() ? 0 : 1;
+        result = Visual::XSharp::Driver::RefreshProjectLock() ? 0 : 1;
     else if(command == "install" || command == "viget")
     {
         std::fprintf(stderr, "vxs: %.*s requires the ViGet client, which is not linked into this build yet\n",

@@ -8,6 +8,7 @@ elseif(NOT LLVM_DIR AND DEFINED ENV{LLVM_ROOT})
 endif()
 find_package(LLVM REQUIRED CONFIG)
 find_package(LibArchive REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 find_library(XS_LLVM_LIBRARY NAMES LLVM-C HINTS ${LLVM_LIBRARY_DIRS} REQUIRED)
 find_program(XS_CABAL_EXECUTABLE NAMES cabal REQUIRED)
 
@@ -33,7 +34,7 @@ add_library(xs_compiler
   sources/driver/Cli.cpp
   sources/driver/CorePipeline.cpp
   sources/driver/Options.cpp
-  sources/driver/project_driver.c
+  sources/driver/ProjectDriver.cpp
 )
 
 add_library(xs_lil SHARED
@@ -90,7 +91,7 @@ get_target_property(XS_LIL_LIBRARY_TYPE xs_lil TYPE)
 if(XS_LIL_LIBRARY_TYPE STREQUAL "SHARED_LIBRARY")
   target_compile_definitions(xs_lil PUBLIC XS_LIL_SHARED)
 endif()
-target_link_libraries(xs_compiler PRIVATE ${XS_LLVM_LIBRARY})
+target_link_libraries(xs_compiler PRIVATE ${XS_LLVM_LIBRARY} fmt::fmt-header-only)
 target_link_libraries(xs_package PRIVATE LibArchive::LibArchive bcrypt)
 target_compile_definitions(xs_compiler PRIVATE XS_PROJECT_VERSION="${PROJECT_VERSION}"
                                             XS_CLANG_EXECUTABLE="${CMAKE_C_COMPILER}")

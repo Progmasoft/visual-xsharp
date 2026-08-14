@@ -29,30 +29,6 @@ class SourcesScope internal constructor() {
 }
 
 @XsProjectDsl
-class TestScope internal constructor() {
-  internal val includes = mutableListOf<String>()
-  internal var excludes: MutableList<String>? = null
-  internal var framework: String? = null
-
-  fun include(path: String) {
-    val root = requireText(path, "test include")
-    if (root.any { character -> character in "*?" }) {
-      throw ProjectConfigurationException("test include must name a directory, not a glob: $root")
-    }
-    includes += root
-  }
-
-  fun exclude(vararg patterns: String) {
-    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
-    patterns.forEach { pattern -> configured += requireText(pattern, "test exclude") }
-  }
-
-  fun framework(name: String) {
-    framework = requireText(name, "test framework")
-  }
-}
-
-@XsProjectDsl
 class CompilerScope internal constructor(private val settings: CompilerSettings) {
   var version: String
     get() = settings.version
@@ -201,9 +177,7 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   private var publishExcludes: List<String>? = null
   private val sourceIncludes = mutableListOf<String>()
   private var sourceExcludes: List<String>? = null
-  private val testIncludes = mutableListOf<String>()
-  private var testExcludes: List<String>? = null
-  private var testFramework: String? = null
+  private val testSuites = mutableListOf<TestSuite>()
   private val compilerSettings = CompilerSettings()
 
   internal fun configureIdentity(
@@ -283,11 +257,15 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
     scope.excludes?.let { sourceExcludes = it.distinct() }
   }
 
-  internal fun configureTestSources(block: TestScope.() -> Unit) {
-    val scope = TestScope().apply(block)
-    testIncludes += scope.includes
-    scope.excludes?.let { testExcludes = it.distinct() }
-    testFramework = scope.framework
+  internal fun configureTestSuites(suites: List<TestSuite>) {
+    val duplicates = suites.groupingBy(TestSuite::name).eachCount().filterValues { it > 1 }.keys
+    if (duplicates.isNotEmpty()) {
+      throw ProjectConfigurationException(
+        "test suite names must be unique: ${duplicates.sorted().joinToString()}"
+      )
+    }
+    testSuites.clear()
+    testSuites += suites
   }
 
   fun compiler(block: CompilerScope.() -> Unit) {
@@ -329,9 +307,7 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
         publishExcludes,
         effectiveSourceIncludes.distinct(),
         sourceExcludes,
-        testIncludes.distinct(),
-        testExcludes,
-        testFramework,
+        testSuites.toList(),
         compilerSettings,
         emptyList(),
       )
@@ -396,7 +372,7 @@ internal object ProjectRuntime {
 
   fun configureMainSources(block: SourcesScope.() -> Unit) = context.configureMainSources(block)
 
-  fun configureTestSources(block: TestScope.() -> Unit) = context.configureTestSources(block)
+  fun configureTestSuites(suites: List<TestSuite>) = context.configureTestSuites(suites)
 
   fun compiler(block: CompilerScope.() -> Unit) = context.compiler(block)
 
@@ -440,6 +416,10 @@ val RISCV64
 fun cfg(condition: Boolean) = condition
 
 fun panic(message: String): Nothing = throw ProjectAbort(message)
+
+fun eprint(message: Any?) = System.err.print(message)
+
+fun eprintln(message: Any?) = System.err.println(message)
 
 fun dependencies(block: DependenciesScope.() -> Unit) = ProjectRuntime.dependencies(block)
 

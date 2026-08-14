@@ -139,6 +139,13 @@ data class Workspace(
   val path: String,
 ) : Serializable
 
+data class TestSuite(
+  val name: String,
+  val testDir: String,
+  val framework: String?,
+  val exclude: List<String>?,
+) : Serializable
+
 data class CompilerSettings(
   var warningLevel: WarningLevel = WarningLevel.MEDIUM,
   var warningsAsErrors: Boolean = false,
@@ -204,9 +211,7 @@ data class ProjectPlan(
   val publishExcludes: List<String>?,
   val sourceIncludes: List<String>,
   val sourceExcludes: List<String>?,
-  val testIncludes: List<String>,
-  val testExcludes: List<String>?,
-  val testFramework: String?,
+  val testSuites: List<TestSuite>,
   val compiler: CompilerSettings,
   val plugins: List<PluginPlanEntry>,
 )

@@ -3,4 +3,4 @@
  * SPDX-License-Identifier: MPL-2.0
  */
 
-rootProject.name = "xs-project-runtime"
+rootProject.name = "visual-xsharp-project"

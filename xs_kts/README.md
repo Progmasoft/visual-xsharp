@@ -1,7 +1,9 @@
-# Visual X# Kotlin project runtime
+# Visual X# Kotlin project evaluator
 
-This Java 25/Kotlin component evaluates the single `Visual.XSharp.kts` project file used by `vxs`. It resolves `.vxs`
-sources, compiler settings, targets, dependencies, tests, and publication metadata into the native compiler plan.
+This Java 25/Kotlin component evaluates the single `Visual.XSharp.kts` project file used by `vxs`. It resolves source roots,
+compiler settings, targets, dependencies, named test suites, and publication metadata into the native compiler plan. It has
+no standalone launcher: `vxs` invokes its main class directly from the bundled JVM classpath. `vxdc` remains a separate
+command and shares the same libraries.
 
 Production Kotlin DSL plugin JARs use
 `https://viget.xsharp-lang.xyz/dslplugins/<Publisher>/<Name>/`. ViGet is the only remote source. The current host skeleton

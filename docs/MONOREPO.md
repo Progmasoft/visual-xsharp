@@ -6,7 +6,7 @@
 Visual/       C++20 CorePrep, Xpp, and Xmm models and passes
 xs/           Native vxs compiler, driver, backend, Haskell frontend, and CMake integration
 xslang/       Rust compiler core
-xs_kts/       Kotlin project runtime and Visual.XSharp.kts DSL
+xs_kts/       Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
 xsrt/         Runtime components
 Spec/         Public language-design example suites
 tests/        Native compiler and integration tests

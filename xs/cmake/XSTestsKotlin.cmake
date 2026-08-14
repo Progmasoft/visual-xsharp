@@ -9,7 +9,7 @@ add_test(NAME kotlin_project_resolve COMMAND vxs resolve)
 set_tests_properties(kotlin_project_resolve PROPERTIES
   TIMEOUT 180
   WORKING_DIRECTORY "${XS_PROJECT_NATIVE_FIXTURE_DIR}/native_call"
-  ENVIRONMENT "XS_PROJECT_RUNTIME=${XS_PROJECT_TEST_DRIVER}"
+  ENVIRONMENT "XS_PROJECT_EVALUATOR_CLASSPATH=${XS_PROJECT_TEST_CLASSPATH}"
   FIXTURES_REQUIRED kotlin_project_resolver
   FIXTURES_SETUP kotlin_project_lock
   PASS_REGULAR_EXPRESSION "refreshed binary lock file 'Visual.XSharp.Lockfile.sqlite3'"

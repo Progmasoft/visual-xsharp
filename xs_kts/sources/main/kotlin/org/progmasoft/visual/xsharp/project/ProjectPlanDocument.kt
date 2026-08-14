@@ -8,7 +8,7 @@ package org.progmasoft.visual.xsharp.project
 import kotlinx.serialization.Serializable
 
 private const val PROJECT_PLAN_FORMAT = "visual-xsharp-project-plan"
-private const val PROJECT_PLAN_VERSION = 3
+private const val PROJECT_PLAN_VERSION = 4
 
 /**
  * Stable wire representation of [ProjectPlan]. Keeping the transport schema separate from the
@@ -231,7 +231,7 @@ internal data class WorkspaceDocument(val name: String, val path: String) {
 internal data class SourcesDocument(
   val viget: PublishedSourcesDocument,
   val main: MainSourcesDocument,
-  val test: TestSourcesDocument,
+  val tests: List<TestSuiteDocument>,
 ) {
   companion object {
     fun from(plan: ProjectPlan) =
@@ -243,12 +243,7 @@ internal data class SourcesDocument(
             entry = plan.entry,
             exclude = plan.sourceExcludes,
           ),
-        test =
-          TestSourcesDocument(
-            testDir = plan.testIncludes.singleOrNull() ?: "Tests",
-            framework = plan.testFramework,
-            exclude = plan.testExcludes,
-          ),
+        tests = plan.testSuites.map(TestSuiteDocument::from),
       )
   }
 }
@@ -264,8 +259,14 @@ internal data class MainSourcesDocument(
 )
 
 @Serializable
-internal data class TestSourcesDocument(
+internal data class TestSuiteDocument(
+  val name: String,
   val testDir: String,
   val framework: String?,
   val exclude: List<String>?,
-)
+) {
+  companion object {
+    fun from(suite: TestSuite) =
+      TestSuiteDocument(suite.name, suite.testDir, suite.framework, suite.exclude)
+  }
+}

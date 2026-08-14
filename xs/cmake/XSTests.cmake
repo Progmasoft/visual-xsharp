@@ -80,10 +80,10 @@ if(WIN32)
 endif()
 
 set(XS_GRADLE_EXECUTABLE "${CMAKE_SOURCE_DIR}/xs_kts/gradlew.bat")
-set(XS_PROJECT_TEST_DRIVER
-    "${CMAKE_SOURCE_DIR}/xs_kts/build/install/xs-project-runtime/bin/xs-project-runtime.bat")
+set(XS_PROJECT_TEST_CLASSPATH
+    "${CMAKE_SOURCE_DIR}/xs_kts/build/install/vxdc/lib/*")
 set(XS_VXDC_TEST_DRIVER
-    "${CMAKE_SOURCE_DIR}/xs_kts/build/install/xs-project-runtime/bin/vxdc.bat")
+    "${CMAKE_SOURCE_DIR}/xs_kts/build/install/vxdc/bin/vxdc.bat")
 add_test(NAME kotlin_project_resolver_build COMMAND "${XS_GRADLE_EXECUTABLE}" --daemon --build-cache
   -p "${CMAKE_SOURCE_DIR}/xs_kts" installDist)
 set_tests_properties(kotlin_project_resolver_build PROPERTIES TIMEOUT 180
@@ -138,7 +138,7 @@ set_tests_properties(cli_requires_install_coordinate PROPERTIES TIMEOUT 5 WILL_F
 
 add_executable(xs_text_artifact_tests tests/text_artifact_tests.c)
 
-# Kotlin project tests still exercise the project-runtime boundary independently
+# Kotlin project tests still exercise the project-evaluator boundary independently
 # from the retired C source frontend. Keep their copied workspaces owned here so
 # removing a source-compiler test suite cannot silently erase this fixture root.
 set(XS_PROJECT_NATIVE_FIXTURE_DIR "${CMAKE_CURRENT_BINARY_DIR}/tests/fixtures/projects")

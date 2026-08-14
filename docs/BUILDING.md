@@ -15,7 +15,7 @@ Required tools:
 - Rustup and Cargo;
 - GHC 9.10 and Cabal;
 - JDK 25; and
-- the Kotlin command used by project-runtime tests.
+- the Kotlin command used by project-evaluator tests.
 
 ## LLVM discovery
 

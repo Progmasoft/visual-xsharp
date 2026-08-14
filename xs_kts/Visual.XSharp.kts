@@ -77,8 +77,8 @@ sources {
     exclude("Tests/**")
   }
 
-  test {
-    testDir = "Tests"
+  test("unit") {
+    testDir = "Tests/Unit"
     framework = "tests"
   }
 }

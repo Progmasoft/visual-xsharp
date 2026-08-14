@@ -58,11 +58,12 @@ Rust HIR, MIR, XLIL models, algorithms, and tests remain available for selective
 The C language frontend and duplicate semantic/middle-end implementation have been removed. Retained C code is limited to
 still-used compatibility/package surfaces and is migrated only when a tested replacement exists.
 
-## CLI and project runtime
+## CLI and project evaluation
 
 The native C++20 CLI uses a declarative typed schema for command scope, option arity, duplicate rejection, defaults, and value
-conversion. It has no DIMCLI dependency. The Kotlin project runtime continues to own source discovery, configuration, and the
-SQLite lock file.
+conversion. It has no DIMCLI dependency. The Kotlin project evaluator continues to own project discovery, configuration, and
+the SQLite lock file. It is not a second executable: `vxs` starts the evaluator main class from bundled JVM libraries. VXDC
+remains a separate command.
 
 Known gaps include:
 
@@ -77,7 +78,7 @@ Known gaps include:
 
 GitHub CI runs:
 
-- Kotlin project-runtime tests;
+- Kotlin project-evaluator tests;
 - Haskell build, behavior tests, and package checks;
 - Rust formatting, tests, and lints;
 - Windows ClangCL Debug configure, build, and CTest;

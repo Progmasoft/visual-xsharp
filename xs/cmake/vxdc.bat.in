@@ -1,3 +1,3 @@
 @echo off
-call "%~dp0..\libexec\xs\project-runtime\bin\vxdc.bat" %*
+call "%~dp0..\libexec\xs\project\bin\vxdc.bat" %*
 exit /b %ERRORLEVEL%

@@ -20,8 +20,8 @@ set(required_files
   bin/vxs.exe
   bin/vxdc.bat
   bin/vxs-frontend.exe
-  libexec/xs/project-runtime/bin/xs-project-runtime.bat
-  libexec/xs/project-runtime/bin/vxdc.bat
+  libexec/xs/project/bin/vxdc.bat
+  libexec/xs/project/lib/visual-xsharp-project-${XS_VERSION}.jar
   include/Visual/C23/compiler_check.h
   include/Visual/C23/int128.hh
   include/Visual/XSharp/lil.hh
@@ -39,6 +39,10 @@ foreach(relative_path IN LISTS required_files)
     message(FATAL_ERROR "installed compiler is missing ${relative_path}")
   endif()
 endforeach()
+
+if(EXISTS "${XS_INSTALL_PREFIX}/libexec/xs/project/bin/xs-project-runtime.bat")
+  message(FATAL_ERROR "installed compiler must not expose a separate xs-project-runtime launcher")
+endif()
 
 execute_process(
   COMMAND "${XS_INSTALL_PREFIX}/bin/vxs.exe" --version

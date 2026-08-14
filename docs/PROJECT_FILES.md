@@ -67,10 +67,14 @@ sources {
     exclude("Generated/**")
   }
 
-  test {
-    testDir = "Tests"
+  test("unit") {
+    testDir = "Tests/Unit"
     framework = "tests"
     exclude("Fixtures/**")
+  }
+
+  test("integration") {
+    testDir = "Tests/Integration"
   }
 
   viget {
@@ -82,9 +86,13 @@ sources {
 
 Source roots must stay inside the project root. The Kotlin runtime validates the configured roots and forwards them with
 their exclusion policy; it does not walk the roots or create a `.vxs` file list. Source discovery and namespace-based entry
-resolution belong to the compiler. Exclusions accept project-relative glob patterns. `sources.main.exclude`,
-`sources.test.exclude`, and `sources.viget.exclude` have no implicit pattern: their plan value is `null` until an
+resolution belong to the compiler. Exclusions accept project-relative glob patterns. `sources.main.exclude`, each named
+test suite's `exclude`, and `sources.viget.exclude` have no implicit pattern: their plan value is `null` until an
 `exclude(...)` declaration is present.
+
+Test suites have case-sensitive Visual X# identifiers and retain their own root, framework, and exclusion policy across the
+typed project plan and native compiler boundary. A suite defaults to `Tests/<suite-name>` when `testDir` is omitted. Duplicate
+suite names are configuration errors; suites are never flattened into one anonymous test directory.
 
 ## Project plugins
 
@@ -192,9 +200,12 @@ The DSL also supports:
 - `pml` for PML enablement; and
 - `workspaces` for named project paths.
 
-`panic("message")` immediately aborts project-script evaluation. Because the runtime emits the plan, source registry, and
+`panic("message")` immediately aborts project-script evaluation. Because the evaluator emits the plan, source registry, and
 lock only after the script returns normally, a panic does not start Visual X# compilation and does not emit partial project
 state.
+
+`eprint(value)` and `eprintln(value)` mirror Kotlin's standard output helpers but write to standard error. Both accept
+nullable values; `eprintln` appends the platform line separator.
 
 Author declarations take exactly two values named `user` and `mail`; the function is not variadic:
 

@@ -51,7 +51,7 @@ data class PluginPlanEntry(
 }
 
 /**
- * A project plugin runs with the same JVM permissions as the project runtime. This API does not
+ * A project plugin runs with the same JVM permissions as the project evaluator. This API does not
  * sandbox plugin code; integrity and compatibility checks happen before activation.
  */
 interface ProjectPlugin {

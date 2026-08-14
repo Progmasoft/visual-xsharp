@@ -20,7 +20,7 @@ internal data class ProjectFiles(
 )
 
 private fun usage() =
-  "internal xs project runtime usage: evaluate [project-root]\n" +
+  "internal vxs project evaluator usage: evaluate [project-root]\n" +
     "       resolve [project-root]\n" +
     "       sources0 <project-root> <output-file>"
 
@@ -213,7 +213,7 @@ fun main(args: Array<String>) {
       }
     exitProcess(status)
   } catch (error: ProjectConfigurationException) {
-    System.err.println("xs: project runtime: ${error.message}")
+    System.err.println("vxs: project evaluator: ${error.message}")
     exitProcess(1)
   }
 }

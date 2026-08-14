@@ -12,6 +12,12 @@ source-to-native executable pipeline.
 
 ## 0.3.1 - 2026-08-13
 
+- Replaced the anonymous Kotlin DSL test root with case-sensitive named test suites that preserve independent source roots,
+  frameworks, and nullable exclusion policies through project plan v4 and the native source registry v3.
+- Rewrote the project driver from manual C allocation to a C++20 RAII model with `fmt` diagnostics, and removed the
+  standalone `xs-project-runtime` launcher. `vxs` now starts the bundled Kotlin evaluator class directly; VXDC remains a
+  separate command.
+- Added `eprint(Any?)` and `eprintln(Any?)` project-script helpers for standard-error output.
 - Replaced the C lexer/parser and compatibility semantic route with the Haskell frontend as the sole `.vxs` source owner.
 - Rewrote the public driver around a typed C++20 command schema and removed DIMCLI.
 - Connected `.vxs` checking and explicit Core/LLVM emission through the bounded Core boundary and C++20 backend pipeline.

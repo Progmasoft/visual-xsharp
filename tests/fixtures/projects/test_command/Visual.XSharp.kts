@@ -4,5 +4,5 @@
 project { name = "TestCommand"; version = "0.2.1"; stability = Stability.BETA }
 sources {
   main { srcDir = "Sources"; entry = "TestCommand.Main"; exclude("Test/**") }
-  test { testDir = "Sources/Test"; framework = "tests" }
+  test("unit") { testDir = "Sources/Test"; framework = "tests" }
 }
