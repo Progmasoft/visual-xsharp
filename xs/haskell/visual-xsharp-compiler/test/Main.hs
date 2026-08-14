@@ -5,6 +5,7 @@ module Main (main) where
 import Control.Exception (finally)
 import Data.List (isInfixOf)
 import Data.Word (Word8)
+import SourceSetTests (sourceSetTests)
 import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
@@ -68,6 +69,7 @@ main = do
     checkIO "real Core artifact round-trips through .core I/O" coreArtifactRoundTrip
     checkIO "Core artifact rejects an invalid Core module" coreArtifactRejectsInvalidModule
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
+    mapM_ (uncurry checkIO) sourceSetTests
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure

@@ -12,6 +12,13 @@ source-to-native executable pipeline.
 
 ## 0.3.1 - 2026-08-13
 
+- Connected Kotlin project source roots to a compiler-owned Haskell source-set loader with strict UTF-8 decoding,
+  deterministic recursive discovery, project-relative glob exclusions, overlapping-root de-duplication, and root/link
+  escape diagnostics.
+- Added namespace-based multi-file compilation: physical units are parsed independently, declarations in the same
+  namespace are merged before renaming, every namespace crosses the complete verified CorePrep pipeline, and the configured
+  namespace/class entry selects the Core module consumed by C++20.
+- Connected project `check` and `build -Emit core|llvmll|llvmbc` to the Haskell frontend and native Core-to-LLVM pipeline.
 - Replaced the anonymous Kotlin DSL test root with case-sensitive named test suites that preserve independent source roots,
   frameworks, and nullable exclusion policies through project plan v4 and the native source registry v3.
 - Rewrote the project driver from manual C allocation to a C++20 RAII model with `fmt` diagnostics, and removed the

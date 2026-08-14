@@ -96,6 +96,18 @@ The reliable single-file validation form is:
 .\build\clangcl-debug\vxs.exe check -File .\path\to\Main.vxs
 ```
 
+From a directory containing `Visual.XSharp.kts`, project validation uses the configured source roots and namespace-qualified
+entry directly:
+
+```powershell
+.\path\to\vxs.exe check
+.\path\to\vxs.exe build -Emit core
+```
+
+The compiler recursively discovers case-sensitive `.vxs` files, applies project-relative exclusions, merges files by
+declared namespace, validates every namespace, and selects the configured entry class. It does not require namespace and
+directory layouts to match.
+
 See [CLI](docs/CLI.md) for the exact accepted surface and implementation status.
 
 ## Project files
@@ -105,7 +117,8 @@ segment is a class name and need not be `Main` or `Program`. The selected class 
 `public static void Main()` method; a top-level runtime function is not an entry point.
 The entry is resolved from namespace and type identity. It does not name a source file, and source file names or directory
 layout do not have to mirror the namespace. The Kotlin runtime passes source roots and exclusions to the compiler without
-walking the project for `.vxs` files.
+walking the project for `.vxs` files. The Haskell frontend now owns that discovery, strict UTF-8 decoding, deterministic
+ordering, exclusion matching, namespace merge, and entry validation.
 
 ```kotlin
 project {

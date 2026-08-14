@@ -33,13 +33,16 @@ library
         Visual.XSharp.Pipeline.Stage
         Visual.XSharp.Resolver.NameResolution
         Visual.XSharp.Resolver.Renamer
+        Visual.XSharp.SourceSet
         Visual.XSharp.TypeChecker
     hs-source-dirs: src
     build-depends:
         base >=4.20 && <4.23,
         bytestring >=0.12 && <0.14,
         containers >=0.7 && <0.9,
-        filepath >=1.5 && <1.6
+        directory >=1.3 && <1.4,
+        filepath >=1.5 && <1.6,
+        text >=2.1 && <2.3
     default-language: GHC2021
 
 executable vxs-frontend
@@ -54,8 +57,11 @@ test-suite compiler-layer-tests
     type: exitcode-stdio-1.0
     main-is: Main.hs
     hs-source-dirs: test
+    other-modules:
+        SourceSetTests
     build-depends:
         base >=4.20 && <4.23,
+        bytestring >=0.12 && <0.14,
         directory >=1.3 && <1.4,
         filepath >=1.5 && <1.6,
         visual-xsharp-compiler

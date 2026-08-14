@@ -90,6 +90,18 @@ resolution belong to the compiler. Exclusions accept project-relative glob patte
 test suite's `exclude`, and `sources.viget.exclude` have no implicit pattern: their plan value is `null` until an
 `exclude(...)` declaration is present.
 
+The Haskell source loader recursively discovers files whose extension is exactly `.vxs`. It decodes every selected file as
+UTF-8 before lexing, sorts project-relative paths deterministically, and de-duplicates files reached through overlapping
+roots. A configured root or filesystem link that escapes the project root is a compilation error. Exclusions are evaluated
+against normalized project-relative paths: `*` and `?` stay within one path segment, while a complete `**` segment may span
+zero or more directories.
+
+Physical files are compilation units, not modules. Files with the same namespace are merged before Renamer and Name
+Resolution, regardless of their names or directory locations. Duplicate types across those files are diagnosed as duplicate
+namespace declarations. All discovered namespaces are checked through CorePrep; the namespace named by `entry` selects the
+Core module passed to the native pipeline. Cross-namespace imports and multi-module native linking remain separate compiler
+work.
+
 Test suites have case-sensitive Visual X# identifiers and retain their own root, framework, and exclusion policy across the
 typed project plan and native compiler boundary. A suite defaults to `Tests/<suite-name>` when `testDir` is omitted. Duplicate
 suite names are configuration errors; suites are never flattened into one anonymous test directory.

@@ -227,7 +227,7 @@ jobs:
           }
 
           New-Item -ItemType Directory -Force $reportDirectory | Out-Null
-          & $tool -r . -x Main -f lcov -o $report cabal:compiler-layer-tests
+          & $tool -r . -x Main -x SourceSetTests -f lcov -o $report cabal:compiler-layer-tests
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $report)) {
             throw "hpc-codecov did not produce the expected LCOV report"
           }

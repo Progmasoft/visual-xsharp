@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -94,7 +95,34 @@ private:
 #endif
 }
 
-[[nodiscard]] int RunFrontend(const std::filesystem::path &output, const std::filesystem::path &source)
+[[nodiscard]] std::string PathText(const std::filesystem::path &path)
+{
+#ifdef _WIN32
+    const auto text = path.u8string();
+    return std::string(reinterpret_cast<const char *>(text.data()), text.size());
+#else
+    return path.string();
+#endif
+}
+
+#ifdef _WIN32
+[[nodiscard]] std::optional<std::wstring> Utf8ToWide(std::string_view text)
+{
+    if(text.empty())
+        return std::wstring{};
+    const int length =
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    if(length <= 0)
+        return std::nullopt;
+    std::wstring result(static_cast<std::size_t>(length), L'\0');
+    if(MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(),
+                           length) != length)
+        return std::nullopt;
+    return result;
+}
+#endif
+
+[[nodiscard]] int RunFrontend(std::span<const std::string> commandArguments)
 {
     auto directory = ExecutableDirectory();
     if(!directory)
@@ -103,13 +131,29 @@ private:
         return -1;
     }
 #ifdef _WIN32
-    // _wspawnv passes an argument vector directly; no shell quoting or command
-    // interpolation is involved, including for non-ASCII and spaced paths.
+    // _wspawnv passes an argument vector directly; no shell quoting or glob
+    // expansion is involved. Convert the private UTF-8 protocol explicitly so
+    // namespace and filesystem characters do not depend on the active codepage.
     const auto frontend = *directory / "vxs-frontend.exe";
-    const std::wstring outputText = output.wstring();
-    const std::wstring sourceText = source.wstring();
-    const wchar_t *arguments[] = {frontend.c_str(), L"--output", outputText.c_str(), sourceText.c_str(), nullptr};
-    const intptr_t status = _wspawnv(_P_WAIT, frontend.c_str(), arguments);
+    std::vector<std::wstring> storage;
+    storage.reserve(commandArguments.size() + 1);
+    storage.push_back(frontend.wstring());
+    for(const auto &argument : commandArguments)
+    {
+        auto wide = Utf8ToWide(argument);
+        if(!wide)
+        {
+            std::fputs("vxs: private frontend argument is not valid UTF-8\n", stderr);
+            return -1;
+        }
+        storage.push_back(std::move(*wide));
+    }
+    std::vector<const wchar_t *> arguments;
+    arguments.reserve(storage.size() + 1);
+    for(const auto &argument : storage)
+        arguments.push_back(argument.c_str());
+    arguments.push_back(nullptr);
+    const intptr_t status = _wspawnv(_P_WAIT, frontend.c_str(), arguments.data());
     if(status == -1)
         fmt::print(stderr, "vxs: could not start Haskell frontend: {}\n",
                    std::error_code(errno, std::generic_category()).message());
@@ -117,12 +161,17 @@ private:
 #else
     const auto frontend = *directory / "vxs-frontend";
     const std::string frontendText = frontend.string();
-    const std::string outputText = output.string();
-    const std::string sourceText = source.string();
-    char *arguments[] = {frontendText.data(), const_cast<char *>("--output"), outputText.data(), sourceText.data(),
-                         nullptr};
+    std::vector<std::string> storage;
+    storage.reserve(commandArguments.size() + 1);
+    storage.push_back(frontendText);
+    storage.insert(storage.end(), commandArguments.begin(), commandArguments.end());
+    std::vector<char *> arguments;
+    arguments.reserve(storage.size() + 1);
+    for(auto &argument : storage)
+        arguments.push_back(argument.data());
+    arguments.push_back(nullptr);
     pid_t process{};
-    const int spawnStatus = posix_spawn(&process, frontendText.c_str(), nullptr, nullptr, arguments, environ);
+    const int spawnStatus = posix_spawn(&process, frontendText.c_str(), nullptr, nullptr, arguments.data(), environ);
     if(spawnStatus != 0)
     {
         std::fprintf(stderr, "vxs: could not start Haskell frontend: %s\n", std::strerror(spawnStatus));
@@ -133,6 +182,38 @@ private:
         return -1;
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 #endif
+}
+
+[[nodiscard]] int RunFileFrontend(const std::filesystem::path &output, const std::filesystem::path &source)
+{
+    const std::vector<std::string> arguments{"--output", PathText(output), "--source-file", PathText(source)};
+    return RunFrontend(arguments);
+}
+
+[[nodiscard]] int RunProjectFrontend(const std::filesystem::path &output,
+                                     const Visual::XSharp::Driver::ResolvedProject &project)
+{
+    std::error_code error;
+    const auto projectRoot = std::filesystem::current_path(error);
+    if(error)
+    {
+        fmt::print(stderr, "vxs: could not resolve the project working directory: {}\n", error.message());
+        return -1;
+    }
+    std::vector<std::string> arguments{"--output", PathText(output), "--project-root", PathText(projectRoot),
+                                       "--entry",  project.entry};
+    arguments.reserve(arguments.size() + project.sourceRoots.size() * 2 + project.sourceExcludes.size() * 2);
+    for(const auto &root : project.sourceRoots)
+    {
+        arguments.push_back("--source-root");
+        arguments.push_back(PathText(root));
+    }
+    for(const auto &pattern : project.sourceExcludes)
+    {
+        arguments.push_back("--exclude");
+        arguments.push_back(pattern);
+    }
+    return RunFrontend(arguments);
 }
 
 [[nodiscard]] bool HasSuffix(std::string_view value, std::string_view suffix)
@@ -149,7 +230,7 @@ private:
     return output;
 }
 
-[[nodiscard]] bool CopyCore(const std::filesystem::path &temporary, const char *source)
+[[nodiscard]] bool CopyCore(const std::filesystem::path &temporary, const std::filesystem::path &source)
 {
     const auto output = OutputPath(source, ".core");
     std::error_code error;
@@ -177,7 +258,7 @@ private:
         std::fputs("vxs: could not allocate a temporary Core artifact\n", stderr);
         return false;
     }
-    if(RunFrontend(core.Path(), source) != 0)
+    if(RunFileFrontend(core.Path(), source) != 0)
         return false;
     // Every source command crosses the same verified Core consumer. `check` and
     // artifact emission therefore cannot drift into separate validation paths.
@@ -225,13 +306,57 @@ private:
     auto project = Visual::XSharp::Driver::ResolveProject(!testing);
     if(!project)
         return 1;
-    // Kotlin deliberately returns source roots and exclusion policy without
-    // walking Visual X# files. The Haskell module loader must discover units and
-    // resolve `entry` by namespace/type identity; interpreting a root or entry as
-    // a file path here would reintroduce the retired layout convention.
-    std::fprintf(stderr,
-                 "vxs: project compilation requires the Haskell source-root loader; entry '%s' is not a file path\n",
-                 project->entry.c_str());
+    if(testing)
+    {
+        std::fputs("vxs: named test-suite execution requires the test framework runner, which is not linked yet\n",
+                   stderr);
+        return 1;
+    }
+
+    TemporaryCore core;
+    if(!core)
+    {
+        std::fputs("vxs: could not allocate a temporary Core artifact\n", stderr);
+        return 1;
+    }
+    if(RunProjectFrontend(core.Path(), *project) != 0)
+        return 1;
+
+    auto settings = project->settings;
+    xs_cli_apply_compiler_overrides(&options, &settings);
+    const auto separator = project->entry.find_last_of('.');
+    const std::string className =
+        separator == std::string::npos ? project->entry : project->entry.substr(separator + 1);
+    std::error_code pathError;
+    const auto workingDirectory = std::filesystem::current_path(pathError);
+    if(pathError)
+    {
+        fmt::print(stderr, "vxs: could not resolve the project artifact directory: {}\n", pathError.message());
+        return 1;
+    }
+    const auto artifactBase = workingDirectory / className;
+    const auto corePathText = core.Path().string();
+    const auto artifactBaseText = artifactBase.string();
+    const std::string_view command(options.command);
+    if(command == "check")
+        return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), "check",
+                                                  options.output, &settings)
+                   ? 0
+                   : 1;
+    if(command != "build")
+    {
+        std::fputs("vxs: run will be reconnected after native object/link ownership moves to C++20\n", stderr);
+        return 1;
+    }
+    if(options.output == XS_BUILD_OUTPUT_CORE)
+        return CopyCore(core.Path(), artifactBase) ? 0 : 1;
+    if(options.output == XS_BUILD_OUTPUT_LLVM_LL || options.output == XS_BUILD_OUTPUT_LLVM_BC)
+        return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), "build",
+                                                  options.output, &settings)
+                   ? 0
+                   : 1;
+    std::fputs("vxs: project builds currently emit core, llvmll, or llvmbc during native object/link migration\n",
+               stderr);
     return 1;
 }
 } // namespace

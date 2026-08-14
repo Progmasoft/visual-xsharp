@@ -10,7 +10,8 @@ module Visual.XSharp.Diagnostic
 import Visual.XSharp.AST (SourceSpan)
 
 data DiagnosticStage
-    = LexerStage
+    = SourceLoaderStage
+    | LexerStage
     | ParserStage
     | RenamerStage
     | NameResolutionStage

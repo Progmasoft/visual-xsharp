@@ -3,8 +3,8 @@
 
 namespace NativeCall;
 
-class Main {
-  public static void Main() {
-    return;
+class Helper {
+  public static int Value() {
+    return 7;
   }
 }

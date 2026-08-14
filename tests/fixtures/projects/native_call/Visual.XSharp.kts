@@ -3,4 +3,10 @@
 
 project { name = "NativeCall"; version = "0.2.1"; stability = Stability.BETA }
 
-sources { main { srcDir = "sources"; entry = "NativeCall.Main" } }
+sources {
+  main {
+    srcDir = "sources"
+    entry = "NativeCall.Main"
+    exclude("sources/Generated/**")
+  }
+}
