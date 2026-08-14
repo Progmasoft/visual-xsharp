@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+# SPDX-License-Identifier: MPL-2.0
+
+# Coverage starts with the Haskell-owned frontend. Keep its status separate from
+# the rest of the monorepo until native, Kotlin, and Rust reports are available.
+coverage:
+  status:
+    project:
+      haskell-frontend:
+        flags:
+          - haskell-frontend
+        informational: true
+    patch:
+      haskell-frontend:
+        flags:
+          - haskell-frontend
+        informational: true
+
+flags:
+  haskell-frontend:
+    paths:
+      - xs/haskell/visual-xsharp-compiler/src/
+    carryforward: false
+
+comment:
+  layout: "reach, diff, flags, files"
+  require_changes: true
