@@ -19,6 +19,17 @@ install(TARGETS vxs
   COMPONENT compiler
 )
 
+# ClangCL's dynamic AddressSanitizer runtime must travel beside an instrumented
+# executable. Build-tree tests already find the configure-time copy at the
+# project output root; the installed compiler needs the same invariant so it
+# can be launched without inheriting a compiler-specific runtime directory.
+if(XS_ENABLE_SANITIZERS)
+  install(FILES "${XS_ASAN_DYNAMIC_DLL}"
+    DESTINATION "${XS_INSTALL_BINDIR}"
+    COMPONENT compiler
+  )
+endif()
+
 # The Haskell frontend is a private sibling executable discovered relative to vxs.
 # Installing both into the same directory preserves that location invariant.
 install(PROGRAMS "${XS_HASKELL_FRONTEND}"

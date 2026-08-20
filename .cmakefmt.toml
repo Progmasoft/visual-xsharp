@@ -1,0 +1,31 @@
+[format]
+line_width = 120
+tab_size = 4
+use_tabs = false
+
+space_before_control_paren = false
+space_before_definition_paren = false
+dangle_parens = false
+dangle_align = "open"
+continuation_align = "under-first-value"
+
+always_wrap = ["add_executable", "add_library"]
+wrap_after_first_arg = true
+
+enable_sort = true
+autosort = false
+require_valid_layout = false
+
+command_case = "lower"
+keyword_case = "upper"
+
+max_hanging_wrap_lines = 2
+max_hanging_wrap_groups = 4
+max_rows_cmdline = 1
+max_empty_lines = 2
+
+line_ending = "windows"
+
+[markup]
+enable_markup = true
+first_comment_is_literal = true

@@ -51,6 +51,9 @@ xs_enable_strict_warnings(xs_cli_parser_tests)
 target_link_libraries(xs_cli_parser_tests PRIVATE Catch2::Catch2WithMain)
 add_test(NAME cli_parser_model COMMAND xs_cli_parser_tests)
 set_tests_properties(cli_parser_model PROPERTIES TIMEOUT 15)
+# This test does not link xs_lil, but an ASan-instrumented executable still
+# needs the dynamic sanitizer runtime copied beside vxs at the output root.
+xs_prepend_test_runtime_path(cli_parser_model vxs)
 
 # These cases prove schema invariants independently from source compilation.
 add_test(NAME cli_rejects_missing_value COMMAND vxs build -File)
