@@ -2,20 +2,27 @@
 
 ## Supported host
 
-The supported native development host is Windows in a Visual Studio 2026 developer environment. Retained C compatibility
-libraries and C++20 code are compiled with `clang-cl`. Ninja is the supported CMake generator and LLD is the linker.
+The supported native development host is Windows. Retained C compatibility libraries and C++20 code are compiled with a
+standalone LLVM `clang-cl`; standalone Ninja is the supported CMake generator and LLD is the linker. Visual Studio-bundled
+build executables are not part of the toolchain.
 
 Required tools:
 
-- CMake 3.31 or newer;
-- Ninja;
-- ClangCL and LLD from the active Visual Studio/LLVM environment;
+- Kitware CMake 3.31 or newer;
+- standalone Ninja;
+- ClangCL and LLD from a standalone LLVM installation;
+- Windows SDK headers and import libraries;
+- MSVC CRT and C++ standard-library development files;
 - an LLVM development package containing `LLVMConfig.cmake` and the LLVM C library;
 - vcpkg;
 - Rustup and Cargo;
 - GHC 9.10 and Cabal;
 - JDK 25; and
 - the Kotlin command used by project-evaluator tests.
+
+The Windows SDK and MSVC development files provide platform headers and libraries only. Make their `include`, `lib`, and
+tool directories available to the PowerShell build environment; CMake, Ninja, ClangCL, and LLD still come from the
+independent installations listed above.
 
 ## LLVM discovery
 

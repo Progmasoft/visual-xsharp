@@ -44,10 +44,11 @@ normal compilation keeps intermediate data in memory unless explicit emission is
 
 The supported native build is Windows with:
 
-- Visual Studio 2026 developer environment;
-- ClangCL for retained C components and C++20;
-- LLD and Ninja;
-- CMake 3.31 or newer;
+- Kitware CMake 3.31 or newer;
+- standalone Ninja;
+- ClangCL and LLD from an LLVM installation for retained C components and C++20;
+- Windows SDK headers and import libraries;
+- MSVC CRT and C++ standard-library development files;
 - an LLVM development package containing `LLVMConfig.cmake`;
 - Rustup and Cargo;
 - GHC 9.10 and Cabal for the Haskell frontend;
@@ -71,7 +72,8 @@ Install the manifest dependencies using an existing vcpkg installation:
 & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows --x-manifest-root .
 ```
 
-Configure, build, and test from a Visual Studio 2026 developer terminal:
+Configure, build, and test from PowerShell after making the Windows SDK and MSVC library/include directories available in
+the environment:
 
 ```powershell
 cmake --preset clangcl-debug `
