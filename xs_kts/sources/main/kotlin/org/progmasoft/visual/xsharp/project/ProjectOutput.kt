@@ -10,7 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 object ProjectOutput {
-  private const val REGISTRY_VERSION = "visual-xsharp-sources-v3"
+  private const val REGISTRY_VERSION = "visual-xsharp-sources-v5"
 
   fun emit(plan: ProjectPlan) {
     val root = projectRoot()
@@ -113,11 +113,18 @@ object ProjectOutput {
           optLevel.name.removePrefix("O").lowercase(),
           compiler.llvmCompiler.name.lowercase(),
           compiler.llvmLto.name.lowercase(),
+          if (compiler.buildMode == BuildMode.DEBUG) {
+            plan.debugOutputDirectory
+          } else {
+            plan.releaseOutputDirectory
+          },
+          plan.targets.size.toString(),
           project.sources.size.toString(),
           plan.sourceExcludes.orEmpty().size.toString(),
           project.tests.size.toString(),
         )
         .forEach { writeRecord(output, it) }
+      plan.targets.forEach { writeRecord(output, it) }
       project.sources.forEach { writeRecord(output, it.toString()) }
       plan.sourceExcludes.orEmpty().forEach { writeRecord(output, it) }
       project.tests.forEach { suite ->

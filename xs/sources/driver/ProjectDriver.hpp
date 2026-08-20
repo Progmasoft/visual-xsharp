@@ -25,9 +25,11 @@ struct ResolvedProject final
     std::vector<std::filesystem::path> sourceRoots;
     std::vector<std::string> sourceExcludes;
     std::vector<ResolvedTestSuite> testSuites;
+    std::vector<std::string> targets;
     std::string entry;
     std::string compilerVersion;
     std::string standard;
+    std::filesystem::path outputDirectory;
     XsBuildOutput output{};
     XsCompilerSettings settings{};
 };

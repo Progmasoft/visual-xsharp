@@ -106,12 +106,16 @@ struct XsCliOptions
     XsViGetAction vigetAction;
     std::optional<std::filesystem::path> filePath;
     std::optional<std::string> packageCoordinate;
+    std::optional<std::string> target;
     std::string compilerVersion;
     std::string standard;
     XsBuildOutput output;
     XsBuildInput input;
     XsCompilerSettings compiler;
     bool globalInstall;
+    bool compilerVersionOverride;
+    bool standardOverride;
+    bool targetOverride;
     bool outputOverride;
     bool warningOverride;
     bool werrorOverride;
@@ -124,6 +128,17 @@ struct XsCliOptions
     bool llvmOptOverride;
     bool llvmCompilerOverride;
     bool llvmLtoOverride;
+};
+
+// Fully resolved values for one compiler invocation. A project evaluation can
+// provide the base layer; only CLI fields that were actually present replace it.
+struct XsEffectiveCompilerOptions
+{
+    std::string compilerVersion;
+    std::string standard;
+    std::optional<std::string> target;
+    XsBuildOutput output;
+    XsCompilerSettings compiler;
 };
 
 enum XsCliParseResult : std::uint8_t
@@ -151,5 +166,7 @@ extern "C"
 }
 
 [[nodiscard]] XsCliParseOutcome ParseCommandLine(int argc, char **argv);
+[[nodiscard]] XsEffectiveCompilerOptions
+ResolveCompilerOptions(const XsCliOptions &options, const XsEffectiveCompilerOptions *projectDefaults = nullptr);
 void PrintCliHelp(std::optional<XsCliCommand> command);
 void PrintCliVersion();

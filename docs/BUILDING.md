@@ -1,5 +1,16 @@
 # Building and testing
 
+The optional top-level `justfile` composes the existing CMake and Gradle owners without replacing either build system:
+
+```powershell
+just check
+just check sanitize
+just format-kotlin
+just format-native xs/sources/driver/Cli.cpp
+```
+
+The recipes intentionally remain thin. The commands below are still the canonical native and Kotlin build interfaces.
+
 ## Supported host
 
 The supported native development host is Windows. Retained C compatibility libraries and C++20 code are compiled with a

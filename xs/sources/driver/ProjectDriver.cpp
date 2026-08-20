@@ -33,8 +33,8 @@ namespace Visual::XSharp::Driver
 {
 namespace
 {
-constexpr std::string_view kRegistryVersion = "visual-xsharp-sources-v3";
-constexpr std::size_t kHeaderRecordCount = 21;
+constexpr std::string_view kRegistryVersion = "visual-xsharp-sources-v5";
+constexpr std::size_t kHeaderRecordCount = 23;
 
 #ifndef XS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT
 #    define XS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT "libexec/xs/project/lib/*"
@@ -399,11 +399,24 @@ private:
     ResolvedProject project;
     if(!ParseCompilerHeader(reader, project))
         return std::nullopt;
+    const auto outputDirectory = reader.Next();
+    const auto targetCount = reader.Size();
     const auto sourceCount = reader.Size();
     const auto sourceExcludeCount = reader.Size();
     const auto suiteCount = reader.Size();
-    if(!sourceCount || !sourceExcludeCount || !suiteCount || (requireSources && *sourceCount == 0))
+    if(!outputDirectory || outputDirectory->empty() || !targetCount || !sourceCount || !sourceExcludeCount ||
+       !suiteCount || (requireSources && *sourceCount == 0))
         return std::nullopt;
+    project.outputDirectory = *outputDirectory;
+
+    project.targets.reserve(*targetCount);
+    for(std::size_t index = 0; index < *targetCount; ++index)
+    {
+        const auto value = reader.Next();
+        if(!value || value->empty())
+            return std::nullopt;
+        project.targets.emplace_back(*value);
+    }
 
     for(std::size_t index = 0; index < *sourceCount; ++index)
     {

@@ -32,6 +32,7 @@ vxs viget push|update
 -File PATH
 -Standard 26|latest
 -Compiler-Version VERSION|latest
+-Target TARGET-TRIPLE
 -Warnings all|medium|low|none
 -Werror true|false
 -Wexperimental true|false
@@ -67,6 +68,23 @@ One declarative schema owns canonical spelling, value domain, arity, command sco
 Consequently, `vxs check --help` shows `check` options but not build-only `-Emit`, while `vxs build --help` includes it.
 Option and value spelling is case-sensitive.
 
+## Configuration precedence
+
+For every scalar compiler setting, the driver resolves values in this order, from strongest to weakest:
+
+1. an option explicitly supplied in the current `vxs` command;
+2. the value produced by the project's `Visual.XSharp.kts` evaluation;
+3. the Kotlin DSL's built-in default for that value;
+4. the CLI fallback used when no project is being evaluated.
+
+The evaluator deliberately materializes both user-written values and Kotlin DSL defaults. The native driver therefore
+uses the evaluated project as one authoritative layer and never lets an omitted CLI option overwrite it. This applies to
+`emit`, warning policy, optimization settings, compiler/standard selection, and other transported compiler settings.
+
+`-Target` accepts a case-sensitive LLVM target triple such as `x86_64-pc-windows-msvc`. In project mode, an explicitly
+selected target must occur in the DSL's `targets { target(...) }` catalog when that catalog is non-empty. Without an
+explicit target, LLVM selects its host-dependent default; the first catalog entry is not chosen implicitly.
+
 An explicit non-source `-Build` always requires `-File`. For example, `vxs check -Build core` is rejected rather than
 silently discovering a project; use `vxs check -Build core -File Module.core`.
 
@@ -85,6 +103,7 @@ backend: llvm
 LLVM optimization: 2
 LLVM compiler: aot
 LLVM LTO: none
+target: host-dependent
 Xpp optimization passes: true
 Xmm optimization passes: true
 ```
@@ -107,6 +126,14 @@ vxs build -File .\Sources\Main.vxs -Emit llvmbc
 
 The accepted source subset is the subset implemented by the Haskell frontend. Native object, link, `run`, and `test`
 reconnection remains pending; the CLI rejects those routes instead of falling back to the removed compatibility frontend.
+
+Project artifacts use the active Kotlin DSL output directory (`build/debug` or `build/release` by default). `binary`
+produces one project executable with the `.vxse` extension. Source-oriented outputs such as `object` and `assembly` use
+the source stem directly in that directory, so `Sources/MyApp/Main.vxs` maps to `build/debug/Main.o` in a debug object
+build. Multiple sources consequently produce multiple artifacts, not one merged object. An artifact left by an earlier
+build is replaced by `vxs build`. Two different inputs in the same build that map to the same output name are rejected as
+an ambiguous source-name collision. Native object, assembly, and executable emission remains part of the explicitly
+pending backend/link reconnection described below.
 
 ## Core input status
 

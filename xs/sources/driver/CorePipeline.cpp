@@ -79,7 +79,8 @@ void PrintFailure(const visual_xsharp::PipelineResult &result)
 } // namespace
 
 bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command,
-                                        XsBuildOutput output, const XsCompilerSettings *settings)
+                                        XsBuildOutput output, const XsCompilerSettings *settings,
+                                        const char *targetTriple)
 {
     if(path == nullptr || artifactBasePath == nullptr || settings == nullptr)
         return false;
@@ -103,6 +104,9 @@ bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBa
     options.optimize_xpp = settings->xpp_optimization_passes;
     options.optimize_xmm = settings->xmm_optimization_passes;
     options.llvm.optimization = Optimization(*settings);
+    // An empty target deliberately delegates to LLVM's host-dependent default.
+    // Explicit CLI targets have already passed parser and project-catalog checks.
+    options.llvm.target_triple = targetTriple == nullptr ? "" : targetTriple;
     const auto result = Visual::XSharp::Pipeline::ConsumeCore(*bytes, options);
     if(!result)
     {
@@ -123,7 +127,7 @@ bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBa
 }
 
 bool xs_driver_process_core_artifact(const char *path, XsCliCommand command, XsBuildOutput output,
-                                     const XsCompilerSettings *settings)
+                                     const XsCompilerSettings *settings, const char *targetTriple)
 {
-    return xs_driver_process_core_artifact_as(path, path, command, output, settings);
+    return xs_driver_process_core_artifact_as(path, path, command, output, settings, targetTriple);
 }

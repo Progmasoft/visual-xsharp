@@ -61,6 +61,7 @@ TEST_CASE("CLI defaults become typed compiler settings", "[cli][parser]")
     REQUIRE_FALSE(options.filePath);
     REQUIRE(std::string(options.standard) == "latest");
     REQUIRE(options.compilerVersion == "latest");
+    REQUIRE_FALSE(options.target);
     REQUIRE(options.input == XS_BUILD_INPUT_VXS);
     REQUIRE(options.output == XS_BUILD_OUTPUT_BINARY);
     REQUIRE(options.compiler.warning_level == XS_WARNING_MEDIUM);
@@ -74,6 +75,9 @@ TEST_CASE("CLI defaults become typed compiler settings", "[cli][parser]")
     REQUIRE(options.compiler.llvm_opt_level == XS_LLVM_OPT_2);
     REQUIRE(options.compiler.llvm_compiler == XS_LLVM_COMPILER_AOT);
     REQUIRE(options.compiler.llvm_lto == XS_LLVM_LTO_NONE);
+    REQUIRE_FALSE(options.compilerVersionOverride);
+    REQUIRE_FALSE(options.standardOverride);
+    REQUIRE_FALSE(options.targetOverride);
 }
 
 TEST_CASE("help and version are parser outcomes rather than parser side effects", "[cli][parser]")
@@ -106,6 +110,8 @@ TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")
         "26",
         "-Compiler-Version",
         "0.3.1",
+        "-Target",
+        "x86_64-pc-windows-msvc",
         "-Emit",
         "llvmbc",
         "-Build",
@@ -142,6 +148,7 @@ TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")
     REQUIRE(options.filePath == std::filesystem::path("Program.vxs"));
     REQUIRE(std::string(options.standard) == "26");
     REQUIRE(options.compilerVersion == "0.3.1");
+    REQUIRE(options.target == "x86_64-pc-windows-msvc");
     REQUIRE(options.input == XS_BUILD_INPUT_VXS);
     REQUIRE(options.output == XS_BUILD_OUTPUT_LLVM_BC);
     REQUIRE(options.compiler.warning_level == XS_WARNING_ALL);
@@ -156,6 +163,9 @@ TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")
     REQUIRE(options.compiler.llvm_compiler == XS_LLVM_COMPILER_ORC);
     REQUIRE(options.compiler.llvm_lto == XS_LLVM_LTO_THIN);
     REQUIRE(options.outputOverride);
+    REQUIRE(options.compilerVersionOverride);
+    REQUIRE(options.standardOverride);
+    REQUIRE(options.targetOverride);
     REQUIRE(options.warningOverride);
     REQUIRE(options.werrorOverride);
     REQUIRE(options.llvmOptOverride);
@@ -188,6 +198,8 @@ TEST_CASE("every typed value domain rejects unknown values", "[cli][parser]")
     REQUIRE(ParsedInvocation{"vxs", "check", "-Llvm-OptLevel", "0"}.Result() == XS_CLI_PARSE_ERROR);
     REQUIRE(ParsedInvocation{"vxs", "check", "-Llvm-Compiler", "jit"}.Result() == XS_CLI_PARSE_ERROR);
     REQUIRE(ParsedInvocation{"vxs", "check", "-Llvm-Lto", "full"}.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{"vxs", "check", "-Target", "windows"}.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{"vxs", "check", "-Target", "x86_64/windows/msvc"}.Result() == XS_CLI_PARSE_ERROR);
 
     const ParsedInvocation warning{"vxs", "check", "-Warnings", "urgent"};
     REQUIRE(warning.Diagnostic() == "invalid value 'urgent' for -Warnings; expected all|medium|low|none");
@@ -265,6 +277,46 @@ TEST_CASE("project settings are overridden only by explicitly present CLI values
     REQUIRE(project.llvm_opt_level == XS_LLVM_OPT_3);
     REQUIRE(project.llvm_compiler == XS_LLVM_COMPILER_ORC);
     REQUIRE(project.llvm_lto == XS_LLVM_LTO_FAT);
+}
+
+TEST_CASE("effective compiler options follow CLI project and fallback precedence", "[cli][parser]")
+{
+    const ParsedInvocation fallbackInvocation{"vxs", "build"};
+    REQUIRE(fallbackInvocation.Result() == XS_CLI_PARSE_READY);
+    const auto fallback = ResolveCompilerOptions(fallbackInvocation.Options());
+    REQUIRE(fallback.compilerVersion == "latest");
+    REQUIRE(fallback.standard == "latest");
+    REQUIRE_FALSE(fallback.target);
+    REQUIRE(fallback.output == XS_BUILD_OUTPUT_BINARY);
+    REQUIRE(fallback.compiler.llvm_opt_level == XS_LLVM_OPT_2);
+
+    XsEffectiveCompilerOptions project{
+        .compilerVersion = "0.3.1",
+        .standard = "26",
+        .target = std::nullopt,
+        .output = XS_BUILD_OUTPUT_OBJECT,
+        .compiler = xs_cli_default_compiler_settings(),
+    };
+    // Kotlin materializes explicit project settings and DSL defaults alike. Both
+    // outrank CLI fallbacks; only argv presence bits can replace this layer.
+    project.compiler.llvm_opt_level = XS_LLVM_OPT_0;
+    const auto fromProject = ResolveCompilerOptions(fallbackInvocation.Options(), &project);
+    REQUIRE(fromProject.compilerVersion == "0.3.1");
+    REQUIRE(fromProject.standard == "26");
+    REQUIRE(fromProject.output == XS_BUILD_OUTPUT_OBJECT);
+    REQUIRE(fromProject.compiler.llvm_opt_level == XS_LLVM_OPT_0);
+
+    const ParsedInvocation explicitInvocation{
+        "vxs",   "build",  "-Compiler-Version", "latest", "-Standard", "latest", "-Target", "aarch64-unknown-linux-gnu",
+        "-Emit", "llvmll", "-Llvm-OptLevel",    "3",
+    };
+    REQUIRE(explicitInvocation.Result() == XS_CLI_PARSE_READY);
+    const auto explicitResult = ResolveCompilerOptions(explicitInvocation.Options(), &project);
+    REQUIRE(explicitResult.compilerVersion == "latest");
+    REQUIRE(explicitResult.standard == "latest");
+    REQUIRE(explicitResult.target == "aarch64-unknown-linux-gnu");
+    REQUIRE(explicitResult.output == XS_BUILD_OUTPUT_LLVM_LL);
+    REQUIRE(explicitResult.compiler.llvm_opt_level == XS_LLVM_OPT_3);
 }
 
 TEST_CASE("parser rejects malformed process argument vectors safely", "[cli][parser]")

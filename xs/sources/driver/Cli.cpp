@@ -9,6 +9,7 @@
 
 #include <fmt/format.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -241,7 +242,7 @@ private:
 }
 
 [[nodiscard]] bool ProcessSource(const std::filesystem::path &source, const XsCliOptions &options,
-                                 XsCompilerSettings settings)
+                                 const XsEffectiveCompilerOptions &effective)
 {
     if(source.extension() != ".vxs")
     {
@@ -261,25 +262,26 @@ private:
     // artifact emission therefore cannot drift into separate validation paths.
     if(options.command == XS_CLI_COMMAND_CHECK)
         return xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command,
-                                                  options.output, &settings);
+                                                  effective.output, &effective.compiler,
+                                                  effective.target ? effective.target->c_str() : nullptr);
     if(options.command != XS_CLI_COMMAND_BUILD)
     {
         std::fputs("vxs: run and test will be reconnected after native object/link ownership moves to C++20\n", stderr);
         return false;
     }
-    if(options.output == XS_BUILD_OUTPUT_CORE)
+    if(effective.output == XS_BUILD_OUTPUT_CORE)
         return CopyCore(core.Path(), source);
-    if(options.output == XS_BUILD_OUTPUT_LLVM_LL || options.output == XS_BUILD_OUTPUT_LLVM_BC)
+    if(effective.output == XS_BUILD_OUTPUT_LLVM_LL || effective.output == XS_BUILD_OUTPUT_LLVM_BC)
         return xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command,
-                                                  options.output, &settings);
+                                                  effective.output, &effective.compiler,
+                                                  effective.target ? effective.target->c_str() : nullptr);
     std::fputs("vxs: source builds currently emit core, llvmll, or llvmbc during the frontend migration\n", stderr);
     return false;
 }
 
 [[nodiscard]] int RunFile(const XsCliOptions &options)
 {
-    XsCompilerSettings settings = xs_cli_default_compiler_settings();
-    xs_cli_apply_compiler_overrides(&options, &settings);
+    const auto effective = ResolveCompilerOptions(options);
     if(options.input == XS_BUILD_INPUT_CORE)
     {
         if(!options.filePath || options.filePath->extension() != ".core")
@@ -288,14 +290,17 @@ private:
             return 2;
         }
         const auto fileText = PathText(*options.filePath);
-        return xs_driver_process_core_artifact(fileText.c_str(), options.command, options.output, &settings) ? 0 : 1;
+        return xs_driver_process_core_artifact(fileText.c_str(), options.command, effective.output, &effective.compiler,
+                                               effective.target ? effective.target->c_str() : nullptr)
+                   ? 0
+                   : 1;
     }
     if(options.input != XS_BUILD_INPUT_VXS)
     {
         std::fputs("vxs: only vxs and core inputs belong to the renewed pipeline\n", stderr);
         return 2;
     }
-    return options.filePath && ProcessSource(*options.filePath, options, settings) ? 0 : 1;
+    return options.filePath && ProcessSource(*options.filePath, options, effective) ? 0 : 1;
 }
 
 [[nodiscard]] int RunProject(const XsCliOptions &options)
@@ -311,6 +316,21 @@ private:
         return 1;
     }
 
+    const XsEffectiveCompilerOptions projectDefaults{
+        .compilerVersion = project->compilerVersion,
+        .standard = project->standard,
+        .target = std::nullopt,
+        .output = project->output,
+        .compiler = project->settings,
+    };
+    const auto effective = ResolveCompilerOptions(options, &projectDefaults);
+    if(effective.target && !project->targets.empty() &&
+       std::find(project->targets.begin(), project->targets.end(), *effective.target) == project->targets.end())
+    {
+        fmt::print(stderr, "vxs: target '{}' is not declared by Visual.XSharp.kts\n", *effective.target);
+        return 2;
+    }
+
     TemporaryCore core;
     if(!core)
     {
@@ -320,8 +340,6 @@ private:
     if(RunProjectFrontend(core.Path(), *project) != 0)
         return 1;
 
-    auto settings = project->settings;
-    xs_cli_apply_compiler_overrides(&options, &settings);
     const auto separator = project->entry.find_last_of('.');
     const std::string className =
         separator == std::string::npos ? project->entry : project->entry.substr(separator + 1);
@@ -332,12 +350,13 @@ private:
         fmt::print(stderr, "vxs: could not resolve the project artifact directory: {}\n", pathError.message());
         return 1;
     }
-    const auto artifactBase = workingDirectory / className;
+    const auto artifactBase = workingDirectory / project->outputDirectory / className;
     const auto corePathText = core.Path().string();
     const auto artifactBaseText = artifactBase.string();
     if(options.command == XS_CLI_COMMAND_CHECK)
         return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), options.command,
-                                                  options.output, &settings)
+                                                  effective.output, &effective.compiler,
+                                                  effective.target ? effective.target->c_str() : nullptr)
                    ? 0
                    : 1;
     if(options.command != XS_CLI_COMMAND_BUILD)
@@ -345,11 +364,19 @@ private:
         std::fputs("vxs: run will be reconnected after native object/link ownership moves to C++20\n", stderr);
         return 1;
     }
-    if(options.output == XS_BUILD_OUTPUT_CORE)
+    std::filesystem::create_directories(artifactBase.parent_path(), pathError);
+    if(pathError)
+    {
+        fmt::print(stderr, "vxs: could not create project artifact directory '{}': {}\n",
+                   PathText(artifactBase.parent_path()), pathError.message());
+        return 1;
+    }
+    if(effective.output == XS_BUILD_OUTPUT_CORE)
         return CopyCore(core.Path(), artifactBase) ? 0 : 1;
-    if(options.output == XS_BUILD_OUTPUT_LLVM_LL || options.output == XS_BUILD_OUTPUT_LLVM_BC)
+    if(effective.output == XS_BUILD_OUTPUT_LLVM_LL || effective.output == XS_BUILD_OUTPUT_LLVM_BC)
         return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), options.command,
-                                                  options.output, &settings)
+                                                  effective.output, &effective.compiler,
+                                                  effective.target ? effective.target->c_str() : nullptr)
                    ? 0
                    : 1;
     std::fputs("vxs: project builds currently emit core, llvmll, or llvmbc during native object/link migration\n",

@@ -23,6 +23,7 @@ enum class Option : unsigned
     File,
     Standard,
     CompilerVersion,
+    Target,
     Emit,
     Build,
     Warnings,
@@ -47,6 +48,7 @@ enum class ValueDomain : unsigned
     Path,
     Standard,
     Version,
+    TargetTriple,
     Output,
     Input,
     WarningLevel,
@@ -162,6 +164,7 @@ constexpr OptionSpec kOptions[] = {
     {"-Standard", Option::Standard, kCompilerCommands, ValueDomain::Standard, "select the language standard"},
     {"-Compiler-Version", Option::CompilerVersion, kCompilerCommands, ValueDomain::Version,
      "select the compiler version"},
+    {"-Target", Option::Target, kCompilerCommands, ValueDomain::TargetTriple, "select the LLVM target triple"},
     {"-Emit", Option::Emit, Bit(XS_CLI_COMMAND_BUILD), ValueDomain::Output, "select the emitted artifact"},
     {"-Build", Option::Build, Bit(XS_CLI_COMMAND_BUILD) | Bit(XS_CLI_COMMAND_CHECK), ValueDomain::Input,
      "select the explicit input artifact kind"},
@@ -272,6 +275,9 @@ template <std::size_t Size> void AppendChoices(std::string &output, const std::a
     case ValueDomain::Version:
         result = "VERSION|latest";
         break;
+    case ValueDomain::TargetTriple:
+        result = "TARGET-TRIPLE";
+        break;
     case ValueDomain::Standard:
         AppendChoices(result, kStandardValues);
         break;
@@ -326,6 +332,8 @@ template <typename Value, std::size_t Size>
     case Option::Standard:
     case Option::CompilerVersion:
         return "latest"sv;
+    case Option::Target:
+        return "host"sv;
     case Option::Emit:
         return ChoiceText(XS_BUILD_OUTPUT_BINARY, kOutputValues);
     case Option::Build:
@@ -382,6 +390,30 @@ template <typename Value, std::size_t Size>
 {
     const auto *begin = reinterpret_cast<const char8_t *>(value.data());
     return std::filesystem::path(std::u8string_view(begin, value.size()));
+}
+
+[[nodiscard]] bool IsTargetTriple(std::string_view value)
+{
+    std::size_t segmentCount{};
+    std::size_t segmentLength{};
+    for(const char character : value)
+    {
+        if(character == '-')
+        {
+            if(segmentLength == 0U)
+                return false;
+            ++segmentCount;
+            segmentLength = 0U;
+            continue;
+        }
+        const bool accepted = (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z') ||
+                              (character >= '0' && character <= '9') || character == '_' || character == '+' ||
+                              character == '.';
+        if(!accepted)
+            return false;
+        ++segmentLength;
+    }
+    return segmentLength != 0U && segmentCount >= 2U;
 }
 
 [[nodiscard]] std::string PositionalText(PositionalKind positional)
@@ -502,11 +534,19 @@ void PrintHelp(const CommandSpec *command)
         if(!Contains(value, kStandardValues))
             return ApplyResult::Invalid;
         options.standard = value;
+        options.standardOverride = true;
         return ApplyResult::Applied;
     case Option::CompilerVersion:
         if(value.empty())
             return ApplyResult::Invalid;
         options.compilerVersion = value;
+        options.compilerVersionOverride = true;
+        return ApplyResult::Applied;
+    case Option::Target:
+        if(!IsTargetTriple(value))
+            return ApplyResult::Invalid;
+        options.target = value;
+        options.targetOverride = true;
         return ApplyResult::Applied;
     case Option::Emit:
         if(!ParseChoice(value, options.output, kOutputValues))
@@ -622,6 +662,36 @@ extern "C" void xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsC
         settings->llvm_compiler = options->compiler.llvm_compiler;
     if(options->llvmLtoOverride)
         settings->llvm_lto = options->compiler.llvm_lto;
+}
+
+XsEffectiveCompilerOptions ResolveCompilerOptions(const XsCliOptions &options,
+                                                  const XsEffectiveCompilerOptions *projectDefaults)
+{
+    // Kotlin materializes both explicit DSL values and DSL defaults. Therefore
+    // any project layer outranks CLI fallbacks, while the parser's presence bits
+    // ensure only argv values explicitly supplied by the user can replace it.
+    XsEffectiveCompilerOptions result;
+    if(projectDefaults != nullptr)
+        result = *projectDefaults;
+    else
+    {
+        result.compilerVersion = options.compilerVersion;
+        result.standard = options.standard;
+        result.target = std::nullopt;
+        result.output = options.output;
+        result.compiler = kCompilerDefaults;
+    }
+
+    if(options.compilerVersionOverride)
+        result.compilerVersion = options.compilerVersion;
+    if(options.standardOverride)
+        result.standard = options.standard;
+    if(options.targetOverride)
+        result.target = options.target;
+    if(options.outputOverride)
+        result.output = options.output;
+    xs_cli_apply_compiler_overrides(&options, &result.compiler);
+    return result;
 }
 
 extern "C" const char *xs_cli_warning_level_name(XsWarningLevel level) noexcept
