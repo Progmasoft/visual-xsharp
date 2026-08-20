@@ -12,14 +12,12 @@ class ProjectScope internal constructor() {
   var stability: Stability? = null
 
   internal fun apply() {
-    val configured = listOf(name, version, stability).count { it != null }
-    if (configured == 0) return
-    if (configured != 3) {
-      throw ProjectConfigurationException(
-        "project name, version, and stability must be configured together"
-      )
-    }
-    ProjectRuntime.configureIdentity(name!!, stability!!.name, version!!)
+    if (name == null && version == null && stability == null) return
+
+    // Publication is configured later in many project files, so completeness
+    // cannot be decided while this block is evaluated. Preserve every supplied
+    // value and enforce the publication contract once the whole model is built.
+    ProjectRuntime.configureIdentity(name, stability?.name, version)
   }
 }
 

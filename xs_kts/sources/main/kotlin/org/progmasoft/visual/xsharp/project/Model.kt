@@ -124,9 +124,9 @@ data class Host(
 )
 
 data class ProjectIdentity(
-  val name: String,
-  val channel: String,
-  val version: String,
+  val name: String?,
+  val stability: String?,
+  val version: String?,
 ) : Serializable
 
 data class Author(

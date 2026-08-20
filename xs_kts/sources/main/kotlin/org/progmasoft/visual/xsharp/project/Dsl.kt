@@ -181,16 +181,16 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   private val compilerSettings = CompilerSettings()
 
   internal fun configureIdentity(
-    name: String,
-    channel: String,
-    version: String,
+    name: String?,
+    stability: String?,
+    version: String?,
   ) {
     if (identity != null) throw ProjectConfigurationException("project may be configured only once")
     identity =
       ProjectIdentity(
-        requireText(name, "project name"),
-        requireText(channel, "release channel"),
-        requireText(version, "project version"),
+        name?.let { requireText(it, "project name") },
+        stability?.let { requireText(it, "project stability") },
+        version?.let { requireText(it, "project version") },
       )
   }
 
@@ -281,6 +281,18 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
       )
     }
     val project = identity
+    if (publishSources) {
+      val missingFields = buildList {
+        if (project?.name == null) add("name")
+        if (project?.version == null) add("version")
+        if (project?.stability == null) add("stability")
+      }
+      if (missingFields.isNotEmpty()) {
+        throw ProjectConfigurationException(
+          "sources.viget.publish requires every project field; missing: ${missingFields.joinToString()}"
+        )
+      }
+    }
     val dependencyManifest =
       validateDependencies(
         dependencies,
@@ -343,10 +355,10 @@ internal object ProjectRuntime {
   }
 
   fun configureIdentity(
-    name: String,
-    channel: String,
-    version: String,
-  ) = context.configureIdentity(name, channel, version)
+    name: String?,
+    stability: String?,
+    version: String?,
+  ) = context.configureIdentity(name, stability, version)
 
   fun configureEntry(value: String) = context.configureEntry(value)
 

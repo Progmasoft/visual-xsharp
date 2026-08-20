@@ -71,13 +71,13 @@ internal data class ProjectPlanDocument(
 
 @Serializable
 internal data class ProjectIdentityDocument(
-  val name: String,
-  val version: String,
-  val stability: String,
+  val name: String?,
+  val version: String?,
+  val stability: String?,
 ) {
   companion object {
     fun from(identity: ProjectIdentity) =
-      ProjectIdentityDocument(identity.name, identity.version, identity.channel)
+      ProjectIdentityDocument(identity.name, identity.version, identity.stability)
   }
 }
 

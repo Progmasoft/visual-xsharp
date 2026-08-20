@@ -58,6 +58,54 @@ class ProjectDslTest {
   }
 
   @Test
+  fun permitsAnyProjectFieldSubsetWhenPublishingIsDisabled() {
+    project { name = "PrivateCompiler" }
+    sources { main { entry = "PrivateCompiler.Main" } }
+
+    val plan = ProjectRuntime.build()
+    assertEquals(ProjectIdentity("PrivateCompiler", null, null), plan.identity)
+
+    val projectDocument =
+      Json.parseToJsonElement(PlanWriter.write(plan)).jsonObject.getValue("project").jsonObject
+    assertEquals("PrivateCompiler", projectDocument.getValue("name").jsonPrimitive.content)
+    assertEquals("null", projectDocument.getValue("version").toString())
+    assertEquals("null", projectDocument.getValue("stability").toString())
+
+    ProjectRuntime.reset()
+    project {
+      version = "0.3.1"
+      stability = Stability.DEV
+    }
+    sources { main { entry = "Internal.Tool" } }
+    assertEquals(ProjectIdentity(null, "DEV", "0.3.1"), ProjectRuntime.build().identity)
+  }
+
+  @Test
+  fun requiresEveryProjectFieldWhenPublishingIsEnabled() {
+    fun rejectionFor(block: ProjectScope.() -> Unit): ProjectConfigurationException {
+      ProjectRuntime.reset()
+      project(block)
+      sources {
+        viget { publish = true }
+        main { entry = "Published.Main" }
+      }
+      return assertFailsWith { ProjectRuntime.build() }
+    }
+
+    assertTrue(rejectionFor {}.message.orEmpty().contains("name, version, stability"))
+    assertTrue(rejectionFor { name = "Published" }.message.orEmpty().contains("version, stability"))
+    assertTrue(
+      rejectionFor {
+          name = "Published"
+          version = "1.0.0"
+        }
+        .message
+        .orEmpty()
+        .contains("stability")
+    )
+  }
+
+  @Test
   fun rejectsMissingOrUnqualifiedEntry() {
     assertFailsWith<ProjectConfigurationException> { ProjectRuntime.build() }
 
