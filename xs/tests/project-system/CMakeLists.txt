@@ -64,7 +64,7 @@ set_tests_properties(compiler_check_project PROPERTIES
 )
 
 set(xs_project_core_artifact
-  "${xs_project_fixture_dir}/native_call/Main.core"
+  "${xs_project_fixture_dir}/native_call/build/debug/Main.core"
 )
 file(REMOVE "${xs_project_core_artifact}")
 add_test(NAME compiler_emits_project_core COMMAND vxs build -Emit core)
