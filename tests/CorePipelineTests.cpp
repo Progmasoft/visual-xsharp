@@ -229,9 +229,9 @@ TEST_CASE("Core artifact driver validates and emits explicit LLVM artifacts")
     }
     const auto settings = xs_cli_default_compiler_settings();
     REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_CHECK, XS_BUILD_OUTPUT_NONE,
-                                            &settings));
+                                            &settings, nullptr));
     REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_LLVM_LL,
-                                            &settings));
+                                            &settings, nullptr));
     REQUIRE(std::filesystem::file_size(llvmPath) > 0U);
     std::filesystem::remove_all(directory);
 }
