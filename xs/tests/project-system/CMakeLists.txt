@@ -46,7 +46,10 @@ add_test(NAME kotlin_project_resolve_binary_lock COMMAND xs_text_artifact_tests
   "SQLite format 3"
 )
 set_tests_properties(kotlin_project_resolve_binary_lock PROPERTIES
-  TIMEOUT 5
+  # The producer fixture launches the Kotlin evaluator. On instrumented CI,
+  # Windows can retain its freshly written database briefly while the JVM
+  # exits; use the standard native-test budget for the following read check.
+  TIMEOUT 15
   FIXTURES_REQUIRED kotlin_project_lock
   LABELS jvm
 )
@@ -112,7 +115,9 @@ add_test(NAME vxdc_project_dump_is_sql COMMAND xs_text_artifact_tests
   "${xs_vxdc_output}" "BEGIN TRANSACTION;"
 )
 set_tests_properties(vxdc_project_dump_is_sql PROPERTIES
-  TIMEOUT 5
+  # Keep the post-JVM artifact probe tolerant of sanitizer and filesystem
+  # teardown latency without relaxing the long-running producer's own limit.
+  TIMEOUT 15
   FIXTURES_REQUIRED vxdc_project_dump
   LABELS jvm
 )
