@@ -13,6 +13,11 @@ endif()
 find_package(LLVM REQUIRED CONFIG)
 find_package(LibArchive REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+# The renewed C++20 backend uses LLVM's native C++ IR and pass-manager APIs.
+# Component targets keep that dependency independent from the LLVM-C import
+# library retained only by the isolated legacy C backend below.
+include("${CMAKE_CURRENT_LIST_DIR}/XSLLVM.cmake")
+xs_resolve_llvm_cpp_libraries(XS_LLVM_CPP_LIBRARIES)
 find_library(XS_LLVM_LIBRARY NAMES LLVM-C HINTS ${LLVM_LIBRARY_DIRS} REQUIRED)
 find_program(XS_CABAL_EXECUTABLE NAMES cabal REQUIRED)
 

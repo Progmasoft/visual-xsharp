@@ -27,6 +27,8 @@ source-to-native executable pipeline.
   a script evaluator.
 - Split Visual Analyzer, Visual Formatter, and Visual Linter into independently owned CI workflows; the shared language
   workflow now covers only the project DSL runtime, compiler layers, and Rust core.
+- Migrated the renewed C++20 LLVM backend from LLVM-C handles to native LLVM IRBuilder, module, verifier, bitcode, support,
+  and new-pass-manager APIs while retaining LLVM-C only for the isolated legacy C backend.
 
 ## 0.3.1 - 2026-08-13
 

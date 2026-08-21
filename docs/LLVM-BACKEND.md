@@ -54,9 +54,10 @@ The CLI optimization setting selects an LLVM new-pass-manager pipeline:
 | `2` | `default<O2>` |
 | `3` | `default<O3>` |
 
-The generated module is verified before optimization. LLVM pass failures and serialization failures are returned as explicit
-backend errors. LLVM contexts, modules, builders, messages, and memory buffers are owned by scoped C++20 wrappers and are
-released on every success or error path.
+The generated module is verified before optimization. The backend builds LLVM's standard per-module optimization pipeline
+with the C++ new pass manager and local analysis managers. LLVM contexts, modules, builders, printed IR streams, and bitcode
+buffers have ordinary scoped C++ ownership and are released on every success or error path. The renewed backend does not use
+the LLVM C API; LLVM-C remains confined to the isolated legacy C backend.
 
 ## Artifacts
 

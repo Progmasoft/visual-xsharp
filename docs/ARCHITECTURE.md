@@ -63,8 +63,10 @@ control-flow operations, runs the selected LLVM optimization pipeline, verifies 
 and bitcode in memory. Visual X# `String` constants are represented as Unicode scalar (`i32`) storage plus a 64-bit scalar
 count; they are not encoded as UTF-8 byte strings. LLVM types and handles do not escape the backend API.
 
-The build discovers LLVM through its CMake package and links the LLVM C API. The compatibility route still owns object-file
-and executable production. Connecting verified Xmm bitcode to object emission and LLD is separate work.
+The build discovers LLVM through its CMake package. The renewed C++20 backend uses LLVM's C++ IR, bitcode, support, and
+new-pass-manager libraries; LLVM C handles do not enter this pipeline. The isolated compatibility C route retains LLVM-C
+until it is retired and still owns object-file and executable production. Connecting verified Xmm bitcode to object emission
+and LLD is separate work.
 
 ## Entry point
 

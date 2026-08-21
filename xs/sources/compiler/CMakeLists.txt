@@ -22,5 +22,5 @@ add_library(xs_compiler_pipeline STATIC
 
 xs_add_public_include_roots(xs_compiler_pipeline)
 target_include_directories(xs_compiler_pipeline SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
-target_link_libraries(xs_compiler_pipeline PRIVATE ${XS_LLVM_LIBRARY})
+target_link_libraries(xs_compiler_pipeline PRIVATE ${XS_LLVM_CPP_LIBRARIES})
 xs_enable_strict_warnings(xs_compiler_pipeline)
