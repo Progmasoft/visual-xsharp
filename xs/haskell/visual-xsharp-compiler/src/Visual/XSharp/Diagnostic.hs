@@ -25,7 +25,6 @@ data DiagnosticStage
     | XmmLoweringStage
     | XmmOptimizerStage
     | LlvmBackendStage
-    | VpiBackendStage
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
 data DiagnosticSeverity = Error | Warning

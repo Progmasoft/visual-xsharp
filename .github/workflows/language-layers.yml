@@ -55,8 +55,24 @@ jobs:
 
       - name: Check Haskell package metadata
         shell: pwsh
-        working-directory: xs/haskell/visual-xsharp-compiler
-        run: cabal check
+        run: |
+          $packageDirectories = @(
+            "xs/haskell/visual-xsharp-compiler",
+            "VisualAnalyzer",
+            "VisualFormatter",
+            "VisualLinter"
+          )
+          foreach ($directory in $packageDirectories) {
+            Push-Location $directory
+            try {
+              cabal check
+              if ($LASTEXITCODE -ne 0) {
+                throw "cabal check failed for $directory"
+              }
+            } finally {
+              Pop-Location
+            }
+          }
 
       - name: Check Rust formatting
         shell: pwsh

@@ -1,0 +1,11 @@
+-- SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+-- SPDX-License-Identifier: MPL-2.0
+
+packages:
+    visual-linter.cabal
+    ../VisualFormatter/visual-formatter.cabal
+    ../xs/haskell/visual-xsharp-compiler/visual-xsharp-compiler.cabal
+
+tests: True
+documentation: False
+write-ghc-environment-files: never

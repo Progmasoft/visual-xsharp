@@ -1,0 +1,43 @@
+cabal-version: 3.12
+name: visual-formatter
+version: 0.3.2
+synopsis: Syntax-aware source formatter for Visual X#
+description:
+    Provides safe source layout normalization and the vfmt command-line tool
+    on top of the canonical Visual X# compiler frontend.
+category: Development
+license: MPL-2.0
+author: Progmasoft
+maintainer: support@xsharp-lang.xyz
+build-type: Simple
+
+library
+    exposed-modules:
+        Visual.Formatter
+    hs-source-dirs: sources/main/haskell
+    build-depends:
+        base >=4.20 && <4.23,
+        visual-xsharp-compiler >=0.3.2 && <0.4
+    default-language: GHC2021
+
+executable vfmt
+    main-is: Visual/Formatter/Main.hs
+    other-modules:
+        Visual.Formatter
+    hs-source-dirs: sources/main/haskell
+    build-depends:
+        base >=4.20 && <4.23,
+        text >=2.1 && <2.3,
+        visual-formatter,
+        visual-xsharp-compiler
+    default-language: GHC2021
+
+test-suite visual-formatter-tests
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+    hs-source-dirs: sources/test/haskell
+    build-depends:
+        base >=4.20 && <4.23,
+        visual-formatter,
+        visual-xsharp-compiler
+    default-language: GHC2021

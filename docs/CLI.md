@@ -7,6 +7,8 @@ The parser recognizes:
 ```text
 check
 build
+format
+lint
 run
 test
 resolve
@@ -18,6 +20,18 @@ version
 
 `check`, `build`, `run`, and `test` accept either a discovered `Visual.XSharp.kts` project or a `.vxs` file selected with
 `-File`.
+
+`format` and `lint` are project-only commands. They evaluate the project source policy, apply its roots and exclusions,
+and invoke the separately installed ecosystem tool for every discovered `.vxs` source:
+
+```text
+vxs format  # requires Progmasoft.VisualFormatter
+vxs lint    # requires Progmasoft.VisualLinter
+```
+
+Visual Formatter reads `Visual.Formatter.kts` from the project root when present and otherwise uses its defaults. Visual
+Linter applies the equivalent rule for `Visual.Linter.kts`. Tool configuration remains owned by the tool rather than the
+compiler CLI.
 
 Package commands use typed positional forms:
 

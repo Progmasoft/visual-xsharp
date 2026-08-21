@@ -14,6 +14,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
@@ -217,6 +219,147 @@ private:
     return RunFrontend(arguments);
 }
 
+[[nodiscard]] int WriteProjectSourceList(const std::filesystem::path &output,
+                                         const Visual::XSharp::Driver::ResolvedProject &project)
+{
+    std::error_code error;
+    const auto projectRoot = std::filesystem::current_path(error);
+    if(error)
+    {
+        fmt::print(stderr, "vxs: could not resolve the project working directory: {}\n", error.message());
+        return -1;
+    }
+    std::vector<std::string> arguments{"--output", PathText(output), "--project-root", PathText(projectRoot),
+                                       "--list-sources"};
+    arguments.reserve(arguments.size() + project.sourceRoots.size() * 2 + project.sourceExcludes.size() * 2);
+    for(const auto &root : project.sourceRoots)
+    {
+        arguments.push_back("--source-root");
+        arguments.push_back(PathText(root));
+    }
+    for(const auto &pattern : project.sourceExcludes)
+    {
+        arguments.push_back("--exclude");
+        arguments.push_back(pattern);
+    }
+    return RunFrontend(arguments);
+}
+
+[[nodiscard]] std::optional<std::vector<std::filesystem::path>> ReadProjectSourceList(const std::filesystem::path &path)
+{
+    std::ifstream stream(path, std::ios::binary);
+    if(!stream)
+        return std::nullopt;
+    const std::string bytes{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+    std::vector<std::filesystem::path> sources;
+    std::size_t offset{};
+    while(offset < bytes.size())
+    {
+        const auto end = bytes.find('\0', offset);
+        if(end == std::string::npos)
+            return std::nullopt;
+        const std::string_view encoded(bytes.data() + offset, end - offset);
+#ifdef _WIN32
+        auto wide = Utf8ToWide(encoded);
+        if(!wide)
+            return std::nullopt;
+        sources.emplace_back(std::move(*wide));
+#else
+        sources.emplace_back(encoded);
+#endif
+        offset = end + 1;
+    }
+    return sources;
+}
+
+[[nodiscard]] int RunInstalledTool(std::string_view executable, std::span<const std::string> commandArguments)
+{
+#ifdef _WIN32
+    auto executableWide = Utf8ToWide(executable);
+    if(!executableWide)
+        return -1;
+    std::vector<std::wstring> storage;
+    storage.reserve(commandArguments.size() + 1);
+    storage.push_back(*executableWide);
+    for(const auto &argument : commandArguments)
+    {
+        auto wide = Utf8ToWide(argument);
+        if(!wide)
+            return -1;
+        storage.push_back(std::move(*wide));
+    }
+    std::vector<const wchar_t *> arguments;
+    arguments.reserve(storage.size() + 1);
+    for(const auto &argument : storage)
+        arguments.push_back(argument.c_str());
+    arguments.push_back(nullptr);
+    return static_cast<int>(_wspawnvp(_P_WAIT, executableWide->c_str(), arguments.data()));
+#else
+    std::vector<std::string> storage;
+    storage.reserve(commandArguments.size() + 1);
+    storage.emplace_back(executable);
+    storage.insert(storage.end(), commandArguments.begin(), commandArguments.end());
+    std::vector<char *> arguments;
+    arguments.reserve(storage.size() + 1);
+    for(auto &argument : storage)
+        arguments.push_back(argument.data());
+    arguments.push_back(nullptr);
+    pid_t process{};
+    const int spawnStatus =
+        posix_spawnp(&process, storage.front().c_str(), nullptr, nullptr, arguments.data(), environ);
+    if(spawnStatus != 0)
+        return -1;
+    int status{};
+    if(waitpid(process, &status, 0) < 0)
+        return -1;
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+#endif
+}
+
+[[nodiscard]] int RunProjectTool(XsCliCommand command)
+{
+    auto project = Visual::XSharp::Driver::ResolveProject(true);
+    if(!project)
+        return 1;
+    TemporaryCore sourceList;
+    if(!sourceList || WriteProjectSourceList(sourceList.Path(), *project) != 0)
+        return 1;
+    auto sources = ReadProjectSourceList(sourceList.Path());
+    if(!sources)
+    {
+        std::fputs("vxs: compiler frontend returned an invalid project source list\n", stderr);
+        return 1;
+    }
+
+    const bool formatting = command == XS_CLI_COMMAND_FORMAT;
+#ifdef _WIN32
+    const std::string executable = formatting ? "vfmt.exe" : "vlint.exe";
+#else
+    const std::string executable = formatting ? "vfmt" : "vlint";
+#endif
+    bool succeeded = true;
+    for(const auto &source : *sources)
+    {
+        // Child tools inherit the project-root working directory. Their
+        // canonical Visual.Formatter.kts or Visual.Linter.kts lookup therefore
+        // has one project-wide owner; when the corresponding file is absent,
+        // the installed tool applies its own defaults.
+        std::vector<std::string> arguments;
+        if(formatting)
+            arguments.emplace_back("-In-Place");
+        arguments.push_back(PathText(source));
+        const int status = RunInstalledTool(executable, arguments);
+        if(status == -1)
+        {
+            fmt::print(stderr, "vxs: {} is not installed or is not available on PATH; install {}\n", executable,
+                       formatting ? "Progmasoft.VisualFormatter" : "Progmasoft.VisualLinter");
+            return 1;
+        }
+        succeeded = status == 0 && succeeded;
+    }
+    return succeeded ? 0 : 1;
+}
+
 [[nodiscard]] std::filesystem::path OutputPath(const std::filesystem::path &input, std::string_view extension)
 {
     // Artifact naming is a filesystem operation, not a C string manipulation
@@ -407,6 +550,8 @@ extern "C" int xs_driver_main(int argc, char **argv)
     int result{};
     if(options.command == XS_CLI_COMMAND_RESOLVE || options.command == XS_CLI_COMMAND_UPDATE)
         result = Visual::XSharp::Driver::RefreshProjectLock() ? 0 : 1;
+    else if(options.command == XS_CLI_COMMAND_FORMAT || options.command == XS_CLI_COMMAND_LINT)
+        result = RunProjectTool(options.command);
     else if(options.command == XS_CLI_COMMAND_INSTALL || options.command == XS_CLI_COMMAND_VIGET)
     {
         const char *commandName = options.command == XS_CLI_COMMAND_INSTALL ? "install" : "viget";

@@ -179,6 +179,22 @@ TEST_CASE("command and option spellings are case-sensitive", "[cli][parser]")
     REQUIRE(ParsedInvocation{"vxs", "check", "--module", "Sources"}.Result() == XS_CLI_PARSE_ERROR);
 }
 
+TEST_CASE("format and lint are project-wide tool commands", "[cli][parser][tools]")
+{
+    const ParsedInvocation format{"vxs", "format"};
+    REQUIRE(format.Result() == XS_CLI_PARSE_READY);
+    REQUIRE(format.Options().command == XS_CLI_COMMAND_FORMAT);
+    REQUIRE_FALSE(format.Options().filePath);
+
+    const ParsedInvocation lint{"vxs", "lint"};
+    REQUIRE(lint.Result() == XS_CLI_PARSE_READY);
+    REQUIRE(lint.Options().command == XS_CLI_COMMAND_LINT);
+    REQUIRE_FALSE(lint.Options().filePath);
+
+    REQUIRE(ParsedInvocation{"vxs", "format", "-File", "Program.vxs"}.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{"vxs", "lint", "Program.vxs"}.Result() == XS_CLI_PARSE_ERROR);
+}
+
 TEST_CASE("schema enforces arity command scope and duplicate policy", "[cli][parser]")
 {
     REQUIRE(ParsedInvocation{"vxs", "build", "-File"}.Result() == XS_CLI_PARSE_ERROR);

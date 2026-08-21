@@ -1,0 +1,46 @@
+cabal-version: 3.12
+name: visual-linter
+version: 0.3.2
+synopsis: Compiler-backed static analysis for Visual X#
+description:
+    Provides compiler diagnostics, source hygiene checks, safe fixes, and the
+    vlint command-line tool for Visual X# source files.
+category: Development
+license: MPL-2.0
+author: Progmasoft
+maintainer: support@xsharp-lang.xyz
+build-type: Simple
+
+library
+    exposed-modules:
+        Visual.Linter
+    hs-source-dirs: sources/main/haskell
+    build-depends:
+        base >=4.20 && <4.23,
+        visual-formatter >=0.3.2 && <0.4,
+        visual-xsharp-compiler >=0.3.2 && <0.4
+    default-language: GHC2021
+
+executable vlint
+    main-is: Visual/Linter/Main.hs
+    other-modules:
+        Visual.Linter
+    hs-source-dirs: sources/main/haskell
+    build-depends:
+        base >=4.20 && <4.23,
+        text >=2.1 && <2.3,
+        visual-formatter,
+        visual-linter,
+        visual-xsharp-compiler
+    default-language: GHC2021
+
+test-suite visual-linter-tests
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+    hs-source-dirs: sources/test/haskell
+    build-depends:
+        base >=4.20 && <4.23,
+        visual-formatter,
+        visual-linter,
+        visual-xsharp-compiler
+    default-language: GHC2021

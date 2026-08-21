@@ -26,6 +26,11 @@ These canonical projects replace the retired `xs-analyzer`, `xsfmt`, and `xstidy
 subprojects. Their Haskell components use Cabal, their Kotlin configuration layers use Gradle with an external JRE 25 and
 Kotlin Script Runner, and the Visual Analyzer editor integrations additionally use their platform-specific build systems.
 
+Their first compiler-connected layer is intentionally narrow: Visual Analyzer exposes syntax, semantic, and full frontend
+analysis without a standalone executable; `vfmt` performs parser-gated physical source normalization; and `vlint` combines
+semantic compiler diagnostics with independently actionable source-hygiene checks. Kotlin configuration and editor hosts
+remain separate ownership layers and are not represented by placeholder implementations.
+
 ## CMake selection
 
 The root CMake project currently treats `xs` as the buildable compiler project and `xsrt` as the buildable runtime. The

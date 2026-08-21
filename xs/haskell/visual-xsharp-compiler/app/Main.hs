@@ -3,7 +3,10 @@
 
 module Main (main) where
 
+import Data.ByteString qualified as ByteString
 import Data.Char (isAlpha, isAlphaNum)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
@@ -17,6 +20,7 @@ import Visual.XSharp.SourceSet
 data FrontendCommand
     = CompileFile FilePath FilePath
     | CompileProject FilePath FilePath QualifiedName [FilePath] [FilePath]
+    | ListProjectSources FilePath FilePath [FilePath] [FilePath]
 
 data CommandOptions = CommandOptions
     { optionOutput :: Maybe FilePath
@@ -25,10 +29,11 @@ data CommandOptions = CommandOptions
     , optionEntry :: Maybe String
     , optionSourceRoots :: [FilePath]
     , optionExcludes :: [FilePath]
+    , optionListSources :: Bool
     }
 
 emptyOptions :: CommandOptions
-emptyOptions = CommandOptions Nothing Nothing Nothing Nothing [] []
+emptyOptions = CommandOptions Nothing Nothing Nothing Nothing [] [] False
 
 main :: IO ()
 main = do
@@ -53,6 +58,9 @@ parseOptions options (name : remaining) = case name of
     "--entry" -> uniqueValue "--entry" optionEntry setEntry options remaining
     "--source-root" -> repeatedValue "--source-root" addSourceRoot options remaining
     "--exclude" -> repeatedValue "--exclude" addExclude options remaining
+    "--list-sources"
+        | optionListSources options -> Left "--list-sources may be specified only once"
+        | otherwise -> parseOptions options {optionListSources = True} remaining
     _ -> Left ("unknown private frontend option: " ++ name)
 
 uniqueValue ::
@@ -92,20 +100,28 @@ addSourceRoot value options = options {optionSourceRoots = optionSourceRoots opt
 addExclude value options = options {optionExcludes = optionExcludes options ++ [value]}
 
 finishCommand :: CommandOptions -> Either String FrontendCommand
-finishCommand options = case (optionOutput options, optionSourceFile options, optionProjectRoot options, optionEntry options) of
-    (Nothing, _, _, _) -> Left "--output is required"
-    (Just output, Just source, Nothing, Nothing)
+finishCommand options = case ( optionOutput options
+                             , optionSourceFile options
+                             , optionProjectRoot options
+                             , optionEntry options
+                             , optionListSources options
+                             ) of
+    (Nothing, _, _, _, _) -> Left "--output is required"
+    (Just output, Just source, Nothing, Nothing, False)
         | null (optionSourceRoots options) && null (optionExcludes options) ->
             Right (CompileFile output source)
         | otherwise -> Left "file compilation cannot declare source roots or exclusions"
-    (Just output, Nothing, Just root, Just entryText) -> do
+    (Just output, Nothing, Just root, Just entryText, False) -> do
         entry <- parseQualifiedName entryText
         if null (optionSourceRoots options)
             then Left "project compilation requires at least one --source-root"
             else Right (CompileProject output root entry (optionSourceRoots options) (optionExcludes options))
-    (Just _, Just _, Just _, _) -> Left "--source-file and --project-root are mutually exclusive"
-    (Just _, Nothing, _, _) -> Left "project compilation requires --project-root and --entry"
-    (Just _, Just _, _, _) -> Left "file compilation accepts only --output and --source-file"
+    (Just output, Nothing, Just root, Nothing, True)
+        | null (optionSourceRoots options) -> Left "source listing requires at least one --source-root"
+        | otherwise -> Right (ListProjectSources output root (optionSourceRoots options) (optionExcludes options))
+    (Just _, Just _, Just _, _, _) -> Left "--source-file and --project-root are mutually exclusive"
+    (Just _, Nothing, _, _, _) -> Left "project compilation requires --project-root and --entry"
+    (Just _, Just _, _, _, _) -> Left "file compilation accepts only --output and --source-file"
 
 parseQualifiedName :: String -> Either String QualifiedName
 parseQualifiedName text =
@@ -133,6 +149,7 @@ compileCommand :: FrontendCommand -> IO ()
 compileCommand command = case command of
     CompileFile output source -> compileFile output source
     CompileProject output root entry roots excludes -> compileProject output root entry roots excludes
+    ListProjectSources output root roots excludes -> listProjectSources output root roots excludes
 
 compileFile :: FilePath -> FilePath -> IO ()
 compileFile output source = do
@@ -153,6 +170,18 @@ compileProject output root entry roots excludes = do
             case compileProjectToCorePrep entry (map toCompilerInput documents) of
                 Left diagnostics -> failWithDiagnostics diagnostics
                 Right artifacts -> writeArtifact output (projectEntryCore artifacts)
+
+listProjectSources :: FilePath -> FilePath -> [FilePath] -> [FilePath] -> IO ()
+listProjectSources output root roots excludes = do
+    loaded <- loadSourceSet (SourceSetRequest root roots excludes)
+    case loaded of
+        Left diagnostics -> failWithDiagnostics diagnostics
+        Right documents ->
+            -- NUL framing is private and lossless for supported platform paths;
+            -- unlike newline records it also admits spaces without quoting.
+            ByteString.writeFile
+                output
+                (Text.encodeUtf8 (Text.pack (concatMap ((++ "\0") . loadedSourcePath) documents)))
 
 toCompilerInput :: LoadedSource -> CompilerInput
 toCompilerInput source = CompilerInput (loadedSourcePath source) (loadedSourceText source)

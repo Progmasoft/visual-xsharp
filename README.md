@@ -104,11 +104,16 @@ entry directly:
 ```powershell
 .\path\to\vxs.exe check
 .\path\to\vxs.exe build -Emit core
+.\path\to\vxs.exe format
+.\path\to\vxs.exe lint
 ```
 
 The compiler recursively discovers case-sensitive `.vxs` files, applies project-relative exclusions, merges files by
 declared namespace, validates every namespace, and selects the configured entry class. It does not require namespace and
 directory layouts to match.
+
+Project-wide `format` and `lint` reuse that compiler-owned source discovery. They require the separately installed Visual
+Formatter and Visual Linter packages, respectively; the compiler does not embed either tool.
 
 See [CLI](docs/CLI.md) for the exact accepted surface and implementation status.
 

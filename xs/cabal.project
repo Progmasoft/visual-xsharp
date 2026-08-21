@@ -3,6 +3,9 @@
 
 packages:
     haskell/visual-xsharp-compiler/visual-xsharp-compiler.cabal
+    ../VisualAnalyzer/visual-analyzer.cabal
+    ../VisualFormatter/visual-formatter.cabal
+    ../VisualLinter/visual-linter.cabal
 
 with-compiler: ghc
 optimization: 2

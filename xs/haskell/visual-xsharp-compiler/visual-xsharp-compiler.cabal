@@ -1,6 +1,6 @@
 cabal-version: 3.12
 name: visual-xsharp-compiler
-version: 0.3.1
+version: 0.3.2
 synopsis: Target-independent stages for the Visual X# compiler pipeline
 description:
     Defines the stable stage vocabulary and emitted artifact extensions used by
@@ -28,6 +28,7 @@ library
         Visual.XSharp.Compiler
         Visual.XSharp.Desugarer
         Visual.XSharp.Diagnostic
+        Visual.XSharp.Frontend
         Visual.XSharp.Lexer
         Visual.XSharp.Parser
         Visual.XSharp.Pipeline.Stage
@@ -50,6 +51,8 @@ executable vxs-frontend
     hs-source-dirs: app
     build-depends:
         base >=4.20 && <4.23,
+        bytestring >=0.12 && <0.14,
+        text >=2.1 && <2.3,
         visual-xsharp-compiler
     default-language: GHC2021
 

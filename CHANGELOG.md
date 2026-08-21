@@ -10,6 +10,18 @@ This file summarizes user-visible and developer-visible changes in the xs-projec
 The 0.0.x development period is the pre-1.0 xs-project compiler infrastructure line. It does not imply a complete X#
 source-to-native executable pipeline.
 
+## 0.3.2 - 2026-08-21
+
+- Added the first compiler-backed Visual Analyzer, Visual Formatter, and Visual Linter Haskell packages. They share the
+  compiler's syntax and semantic analysis boundaries instead of maintaining parallel language implementations.
+- Added `vfmt` with standard-output, `-In-Place`, `-Dry-Run`, and `-Help` modes, plus `vlint` with compiler diagnostics,
+  source-hygiene checks, safe `-Fix`, `-List-Checks`, and `-Help` modes.
+- Added project-wide `vxs format` and `vxs lint` dispatch. The compiler-owned source-set loader applies Kotlin project
+  roots and exclusions before the installed Visual Formatter or Visual Linter is invoked for each source.
+- Advanced the native compiler, Haskell compiler frontend, Kotlin project runtime, and new ecosystem packages to 0.3.2.
+- Removed the retired `xlil-java` binding project; the maintained Rust intermediate-language implementation remains in
+  place and is unaffected.
+
 ## 0.3.1 - 2026-08-13
 
 - Retired the obsolete Rust `xs-analyzer`, `xsfmt`, and `xstidy` prototypes without carrying them into replacement

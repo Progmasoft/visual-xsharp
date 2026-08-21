@@ -5,12 +5,12 @@
 
 project {
   name = "Example"
-  version = "0.3.1"
+  version = "0.3.2"
   stability = Stability.BETA
 }
 
 compiler {
-  version = "0.3.1"
+  version = "0.3.2"
   standard = "26"
   backend = Backend.LLVM
   buildMode = BuildMode.RELEASE

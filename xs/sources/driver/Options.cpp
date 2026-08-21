@@ -11,7 +11,7 @@
 #include <utility>
 
 #ifndef XS_PROJECT_VERSION
-#    define XS_PROJECT_VERSION "0.3.1"
+#    define XS_PROJECT_VERSION "0.3.2"
 #endif
 
 namespace
@@ -148,6 +148,8 @@ constexpr std::array kViGetActions = {
 constexpr CommandSpec kCommands[] = {
     {"check", XS_CLI_COMMAND_CHECK, PositionalKind::None, "validate a project or source artifact"},
     {"build", XS_CLI_COMMAND_BUILD, PositionalKind::None, "build a project or source artifact"},
+    {"format", XS_CLI_COMMAND_FORMAT, PositionalKind::None, "format every source in the project with Visual Formatter"},
+    {"lint", XS_CLI_COMMAND_LINT, PositionalKind::None, "lint every source in the project with Visual Linter"},
     {"run", XS_CLI_COMMAND_RUN, PositionalKind::None, "build and run a project or source file"},
     {"test", XS_CLI_COMMAND_TEST, PositionalKind::None, "run the project's named test suites"},
     {"resolve", XS_CLI_COMMAND_RESOLVE, PositionalKind::None, "resolve project dependencies"},

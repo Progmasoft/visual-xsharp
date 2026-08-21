@@ -31,17 +31,7 @@ import Visual.XSharp.Core.Optimizer
 import Visual.XSharp.Core.Verifier
 import Visual.XSharp.Desugarer
 import Visual.XSharp.Diagnostic
-import Visual.XSharp.Lexer
-import Visual.XSharp.Parser
-import Visual.XSharp.Resolver.NameResolution
-import Visual.XSharp.Resolver.Renamer
-import Visual.XSharp.TypeChecker
-
-data CompilerInput = CompilerInput
-    { compilerSourceFile :: FilePath
-    , compilerSourceText :: String
-    }
-    deriving (Eq, Ord, Read, Show)
+import Visual.XSharp.Frontend
 
 {- | Artifacts for one semantic namespace after all of its physical source
 units have been merged. Keeping every stage visible makes stage ownership and
@@ -78,7 +68,7 @@ data ProjectFrontendArtifacts = ProjectFrontendArtifacts
     deriving (Eq, Ord, Read, Show)
 
 compileToCorePrep :: CompilerInput -> Either [Diagnostic] FrontendArtifacts
-compileToCorePrep input = parseCompilerInput input >>= compileParsedToCorePrep
+compileToCorePrep input = analyzeSemantics input >>= compileSemanticToCorePrep
 
 compileEntryToCorePrep :: QualifiedName -> CompilerInput -> Either [Diagnostic] FrontendArtifacts
 compileEntryToCorePrep entry input = do
@@ -104,22 +94,21 @@ compileProjectToCorePrep entry inputs = do
             pure (ProjectFrontendArtifacts entry compiled selected)
     where
         parseUnit input = do
-            parsed <- parseCompilerInput input
-            pure (compilerSourceFile input, parsed)
+            syntax <- analyzeSyntax input
+            pure (compilerSourceFile input, syntaxParsedAST syntax)
 
 projectEntryCore :: ProjectFrontendArtifacts -> CoreModule
 projectEntryCore = artifactOptimizedCore . artifactFrontend . projectEntryNamespace
 
-parseCompilerInput :: CompilerInput -> Either [Diagnostic] ParsedAST
-parseCompilerInput input = do
-    tokens <- runLexer defaultLexer (LexerInput (compilerSourceFile input) (compilerSourceText input))
-    runParser defaultParser (ParserInput (compilerSourceFile input) tokens)
-
 compileParsedToCorePrep :: ParsedAST -> Either [Diagnostic] FrontendArtifacts
-compileParsedToCorePrep parsed = do
-    renamed <- runRenamer defaultRenamer parsed
-    resolved <- runNameResolution defaultNameResolution renamed
-    typed <- runTypeChecker defaultTypeChecker resolved
+compileParsedToCorePrep parsed = analyzeParsedSemantics parsed >>= compileSemanticToCorePrep
+
+compileSemanticToCorePrep :: SemanticArtifacts -> Either [Diagnostic] FrontendArtifacts
+compileSemanticToCorePrep semantic = do
+    let parsed = semanticParsedAST semantic
+        renamed = semanticRenamedAST semantic
+        resolved = semanticResolvedAST semantic
+        typed = semanticTypedAST semantic
     core <- runDesugarer defaultDesugarer typed >>= verifyCore
     optimized <- runCoreOptimizer defaultCoreOptimizer core >>= verifyCore
     prepared <- prepareCore optimized >>= verifyCorePrep
