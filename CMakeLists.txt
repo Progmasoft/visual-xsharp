@@ -119,7 +119,11 @@ function(xs_validate_llvm_toolchain)
   endif()
 endfunction()
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+# LLVM's official Windows development archive is built against the static
+# multithreaded CRT. Keep every native target on the same ABI contract: LLVM
+# C++ objects carry /FAILIFMISMATCH records and must never be force-linked
+# against an incompatible runtime.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
 xs_monorepo_validate_projects()
 xs_monorepo_validate_runtimes()

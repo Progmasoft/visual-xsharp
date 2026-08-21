@@ -21,7 +21,7 @@ xs_resolve_llvm_cpp_libraries(XS_LLVM_CPP_LIBRARIES)
 find_library(XS_LLVM_LIBRARY NAMES LLVM-C HINTS ${LLVM_LIBRARY_DIRS} REQUIRED)
 find_program(XS_CABAL_EXECUTABLE NAMES cabal REQUIRED)
 
-# Some dependency package files alter this directory-scoped default. Keep all
-# Visual X# components on the DLL CRT so objects remain safe across library
-# boundaries and agree with test executables.
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+# Some dependency package files alter this directory-scoped default. Restore
+# the static multithreaded CRT selected at the root so LLVM component objects,
+# Visual X# libraries, executables, and in-tree tests share one ABI contract.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
