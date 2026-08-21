@@ -24,8 +24,8 @@ set(xs_project_fixture_dir "${XS_TEST_WORK_ROOT}/projects")
 file(COPY "${XS_TEST_SOURCE_ROOT}/fixtures/projects/"
      DESTINATION "${xs_project_fixture_dir}")
 
-add_executable(xs_text_artifact_tests
-  "${XS_TEST_SOURCE_ROOT}/text_artifact_tests.c"
+set(xs_assert_file_contains_script
+  "${CMAKE_CURRENT_LIST_DIR}/AssertFileContainsHex.cmake"
 )
 
 add_test(NAME kotlin_project_resolve COMMAND vxs resolve)
@@ -41,18 +41,15 @@ set_tests_properties(kotlin_project_resolve PROPERTIES
   RUN_SERIAL TRUE
 )
 
-add_test(NAME kotlin_project_resolve_binary_lock COMMAND xs_text_artifact_tests
-  "${xs_project_fixture_dir}/native_call/Visual.XSharp.Lockfile.sqlite3"
-  "SQLite format 3"
+add_test(NAME kotlin_project_resolve_binary_lock COMMAND "${CMAKE_COMMAND}"
+  "-DINPUT=${xs_project_fixture_dir}/native_call/Visual.XSharp.Lockfile.sqlite3"
+  "-DEXPECTED_HEX=53514c69746520666f726d61742033"
+  -P "${xs_assert_file_contains_script}"
 )
 set_tests_properties(kotlin_project_resolve_binary_lock PROPERTIES
-  # Both artifact probes reuse one instrumented executable. Serialize those
-  # invocations because concurrent copies of the same ASan image can stall on
-  # Windows even though the probes read independent files.
   TIMEOUT 15
   FIXTURES_REQUIRED kotlin_project_lock
   LABELS jvm
-  RESOURCE_LOCK text_artifact_probe
 )
 
 add_test(NAME compiler_check_project COMMAND vxs check)
@@ -112,12 +109,13 @@ set_tests_properties(vxdc_project_dump PROPERTIES
   RUN_SERIAL TRUE
 )
 
-add_test(NAME vxdc_project_dump_is_sql COMMAND xs_text_artifact_tests
-  "${xs_vxdc_output}" "BEGIN TRANSACTION;"
+add_test(NAME vxdc_project_dump_is_sql COMMAND "${CMAKE_COMMAND}"
+  "-DINPUT=${xs_vxdc_output}"
+  "-DEXPECTED_HEX=424547494e205452414e53414354494f4e3b"
+  -P "${xs_assert_file_contains_script}"
 )
 set_tests_properties(vxdc_project_dump_is_sql PROPERTIES
   TIMEOUT 15
   FIXTURES_REQUIRED vxdc_project_dump
   LABELS jvm
-  RESOURCE_LOCK text_artifact_probe
 )
