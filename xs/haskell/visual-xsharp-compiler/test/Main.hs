@@ -29,6 +29,12 @@ main = do
     check "operator precedence is preserved and constants fold" precedence
     check "unterminated final expression supplies the function result" finalExpression
     check "semicolon-terminated pure expression is rejected" pureExpressionStatement
+    check "binding statements require semicolons" bindingRequiresSemicolon
+    check "assignment statements require semicolons" assignmentRequiresSemicolon
+    check "return statements require semicolons" returnRequiresSemicolon
+    check "call expression statements require semicolons" callRequiresSemicolon
+    check "void functions cannot use a final result expression" voidFinalExpression
+    check "nested blocks cannot use a final result expression" nestedFinalExpression
     check "CorePrep atomizes calls and creates explicit control flow" preparedControlFlow
     check "project entry resolves namespace, class, and public static void Main" entryContract
     check "int Main is rejected for the selected project entry" wrongEntryReturn
@@ -127,6 +133,25 @@ finalExpression = case compile "class Math { auto Calculate() { 2 + 3 * 4 } }" o
 pureExpressionStatement :: Bool
 pureExpressionStatement = hasCode "VXT0013" (compile "class App { void Run() { 42; } }")
 
+bindingRequiresSemicolon :: Bool
+bindingRequiresSemicolon = rejected (compile "class App { int Read() { int value = 1 return value; } }")
+
+assignmentRequiresSemicolon :: Bool
+assignmentRequiresSemicolon = rejected (compile "class App { int Read() { int value = 1; value = 2 return value; } }")
+
+returnRequiresSemicolon :: Bool
+returnRequiresSemicolon = rejected (compile "class App { int Read() { return 1 } }")
+
+callRequiresSemicolon :: Bool
+callRequiresSemicolon =
+    rejected (compile "class App { void Save() { return; } void Run() { Save() return; } }")
+
+voidFinalExpression :: Bool
+voidFinalExpression = rejected (compile "class App { void Run() { 1 } }")
+
+nestedFinalExpression :: Bool
+nestedFinalExpression = rejected (compile "class App { int Read() { if (true) { 1 } 2 } }")
+
 preparedControlFlow :: Bool
 preparedControlFlow = case compileEntryToCorePrep (QualifiedName [Identifier "Name", Identifier "Main"]) (CompilerInput "test.vxs" sample) of
     Right artifacts ->
@@ -157,6 +182,9 @@ topLevelFunction = hasCode "VXP0006" (compile "int Main() { return 0; }")
 
 hasCode :: String -> Either [Diagnostic] a -> Bool
 hasCode code result = case result of Left problems -> any ((== code) . diagnosticCode) problems; Right _ -> False
+
+rejected :: Either [Diagnostic] a -> Bool
+rejected result = case result of Left _ -> True; Right _ -> False
 unknownName :: Bool
 unknownName = hasCode "VXN0001" (compile "class App { int Read() { return missing; } }")
 immutableAssignment :: Bool

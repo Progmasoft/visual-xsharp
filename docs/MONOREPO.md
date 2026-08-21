@@ -14,8 +14,17 @@ include/      Shared public headers
 third_party/  Pinned source dependencies
 ```
 
-Additional registered tool directories include `xsfmt`, `xstidy`, and `xs-analyzer`. Their registration in the repository does
-not imply that they are built by the default native CMake configuration.
+The ecosystem tools have independent ownership and build systems:
+
+```text
+VisualAnalyzer/   Haskell LSP, Kotlin configuration DSL, IntelliJ plugin, and VS Code extension
+VisualFormatter/  Haskell vfmt executable and Kotlin configuration DSL
+VisualLinter/     Haskell vlint executable and Kotlin configuration DSL
+```
+
+These canonical projects replace the retired `xs-analyzer`, `xsfmt`, and `xstidy` prototypes. They are not native CMake
+subprojects. Their Haskell components use Cabal, their Kotlin configuration layers use Gradle with an external JRE 25 and
+Kotlin Script Runner, and the Visual Analyzer editor integrations additionally use their platform-specific build systems.
 
 ## CMake selection
 
@@ -27,8 +36,8 @@ XS_ENABLE_PROJECTS
 XS_ENABLE_RUNTIMES
 ```
 
-The default values select `xs` and `xsrt`. Registered future projects are rejected with an explicit not-buildable-yet error
-rather than silently ignored.
+The default values select `xs` and `xsrt`. Cargo, Cabal, Gradle, IntelliJ Platform, and pnpm projects remain outside this
+native selector and are composed by repository-level orchestration and CI.
 
 ## Nested repositories
 

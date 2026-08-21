@@ -12,6 +12,13 @@ source-to-native executable pipeline.
 
 ## 0.3.1 - 2026-08-13
 
+- Retired the obsolete Rust `xs-analyzer`, `xsfmt`, and `xstidy` prototypes without carrying them into replacement
+  directories. The canonical Visual Analyzer, Visual Formatter, and Visual Linter designs now have independent Haskell,
+  Kotlin, and editor-integration ownership outside the native CMake project selector.
+- Split the monolithic GitHub Actions workflow into independently cancellable native, language-layer, and Haskell coverage
+  workflows.
+- Made semicolons mandatory for bindings, assignments, expression statements, and explicit value returns in the Haskell
+  parser. A semicolon-free expression is accepted only as the direct final result of a value-returning function body.
 - Strengthened the C++20 CLI parser around one declarative command/option schema: command dispatch, artifact kinds,
   warnings, booleans, LLVM choices, and ViGet actions become typed values at the argv boundary; command-specific help is
   generated from the same domains and parse failures identify the rejected option and expected values.

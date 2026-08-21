@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
 # SPDX-License-Identifier: MPL-2.0
 
-name: CI
+name: Native
 
 on:
   pull_request:
@@ -11,11 +11,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: native-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  native:
+  windows-clangcl:
     name: Windows ClangCL
     runs-on: windows-2025
     timeout-minutes: 60
@@ -132,113 +132,3 @@ jobs:
       - name: Test sanitizer configuration
         shell: pwsh
         run: ctest --preset clangcl-sanitize --output-on-failure --parallel 2
-
-  languages:
-    name: Language layers
-    runs-on: windows-2025
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: recursive
-
-      - name: Install JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "25"
-
-      - name: Install Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "9.6.1"
-
-      - name: Install Rust nightly
-        shell: pwsh
-        run: rustup toolchain install nightly-2026-07-10 --profile default
-
-      - name: Check Kotlin project runtime
-        shell: pwsh
-        run: .\xs_kts\gradlew.bat -p xs_kts check
-
-      - name: Build Haskell compiler layers
-        shell: pwsh
-        working-directory: xs
-        run: cabal build all
-
-      - name: Test Haskell compiler layers
-        shell: pwsh
-        working-directory: xs
-        run: cabal test all
-
-      - name: Check Haskell package metadata
-        shell: pwsh
-        working-directory: xs/haskell/visual-xsharp-compiler
-        run: cabal check
-
-      - name: Check Rust formatting
-        shell: pwsh
-        run: cargo +nightly-2026-07-10 fmt --manifest-path xslang/Cargo.toml --check
-
-      - name: Test Rust compiler core
-        shell: pwsh
-        run: cargo +nightly-2026-07-10 test --manifest-path xslang/Cargo.toml
-
-      - name: Check Rust lints
-        shell: pwsh
-        run: cargo +nightly-2026-07-10 clippy --manifest-path xslang/Cargo.toml -- -D warnings
-
-      - name: Check patch hygiene
-        shell: pwsh
-        run: git diff --check
-
-  coverage:
-    name: Haskell frontend coverage
-    runs-on: windows-2025
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Test Haskell frontend with HPC
-        shell: pwsh
-        working-directory: xs
-        run: cabal test all --enable-coverage --test-show-details=direct
-
-      - name: Convert HPC data to LCOV
-        shell: pwsh
-        working-directory: xs
-        run: |
-          $toolVersion = "0.6.4.1"
-          $expectedHash = "9805651928db5c168a453ae09dd26113c7fc9816314b7268f1d1a71f7196f55f"
-          $tool = Join-Path $env:RUNNER_TEMP "hpc-codecov-$toolVersion.exe"
-          $reportDirectory = Join-Path $PWD "coverage"
-          $report = Join-Path $reportDirectory "haskell-frontend.lcov"
-
-          curl.exe -L --fail --retry 4 --retry-delay 3 `
-            -o $tool `
-            "https://github.com/8c6794b6/hpc-codecov/releases/download/v$toolVersion/hpc-codecov-Windows-X64.exe"
-
-          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $tool).Hash.ToLowerInvariant()
-          if ($actualHash -ne $expectedHash) {
-            throw "hpc-codecov SHA-256 mismatch: $actualHash"
-          }
-
-          New-Item -ItemType Directory -Force $reportDirectory | Out-Null
-          & $tool -r . -x Main -x SourceSetTests -f lcov -o $report cabal:compiler-layer-tests
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $report)) {
-            throw "hpc-codecov did not produce the expected LCOV report"
-          }
-
-      - name: Upload Haskell frontend coverage
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
-        with:
-          use_oidc: true
-          fail_ci_if_error: true
-          disable_search: true
-          plugins: noop
-          files: ./xs/coverage/haskell-frontend.lcov
-          flags: haskell-frontend
-          name: haskell-frontend
