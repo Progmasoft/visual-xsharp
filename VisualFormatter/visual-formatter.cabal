@@ -1,6 +1,6 @@
 cabal-version: 3.12
 name: visual-formatter
-version: 0.3.2
+version: 0.1.0
 synopsis: Syntax-aware source formatter for Visual X#
 description:
     Provides safe source layout normalization and the vfmt command-line tool

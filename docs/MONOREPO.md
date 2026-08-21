@@ -31,6 +31,13 @@ analysis without a standalone executable; `vfmt` performs parser-gated physical 
 semantic compiler diagnostics with independently actionable source-hygiene checks. Kotlin configuration and editor hosts
 remain separate ownership layers and are not represented by placeholder implementations.
 
+The analyzer, formatter, and linter Kotlin modules currently provide typed scopes, defaults, validation, and immutable
+snapshots. Their future script evaluators remain a separate integration layer.
+
+Visual Formatter and Visual Linter use independent release lines rather than inheriting the compiler version. Analyzer,
+Formatter, and Linter also have separate CI workflows so each project can evolve without coupling its validation gates to
+the others.
+
 ## CMake selection
 
 The root CMake project currently treats `xs` as the buildable compiler project and `xsrt` as the buildable runtime. The

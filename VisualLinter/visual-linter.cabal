@@ -1,6 +1,6 @@
 cabal-version: 3.12
 name: visual-linter
-version: 0.3.2
+version: 0.1.0
 synopsis: Compiler-backed static analysis for Visual X#
 description:
     Provides compiler diagnostics, source hygiene checks, safe fixes, and the
@@ -17,7 +17,7 @@ library
     hs-source-dirs: sources/main/haskell
     build-depends:
         base >=4.20 && <4.23,
-        visual-formatter >=0.3.2 && <0.4,
+        visual-formatter >=0.1 && <0.2,
         visual-xsharp-compiler >=0.3.2 && <0.4
     default-language: GHC2021
 

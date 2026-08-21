@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   language-layers:
-    name: Kotlin, Haskell, and Rust
+    name: Project DSL, compiler, and Rust
     runs-on: windows-2025
     timeout-minutes: 45
     steps:
@@ -46,21 +46,18 @@ jobs:
       - name: Build Haskell compiler layers
         shell: pwsh
         working-directory: xs
-        run: cabal build all
+        run: cabal build visual-xsharp-compiler
 
       - name: Test Haskell compiler layers
         shell: pwsh
         working-directory: xs
-        run: cabal test all
+        run: cabal test compiler-layer-tests
 
       - name: Check Haskell package metadata
         shell: pwsh
         run: |
           $packageDirectories = @(
-            "xs/haskell/visual-xsharp-compiler",
-            "VisualAnalyzer",
-            "VisualFormatter",
-            "VisualLinter"
+            "xs/haskell/visual-xsharp-compiler"
           )
           foreach ($directory in $packageDirectories) {
             Push-Location $directory

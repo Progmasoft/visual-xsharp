@@ -6,3 +6,6 @@ frontend analysis results.
 
 The first implemented boundary reuses the compiler's lexer, parser, resolver, type checker, and CorePrep pipeline. Compiler
 diagnostics are translated to zero-based protocol positions without maintaining a second language implementation.
+
+The Kotlin module under `sources/main/kotlin` owns the typed `Visual.Analyzer.kts` configuration surface, canonical
+defaults, validation, and immutable snapshots. Script discovery and evaluation are intentionally outside this module.

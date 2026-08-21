@@ -13,3 +13,6 @@ vfmt -Help
 
 Standard mode writes formatted source to standard output. `-In-Place` overwrites the file, while `-Dry-Run` produces no
 output and returns a failing exit status when formatting would change the file.
+
+The Kotlin module under `sources/main/kotlin` owns the typed `Visual.Formatter.kts` configuration surface, canonical
+defaults, validation, and immutable snapshots. Script discovery and evaluation are intentionally outside this module.

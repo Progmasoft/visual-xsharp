@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
+# SPDX-License-Identifier: MPL-2.0
+
+name: Visual Formatter
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-formatter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  formatter:
+    name: Kotlin DSL and formatter
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.6.1"
+
+      - name: Check formatter configuration DSL
+        shell: pwsh
+        run: .\xs_kts\gradlew.bat -p VisualFormatter spotlessCheck test
+
+      - name: Build Visual Formatter
+        shell: pwsh
+        working-directory: xs
+        run: cabal build visual-formatter
+
+      - name: Test Visual Formatter
+        shell: pwsh
+        working-directory: xs
+        run: cabal test visual-formatter-tests
+
+      - name: Check package metadata
+        shell: pwsh
+        working-directory: VisualFormatter
+        run: cabal check
+
+      - name: Check patch hygiene
+        shell: pwsh
+        run: git diff --check

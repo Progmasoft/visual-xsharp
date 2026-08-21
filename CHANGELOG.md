@@ -18,9 +18,15 @@ source-to-native executable pipeline.
   source-hygiene checks, safe `-Fix`, `-List-Checks`, and `-Help` modes.
 - Added project-wide `vxs format` and `vxs lint` dispatch. The compiler-owned source-set loader applies Kotlin project
   roots and exclusions before the installed Visual Formatter or Visual Linter is invoked for each source.
-- Advanced the native compiler, Haskell compiler frontend, Kotlin project runtime, and new ecosystem packages to 0.3.2.
+- Advanced the native compiler, Haskell compiler frontend, and Kotlin project runtime to 0.3.2. Visual Formatter and
+  Visual Linter retain independent 0.1.0 release lines.
 - Removed the retired `xlil-java` binding project; the maintained Rust intermediate-language implementation remains in
   place and is unaffected.
+- Added typed Kotlin DSL models for `Visual.Analyzer.kts`, `Visual.Formatter.kts`, and `Visual.Linter.kts`, including
+  canonical defaults, validation, immutable snapshots, and the complete linter rule catalog without coupling any DSL to
+  a script evaluator.
+- Split Visual Analyzer, Visual Formatter, and Visual Linter into independently owned CI workflows; the shared language
+  workflow now covers only the project DSL runtime, compiler layers, and Rust core.
 
 ## 0.3.1 - 2026-08-13
 
