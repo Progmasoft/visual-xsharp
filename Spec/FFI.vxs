@@ -6,6 +6,8 @@
 -- This file is a topic-oriented language design example suite.
 -- Each fragment states its intent explicitly; fragments marked INVALID are expected to be rejected.
 -- Examples record intended behavior; they do not claim complete compiler support.
+-- System.Worlds.* names are compiler-known special interop surfaces. They are not built-in language types or ordinary
+-- library namespaces; the compiler supplies their meaning for the selected foreign ABI and imported platform metadata.
 
 -- ============================================================================
 -- Example 1: 2. Direction rule

@@ -700,7 +700,7 @@ class Native {
 
 -- ============================================================================
 -- Example 80: 40. System.Worlds.ObjectiveC
--- Demonstrates: Example:
+-- Demonstrates: System.Worlds.ObjectiveC is a compiler-known special interop surface, not a built-in language namespace.
 
 using System.Worlds.ObjectiveC;
 
@@ -710,7 +710,7 @@ NSProcessInfo processInfo;
 
 -- ============================================================================
 -- Example 81: 41. System.Worlds.Swift
--- Demonstrates: Example:
+-- Demonstrates: System.Worlds.Swift is a compiler-known special interop surface, not a built-in language namespace.
 
 using System.Worlds.Swift;
 

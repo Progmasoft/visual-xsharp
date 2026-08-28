@@ -751,7 +751,7 @@ long raw = id;
 -- Demonstrates: The two declarations above use the same static type.
 
 template<typename T>
-typealias ListOf = System.Utils.ArrayList<T>;
+typealias ListOf = System.Array<T>;
 
 -- ============================================================================
 -- Example 81: 13.1 Alias Templates
@@ -766,7 +766,7 @@ typealias VariantOf = System.Variant<Types...>;
 
 template<typename T>
 requires Numeric<T>
-typealias NumericList = System.Utils.ArrayList<T>;
+typealias NumericList = System.Array<T>;
 
 -- ============================================================================
 -- Example 83: 13.2 Alias Restrictions
@@ -804,7 +804,7 @@ extension StringExtensions : String {
 -- Demonstrates: self refers to the extension target value.
 
 template<typename T>
-extension ArrayListExtensions : System.Utils.ArrayList<T> {
+extension ArrayExtensions : System.Array<T> {
     public T First() {
         self[0]
     }
@@ -816,7 +816,7 @@ extension ArrayListExtensions : System.Utils.ArrayList<T> {
 
 template<typename T>
 requires Printable<T>
-extension PrintableListExtensions : System.Utils.ArrayList<T> {
+extension PrintableArrayExtensions : System.Array<T> {
     public void PrintAll() {
         for (T value : self) {
             value.Print();
@@ -2355,9 +2355,9 @@ using System.Utils;
 -- Example 251: 40.2 Selected Import
 -- Demonstrates: Sub-namespaces are not imported recursively.
 
-using selected System.Utils {
-    ArrayList,
-    Enumerable,
+using selected System {
+    Array,
+    Dictionary,
 };
 
 -- ============================================================================
@@ -2365,16 +2365,16 @@ using selected System.Utils {
 -- Demonstrates: A selected source declaration must exist and must be accessible.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-using selected System.Utils {
-    HashMap, // INVALID when System.Utils.HashMap does not exist
+using selected System {
+    HashMap, // INVALID when System.HashMap does not exist
 };
 
 -- ============================================================================
 -- Example 253: 40.3 Selected Alias Import
 -- Demonstrates: Alias selection uses:
 
-using selected alias System.Utils {
-    ArrayList = Collection,
+using selected alias System {
+    Array = Collection,
 };
 
 -- ============================================================================
@@ -2382,9 +2382,9 @@ using selected alias System.Utils {
 -- Demonstrates: The right side is the local alias name.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-using selected alias System.Utils {
-    ArrayList = Collection,
-    HashMap = Map, // INVALID when System.Utils.HashMap does not exist
+using selected alias System {
+    Array = Collection,
+    HashMap = Map, // INVALID when System.HashMap does not exist
 };
 
 -- ============================================================================

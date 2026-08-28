@@ -305,8 +305,8 @@ source-to-native executable pipeline.
 ### Changed
 
 - An unconstrained square-bracket array literal remains runtime-sized `[T]`; only an explicit `[T; N]` context selects a
-  fixed layout. Runtime-sized arrays retain a fixed element count after construction and remain distinct from
-  count-changing `ArrayList<T>` values.
+  fixed layout. That implementation stage retained a fixed element count after construction; the current collection model
+  names the count-changing reference collection `System.Array<T>` and exposes it through `[T]`.
 
 ## 0.1.9 - 2026-07-18
 
@@ -316,8 +316,9 @@ source-to-native executable pipeline.
   trait-object, implementation binding, and dynamic-call helpers. A standalone public-header test exercises real dispatch.
 - Chained `data` field projection from arbitrary values, including aggregate-returning calls, now has a typed XHIR `member`
   record and lowers through MIR/XLIL aggregate extraction to LLVM `extractvalue` and native `.vxse` execution.
-- Built-in collection spelling is now consistent across the specification: resizable sequences use `ArrayList<T>`, maps
-  use `[K: V]`, sets use `[T] = {...}`, and none of these built-in forms requires `import collections`.
+- Collection spelling is consistent across the current specification: resizable reference sequences use
+  `System.Array<T>` / `[T]`, maps use `System.Dictionary<K, V>` / `[K to V]`, and sets use `System.Set<T>`. These system
+  collections are distinct from the built-in fixed-size CoW array `[]T`.
 - Ordered, transitive, and multiple `data` base lists now cross the C23 structural AST into Rust HIR and canonical XHIR.
   Inherited fields are laid out base-first in source base-list order, participate in object initialization, member access,
   mutation, scalar call ABI lowering, XMIR aggregate registries, LLVM IR, and native `.vxse` execution. Unknown/cyclic/
