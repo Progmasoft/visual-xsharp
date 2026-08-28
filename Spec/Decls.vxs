@@ -2362,11 +2362,13 @@ using selected System {
 
 -- ============================================================================
 -- Example 252: 40.2 Selected Import
--- Demonstrates: A selected source declaration must exist and must be accessible.
--- Expected result: compile-time rejection; the INVALID marker is normative.
+-- Demonstrates: Selected collection imports name declarations from the canonical System collection catalog.
+-- Expected result: accepted when the referenced declarations are available.
 
 using selected System {
-    HashMap, // INVALID when System.HashMap does not exist
+    Array,
+    Dictionary,
+    Set,
 };
 
 -- ============================================================================
@@ -2379,12 +2381,12 @@ using selected alias System {
 
 -- ============================================================================
 -- Example 254: 40.3 Selected Alias Import
--- Demonstrates: The right side is the local alias name.
--- Expected result: compile-time rejection; the INVALID marker is normative.
+-- Demonstrates: The left side is the canonical source declaration and the right side is its local alias.
+-- Expected result: accepted when the referenced declarations are available.
 
 using selected alias System {
     Array = Collection,
-    HashMap = Map, // INVALID when System.HashMap does not exist
+    Dictionary = Map,
 };
 
 -- ============================================================================
