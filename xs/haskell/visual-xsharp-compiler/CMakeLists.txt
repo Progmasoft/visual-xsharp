@@ -6,7 +6,9 @@
 # driver target.
 file(GLOB_RECURSE xs_haskell_frontend_sources CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hs"
-  "${CMAKE_CURRENT_SOURCE_DIR}/app/*.hs"
+)
+list(APPEND xs_haskell_frontend_sources
+  "${CMAKE_CURRENT_SOURCE_DIR}/app/Main.hs"
 )
 
 execute_process(
