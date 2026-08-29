@@ -33,6 +33,11 @@ source-to-native executable pipeline.
   the Visual X# command surface; global and command-specific help now reject the retired spelling.
 - Unified synchronous vxs help, version, diagnostic, and Core-pipeline output on the existing type-safe `fmt` dependency
   instead of retaining parallel `printf`, `fprintf`, `fputs`, and `putchar` formatting paths.
+- Split the post-CorePrep compiler monolith into independently owned Xpp and Xmm lowering units. Added a dedicated Xpp
+  structural/storage verifier, moved Xmm validation out of the LLVM backend into its own stage, and made the RAM pipeline
+  stop with location-preserving diagnostics before a malformed intermediate representation reaches the next owner.
+- Exposed the existing fmt package through a project-owned CMake interface target so compiler and sibling CLI parser tests
+  share one dependency without relying on directory-scoped imported targets.
 
 ## 0.3.1 - 2026-08-13
 

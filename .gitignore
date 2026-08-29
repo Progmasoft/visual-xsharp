@@ -6,6 +6,7 @@ bin/
 xide_api/
 xide/
 .codex/
+.agents/
 target/
 .gradle/
 .kotlin/

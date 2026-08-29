@@ -58,6 +58,12 @@ void PrintFailure(const visual_xsharp::PipelineResult &result)
     for(const auto &issue : result.verification_issues)
         fmt::print(stderr, "vxs: {}: {} [function={}, block={}]\n", issue.code, issue.message, issue.function,
                    issue.block);
+    for(const auto &issue : result.xppVerificationIssues)
+        fmt::print(stderr, "vxs: {}: {} [Xpp function={}, block={}, instruction={}]\n", issue.code, issue.message,
+                   issue.function, issue.block, issue.instruction);
+    for(const auto &issue : result.xmmVerificationIssues)
+        fmt::print(stderr, "vxs: {}: {} [Xmm function={}, block={}, instruction={}]\n", issue.code, issue.message,
+                   issue.function, issue.block, issue.instruction);
     if(result.llvm_error)
         fmt::print(stderr, "vxs: {}: {}\n", result.llvm_error->code, result.llvm_error->message);
 }

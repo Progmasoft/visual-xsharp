@@ -28,8 +28,14 @@ auto consume_coreprep(std::span<const std::uint8_t> bytes, const PipelineOptions
     // Optimization toggles select identity-vs-optimized forms; they never skip a stage.
     // Xmm therefore receives the same typed Xpp contract in debug and release modes.
     result.xpp = options.optimize_xpp ? xpp::optimize(std::move(lowered_xpp)) : std::move(lowered_xpp);
+    result.xppVerificationIssues = ::Visual::XSharp::Xpp::Verify(*result.xpp);
+    if(!result.xppVerificationIssues.empty())
+        return result;
     auto lowered_xmm = xmm::lower(*result.xpp);
     result.xmm = options.optimize_xmm ? xmm::optimize(std::move(lowered_xmm)) : std::move(lowered_xmm);
+    result.xmmVerificationIssues = ::Visual::XSharp::Xmm::Verify(*result.xmm);
+    if(!result.xmmVerificationIssues.empty())
+        return result;
     auto loweredLlvm = ::Visual::XSharp::Backend::LLVM::Lower(*result.xmm, options.llvm);
     // LLVM failures stay structured instead of being flattened into a pipeline boolean.
     // Frontends can render VXL diagnostics while still inspecting the verified Xmm.
@@ -70,8 +76,14 @@ auto ConsumeCore(std::span<const std::uint8_t> bytes, const Options &options) ->
 
     auto loweredXpp = ::visual_xsharp::xpp::lower(*result.core_prep);
     result.xpp = options.optimize_xpp ? ::visual_xsharp::xpp::optimize(std::move(loweredXpp)) : std::move(loweredXpp);
+    result.xppVerificationIssues = Xpp::Verify(*result.xpp);
+    if(!result.xppVerificationIssues.empty())
+        return result;
     auto loweredXmm = ::visual_xsharp::xmm::lower(*result.xpp);
     result.xmm = options.optimize_xmm ? ::visual_xsharp::xmm::optimize(std::move(loweredXmm)) : std::move(loweredXmm);
+    result.xmmVerificationIssues = Xmm::Verify(*result.xmm);
+    if(!result.xmmVerificationIssues.empty())
+        return result;
     auto loweredLlvm = Backend::LLVM::Lower(*result.xmm, options.llvm);
     if(!loweredLlvm)
     {

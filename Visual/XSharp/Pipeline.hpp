@@ -9,7 +9,9 @@
 #include "Visual/XSharp/Core/Verifier.hpp"
 #include "Visual/XSharp/Core/Wire.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
+#include "Visual/XSharp/Xmm/Verifier.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
+#include "Visual/XSharp/Xpp/Verifier.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -42,6 +44,8 @@ struct PipelineResult final
     std::optional<::Visual::XSharp::Core::Wire::Error> coreWireError;
     std::vector<::Visual::XSharp::Core::VerificationIssue> coreVerificationIssues;
     std::vector<core::VerificationIssue> verification_issues;
+    std::vector<::Visual::XSharp::Xpp::VerificationIssue> xppVerificationIssues;
+    std::vector<::Visual::XSharp::Xmm::VerificationIssue> xmmVerificationIssues;
 
     // Pipeline success means a verified, owned LLVM artifact exists; merely reaching
     // CorePrep, Xpp or Xmm is a partial result rather than a successful compilation.

@@ -195,6 +195,8 @@ TEST_CASE("VXCR RAM pipeline reaches optimized Xpp Xmm and LLVM")
     REQUIRE(result.llvm);
     REQUIRE(result.coreVerificationIssues.empty());
     REQUIRE(result.verification_issues.empty());
+    REQUIRE(result.xppVerificationIssues.empty());
+    REQUIRE(result.xmmVerificationIssues.empty());
     REQUIRE(result.xpp->functions.at(1).blocks.size() == 4U);
 }
 

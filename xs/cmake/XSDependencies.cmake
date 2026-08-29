@@ -13,6 +13,11 @@ endif()
 find_package(LLVM REQUIRED CONFIG)
 find_package(LibArchive REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+# Imported targets are directory-scoped unless a package promotes them to the
+# global scope.  Expose fmt through a project-owned target so sibling test
+# directories can consume the same dependency without repeating discovery.
+add_library(xs_fmt INTERFACE)
+target_link_libraries(xs_fmt INTERFACE fmt::fmt-header-only)
 # The renewed C++20 backend uses LLVM's native C++ IR and pass-manager APIs.
 # Component targets keep that dependency independent from the LLVM-C import
 # library retained only by the isolated legacy C backend below.

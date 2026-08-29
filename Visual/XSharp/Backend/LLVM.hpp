@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Visual/XSharp/Xmm/IR.hpp"
+#include "Visual/XSharp/Xmm/Verifier.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -35,37 +36,8 @@ struct Options final
     bool verify_module{true};
 };
 
-enum class IssueKind : std::uint8_t
-{
-    EmptyModule,
-    InvalidModuleName,
-    DuplicateFunction,
-    InvalidFunction,
-    UnsupportedType,
-    ParameterShape,
-    DuplicateBlock,
-    MissingEntry,
-    InvalidTarget,
-    RegisterRedefinition,
-    UndefinedRegister,
-    OperandCount,
-    OperandType,
-    ResultType,
-    InvalidCall,
-    InvalidReturn,
-    InvalidBranch,
-    InvalidLiteral
-};
-
-struct Issue final
-{
-    IssueKind kind{IssueKind::InvalidFunction};
-    std::string code;
-    std::string message;
-    Core::SymbolId function{};
-    Xmm::BlockId block{};
-    std::size_t instruction{};
-};
+using IssueKind = ::Visual::XSharp::Xmm::IssueKind;
+using Issue = ::Visual::XSharp::Xmm::VerificationIssue;
 
 enum class ErrorKind : std::uint8_t
 {
@@ -95,7 +67,10 @@ struct Artifact final
     std::string target_triple;
     std::size_t function_count{};
 
-    [[nodiscard]] auto empty() const noexcept -> bool { return llvm_ir.empty() || bitcode.empty(); }
+    [[nodiscard]] auto empty() const noexcept -> bool
+    {
+        return llvm_ir.empty() || bitcode.empty();
+    }
 };
 
 struct Result final
@@ -103,7 +78,10 @@ struct Result final
     std::optional<Artifact> artifact;
     std::optional<Error> error;
 
-    [[nodiscard]] explicit operator bool() const noexcept { return artifact.has_value(); }
+    [[nodiscard]] explicit operator bool() const noexcept
+    {
+        return artifact.has_value();
+    }
 };
 
 // Verify is public so tools can diagnose an Xmm artifact without constructing LLVM
@@ -111,8 +89,7 @@ struct Result final
 // backend's structural and type-safety boundary.
 [[nodiscard]] auto Verify(const Xmm::Module &module) -> std::vector<Issue>;
 [[nodiscard]] auto Lower(const Xmm::Module &module, const Options &options = {}) -> Result;
-[[nodiscard]] auto WriteLlvmIr(const std::filesystem::path &path, std::string_view llvmIr)
-    -> std::optional<Error>;
+[[nodiscard]] auto WriteLlvmIr(const std::filesystem::path &path, std::string_view llvmIr) -> std::optional<Error>;
 [[nodiscard]] auto WriteBitcode(const std::filesystem::path &path, const std::vector<std::uint8_t> &bitcode)
     -> std::optional<Error>;
 } // namespace Visual::XSharp::Backend::LLVM

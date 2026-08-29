@@ -47,10 +47,12 @@ and terminators. A verifier rejects malformed symbols, blocks, branch targets, a
 
 ## Native middle end
 
-Xpp is a target-independent typed representation consumed from verified CorePrep. Xmm lowers Xpp into a lower-level virtual
-register model. Function identities, signatures, instruction result types, and the distinction between function symbols and
-ordinary registers remain explicit across both stages. Both stages have optimization boundaries and remain independent of
-LLVM.
+Xpp is a target-independent typed representation consumed from verified CorePrep. Its stage verifier checks optimized
+control flow, storage declarations, typed operands, call identity, and terminators before Xmm is constructed. Xmm then lowers
+verified Xpp into a lower-level virtual-register model and verifies register storage, signatures, instruction shapes, calls,
+results, and control flow before the backend boundary. Function identities, signatures, instruction result types, and the
+distinction between function symbols and ordinary registers remain explicit across both stages. Lowering, optimization, and
+verification are owned by separate Xpp/Xmm translation units and remain independent of LLVM.
 
 Core has a shared versioned `VXCR` binary contract and equivalent semantic verifiers in Haskell and C++20. The native reader
 decodes a bounded `.core` document, verifies it, and applies a dedicated Core-to-CorePrep adapter before Xpp lowering. The
@@ -61,7 +63,8 @@ RAM and has no file extension, artifact API, CLI input, or emit option.
 
 ## Backend
 
-LLVM is the compiler backend. The C++20 backend verifies Xmm before constructing an LLVM module, lowers supported scalar and
+LLVM is the compiler backend. It consumes Xmm only after the Xmm-owned verifier succeeds and repeats that verifier through a
+compatibility adapter for direct embedding clients. It then constructs an LLVM module, lowers supported scalar and
 control-flow operations, runs the selected LLVM optimization pipeline, verifies the resulting module, and serializes LLVM IR
 and bitcode in memory. Visual X# `String` constants are represented as Unicode scalar (`i32`) storage plus a 64-bit scalar
 count; they are not encoded as UTF-8 byte strings. LLVM types and handles do not escape the backend API.

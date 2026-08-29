@@ -50,7 +50,7 @@ target_compile_definitions(xs_cli_parser_tests PRIVATE
 xs_enable_strict_warnings(xs_cli_parser_tests)
 target_link_libraries(xs_cli_parser_tests PRIVATE
   Catch2::Catch2WithMain
-  fmt::fmt-header-only
+  xs_fmt
 )
 add_test(NAME cli_parser_model COMMAND xs_cli_parser_tests)
 set_tests_properties(cli_parser_model PROPERTIES TIMEOUT 15)

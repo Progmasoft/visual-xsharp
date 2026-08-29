@@ -7,6 +7,7 @@
 #include "Visual/XSharp/Pipeline.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
+#include "Visual/XSharp/Xpp/Verifier.hpp"
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -154,6 +155,48 @@ TEST_CASE("typed native lowering allocates stable virtual registers")
     REQUIRE(sum.blocks.front().terminator.value.kind == visual_xsharp::xmm::Value::Kind::Register);
 }
 
+TEST_CASE("Xpp verifier rejects optimizer output that breaks storage and control flow")
+{
+    auto xpp = visual_xsharp::xpp::lower(prepared_module());
+    auto &main = xpp.functions.at(1);
+    main.blocks.front().instructions.front().effect = visual_xsharp::xpp::Instruction::Effect::Store;
+    main.blocks.front().instructions.front().destination = 404U;
+    main.blocks.front().terminator.true_target = 405U;
+
+    const auto issues = Visual::XSharp::Xpp::Verify(xpp);
+    REQUIRE(std::ranges::any_of(issues, [](const auto &issue) { return issue.code == "VXP1018"; }));
+    REQUIRE(std::ranges::any_of(issues, [](const auto &issue) { return issue.code == "VXP1022"; }));
+}
+
+TEST_CASE("Xpp verifier accepts the complete lowered and optimized contract")
+{
+    const auto lowered = visual_xsharp::xpp::lower(prepared_module());
+    REQUIRE(Visual::XSharp::Xpp::Verify(lowered).empty());
+    REQUIRE(Visual::XSharp::Xpp::Verify(visual_xsharp::xpp::optimize(lowered)).empty());
+}
+
+TEST_CASE("Xpp verifier reports declaration and operand corruption independently")
+{
+    auto xpp = visual_xsharp::xpp::lower(prepared_module());
+    auto &sum = xpp.functions.front();
+    sum.parameters.back().symbol.id = sum.parameters.front().symbol.id;
+    sum.blocks.front().instructions.front().operands.front().symbol = 900U;
+
+    const auto issues = Visual::XSharp::Xpp::Verify(xpp);
+    REQUIRE(std::ranges::any_of(issues, [](const auto &issue) { return issue.code == "VXP1006"; }));
+    REQUIRE(std::ranges::any_of(issues, [](const auto &issue) { return issue.code == "VXP1013"; }));
+    REQUIRE(std::ranges::all_of(issues, [](const auto &issue) { return issue.function == 10U; }));
+}
+
+TEST_CASE("Xpp verifier validates direct-call signatures before register lowering")
+{
+    auto xpp = visual_xsharp::xpp::lower(prepared_module());
+    xpp.functions.at(1).blocks.front().instructions.front().operands.pop_back();
+
+    const auto issues = Visual::XSharp::Xpp::Verify(xpp);
+    REQUIRE(std::ranges::any_of(issues, [](const auto &issue) { return issue.code == "VXP1025"; }));
+}
+
 TEST_CASE("C++20 CorePrep wire codec preserves the complete typed CFG")
 {
     const auto prepared = prepared_module();
@@ -249,9 +292,11 @@ TEST_CASE("RAM pipeline decodes verifies and lowers CorePrep to optimized Xmm")
     REQUIRE(result.core_prep.has_value());
     REQUIRE(result.xpp.has_value());
     REQUIRE(result.xmm.has_value());
+    REQUIRE(result.xmmVerificationIssues.empty());
     REQUIRE(result.llvm.has_value());
     REQUIRE_FALSE(result.wire_error.has_value());
     REQUIRE(result.verification_issues.empty());
+    REQUIRE(result.xppVerificationIssues.empty());
     REQUIRE(result.core_prep->functions.at(1).blocks.size() == 5);
     REQUIRE(result.xpp->functions.at(1).blocks.size() == 4);
     REQUIRE(result.xmm->functions.at(1).blocks.size() == 4);

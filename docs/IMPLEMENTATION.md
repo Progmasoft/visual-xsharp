@@ -49,9 +49,11 @@ The repository contains:
 - structural and semantic native CorePrep verifiers;
 - CorePrep-to-Xpp lowering;
 - Xpp control-flow and self-copy optimization;
+- an Xpp-owned verifier for module/function identity, storage declarations, typed operands, and CFG targets;
 - Xpp-to-Xmm lowering; and
 - Xmm virtual-register move optimization;
-- an Xmm verifier with register, signature, call, operand, result, and control-flow diagnostics;
+- an Xmm-owned verifier with register, signature, call, operand, result, and control-flow diagnostics, exposed through the
+  existing LLVM verification API for compatibility;
 - C++20 Xmm-to-LLVM lowering for the implemented scalar, call, branch, jump, and return operations;
 - LLVM O0/O1/O2/O3 pass-pipeline selection followed by module verification;
 - Unicode-scalar `String` constant storage; and

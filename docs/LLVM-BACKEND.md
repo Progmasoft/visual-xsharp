@@ -15,8 +15,9 @@ missing semantic information. Xmm therefore retains every item required for dete
 - function operands distinct from ordinary virtual registers; and
 - explicit basic-block terminators and targets.
 
-CorePrep and Xmm verification happen before LLVM objects are constructed. A failed check produces structured `VXL` issues and
-no LLVM artifact.
+CorePrep, Xpp, and Xmm verification happen before LLVM objects are constructed. Xmm owns the final native IR verifier; the
+LLVM `Verify` entry remains as a source-compatible adapter and `Lower` repeats the check for direct clients. A failed check
+produces structured `VXP` or `VXL` issues and no LLVM artifact.
 
 The canonical C++ spelling is `Visual::XSharp`, with PascalCase namespace segments, classes, and functions. The LLVM backend
 is the first renewed subsystem that uses the canonical spelling as its real namespace rather than an alias. Older C++ middle-

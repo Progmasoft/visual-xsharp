@@ -4,6 +4,7 @@
 #include "Visual/XSharp/Backend/LLVM.hpp"
 #include "Visual/XSharp/Core/CorePrep/Wire.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
+#include "Visual/XSharp/Xmm/Verifier.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -40,39 +41,62 @@ auto Variable(std::uint64_t symbol, Type type) -> Atom
 
 auto ArithmeticModule() -> CorePrepModule
 {
-    Function calculate{
-        {10, U"Calculate"},
-        {Parameter{{11, U"left"}, Type::int64()}, Parameter{{12, U"right"}, Type::int64()}},
-        Type::int64(),
-        0,
-        {Block{0,
-               {Instruction{Instruction::Kind::Bind, {13, U"sum"}, Type::int64(), false, Operation::Add,
-                            {Variable(11, Type::int64()), Variable(12, Type::int64())}},
-                Instruction{Instruction::Kind::Bind, {14, U"quotient"}, Type::int64(), false, Operation::FloorDivide,
-                            {Variable(13, Type::int64()), Literal(3)}}},
-               Terminator{Terminator::Kind::Return, Variable(14, Type::int64()), 0, 0}}}};
-    Function main{
-        {20, U"Main"}, {}, Type::unit(), 0,
-        {Block{0,
-               {Instruction{Instruction::Kind::Bind, {21, U"answer"}, Type::int64(), false, Operation::Call,
-                            {Variable(10, Type::function({Type::int64(), Type::int64()}, Type::int64())), Literal(40),
-                             Literal(2)}},
-                Instruction{Instruction::Kind::Bind, {22, U"ok"}, Type::boolean(), false, Operation::GreaterEqual,
-                            {Variable(21, Type::int64()), Literal(14)}}},
-               Terminator{Terminator::Kind::Branch, Variable(22, Type::boolean()), 1, 2}},
-         Block{1, {}, Terminator{Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}},
-         Block{2, {}, Terminator{Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}}}};
+    Function calculate{{10, U"Calculate"},
+                       {Parameter{{11, U"left"}, Type::int64()}, Parameter{{12, U"right"}, Type::int64()}},
+                       Type::int64(),
+                       0,
+                       {Block{0,
+                              {Instruction{Instruction::Kind::Bind,
+                                           {13, U"sum"},
+                                           Type::int64(),
+                                           false,
+                                           Operation::Add,
+                                           {Variable(11, Type::int64()), Variable(12, Type::int64())}},
+                               Instruction{Instruction::Kind::Bind,
+                                           {14, U"quotient"},
+                                           Type::int64(),
+                                           false,
+                                           Operation::FloorDivide,
+                                           {Variable(13, Type::int64()), Literal(3)}}},
+                              Terminator{Terminator::Kind::Return, Variable(14, Type::int64()), 0, 0}}}};
+    Function main{{20, U"Main"},
+                  {},
+                  Type::unit(),
+                  0,
+                  {Block{0,
+                         {Instruction{Instruction::Kind::Bind,
+                                      {21, U"answer"},
+                                      Type::int64(),
+                                      false,
+                                      Operation::Call,
+                                      {Variable(10, Type::function({Type::int64(), Type::int64()}, Type::int64())),
+                                       Literal(40), Literal(2)}},
+                          Instruction{Instruction::Kind::Bind,
+                                      {22, U"ok"},
+                                      Type::boolean(),
+                                      false,
+                                      Operation::GreaterEqual,
+                                      {Variable(21, Type::int64()), Literal(14)}}},
+                         Terminator{Terminator::Kind::Branch, Variable(22, Type::boolean()), 1, 2}},
+                   Block{1, {}, Terminator{Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}},
+                   Block{2, {}, Terminator{Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}}}};
     return CorePrepModule{{U"Backend", U"Contract"}, {std::move(calculate), std::move(main)}};
 }
 
 auto StringModule() -> CorePrepModule
 {
-    Function message{
-        {30, U"Message"}, {}, Type::string(), 0,
-        {Block{0,
-               {Instruction{Instruction::Kind::Bind, {31, U"text"}, Type::string(), false, Operation::Copy,
-                            {Atom::constant(std::u32string{U"Merhaba \U0001f30d"}, Type::string())}}},
-               Terminator{Terminator::Kind::Return, Variable(31, Type::string()), 0, 0}}}};
+    Function message{{30, U"Message"},
+                     {},
+                     Type::string(),
+                     0,
+                     {Block{0,
+                            {Instruction{Instruction::Kind::Bind,
+                                         {31, U"text"},
+                                         Type::string(),
+                                         false,
+                                         Operation::Copy,
+                                         {Atom::constant(std::u32string{U"Merhaba \U0001f30d"}, Type::string())}}},
+                            Terminator{Terminator::Kind::Return, Variable(31, Type::string()), 0, 0}}}};
     return CorePrepModule{{U"Unicode"}, {std::move(message)}};
 }
 
@@ -168,8 +192,10 @@ TEST_CASE("Xmm verifier rejects undefined and redefined virtual registers")
     instructions.back().destination = instructions.front().destination;
     instructions.back().result_type = Type::boolean();
     const auto issues = Llvm::Verify(xmm);
+    const auto stageIssues = Visual::XSharp::Xmm::Verify(xmm);
     REQUIRE(HasIssue(issues, "VXL1011"));
     REQUIRE(HasIssue(issues, "VXL1026"));
+    REQUIRE(stageIssues == issues);
     const auto result = Llvm::Lower(xmm);
     REQUIRE_FALSE(result);
     REQUIRE(result.error->kind == Llvm::ErrorKind::InvalidXmm);
@@ -274,6 +300,7 @@ TEST_CASE("RAM pipeline reaches LLVM only after wire and semantic verification")
     REQUIRE(result.core_prep);
     REQUIRE(result.xpp);
     REQUIRE(result.xmm);
+    REQUIRE(result.xmmVerificationIssues.empty());
     REQUIRE(result.llvm);
     REQUIRE_FALSE(result.llvm_error);
     REQUIRE(result.llvm->function_count == 2);

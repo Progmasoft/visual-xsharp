@@ -14,7 +14,7 @@ add_library(xs_compiler STATIC
 xs_add_public_include_roots(xs_compiler)
 target_link_libraries(xs_compiler
   PUBLIC xs_compiler_pipeline
-  PRIVATE fmt::fmt-header-only
+  PRIVATE xs_fmt
 )
 target_compile_definitions(xs_compiler PRIVATE
   XS_PROJECT_VERSION="${PROJECT_VERSION}"
