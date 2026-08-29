@@ -19,7 +19,7 @@ coverage:
 flags:
   haskell-frontend:
     paths:
-      - xs/haskell/visual-xsharp-compiler/src/
+      - Compiler/Haskell/
     carryforward: false
 
 comment:

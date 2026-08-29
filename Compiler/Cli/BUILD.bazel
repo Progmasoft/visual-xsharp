@@ -1,0 +1,10 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+package(default_visibility = ["//visibility:public"])
+
+# vxs remains one shipped executable. The packages below this directory are
+# ownership seams, not separately installed helper programs.
+cc_binary(
+    name = "vxs",
+    srcs = ["Main.cpp"],
+    deps = ["//Compiler/Cli/Commands:commands"],
+)

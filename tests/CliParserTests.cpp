@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
-#include "xs/sources/driver/Options.hpp"
+#include "Compiler/Cli/Arguments/Options.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

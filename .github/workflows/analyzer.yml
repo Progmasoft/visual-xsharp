@@ -37,21 +37,21 @@ jobs:
 
       - name: Check analyzer configuration DSL
         shell: pwsh
-        run: .\vxs_kts\gradlew.bat -p VisualAnalyzer spotlessCheck test
+        run: .\ProjectSystem\gradlew.bat -p Analyzer spotlessCheck test
 
       - name: Build Visual Analyzer
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal build visual-analyzer
 
       - name: Test Visual Analyzer
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal test visual-analyzer-tests
 
       - name: Check package metadata
         shell: pwsh
-        working-directory: VisualAnalyzer
+        working-directory: Analyzer
         run: cabal check
 
       - name: Check patch hygiene

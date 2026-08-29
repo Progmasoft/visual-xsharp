@@ -30,8 +30,6 @@ pub mod compiler_core;
     reason = "existing HIR API documentation is being completed incrementally"
 )]
 pub mod hir;
-/// Compatibility queries for the native C++20 compiler-core bridge.
-pub mod interop;
 #[allow(
     missing_docs,
     reason = "existing MIR API documentation is being completed incrementally"
@@ -50,10 +48,10 @@ pub(crate) mod text;
 pub mod xlil;
 
 /// Version of the `xslang` crate that built this compiler core.
-pub const VERSION: &str = env!("XSLANG_BUILD_VERSION");
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Highest XHIR text format version accepted by this release.
-pub const XHIR_VERSION: &str = env!("XSLANG_XHIR_VERSION");
+pub const XHIR_VERSION: &str = "1";
 /// Highest XMIR text format version accepted by this release.
-pub const XMIR_VERSION: &str = env!("XSLANG_XMIR_VERSION");
+pub const XMIR_VERSION: &str = "1";
 /// Highest XLIL text format version accepted by this release.
-pub const XLIL_VERSION: &str = env!("XSLANG_XLIL_VERSION");
+pub const XLIL_VERSION: &str = "1";

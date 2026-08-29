@@ -3,16 +3,8 @@
 
 # Building and testing
 
-The optional top-level `justfile` composes the existing CMake and Gradle owners without replacing either build system:
-
-```powershell
-just check
-just check sanitize
-just format-kotlin
-just format-native xs/sources/driver/Cli.cpp
-```
-
-The recipes intentionally remain thin. The commands below are still the canonical native and Kotlin build interfaces.
+The repository has no secondary orchestration wrapper. Bazel is the top-level native build and test interface; Cabal and
+Gradle remain the direct build interfaces for their Haskell and Kotlin ownership boundaries.
 
 ## Supported host
 
@@ -22,14 +14,13 @@ build executables are not part of the toolchain.
 
 Required tools:
 
-- Kitware CMake 3.31 or newer;
-- standalone Ninja;
+- Bazelisk;
+- Kitware CMake 3.31 and standalone Ninja for legacy C/package components;
 - ClangCL and LLD from a standalone LLVM installation;
 - Windows SDK headers and import libraries;
 - MSVC CRT and C++ standard-library development files;
-- an LLVM development package containing `LLVMConfig.cmake` and the LLVM C library;
-- vcpkg;
-- Rustup and Cargo;
+- an LLVM development package containing LLVM headers, libraries, `LLVMConfig.cmake`, and `llvm-config`;
+- vcpkg only when building the legacy package subtree;
 - GHC 9.10 and Cabal;
 - JDK 25; and
 - the Kotlin command used by project-evaluator tests.
@@ -46,7 +37,8 @@ Do not write a machine-specific LLVM path into the repository. Use one of these 
 - set `LLVM_ROOT` to an LLVM development installation prefix; or
 - expose the package through `CMAKE_PREFIX_PATH`.
 
-The CMake build fails at configuration time if the LLVM package or LLVM C library cannot be found.
+The Bazel repository rule fails during analysis if it cannot discover a complete LLVM development tree. Transitional CMake
+configuration uses `LLVM_DIR` or normal package discovery.
 
 ## Submodules
 
@@ -58,7 +50,18 @@ git submodule update --init --recursive
 
 The native CLI uses its own typed C++20 command schema. Catch2 remains the only native test submodule.
 
-## Native dependencies
+## Production C++20 build
+
+```powershell
+bazelisk build //Compiler/Cli:vxs
+bazelisk build //tests:cli_parser_tests
+.\bazel-bin\tests\cli_parser_tests.exe
+```
+
+The native Catch2 program is executed directly from PowerShell. This avoids introducing a Git Bash/MSYS runtime solely for
+Bazel's POSIX-oriented `cc_test` launcher on Windows.
+
+## Legacy native dependencies
 
 The vcpkg manifest provides a minimal LibArchive build with zstd support. LLVM is not built through vcpkg.
 
@@ -68,7 +71,7 @@ The vcpkg manifest provides a minimal LibArchive build with zstd support. LLVM i
   --x-manifest-root .
 ```
 
-## Debug build
+## Legacy debug build
 
 ```powershell
 cmake --preset clangcl-debug `
@@ -77,7 +80,7 @@ cmake --build --preset clangcl-debug --parallel 4
 ctest --preset clangcl-debug --output-on-failure --parallel 2
 ```
 
-## Sanitizer build
+## Legacy sanitizer build
 
 ```powershell
 cmake --preset clangcl-sanitize `
@@ -94,26 +97,19 @@ beside test executables.
 Haskell:
 
 ```powershell
-Set-Location xs
+Set-Location Compiler
 cabal build all
 cabal test all
-Set-Location haskell\visual-xsharp-compiler
-cabal check
-```
-
-Rust:
-
-```powershell
-Set-Location xslang
-cargo +nightly-2026-07-10 fmt --check
-cargo +nightly-2026-07-10 test
-cargo +nightly-2026-07-10 clippy -- -D warnings
+Get-ChildItem Haskell -Filter *.cabal -Recurse | ForEach-Object {
+  Push-Location $_.DirectoryName
+  try { cabal check } finally { Pop-Location }
+}
 ```
 
 Kotlin:
 
 ```powershell
-.\vxs_kts\gradlew.bat -p vxs_kts test
+.\ProjectSystem\gradlew.bat -p ProjectSystem test
 ```
 
 ## File-size gate

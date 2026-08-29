@@ -110,6 +110,19 @@ auto LowerModule(const CorePrepModule &module, Llvm::OptimizationLevel optimizat
     return Llvm::Lower(xmm, options);
 }
 
+auto LowerMachineArtifact(const CorePrepModule &module, Llvm::MachineCodeEmission emission, bool executable = false)
+    -> Llvm::Result
+{
+    const auto xpp = visual_xsharp::xpp::optimize(visual_xsharp::xpp::lower(module));
+    const auto xmm = visual_xsharp::xmm::optimize(visual_xsharp::xmm::lower(xpp));
+    Llvm::Options options;
+    options.optimization = Llvm::OptimizationLevel::Debug;
+    options.target_triple = "x86_64-pc-windows-msvc";
+    options.machineCode = emission;
+    options.executableEntry = executable;
+    return Llvm::Lower(xmm, options);
+}
+
 auto HasIssue(const std::vector<Llvm::Issue> &issues, std::string_view code) -> bool
 {
     return std::ranges::any_of(issues, [code](const auto &issue) { return issue.code == code; });
@@ -119,18 +132,24 @@ struct TemporaryArtifacts final
 {
     std::filesystem::path llvm_ir = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.ll";
     std::filesystem::path bitcode = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.bc";
+    std::filesystem::path object = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.o";
+    std::filesystem::path assembly = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.asm";
 
     TemporaryArtifacts()
     {
         std::error_code ignored;
         std::filesystem::remove(llvm_ir, ignored);
         std::filesystem::remove(bitcode, ignored);
+        std::filesystem::remove(object, ignored);
+        std::filesystem::remove(assembly, ignored);
     }
     ~TemporaryArtifacts()
     {
         std::error_code ignored;
         std::filesystem::remove(llvm_ir, ignored);
         std::filesystem::remove(bitcode, ignored);
+        std::filesystem::remove(object, ignored);
+        std::filesystem::remove(assembly, ignored);
     }
 };
 } // namespace
@@ -263,6 +282,35 @@ TEST_CASE("LLVM artifact records an explicit target triple without repository pa
     REQUIRE(result.artifact->llvm_ir.find("C:/LLVM") == std::string::npos);
 }
 
+TEST_CASE("LLVM target machine emits COFF object and assembly artifacts")
+{
+    const auto object = LowerMachineArtifact(ArithmeticModule(), Llvm::MachineCodeEmission::Object, true);
+    REQUIRE(object);
+    REQUIRE(object.artifact->objectFormat == Llvm::ObjectFormat::Coff);
+    REQUIRE(object.artifact->object.size() > 100U);
+    // AMD64 COFF starts with IMAGE_FILE_MACHINE_AMD64 in little-endian order.
+    // This catches accidental bitcode/text output hidden behind an `.o` name.
+    REQUIRE(object.artifact->object.at(0) == 0x64U);
+    REQUIRE(object.artifact->object.at(1) == 0x86U);
+    REQUIRE(object.artifact->llvm_ir.find("mainCRTStartup") != std::string::npos);
+
+    const auto assembly = LowerMachineArtifact(ArithmeticModule(), Llvm::MachineCodeEmission::Assembly);
+    REQUIRE(assembly);
+    REQUIRE_FALSE(assembly.artifact->assembly.empty());
+    REQUIRE(assembly.artifact->assembly.find("Backend.Contract.Calculate.10") != std::string::npos);
+    REQUIRE(assembly.artifact->llvm_ir.find("mainCRTStartup") == std::string::npos);
+}
+
+TEST_CASE("native executable emission requires one valid Main function")
+{
+    // A library-like module remains legal until executable emission requests a
+    // concrete process entry. The diagnostic belongs at that precise boundary.
+    const auto result = LowerMachineArtifact(StringModule(), Llvm::MachineCodeEmission::Object, true);
+    REQUIRE_FALSE(result);
+    REQUIRE(result.error->kind == Llvm::ErrorKind::InvalidEntryPoint);
+    REQUIRE(result.error->code == "VXL2007");
+}
+
 TEST_CASE("canonical Visual XSharp C++ namespace owns the renewed backend")
 {
     static_assert(std::same_as<Llvm::Artifact, Visual::XSharp::Backend::LLVM::Artifact>);
@@ -282,6 +330,15 @@ TEST_CASE("LLVM artifacts write only through explicit extension-checked APIs")
     REQUIRE_FALSE(Llvm::WriteBitcode(paths.bitcode, result.artifact->bitcode));
     REQUIRE(std::filesystem::file_size(paths.llvm_ir) == result.artifact->llvm_ir.size());
     REQUIRE(std::filesystem::file_size(paths.bitcode) == result.artifact->bitcode.size());
+
+    const auto object = LowerMachineArtifact(ArithmeticModule(), Llvm::MachineCodeEmission::Object);
+    const auto assembly = LowerMachineArtifact(ArithmeticModule(), Llvm::MachineCodeEmission::Assembly);
+    REQUIRE(object);
+    REQUIRE(assembly);
+    REQUIRE_FALSE(Llvm::WriteObject(paths.object, object.artifact->object));
+    REQUIRE_FALSE(Llvm::WriteAssembly(paths.assembly, assembly.artifact->assembly));
+    REQUIRE(std::filesystem::file_size(paths.object) == object.artifact->object.size());
+    REQUIRE(std::filesystem::file_size(paths.assembly) == assembly.artifact->assembly.size());
 
     const auto wrongText = Llvm::WriteLlvmIr(paths.bitcode, result.artifact->llvm_ir);
     const auto wrongBinary = Llvm::WriteBitcode(paths.llvm_ir, result.artifact->bitcode);

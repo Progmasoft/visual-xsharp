@@ -5,7 +5,6 @@
 name = "xslang"
 version = "0.3.1"
 edition = "2024"
-build = "build.rs"
 authors = ["Progmasoft <support@progmasoft.com>"]
 description = "Target-independent semantic analysis and IR core for the Visual X# compiler"
 license = "MPL-2.0"
@@ -24,7 +23,7 @@ proc-macros = ["dep:xslang-proc-macros"]
 [lib]
 name = "xslang"
 path = "sources/lib.rs"
-crate-type = ["rlib", "staticlib"]
+crate-type = ["rlib"]
 bench = false
 
 [dependencies]
@@ -42,11 +41,7 @@ typed-arena = "2.0"
 bitflags = "2.13"
 camino = "1.2"
 lasso = "0.7"
-cxx = "1.0"
 xslang-proc-macros = { version = "=0.3.1", path = "proc-macros/xlil-create", optional = true }
-
-[build-dependencies]
-cxx-build = "1.0"
 
 [dev-dependencies]
 proptest = "1.11"

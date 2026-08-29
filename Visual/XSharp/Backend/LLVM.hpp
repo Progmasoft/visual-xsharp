@@ -29,11 +29,34 @@ enum class OptimizationLevel : std::uint8_t
     Aggressive
 };
 
+enum class MachineCodeEmission : std::uint8_t
+{
+    // IR and bitcode remain available without initializing target code generation.
+    None,
+    Object,
+    Assembly
+};
+
+enum class ObjectFormat : std::uint8_t
+{
+    Unknown,
+    Coff,
+    Elf,
+    MachO,
+    Wasm
+};
+
 struct Options final
 {
     OptimizationLevel optimization{OptimizationLevel::Default};
     std::string target_triple;
     bool verify_module{true};
+    // Machine-code generation is opt-in so `check`, `.ll`, and `.bc` stay
+    // target-independent until the driver explicitly asks for native bytes.
+    MachineCodeEmission machineCode{MachineCodeEmission::None};
+    // Reusable object files must not acquire an accidental process entry symbol.
+    // The platform ABI bridge is therefore enabled only for final executables.
+    bool executableEntry{};
 };
 
 using IssueKind = ::Visual::XSharp::Xmm::IssueKind;
@@ -47,6 +70,9 @@ enum class ErrorKind : std::uint8_t
     LlvmConstruction,
     LlvmVerification,
     BitcodeEmission,
+    TargetMachine,
+    MachineCodeEmission,
+    InvalidEntryPoint,
     FileSystem
 };
 
@@ -64,7 +90,12 @@ struct Artifact final
     // are independent copies and therefore remain valid after the LLVM context dies.
     std::string llvm_ir;
     std::vector<std::uint8_t> bitcode;
+    // Native payloads remain in memory until an explicit driver writer runs;
+    // validation commands consequently cannot leave incidental files behind.
+    std::vector<std::uint8_t> object;
+    std::string assembly;
     std::string target_triple;
+    ObjectFormat objectFormat{ObjectFormat::Unknown};
     std::size_t function_count{};
 
     [[nodiscard]] auto empty() const noexcept -> bool
@@ -92,4 +123,7 @@ struct Result final
 [[nodiscard]] auto WriteLlvmIr(const std::filesystem::path &path, std::string_view llvmIr) -> std::optional<Error>;
 [[nodiscard]] auto WriteBitcode(const std::filesystem::path &path, const std::vector<std::uint8_t> &bitcode)
     -> std::optional<Error>;
+[[nodiscard]] auto WriteObject(const std::filesystem::path &path, const std::vector<std::uint8_t> &object)
+    -> std::optional<Error>;
+[[nodiscard]] auto WriteAssembly(const std::filesystem::path &path, std::string_view assembly) -> std::optional<Error>;
 } // namespace Visual::XSharp::Backend::LLVM

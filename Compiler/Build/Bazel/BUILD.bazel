@@ -1,0 +1,4 @@
+exports_files([
+    "llvm.bzl",
+    "rules_cc_clangcl_dumpbin.patch",
+])

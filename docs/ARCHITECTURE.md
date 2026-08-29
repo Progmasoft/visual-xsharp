@@ -33,7 +33,7 @@ Stage ownership is deliberate:
 - Lexer through CorePrep belongs to Haskell.
 - Xpp, Xmm, and the native lowering boundary belong to C++20.
 - LLVM types and handles belong only to the backend.
-- The Rust compiler core remains a supported implementation asset during the transition.
+- The retiring Rust tree is not linked, is not a production implementation, and receives no new compiler behavior.
 - C23 implementation code is migrated subsystem by subsystem after replacement behavior is verified.
 
 ## Frontend stages
@@ -69,10 +69,10 @@ control-flow operations, runs the selected LLVM optimization pipeline, verifies 
 and bitcode in memory. Visual X# `String` constants are represented as Unicode scalar (`i32`) storage plus a 64-bit scalar
 count; they are not encoded as UTF-8 byte strings. LLVM types and handles do not escape the backend API.
 
-The build discovers LLVM through its CMake package. The renewed C++20 backend uses LLVM's C++ IR, bitcode, support, and
-new-pass-manager libraries; LLVM C handles do not enter this pipeline. The isolated compatibility C route retains LLVM-C
-until it is retired and still owns object-file and executable production. Connecting verified Xmm bitcode to object emission
-and LLD is separate work.
+The build discovers LLVM through its CMake package. The renewed C++20 backend uses LLVM's C++ IR, bitcode, support,
+new-pass-manager, target-machine, and native-code-generation libraries; LLVM C handles do not enter this pipeline. A target
+machine emits COFF objects or target assembly from verified Xmm. The C++20 driver passes a typed argument vector directly
+to LLD, without a shell or DIMCLI, and validates the resulting `.vxse` artifact.
 
 ## Entry point
 
@@ -96,5 +96,6 @@ The current public artifact names are:
 ```
 
 Normal compilation keeps these representations in memory. Haskell writes real `.core` artifacts and C++20 consumes them
-through the full verified pipeline. Explicit `.ll` and `.bc` emission is available after Core input. Native object/linking
-from that route and Xpp/Xmm readers and writers remain later work.
+through the full verified pipeline. Explicit `.ll`, `.bc`, `.o`, and `.asm` emission is available after source or Core
+input. Binary emission adds the platform entry bridge, writes a temporary object, links one `.vxse`, and removes the
+temporary object. Xpp/Xmm readers and writers remain later work.

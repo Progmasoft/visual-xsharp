@@ -22,5 +22,9 @@ website/
 .vs/
 vcpkg-debug.log
 vcpkg_installed/
-vxs_kts/sources/Tests/
-vxs_kts/sources/main.vxs
+ProjectSystem/sources/Tests/
+ProjectSystem/sources/main.vxs
+/bazel-bin
+/bazel-out
+/bazel-testlogs
+/bazel-xsharp

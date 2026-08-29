@@ -37,21 +37,21 @@ jobs:
 
       - name: Check linter configuration DSL
         shell: pwsh
-        run: .\vxs_kts\gradlew.bat -p VisualLinter spotlessCheck test
+        run: .\ProjectSystem\gradlew.bat -p Linter spotlessCheck test
 
       - name: Build Visual Linter
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal build visual-linter
 
       - name: Test Visual Linter
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal test visual-linter-tests
 
       - name: Check package metadata
         shell: pwsh
-        working-directory: VisualLinter
+        working-directory: Linter
         run: cabal check
 
       - name: Check patch hygiene

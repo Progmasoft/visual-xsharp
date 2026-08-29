@@ -68,12 +68,15 @@ the LLVM C API; LLVM-C remains confined to the isolated legacy C backend.
 Ordinary pipeline execution keeps printed LLVM IR and serialized bitcode in memory. Disk access occurs only through explicit
 artifact APIs:
 
-- `WriteLlvmIr` accepts only a `.ll` path; and
-- `WriteBitcode` accepts only a `.bc` path.
+- `WriteLlvmIr` accepts only a `.ll` path;
+- `WriteBitcode` accepts only a `.bc` path;
+- `WriteObject` accepts only a `.o` path; and
+- `WriteAssembly` accepts only a `.asm` path.
 
 `vxs build -Emit llvmll` writes the sibling `.ll` file and `vxs build -Emit llvmbc` writes the sibling `.bc` file for either
-`.vxs` or `VXCR` Core input. `vxs check` never emits. Object, assembly, executable, Xpp, and Xmm writers are not implied by
-this connection.
+`.vxs` or `VXCR` Core input. `vxs build -Emit object|assembly` writes target-machine output. Binary emission creates an
+executable entry bridge, emits a temporary object, invokes LLD through a typed C++20 argument vector, verifies the `.vxse`,
+and removes the temporary object. `vxs check` never emits. Xpp and Xmm artifact writers are not implied by this connection.
 
-The Haskell frontend is the sole source owner. Object and executable production will return when the new bitcode path is
-connected to target-machine emission and LLD; no compatibility frontend fallback remains.
+The Haskell frontend is the sole source owner. The backend remains responsible for target lowering and the driver remains
+responsible for linking; no compatibility frontend, shell command construction, or DIMCLI route is used.

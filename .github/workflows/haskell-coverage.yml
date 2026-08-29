@@ -25,12 +25,12 @@ jobs:
 
       - name: Test Haskell frontend with HPC
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal test all --enable-coverage --test-show-details=direct
 
       - name: Convert HPC data to LCOV
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: |
           $toolVersion = "0.6.4.1"
           $expectedHash = "9805651928db5c168a453ae09dd26113c7fc9816314b7268f1d1a71f7196f55f"
@@ -48,7 +48,7 @@ jobs:
           }
 
           New-Item -ItemType Directory -Force $reportDirectory | Out-Null
-          & $tool -r . -x Main -x SourceSetTests -f lcov -o $report cabal:compiler-layer-tests
+          & $tool -r . -x Main -x SourceSetTests -f lcov -o $report cabal:visual-xsharp-compiler-tests
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $report)) {
             throw "hpc-codecov did not produce the expected LCOV report"
           }
@@ -60,6 +60,6 @@ jobs:
           fail_ci_if_error: true
           disable_search: true
           plugins: noop
-          files: ./xs/coverage/haskell-frontend.lcov
+          files: ./Compiler/coverage/haskell-frontend.lcov
           flags: haskell-frontend
           name: haskell-frontend

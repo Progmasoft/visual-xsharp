@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   language-layers:
-    name: Project DSL, compiler, and Rust
+    name: Project DSL and compiler
     runs-on: windows-2025
     timeout-minutes: 45
     steps:
@@ -35,29 +35,28 @@ jobs:
         with:
           gradle-version: "9.6.1"
 
-      - name: Install Rust nightly
-        shell: pwsh
-        run: rustup toolchain install nightly-2026-07-10 --profile default
-
       - name: Check Kotlin project runtime
         shell: pwsh
-        run: .\vxs_kts\gradlew.bat -p vxs_kts check
+        run: .\ProjectSystem\gradlew.bat -p ProjectSystem check
 
       - name: Build Haskell compiler layers
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal build visual-xsharp-compiler
 
       - name: Test Haskell compiler layers
         shell: pwsh
-        working-directory: xs
-        run: cabal test compiler-layer-tests
+        working-directory: Compiler
+        run: cabal test visual-xsharp-compiler-tests
 
       - name: Check Haskell package metadata
         shell: pwsh
         run: |
           $packageDirectories = @(
-            "xs/haskell/visual-xsharp-compiler"
+            "Compiler/Haskell/Syntax",
+            "Compiler/Haskell/Frontend",
+            "Compiler/Haskell/Core",
+            "Compiler/Haskell/Driver"
           )
           foreach ($directory in $packageDirectories) {
             Push-Location $directory
@@ -70,18 +69,6 @@ jobs:
               Pop-Location
             }
           }
-
-      - name: Check Rust formatting
-        shell: pwsh
-        run: cargo +nightly-2026-07-10 fmt --manifest-path xslang/Cargo.toml --check
-
-      - name: Test Rust compiler core
-        shell: pwsh
-        run: cargo +nightly-2026-07-10 test --manifest-path xslang/Cargo.toml
-
-      - name: Check Rust lints
-        shell: pwsh
-        run: cargo +nightly-2026-07-10 clippy --manifest-path xslang/Cargo.toml -- -D warnings
 
       - name: Check patch hygiene
         shell: pwsh

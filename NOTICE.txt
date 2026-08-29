@@ -10,8 +10,8 @@ LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt.
 Third-party notices
 -------------------
 
-The Gradle wrapper launcher files `vxs_kts/gradlew` and
-`vxs_kts/gradlew.bat` retain their original copyright notices and remain
+The Gradle wrapper launcher files `ProjectSystem/gradlew` and
+`ProjectSystem/gradlew.bat` retain their original copyright notices and remain
 licensed under the Apache License, version 2.0.
 
 JUnit Jupiter and the JUnit Platform are used to test the Java XLIL binding.

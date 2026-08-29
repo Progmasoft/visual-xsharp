@@ -7,10 +7,9 @@
 
 ```text
 Visual/       C++20 CorePrep, Xpp, and Xmm models and passes
-xs/           Native vxs compiler, driver, backend, Haskell frontend, and CMake integration
-xslang/       Rust compiler core
-vxs_kts/       Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
-xsrt/         Runtime components
+Compiler/     Native vxs driver, modular C++20 implementation, Haskell packages, and build support
+xslang/       Retiring Rust reference implementation; not a production build dependency
+ProjectSystem/ Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
 Spec/         Public language-design example suites
 tests/        Native compiler and integration tests
 include/      Shared public headers
@@ -20,9 +19,9 @@ third_party/  Pinned source dependencies
 The ecosystem tools have independent ownership and build systems:
 
 ```text
-VisualAnalyzer/   Haskell LSP, Kotlin configuration DSL, IntelliJ plugin, and VS Code extension
-VisualFormatter/  Haskell vfmt executable and Kotlin configuration DSL
-VisualLinter/     Haskell vlint executable and Kotlin configuration DSL
+Analyzer/         Haskell LSP and Kotlin configuration DSL
+Formatter/        Haskell vfmt executable and Kotlin configuration DSL
+Linter/           Haskell vlint executable and Kotlin configuration DSL
 ```
 
 These canonical projects replace the retired `xs-analyzer`, `xsfmt`, and `xstidy` prototypes. They are not native CMake
@@ -43,7 +42,7 @@ the others.
 
 ## CMake selection
 
-The root CMake project currently treats `xs` as the buildable compiler project and `xsrt` as the buildable runtime. The
+The native compiler is built with Bazel. CMake remains transitional infrastructure for retained legacy C components. The
 selection cache variables are:
 
 ```text
@@ -51,8 +50,8 @@ XS_ENABLE_PROJECTS
 XS_ENABLE_RUNTIMES
 ```
 
-The default values select `xs` and `xsrt`. Cargo, Cabal, Gradle, IntelliJ Platform, and pnpm projects remain outside this
-native selector and are composed by repository-level orchestration and CI.
+Cabal, Gradle, IntelliJ Platform, and pnpm projects remain outside the transitional CMake selector. Bazel owns top-level
+native orchestration; language-specific CI jobs call Cabal and Gradle directly without a second wrapper such as `just`.
 
 ## Nested repositories
 

@@ -5,13 +5,17 @@
 #include "Visual/XSharp/Core/Verifier.hpp"
 #include "Visual/XSharp/Core/Wire.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
-#include "xs/sources/driver/CorePipeline.hpp"
+#include "Compiler/Driver/CorePipeline.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 #include <filesystem>
 #include <fstream>
 #include <ranges>
 #include <sstream>
+
+#ifdef _WIN32
+#    include <process.h>
+#endif
 
 namespace
 {
@@ -216,7 +220,7 @@ TEST_CASE("VXCR RAM pipeline never lowers semantically invalid Core")
     REQUIRE_FALSE(result.llvm);
 }
 
-TEST_CASE("Core artifact driver validates and emits explicit LLVM artifacts")
+TEST_CASE("Core artifact driver validates and emits LLVM and native artifacts")
 {
     const auto encoded = Core::Wire::Encode(GoldenModule());
     REQUIRE(encoded);
@@ -224,6 +228,11 @@ TEST_CASE("Core artifact driver validates and emits explicit LLVM artifacts")
     std::filesystem::create_directories(directory);
     const auto corePath = directory / "Golden.core";
     const auto llvmPath = directory / "Golden.ll";
+    const auto objectPath = directory / "Golden.o";
+    const auto assemblyPath = directory / "Golden.asm";
+    const auto executablePath = directory / "Golden.vxse";
+    // Keep every explicit format beside one verified Core input, then exercise
+    // the binary as a process to cover TargetMachine, LLD, and PE loading together.
     {
         std::ofstream stream(corePath, std::ios::binary | std::ios::trunc);
         stream.write(reinterpret_cast<const char *>(encoded.bytes.data()),
@@ -235,5 +244,18 @@ TEST_CASE("Core artifact driver validates and emits explicit LLVM artifacts")
     REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_LLVM_LL,
                                             &settings, nullptr));
     REQUIRE(std::filesystem::file_size(llvmPath) > 0U);
+#ifdef _WIN32
+    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_OBJECT,
+                                            &settings, nullptr));
+    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_ASSEMBLY,
+                                            &settings, nullptr));
+    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_BINARY,
+                                            &settings, nullptr));
+    REQUIRE(std::filesystem::file_size(objectPath) > 0U);
+    REQUIRE(std::filesystem::file_size(assemblyPath) > 0U);
+    REQUIRE(std::filesystem::file_size(executablePath) > 0U);
+    const std::vector<const wchar_t *> arguments{executablePath.c_str(), nullptr};
+    REQUIRE(_wspawnv(_P_WAIT, executablePath.c_str(), arguments.data()) == 0);
+#endif
     std::filesystem::remove_all(directory);
 }

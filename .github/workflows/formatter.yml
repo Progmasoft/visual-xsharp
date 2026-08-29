@@ -37,21 +37,21 @@ jobs:
 
       - name: Check formatter configuration DSL
         shell: pwsh
-        run: .\vxs_kts\gradlew.bat -p VisualFormatter spotlessCheck test
+        run: .\ProjectSystem\gradlew.bat -p Formatter spotlessCheck test
 
       - name: Build Visual Formatter
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal build visual-formatter
 
       - name: Test Visual Formatter
         shell: pwsh
-        working-directory: xs
+        working-directory: Compiler
         run: cabal test visual-formatter-tests
 
       - name: Check package metadata
         shell: pwsh
-        working-directory: VisualFormatter
+        working-directory: Formatter
         run: cabal check
 
       - name: Check patch hygiene

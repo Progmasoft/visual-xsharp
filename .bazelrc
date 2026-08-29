@@ -1,0 +1,23 @@
+common --enable_bzlmod
+common --announce_rc
+common --repo_env=USE_CLANG_CL=1
+
+build --incompatible_strict_action_env
+build --config=windows
+build --verbose_failures
+build --show_timestamps
+build --keep_going
+build --features=static_link_msvcrt
+
+# rules_cc selects its Windows clang-cl branch through USE_CLANG_CL. LLVM_ROOT
+# remains an environment-owned discovery input rather than a committed path.
+build:windows --compiler=clang-cl
+build:windows --cxxopt=/std:c++20
+build:windows --cxxopt=/permissive-
+build:windows --cxxopt=/Zc:__cplusplus
+build:windows --cxxopt=/W4
+build:windows --cxxopt=/utf-8
+build:windows --host_cxxopt=/std:c++20
+
+test --test_output=errors
+test --test_summary=detailed

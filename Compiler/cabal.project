@@ -1,0 +1,30 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+packages:
+    Haskell/Syntax/visual-xsharp-syntax.cabal
+    Haskell/Frontend/visual-xsharp-frontend.cabal
+    Haskell/Core/visual-xsharp-core.cabal
+    Haskell/Driver/visual-xsharp-compiler.cabal
+    ../Analyzer/visual-analyzer.cabal
+    ../Formatter/visual-formatter.cabal
+    ../Linter/visual-linter.cabal
+
+with-compiler: ghc
+optimization: 2
+tests: True
+benchmarks: False
+documentation: False
+write-ghc-environment-files: never
+
+package *
+    ghc-options:
+        -Wall
+        -Wcompat
+        -Widentities
+        -Wincomplete-record-updates
+        -Wincomplete-uni-patterns
+        -Wmissing-export-lists
+        -Wmissing-home-modules
+        -Wpartial-fields
+        -Wredundant-constraints

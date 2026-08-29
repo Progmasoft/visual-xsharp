@@ -1,0 +1,32 @@
+module(
+    name = "visual_xsharp",
+    version = "0.3.2",
+)
+
+bazel_dep(name = "rules_cc", version = "0.2.22")
+bazel_dep(name = "fmt", version = "12.1.0")
+bazel_dep(name = "catch2", version = "3.11.0")
+
+# Catch2 is deliberately vendored: tests must remain reproducible even when the
+# registry is unavailable. This override does not make third_party part of the
+# compiler architecture.
+local_path_override(
+    module_name = "catch2",
+    path = "third_party/catch2",
+)
+
+# rules_cc 0.2.22 forgets to populate DUMPBIN in its clang-cl branch but reads
+# the key unconditionally. Keep the workaround isolated and removable when the
+# upstream module ships the same one-line fix.
+single_version_override(
+    module_name = "rules_cc",
+    patch_strip = 0,
+    patches = ["//Compiler/Build/Bazel:rules_cc_clangcl_dumpbin.patch"],
+    version = "0.2.22",
+)
+
+# LLVM is a machine toolchain, not a source dependency. The extension discovers
+# it through LLVM_ROOT or llvm-config on PATH and exposes only the components the
+# native backend owns.
+llvm = use_extension("//Compiler/Build/Bazel:llvm.bzl", "llvm")
+use_repo(llvm, "llvm")

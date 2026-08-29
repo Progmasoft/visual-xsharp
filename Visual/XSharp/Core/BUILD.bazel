@@ -1,0 +1,52 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "coreprep_model",
+    hdrs = ["CorePrep.hpp"],
+    deps = ["//Visual/XSharp:namespace"],
+)
+
+cc_library(
+    name = "model",
+    hdrs = ["IR.hpp"],
+    deps = [
+        ":coreprep_model",
+        "//Visual/XSharp:namespace",
+    ],
+)
+
+cc_library(
+    name = "coreprep",
+    hdrs = [
+        "CorePrep/Prepare.hpp",
+        "CorePrep/Verifier.hpp",
+        "CorePrep/Verifier/Semantics.hpp",
+    ],
+    deps = [
+        ":coreprep_model",
+        ":model",
+    ],
+)
+
+cc_library(
+    name = "coreprep_wire",
+    hdrs = [
+        "CorePrep/Wire.hpp",
+        "CorePrep/Wire/Format.hpp",
+    ],
+    deps = [":coreprep_model"],
+)
+
+cc_library(
+    name = "core",
+    hdrs = [
+        "Verifier.hpp",
+        "Wire.hpp",
+    ],
+    deps = [
+        ":model",
+        ":coreprep",
+    ],
+)

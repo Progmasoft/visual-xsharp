@@ -11,7 +11,7 @@ project DSL, runtime components, language examples, tests, and supporting develo
 The repository is under an architectural transition. The production `.vxs` route now uses the Haskell lexer-through-Core
 frontend and hands a verified `VXCR` Core artifact to the C++20 CorePrep-to-Xpp-to-Xmm-to-LLVM pipeline. The previous C
 lexer/parser, semantic tree, macro, HIR/MIR duplicate, Rust FFI session bridge, and DIMCLI dependency have been removed.
-The retained Rust compiler core remains an implementation and test asset, but it is no longer linked into `vxs`.
+The remaining Rust tree is transitional reference material, not a production dependency or a second supported compiler.
 
 ## Intended compiler pipeline
 
@@ -44,13 +44,12 @@ normal compilation keeps intermediate data in memory unless explicit emission is
 
 The supported native build is Windows with:
 
-- Kitware CMake 3.31 or newer;
-- standalone Ninja;
-- ClangCL and LLD from an LLVM installation for retained C components and C++20;
+- Bazelisk for the production C++20 graph;
+- Kitware CMake 3.31 and standalone Ninja only for retained legacy C/package components;
+- ClangCL and LLD from an LLVM installation;
 - Windows SDK headers and import libraries;
 - MSVC CRT and C++ standard-library development files;
 - an LLVM development package containing `LLVMConfig.cmake`;
-- Rustup and Cargo;
 - GHC 9.10 and Cabal for the Haskell frontend;
 - JDK 25 and the Kotlin runner for the project DSL; and
 - vcpkg for the small native dependency set declared by `vcpkg.json`.
@@ -66,36 +65,31 @@ Initialize the recursive submodules first:
 git submodule update --init --recursive
 ```
 
-Install the manifest dependencies using an existing vcpkg installation:
+Build the production C++20 compiler and its first native contract suite from PowerShell after making the Windows SDK and
+MSVC library/include directories available in the environment:
 
 ```powershell
-& "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows --x-manifest-root .
+bazelisk build //Compiler/Cli:vxs
+bazelisk build //tests:cli_parser_tests
+.\bazel-bin\tests\cli_parser_tests.exe
 ```
 
-Configure, build, and test from PowerShell after making the Windows SDK and MSVC library/include directories available in
-the environment:
-
-```powershell
-cmake --preset clangcl-debug `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-cmake --build --preset clangcl-debug --parallel 4
-ctest --preset clangcl-debug --output-on-failure --parallel 2
-```
-
-The preset intentionally uses tool names and environment-based discovery rather than absolute installation paths.
+The Bazel graph discovers LLVM from `LLVM_ROOT` or `llvm-config`; it does not store a machine-specific installation path.
+CMake and vcpkg remain transitional interfaces for the legacy C/package subtree, not the `vxs` executable.
 
 ## Command-line status
 
 The compiler executable is `vxs`. Its C++20 command parser uses one typed schema for command scope, option arity, duplicate
 rejection, defaults, and value conversion; it has no third-party CLI dependency. For `.vxs`, `check` runs the Haskell
-frontend and the complete in-memory Core/CorePrep/Xpp/Xmm/LLVM validation route. `build -Emit core|llvmll|llvmbc` writes the
-selected sibling artifact. Native object/executable production and public Xpp/Xmm readers and writers remain later work.
+frontend and the complete in-memory Core/CorePrep/Xpp/Xmm/LLVM validation route. `build` produces a native `.vxse` by
+default; `-Emit core|object|assembly|llvmll|llvmbc` selects another supported artifact. `run` builds and executes the
+native binary. Public Xpp/Xmm readers and writers remain later work.
 CorePrep wire bytes are never accepted under the public `.core` extension.
 
 The reliable single-file validation form is:
 
 ```powershell
-.\build\clangcl-debug\vxs.exe check -File .\path\to\Main.vxs
+.\bazel-bin\Compiler\Cli\vxs.exe check -File .\path\to\Main.vxs
 ```
 
 From a directory containing `Visual.XSharp.kts`, project validation uses the configured source roots and namespace-qualified

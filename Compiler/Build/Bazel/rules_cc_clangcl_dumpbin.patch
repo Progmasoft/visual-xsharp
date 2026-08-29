@@ -1,0 +1,9 @@
+--- cc/private/toolchain/windows_cc_configure.bzl
++++ cc/private/toolchain/windows_cc_configure.bzl
+@@ -722,5 +722,6 @@
+         if not build_tools["LIB"]:
+             build_tools["LIB"] = find_msvc_tool(repository_ctx, vc_path, "lib.exe", "x64")
++        build_tools["DUMPBIN"] = find_msvc_tool(repository_ctx, vc_path, "dumpbin.exe", "x64")
+     else:
+         build_tools = _find_msvc_tools(repository_ctx, vc_path, target_arch)
+ 

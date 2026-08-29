@@ -12,6 +12,11 @@ source-to-native executable pipeline.
 
 ## 0.3.2 - 2026-08-21
 
+- Connected the renewed Haskell-to-C++20 pipeline to LLVM target-machine object and assembly emission, a typed Windows LLD
+  driver, native `.vxse` builds, and `vxs run`. Binary builds remove their temporary object after linking, while explicit
+  object output uses the canonical `.o` extension on Windows.
+- Added backend and CLI regression coverage for COFF object identity, assembly output, executable entry validation, direct
+  Core native artifacts, single-file execution, project binary builds, and native process exit propagation.
 - Added the first compiler-backed Visual Analyzer, Visual Formatter, and Visual Linter Haskell packages. They share the
   compiler's syntax and semantic analysis boundaries instead of maintaining parallel language implementations.
 - Added `vfmt` with standard-output, `-In-Place`, `-Dry-Run`, and `-Help` modes, plus `vlint` with compiler diagnostics,

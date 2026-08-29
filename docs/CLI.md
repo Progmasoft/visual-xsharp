@@ -133,24 +133,29 @@ Single-file validation:
 vxs check -File .\Sources\Main.vxs
 ```
 
-The Haskell frontend can emit verified Core or continue to LLVM text/bitcode:
+The Haskell frontend can emit verified Core, LLVM forms, target-machine output, or a native executable:
 
 ```powershell
 vxs build -File .\Sources\Main.vxs -Emit core
 vxs build -File .\Sources\Main.vxs -Emit llvmll
 vxs build -File .\Sources\Main.vxs -Emit llvmbc
+vxs build -File .\Sources\Main.vxs -Emit object
+vxs build -File .\Sources\Main.vxs -Emit assembly
+vxs build -File .\Sources\Main.vxs
+vxs run -File .\Sources\Main.vxs
 ```
 
-The accepted source subset is the subset implemented by the Haskell frontend. Native object, link, `run`, and `test`
-reconnection remains pending; the CLI rejects those routes instead of falling back to the removed compatibility frontend.
+The accepted source subset is the subset implemented by the Haskell frontend. Native binary, object, assembly, and `run`
+routes use the renewed C++20 backend and never fall back to the removed compatibility frontend. Named test-suite execution
+remains pending.
 
 Project artifacts use the active Kotlin DSL output directory (`build/debug` or `build/release` by default). `binary`
 produces one project executable with the `.vxse` extension. Source-oriented outputs such as `object` and `assembly` use
 the source stem directly in that directory, so `Sources/MyApp/Main.vxs` maps to `build/debug/Main.o` in a debug object
 build. Multiple sources consequently produce multiple artifacts, not one merged object. An artifact left by an earlier
 build is replaced by `vxs build`. Two different inputs in the same build that map to the same output name are rejected as
-an ambiguous source-name collision. Native object, assembly, and executable emission remains part of the explicitly
-pending backend/link reconnection described below.
+an ambiguous source-name collision. Project binary emission is connected. Project-wide object and assembly emission remains
+disabled until Core preserves source ownership, so the compiler cannot accidentally collapse multiple inputs into one file.
 
 ## Core input status
 
@@ -165,15 +170,15 @@ vxs build -Build core -Emit llvmbc -File module.core
 The native C++20 route reads the Haskell `VXCR` v1 contract with byte, collection, text, type-depth, and expression-depth
 limits. It verifies Core semantics before adapting nested expressions and source control flow to CorePrep, then runs the
 existing verified CorePrep → Xpp → Xmm → LLVM pipeline entirely in memory. `check` writes nothing. The two `build` examples
-write a sibling `.ll` or `.bc` file. Native object/executable output from Core and public Xpp/Xmm artifact codecs are not
-connected yet. The older `VXCP` transport remains internal and is rejected when supplied as `.core`.
+write a sibling `.ll` or `.bc` file. A Core build can also write a sibling `.o` or `.asm`, or link a `.vxse`; binary is the
+default emit kind. The older `VXCP` transport remains internal and is rejected when supplied as `.core`.
 
 ## Registered but not connected
 
 The CLI reserves the renewed artifact vocabulary before all routes are implemented:
 
 - `.xpp` and `.xmm` input routes report that the selected input is not connected;
-- Core input does not yet emit native objects, executables, `.xpp`, or `.xmm` files;
+- `.xpp` and `.xmm` output codecs are not connected;
 - `install` and `viget` report that the ViGet client is not linked into the compiler build.
 
 `resolve` and `update` evaluate the project configuration and refresh `Visual.XSharp.Lockfile.sqlite3`.
@@ -187,8 +192,8 @@ vxdc -Projectfile .\Visual.XSharp.kts -Output .\Project.sqlite3.dump
 
 ## Exit behavior
 
-Command parsing errors return a nonzero status. Compilation diagnostics are printed to standard error. `run` currently
-fails with an explicit migration diagnostic because native object/link production is not connected.
+Command parsing errors return a nonzero status. Compilation diagnostics are printed to standard error. `run` propagates
+build failures and, after a successful link, returns the native process exit status.
 
 Parse diagnostics retain context. Unknown commands/options name the rejected spelling; invalid typed values name the
 option and its accepted domain; duplicate, missing-value, wrong-command-scope, positional, and invalid process-vector

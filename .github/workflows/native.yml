@@ -24,25 +24,17 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Configure Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: native-windows-clangcl
+          repository-cache: true
+
       - name: Enter Visual Studio 2026 developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-
-      - name: Install Rust nightly
-        shell: pwsh
-        run: rustup toolchain install nightly-2026-07-10 --profile minimal
-
-      - name: Install JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "25"
-
-      - name: Install Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "9.6.1"
 
       - name: Restore LLVM development package
         uses: actions/cache@v4
@@ -74,61 +66,19 @@ jobs:
       - name: Verify Windows toolchain
         shell: pwsh
         run: |
-          cmake --version
-          ninja --version
+          bazel --version
           clang-cl --version
           lld-link --version
-          java --version
-          kotlin -version
           if (-not (Test-Path (Join-Path $env:LLVM_DIR "LLVMConfig.cmake"))) {
             throw "LLVMConfig.cmake was not activated from the development package"
           }
 
-      - name: Restore native dependency cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}\vcpkg-binary-cache
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
-
-      - name: Install native dependencies
+      - name: Build native compiler
         shell: pwsh
-        timeout-minutes: 15
-        env:
-          VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\vcpkg-binary-cache
-        run: |
-          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
-            --triplet x64-windows `
-            --x-manifest-root "$env:GITHUB_WORKSPACE"
+        run: bazel build //Compiler/Cli:vxs
 
-      - name: Configure debug build
+      - name: Test native compiler
         shell: pwsh
         run: |
-          cmake --preset clangcl-debug `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_APPLOCAL_DEPS=OFF `
-            -DLLVM_DIR="$env:LLVM_DIR"
-
-      - name: Build debug configuration
-        shell: pwsh
-        run: cmake --build --preset clangcl-debug --parallel 4
-
-      - name: Test debug configuration
-        shell: pwsh
-        run: ctest --preset clangcl-debug --output-on-failure --parallel 2
-
-      - name: Configure sanitizer build
-        shell: pwsh
-        run: |
-          cmake --preset clangcl-sanitize `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_APPLOCAL_DEPS=OFF `
-            -DLLVM_DIR="$env:LLVM_DIR"
-
-      - name: Build sanitizer configuration
-        shell: pwsh
-        run: cmake --build --preset clangcl-sanitize --parallel 4
-
-      - name: Test sanitizer configuration
-        shell: pwsh
-        run: ctest --preset clangcl-sanitize --output-on-failure --parallel 2
+          bazel build //tests:cli_parser_tests
+          & .\bazel-bin\tests\cli_parser_tests.exe

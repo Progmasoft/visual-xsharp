@@ -77,9 +77,9 @@ class Release
         checks.add(contains(Path.of("CMakeLists.txt"), "project(vxs_project VERSION " + version + " LANGUAGES C CXX)",
                 "CMake project version"));
         checks.add(containsOnce(Path.of("CHANGELOG.md"), "## " + version + " - ", "CHANGELOG heading"));
-        checks.add(contains(Path.of("xs/haskell/visual-xsharp-compiler/visual-xsharp-compiler.cabal"),
+        checks.add(contains(Path.of("Compiler/Haskell/Driver/visual-xsharp-compiler.cabal"),
                 "version: " + version, "Haskell compiler version"));
-        checks.add(contains(Path.of("vxs_kts/build.gradle.kts"), "version = \"" + version + "\"",
+        checks.add(contains(Path.of("ProjectSystem/build.gradle.kts"), "version = \"" + version + "\"",
                 "Kotlin project runtime version"));
         checks.add(contains(Path.of("xslang/Cargo.toml"), "version = \"" + version + "\"",
                 "Rust compiler core version"));

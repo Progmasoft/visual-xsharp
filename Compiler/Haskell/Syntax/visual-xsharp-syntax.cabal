@@ -1,0 +1,21 @@
+cabal-version: 3.12
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+name: visual-xsharp-syntax
+version: 0.3.2
+synopsis: Visual X# source model, lexer, parser, and diagnostics
+license: MPL-2.0
+author: Progmasoft
+maintainer: support@progmasoft.com
+build-type: Simple
+
+library
+    exposed-modules:
+        Visual.XSharp.AST
+        Visual.XSharp.Diagnostic
+        Visual.XSharp.Lexer
+        Visual.XSharp.Parser
+    hs-source-dirs: src
+    build-depends:
+        base >=4.20 && <4.23
+    default-language: GHC2021

@@ -1,0 +1,33 @@
+cabal-version: 3.12
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+name: visual-xsharp-core
+version: 0.3.2
+synopsis: Visual X# Core and CorePrep models, verification, and wire codecs
+license: MPL-2.0
+author: Progmasoft
+maintainer: support@progmasoft.com
+build-type: Simple
+
+library
+    exposed-modules:
+        Visual.XSharp.Core
+        Visual.XSharp.Core.Artifact
+        Visual.XSharp.Core.CorePrep
+        Visual.XSharp.Core.CorePrep.Verifier
+        Visual.XSharp.Core.CorePrep.Wire
+        Visual.XSharp.Core.CorePrep.Wire.Decode
+        Visual.XSharp.Core.CorePrep.Wire.Encode
+        Visual.XSharp.Core.CorePrep.Wire.Format
+        Visual.XSharp.Core.Optimizer
+        Visual.XSharp.Core.Verifier
+        Visual.XSharp.Core.Wire
+        Visual.XSharp.Desugarer
+    hs-source-dirs: src
+    build-depends:
+        base >=4.20 && <4.23,
+        bytestring >=0.12 && <0.14,
+        containers >=0.7 && <0.9,
+        filepath >=1.5 && <1.6,
+        visual-xsharp-syntax
+    default-language: GHC2021

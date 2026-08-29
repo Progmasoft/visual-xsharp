@@ -17,8 +17,8 @@
         "CMAKE_RC_COMPILER": "rc",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "XS_ENABLE_PROJECTS": "xs",
-        "XS_ENABLE_RUNTIMES": "xsrt"
+        "XS_ENABLE_PROJECTS": "Compiler",
+        "XS_ENABLE_RUNTIMES": ""
       }
     },
     {
@@ -32,8 +32,8 @@
         "CMAKE_RC_COMPILER": "rc",
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "XS_ENABLE_PROJECTS": "xs",
-        "XS_ENABLE_RUNTIMES": "xsrt",
+        "XS_ENABLE_PROJECTS": "Compiler",
+        "XS_ENABLE_RUNTIMES": "",
         "XS_ENABLE_SANITIZERS": "ON"
       }
     }

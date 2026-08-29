@@ -4,7 +4,7 @@
 cmake_minimum_required(VERSION 3.31)
 
 list(APPEND CMAKE_MODULE_PATH
-  "${CMAKE_CURRENT_SOURCE_DIR}/xs/cmake"
+  "${CMAKE_CURRENT_SOURCE_DIR}/Compiler/Build/CMake"
 )
 
 if(DEFINED CMAKE_C_COMPILER)
@@ -27,12 +27,12 @@ find_program(XS_LLD_EXECUTABLE NAMES lld-link REQUIRED)
 set(CMAKE_C_COMPILER "${XS_CLANGCL_EXECUTABLE}" CACHE FILEPATH "ClangCL C compiler" FORCE)
 set(CMAKE_CXX_COMPILER "${XS_CLANGCL_EXECUTABLE}" CACHE FILEPATH "ClangCL C++ compiler" FORCE)
 
-set(XS_MONOREPO_STABLE_PROJECTS xs)
+set(XS_MONOREPO_STABLE_PROJECTS Compiler)
 set(XS_MONOREPO_FUTURE_PROJECTS)
-set(XS_MONOREPO_STABLE_RUNTIMES xsrt)
+set(XS_MONOREPO_STABLE_RUNTIMES)
 set(XS_MONOREPO_FUTURE_RUNTIMES)
-set(XS_ENABLE_PROJECTS "xs" CACHE STRING "Semicolon-separated monorepo projects, or 'all'.")
-set(XS_ENABLE_RUNTIMES "xsrt" CACHE STRING "Semicolon-separated monorepo runtimes, or 'all'.")
+set(XS_ENABLE_PROJECTS "Compiler" CACHE STRING "Semicolon-separated legacy projects, or 'all'.")
+set(XS_ENABLE_RUNTIMES "" CACHE STRING "Semicolon-separated legacy runtimes, or 'all'.")
 
 function(xs_monorepo_normalize_list out_variable input_items all_items)
   if("${input_items}" STREQUAL "all")
@@ -127,13 +127,12 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
 xs_monorepo_validate_projects()
 xs_monorepo_validate_runtimes()
-xs_monorepo_project_enabled(xs XS_BUILD_PROJECT_XS)
-xs_monorepo_runtime_enabled(xsrt XS_BUILD_RUNTIME_XSRT)
-if(NOT XS_BUILD_PROJECT_XS)
-  message(FATAL_ERROR "This checkout currently has one buildable compiler project: 'xs'.")
+xs_monorepo_project_enabled(Compiler XS_BUILD_PROJECT_COMPILER)
+if(NOT XS_BUILD_PROJECT_COMPILER)
+  message(FATAL_ERROR "The transitional CMake build only recognizes 'Compiler'.")
 endif()
 
-project(vxs_project VERSION 0.3.2 LANGUAGES C CXX)
+project(visual_xsharp_legacy VERSION 0.3.2 LANGUAGES C CXX)
 xs_validate_llvm_toolchain()
 
 file(RELATIVE_PATH XS_SOURCE_FROM_BINARY "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -177,15 +176,6 @@ if(XS_ENABLE_SANITIZERS)
        "${CMAKE_BINARY_DIR}/clang_rt.asan_dynamic-x86_64.dll" ONLY_IF_DIFFERENT)
 endif()
 
-include(CTest)
-
-if(XS_BUILD_PROJECT_XS)
-  add_subdirectory(xs "${CMAKE_CURRENT_BINARY_DIR}/projects/xs")
-endif()
-if(XS_BUILD_RUNTIME_XSRT)
-  add_subdirectory(xsrt "${CMAKE_CURRENT_BINARY_DIR}/runtimes/xsrt")
-endif()
-
-if(BUILD_TESTING)
-  include(XSTests)
+if(XS_BUILD_PROJECT_COMPILER)
+  add_subdirectory(Compiler "${CMAKE_CURRENT_BINARY_DIR}/projects/Compiler")
 endif()

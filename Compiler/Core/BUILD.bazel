@@ -1,0 +1,25 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Core and CorePrep share one implementation archive for now, while their
+# public models/codecs remain separately consumable header contracts.
+cc_library(
+    name = "core",
+    srcs = [
+        "CorePrep/Prepare.cpp",
+        "CorePrep/Verifier.cpp",
+        "CorePrep/Verifier/Semantics.cpp",
+        "CorePrep/Wire/Decode.cpp",
+        "CorePrep/Wire/Encode.cpp",
+        "IR.cpp",
+        "Verifier.cpp",
+        "Wire.cpp",
+    ],
+    deps = [
+        "//Visual/XSharp/Core:core",
+        "//Visual/XSharp/Core:coreprep",
+        "//Visual/XSharp/Core:coreprep_wire",
+        "//Visual/XSharp/Core:model",
+    ],
+)

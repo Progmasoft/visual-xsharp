@@ -1,0 +1,27 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "pipeline",
+    srcs = ["Pipeline.cpp"],
+    deps = [
+        "//Compiler/Backend/LLVM:llvm_backend",
+        "//Compiler/Codegen/Xmm:xmm",
+        "//Compiler/Codegen/Xpp:xpp",
+        "//Compiler/Core:core",
+        "//Visual/XSharp:pipeline_api",
+    ],
+)
+
+cc_library(
+    name = "core_pipeline",
+    srcs = ["CorePipeline.cpp"],
+    hdrs = ["CorePipeline.hpp"],
+    deps = [
+        "//Compiler/Cli/Arguments:arguments",
+        "//Compiler/Linker:native_linker",
+        ":pipeline",
+        "@fmt//:fmt",
+    ],
+)

@@ -60,14 +60,16 @@ The repository contains:
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The production process boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
-contract coverage, but the CLI does not expose CorePrep. Remaining work is native object/link production, cross-namespace
-Haskell name resolution, a multi-module Core link unit, and explicit Xpp/Xmm writers and readers.
+contract coverage, but the CLI does not expose CorePrep. LLVM target-machine emission and typed C++20 LLD invocation now
+produce `.o`, `.asm`, and `.vxse` artifacts. Remaining work includes cross-namespace Haskell name resolution, a multi-module
+Core link unit, source ownership for project-wide per-file artifacts, and explicit Xpp/Xmm writers and readers.
 
-## Rust compiler core
+## Retiring Rust compiler core
 
-Rust remains an active implementation and test asset with substantial semantic, lowering, verification, and IR coverage. It
-is no longer linked into the native driver, and its obsolete direct-IR C FFI session wrapper has been removed. The underlying
-Rust HIR, MIR, XLIL models, algorithms, and tests remain available for selective adaptation.
+The Rust compiler core is no longer a supported production layer or a required CI gate. Nothing in the native executable,
+Haskell frontend, project evaluator, or Bazel graph links it. Its remaining source tree is transitional reference material:
+useful algorithms and tests may be adapted deliberately, but new compiler behavior must be implemented in the owning
+Haskell or C++20 layer. The tree will be reduced in reviewed slices rather than becoming a second implementation again.
 
 ## C23 migration
 
@@ -88,13 +90,13 @@ guessed from the entry spelling.
 
 Known gaps include:
 
-- Core input can be checked through LLVM and can emit `.ll` or `.bc`, but not yet a native object or executable;
+- Core input can be checked through LLVM and can emit `.ll`, `.bc`, `.o`, `.asm`, or a native `.vxse`;
 - explicit Core emission from source is connected; Xpp/Xmm emission is not;
 - Xpp/Xmm and other later non-source `-Build` inputs are registered but not connected;
 - package publication and installation require a ViGet client not linked into this build;
 - cross-namespace imports and the multi-module Core link unit are not connected yet; and
-- native object/link, `run`, and named test-suite execution are intentionally unavailable rather than routed through the
-  removed frontend.
+- project-wide per-source object/assembly emission and named test-suite execution remain intentionally unavailable rather
+  than violating their output contracts or routing through the removed frontend.
 
 ## Verification
 
@@ -102,7 +104,5 @@ GitHub CI runs:
 
 - Kotlin project-evaluator tests;
 - Haskell build, behavior tests, and package checks;
-- Rust formatting, tests, and lints;
-- Windows ClangCL Debug configure, build, and CTest;
-- Windows ClangCL AddressSanitizer configure, build, and CTest; and
+- Windows ClangCL Bazel build and native CLI contract tests; and
 - patch hygiene checks.
