@@ -1,16 +1,16 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 [package]
 name = "xslang"
 version = "0.3.1"
 edition = "2024"
 build = "build.rs"
-authors = ["Leitwolf <support@xsharp-lang.xyz>"]
+authors = ["Progmasoft <support@progmasoft.com>"]
 description = "Target-independent semantic analysis and IR core for the Visual X# compiler"
 license = "MPL-2.0"
-repository = "https://github.com/xss-lang/xs-project"
-homepage = "https://github.com/xss-lang/xs-project"
+repository = "https://github.com/Progmasoft/visual-xsharp"
+homepage = "https://github.com/Progmasoft/visual-xsharp"
 readme = "README.md"
 documentation = "https://docs.rs/xslang"
 keywords = ["compiler", "xsharp", "compiler-ir", "xlil"]

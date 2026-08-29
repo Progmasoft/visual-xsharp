@@ -1,0 +1,10 @@
+version = 1
+SPDX-PackageName = "Visual XSharp"
+SPDX-PackageSupplier = "Organization: Progmasoft"
+SPDX-PackageDownloadLocation = "https://github.com/Progmasoft/visual-xsharp"
+
+[[annotations]]
+path = ["CMakePresets.json", "vcpkg.json", "xs/.vscode/*.json", "tests/fixtures/core/**", "tests/fixtures/coreprep/**", "tests/fixtures/intermediate/**", "tests/fixtures/projects/native_call/sources/Generated/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Progmasoft <support@progmasoft.com>"
+SPDX-License-Identifier = "MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0"

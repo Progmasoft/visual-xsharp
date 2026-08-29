@@ -1,5 +1,5 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 if(NOT DEFINED XS_BUILD_DIR OR NOT DEFINED XS_INSTALL_PREFIX OR NOT DEFINED XS_VERSION)
   message(FATAL_ERROR "install layout test requires build dir, prefix, and version")
@@ -40,8 +40,8 @@ foreach(relative_path IN LISTS required_files)
   endif()
 endforeach()
 
-if(EXISTS "${XS_INSTALL_PREFIX}/libexec/xs/project/bin/xs-project-runtime.bat")
-  message(FATAL_ERROR "installed compiler must not expose a separate xs-project-runtime launcher")
+if(EXISTS "${XS_INSTALL_PREFIX}/libexec/xs/project/bin/vxs-project-runtime.bat")
+  message(FATAL_ERROR "installed compiler must not expose a separate vxs-project-runtime launcher")
 endif()
 
 execute_process(

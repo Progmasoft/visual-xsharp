@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
+<!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0 -->
+
 # Repository layout
 
 ## Buildable components
@@ -6,7 +9,7 @@
 Visual/       C++20 CorePrep, Xpp, and Xmm models and passes
 xs/           Native vxs compiler, driver, backend, Haskell frontend, and CMake integration
 xslang/       Rust compiler core
-xs_kts/       Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
+vxs_kts/       Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
 xsrt/         Runtime components
 Spec/         Public language-design example suites
 tests/        Native compiler and integration tests

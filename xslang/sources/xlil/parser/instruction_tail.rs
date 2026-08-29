@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
 impl Parser<'_>
 {
     fn load(&mut self, function: &mut Function, result: &str, slot: &str, line: usize) -> Option<Instruction>

@@ -1,6 +1,6 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-SPDX-License-Identifier: MPL-2.0
+SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 -->
 
 # xslang
@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
 monomorphization and codegen-unit models, and the human-readable XLIL v1 registry.
 
 The public `xslang::xlil` API lets Rust tools and third-party language implementations construct, parse, verify, optimize,
-and write XLIL without depending on LLVM. The corresponding C23 API is maintained in the xs-project repository under
+and write XLIL without depending on LLVM. The corresponding C23 API is maintained in the Visual X# repository under
 `<Visual/XSharp/lil.hh>` and `<Visual/XSharp/lil-c/*.hh>`.
 
 ### Typed producer facade
@@ -95,4 +95,4 @@ of producing incomplete XLIL. See the [Rust XLIL API guide](../docs/XLIL_RUST.md
 This crate is pre-1.0 compiler infrastructure. Its APIs and version-0 intermediate formats may evolve together with the Visual X#
 compiler. The repository pins a Rust nightly toolchain for reproducible development and validation.
 
-Documentation and source are available in the [xs-project repository](https://github.com/xss-lang/xs-project).
+Documentation and source are available in the [Visual X# repository](https://github.com/Progmasoft/visual-xsharp).

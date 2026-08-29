@@ -1,17 +1,17 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
-set(xs_gradle_executable "${PROJECT_SOURCE_DIR}/xs_kts/gradlew.bat")
-set(xs_project_test_classpath
-  "${PROJECT_SOURCE_DIR}/xs_kts/build/install/vxdc/lib/*"
+set(vxs_gradle_executable "${PROJECT_SOURCE_DIR}/vxs_kts/gradlew.bat")
+set(vxs_project_test_classpath
+  "${PROJECT_SOURCE_DIR}/vxs_kts/build/install/vxdc/lib/*"
 )
 set(xs_vxdc_test_driver
-  "${PROJECT_SOURCE_DIR}/xs_kts/build/install/vxdc/bin/vxdc.bat"
+  "${PROJECT_SOURCE_DIR}/vxs_kts/build/install/vxdc/bin/vxdc.bat"
 )
 
 add_test(NAME kotlin_project_resolver_build
-  COMMAND "${xs_gradle_executable}" --daemon --build-cache
-          -p "${PROJECT_SOURCE_DIR}/xs_kts" installDist
+  COMMAND "${vxs_gradle_executable}" --daemon --build-cache
+          -p "${PROJECT_SOURCE_DIR}/vxs_kts" installDist
 )
 set_tests_properties(kotlin_project_resolver_build PROPERTIES
   TIMEOUT 180
@@ -20,9 +20,9 @@ set_tests_properties(kotlin_project_resolver_build PROPERTIES
 )
 
 # Copy project fixtures so lockfiles and emitted artifacts remain disposable.
-set(xs_project_fixture_dir "${XS_TEST_WORK_ROOT}/projects")
+set(vxs_project_fixture_dir "${XS_TEST_WORK_ROOT}/projects")
 file(COPY "${XS_TEST_SOURCE_ROOT}/fixtures/projects/"
-     DESTINATION "${xs_project_fixture_dir}")
+     DESTINATION "${vxs_project_fixture_dir}")
 
 set(xs_assert_file_contains_script
   "${CMAKE_CURRENT_LIST_DIR}/AssertFileContainsHex.cmake"
@@ -31,8 +31,8 @@ set(xs_assert_file_contains_script
 add_test(NAME kotlin_project_resolve COMMAND vxs resolve)
 set_tests_properties(kotlin_project_resolve PROPERTIES
   TIMEOUT 180
-  WORKING_DIRECTORY "${xs_project_fixture_dir}/native_call"
-  ENVIRONMENT "XS_PROJECT_EVALUATOR_CLASSPATH=${xs_project_test_classpath}"
+  WORKING_DIRECTORY "${vxs_project_fixture_dir}/native_call"
+  ENVIRONMENT "XS_PROJECT_EVALUATOR_CLASSPATH=${vxs_project_test_classpath}"
   FIXTURES_REQUIRED kotlin_project_resolver
   FIXTURES_SETUP kotlin_project_lock
   PASS_REGULAR_EXPRESSION "refreshed binary lock file 'Visual.XSharp.Lockfile.sqlite3'"
@@ -42,7 +42,7 @@ set_tests_properties(kotlin_project_resolve PROPERTIES
 )
 
 add_test(NAME kotlin_project_resolve_binary_lock COMMAND "${CMAKE_COMMAND}"
-  "-DINPUT=${xs_project_fixture_dir}/native_call/Visual.XSharp.Lockfile.sqlite3"
+  "-DINPUT=${vxs_project_fixture_dir}/native_call/Visual.XSharp.Lockfile.sqlite3"
   "-DEXPECTED_HEX=53514c69746520666f726d61742033"
   -P "${xs_assert_file_contains_script}"
 )
@@ -55,8 +55,8 @@ set_tests_properties(kotlin_project_resolve_binary_lock PROPERTIES
 add_test(NAME compiler_check_project COMMAND vxs check)
 set_tests_properties(compiler_check_project PROPERTIES
   TIMEOUT 180
-  WORKING_DIRECTORY "${xs_project_fixture_dir}/native_call"
-  ENVIRONMENT "XS_PROJECT_EVALUATOR_CLASSPATH=${xs_project_test_classpath}"
+  WORKING_DIRECTORY "${vxs_project_fixture_dir}/native_call"
+  ENVIRONMENT "XS_PROJECT_EVALUATOR_CLASSPATH=${vxs_project_test_classpath}"
   FIXTURES_REQUIRED kotlin_project_resolver
   PASS_REGULAR_EXPRESSION "is valid through the LLVM boundary"
   LABELS "jvm;compiler"
@@ -64,15 +64,15 @@ set_tests_properties(compiler_check_project PROPERTIES
   RUN_SERIAL TRUE
 )
 
-set(xs_project_core_artifact
-  "${xs_project_fixture_dir}/native_call/build/debug/Main.core"
+set(vxs_project_core_artifact
+  "${vxs_project_fixture_dir}/native_call/build/debug/Main.core"
 )
-file(REMOVE "${xs_project_core_artifact}")
+file(REMOVE "${vxs_project_core_artifact}")
 add_test(NAME compiler_emits_project_core COMMAND vxs build -Emit core)
 set_tests_properties(compiler_emits_project_core PROPERTIES
   TIMEOUT 180
-  WORKING_DIRECTORY "${xs_project_fixture_dir}/native_call"
-  ENVIRONMENT "XS_PROJECT_EVALUATOR_CLASSPATH=${xs_project_test_classpath}"
+  WORKING_DIRECTORY "${vxs_project_fixture_dir}/native_call"
+  ENVIRONMENT "XS_PROJECT_EVALUATOR_CLASSPATH=${vxs_project_test_classpath}"
   FIXTURES_REQUIRED kotlin_project_resolver
   FIXTURES_SETUP project_core_artifact
   PASS_REGULAR_EXPRESSION "wrote.*Main.core"
@@ -82,7 +82,7 @@ set_tests_properties(compiler_emits_project_core PROPERTIES
 )
 
 add_test(NAME compiler_rechecks_project_core COMMAND vxs check
-  -Build core -File "${xs_project_core_artifact}"
+  -Build core -File "${vxs_project_core_artifact}"
 )
 set_tests_properties(compiler_rechecks_project_core PROPERTIES
   TIMEOUT 30
@@ -92,11 +92,11 @@ set_tests_properties(compiler_rechecks_project_core PROPERTIES
 )
 
 set(xs_vxdc_output
-  "${xs_project_fixture_dir}/native_call/NativeCall.sqlite3.dump"
+  "${vxs_project_fixture_dir}/native_call/NativeCall.sqlite3.dump"
 )
 file(REMOVE "${xs_vxdc_output}")
 add_test(NAME vxdc_project_dump COMMAND "${xs_vxdc_test_driver}"
-  -Projectfile "${xs_project_fixture_dir}/native_call/Visual.XSharp.kts"
+  -Projectfile "${vxs_project_fixture_dir}/native_call/Visual.XSharp.kts"
   -Output "${xs_vxdc_output}"
 )
 set_tests_properties(vxdc_project_dump PROPERTIES

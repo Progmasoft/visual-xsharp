@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
+<!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0 -->
+
 # Visual X# documentation
 
 This directory documents the repository as it exists today and separates intended architecture from current implementation.

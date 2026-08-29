@@ -1,5 +1,5 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 cmake_minimum_required(VERSION 3.31)
 
@@ -133,7 +133,7 @@ if(NOT XS_BUILD_PROJECT_XS)
   message(FATAL_ERROR "This checkout currently has one buildable compiler project: 'xs'.")
 endif()
 
-project(xs_project VERSION 0.3.2 LANGUAGES C CXX)
+project(vxs_project VERSION 0.3.2 LANGUAGES C CXX)
 xs_validate_llvm_toolchain()
 
 file(RELATIVE_PATH XS_SOURCE_FROM_BINARY "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")

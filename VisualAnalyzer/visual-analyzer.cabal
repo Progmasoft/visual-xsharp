@@ -1,4 +1,6 @@
 cabal-version: 3.12
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 name: visual-analyzer
 version: 0.3.2
 synopsis: Compiler-backed analysis model for Visual X# editor integrations
@@ -8,7 +10,7 @@ description:
 category: Development
 license: MPL-2.0
 author: Progmasoft
-maintainer: support@xsharp-lang.xyz
+maintainer: support@progmasoft.com
 build-type: Simple
 
 library

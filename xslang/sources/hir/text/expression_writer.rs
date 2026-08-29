@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
 fn write_desugared_expression(output: &mut String, expression: &DesugaredExpression, indent: usize)
 {
     let pad = "  ".repeat(indent);

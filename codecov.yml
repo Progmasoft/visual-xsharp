@@ -1,5 +1,5 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 # Coverage starts with the Haskell-owned frontend. Keep its status separate from
 # the rest of the monorepo until native, Kotlin, and Rust reports are available.

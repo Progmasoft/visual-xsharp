@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
+<!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0 -->
+
 # Building and testing
 
 The optional top-level `justfile` composes the existing CMake and Gradle owners without replacing either build system:
@@ -110,7 +113,7 @@ cargo +nightly-2026-07-10 clippy -- -D warnings
 Kotlin:
 
 ```powershell
-.\xs_kts\gradlew.bat -p xs_kts test
+.\vxs_kts\gradlew.bat -p vxs_kts test
 ```
 
 ## File-size gate

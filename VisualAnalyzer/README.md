@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
+<!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0 -->
+
 # Visual Analyzer
 
 Visual Analyzer is the compiler-backed language analysis layer used by Visual X# editor integrations. It does not ship a

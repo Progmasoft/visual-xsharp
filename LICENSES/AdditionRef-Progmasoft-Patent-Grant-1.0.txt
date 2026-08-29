@@ -1,0 +1,47 @@
+Progmasoft Patent Grant, Version 1.0
+
+1. Definitions
+
+"Covered Software" means the project-owned software in this repository to which the accompanying copyright license and this Patent Grant apply. It excludes third-party material identified as such.
+
+"Progmasoft Contribution" means any portion of Covered Software authored by or on behalf of Progmasoft.
+
+Progmasoft "controls" a patent claim when Progmasoft has the right to grant the patent license in this Patent Grant without a duty to pay a third party for the grant, other than compensation owed to Progmasoft personnel.
+
+"Essential Claim" means a claim of a patent that Progmasoft owns or controls, now or in the future, that would necessarily be infringed by making, having made, using, offering to sell, selling, importing, or otherwise transferring a Progmasoft Contribution, either by itself or in a combination or interface expressly designed, documented, or provided by Progmasoft for use with that Contribution. Essential Claims do not include claims infringed only because of a downstream modification or a combination not expressly designed, documented, or provided by Progmasoft.
+
+2. Patent License
+
+Subject only to the defensive-termination provision in Section 4, Progmasoft grants each recipient of Covered Software a perpetual, worldwide, royalty-free, non-exclusive, irrevocable patent license under the Essential Claims to make, have made, use, offer to sell, sell, import, and otherwise transfer Covered Software and permitted combinations of Covered Software.
+
+This license includes the right to distribute Covered Software and to pass the benefit of this Patent Grant directly to downstream recipients. Every downstream recipient receives this Patent Grant directly from Progmasoft; no distributor is required to grant rights in patents it does not own or control.
+
+3. Independent Components and Outputs
+
+The patent license covers use of Covered Software with independent software, libraries, modules, plugins, extensions, applications, and processes, including proprietary or closed-source components, to the extent an Essential Claim is necessarily infringed by an interface or combination expressly designed, documented, or provided by Progmasoft.
+
+Running Covered Software to compile, generate, transform, format, analyze, or otherwise process input does not impose this repository's copyright license on the resulting output merely because the output was produced by Covered Software. This paragraph does not grant rights in third-party patents or alter the copyright status of material incorporated into an output.
+
+4. Defensive Termination
+
+If a recipient initiates patent litigation alleging that Covered Software or a Progmasoft Contribution directly or contributorily infringes a patent, the patent licenses granted to that recipient under this Patent Grant terminate on the date the claim is filed.
+
+Good-faith notice of a possible patent issue, a request to discuss licensing, participation in a standards process, and a claim asserted solely as a compulsory counterclaim, cross-claim, or defense in response to patent litigation initiated against the recipient do not trigger termination.
+
+If the triggering claim is voluntarily and permanently withdrawn, with prejudice where the applicable procedure permits, within 60 days after filing and before a final judgment on the merits, the patent license is automatically reinstated prospectively. Progmasoft may confirm reinstatement in other circumstances in writing. Termination under this section does not alter copyright permissions already granted under the accompanying copyright license.
+
+5. Scope and Preservation of Other Terms
+
+This Patent Grant applies only to patent rights that Progmasoft has authority to license. It does not require any contributor other than Progmasoft to grant patent rights. It grants no rights in third-party patents, trademarks, trade names, service marks, or confidential information. No provision is a representation that Covered Software is non-infringing or that Progmasoft owns patents covering it.
+
+This Patent Grant is additional to, and does not replace or reduce, the accompanying copyright license. In particular, it does not remove source-code availability, notice, attribution, or other obligations that apply to files under MPL-2.0 or AGPL-3.0-or-later.
+
+6. No Warranty
+
+The patent rights are granted without warranties or conditions of any kind. The warranty disclaimers and limitations of liability in the accompanying copyright license remain in effect.
+
+7. Severability
+
+If any provision of this Patent Grant is held unenforceable, the remaining provisions continue to apply to the maximum extent permitted by law.
+
+SPDX custom addition identifier: AdditionRef-Progmasoft-Patent-Grant-1.0

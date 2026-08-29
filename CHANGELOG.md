@@ -1,13 +1,13 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-SPDX-License-Identifier: MPL-2.0
+SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 -->
 
 # Changelog
 
-This file summarizes user-visible and developer-visible changes in the xs-project repository.
+This file summarizes user-visible and developer-visible changes in the vxs-project repository.
 
-The 0.0.x development period is the pre-1.0 xs-project compiler infrastructure line. It does not imply a complete X#
+The 0.0.x development period is the pre-1.0 vxs-project compiler infrastructure line. It does not imply a complete X#
 source-to-native executable pipeline.
 
 ## 0.3.2 - 2026-08-21
@@ -52,7 +52,7 @@ source-to-native executable pipeline.
 - Replaced the anonymous Kotlin DSL test root with case-sensitive named test suites that preserve independent source roots,
   frameworks, and nullable exclusion policies through project plan v4 and the native source registry v3.
 - Rewrote the project driver from manual C allocation to a C++20 RAII model with `fmt` diagnostics, and removed the
-  standalone `xs-project-runtime` launcher. `vxs` now starts the bundled Kotlin evaluator class directly; VXDC remains a
+  standalone `vxs-project-runtime` launcher. `vxs` now starts the bundled Kotlin evaluator class directly; VXDC remains a
   separate command.
 - Added `eprint(Any?)` and `eprintln(Any?)` project-script helpers for standard-error output.
 - Replaced the C lexer/parser and compatibility semantic route with the Haskell frontend as the sole `.vxs` source owner.
@@ -385,7 +385,7 @@ source-to-native executable pipeline.
   members. Compiler-core resolves them before nominal field lookup and lowers them through the existing typed HIR and
   native array path.
 - Kotlin projects may define importable source membership in `xs.module.kts`. Direct members and optional `submodule`
-  blocks accept concrete paths or globs and cross the xs-project/xs-compiler boundary in a module-aware v3 registry.
+  blocks accept concrete paths or globs and cross the vxs-project/xs-compiler boundary in a module-aware v3 registry.
 - Project source, test, and module includes are recursive directory roots rather than globs. Exclude patterns retain glob
   support, `--module` supplies an omitted module root, and `XS_EXTENSION` replaces the default `.vxs` discovery suffix.
 - Positional and named tuple types/literals now have explicit structural-AST tuple field records, including positional
@@ -464,7 +464,7 @@ source-to-native executable pipeline.
 - Source-native body compilation now has one authoritative implementation: structural AST enters the Rust compiler core,
   then returns verified XLIL through the public C23 boundary for LLVM emission. The obsolete C source-body fallback was
   removed after the complete source-native fixture matrix passed with it disabled.
-- Native project tests now evaluate real `xs.project.kts` files with the external Kotlin 2.4.0 runner and JRE 25, including
+- Native project tests now evaluate real `vxs.project.kts` files with the external Kotlin 2.4.0 runner and JRE 25, including
   multi-file and fixed-width integer projects.
 - Rust compiler-core sessions can merge multiple expanded structural-AST source trees into one program-wide declaration,
   typed HIR, MIR, XLIL, and LLVM module. Same-module helper calls across project files now produce native `.vxse` output.
@@ -482,8 +482,8 @@ source-to-native executable pipeline.
 - The Kotlin project DSL exposes strict `get(name)` and lossless `getAll(name)` lookup. `set(name, value, ...)` supports
   multi-value settings, replacing the former `targets { target(...) }` section; the complete example prints project,
   compiler, backend, and `TARGET` values through ordinary Kotlin `println` calls.
-- The Kotlin/JVM 25 `xs-project` resolver evaluates combined `xs.project.kts` files or split `xs.settings.kts` and
-  `xs.build.kts` files through the required external `kotlin` script runner. Explicit source registries require one
+- The Kotlin/JVM 25 `vxs-project` resolver evaluates combined `vxs.project.kts` files or split `vxs.settings.kts` and
+  `vxs.build.kts` files through the required external `kotlin` script runner. Explicit source registries require one
   case-sensitive `main.vxs` entry and are compiled by the JVM-free `/usr/bin/xs` process.
 
 ### Changed
@@ -493,7 +493,7 @@ source-to-native executable pipeline.
 - Kotlin project host matching treats BSD systems as members of both the BSD and UNIX families.
 - The compiler flag is spelled `--werror`; the former misspelling is rejected. ReactOS is a distinct internal host OS,
   has no public OS constant, and satisfies `FAMILY == WINDOWS` without satisfying `OS == WINDOWS`.
-- Split Kotlin project files have no section ownership rule. `xs.settings.kts` is evaluated first and `xs.build.kts`
+- Split Kotlin project files have no section ownership rule. `vxs.settings.kts` is evaluated first and `vxs.build.kts`
   extends its complete state; either file may call any DSL function.
 
 ## 0.1.6 - 2026-07-13

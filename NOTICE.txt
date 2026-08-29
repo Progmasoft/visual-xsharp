@@ -1,14 +1,17 @@
-xs-project
-Copyright 2026 Leitwolf <support@xsharp-lang.xyz>
+vxs-project
+Copyright 2026 Progmasoft <support@progmasoft.com>
 
 The original source code in this repository is licensed under the Mozilla
-Public License, version 2.0. See LICENSE.txt for the complete license text.
+Public License, version 2.0, with the Progmasoft Linking Exception 1.0.
+The Progmasoft Patent Grant, Version 1.0, also applies. See LICENSE.txt, PATENTS,
+LICENSES/AdditionRef-Progmasoft-Exception-1.0.txt, and
+LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt.
 
 Third-party notices
 -------------------
 
-The Gradle wrapper launcher files `xs_kts/gradlew` and
-`xs_kts/gradlew.bat` retain their original copyright notices and remain
+The Gradle wrapper launcher files `vxs_kts/gradlew` and
+`vxs_kts/gradlew.bat` retain their original copyright notices and remain
 licensed under the Apache License, version 2.0.
 
 JUnit Jupiter and the JUnit Platform are used to test the Java XLIL binding.

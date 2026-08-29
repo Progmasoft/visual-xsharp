@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
- * SPDX-License-Identifier: MPL-2.0
+ * SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+ * SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
  */
 
 import java.io.IOException;
@@ -74,12 +74,12 @@ class Release
     static int check(String version) throws IOException, InterruptedException
     {
         List<Check> checks = new ArrayList<>();
-        checks.add(contains(Path.of("CMakeLists.txt"), "project(xs_project VERSION " + version + " LANGUAGES C CXX)",
+        checks.add(contains(Path.of("CMakeLists.txt"), "project(vxs_project VERSION " + version + " LANGUAGES C CXX)",
                 "CMake project version"));
         checks.add(containsOnce(Path.of("CHANGELOG.md"), "## " + version + " - ", "CHANGELOG heading"));
         checks.add(contains(Path.of("xs/haskell/visual-xsharp-compiler/visual-xsharp-compiler.cabal"),
                 "version: " + version, "Haskell compiler version"));
-        checks.add(contains(Path.of("xs_kts/build.gradle.kts"), "version = \"" + version + "\"",
+        checks.add(contains(Path.of("vxs_kts/build.gradle.kts"), "version = \"" + version + "\"",
                 "Kotlin project runtime version"));
         checks.add(contains(Path.of("xslang/Cargo.toml"), "version = \"" + version + "\"",
                 "Rust compiler core version"));

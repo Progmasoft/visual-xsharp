@@ -1,0 +1,269 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+ * SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+ */
+
+package com.progmasoft.visual.xsharp.project
+
+@XsProjectDsl
+class ProjectScope internal constructor() {
+  var name: String? = null
+  var version: String? = null
+  var stability: Stability? = null
+
+  internal fun apply() {
+    if (name == null && version == null && stability == null) return
+
+    // Publication is configured later in many project files, so completeness
+    // cannot be decided while this block is evaluated. Preserve every supplied
+    // value and enforce the publication contract once the whole model is built.
+    ProjectRuntime.configureIdentity(name, stability?.name, version)
+  }
+}
+
+@XsProjectDsl
+class MainSourcesScope internal constructor() {
+  var srcDir: String = "Sources"
+  var entry: String? = null
+  internal var excludes: MutableList<String>? = null
+
+  fun exclude(vararg patterns: String) {
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { configured += requireText(it, "main source exclude") }
+  }
+}
+
+@XsProjectDsl
+class TestSourcesScope internal constructor(private val suiteName: String) {
+  var testDir: String = "Tests/$suiteName"
+  var framework: String? = null
+  internal var excludes: MutableList<String>? = null
+
+  fun exclude(vararg patterns: String) {
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { configured += requireText(it, "test source exclude") }
+  }
+}
+
+@XsProjectDsl
+class ViGetSourcesScope internal constructor() {
+  var publish: Boolean = false
+  internal var excludes: MutableList<String>? = null
+
+  fun exclude(vararg patterns: String) {
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { configured += requireText(it, "ViGet source exclude") }
+  }
+}
+
+@XsProjectDsl
+class ProjectSourcesScope internal constructor() {
+  private var main: MainSourcesScope? = null
+  private val tests = linkedMapOf<String, TestSourcesScope>()
+  private var viget: ViGetSourcesScope? = null
+
+  fun main(block: MainSourcesScope.() -> Unit) {
+    if (main != null)
+      throw ProjectConfigurationException("sources.main may be configured only once")
+    main = MainSourcesScope().apply(block)
+  }
+
+  fun test(
+    name: String,
+    block: TestSourcesScope.() -> Unit,
+  ) {
+    val suiteName = requireModuleSegment(name, "test suite name")
+    if (suiteName in tests) {
+      throw ProjectConfigurationException("test suite '$suiteName' may be configured only once")
+    }
+    tests[suiteName] = TestSourcesScope(suiteName).apply(block)
+  }
+
+  fun viget(block: ViGetSourcesScope.() -> Unit) {
+    if (viget != null)
+      throw ProjectConfigurationException("sources.viget may be configured only once")
+    viget = ViGetSourcesScope().apply(block)
+  }
+
+  internal fun apply() {
+    val mainSources = main ?: throw ProjectConfigurationException("sources.main is required")
+    val entry =
+      mainSources.entry ?: throw ProjectConfigurationException("sources.main.entry is required")
+    ProjectRuntime.configureEntry(entry)
+    ProjectRuntime.configureMainSources {
+      include(requireText(mainSources.srcDir, "sources.main.srcDir"))
+      mainSources.excludes?.let { exclude(*it.toTypedArray()) }
+    }
+    ProjectRuntime.configureTestSuites(
+      tests.map { (name, suite) ->
+        TestSuite(
+          name = name,
+          testDir = requireText(suite.testDir, "sources.test('$name').testDir"),
+          framework = suite.framework?.let { requireText(it, "test suite '$name' framework") },
+          exclude =
+            suite.excludes?.map { requireText(it, "test suite '$name' exclude") }?.distinct(),
+        )
+      }
+    )
+    viget?.let { publishing ->
+      ProjectRuntime.configurePublishing(publishing.publish, publishing.excludes)
+    }
+  }
+}
+
+@XsProjectDsl
+class OutputDirectoriesScope internal constructor() {
+  var release: String = "build/release"
+  var debug: String = "build/debug"
+
+  internal fun apply() {
+    ProjectRuntime.configureOutputDirectories(release, debug)
+  }
+}
+
+@XsProjectDsl
+class TargetsScope internal constructor() {
+  private val values = mutableListOf<String>()
+
+  fun target(vararg triples: String) {
+    triples.forEach { value ->
+      val target = requireText(value, "target triple")
+      if (!target.matches(Regex("[A-Za-z0-9_+.]+(?:-[A-Za-z0-9_+.]+){2,}"))) {
+        throw ProjectConfigurationException("invalid target triple: $target")
+      }
+      values += target
+    }
+  }
+
+  internal fun apply() {
+    ProjectRuntime.configureTargets(values)
+  }
+}
+
+@XsProjectDsl
+class AuthorsScope internal constructor() {
+  private val values = mutableListOf<Author>()
+
+  fun author(user: String, mail: String) {
+    values += Author(requireText(user, "author user"), requireText(mail, "author mail"))
+  }
+
+  internal fun apply() {
+    if (values.isNotEmpty()) ProjectRuntime.configureAuthors(values)
+  }
+}
+
+@XsProjectDsl
+class PmlScope internal constructor() {
+  var enabled: Boolean = true
+
+  internal fun apply() {
+    ProjectRuntime.configurePml(enabled)
+  }
+}
+
+@XsProjectDsl
+class WorkspaceScope internal constructor(private val name: String) {
+  var path: String? = null
+
+  internal fun build(): Workspace {
+    val configuredPath =
+      path ?: throw ProjectConfigurationException("workspace '$name' requires path")
+    return Workspace(name, requireText(configuredPath, "workspace path"))
+  }
+}
+
+@XsProjectDsl
+class WorkspacesScope internal constructor() {
+  private val values = mutableListOf<Workspace>()
+
+  fun workspace(
+    name: String,
+    block: WorkspaceScope.() -> Unit,
+  ) {
+    val normalized = requireModuleSegment(name, "workspace name")
+    values += WorkspaceScope(normalized).apply(block).build()
+  }
+
+  internal fun apply() {
+    ProjectRuntime.configureWorkspaces(values)
+  }
+}
+
+@XsProjectDsl
+class DependencyDeclarationScope internal constructor(private val publisher: String) {
+  var name: String? = null
+  var version: String? = null
+  var stability: Stability = Stability.STABLE
+  var optional: String? = null
+  var path: String? = null
+  private val features = linkedMapOf<String, Boolean>()
+
+  fun feature(
+    name: String,
+    block: DependencyFeatureDeclarationScope.() -> Unit,
+  ) {
+    val normalized = requireFeatureName(name)
+    features[normalized] = DependencyFeatureDeclarationScope().apply(block).enabled
+  }
+
+  internal fun applyTo(scope: DependenciesScope) {
+    if (publisher == "local") {
+      if (name != null || version != null || optional != null || features.isNotEmpty()) {
+        throw ProjectConfigurationException(
+          "local dependency accepts only path; package identity comes from the .vipkg manifest"
+        )
+      }
+      scope.addLocal(requireLocalArtifactPath(path, "vipkg", "local dependency path"))
+      return
+    }
+    if (path != null) {
+      throw ProjectConfigurationException("ViGet dependency does not accept a local path")
+    }
+    val packageName =
+      requireModuleSegment(
+        name ?: throw ProjectConfigurationException("dependency requires name"),
+        "dependency name",
+      )
+    val packageVersion =
+      requirePackageVersion(
+        version ?: throw ProjectConfigurationException("dependency requires version")
+      )
+    val optionalFeature = optional
+    if (optionalFeature == null) {
+      scope.add(packageDependency(publisher, packageName, stability, packageVersion))
+    } else {
+      val feature = requireFeatureName(optionalFeature)
+      val dependency = packageDependency(publisher, packageName, stability, packageVersion)
+      val enabled = features[feature] ?: false
+      scope.addOptional(feature, dependency, enabled)
+    }
+  }
+}
+
+@XsProjectDsl
+class DependencyFeatureDeclarationScope internal constructor() {
+  var enabled: Boolean = false
+}
+
+fun project(block: ProjectScope.() -> Unit) = ProjectScope().apply(block).apply()
+
+fun sources(block: ProjectSourcesScope.() -> Unit) = ProjectSourcesScope().apply(block).apply()
+
+fun outdirs(block: OutputDirectoriesScope.() -> Unit) =
+  OutputDirectoriesScope().apply(block).apply()
+
+fun targets(block: TargetsScope.() -> Unit) = TargetsScope().apply(block).apply()
+
+fun authors(block: AuthorsScope.() -> Unit) = AuthorsScope().apply(block).apply()
+
+fun pml(block: PmlScope.() -> Unit) = PmlScope().apply(block).apply()
+
+fun workspaces(block: WorkspacesScope.() -> Unit) = WorkspacesScope().apply(block).apply()
+
+fun DependenciesScope.dependency(
+  publisher: String,
+  block: DependencyDeclarationScope.() -> Unit,
+) = DependencyDeclarationScope(publisher).apply(block).applyTo(this)
+
+fun emitProject() = ProjectOutput.emit(ProjectRuntime.build())

@@ -1,6 +1,6 @@
 <!--
-SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-SPDX-License-Identifier: MPL-2.0
+SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 -->
 
 # Visual X#
@@ -168,4 +168,8 @@ that every rule is already implemented by `vxs`.
 
 ## License
 
-See `LICENSE.txt` and `NOTICE.txt`.
+Project-owned source files use `MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0`. The exception permits static and
+dynamic linking with independent components under licenses of their choice, including proprietary licenses, without
+removing MPL-2.0 obligations from covered files or modifications to those files. See `LICENSE.txt`,
+`LICENSES/AdditionRef-Progmasoft-Exception-1.0.txt`, `PATENTS`,
+`LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt`, and `NOTICE.txt`.

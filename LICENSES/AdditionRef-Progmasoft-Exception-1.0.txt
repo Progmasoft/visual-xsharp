@@ -1,0 +1,25 @@
+Progmasoft Linking Exception, Version 1.0
+
+This Exception is an additional permission to the Mozilla Public License, version 2.0 ("MPL-2.0"). Capitalized terms not defined by this Exception have the meanings given in MPL-2.0.
+
+1. You may create, use, reproduce, and distribute a Larger Work that combines or links Covered Software with one or more Independent Components, whether the link is static or dynamic.
+
+2. "Independent Component" means software contained in a separate file or files that neither contains Covered Software nor is itself a Modification of Covered Software. Merely linking with, loading, calling, communicating with, or distributing an Independent Component together with Covered Software does not, by itself, make that Independent Component Covered Software or subject it to MPL-2.0. This includes independently written plugins, extensions, libraries, frontends, backends, language bindings, and separate processes that interact with Covered Software only through a published API, ABI, FFI boundary, command-line interface, protocol, inter-process communication mechanism, or file format.
+
+3. You may license and distribute an Independent Component, and the portions of a Larger Work other than Covered Software, under terms of your choice, including proprietary or closed-source terms, provided that those terms do not restrict a recipient's rights in the Covered Software under MPL-2.0 and that you comply with MPL-2.0 for the Covered Software. Merely placing Covered Software and an Independent Component in the same archive, package, installer, application bundle, container image, distribution medium, or deployment does not change the license of the Independent Component.
+
+4. Output produced by running Covered Software, including compiled programs, generated source code, object files, intermediate representations, documentation, reports, diagnostics, formatted text, and analysis results, does not become Covered Software merely because Covered Software produced, transformed, or processed it. If an output contains or incorporates Covered Software, the incorporated Covered Software remains subject to MPL-2.0.
+
+5. This Exception does not remove, replace, or limit any MPL-2.0 obligation that applies to Covered Software. Every Source Code Form file that is Covered Software, every Modification of such a file, and every new file that contains Covered Software remains subject to MPL-2.0, including its applicable source-code availability, license, and notice obligations. This Exception grants no permission to relicense such Covered Software or to withhold its Source Code Form when MPL-2.0 requires that source to be made available.
+
+6. The additional permissions in this Exception are granted directly to every recipient of Covered Software bearing the license expression below. A recipient may rely on these permissions or may use the Covered Software under MPL-2.0 without relying on this Exception.
+
+7. This Exception grants no trademark rights, changes no patent grant in MPL-2.0, and does not alter MPL-2.0's warranty disclaimer or limitation of liability.
+
+8. If any provision of this Exception is held unenforceable, the remaining provisions continue to apply to the maximum extent permitted by law.
+
+9. The Progmasoft Patent Grant, Version 1.0, identified as AdditionRef-Progmasoft-Patent-Grant-1.0 and published in LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt, applies independently and is incorporated into this Exception by reference. The patent grant does not remove or reduce any copyright obligation in MPL-2.0 or this Exception.
+
+10. This Exception applies only to a file that expressly identifies it using the following SPDX license expression:
+
+   MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0

@@ -1,5 +1,5 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <xs-lang.chess031@slmails.com>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 build/
 bin/
@@ -21,5 +21,5 @@ website/
 .vs/
 vcpkg-debug.log
 vcpkg_installed/
-xs_kts/sources/Tests/
-xs_kts/sources/main.vxs
+vxs_kts/sources/Tests/
+vxs_kts/sources/main.vxs

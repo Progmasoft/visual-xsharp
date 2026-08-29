@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
+<!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0 -->
+
 # Contributing
 
 ## Preserve architectural ownership
@@ -40,7 +43,7 @@ Run the checks appropriate to the changed ownership boundary:
 
 - Haskell: `cabal build all`, `cabal test all`, and `cabal check`.
 - Rust: `cargo fmt --check`, `cargo test`, and `cargo clippy -- -D warnings`.
-- Kotlin: `xs_kts\gradlew.bat -p xs_kts test`.
+- Kotlin: `vxs_kts\gradlew.bat -p vxs_kts test`.
 - Native: Debug and sanitizer CMake builds plus CTest.
 - Documentation: link scan, spelling scan, and `git diff --check`.
 

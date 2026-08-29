@@ -1,5 +1,5 @@
-// SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-// SPDX-License-Identifier: MPL-2.0
+// SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 #include "ProjectDriver.hpp"
 
@@ -54,7 +54,7 @@ public:
         if(GetTempFileNameW(directory.c_str(), L"xsr", 0, candidate) != 0)
             path_ = candidate;
 #else
-        std::string candidate = (directory / "xs-project-sources-XXXXXX").string();
+        std::string candidate = (directory / "vxs-project-sources-XXXXXX").string();
         const int descriptor = mkstemp(candidate.data());
         if(descriptor >= 0)
         {
@@ -203,7 +203,7 @@ private:
         "--enable-native-access=ALL-UNNAMED",
         "-cp",
         ProjectEvaluatorClasspath(),
-        "org.progmasoft.visual.xsharp.project.MainKt",
+        "com.progmasoft.visual.xsharp.project.MainKt",
     };
     arguments.insert(arguments.end(), commandArguments.begin(), commandArguments.end());
     const int status = RunProgram(program, arguments);

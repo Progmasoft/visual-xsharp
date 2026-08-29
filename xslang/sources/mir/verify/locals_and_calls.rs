@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
 impl<'a> Verifier<'a>
 {
     fn verify_local_storage(&mut self, local: LocalId, value: LocalId, instruction: &str, span: Span)

@@ -1,5 +1,5 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 # `just` is the repository-level command surface. CMake continues to own native
 # targets and Gradle continues to own the Kotlin DSL; recipes only compose them.
@@ -22,14 +22,14 @@ test-native profile="debug": (build profile)
 
 # Format and verify the programmable Kotlin project DSL.
 check-kotlin:
-    .\xs_kts\gradlew.bat -p xs_kts check
+    .\vxs_kts\gradlew.bat -p vxs_kts check
 
 # Match the independently owned native and Kotlin verification layers used by CI.
 check profile="debug": (test-native profile) check-kotlin
 
 # Apply Kotlin DSL formatting without changing native files implicitly.
 format-kotlin:
-    .\xs_kts\gradlew.bat -p xs_kts spotlessApply
+    .\vxs_kts\gradlew.bat -p vxs_kts spotlessApply
 
 # Format only paths deliberately supplied by the caller.
 format-native *files:

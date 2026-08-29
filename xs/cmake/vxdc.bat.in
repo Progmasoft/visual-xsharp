@@ -1,3 +1,6 @@
+@rem SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+@rem SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
 @echo off
 call "%~dp0..\libexec\xs\project\bin\vxdc.bat" %*
 exit /b %ERRORLEVEL%

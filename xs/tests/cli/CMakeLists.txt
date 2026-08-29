@@ -1,17 +1,17 @@
-# SPDX-FileCopyrightText: 2026 Leitwolf <support@xsharp-lang.xyz>
-# SPDX-License-Identifier: MPL-2.0
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 add_test(NAME cli_version COMMAND vxs --version)
-string(REPLACE "." "\\." xs_project_version_regex "${PROJECT_VERSION}")
+string(REPLACE "." "\\." vxs_project_version_regex "${PROJECT_VERSION}")
 set_tests_properties(cli_version PROPERTIES
   TIMEOUT 5
-  PASS_REGULAR_EXPRESSION "vxs ${xs_project_version_regex}"
+  PASS_REGULAR_EXPRESSION "vxs ${vxs_project_version_regex}"
 )
 
 add_test(NAME cli_version_command COMMAND vxs version)
 set_tests_properties(cli_version_command PROPERTIES
   TIMEOUT 5
-  PASS_REGULAR_EXPRESSION "vxs ${xs_project_version_regex}"
+  PASS_REGULAR_EXPRESSION "vxs ${vxs_project_version_regex}"
 )
 
 add_test(NAME cli_help COMMAND vxs --help)
