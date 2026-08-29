@@ -13,6 +13,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -130,7 +131,7 @@ private:
     auto directory = ExecutableDirectory();
     if(!directory)
     {
-        std::fputs("vxs: could not locate the compiler executable directory\n", stderr);
+        fmt::print(stderr, "vxs: could not locate the compiler executable directory\n");
         return -1;
     }
 #ifdef _WIN32
@@ -146,7 +147,7 @@ private:
         auto wide = Utf8ToWide(argument);
         if(!wide)
         {
-            std::fputs("vxs: private frontend argument is not valid UTF-8\n", stderr);
+            fmt::print(stderr, "vxs: private frontend argument is not valid UTF-8\n");
             return -1;
         }
         storage.push_back(std::move(*wide));
@@ -177,7 +178,7 @@ private:
     const int spawnStatus = posix_spawn(&process, frontendText.c_str(), nullptr, nullptr, arguments.data(), environ);
     if(spawnStatus != 0)
     {
-        std::fprintf(stderr, "vxs: could not start Haskell frontend: %s\n", std::strerror(spawnStatus));
+        fmt::print(stderr, "vxs: could not start Haskell frontend: {}\n", std::strerror(spawnStatus));
         return -1;
     }
     int status{};
@@ -327,7 +328,7 @@ private:
     auto sources = ReadProjectSourceList(sourceList.Path());
     if(!sources)
     {
-        std::fputs("vxs: compiler frontend returned an invalid project source list\n", stderr);
+        fmt::print(stderr, "vxs: compiler frontend returned an invalid project source list\n");
         return 1;
     }
 
@@ -376,11 +377,10 @@ private:
     std::filesystem::copy_file(temporary, output, std::filesystem::copy_options::overwrite_existing, error);
     if(error)
     {
-        std::fprintf(stderr, "vxs: could not write Core artifact '%s': %s\n", output.string().c_str(),
-                     error.message().c_str());
+        fmt::print(stderr, "vxs: could not write Core artifact '{}': {}\n", PathText(output), error.message());
         return false;
     }
-    std::fprintf(stderr, "vxs: wrote '%s'\n", output.string().c_str());
+    fmt::print(stderr, "vxs: wrote '{}'\n", PathText(output));
     return true;
 }
 
@@ -389,13 +389,13 @@ private:
 {
     if(source.extension() != ".vxs")
     {
-        std::fputs("vxs: Haskell frontend input must be a .vxs file\n", stderr);
+        fmt::print(stderr, "vxs: Haskell frontend input must be a .vxs file\n");
         return false;
     }
     TemporaryCore core;
     if(!core)
     {
-        std::fputs("vxs: could not allocate a temporary Core artifact\n", stderr);
+        fmt::print(stderr, "vxs: could not allocate a temporary Core artifact\n");
         return false;
     }
     if(RunFileFrontend(core.Path(), source) != 0)
@@ -409,7 +409,7 @@ private:
                                                   effective.target ? effective.target->c_str() : nullptr);
     if(options.command != XS_CLI_COMMAND_BUILD)
     {
-        std::fputs("vxs: run and test will be reconnected after native object/link ownership moves to C++20\n", stderr);
+        fmt::print(stderr, "vxs: run and test will be reconnected after native object/link ownership moves to C++20\n");
         return false;
     }
     if(effective.output == XS_BUILD_OUTPUT_CORE)
@@ -418,7 +418,7 @@ private:
         return xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command,
                                                   effective.output, &effective.compiler,
                                                   effective.target ? effective.target->c_str() : nullptr);
-    std::fputs("vxs: source builds currently emit core, llvmll, or llvmbc during the frontend migration\n", stderr);
+    fmt::print(stderr, "vxs: source builds currently emit core, llvmll, or llvmbc during the frontend migration\n");
     return false;
 }
 
@@ -429,7 +429,7 @@ private:
     {
         if(!options.filePath || options.filePath->extension() != ".core")
         {
-            std::fputs("vxs: -Build core requires a .core -File\n", stderr);
+            fmt::print(stderr, "vxs: -Build core requires a .core -File\n");
             return 2;
         }
         const auto fileText = PathText(*options.filePath);
@@ -440,7 +440,7 @@ private:
     }
     if(options.input != XS_BUILD_INPUT_VXS)
     {
-        std::fputs("vxs: only vxs and core inputs belong to the renewed pipeline\n", stderr);
+        fmt::print(stderr, "vxs: only vxs and core inputs belong to the renewed pipeline\n");
         return 2;
     }
     return options.filePath && ProcessSource(*options.filePath, options, effective) ? 0 : 1;
@@ -454,8 +454,8 @@ private:
         return 1;
     if(testing)
     {
-        std::fputs("vxs: named test-suite execution requires the test framework runner, which is not linked yet\n",
-                   stderr);
+        fmt::print(stderr,
+                   "vxs: named test-suite execution requires the test framework runner, which is not linked yet\n");
         return 1;
     }
 
@@ -477,7 +477,7 @@ private:
     TemporaryCore core;
     if(!core)
     {
-        std::fputs("vxs: could not allocate a temporary Core artifact\n", stderr);
+        fmt::print(stderr, "vxs: could not allocate a temporary Core artifact\n");
         return 1;
     }
     if(RunProjectFrontend(core.Path(), *project) != 0)
@@ -504,7 +504,7 @@ private:
                    : 1;
     if(options.command != XS_CLI_COMMAND_BUILD)
     {
-        std::fputs("vxs: run will be reconnected after native object/link ownership moves to C++20\n", stderr);
+        fmt::print(stderr, "vxs: run will be reconnected after native object/link ownership moves to C++20\n");
         return 1;
     }
     std::filesystem::create_directories(artifactBase.parent_path(), pathError);
@@ -522,8 +522,8 @@ private:
                                                   effective.target ? effective.target->c_str() : nullptr)
                    ? 0
                    : 1;
-    std::fputs("vxs: project builds currently emit core, llvmll, or llvmbc during native object/link migration\n",
-               stderr);
+    fmt::print(stderr,
+               "vxs: project builds currently emit core, llvmll, or llvmbc during native object/link migration\n");
     return 1;
 }
 } // namespace
@@ -555,8 +555,7 @@ extern "C" int xs_driver_main(int argc, char **argv)
     else if(options.command == XS_CLI_COMMAND_INSTALL || options.command == XS_CLI_COMMAND_VIGET)
     {
         const char *commandName = options.command == XS_CLI_COMMAND_INSTALL ? "install" : "viget";
-        std::fprintf(stderr, "vxs: %s requires the ViGet client, which is not linked into this build yet\n",
-                     commandName);
+        fmt::print(stderr, "vxs: {} requires the ViGet client, which is not linked into this build yet\n", commandName);
         result = 1;
     }
     else

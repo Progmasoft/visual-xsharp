@@ -82,21 +82,25 @@ TEST_CASE("CLI defaults become typed compiler settings", "[cli][parser]")
 
 TEST_CASE("help and version are parser outcomes rather than parser side effects", "[cli][parser]")
 {
-    const ParsedInvocation globalHelp{"vxs", "--help"};
+    const ParsedInvocation globalHelp{"vxs", "-Help"};
     REQUIRE(globalHelp.Result() == XS_CLI_PARSE_HELP);
     REQUIRE_FALSE(globalHelp.Options().filePath);
     REQUIRE_FALSE(globalHelp.HelpCommand());
 
-    const ParsedInvocation buildHelp{"vxs", "build", "--help"};
+    const ParsedInvocation buildHelp{"vxs", "build", "-Help"};
     REQUIRE(buildHelp.Result() == XS_CLI_PARSE_HELP);
     REQUIRE(buildHelp.HelpCommand() == XS_CLI_COMMAND_BUILD);
 
     const ParsedInvocation version{"vxs", "version"};
     REQUIRE(version.Result() == XS_CLI_PARSE_VERSION);
 
-    const ParsedInvocation versionHelp{"vxs", "version", "--help"};
+    const ParsedInvocation versionHelp{"vxs", "version", "-Help"};
     REQUIRE(versionHelp.Result() == XS_CLI_PARSE_HELP);
     REQUIRE(versionHelp.HelpCommand() == XS_CLI_COMMAND_VERSION);
+
+    const ParsedInvocation legacyHelp{"vxs", "build", "--help"};
+    REQUIRE(legacyHelp.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(legacyHelp.Diagnostic() == "unknown option '--help'");
 }
 
 TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")

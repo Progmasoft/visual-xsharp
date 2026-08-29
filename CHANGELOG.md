@@ -29,6 +29,10 @@ source-to-native executable pipeline.
   workflow now covers only the project DSL runtime, compiler layers, and Rust core.
 - Migrated the renewed C++20 LLVM backend from LLVM-C handles to native LLVM IRBuilder, module, verifier, bitcode, support,
   and new-pass-manager APIs while retaining LLVM-C only for the isolated legacy C backend.
+- Replaced the CLI's exceptional GNU-style `--help` spelling with the case-sensitive canonical `-Help` control used by
+  the Visual X# command surface; global and command-specific help now reject the retired spelling.
+- Unified synchronous vxs help, version, diagnostic, and Core-pipeline output on the existing type-safe `fmt` dependency
+  instead of retaining parallel `printf`, `fprintf`, `fputs`, and `putchar` formatting paths.
 
 ## 0.3.1 - 2026-08-13
 

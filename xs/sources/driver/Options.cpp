@@ -3,8 +3,9 @@
 
 #include "Options.hpp"
 
+#include <fmt/format.h>
+
 #include <array>
-#include <cstdio>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -17,6 +18,8 @@
 namespace
 {
 using namespace std::literals;
+
+constexpr std::string_view kHelpOption = "-Help";
 
 enum class Option : unsigned
 {
@@ -436,19 +439,17 @@ void PrintHelp(const CommandSpec *command)
 {
     if(command == nullptr)
     {
-        std::puts("Visual X# compiler, project, and ViGet command-line interface.\n\n"
-                  "Usage: vxs <command> [options]\n\n"
-                  "Commands:");
+        fmt::print("Visual X# compiler, project, and ViGet command-line interface.\n\n"
+                   "Usage: vxs <command> [options]\n\n"
+                   "Commands:\n");
         for(const auto &spec : kCommands)
-            std::printf("  %-9.*s %.*s\n", static_cast<int>(spec.name.size()), spec.name.data(),
-                        static_cast<int>(spec.description.size()), spec.description.data());
-        std::puts("\nRun 'vxs <command> --help' for command-specific options.");
+            fmt::print("  {:<9} {}\n", spec.name, spec.description);
+        fmt::print("\nRun 'vxs <command> -Help' for command-specific options.\n");
         return;
     }
 
     const auto positional = PositionalText(command->positional);
-    std::printf("Usage: vxs %.*s [options]%s\n", static_cast<int>(command->name.size()), command->name.data(),
-                positional.c_str());
+    fmt::print("Usage: vxs {} [options]{}\n", command->name, positional);
     bool headingPrinted = false;
     for(const auto &spec : kOptions)
     {
@@ -456,7 +457,7 @@ void PrintHelp(const CommandSpec *command)
             continue;
         if(!headingPrinted)
         {
-            std::puts("\nOptions:");
+            fmt::print("\nOptions:\n");
             headingPrinted = true;
         }
         std::string signature(spec.spelling);
@@ -467,13 +468,12 @@ void PrintHelp(const CommandSpec *command)
             signature.append(domain);
         }
         const auto defaultValue = DefaultText(spec.option);
-        std::printf("  %-52s %.*s", signature.c_str(), static_cast<int>(spec.description.size()),
-                    spec.description.data());
+        fmt::print("  {:<52} {}", signature, spec.description);
         if(!defaultValue.empty())
-            std::printf(" [default: %.*s]", static_cast<int>(defaultValue.size()), defaultValue.data());
-        std::putchar('\n');
+            fmt::print(" [default: {}]", defaultValue);
+        fmt::print("\n");
     }
-    std::puts("  --help                                               show this command help");
+    fmt::print("  -Help                                                show this command help\n");
 }
 
 [[nodiscard]] ApplyResult ApplyBoolean(Option option, std::string_view value, XsCliOptions &options)
@@ -719,8 +719,8 @@ XsCliParseOutcome ParseCommandLine(int argc, char **argv)
     if(argc == 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--version")
         return {XS_CLI_PARSE_VERSION, std::move(options), std::nullopt, {}};
     if(argc < 2 || argv[1] == nullptr)
-        return Failure(std::move(options), "a command is required; use --help to list commands");
-    if(std::string_view(argv[1]) == "--help")
+        return Failure(std::move(options), "a command is required; use -Help to list commands");
+    if(std::string_view(argv[1]) == kHelpOption)
         return {XS_CLI_PARSE_HELP, std::move(options), std::nullopt, {}};
 
     const auto command = FindCommand(argv[1]);
@@ -728,7 +728,7 @@ XsCliParseOutcome ParseCommandLine(int argc, char **argv)
         return Failure(std::move(options), std::string("unknown command '") + argv[1] + "'");
     if(command->command == XS_CLI_COMMAND_VERSION)
     {
-        if(argc == 3 && argv[2] != nullptr && std::string_view(argv[2]) == "--help")
+        if(argc == 3 && argv[2] != nullptr && std::string_view(argv[2]) == kHelpOption)
             return {XS_CLI_PARSE_HELP, std::move(options), command->command, {}};
         if(argc != 2)
             return Failure(std::move(options), "version does not accept arguments");
@@ -743,7 +743,7 @@ XsCliParseOutcome ParseCommandLine(int argc, char **argv)
         if(argv[index] == nullptr)
             return Failure(std::move(options), "process argument vector contains null");
         const std::string_view argument(argv[index]);
-        if(argument == "--help")
+        if(argument == kHelpOption)
         {
             return {XS_CLI_PARSE_HELP, std::move(options), command->command, {}};
         }
@@ -815,5 +815,5 @@ void PrintCliHelp(std::optional<XsCliCommand> command)
 
 void PrintCliVersion()
 {
-    std::printf("vxs %s\n", XS_PROJECT_VERSION);
+    fmt::print("vxs {}\n", XS_PROJECT_VERSION);
 }

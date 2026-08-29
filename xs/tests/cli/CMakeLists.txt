@@ -14,26 +14,26 @@ set_tests_properties(cli_version_command PROPERTIES
   PASS_REGULAR_EXPRESSION "vxs ${vxs_project_version_regex}"
 )
 
-add_test(NAME cli_help COMMAND vxs --help)
+add_test(NAME cli_help COMMAND vxs -Help)
 set_tests_properties(cli_help PROPERTIES
   TIMEOUT 5
   PASS_REGULAR_EXPRESSION "Commands:"
 )
 
-add_test(NAME cli_build_help COMMAND vxs build --help)
+add_test(NAME cli_build_help COMMAND vxs build -Help)
 set_tests_properties(cli_build_help PROPERTIES
   TIMEOUT 5
   PASS_REGULAR_EXPRESSION "-Emit"
 )
 
-add_test(NAME cli_check_help COMMAND vxs check --help)
+add_test(NAME cli_check_help COMMAND vxs check -Help)
 set_tests_properties(cli_check_help PROPERTIES
   TIMEOUT 5
   PASS_REGULAR_EXPRESSION "-Build"
   FAIL_REGULAR_EXPRESSION "-Emit"
 )
 
-add_test(NAME cli_install_help COMMAND vxs install --help)
+add_test(NAME cli_install_help COMMAND vxs install -Help)
 set_tests_properties(cli_install_help PROPERTIES
   TIMEOUT 5
   PASS_REGULAR_EXPRESSION "Publisher.Name"
@@ -48,7 +48,10 @@ target_compile_definitions(xs_cli_parser_tests PRIVATE
   XS_PROJECT_VERSION="${PROJECT_VERSION}"
 )
 xs_enable_strict_warnings(xs_cli_parser_tests)
-target_link_libraries(xs_cli_parser_tests PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(xs_cli_parser_tests PRIVATE
+  Catch2::Catch2WithMain
+  fmt::fmt-header-only
+)
 add_test(NAME cli_parser_model COMMAND xs_cli_parser_tests)
 set_tests_properties(cli_parser_model PROPERTIES TIMEOUT 15)
 # This test does not link xs_lil, but an ASan-instrumented executable still

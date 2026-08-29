@@ -4,6 +4,8 @@
 #include "CorePipeline.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
 
+#include <fmt/format.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -46,18 +48,18 @@ void PrintFailure(const visual_xsharp::PipelineResult &result)
 {
     if(result.coreWireError)
     {
-        std::fprintf(stderr, "vxs: Core artifact error at byte %zu (%s): %s\n", result.coreWireError->offset,
-                     result.coreWireError->context.c_str(), result.coreWireError->message.c_str());
+        fmt::print(stderr, "vxs: Core artifact error at byte {} ({}): {}\n", result.coreWireError->offset,
+                   result.coreWireError->context, result.coreWireError->message);
         return;
     }
     for(const auto &issue : result.coreVerificationIssues)
-        std::fprintf(stderr, "vxs: %s: %s [function=%llu, symbol=%llu]\n", issue.code.c_str(), issue.message.c_str(),
-                     static_cast<unsigned long long>(issue.function), static_cast<unsigned long long>(issue.symbol));
+        fmt::print(stderr, "vxs: {}: {} [function={}, symbol={}]\n", issue.code, issue.message, issue.function,
+                   issue.symbol);
     for(const auto &issue : result.verification_issues)
-        std::fprintf(stderr, "vxs: %s: %s [function=%llu, block=%u]\n", issue.code.c_str(), issue.message.c_str(),
-                     static_cast<unsigned long long>(issue.function), static_cast<unsigned>(issue.block));
+        fmt::print(stderr, "vxs: {}: {} [function={}, block={}]\n", issue.code, issue.message, issue.function,
+                   issue.block);
     if(result.llvm_error)
-        std::fprintf(stderr, "vxs: %s: %s\n", result.llvm_error->code.c_str(), result.llvm_error->message.c_str());
+        fmt::print(stderr, "vxs: {}: {}\n", result.llvm_error->code, result.llvm_error->message);
 }
 
 [[nodiscard]] auto WriteArtifact(const char *inputPath, XsBuildOutput output, const Llvm::Artifact &artifact) -> bool
@@ -69,11 +71,10 @@ void PrintFailure(const visual_xsharp::PipelineResult &result)
                                                          : Llvm::WriteBitcode(path, artifact.bitcode);
     if(error)
     {
-        std::fprintf(stderr, "vxs: %s: %s\n", error->code.c_str(), error->message.c_str());
+        fmt::print(stderr, "vxs: {}: {}\n", error->code, error->message);
         return false;
     }
-    std::fprintf(stderr, "vxs: wrote '%s' from verified Core through CorePrep, Xpp, Xmm and LLVM\n",
-                 path.string().c_str());
+    fmt::print(stderr, "vxs: wrote '{}' from verified Core through CorePrep, Xpp, Xmm and LLVM\n", path.string());
     return true;
 }
 } // namespace
@@ -89,14 +90,14 @@ bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBa
     const Visual::XSharp::Core::Wire::Limits coreLimits;
     if(!sizeError && fileSize > coreLimits.maximumWireBytes)
     {
-        std::fprintf(stderr, "vxs: Core artifact '%s' exceeds the %zu-byte input limit\n", path,
-                     coreLimits.maximumWireBytes);
+        fmt::print(stderr, "vxs: Core artifact '{}' exceeds the {}-byte input limit\n", path,
+                   coreLimits.maximumWireBytes);
         return false;
     }
     const auto bytes = ReadFile(path);
     if(!bytes)
     {
-        std::fprintf(stderr, "vxs: could not read Core artifact '%s'\n", path);
+        fmt::print(stderr, "vxs: could not read Core artifact '{}'\n", path);
         return false;
     }
 
@@ -115,14 +116,14 @@ bool xs_driver_process_core_artifact_as(const char *path, const char *artifactBa
     }
     if(command == XS_CLI_COMMAND_CHECK)
     {
-        std::fprintf(stderr, "vxs: Core artifact '%s' is valid through the LLVM boundary\n", path);
+        fmt::print(stderr, "vxs: Core artifact '{}' is valid through the LLVM boundary\n", path);
         return true;
     }
     if(output == XS_BUILD_OUTPUT_LLVM_LL || output == XS_BUILD_OUTPUT_LLVM_BC)
         return WriteArtifact(artifactBasePath, output, *result.llvm);
-    std::fprintf(stderr,
-                 "vxs: Core input currently emits llvmll or llvmbc; native object/link and Xpp/Xmm artifact writers "
-                 "are separate pipeline work\n");
+    fmt::print(stderr,
+               "vxs: Core input currently emits llvmll or llvmbc; native object/link and Xpp/Xmm artifact writers "
+               "are separate pipeline work\n");
     return false;
 }
 

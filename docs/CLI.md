@@ -71,8 +71,8 @@ vxs viget push|update
 -Build object|vxs|core|xpp|xmm|llvmll|llvmbc
 ```
 
-Canonical compiler settings use one leading hyphen and the displayed capitalization. `--help` and `--version` are special
-driver controls; other legacy long options are rejected.
+Canonical compiler settings use one leading hyphen and the displayed capitalization. `-Help` is the canonical help
+control; `--version` remains a special version control. Other legacy long options, including `--help`, are rejected.
 
 ## Parser model
 
@@ -82,7 +82,7 @@ write process output. The driver renders the selected outcome. Later compiler st
 reinterpret option values.
 
 One declarative schema owns canonical spelling, value domain, arity, command scope, defaults, and help descriptions.
-Consequently, `vxs check --help` shows `check` options but not build-only `-Emit`, while `vxs build --help` includes it.
+Consequently, `vxs check -Help` shows `check` options but not build-only `-Emit`, while `vxs build -Help` includes it.
 Option and value spelling is case-sensitive.
 
 ## Configuration precedence
