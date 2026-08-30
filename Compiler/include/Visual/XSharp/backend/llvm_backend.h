@@ -9,10 +9,9 @@
 
 #include <llvm-c/Core.h>
 #include <llvm-c/TargetMachine.h>
+#include <stddef.h>
 
 #include "Visual/XSharp/lil.hh"
-
-#include <stddef.h>
 
 typedef enum
 {
@@ -80,31 +79,41 @@ typedef struct
 typedef struct XsLlvmBackend XsLlvmBackend;
 typedef struct XsLlvmCodegenUnit XsLlvmCodegenUnit;
 
-XsBackendStatus xs_llvm_backend_create(const XsLlvmBackendConfig *config, XsLlvmBackend **backend,
-                                       XsBackendError *error);
-void xs_llvm_backend_destroy(XsLlvmBackend *backend);
-LLVMContextRef xs_llvm_backend_context(const XsLlvmBackend *backend);
-const char *xs_llvm_backend_target_triple(const XsLlvmBackend *backend);
-const char *xs_llvm_backend_data_layout(const XsLlvmBackend *backend);
+XsBackendStatus
+xs_llvm_backend_create(const XsLlvmBackendConfig *config, XsLlvmBackend **backend, XsBackendError *error);
+void
+xs_llvm_backend_destroy(XsLlvmBackend *backend);
+LLVMContextRef
+xs_llvm_backend_context(const XsLlvmBackend *backend);
+const char *
+xs_llvm_backend_target_triple(const XsLlvmBackend *backend);
+const char *
+xs_llvm_backend_data_layout(const XsLlvmBackend *backend);
 
-XsBackendStatus xs_llvm_codegen_unit_create(XsLlvmBackend *backend, const char *name, XsLlvmCodegenUnit **unit,
-                                            XsBackendError *error);
-void xs_llvm_codegen_unit_destroy(XsLlvmCodegenUnit *unit);
-LLVMModuleRef xs_llvm_codegen_unit_module(const XsLlvmCodegenUnit *unit);
+XsBackendStatus
+xs_llvm_codegen_unit_create(XsLlvmBackend *backend, const char *name, XsLlvmCodegenUnit **unit, XsBackendError *error);
+void
+xs_llvm_codegen_unit_destroy(XsLlvmCodegenUnit *unit);
+LLVMModuleRef
+xs_llvm_codegen_unit_module(const XsLlvmCodegenUnit *unit);
 
-XsBackendStatus xs_llvm_primitive_type(XsLlvmBackend *backend, XsPrimitiveType primitive, LLVMTypeRef *type,
-                                       XsBackendError *error);
-XsBackendStatus xs_llvm_lil_type(XsLlvmBackend *backend, XsLilType type, LLVMTypeRef *llvm_type, XsBackendError *error);
-XsBackendStatus xs_llvm_register_lil_types(XsLlvmCodegenUnit *unit, const XsLilModule *module, XsBackendError *error);
-XsBackendStatus xs_llvm_declare_function(XsLlvmCodegenUnit *unit, const XsFunctionSignature *signature,
-                                         LLVMValueRef *function, XsBackendError *error);
-XsBackendStatus xs_llvm_declare_lil_function(XsLlvmCodegenUnit *unit, const char *name, XsLilType return_type,
-                                             const XsLilType *parameter_types, size_t parameter_count,
-                                             LLVMValueRef *function, XsBackendError *error);
-XsBackendStatus xs_llvm_lower_lil_function_body(XsLlvmCodegenUnit *unit, const XsLilFunction *function,
-                                                XsBackendError *error);
-XsBackendStatus xs_llvm_optimize_codegen_unit(XsLlvmCodegenUnit *unit, XsBackendError *error);
-XsBackendStatus xs_llvm_write_ir_file(XsLlvmCodegenUnit *unit, const char *path, XsBackendError *error);
-XsBackendStatus xs_llvm_emit_object_file(XsLlvmCodegenUnit *unit, const char *path, XsBackendError *error);
+XsBackendStatus
+xs_llvm_primitive_type(XsLlvmBackend *backend, XsPrimitiveType primitive, LLVMTypeRef *type, XsBackendError *error);
+XsBackendStatus
+xs_llvm_lil_type(XsLlvmBackend *backend, XsLilType type, LLVMTypeRef *llvm_type, XsBackendError *error);
+XsBackendStatus
+xs_llvm_register_lil_types(XsLlvmCodegenUnit *unit, const XsLilModule *module, XsBackendError *error);
+XsBackendStatus
+xs_llvm_declare_function(XsLlvmCodegenUnit *unit, const XsFunctionSignature *signature, LLVMValueRef *function, XsBackendError *error);
+XsBackendStatus
+xs_llvm_declare_lil_function(XsLlvmCodegenUnit *unit, const char *name, XsLilType return_type, const XsLilType *parameter_types, size_t parameter_count, LLVMValueRef *function, XsBackendError *error);
+XsBackendStatus
+xs_llvm_lower_lil_function_body(XsLlvmCodegenUnit *unit, const XsLilFunction *function, XsBackendError *error);
+XsBackendStatus
+xs_llvm_optimize_codegen_unit(XsLlvmCodegenUnit *unit, XsBackendError *error);
+XsBackendStatus
+xs_llvm_write_ir_file(XsLlvmCodegenUnit *unit, const char *path, XsBackendError *error);
+XsBackendStatus
+xs_llvm_emit_object_file(XsLlvmCodegenUnit *unit, const char *path, XsBackendError *error);
 
 #endif

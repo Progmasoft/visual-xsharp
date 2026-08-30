@@ -8,11 +8,11 @@
 #ifndef XS_LIL_C_MODEL_H
 #define XS_LIL_C_MODEL_H
 
-#include "Visual/C23/int128.hh"
-#include "Visual/XSharp/lil-c/api.hh"
-
 #include <stddef.h>
 #include <stdint.h>
+
+#include "Visual/C23/int128.hh"
+#include "Visual/XSharp/lil-c/api.hh"
 
 #ifdef __cplusplus
 extern "C"
@@ -220,16 +220,26 @@ extern "C"
     typedef struct XsLilFunction XsLilFunction;
     typedef struct XsLilModule XsLilModule;
 
-    XS_LIL_API const char *xs_lil_status_name(XsLilStatus status);
-    XS_LIL_API XsLilError *xs_lil_error_create(void);
-    XS_LIL_API void xs_lil_error_destroy(XsLilError *error);
-    XS_LIL_API void xs_lil_error_reset(XsLilError *error);
-    XS_LIL_API XsLilStatus xs_lil_error_status(const XsLilError *error);
-    XS_LIL_API const char *xs_lil_error_message(const XsLilError *error);
-    XS_LIL_API XsLilType xs_lil_scalar_type(XsLilTypeKind kind);
-    XS_LIL_API bool xs_lil_type_is_scalar(XsLilType type);
-    XS_LIL_API XsLilTypeKind xs_lil_type_kind(XsLilType type);
-    XS_LIL_API uint32_t xs_lil_type_registry_id(XsLilType type);
+    XS_LIL_API const char *
+    xs_lil_status_name(XsLilStatus status);
+    XS_LIL_API XsLilError *
+    xs_lil_error_create(void);
+    XS_LIL_API void
+    xs_lil_error_destroy(XsLilError *error);
+    XS_LIL_API void
+    xs_lil_error_reset(XsLilError *error);
+    XS_LIL_API XsLilStatus
+    xs_lil_error_status(const XsLilError *error);
+    XS_LIL_API const char *
+    xs_lil_error_message(const XsLilError *error);
+    XS_LIL_API XsLilType
+    xs_lil_scalar_type(XsLilTypeKind kind);
+    XS_LIL_API bool
+    xs_lil_type_is_scalar(XsLilType type);
+    XS_LIL_API XsLilTypeKind
+    xs_lil_type_kind(XsLilType type);
+    XS_LIL_API uint32_t
+    xs_lil_type_registry_id(XsLilType type);
 
 #ifdef __cplusplus
 }

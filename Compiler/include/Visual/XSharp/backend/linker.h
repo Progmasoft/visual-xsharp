@@ -7,9 +7,9 @@
 #ifndef XS_BACKEND_LINKER_H
 #define XS_BACKEND_LINKER_H
 
-#include "Visual/XSharp/backend/llvm_backend.h"
-
 #include <stddef.h>
+
+#include "Visual/XSharp/backend/llvm_backend.h"
 
 typedef struct
 {
@@ -18,6 +18,7 @@ typedef struct
     size_t argument_count;
 } XsLinkerInvocation;
 
-XsBackendStatus xs_linker_invoke(const XsLinkerInvocation *invocation, int *exit_code, XsBackendError *error);
+XsBackendStatus
+xs_linker_invoke(const XsLinkerInvocation *invocation, int *exit_code, XsBackendError *error);
 
 #endif

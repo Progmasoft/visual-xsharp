@@ -10,5 +10,6 @@ namespace Visual::XSharp::Cli
 {
     // Run owns argument dispatch only. Frontend and backend stages remain
     // separate libraries so the CLI does not become the compiler architecture.
-    [[nodiscard]] auto Run(int argc, char **argv) -> int;
-}
+    [[nodiscard]] auto
+    Run(int argc, char **argv) -> int;
+} // namespace Visual::XSharp::Cli

@@ -69,6 +69,36 @@ jobs:
           lld-link --version
           llvm-config --version
 
+      - name: Verify project C and C++ formatting
+        shell: pwsh
+        run: |
+          $wheel = Join-Path $env:RUNNER_TEMP "clang_format-23.1.0-py2.py3-none-win_amd64.whl"
+          curl.exe -L --fail --retry 4 --retry-delay 3 `
+            -o $wheel `
+            "https://files.pythonhosted.org/packages/95/19/501001c2aa10dff69eb3ec3802851abafbdd3adeb06db152fef553b5ef00/clang_format-23.1.0-py2.py3-none-win_amd64.whl"
+
+          $expectedHash = "c10a99dc55a5630bbf6135f004e057d1a3153e4f54cda3f67e0c0b5a150d1cdd"
+          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $wheel).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "clang-format wheel SHA-256 mismatch: $actualHash"
+          }
+
+          python -m pip install --disable-pip-version-check --no-deps $wheel
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not install the pinned clang-format wheel"
+          }
+
+          $formatter = python -c "import clang_format; print(clang_format.get_executable('clang-format'))"
+          & $formatter --version
+          $files = @(git ls-files -- '*.cpp' '*.hpp' '*.hh' '*.h' ':!third_party/**')
+          if ($files.Count -eq 0) {
+            throw "No project-owned C or C++ files were selected for formatting"
+          }
+          & $formatter --dry-run --Werror --style=file @files
+          if ($LASTEXITCODE -ne 0) {
+            throw "Project-owned C or C++ files are not formatted"
+          }
+
       - name: Build native compiler
         shell: pwsh
         run: bazel build //Compiler/Cli:vxs

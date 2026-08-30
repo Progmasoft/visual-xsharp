@@ -161,14 +161,21 @@ struct XsCliParseOutcome
 
 extern "C"
 {
-    [[nodiscard]] XsCompilerSettings xs_cli_default_compiler_settings() noexcept;
-    void xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsCompilerSettings *settings) noexcept;
-    [[nodiscard]] const char *xs_cli_warning_level_name(XsWarningLevel level) noexcept;
-    [[nodiscard]] const char *xs_cli_output_extension(XsBuildOutput output) noexcept;
+    [[nodiscard]] XsCompilerSettings
+    xs_cli_default_compiler_settings() noexcept;
+    void
+    xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsCompilerSettings *settings) noexcept;
+    [[nodiscard]] const char *
+    xs_cli_warning_level_name(XsWarningLevel level) noexcept;
+    [[nodiscard]] const char *
+    xs_cli_output_extension(XsBuildOutput output) noexcept;
 }
 
-[[nodiscard]] XsCliParseOutcome ParseCommandLine(int argc, char **argv);
+[[nodiscard]] XsCliParseOutcome
+ParseCommandLine(int argc, char **argv);
 [[nodiscard]] XsEffectiveCompilerOptions
 ResolveCompilerOptions(const XsCliOptions &options, const XsEffectiveCompilerOptions *projectDefaults = nullptr);
-void PrintCliHelp(std::optional<XsCliCommand> command);
-void PrintCliVersion();
+void
+PrintCliHelp(std::optional<XsCliCommand> command);
+void
+PrintCliVersion();

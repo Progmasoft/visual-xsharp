@@ -30,9 +30,10 @@ typedef struct
     size_t length;
 } XsText;
 
-static inline XsText xs_source_text(const XsSource *source, XsSpan span)
+static inline XsText
+xs_source_text(const XsSource *source, XsSpan span)
 {
-    return (XsText){.data = source->text + span.start, .length = span.end - span.start};
+    return (XsText){ .data = source->text + span.start, .length = span.end - span.start };
 }
 
 #endif

@@ -107,39 +107,45 @@ struct XsLilModule
     size_t function_capacity;
 };
 
-void xs_lil_clear_error(XsLilError *error);
-XsLilStatus xs_lil_set_error(XsLilError *error, XsLilStatus status, const char *message);
-char *xs_lil_copy_text(const char *text);
-char *xs_lil_copy_span(const char *text, size_t length);
-XsLilStatus xs_lil_write_checked(FILE *stream, XsLilError *error, const char *text);
-XsLilStatus xs_lil_add_value(XsLilFunction *function, XsLilType type, XsLilValueId *value, XsLilError *error);
-XsLilStatus xs_lil_append_instruction(XsLilBlock *block, XsLilInstruction instruction, XsLilError *error);
-XsLilStatus xs_lil_parse_const_str(XsLilBlock *block, XsLilType result_type, const char *operation,
-                                   size_t operation_length, XsLilValueId expected_result, bool *matched,
-                                   XsLilError *error);
-XsLilStatus xs_lil_parse_str_comparison(XsLilBlock *block, XsLilType result_type, const char *operation,
-                                        size_t operation_length, XsLilValueId expected_result, bool *matched,
-                                        XsLilError *error);
-XsLilStatus xs_lil_parse_const_u16(XsLilBlock *block, XsLilType result_type, const char *operation,
-                                   size_t operation_length, XsLilValueId expected_result, bool *matched,
-                                   XsLilError *error);
-XsLilStatus xs_lil_parse_const_integer(XsLilBlock *block, XsLilType result_type, const char *operation,
-                                       size_t operation_length, XsLilValueId expected_result, bool *matched,
-                                       XsLilError *error);
-XsLilStatus xs_lil_parse_integer_operation(XsLilBlock *block, XsLilType result_type, const char *operation,
-                                           size_t operation_length, XsLilValueId expected_result, bool *matched,
-                                           XsLilError *error);
-const char *xs_lil_integer_operation_name(XsLilIntegerBinaryOperation operation);
-bool xs_lil_integer_operation_is_comparison(XsLilIntegerBinaryOperation operation);
-bool xs_lil_parse_type_name(const XsLilModule *module, const char *text, size_t length, XsLilType *type);
-bool xs_lil_parse_signature(const XsLilModule *module, const char *line, size_t length, const char *prefix, char **name,
-                            XsLilType *return_type, XsLilType **parameters, size_t *parameter_count);
-XsLilStatus xs_lil_parse_aggregate_record(XsLilModule *module, const char *text, size_t length, XsLilError *error);
-XsLilStatus xs_lil_parse_array_record(XsLilModule *module, const char *text, size_t length, XsLilError *error);
-XsLilStatus xs_lil_parse_aggregate_instruction(XsLilBlock *block, XsLilType result_type, const char *operation,
-                                               size_t operation_length, XsLilValueId expected_result, bool *matched,
-                                               XsLilError *error);
-XsLilStatus xs_lil_add_const_integer_bits(XsLilBlock *block, XsLilType type, XsUInt128 bits, XsLilValueId *result,
-                                          XsLilError *error);
+void
+xs_lil_clear_error(XsLilError *error);
+XsLilStatus
+xs_lil_set_error(XsLilError *error, XsLilStatus status, const char *message);
+char *
+xs_lil_copy_text(const char *text);
+char *
+xs_lil_copy_span(const char *text, size_t length);
+XsLilStatus
+xs_lil_write_checked(FILE *stream, XsLilError *error, const char *text);
+XsLilStatus
+xs_lil_add_value(XsLilFunction *function, XsLilType type, XsLilValueId *value, XsLilError *error);
+XsLilStatus
+xs_lil_append_instruction(XsLilBlock *block, XsLilInstruction instruction, XsLilError *error);
+XsLilStatus
+xs_lil_parse_const_str(XsLilBlock *block, XsLilType result_type, const char *operation, size_t operation_length, XsLilValueId expected_result, bool *matched, XsLilError *error);
+XsLilStatus
+xs_lil_parse_str_comparison(XsLilBlock *block, XsLilType result_type, const char *operation, size_t operation_length, XsLilValueId expected_result, bool *matched, XsLilError *error);
+XsLilStatus
+xs_lil_parse_const_u16(XsLilBlock *block, XsLilType result_type, const char *operation, size_t operation_length, XsLilValueId expected_result, bool *matched, XsLilError *error);
+XsLilStatus
+xs_lil_parse_const_integer(XsLilBlock *block, XsLilType result_type, const char *operation, size_t operation_length, XsLilValueId expected_result, bool *matched, XsLilError *error);
+XsLilStatus
+xs_lil_parse_integer_operation(XsLilBlock *block, XsLilType result_type, const char *operation, size_t operation_length, XsLilValueId expected_result, bool *matched, XsLilError *error);
+const char *
+xs_lil_integer_operation_name(XsLilIntegerBinaryOperation operation);
+bool
+xs_lil_integer_operation_is_comparison(XsLilIntegerBinaryOperation operation);
+bool
+xs_lil_parse_type_name(const XsLilModule *module, const char *text, size_t length, XsLilType *type);
+bool
+xs_lil_parse_signature(const XsLilModule *module, const char *line, size_t length, const char *prefix, char **name, XsLilType *return_type, XsLilType **parameters, size_t *parameter_count);
+XsLilStatus
+xs_lil_parse_aggregate_record(XsLilModule *module, const char *text, size_t length, XsLilError *error);
+XsLilStatus
+xs_lil_parse_array_record(XsLilModule *module, const char *text, size_t length, XsLilError *error);
+XsLilStatus
+xs_lil_parse_aggregate_instruction(XsLilBlock *block, XsLilType result_type, const char *operation, size_t operation_length, XsLilValueId expected_result, bool *matched, XsLilError *error);
+XsLilStatus
+xs_lil_add_const_integer_bits(XsLilBlock *block, XsLilType type, XsUInt128 bits, XsLilValueId *result, XsLilError *error);
 
 #endif

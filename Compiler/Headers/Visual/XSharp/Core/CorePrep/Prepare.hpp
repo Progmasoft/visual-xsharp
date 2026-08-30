@@ -7,8 +7,9 @@
 
 namespace Visual::XSharp::Core::CorePrep
 {
-// Prepare is the adapting layer between verified, nested Core and the flat typed
-// CorePrep CFG consumed by Xpp. It deliberately performs no optimization and invents
-// no types; it only atomizes expressions and makes source control flow explicit.
-[[nodiscard]] auto Prepare(const Module &module) -> ::visual_xsharp::core::CorePrepModule;
+    // Prepare is the adapting layer between verified, nested Core and the flat typed
+    // CorePrep CFG consumed by Xpp. It deliberately performs no optimization and invents
+    // no types; it only atomizes expressions and makes source control flow explicit.
+    [[nodiscard]] auto
+    Prepare(const Module &module) -> ::visual_xsharp::core::CorePrepModule;
 } // namespace Visual::XSharp::Core::CorePrep

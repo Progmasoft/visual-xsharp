@@ -9,41 +9,47 @@
 
 namespace xs::lil
 {
-class Function final
-{
-public:
-    [[nodiscard]] XsLilFunction *native_handle() const noexcept
+    class Function final
     {
-        return value_;
-    }
+    public:
+        [[nodiscard]] XsLilFunction *
+        native_handle() const noexcept
+        {
+            return value_;
+        }
 
-private:
-    friend class Module;
-    friend class Builder;
+    private:
+        friend class Module;
+        friend class Builder;
 
-    explicit Function(XsLilFunction *value) noexcept : value_(value) {}
+        explicit Function(XsLilFunction *value) noexcept
+            : value_(value)
+        {}
 
-    XsLilFunction *value_{};
-};
+        XsLilFunction *value_{};
+    };
 
-class Block final
-{
-public:
-    [[nodiscard]] XsLilBlock *native_handle() const noexcept
+    class Block final
     {
-        return value_;
-    }
+    public:
+        [[nodiscard]] XsLilBlock *
+        native_handle() const noexcept
+        {
+            return value_;
+        }
 
-private:
-    friend class Builder;
+    private:
+        friend class Builder;
 
-    explicit Block(XsLilBlock *value) noexcept : value_(value) {}
+        explicit Block(XsLilBlock *value) noexcept
+            : value_(value)
+        {}
 
-    XsLilBlock *value_{};
-};
+        XsLilBlock *value_{};
+    };
 
-using ValueId = XsLilValueId;
-using SlotId = XsLilSlotId;
+    using ValueId = XsLilValueId;
+    using SlotId = XsLilSlotId;
 } // namespace xs::lil
 
 #endif

@@ -49,9 +49,11 @@ typedef struct XsPackageArchiveInfo
     uint32_t entry_count;
 } XsPackageArchiveInfo;
 
-XsPackageStatus xs_package_archive_write(const char *output_path, const XsPackageInput *inputs, size_t input_count,
-                                         XsPackageArchiveInfo *info, XsPackageError *error);
-XsPackageStatus xs_package_archive_verify(const char *archive_path, XsPackageArchiveInfo *info, XsPackageError *error);
-void xs_package_sha256_hex(const uint8_t digest[XS_PACKAGE_SHA256_SIZE], char output[XS_PACKAGE_SHA256_HEX_SIZE]);
+XsPackageStatus
+xs_package_archive_write(const char *output_path, const XsPackageInput *inputs, size_t input_count, XsPackageArchiveInfo *info, XsPackageError *error);
+XsPackageStatus
+xs_package_archive_verify(const char *archive_path, XsPackageArchiveInfo *info, XsPackageError *error);
+void
+xs_package_sha256_hex(const uint8_t digest[XS_PACKAGE_SHA256_SIZE], char output[XS_PACKAGE_SHA256_HEX_SIZE]);
 
 #endif

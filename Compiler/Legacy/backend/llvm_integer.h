@@ -8,10 +8,11 @@
 
 #include "Visual/XSharp/backend/llvm_backend.h"
 
-bool xs_llvm_is_integer_constant(XsLilInstructionKind kind);
-XsBackendStatus xs_llvm_lower_integer_constant(XsLlvmBackend *backend, const XsLilBlock *block, size_t index,
-                                               LLVMValueRef *value, XsBackendError *error);
-XsBackendStatus xs_llvm_lower_integer_operation(LLVMBuilderRef builder, const XsLilBlock *block, size_t index,
-                                                LLVMValueRef *values, size_t value_count, XsBackendError *error);
+bool
+xs_llvm_is_integer_constant(XsLilInstructionKind kind);
+XsBackendStatus
+xs_llvm_lower_integer_constant(XsLlvmBackend *backend, const XsLilBlock *block, size_t index, LLVMValueRef *value, XsBackendError *error);
+XsBackendStatus
+xs_llvm_lower_integer_operation(LLVMBuilderRef builder, const XsLilBlock *block, size_t index, LLVMValueRef *values, size_t value_count, XsBackendError *error);
 
 #endif

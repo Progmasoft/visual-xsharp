@@ -31,14 +31,15 @@ struct XsLlvmCodegenUnit
     size_t lil_array_type_count;
 };
 
-void xs_llvm_clear_error(XsBackendError *error);
-XsBackendStatus xs_llvm_set_error(XsBackendError *error, XsBackendStatus status, const char *message);
-char *xs_llvm_copy_text(const char *text);
-XsBackendStatus xs_llvm_codegen_lil_type(XsLlvmCodegenUnit *unit, XsLilType type, LLVMTypeRef *llvm_type,
-                                         XsBackendError *error);
-XsBackendStatus xs_llvm_lower_aggregate_instruction(XsLlvmCodegenUnit *unit, LLVMBuilderRef builder,
-                                                    const XsLilFunction *function, const XsLilBlock *block,
-                                                    size_t index, LLVMValueRef *values, size_t value_count,
-                                                    XsBackendError *error);
+void
+xs_llvm_clear_error(XsBackendError *error);
+XsBackendStatus
+xs_llvm_set_error(XsBackendError *error, XsBackendStatus status, const char *message);
+char *
+xs_llvm_copy_text(const char *text);
+XsBackendStatus
+xs_llvm_codegen_lil_type(XsLlvmCodegenUnit *unit, XsLilType type, LLVMTypeRef *llvm_type, XsBackendError *error);
+XsBackendStatus
+xs_llvm_lower_aggregate_instruction(XsLlvmCodegenUnit *unit, LLVMBuilderRef builder, const XsLilFunction *function, const XsLilBlock *block, size_t index, LLVMValueRef *values, size_t value_count, XsBackendError *error);
 
 #endif

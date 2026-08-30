@@ -35,7 +35,8 @@ extern "C"
 #    define XS_LIL_API
 #endif
 
-    XS_LIL_API uint32_t xs_lil_c_api_version(void);
+    XS_LIL_API uint32_t
+    xs_lil_c_api_version(void);
 
 #ifdef __cplusplus
 }

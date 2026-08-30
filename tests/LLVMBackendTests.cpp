@@ -1,157 +1,166 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
-#include "Visual/XSharp/Backend/LLVM.hpp"
-#include "Visual/XSharp/Core/CorePrep/Wire.hpp"
-#include "Visual/XSharp/Pipeline.hpp"
-#include "Visual/XSharp/Xmm/Verifier.hpp"
-
-#include <catch2/catch_test_macros.hpp>
-
 #include <algorithm>
+#include <catch2/catch_test_macros.hpp>
 #include <concepts>
 #include <filesystem>
 #include <fstream>
 #include <ranges>
 #include <string_view>
 
+#include "Visual/XSharp/Backend/LLVM.hpp"
+#include "Visual/XSharp/Core/CorePrep/Wire.hpp"
+#include "Visual/XSharp/Pipeline.hpp"
+#include "Visual/XSharp/Xmm/Verifier.hpp"
+
 namespace
 {
-using visual_xsharp::core::Atom;
-using visual_xsharp::core::Block;
-using visual_xsharp::core::CorePrepModule;
-using visual_xsharp::core::Function;
-using visual_xsharp::core::Instruction;
-using visual_xsharp::core::Operation;
-using visual_xsharp::core::Parameter;
-using visual_xsharp::core::SymbolName;
-using visual_xsharp::core::Terminator;
-using visual_xsharp::core::Type;
-namespace Llvm = Visual::XSharp::Backend::LLVM;
+    using visual_xsharp::core::Atom;
+    using visual_xsharp::core::Block;
+    using visual_xsharp::core::CorePrepModule;
+    using visual_xsharp::core::Function;
+    using visual_xsharp::core::Instruction;
+    using visual_xsharp::core::Operation;
+    using visual_xsharp::core::Parameter;
+    using visual_xsharp::core::SymbolName;
+    using visual_xsharp::core::Terminator;
+    using visual_xsharp::core::Type;
+    namespace Llvm = Visual::XSharp::Backend::LLVM;
 
-auto Literal(std::int64_t value) -> Atom
-{
-    return Atom::constant(value, Type::int64());
-}
+    auto
+    Literal(std::int64_t value) -> Atom
+    {
+        return Atom::constant(value, Type::int64());
+    }
 
-auto Variable(std::uint64_t symbol, Type type) -> Atom
-{
-    return Atom::variable(SymbolName{symbol, {}}, std::move(type));
-}
+    auto
+    Variable(std::uint64_t symbol, Type type) -> Atom
+    {
+        return Atom::variable(SymbolName{ symbol, {} }, std::move(type));
+    }
 
-auto ArithmeticModule() -> CorePrepModule
-{
-    Function calculate{{10, U"Calculate"},
-                       {Parameter{{11, U"left"}, Type::int64()}, Parameter{{12, U"right"}, Type::int64()}},
-                       Type::int64(),
+    auto
+    ArithmeticModule() -> CorePrepModule
+    {
+        Function calculate{ { 10, U"Calculate" },
+                            { Parameter{ { 11, U"left" }, Type::int64() }, Parameter{ { 12, U"right" }, Type::int64() } },
+                            Type::int64(),
+                            0,
+                            { Block{ 0,
+                                     { Instruction{ Instruction::Kind::Bind,
+                                                    { 13, U"sum" },
+                                                    Type::int64(),
+                                                    false,
+                                                    Operation::Add,
+                                                    { Variable(11, Type::int64()), Variable(12, Type::int64()) } },
+                                       Instruction{ Instruction::Kind::Bind,
+                                                    { 14, U"quotient" },
+                                                    Type::int64(),
+                                                    false,
+                                                    Operation::FloorDivide,
+                                                    { Variable(13, Type::int64()), Literal(3) } } },
+                                     Terminator{ Terminator::Kind::Return, Variable(14, Type::int64()), 0, 0 } } } };
+        Function main{ { 20, U"Main" },
+                       {},
+                       Type::unit(),
                        0,
-                       {Block{0,
-                              {Instruction{Instruction::Kind::Bind,
-                                           {13, U"sum"},
-                                           Type::int64(),
-                                           false,
-                                           Operation::Add,
-                                           {Variable(11, Type::int64()), Variable(12, Type::int64())}},
-                               Instruction{Instruction::Kind::Bind,
-                                           {14, U"quotient"},
-                                           Type::int64(),
-                                           false,
-                                           Operation::FloorDivide,
-                                           {Variable(13, Type::int64()), Literal(3)}}},
-                              Terminator{Terminator::Kind::Return, Variable(14, Type::int64()), 0, 0}}}};
-    Function main{{20, U"Main"},
-                  {},
-                  Type::unit(),
-                  0,
-                  {Block{0,
-                         {Instruction{Instruction::Kind::Bind,
-                                      {21, U"answer"},
-                                      Type::int64(),
-                                      false,
-                                      Operation::Call,
-                                      {Variable(10, Type::function({Type::int64(), Type::int64()}, Type::int64())),
-                                       Literal(40), Literal(2)}},
-                          Instruction{Instruction::Kind::Bind,
-                                      {22, U"ok"},
-                                      Type::boolean(),
-                                      false,
-                                      Operation::GreaterEqual,
-                                      {Variable(21, Type::int64()), Literal(14)}}},
-                         Terminator{Terminator::Kind::Branch, Variable(22, Type::boolean()), 1, 2}},
-                   Block{1, {}, Terminator{Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}},
-                   Block{2, {}, Terminator{Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0}}}};
-    return CorePrepModule{{U"Backend", U"Contract"}, {std::move(calculate), std::move(main)}};
-}
-
-auto StringModule() -> CorePrepModule
-{
-    Function message{{30, U"Message"},
-                     {},
-                     Type::string(),
-                     0,
-                     {Block{0,
-                            {Instruction{Instruction::Kind::Bind,
-                                         {31, U"text"},
-                                         Type::string(),
-                                         false,
-                                         Operation::Copy,
-                                         {Atom::constant(std::u32string{U"Merhaba \U0001f30d"}, Type::string())}}},
-                            Terminator{Terminator::Kind::Return, Variable(31, Type::string()), 0, 0}}}};
-    return CorePrepModule{{U"Unicode"}, {std::move(message)}};
-}
-
-auto LowerModule(const CorePrepModule &module, Llvm::OptimizationLevel optimization = Llvm::OptimizationLevel::Default)
-    -> Llvm::Result
-{
-    const auto xpp = visual_xsharp::xpp::optimize(visual_xsharp::xpp::lower(module));
-    const auto xmm = visual_xsharp::xmm::optimize(visual_xsharp::xmm::lower(xpp));
-    Llvm::Options options;
-    options.optimization = optimization;
-    return Llvm::Lower(xmm, options);
-}
-
-auto LowerMachineArtifact(const CorePrepModule &module, Llvm::MachineCodeEmission emission, bool executable = false)
-    -> Llvm::Result
-{
-    const auto xpp = visual_xsharp::xpp::optimize(visual_xsharp::xpp::lower(module));
-    const auto xmm = visual_xsharp::xmm::optimize(visual_xsharp::xmm::lower(xpp));
-    Llvm::Options options;
-    options.optimization = Llvm::OptimizationLevel::Debug;
-    options.target_triple = "x86_64-pc-windows-msvc";
-    options.machineCode = emission;
-    options.executableEntry = executable;
-    return Llvm::Lower(xmm, options);
-}
-
-auto HasIssue(const std::vector<Llvm::Issue> &issues, std::string_view code) -> bool
-{
-    return std::ranges::any_of(issues, [code](const auto &issue) { return issue.code == code; });
-}
-
-struct TemporaryArtifacts final
-{
-    std::filesystem::path llvm_ir = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.ll";
-    std::filesystem::path bitcode = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.bc";
-    std::filesystem::path object = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.o";
-    std::filesystem::path assembly = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.asm";
-
-    TemporaryArtifacts()
-    {
-        std::error_code ignored;
-        std::filesystem::remove(llvm_ir, ignored);
-        std::filesystem::remove(bitcode, ignored);
-        std::filesystem::remove(object, ignored);
-        std::filesystem::remove(assembly, ignored);
+                       { Block{ 0,
+                                { Instruction{ Instruction::Kind::Bind,
+                                               { 21, U"answer" },
+                                               Type::int64(),
+                                               false,
+                                               Operation::Call,
+                                               { Variable(10, Type::function({ Type::int64(), Type::int64() }, Type::int64())),
+                                                 Literal(40),
+                                                 Literal(2) } },
+                                  Instruction{ Instruction::Kind::Bind,
+                                               { 22, U"ok" },
+                                               Type::boolean(),
+                                               false,
+                                               Operation::GreaterEqual,
+                                               { Variable(21, Type::int64()), Literal(14) } } },
+                                Terminator{ Terminator::Kind::Branch, Variable(22, Type::boolean()), 1, 2 } },
+                         Block{ 1, {}, Terminator{ Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0 } },
+                         Block{ 2, {}, Terminator{ Terminator::Kind::Return, Atom::constant({}, Type::unit()), 0, 0 } } } };
+        return CorePrepModule{ { U"Backend", U"Contract" }, { std::move(calculate), std::move(main) } };
     }
-    ~TemporaryArtifacts()
+
+    auto
+    StringModule() -> CorePrepModule
     {
-        std::error_code ignored;
-        std::filesystem::remove(llvm_ir, ignored);
-        std::filesystem::remove(bitcode, ignored);
-        std::filesystem::remove(object, ignored);
-        std::filesystem::remove(assembly, ignored);
+        Function message{ { 30, U"Message" },
+                          {},
+                          Type::string(),
+                          0,
+                          { Block{ 0,
+                                   { Instruction{ Instruction::Kind::Bind,
+                                                  { 31, U"text" },
+                                                  Type::string(),
+                                                  false,
+                                                  Operation::Copy,
+                                                  { Atom::constant(std::u32string{ U"Merhaba \U0001f30d" }, Type::string()) } } },
+                                   Terminator{ Terminator::Kind::Return, Variable(31, Type::string()), 0, 0 } } } };
+        return CorePrepModule{ { U"Unicode" }, { std::move(message) } };
     }
-};
+
+    auto
+    LowerModule(const CorePrepModule &module, Llvm::OptimizationLevel optimization = Llvm::OptimizationLevel::Default)
+        -> Llvm::Result
+    {
+        const auto xpp = visual_xsharp::xpp::optimize(visual_xsharp::xpp::lower(module));
+        const auto xmm = visual_xsharp::xmm::optimize(visual_xsharp::xmm::lower(xpp));
+        Llvm::Options options;
+        options.optimization = optimization;
+        return Llvm::Lower(xmm, options);
+    }
+
+    auto
+    LowerMachineArtifact(const CorePrepModule &module, Llvm::MachineCodeEmission emission, bool executable = false)
+        -> Llvm::Result
+    {
+        const auto xpp = visual_xsharp::xpp::optimize(visual_xsharp::xpp::lower(module));
+        const auto xmm = visual_xsharp::xmm::optimize(visual_xsharp::xmm::lower(xpp));
+        Llvm::Options options;
+        options.optimization = Llvm::OptimizationLevel::Debug;
+        options.target_triple = "x86_64-pc-windows-msvc";
+        options.machineCode = emission;
+        options.executableEntry = executable;
+        return Llvm::Lower(xmm, options);
+    }
+
+    auto
+    HasIssue(const std::vector<Llvm::Issue> &issues, std::string_view code) -> bool
+    {
+        return std::ranges::any_of(issues, [code](const auto &issue) {
+            return issue.code == code;
+        });
+    }
+
+    struct TemporaryArtifacts final
+    {
+        std::filesystem::path llvm_ir = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.ll";
+        std::filesystem::path bitcode = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.bc";
+        std::filesystem::path object = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.o";
+        std::filesystem::path assembly = std::filesystem::temp_directory_path() / "visual-xsharp-backend-test.asm";
+
+        TemporaryArtifacts()
+        {
+            std::error_code ignored;
+            std::filesystem::remove(llvm_ir, ignored);
+            std::filesystem::remove(bitcode, ignored);
+            std::filesystem::remove(object, ignored);
+            std::filesystem::remove(assembly, ignored);
+        }
+        ~TemporaryArtifacts()
+        {
+            std::error_code ignored;
+            std::filesystem::remove(llvm_ir, ignored);
+            std::filesystem::remove(bitcode, ignored);
+            std::filesystem::remove(object, ignored);
+            std::filesystem::remove(assembly, ignored);
+        }
+    };
 } // namespace
 
 TEST_CASE("verified Xmm lowers to valid in-memory LLVM IR and bitcode")
@@ -193,8 +202,8 @@ TEST_CASE("Xmm lowering retains function identities signatures and result types"
 {
     const auto xpp = visual_xsharp::xpp::lower(ArithmeticModule());
     const auto xmm = visual_xsharp::xmm::lower(xpp);
-    REQUIRE((xmm.functions[0].symbol == SymbolName{10, U"Calculate"}));
-    REQUIRE(xmm.functions[0].parameter_types == std::vector<Type>{Type::int64(), Type::int64()});
+    REQUIRE((xmm.functions[0].symbol == SymbolName{ 10, U"Calculate" }));
+    REQUIRE(xmm.functions[0].parameter_types == std::vector<Type>{ Type::int64(), Type::int64() });
     REQUIRE(xmm.functions[0].blocks[0].instructions[0].result_type == Type::int64());
     const auto &call = xmm.functions[1].blocks[0].instructions[0];
     REQUIRE(call.opcode == visual_xsharp::xmm::Opcode::Call);
@@ -235,7 +244,7 @@ TEST_CASE("Xmm verifier rejects call signature and control-flow corruption")
 TEST_CASE("Xmm verifier rejects unsupported named types before LLVM construction")
 {
     auto xmm = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(ArithmeticModule()));
-    xmm.functions.front().return_type = Type::named({U"User", U"Record"});
+    xmm.functions.front().return_type = Type::named({ U"User", U"Record" });
     const auto issues = Llvm::Verify(xmm);
     REQUIRE(HasIssue(issues, "VXL1005"));
     const auto result = Llvm::Lower(xmm);
@@ -245,7 +254,7 @@ TEST_CASE("Xmm verifier rejects unsupported named types before LLVM construction
 
 TEST_CASE("Xmm verifier reports module and parameter shape independently")
 {
-    visual_xsharp::xmm::Module empty{{}, {}};
+    visual_xsharp::xmm::Module empty{ {}, {} };
     const auto emptyIssues = Llvm::Verify(empty);
     REQUIRE(HasIssue(emptyIssues, "VXL1001"));
     REQUIRE(HasIssue(emptyIssues, "VXL1002"));
@@ -366,7 +375,7 @@ TEST_CASE("RAM pipeline reaches LLVM only after wire and semantic verification")
 TEST_CASE("RAM pipeline stops unsupported semantic types before native lowering")
 {
     auto module = ArithmeticModule();
-    module.functions.front().return_type = Type::named({U"Unsupported"});
+    module.functions.front().return_type = Type::named({ U"Unsupported" });
     const auto encoded = visual_xsharp::core::wire::encode(module);
     REQUIRE(encoded);
     const auto result = visual_xsharp::consume_coreprep(encoded.bytes);
