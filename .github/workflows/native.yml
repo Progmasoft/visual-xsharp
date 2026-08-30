@@ -46,7 +46,7 @@ jobs:
         shell: pwsh
         run: |
           $llvmRoot = Join-Path $env:RUNNER_TOOL_CACHE "llvm-dev-22.1.6"
-          $llvmConfig = Join-Path $llvmRoot "lib\cmake\llvm\LLVMConfig.cmake"
+          $llvmConfig = Join-Path $llvmRoot "bin\llvm-config.exe"
           if (-not (Test-Path $llvmConfig)) {
             New-Item -ItemType Directory -Force $llvmRoot | Out-Null
             $archive = Join-Path $env:RUNNER_TEMP "llvm-dev.tar.xz"
@@ -56,11 +56,9 @@ jobs:
             tar.exe -xf $archive -C $llvmRoot --strip-components=1
           }
           if (-not (Test-Path $llvmConfig)) {
-            throw "The official LLVM development archive does not contain LLVMConfig.cmake"
+            throw "The official LLVM development archive does not contain llvm-config.exe"
           }
           "LLVM_ROOT=$llvmRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "LLVM_DIR=$([System.IO.Path]::GetDirectoryName($llvmConfig))" |
-            Out-File -FilePath $env:GITHUB_ENV -Append
           (Join-Path $llvmRoot "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Verify Windows toolchain
@@ -69,9 +67,7 @@ jobs:
           bazel --version
           clang-cl --version
           lld-link --version
-          if (-not (Test-Path (Join-Path $env:LLVM_DIR "LLVMConfig.cmake"))) {
-            throw "LLVMConfig.cmake was not activated from the development package"
-          }
+          llvm-config --version
 
       - name: Build native compiler
         shell: pwsh

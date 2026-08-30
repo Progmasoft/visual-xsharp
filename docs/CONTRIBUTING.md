@@ -44,7 +44,7 @@ Run the checks appropriate to the changed ownership boundary:
 
 - Haskell: `cabal build all`, `cabal test all`, and `cabal check`.
 - Kotlin: `ProjectSystem\gradlew.bat -p ProjectSystem test`.
-- Native: Debug and sanitizer CMake builds plus CTest.
+- Native: Bazel `vxs` build plus the Windows-native Catch2 contract executable.
 - Documentation: link scan, spelling scan, and `git diff --check`.
 
 Initialize recursive submodules before native configuration. Do not store machine-specific LLVM or toolchain paths in tracked

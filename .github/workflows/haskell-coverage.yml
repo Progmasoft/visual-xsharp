@@ -26,7 +26,32 @@ jobs:
       - name: Test Haskell frontend with HPC
         shell: pwsh
         working-directory: Compiler
-        run: cabal test all --enable-coverage --test-show-details=direct
+        run: |
+          # Cabal's aggregate HTML report assumes that every instrumented module
+          # belongs to one package. The frontend is intentionally split across
+          # Syntax, Frontend, Core, and Driver packages, so run the instrumented
+          # test executable directly and let hpc-codecov merge their mix data.
+          cabal build visual-xsharp-compiler-tests --enable-coverage
+          if ($LASTEXITCODE -ne 0) {
+            throw "Cabal could not build the instrumented compiler tests"
+          }
+
+          $testBinary = (cabal list-bin visual-xsharp-compiler-tests --enable-coverage).Trim()
+          if (-not (Test-Path -LiteralPath $testBinary)) {
+            throw "Cabal did not report a valid compiler test executable"
+          }
+
+          $reportDirectory = Join-Path $PWD "coverage"
+          New-Item -ItemType Directory -Force $reportDirectory | Out-Null
+          $env:HPCTIXFILE = Join-Path $reportDirectory "visual-xsharp-compiler-tests.tix"
+          try {
+            & $testBinary
+            if ($LASTEXITCODE -ne 0) {
+              throw "The instrumented compiler tests failed"
+            }
+          } finally {
+            Remove-Item Env:HPCTIXFILE -ErrorAction SilentlyContinue
+          }
 
       - name: Convert HPC data to LCOV
         shell: pwsh
@@ -37,6 +62,7 @@ jobs:
           $tool = Join-Path $env:RUNNER_TEMP "hpc-codecov-$toolVersion.exe"
           $reportDirectory = Join-Path $PWD "coverage"
           $report = Join-Path $reportDirectory "haskell-frontend.lcov"
+          $tix = Join-Path $reportDirectory "visual-xsharp-compiler-tests.tix"
 
           curl.exe -L --fail --retry 4 --retry-delay 3 `
             -o $tool `
@@ -47,8 +73,40 @@ jobs:
             throw "hpc-codecov SHA-256 mismatch: $actualHash"
           }
 
-          New-Item -ItemType Directory -Force $reportDirectory | Out-Null
-          & $tool -r . -x Main -x SourceSetTests -f lcov -o $report cabal:visual-xsharp-compiler-tests
+          if (-not (Test-Path -LiteralPath $tix)) {
+            throw "The compiler test run did not produce HPC execution data"
+          }
+
+          $arguments = @(
+            "-r", ".",
+            "-x", "Main",
+            "-x", "SourceSetTests",
+            "-f", "lcov",
+            "-o", $report
+          )
+
+          # The .mix files preserve package-relative source paths such as
+          # src/Visual/XSharp/Compiler.hs. Supply every Cabal package root so
+          # the converter can resolve those paths without flattening packages.
+          @(
+            "Haskell/Driver",
+            "Haskell/Core",
+            "Haskell/Frontend",
+            "Haskell/Syntax"
+          ) | ForEach-Object {
+            $arguments += @("-s", $_)
+          }
+
+          $mixDirectories = @(Get-ChildItem dist-newstyle -Recurse -Directory -Filter mix)
+          if ($mixDirectories.Count -eq 0) {
+            throw "No HPC mix directories were produced by the coverage build"
+          }
+          $mixDirectories | ForEach-Object {
+            $arguments += @("-m", $_.FullName)
+          }
+
+          $arguments += $tix
+          & $tool @arguments
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $report)) {
             throw "hpc-codecov did not produce the expected LCOV report"
           }

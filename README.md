@@ -45,17 +45,15 @@ normal compilation keeps intermediate data in memory unless explicit emission is
 The supported native build is Windows with:
 
 - Bazelisk for the production C++20 graph;
-- Kitware CMake 3.31 and standalone Ninja only for retained legacy C/package components;
 - ClangCL and LLD from an LLVM installation;
 - Windows SDK headers and import libraries;
 - MSVC CRT and C++ standard-library development files;
-- an LLVM development package containing `LLVMConfig.cmake`;
+- an LLVM development package containing headers, libraries, and `llvm-config`;
 - GHC 9.10 and Cabal for the Haskell frontend;
-- JDK 25 and the Kotlin runner for the project DSL; and
-- vcpkg for the small native dependency set declared by `vcpkg.json`.
+- JDK 25 and the Kotlin runner for the project DSL.
 
-Repository configuration does not contain a machine-specific LLVM installation path. Set `LLVM_ROOT` or `LLVM_DIR`, or
-make the LLVM CMake package discoverable through the normal CMake prefix search.
+Repository configuration does not contain a machine-specific LLVM installation path. Set `LLVM_ROOT` or put
+`llvm-config` on `PATH`.
 
 ## Build
 
@@ -75,7 +73,6 @@ bazelisk build //tests:cli_parser_tests
 ```
 
 The Bazel graph discovers LLVM from `LLVM_ROOT` or `llvm-config`; it does not store a machine-specific installation path.
-CMake and vcpkg remain transitional interfaces for the legacy C/package subtree, not the `vxs` executable.
 
 ## Command-line status
 

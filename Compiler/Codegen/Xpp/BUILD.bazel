@@ -7,6 +7,6 @@ cc_library(
     srcs = ["Lower.cpp", "Verifier.cpp"],
     deps = [
         "//Compiler/Core:core",
-        "//Visual/XSharp/Xpp:xpp",
+        "//Compiler/Headers/Visual/XSharp/Xpp:xpp",
     ],
 )

@@ -1,9 +1,0 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-
-package(default_visibility = ["//visibility:public"])
-
-cc_library(
-    name = "xpp",
-    hdrs = ["IR.hpp", "Verifier.hpp"],
-    deps = ["//Visual/XSharp/Core:coreprep_model"],
-)

@@ -8,12 +8,15 @@
 `Spec/` contains 24 topic-oriented `.vxs` example suites. They explain current language design intent using independent,
 numbered fragments.
 
-The suites cover:
+The catalog is grouped by ownership rather than kept as one flat directory:
 
-- core declarations, attributes, operators, strings, optionals, exceptions, and unsafe behavior;
-- collections, iteration, threading, dates, times, console I/O, file I/O, and command execution;
-- JSON, XML, BLINQ, PostgreSQL, MariaDB, and SQLite APIs; and
-- FFI and inline assembly boundaries.
+- `Spec/Language/` contains declarations, attributes, operators, strings, optionals, exceptions, iteration, and unsafe
+  behavior;
+- `Spec/StandardLibrary/` contains Core, collections, I/O, text, concurrency, temporal, and query surfaces;
+- `Spec/Libraries/Databases/` contains database-provider APIs; and
+- `Spec/Interop/` contains FFI and inline-assembly boundaries.
+
+The complete linked catalog is maintained in [`Spec/README.md`](../Spec/README.md).
 
 ## How to read an example
 

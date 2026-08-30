@@ -3,7 +3,7 @@
 
 # Visual X# specification examples
 
-The `.vxs` files in this directory are topic-oriented language design examples. Each numbered fragment is independent and
+The `.vxs` files below this directory are topic-oriented language design examples. Each numbered fragment is independent and
 includes context that explains the intended rule, whether the fragment is valid or invalid, and which surrounding declarations
 may be omitted for brevity.
 
@@ -18,3 +18,27 @@ When a language rule is implemented, it should gain a focused compiler test in a
 Compiler behavior must not be inferred from historical fixtures when it conflicts with the current examples.
 
 See [the specification guide](../docs/SPECIFICATION.md) for the topic map and maintenance rules.
+
+## Catalog
+
+### Language
+
+- [Declarations](Language/Decls.vxs) and [attributes](Language/Attributes.vxs)
+- [Operators](Language/Operators.vxs), [iteration](Language/Iteration.vxs), and [unsafe behavior](Language/Unsafe.vxs)
+- [String](Language/String.vxs), [Optional](Language/Optional.vxs), and [exceptions](Language/Exceptions.vxs)
+
+### Standard library
+
+- Core: [core system](StandardLibrary/Core/CoreSystem.vxs) and [collections](StandardLibrary/Core/Collections.vxs)
+- I/O: [console](StandardLibrary/IO/ConsoleIO.vxs), [files](StandardLibrary/IO/FileIO.vxs), and
+  [commands](StandardLibrary/IO/Command.vxs)
+- Text: [JSON](StandardLibrary/Text/Text.Json.vxs) and [XML](StandardLibrary/Text/Text.Xml.vxs)
+- Runtime services: [threading](StandardLibrary/Concurrency/Threading.vxs), [date](StandardLibrary/Temporal/Date.vxs), and
+  [time](StandardLibrary/Temporal/Time.vxs)
+- Query: [BLINQ](StandardLibrary/Query/BLINQ.vxs)
+
+### Libraries and interop
+
+- Databases: [MariaDB](Libraries/Databases/MariaDB.vxs), [PostgreSQL](Libraries/Databases/PostgreSQL.vxs), and
+  [SQLite](Libraries/Databases/Sqlite3.vxs)
+- Native boundaries: [FFI](Interop/FFI.vxs) and [inline assembly](Interop/InlineAssembly.vxs)

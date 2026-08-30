@@ -39,14 +39,15 @@ Checks:
 
 HeaderFileExtensions:
   - h
-  - hxx
+  - hh
+  - hpp
 
 ImplementationFileExtensions:
   - c
-  - cxx
+  - cpp
 
-HeaderFilterRegex: ".*/(xs|xsproj|tests|include)/.*"
-ExcludeHeaderFilterRegex: "(^|.*/)(build|cmake-build.*|vendor|third_party|external|subprojects)/.*"
+HeaderFilterRegex: ".*/(Compiler|Analyzer|Formatter|Linter|tests|include)/.*"
+ExcludeHeaderFilterRegex: "(^|.*/)(bazel-.*|build|vendor|third_party|external|subprojects)/.*"
 
 SystemHeaders: false
 FormatStyle: file

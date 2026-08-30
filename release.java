@@ -57,32 +57,29 @@ class Release
 
     static Check xsVersion(String version) throws IOException, InterruptedException
     {
-        Path binary = Path.of("build/clangcl-debug/vxs.exe");
+        Path binary = Path.of("bazel-bin/Compiler/Cli/vxs.exe");
         if(!Files.isExecutable(binary))
         {
-            return new Check("vxs --version", true, "build/clangcl-debug/vxs.exe is not built; skipped runtime version check");
+            return new Check("vxs version", true, "Bazel vxs executable is not built; skipped runtime version check");
         }
 
-        Process process = new ProcessBuilder(binary.toString(), "--version")
+        Process process = new ProcessBuilder(binary.toString(), "version")
                 .redirectError(ProcessBuilder.Redirect.INHERIT).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
         int code = process.waitFor();
         boolean ok = code == 0 && output.equals("vxs " + version);
-        return new Check("vxs --version", ok, ok ? output : "expected 'vxs " + version + "', got '" + output + "'");
+        return new Check("vxs version", ok, ok ? output : "expected 'vxs " + version + "', got '" + output + "'");
     }
 
     static int check(String version) throws IOException, InterruptedException
     {
         List<Check> checks = new ArrayList<>();
-        checks.add(contains(Path.of("CMakeLists.txt"), "project(vxs_project VERSION " + version + " LANGUAGES C CXX)",
-                "CMake project version"));
+        checks.add(contains(Path.of("MODULE.bazel"), "version = \"" + version + "\"", "Bazel module version"));
         checks.add(containsOnce(Path.of("CHANGELOG.md"), "## " + version + " - ", "CHANGELOG heading"));
         checks.add(contains(Path.of("Compiler/Haskell/Driver/visual-xsharp-compiler.cabal"),
                 "version: " + version, "Haskell compiler version"));
         checks.add(contains(Path.of("ProjectSystem/build.gradle.kts"), "version = \"" + version + "\"",
                 "Kotlin project runtime version"));
-        checks.add(contains(Path.of("xslang/Cargo.toml"), "version = \"" + version + "\"",
-                "Rust compiler core version"));
         checks.add(xsVersion(version));
 
         boolean ok = true;

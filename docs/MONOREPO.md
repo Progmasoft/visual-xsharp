@@ -6,15 +6,17 @@
 ## Buildable components
 
 ```text
-Visual/       C++20 CorePrep, Xpp, and Xmm models and passes
-Compiler/     Native vxs driver, modular C++20 implementation, Haskell packages, and build support
+Compiler/     Native vxs driver, public headers, modular C++20 implementation, Haskell packages, and build support
 xslang/       Retiring Rust reference implementation; not a production build dependency
 ProjectSystem/ Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
 Spec/         Public language-design example suites
 tests/        Native compiler and integration tests
-include/      Shared public headers
+include/      Shared non-compiler ABI headers
 third_party/  Pinned source dependencies
 ```
+
+Compiler-owned public headers live physically under `Compiler/Headers/Visual/XSharp/`. Bazel removes the physical
+`Compiler/Headers` prefix from consumers, so the stable include spelling remains `Visual/XSharp/...`.
 
 The ecosystem tools have independent ownership and build systems:
 
@@ -24,8 +26,8 @@ Formatter/        Haskell vfmt executable and Kotlin configuration DSL
 Linter/           Haskell vlint executable and Kotlin configuration DSL
 ```
 
-These canonical projects replace the retired `xs-analyzer`, `xsfmt`, and `xstidy` prototypes. They are not native CMake
-subprojects. Their Haskell components use Cabal, their Kotlin configuration layers use Gradle with an external JRE 25 and
+These canonical projects replace the retired `xs-analyzer`, `xsfmt`, and `xstidy` prototypes. Their Haskell components use
+Cabal, their Kotlin configuration layers use Gradle with an external JRE 25 and
 Kotlin Script Runner, and the Visual Analyzer editor integrations additionally use their platform-specific build systems.
 
 Their first compiler-connected layer is intentionally narrow: Visual Analyzer exposes syntax, semantic, and full frontend
@@ -40,23 +42,15 @@ Visual Formatter and Visual Linter use independent release lines rather than inh
 Formatter, and Linter also have separate CI workflows so each project can evolve without coupling its validation gates to
 the others.
 
-## CMake selection
+## Build ownership
 
-The native compiler is built with Bazel. CMake remains transitional infrastructure for retained legacy C components. The
-selection cache variables are:
-
-```text
-XS_ENABLE_PROJECTS
-XS_ENABLE_RUNTIMES
-```
-
-Cabal, Gradle, IntelliJ Platform, and pnpm projects remain outside the transitional CMake selector. Bazel owns top-level
-native orchestration; language-specific CI jobs call Cabal and Gradle directly without a second wrapper such as `just`.
+Bazel owns top-level native orchestration. Language-specific CI jobs call Cabal and Gradle directly; the repository carries
+neither CMake configuration nor a second wrapper such as `just`.
 
 ## Nested repositories
 
 The website and IDE are maintained as separate repositories beneath the local working directory. They are not part of the
-root Git index or root CMake build.
+root Git index or root Bazel graph.
 
 ## Generated directories
 

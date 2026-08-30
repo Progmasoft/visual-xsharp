@@ -69,7 +69,7 @@ control-flow operations, runs the selected LLVM optimization pipeline, verifies 
 and bitcode in memory. Visual X# `String` constants are represented as Unicode scalar (`i32`) storage plus a 64-bit scalar
 count; they are not encoded as UTF-8 byte strings. LLVM types and handles do not escape the backend API.
 
-The build discovers LLVM through its CMake package. The renewed C++20 backend uses LLVM's C++ IR, bitcode, support,
+The Bazel graph discovers LLVM through `LLVM_ROOT` or `llvm-config`. The renewed C++20 backend uses LLVM's C++ IR, bitcode, support,
 new-pass-manager, target-machine, and native-code-generation libraries; LLVM C handles do not enter this pipeline. A target
 machine emits COFF objects or target assembly from verified Xmm. The C++20 driver passes a typed argument vector directly
 to LLD, without a shell or DIMCLI, and validates the resulting `.vxse` artifact.

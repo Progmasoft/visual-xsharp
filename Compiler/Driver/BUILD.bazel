@@ -10,7 +10,7 @@ cc_library(
         "//Compiler/Codegen/Xmm:xmm",
         "//Compiler/Codegen/Xpp:xpp",
         "//Compiler/Core:core",
-        "//Visual/XSharp:pipeline_api",
+        "//Compiler/Headers/Visual/XSharp:pipeline_api",
     ],
 )
 
