@@ -64,6 +64,7 @@ namespace Visual::XSharp::Xpp
                 case IR::Opcode::LogicalNot:
                     return 1U;
                 case IR::Opcode::Call:
+                case IR::Opcode::MakeClosure:
                     return 0U;
                 default:
                     return 2U;
@@ -131,6 +132,30 @@ namespace Visual::XSharp::Xpp
                             context.Add("VXP1027", "call result type does not match its signature");
                     }
                 }
+            }
+            else if (value.opcode == IR::Opcode::MakeClosure)
+            {
+                const auto target = functions.find(value.closure_function);
+                if (value.closure_function == 0U || target == functions.end())
+                    context.Add("VXP1028", "closure operation refers to an unknown lifted function");
+                if (value.result_type.kind != Core::Type::Kind::Function)
+                    context.Add("VXP1029", "closure operation result must have a function type");
+                if (value.capture_modes.size() != value.operands.size())
+                    context.Add("VXP1030", "closure capture modes and operands differ in length");
+                if (target != functions.end())
+                {
+                    const auto &parameters = target->second->parameters;
+                    if (parameters.size() < value.operands.size())
+                        context.Add("VXP1031", "lifted function has fewer parameters than closure captures");
+                    else
+                        for (std::size_t index = 0; index < value.operands.size(); ++index)
+                            if (parameters[index].type != value.operands[index].type)
+                                context.Add("VXP1032", "closure capture type differs from its lifted parameter");
+                }
+                for (std::size_t index = 0; index < value.capture_modes.size(); ++index)
+                    if (value.capture_modes[index] != Core::CaptureMode::Strong
+                        && value.operands[index].type.kind != Core::Type::Kind::Named)
+                        context.Add("VXP1033", "weak and unowned captures require an AARC named type");
             }
             else if (value.operands.size() != ExpectedArity(value.opcode))
                 context.Add("VXP1016", "instruction has the wrong operand count");

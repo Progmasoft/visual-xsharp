@@ -2,25 +2,50 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 module Visual.XSharp.AST
-    ( Identifier (..), QualifiedName (..), SourcePosition (..), SourceSpan (..)
-    , SyntaxTree (..), Declaration (..), Parameter (..), Block (..), Statement (..)
-    , Expression (..), Literal (..), UnaryOperator (..), BinaryOperator (..)
-    , TypeSyntax (..), BindingKind (..), Access (..), ParsedAST (..), RenamedName (..)
-    , RenamedAST (..), SymbolId (..), ResolvedName (..), ResolvedAST (..)
-    , Type (..), TypedAST (..), boolType, intType, unitType, stringType
+    ( Identifier (..)
+    , QualifiedName (..)
+    , SourcePosition (..)
+    , SourceSpan (..)
+    , SyntaxTree (..)
+    , Declaration (..)
+    , Parameter (..)
+    , Block (..)
+    , Statement (..)
+    , Expression (..)
+    , CallableBody (..)
+    , Capture (..)
+    , CaptureMode (..)
+    , Literal (..)
+    , UnaryOperator (..)
+    , BinaryOperator (..)
+    , TypeSyntax (..)
+    , BindingKind (..)
+    , Access (..)
+    , ParsedAST (..)
+    , RenamedName (..)
+    , RenamedAST (..)
+    , SymbolId (..)
+    , ResolvedName (..)
+    , ResolvedAST (..)
+    , Type (..)
+    , TypedAST (..)
+    , boolType
+    , intType
+    , unitType
+    , stringType
     ) where
 
-newtype Identifier = Identifier { identifierText :: String }
+newtype Identifier = Identifier {identifierText :: String}
     deriving (Eq, Ord, Read, Show)
 
-newtype QualifiedName = QualifiedName { qualifiedNameParts :: [Identifier] }
+newtype QualifiedName = QualifiedName {qualifiedNameParts :: [Identifier]}
     deriving (Eq, Ord, Read, Show)
 
-data SourcePosition = SourcePosition { sourceLine :: Int, sourceColumn :: Int }
+data SourcePosition = SourcePosition {sourceLine :: Int, sourceColumn :: Int}
     deriving (Eq, Ord, Read, Show)
 
 data SourceSpan = SourceSpan
-    { sourceFile :: FilePath, sourceStart :: SourcePosition, sourceEnd :: SourcePosition }
+    {sourceFile :: FilePath, sourceStart :: SourcePosition, sourceEnd :: SourcePosition}
     deriving (Eq, Ord, Read, Show)
 
 data TypeSyntax = ExplicitType Identifier | AutoType
@@ -31,7 +56,8 @@ data Access = DefaultAccess | PublicAccess | InternalAccess | ProtectedAccess | 
 data SyntaxTree name annotation = SyntaxTree
     { syntaxNamespace :: Maybe QualifiedName
     , syntaxDeclarations :: [Declaration name annotation]
-    } deriving (Eq, Ord, Read, Show)
+    }
+    deriving (Eq, Ord, Read, Show)
 
 data Declaration name annotation
     = TypeDeclaration
@@ -57,12 +83,37 @@ data Parameter name annotation = Parameter
     , parameterName :: name
     , parameterAnnotation :: annotation
     , parameterTypeSyntax :: TypeSyntax
-    } deriving (Eq, Ord, Read, Show)
+    }
+    deriving (Eq, Ord, Read, Show)
 
-newtype Block name annotation = Block { blockStatements :: [Statement name annotation] }
+newtype Block name annotation = Block {blockStatements :: [Statement name annotation]}
     deriving (Eq, Ord, Read, Show)
 
 data BindingKind = ImmutableBinding | MutableBinding
+    deriving (Eq, Ord, Read, Show)
+
+-- Capture modes are source-level ownership requests.  StrongCapture is also
+-- used for ordinary implicit and explicit captures; the type checker later
+-- refines its storage behavior from the captured value category.
+data CaptureMode = StrongCapture | WeakCapture | UnownedCapture
+    deriving (Eq, Ord, Read, Show)
+
+-- A capture binding owns a name visible inside the callable and an optional
+-- initializer evaluated in the surrounding scope.  During parsing the
+-- initializer is absent for `[value]`; the renamer materializes the outer-name
+-- read so later stages never need to recover lexical spelling.
+data Capture name annotation = Capture
+    { captureSpan :: SourceSpan
+    , captureMode :: CaptureMode
+    , captureName :: name
+    , captureAnnotation :: annotation
+    , captureInitializer :: Maybe (Expression name annotation)
+    }
+    deriving (Eq, Ord, Read, Show)
+
+data CallableBody name annotation
+    = CallableExpressionBody (Expression name annotation)
+    | CallableBlockBody (Block name annotation)
     deriving (Eq, Ord, Read, Show)
 
 data Statement name annotation
@@ -79,6 +130,13 @@ data Expression name annotation
     | CallExpression SourceSpan (Expression name annotation) [Expression name annotation] annotation
     | UnaryExpression SourceSpan UnaryOperator (Expression name annotation) annotation
     | BinaryExpression SourceSpan BinaryOperator (Expression name annotation) (Expression name annotation) annotation
+    | CallableExpression
+        SourceSpan
+        Bool
+        [Capture name annotation]
+        [Parameter name annotation]
+        (CallableBody name annotation)
+        annotation
     deriving (Eq, Ord, Read, Show)
 
 data Literal = IntegerLiteral Integer | BooleanLiteral Bool | StringLiteral String | UnitLiteral
@@ -88,27 +146,38 @@ data UnaryOperator = UnaryPlus | UnaryNegate | LogicalNot
     deriving (Eq, Ord, Read, Show)
 
 data BinaryOperator
-    = Add | Subtract | Multiply | Divide | FloorDivide | Remainder
-    | LessThan | LessEqual | GreaterThan | GreaterEqual | Equal | NotEqual
-    | LogicalAnd | LogicalOr
+    = Add
+    | Subtract
+    | Multiply
+    | Divide
+    | FloorDivide
+    | Remainder
+    | LessThan
+    | LessEqual
+    | GreaterThan
+    | GreaterEqual
+    | Equal
+    | NotEqual
+    | LogicalAnd
+    | LogicalOr
     deriving (Eq, Ord, Read, Show)
 
-newtype ParsedAST = ParsedAST { parsedSyntaxTree :: SyntaxTree Identifier () }
+newtype ParsedAST = ParsedAST {parsedSyntaxTree :: SyntaxTree Identifier ()}
     deriving (Eq, Ord, Read, Show)
 
-data RenamedName = RenamedName { renamedSpelling :: Identifier, renamedUnique :: Int }
+data RenamedName = RenamedName {renamedSpelling :: Identifier, renamedUnique :: Int}
     deriving (Eq, Ord, Read, Show)
 
-newtype RenamedAST = RenamedAST { renamedSyntaxTree :: SyntaxTree RenamedName () }
+newtype RenamedAST = RenamedAST {renamedSyntaxTree :: SyntaxTree RenamedName ()}
     deriving (Eq, Ord, Read, Show)
 
-newtype SymbolId = SymbolId { symbolIdValue :: Int }
+newtype SymbolId = SymbolId {symbolIdValue :: Int}
     deriving (Eq, Ord, Read, Show)
 
-data ResolvedName = ResolvedName { resolvedSymbol :: SymbolId, resolvedSpelling :: Identifier }
+data ResolvedName = ResolvedName {resolvedSymbol :: SymbolId, resolvedSpelling :: Identifier}
     deriving (Eq, Ord, Read, Show)
 
-newtype ResolvedAST = ResolvedAST { resolvedSyntaxTree :: SyntaxTree ResolvedName () }
+newtype ResolvedAST = ResolvedAST {resolvedSyntaxTree :: SyntaxTree ResolvedName ()}
     deriving (Eq, Ord, Read, Show)
 
 data Type
@@ -118,7 +187,7 @@ data Type
     | ErrorType
     deriving (Eq, Ord, Read, Show)
 
-newtype TypedAST = TypedAST { typedSyntaxTree :: SyntaxTree ResolvedName Type }
+newtype TypedAST = TypedAST {typedSyntaxTree :: SyntaxTree ResolvedName Type}
     deriving (Eq, Ord, Read, Show)
 
 named :: String -> Type

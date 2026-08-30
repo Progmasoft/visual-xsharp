@@ -2,7 +2,7 @@ cabal-version: 3.12
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 name: visual-xsharp-compiler
-version: 0.3.2
+version: 0.3.3
 synopsis: Target-independent Visual X# compiler driver
 license: MPL-2.0
 author: Progmasoft
@@ -19,6 +19,7 @@ library
         visual-xsharp-syntax:Visual.XSharp.Lexer,
         visual-xsharp-syntax:Visual.XSharp.Parser,
         visual-xsharp-frontend:Visual.XSharp.Frontend,
+        visual-xsharp-frontend:Visual.XSharp.Closure.Analysis,
         visual-xsharp-frontend:Visual.XSharp.Resolver.NameResolution,
         visual-xsharp-frontend:Visual.XSharp.Resolver.Renamer,
         visual-xsharp-frontend:Visual.XSharp.SourceSet,
@@ -56,7 +57,9 @@ executable vxs-frontend
 test-suite visual-xsharp-compiler-tests
     type: exitcode-stdio-1.0
     main-is: Main.hs
-    other-modules: SourceSetTests
+    other-modules:
+        ClosureTests
+        SourceSetTests
     hs-source-dirs: test
     build-depends:
         base >=4.20 && <4.23,

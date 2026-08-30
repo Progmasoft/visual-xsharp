@@ -253,6 +253,9 @@ longestSymbol source =
         , "<"
         , ">"
         , "!"
+        , "["
+        , "]"
+        , "\\"
         ]
     where
         firstMatch [] = Nothing

@@ -9,7 +9,7 @@
 namespace visual_xsharp::core::wire
 {
     inline constexpr std::uint8_t magic[] = { 'V', 'X', 'C', 'P' };
-    inline constexpr std::uint16_t current_version = 1;
+    inline constexpr std::uint16_t current_version = 2;
 
     struct Limits final
     {

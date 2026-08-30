@@ -32,7 +32,8 @@ namespace visual_xsharp::xpp
         LogicalAnd,
         LogicalOr,
         Negate,
-        LogicalNot
+        LogicalNot,
+        MakeClosure
     };
     struct Operand final
     {
@@ -57,6 +58,8 @@ namespace visual_xsharp::xpp
         SymbolId destination{};
         core::Type result_type{ core::Type::unit() };
         std::vector<Operand> operands;
+        SymbolId closure_function{};
+        std::vector<core::CaptureMode> capture_modes;
     };
     struct Terminator final
     {

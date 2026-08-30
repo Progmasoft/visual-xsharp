@@ -114,6 +114,7 @@ namespace Visual::XSharp::Xmm
                 case xmm::Opcode::OrBool:
                     return 2;
                 case xmm::Opcode::Call:
+                case xmm::Opcode::MakeClosure:
                     return 0;
             }
             return 0;
@@ -182,6 +183,26 @@ namespace Visual::XSharp::Xmm
                         if (instruction.result_type != signature.back())
                             context.add(IssueKind::ResultType, "VXL1019", "call result type does not match its signature");
                     }
+                }
+            }
+            else if (instruction.opcode == xmm::Opcode::MakeClosure)
+            {
+                const auto target = functions.find(instruction.closure_function);
+                if (instruction.closure_function == 0 || target == functions.end())
+                    context.add(IssueKind::InvalidCall, "VXL1032", "closure operation refers to an unknown lifted function");
+                if (instruction.result_type.kind != core::Type::Kind::Function)
+                    context.add(IssueKind::ResultType, "VXL1033", "closure operation result must be callable");
+                if (instruction.capture_modes.size() != instruction.operands.size())
+                    context.add(IssueKind::OperandCount, "VXL1034", "closure capture modes and operands differ in length");
+                if (target != functions.end())
+                {
+                    const auto &types = target->second->parameter_types;
+                    if (types.size() < instruction.operands.size())
+                        context.add(IssueKind::ParameterShape, "VXL1035", "lifted function has fewer parameters than closure captures");
+                    else
+                        for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                            if (types[index] != instruction.operands[index].type)
+                                context.add(IssueKind::OperandType, "VXL1036", "closure capture type differs from its lifted parameter");
                 }
             }
             else

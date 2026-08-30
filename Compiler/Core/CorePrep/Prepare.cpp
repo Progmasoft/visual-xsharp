@@ -150,7 +150,9 @@ namespace Visual::XSharp::Core::CorePrep
                 expression.type,
                 false,
                 operation.operation,
-                std::move(operation.operands)
+                std::move(operation.operands),
+                {},
+                {}
             };
             operation.prefix.push_back(std::move(binding));
             return { std::move(operation.prefix), Prepared::Atom::variable(std::move(temporary), expression.type), operation.state };
@@ -184,7 +186,14 @@ namespace Visual::XSharp::Core::CorePrep
                 {
                     auto operation = AtomizeOperation(state, statement.binding.value);
                     instructions.insert(instructions.end(), std::make_move_iterator(operation.prefix.begin()), std::make_move_iterator(operation.prefix.end()));
-                    instructions.push_back(Prepared::Instruction{ Prepared::Instruction::Kind::Bind, statement.binding.symbol, statement.binding.type, statement.binding.mutableBinding, operation.operation, std::move(operation.operands) });
+                    instructions.push_back(Prepared::Instruction{ Prepared::Instruction::Kind::Bind,
+                                                                  statement.binding.symbol,
+                                                                  statement.binding.type,
+                                                                  statement.binding.mutableBinding,
+                                                                  operation.operation,
+                                                                  std::move(operation.operands),
+                                                                  {},
+                                                                  {} });
                     state = operation.state;
                     continue;
                 }
@@ -197,7 +206,9 @@ namespace Visual::XSharp::Core::CorePrep
                                                                   statement.expression.type,
                                                                   false,
                                                                   Prepared::Operation::Copy,
-                                                                  { std::move(value.atom) } });
+                                                                  { std::move(value.atom) },
+                                                                  {},
+                                                                  {} });
                     state = value.state;
                     continue;
                 }
@@ -210,7 +221,9 @@ namespace Visual::XSharp::Core::CorePrep
                                                                   Type::unit(),
                                                                   false,
                                                                   operation.operation,
-                                                                  std::move(operation.operands) });
+                                                                  std::move(operation.operands),
+                                                                  {},
+                                                                  {} });
                     state = operation.state;
                     continue;
                 }

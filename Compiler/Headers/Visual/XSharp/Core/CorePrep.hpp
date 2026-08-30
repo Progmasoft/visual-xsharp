@@ -118,6 +118,27 @@ namespace visual_xsharp::core
         operator==(const Atom &) const -> bool = default;
     };
 
+    // Capture mode is part of the CorePrep contract because ownership cannot
+    // be reconstructed once lexical bindings have been converted to an
+    // environment layout.  The backend may optimize strong storage, but it
+    // must preserve weak and unowned lifetime behavior.
+    enum class CaptureMode : std::uint8_t
+    {
+        Strong,
+        Weak,
+        Unowned
+    };
+
+    struct Capture final
+    {
+        CaptureMode mode{ CaptureMode::Strong };
+        SymbolName symbol{};
+        Type type{ Type::unit() };
+        Atom value{};
+        [[nodiscard]] auto
+        operator==(const Capture &) const -> bool = default;
+    };
+
     enum class Operation : std::uint8_t
     {
         Copy,
@@ -137,7 +158,8 @@ namespace visual_xsharp::core
         LogicalAnd,
         LogicalOr,
         Negate,
-        LogicalNot
+        LogicalNot,
+        MakeClosure
     };
 
     struct Instruction final
@@ -153,6 +175,11 @@ namespace visual_xsharp::core
         bool mutable_binding{};
         Operation operation{ Operation::Copy };
         std::vector<Atom> operands;
+        // Only MakeClosure uses these fields.  Keeping closure metadata next
+        // to the operation avoids encoding a function symbol as a fake data
+        // operand and makes ownership visible to Xpp verification.
+        SymbolName closure_function{};
+        std::vector<Capture> captures;
         [[nodiscard]] auto
         operator==(const Instruction &) const -> bool = default;
     };

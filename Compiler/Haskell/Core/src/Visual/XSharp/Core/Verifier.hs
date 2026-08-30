@@ -133,6 +133,49 @@ verifyExpression environment expression =
                     ++ callProblems callee arguments valueType
             CorePrimitive primitive arguments valueType ->
                 concatMap (verifyExpression environment) arguments ++ primitiveProblems primitive arguments valueType
+            CoreClosure captures parameters returnType body valueType ->
+                verifyClosure environment captures parameters returnType body valueType
+
+verifyClosure ::
+    Environment -> [CoreCapture] -> [(ResolvedName, Type)] -> Type -> [CoreStatement] -> Type -> [Diagnostic]
+verifyClosure environment captures parameters returnType body valueType =
+    duplicates "VXC1030" "duplicate Core closure capture symbol" (map (resolvedSymbol . coreCaptureName) captures)
+        ++ duplicates "VXC1031" "duplicate Core closure parameter symbol" (map (resolvedSymbol . fst) parameters)
+        ++ concatMap verifyCapture captures
+        ++ concatMap (uncurry verifyParameter) parameters
+        ++ callableTypeProblems
+        ++ fst (verifyStatements closureEnvironment returnType body)
+        ++ [ problem "VXC1032" "non-void Core closure may complete without returning"
+           | returnType /= unitType && not (statementsAlwaysReturn body)
+           ]
+    where
+        captureEnvironment =
+            Map.fromList
+                [(resolvedSymbol (coreCaptureName capture), (coreCaptureType capture, True)) | capture <- captures]
+        parameterEnvironment =
+            Map.fromList
+                [(resolvedSymbol name, (parameterType, False)) | (name, parameterType) <- parameters]
+        closureEnvironment = Map.unions [parameterEnvironment, captureEnvironment, environment]
+        callableTypeProblems = case valueType of
+            FunctionType parameterTypes result ->
+                concat
+                    ( zipWith
+                        (typeMismatch "VXC1033" "closure parameter type disagrees with callable type")
+                        parameterTypes
+                        (map snd parameters)
+                    )
+                    ++ [problem "VXC1034" "closure callable type has the wrong arity" | length parameterTypes /= length parameters]
+                    ++ typeMismatch "VXC1035" "closure return type disagrees with callable type" result returnType
+            _ -> [problem "VXC1036" "Core closure expression must have a callable type"]
+        verifyCapture capture =
+            invalidSymbol "VXC1037" "Core capture symbol must be positive" (coreCaptureName capture)
+                ++ unresolvedType "VXC1038" "Core capture has an unresolved type" (coreCaptureType capture)
+                ++ verifyExpression environment (coreCaptureValue capture)
+                ++ typeMismatch
+                    "VXC1039"
+                    "Core capture value has the wrong type"
+                    (coreCaptureType capture)
+                    (expressionType (coreCaptureValue capture))
 
 callProblems :: CoreExpression -> [CoreExpression] -> Type -> [Diagnostic]
 callProblems callee arguments resultType = case expressionType callee of

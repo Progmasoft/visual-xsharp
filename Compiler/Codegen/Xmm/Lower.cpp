@@ -70,6 +70,8 @@ namespace visual_xsharp::xmm
                     return Opcode::NegateI64;
                 case xpp::Opcode::LogicalNot:
                     return Opcode::NotBool;
+                case xpp::Opcode::MakeClosure:
+                    return Opcode::MakeClosure;
             }
             return Opcode::Move;
         }
@@ -124,6 +126,8 @@ namespace visual_xsharp::xmm
                         loweredInstruction.destination = registerMap.Get(instruction.destination);
                     for (const auto &operand : instruction.operands)
                         loweredInstruction.operands.push_back(LowerValue(operand, registerMap));
+                    loweredInstruction.closure_function = instruction.closure_function;
+                    loweredInstruction.capture_modes = instruction.capture_modes;
                     loweredBlock.instructions.push_back(std::move(loweredInstruction));
                 }
                 loweredBlock.terminator = LowerTerminator(block.terminator, registerMap);

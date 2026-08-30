@@ -7,6 +7,8 @@ This directory documents the repository as it exists today and separates intende
 
 - [Architecture](ARCHITECTURE.md) — stage ownership and data flow.
 - [Implementation status](IMPLEMENTATION.md) — what is implemented, transitional, or not connected.
+- [Roadmap](ROADMAP.md) — sequencing and explicitly deferred runtime work.
+- [Closure compilation pipeline](CLOSURE-PIPELINE.md) — callable lowering through the native boundary.
 - [Building and testing](BUILDING.md) — supported Windows toolchain and verification commands.
 - [CLI](CLI.md) — accepted command surface and current limitations.
 - [Project files](PROJECT_FILES.md) — the `Visual.XSharp.kts` model.

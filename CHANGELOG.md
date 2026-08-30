@@ -10,6 +10,31 @@ This file summarizes user-visible and developer-visible changes in the vxs-proje
 The 0.0.x development period is the pre-1.0 vxs-project compiler infrastructure line. It does not imply a complete X#
 source-to-native executable pipeline.
 
+## 0.3.3 - 2026-08-30
+
+- Implemented callable literal syntax across the Haskell lexer, parser, renamer, name resolver, and type checker,
+  including typed, inferred, and zero-parameter forms; expression and block bodies; explicit and implicit capture mode;
+  strong, weak, and unowned captures; ordered aliases; private capture identities; and positional invocation checking.
+- Added a layout-neutral closure analysis catalog for tooling and later optimization. It records lexical nesting,
+  parameters, ordered captures, ownership, alias/read/write facts, nested capture use, calls, and returns.
+- Added typed closure expressions and capture slots to Core, free-binding discovery for implicit captures, recursive Core
+  verification and optimization, and Core wire version 2 serialization.
+- Added fixed-point CorePrep closure conversion. Closure bodies are lifted into synthetic functions, ordered capture
+  values are atomized at creation, hidden environment parameters precede source parameters, and nested closures are
+  processed through the same module queue.
+- Added `MakeClosure`, capture ownership, and lifted-target support to the C++20 CorePrep model and wire version 2, then
+  preserved that metadata through Xpp and Xmm with independent structural and cross-function verification.
+- Kept LLVM closure allocation behind an explicit AARC ABI boundary. LLVM emission rejects closure construction until
+  object layout, strong/weak/unowned slots, indirect invocation, destruction, and identity are defined; it does not
+  guess a plain function-pointer representation.
+- Added extensive Haskell and native C++ closure regression suites covering parsing, resolution, typing, lowering,
+  nested conversion, malformed IR, ownership restrictions, codec symmetry, and Xpp/Xmm metadata preservation.
+- Documented the closure pipeline and added Concurrent Bacon–Rajan cycle collection to the post-compiler roadmap as an
+  opt-in `-Cycle-Collector true` feature. The planned default is `false`, and demand-driven collection will not run when
+  no candidate cycle remains.
+- Advanced the compiler release line to 0.3.3. Visual Analyzer, Visual Formatter, Visual Linter, and project DSL runtime
+  retain their independent versions.
+
 ## 0.3.2 - 2026-08-21
 
 - Connected the renewed Haskell-to-C++20 pipeline to LLVM target-machine object and assembly emission, a typed Windows LLD

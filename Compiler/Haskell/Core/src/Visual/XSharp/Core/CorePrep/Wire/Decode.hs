@@ -2,10 +2,10 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 module Visual.XSharp.Core.CorePrep.Wire.Decode (decodeCorePrep, decodeCorePrepWith) where
 
-import Data.Bits (Bits, (.|.), shiftL)
+import Data.Bits (Bits, shiftL, (.|.))
 import Data.Char (chr)
 import Data.Int (Int64)
-import Data.Word (Word8, Word16, Word32, Word64)
+import Data.Word (Word16, Word32, Word64, Word8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
@@ -17,7 +17,7 @@ data DecoderState = DecoderState
     , decoderLimits :: WireLimits
     }
 
-newtype Decoder a = Decoder { runDecoder :: DecoderState -> Either WireError (a, DecoderState) }
+newtype Decoder a = Decoder {runDecoder :: DecoderState -> Either WireError (a, DecoderState)}
 
 instance Functor Decoder where
     fmap transform parser = Decoder $ \state -> do
@@ -54,7 +54,10 @@ decodeDocument = do
     magic <- takeBytes "magic" 4
     require (magic == wireMagic) InvalidMagic "magic" "input is not a Visual X# CorePrep wire document"
     version <- readWord16 "version"
-    require (version == wireVersionNumber currentWireVersion) UnsupportedVersion "version"
+    require
+        (version == wireVersionNumber currentWireVersion)
+        UnsupportedVersion
+        "version"
         ("unsupported CorePrep wire version " ++ show version)
     flags <- readWord16 "flags"
     require (flags == 0) InvalidTag "flags" "reserved wire flags must be zero"
@@ -64,27 +67,34 @@ decodeModule :: Decoder CorePrepModule
 decodeModule = CorePrepModule <$> decodeQualifiedName <*> decodeVector "function count" maximumFunctions decodeFunction
 
 decodeFunction :: Decoder CorePrepFunction
-decodeFunction = CorePrepFunction
-    <$> decodeResolvedName "function symbol"
-    <*> decodeVector "parameter count" maximumParametersPerFunction decodeParameter
-    <*> decodeType
-    <*> decodeBlockId "entry block"
-    <*> decodeVector "block count" maximumBlocksPerFunction decodeBlock
+decodeFunction =
+    CorePrepFunction
+        <$> decodeResolvedName "function symbol"
+        <*> decodeVector "parameter count" maximumParametersPerFunction decodeParameter
+        <*> decodeType
+        <*> decodeBlockId "entry block"
+        <*> decodeVector "block count" maximumBlocksPerFunction decodeBlock
 
 decodeParameter :: Decoder (ResolvedName, Type)
 decodeParameter = (,) <$> decodeResolvedName "parameter symbol" <*> decodeType
 
 decodeBlock :: Decoder CorePrepBlock
-decodeBlock = CorePrepBlock
-    <$> decodeBlockId "block id"
-    <*> decodeVector "instruction count" maximumInstructionsPerBlock decodeInstruction
-    <*> decodeTerminator
+decodeBlock =
+    CorePrepBlock
+        <$> decodeBlockId "block id"
+        <*> decodeVector "instruction count" maximumInstructionsPerBlock decodeInstruction
+        <*> decodeTerminator
 
 decodeInstruction :: Decoder CorePrepInstruction
 decodeInstruction = do
     tag <- readWord8 "instruction tag"
     case tag of
-        0 -> CorePrepBind <$> decodeResolvedName "binding symbol" <*> decodeType <*> decodeBool "binding mutability" <*> decodeOperation
+        0 ->
+            CorePrepBind
+                <$> decodeResolvedName "binding symbol"
+                <*> decodeType
+                <*> decodeBool "binding mutability"
+                <*> decodeOperation
         1 -> CorePrepAssign <$> decodeResolvedName "assignment symbol" <*> decodeAtom
         2 -> CorePrepEvaluate <$> decodeOperation
         _ -> invalidTag "instruction tag" tag
@@ -92,13 +102,34 @@ decodeInstruction = do
 decodeOperation :: Decoder CorePrepOperation
 decodeOperation = do
     tag <- readWord8 "operation tag"
-    atoms <- decodeVector "operand count" maximumOperandsPerInstruction decodeAtom
     case tag of
-        0 -> case atoms of [atom] -> pure (CorePrepCopy atom); _ -> invalidArity "copy" 1 (length atoms)
-        1 -> case atoms of callee:arguments -> pure (CorePrepCall callee arguments); [] -> invalidArity "call" 1 0
-        _ -> case tagPrimitive tag of
-            Just primitive -> pure (CorePrepPrimitive primitive atoms)
-            Nothing -> invalidTag "operation tag" tag
+        18 ->
+            CorePrepMakeClosure
+                <$> decodeResolvedName "closure function symbol"
+                <*> decodeVector "closure capture count" maximumOperandsPerInstruction decodeCapture
+        _ -> do
+            atoms <- decodeVector "operand count" maximumOperandsPerInstruction decodeAtom
+            case tag of
+                0 -> case atoms of [atom] -> pure (CorePrepCopy atom); _ -> invalidArity "copy" 1 (length atoms)
+                1 -> case atoms of callee : arguments -> pure (CorePrepCall callee arguments); [] -> invalidArity "call" 1 0
+                _ -> case tagPrimitive tag of
+                    Just primitive -> pure (CorePrepPrimitive primitive atoms)
+                    Nothing -> invalidTag "operation tag" tag
+
+decodeCapture :: Decoder CorePrepCapture
+decodeCapture = do
+    mode <- readWord8 "capture mode" >>= decodeCaptureMode
+    name <- decodeResolvedName "capture symbol"
+    valueType <- decodeType
+    atom <- decodeAtom
+    pure (CorePrepCapture mode name valueType atom)
+
+decodeCaptureMode :: Word8 -> Decoder CaptureMode
+decodeCaptureMode tag = case tag of
+    0 -> pure StrongCapture
+    1 -> pure WeakCapture
+    2 -> pure UnownedCapture
+    _ -> invalidTag "capture mode" tag
 
 decodeAtom :: Decoder CorePrepAtom
 decodeAtom = do
@@ -136,8 +167,12 @@ decodeResolvedName context = do
     pure (ResolvedName (SymbolId (fromIntegral raw)) (Identifier spelling))
 
 decodeQualifiedName :: Decoder QualifiedName
-decodeQualifiedName = QualifiedName <$> decodeVectorWithMaximum "qualified name part count" 65535
-    (Identifier <$> decodeText "qualified name part")
+decodeQualifiedName =
+    QualifiedName
+        <$> decodeVectorWithMaximum
+            "qualified name part count"
+            65535
+            (Identifier <$> decodeText "qualified name part")
 
 decodeType :: Decoder Type
 decodeType = decodeTypeAt 0
@@ -153,11 +188,14 @@ decodeTypeAt depth = do
         2 -> pure intType
         4 -> pure stringType
         3 -> pure (NamedType (QualifiedName [Identifier "int32"]) [])
-        5 -> FunctionType
-            <$> decodeVectorWithMaximum "function type parameter count" 65535 (decodeTypeAt (depth + 1))
-            <*> decodeTypeAt (depth + 1)
-        6 -> NamedType <$> decodeQualifiedName
-            <*> decodeVectorWithMaximum "type argument count" 65535 (decodeTypeAt (depth + 1))
+        5 ->
+            FunctionType
+                <$> decodeVectorWithMaximum "function type parameter count" 65535 (decodeTypeAt (depth + 1))
+                <*> decodeTypeAt (depth + 1)
+        6 ->
+            NamedType
+                <$> decodeQualifiedName
+                <*> decodeVectorWithMaximum "type argument count" 65535 (decodeTypeAt (depth + 1))
         7 -> TypeVariable <$> decodeResolvedName "type variable symbol"
         _ -> invalidTag "type tag" tag
 
@@ -172,7 +210,10 @@ decodeVector context selectLimit parser = do
 decodeVectorWithMaximum :: String -> Int -> Decoder a -> Decoder [a]
 decodeVectorWithMaximum context maximumCount parser = do
     rawCount <- readWord32 context
-    require (toInteger rawCount <= toInteger maximumCount) LimitExceeded context
+    require
+        (toInteger rawCount <= toInteger maximumCount)
+        LimitExceeded
+        context
         ("count " ++ show rawCount ++ " exceeds limit " ++ show maximumCount)
     sequence (replicate (fromIntegral rawCount) parser)
 
@@ -180,14 +221,20 @@ decodeText :: String -> Decoder String
 decodeText context = do
     limits <- currentLimits
     count <- readWord32 (context ++ " length")
-    require (toInteger count <= toInteger (maximumStringCodePoints limits)) LimitExceeded context
+    require
+        (toInteger count <= toInteger (maximumStringCodePoints limits))
+        LimitExceeded
+        context
         "text exceeds configured code point limit"
     sequence (replicate (fromIntegral count) (decodeCodePoint context))
 
 decodeCodePoint :: String -> Decoder Char
 decodeCodePoint context = do
     value <- readWord32 context
-    require (value <= 0x10ffff && not (value >= 0xd800 && value <= 0xdfff)) InvalidCodePoint context
+    require
+        (value <= 0x10ffff && not (value >= 0xd800 && value <= 0xdfff))
+        InvalidCodePoint
+        context
         "wire text contains a non-scalar Unicode code point"
     pure (chr (fromIntegral value))
 
@@ -201,18 +248,33 @@ decodeBool context = do
 
 tagPrimitive :: Word8 -> Maybe CorePrimitive
 tagPrimitive tag = case tag of
-    2 -> Just CoreAdd; 3 -> Just CoreSubtract; 4 -> Just CoreMultiply; 5 -> Just CoreDivide
-    6 -> Just CoreFloorDivide; 7 -> Just CoreRemainder; 8 -> Just CoreLessThan; 9 -> Just CoreLessEqual
-    10 -> Just CoreGreaterThan; 11 -> Just CoreGreaterEqual; 12 -> Just CoreEqual; 13 -> Just CoreNotEqual
-    14 -> Just CoreLogicalAnd; 15 -> Just CoreLogicalOr; 16 -> Just CoreNegate; 17 -> Just CoreLogicalNot
+    2 -> Just CoreAdd
+    3 -> Just CoreSubtract
+    4 -> Just CoreMultiply
+    5 -> Just CoreDivide
+    6 -> Just CoreFloorDivide
+    7 -> Just CoreRemainder
+    8 -> Just CoreLessThan
+    9 -> Just CoreLessEqual
+    10 -> Just CoreGreaterThan
+    11 -> Just CoreGreaterEqual
+    12 -> Just CoreEqual
+    13 -> Just CoreNotEqual
+    14 -> Just CoreLogicalAnd
+    15 -> Just CoreLogicalOr
+    16 -> Just CoreNegate
+    17 -> Just CoreLogicalNot
     _ -> Nothing
 
 invalidTag :: String -> Word8 -> Decoder a
 invalidTag context tag = failAt InvalidTag context ("unknown tag " ++ show tag)
 
 invalidArity :: String -> Int -> Int -> Decoder a
-invalidArity context expected actual = failAt InvalidCount context
-    ("expected " ++ show expected ++ " operand(s), found " ++ show actual)
+invalidArity context expected actual =
+    failAt
+        InvalidCount
+        context
+        ("expected " ++ show expected ++ " operand(s), found " ++ show actual)
 
 currentLimits :: Decoder WireLimits
 currentLimits = Decoder $ \state -> Right (decoderLimits state, state)
@@ -226,10 +288,16 @@ failAt kind context message = Decoder $ \state -> Left (wireError kind (consumed
 takeBytes :: String -> Int -> Decoder [Word8]
 takeBytes context count = Decoder $ \state ->
     let (prefix, suffix) = splitAt count (remainingBytes state)
-    in if length prefix == count
-        then Right (prefix, state { remainingBytes = suffix, consumedBytes = consumedBytes state + count })
-        else Left (wireError TruncatedInput (consumedBytes state) context
-            ("needed " ++ show count ++ " byte(s), found " ++ show (length prefix)))
+     in if length prefix == count
+            then Right (prefix, state {remainingBytes = suffix, consumedBytes = consumedBytes state + count})
+            else
+                Left
+                    ( wireError
+                        TruncatedInput
+                        (consumedBytes state)
+                        context
+                        ("needed " ++ show count ++ " byte(s), found " ++ show (length prefix))
+                    )
 
 readWord8 :: String -> Decoder Word8
 readWord8 context = do
@@ -248,5 +316,6 @@ readWord64 :: String -> Decoder Word64
 readWord64 context = assemble <$> takeBytes context 8
 
 assemble :: (Integral a, Bits a) => [Word8] -> a
-assemble bytes = foldr combine 0 (zip [0..] bytes)
-  where combine (index, value) result = result .|. (fromIntegral value `shiftL` (index * 8))
+assemble bytes = foldr combine 0 (zip [0 ..] bytes)
+    where
+        combine (index, value) result = result .|. (fromIntegral value `shiftL` (index * 8))

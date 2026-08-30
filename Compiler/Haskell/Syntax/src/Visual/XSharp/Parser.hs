@@ -257,6 +257,7 @@ parsePrimary :: P (Expression Identifier ())
 parsePrimary = do
     next <- peekToken
     case next of
+        Just token | tokenText token `elem` ["\\", "["] -> parseCallable
         Just token | tokenKind token == IntegerToken -> do
             _ <- takeToken
             pure (LiteralExpression (tokenSpan token) (IntegerLiteral (read (filter (/= '_') (tokenText token)))) ())
@@ -272,6 +273,107 @@ parsePrimary = do
         Just token -> failAt (tokenSpan token) "VXP0004" ("expected expression, found " ++ show (tokenText token))
         Nothing -> failCurrent "VXP0005" "expected expression at end of input"
 
+-- A capture list belongs to the callable which follows it.  Keeping this at
+-- primary-expression precedence allows immediately invoking a literal while
+-- preventing binary operators from becoming part of capture initializers.
+parseCallable :: P (Expression Identifier ())
+parseCallable = do
+    (explicitCaptures, captures) <- optionalCaptureList
+    slash <- symbol "\\"
+    parameters <- parseCallableParameters
+    _ <- symbol "->"
+    body <- parseCallableBody
+    let endSpan = callableBodySpan body
+    pure
+        ( CallableExpression
+            (mergeSpan (maybe (tokenSpan slash) captureSpanStart (safeHead captures)) endSpan)
+            explicitCaptures
+            captures
+            parameters
+            body
+            ()
+        )
+
+optionalCaptureList :: P (Bool, [Capture Identifier ()])
+optionalCaptureList = do
+    present <- peekText "["
+    if not present
+        then pure (False, [])
+        else do
+            _ <- symbol "["
+            empty <- peekText "]"
+            captures <- if empty then pure [] else separatedUntil "]" "," parseCapture
+            _ <- symbol "]"
+            pure (True, captures)
+
+parseCapture :: P (Capture Identifier ())
+parseCapture = do
+    modeToken <- optionalParser (keyword "weak" <|?> keyword "unowned")
+    (name, nameSpan) <- identifier
+    hasInitializer <- optionalSymbol "="
+    initializer <- if hasInitializer then Just <$> parseExpression else pure Nothing
+    let mode = case fmap tokenText modeToken of
+            Just "weak" -> WeakCapture
+            Just "unowned" -> UnownedCapture
+            _ -> StrongCapture
+        spanValue = maybe nameSpan (mergeSpan nameSpan . expressionSpan) initializer
+    pure (Capture spanValue mode name () initializer)
+
+parseCallableParameters :: P [Parameter Identifier ()]
+parseCallableParameters = do
+    parenthesized <- optionalSymbol "("
+    if parenthesized
+        then do
+            empty <- peekText ")"
+            parameters <- if empty then pure [] else separatedUntil ")" "," parseCallableParameter
+            _ <- symbol ")"
+            pure parameters
+        else do
+            arrow <- peekText "->"
+            if arrow then pure [] else separatedUntil "->" "," parseInferredCallableParameter
+
+parseCallableParameter :: P (Parameter Identifier ())
+parseCallableParameter = P $ \tokens -> case tokens of
+    first : second : _
+        | tokenKind first `elem` [IdentifierToken, KeywordToken]
+        , tokenKind second == IdentifierToken ->
+            runP parseParameter tokens
+    _ -> runP parseInferredCallableParameter tokens
+
+parseInferredCallableParameter :: P (Parameter Identifier ())
+parseInferredCallableParameter = do
+    (name, spanValue) <- identifier
+    pure (Parameter spanValue name () AutoType)
+
+parseCallableBody :: P (CallableBody Identifier ())
+parseCallableBody = do
+    block <- peekText "{"
+    if block
+        then CallableBlockBody <$> parseBlock True
+        else CallableExpressionBody <$> parseExpression
+
+callableBodySpan :: CallableBody name annotation -> SourceSpan
+callableBodySpan body = case body of
+    CallableExpressionBody expression -> expressionSpan expression
+    CallableBlockBody block -> blockSpan block (SourceSpan "" (SourcePosition 1 1) (SourcePosition 1 1))
+
+captureSpanStart :: Capture name annotation -> SourceSpan
+captureSpanStart = captureSpan
+
+safeHead :: [a] -> Maybe a
+safeHead [] = Nothing
+safeHead (value : _) = Just value
+
+separatedUntil :: String -> String -> P a -> P [a]
+separatedUntil closing separator parser = do
+    first <- parser
+    more <- optionalSymbol separator
+    if more
+        then (first :) <$> separatedUntil closing separator parser
+        else do
+            done <- peekText closing
+            if done then pure [first] else failCurrent "VXP0009" ("expected " ++ show separator ++ " or " ++ show closing)
+
 expressionSpan :: Expression name annotation -> SourceSpan
 expressionSpan expression = case expression of
     NameExpression value _ _ -> value
@@ -279,6 +381,7 @@ expressionSpan expression = case expression of
     CallExpression value _ _ _ -> value
     UnaryExpression value _ _ _ -> value
     BinaryExpression value _ _ _ _ -> value
+    CallableExpression value _ _ _ _ _ -> value
 
 (<|?>) :: P a -> P a -> P a
 left <|?> right = P $ \tokens -> case runP left tokens of Left _ -> runP right tokens; success -> success

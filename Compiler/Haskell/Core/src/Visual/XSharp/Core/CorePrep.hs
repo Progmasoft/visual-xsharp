@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 module Visual.XSharp.Core.CorePrep
     ( CorePrepAtom (..)
+    , CorePrepCapture (..)
     , CorePrepOperation (..)
     , CorePrepInstruction (..)
     , CorePrepTerminator (..)
@@ -21,6 +22,9 @@ data CorePrepOperation
     = CorePrepCopy CorePrepAtom
     | CorePrepCall CorePrepAtom [CorePrepAtom]
     | CorePrepPrimitive CorePrimitive [CorePrepAtom]
+    | CorePrepMakeClosure ResolvedName [CorePrepCapture]
+    deriving (Eq, Ord, Read, Show)
+data CorePrepCapture = CorePrepCapture CaptureMode ResolvedName Type CorePrepAtom
     deriving (Eq, Ord, Read, Show)
 data CorePrepInstruction
     = CorePrepBind ResolvedName Type Bool CorePrepOperation
@@ -51,21 +55,44 @@ data CorePrepModule = CorePrepModule
     {corePrepModuleName :: QualifiedName, corePrepModuleFunctions :: [CorePrepFunction]}
     deriving (Eq, Ord, Read, Show)
 
-data PrepState = PrepState {nextTemporary :: Int, nextBlock :: Int}
+data PrepState = PrepState
+    { nextTemporary :: Int
+    , nextBlock :: Int
+    , pendingFunctions :: [CoreFunction]
+    }
 
 prepareCore :: CoreModule -> Either [Diagnostic] CorePrepModule
-prepareCore moduleValue = Right (CorePrepModule (coreModuleName moduleValue) (map prepareFunction (coreModuleFunctions moduleValue)))
+prepareCore moduleValue =
+    let seed = 1 + maximum (0 : concatMap symbolIds (coreModuleFunctions moduleValue))
+        initial = PrepState seed 1 []
+        (functions, _) = prepareFunctionQueue initial (coreModuleFunctions moduleValue)
+     in Right (CorePrepModule (coreModuleName moduleValue) functions)
 
-prepareFunction :: CoreFunction -> CorePrepFunction
-prepareFunction function =
-    let seed = 1 + maximum (0 : symbolIds function)
-        (blocks, _) = prepareStatements (PrepState seed 1) 0 [] (coreFunctionBody function)
-     in CorePrepFunction
+-- Closure conversion appends lifted functions to this work queue.  Processing
+-- the queue to exhaustion also supports nested closures without a separate
+-- whole-module mutation pass.
+prepareFunctionQueue :: PrepState -> [CoreFunction] -> ([CorePrepFunction], PrepState)
+prepareFunctionQueue state [] = case pendingFunctions state of
+    [] -> ([], state)
+    pending -> prepareFunctionQueue (state {pendingFunctions = []}) pending
+prepareFunctionQueue state (function : remaining) =
+    let (prepared, afterFunction) = prepareFunction (state {nextBlock = 1}) function
+        pending = pendingFunctions afterFunction
+        nextState = afterFunction {pendingFunctions = []}
+        (later, final) = prepareFunctionQueue nextState (remaining ++ pending)
+     in (prepared : later, final)
+
+prepareFunction :: PrepState -> CoreFunction -> (CorePrepFunction, PrepState)
+prepareFunction state function =
+    let (blocks, after) = prepareStatements state 0 [] (coreFunctionBody function)
+     in ( CorePrepFunction
             (coreFunctionName function)
             (coreFunctionParameters function)
             (coreFunctionReturnType function)
             0
             blocks
+        , after
+        )
 
 symbolIds :: CoreFunction -> [Int]
 symbolIds function =
@@ -90,6 +117,11 @@ expressionSymbolIds expression = case expression of
     CoreLiteral _ _ -> []
     CoreApply callee arguments _ -> expressionSymbolIds callee ++ concatMap expressionSymbolIds arguments
     CorePrimitive _ arguments _ -> concatMap expressionSymbolIds arguments
+    CoreClosure captures parameters _ body _ ->
+        map (symbol . coreCaptureName) captures
+            ++ concatMap (expressionSymbolIds . coreCaptureValue) captures
+            ++ map (symbol . fst) parameters
+            ++ concatMap statementSymbolIds body
     where
         symbol = symbolIdValue . resolvedSymbol
 
@@ -154,9 +186,40 @@ atomizeOperation state expression = case expression of
          in (calleePrefix ++ argumentPrefix, CorePrepCall calleeAtom argumentAtoms, afterArguments)
     CorePrimitive primitive arguments _ ->
         let (prefix, atoms, after) = atomizeMany state arguments in (prefix, CorePrepPrimitive primitive atoms, after)
+    CoreClosure captures parameters returnType body _ ->
+        let closureId = nextTemporary state
+            closureName =
+                ResolvedName (SymbolId closureId) (Identifier ("$closure" ++ show closureId))
+            (capturePrefix, preparedCaptures, afterCaptures) =
+                atomizeCaptures
+                    (state {nextTemporary = closureId + 1})
+                    captures
+            hiddenParameters = [(coreCaptureName capture, coreCaptureType capture) | capture <- captures]
+            lifted = CoreFunction closureName (hiddenParameters ++ parameters) returnType body
+            finalState =
+                afterCaptures
+                    { pendingFunctions = pendingFunctions afterCaptures ++ [lifted]
+                    }
+         in (capturePrefix, CorePrepMakeClosure closureName preparedCaptures, finalState)
 
 atomizeMany :: PrepState -> [CoreExpression] -> ([CorePrepInstruction], [CorePrepAtom], PrepState)
 atomizeMany state [] = ([], [], state)
 atomizeMany state (value : remaining) =
     let (prefix, atom, after) = atomize state value; (laterPrefix, atoms, final) = atomizeMany after remaining
      in (prefix ++ laterPrefix, atom : atoms, final)
+
+atomizeCaptures ::
+    PrepState ->
+    [CoreCapture] ->
+    ([CorePrepInstruction], [CorePrepCapture], PrepState)
+atomizeCaptures state [] = ([], [], state)
+atomizeCaptures state (capture : remaining) =
+    let (prefix, atom, afterValue) = atomize state (coreCaptureValue capture)
+        prepared =
+            CorePrepCapture
+                (coreCaptureMode capture)
+                (coreCaptureName capture)
+                (coreCaptureType capture)
+                atom
+        (laterPrefix, laterCaptures, final) = atomizeCaptures afterValue remaining
+     in (prefix ++ laterPrefix, prepared : laterCaptures, final)

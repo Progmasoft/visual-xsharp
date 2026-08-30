@@ -253,7 +253,7 @@ namespace visual_xsharp::core::wire
             operation_tag() -> Operation
             {
                 const auto tag = byte("operation tag");
-                if (tag > static_cast<std::uint8_t>(Operation::LogicalNot))
+                if (tag > static_cast<std::uint8_t>(Operation::MakeClosure))
                 {
                     fail(ErrorKind::InvalidTag, "operation tag", "unknown CorePrep operation tag");
                     return Operation::Copy;
@@ -261,10 +261,44 @@ namespace visual_xsharp::core::wire
                 return static_cast<Operation>(tag);
             }
 
+            [[nodiscard]] auto
+            capture_mode() -> CaptureMode
+            {
+                const auto tag = byte("capture mode");
+                if (tag > static_cast<std::uint8_t>(CaptureMode::Unowned))
+                {
+                    fail(ErrorKind::InvalidTag, "capture mode", "unknown CorePrep capture mode");
+                    return CaptureMode::Strong;
+                }
+                return static_cast<CaptureMode>(tag);
+            }
+
+            [[nodiscard]] auto
+            capture() -> Capture
+            {
+                Capture value;
+                value.mode = capture_mode();
+                value.symbol = symbol("capture symbol");
+                value.type = type();
+                value.value = atom();
+                return value;
+            }
+
             void
             operation(Instruction &value)
             {
                 value.operation = operation_tag();
+                if (value.operation == Operation::MakeClosure)
+                {
+                    value.closure_function = symbol("closure function symbol");
+                    value.captures = vector<Capture>(
+                        limits_.maximum_operands_per_instruction,
+                        "closure capture count",
+                        [this] {
+                            return capture();
+                        });
+                    return;
+                }
                 value.operands = vector<Atom>(limits_.maximum_operands_per_instruction, "operand count", [this] {
                     return atom();
                 });

@@ -222,12 +222,46 @@ namespace visual_xsharp::core::wire
             }
 
             void
+            capture(const Capture &value)
+            {
+                byte(static_cast<std::uint8_t>(value.mode));
+                symbol(value.symbol, "capture symbol");
+                type(value.type);
+                atom(value.value);
+            }
+
+            void
             operation(Operation operation, const std::vector<Atom> &operands)
             {
                 byte(static_cast<std::uint8_t>(operation));
                 vector(operands, limits_.maximum_operands_per_instruction, "operand count", [this](const Atom &operand) {
                     atom(operand);
                 });
+            }
+
+            void
+            operation(const Instruction &instruction)
+            {
+                byte(static_cast<std::uint8_t>(instruction.operation));
+                if (instruction.operation == Operation::MakeClosure)
+                {
+                    symbol(instruction.closure_function, "closure function symbol");
+                    vector(
+                        instruction.captures,
+                        limits_.maximum_operands_per_instruction,
+                        "closure capture count",
+                        [this](const Capture &value) {
+                            capture(value);
+                        });
+                    return;
+                }
+                vector(
+                    instruction.operands,
+                    limits_.maximum_operands_per_instruction,
+                    "operand count",
+                    [this](const Atom &operand) {
+                        atom(operand);
+                    });
             }
 
             void
@@ -240,7 +274,7 @@ namespace visual_xsharp::core::wire
                         symbol(value.destination, "binding symbol");
                         type(value.type);
                         byte(value.mutable_binding ? 1U : 0U);
-                        operation(value.operation, value.operands);
+                        operation(value);
                         return;
                     case Instruction::Kind::Assign:
                         symbol(value.destination, "assignment symbol");
@@ -252,7 +286,7 @@ namespace visual_xsharp::core::wire
                         atom(value.operands.front());
                         return;
                     case Instruction::Kind::Evaluate:
-                        operation(value.operation, value.operands);
+                        operation(value);
                         return;
                 }
             }

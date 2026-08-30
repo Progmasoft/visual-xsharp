@@ -50,6 +50,7 @@ namespace visual_xsharp::core
                 case Operation::Copy:
                     return 1;
                 case Operation::Call:
+                case Operation::MakeClosure:
                     return 0;
                 case Operation::Negate:
                 case Operation::LogicalNot:
@@ -64,10 +65,20 @@ namespace visual_xsharp::core
         {
             if (instruction.kind != Instruction::Kind::Evaluate && instruction.destination.id == 0)
                 issues.push_back(issue("VXC1006", "defining instruction has no destination symbol", function, block));
-            if (instruction.operation != Operation::Call && instruction.operands.size() != expected_arity(instruction.operation))
+            if (instruction.operation != Operation::Call && instruction.operation != Operation::MakeClosure
+                && instruction.operands.size() != expected_arity(instruction.operation))
                 issues.push_back(issue("VXC1007", "operation has the wrong operand count", function, block));
             if (instruction.operation == Operation::Call && instruction.operands.empty())
                 issues.push_back(issue("VXC1008", "call operation has no callee operand", function, block));
+            if (instruction.operation == Operation::MakeClosure)
+            {
+                if (instruction.closure_function.id == 0)
+                    issues.push_back(issue("VXC1040", "closure operation has no lifted function symbol", function, block));
+                if (std::any_of(instruction.captures.begin(), instruction.captures.end(), [](const Capture &capture) {
+                        return capture.symbol.id == 0 || !atom_valid(capture.value);
+                    }))
+                    issues.push_back(issue("VXC1041", "closure contains an invalid capture slot", function, block));
+            }
             if (std::any_of(instruction.operands.begin(), instruction.operands.end(), [](const Atom &atom) {
                     return !atom_valid(atom);
                 }))

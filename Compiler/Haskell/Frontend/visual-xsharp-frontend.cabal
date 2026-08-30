@@ -2,7 +2,7 @@ cabal-version: 3.12
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 name: visual-xsharp-frontend
-version: 0.3.2
+version: 0.3.3
 synopsis: Visual X# resolution and type-checking frontend
 license: MPL-2.0
 author: Progmasoft
@@ -11,6 +11,7 @@ build-type: Simple
 
 library
     exposed-modules:
+        Visual.XSharp.Closure.Analysis
         Visual.XSharp.Frontend
         Visual.XSharp.Resolver.NameResolution
         Visual.XSharp.Resolver.Renamer

@@ -23,7 +23,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 1
+currentCoreWireVersion = CoreWireVersion 2
 
 data CoreWireLimits = CoreWireLimits
     { maximumCoreWireBytes :: Int
@@ -186,6 +186,44 @@ encodeExpression limits depth expression
                     (encodeExpression limits (depth + 1))
                     arguments
             pure ([3, primitiveTag primitive] ++ encodedType ++ encodedArguments)
+        CoreClosure captures parameters returnType body valueType -> do
+            encodedType <- encodeType limits 0 valueType
+            encodedCaptures <-
+                encodeVector
+                    limits
+                    "closure capture count"
+                    (maximumCoreOperands limits)
+                    (encodeCoreCapture limits depth)
+                    captures
+            encodedParameters <-
+                encodeVector
+                    limits
+                    "closure parameter count"
+                    (maximumCoreParameters limits)
+                    (encodeParameter limits)
+                    parameters
+            encodedReturn <- encodeType limits 0 returnType
+            encodedBody <-
+                encodeVector
+                    limits
+                    "closure statement count"
+                    (maximumCoreStatements limits)
+                    (encodeStatement limits)
+                    body
+            pure ([4] ++ encodedType ++ encodedCaptures ++ encodedParameters ++ encodedReturn ++ encodedBody)
+
+encodeCoreCapture :: CoreWireLimits -> Int -> CoreCapture -> Encoder
+encodeCoreCapture limits depth capture = do
+    encodedName <- encodeResolvedName limits "closure capture symbol" (coreCaptureName capture)
+    encodedType <- encodeType limits 0 (coreCaptureType capture)
+    encodedValue <- encodeExpression limits (depth + 1) (coreCaptureValue capture)
+    pure (captureModeTag (coreCaptureMode capture) : encodedName ++ encodedType ++ encodedValue)
+
+captureModeTag :: CaptureMode -> Word8
+captureModeTag mode = case mode of
+    StrongCapture -> 0
+    WeakCapture -> 1
+    UnownedCapture -> 2
 
 encodeLiteral :: CoreWireLimits -> CoreLiteral -> Encoder
 encodeLiteral limits literal = case literal of
@@ -367,7 +405,29 @@ decodeExpression depth = do
             valueType <- decodeType 0
             arguments <- decodeVector "primitive operand count" maximumCoreOperands (decodeExpression (depth + 1))
             pure (CorePrimitive primitive arguments valueType)
+        4 -> do
+            valueType <- decodeType 0
+            captures <- decodeVector "closure capture count" maximumCoreOperands (decodeCoreCapture (depth + 1))
+            parameters <- decodeVector "closure parameter count" maximumCoreParameters decodeParameter
+            returnType <- decodeType 0
+            body <- decodeVector "closure statement count" maximumCoreStatements decodeStatement
+            pure (CoreClosure captures parameters returnType body valueType)
         _ -> invalidTag "expression tag" tag
+
+decodeCoreCapture :: Int -> Decoder CoreCapture
+decodeCoreCapture depth = do
+    mode <- readWord8 "closure capture mode" >>= decodeCaptureMode
+    name <- decodeResolvedName "closure capture symbol"
+    valueType <- decodeType 0
+    value <- decodeExpression depth
+    pure (CoreCapture mode name valueType value)
+
+decodeCaptureMode :: Word8 -> Decoder CaptureMode
+decodeCaptureMode tag = case tag of
+    0 -> pure StrongCapture
+    1 -> pure WeakCapture
+    2 -> pure UnownedCapture
+    _ -> invalidTag "closure capture mode" tag
 
 decodeLiteral :: Decoder CoreLiteral
 decodeLiteral = do

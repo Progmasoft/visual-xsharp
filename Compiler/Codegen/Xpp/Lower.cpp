@@ -60,6 +60,8 @@ namespace visual_xsharp::xpp
                     return Opcode::Negate;
                 case core::Operation::LogicalNot:
                     return Opcode::LogicalNot;
+                case core::Operation::MakeClosure:
+                    return Opcode::MakeClosure;
             }
             return Opcode::Copy;
         }
@@ -79,6 +81,17 @@ namespace visual_xsharp::xpp
             lowered.operands.reserve(instruction.operands.size());
             for (const auto &operand : instruction.operands)
                 lowered.operands.push_back(LowerOperand(operand));
+            if (instruction.operation == core::Operation::MakeClosure)
+            {
+                lowered.closure_function = instruction.closure_function.id;
+                lowered.operands.reserve(instruction.captures.size());
+                lowered.capture_modes.reserve(instruction.captures.size());
+                for (const auto &capture : instruction.captures)
+                {
+                    lowered.operands.push_back(LowerOperand(capture.value));
+                    lowered.capture_modes.push_back(capture.mode);
+                }
+            }
             return lowered;
         }
 

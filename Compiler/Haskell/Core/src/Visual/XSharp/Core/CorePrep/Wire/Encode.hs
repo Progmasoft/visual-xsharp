@@ -2,10 +2,10 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 module Visual.XSharp.Core.CorePrep.Wire.Encode (encodeCorePrep, encodeCorePrepWith) where
 
-import Data.Bits (Bits, (.&.), shiftR)
+import Data.Bits (Bits, shiftR, (.&.))
 import Data.Char (ord)
 import Data.Int (Int64)
-import Data.Word (Word8, Word16, Word32, Word64)
+import Data.Word (Word16, Word32, Word64, Word8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
@@ -26,19 +26,34 @@ encodeCorePrepWith limits moduleValue = do
 encodeModule :: WireLimits -> CorePrepModule -> Encoder
 encodeModule limits moduleValue = do
     name <- encodeQualifiedName limits (corePrepModuleName moduleValue)
-    functions <- encodeVector limits "function count" (maximumFunctions limits)
-        (encodeFunction limits) (corePrepModuleFunctions moduleValue)
+    functions <-
+        encodeVector
+            limits
+            "function count"
+            (maximumFunctions limits)
+            (encodeFunction limits)
+            (corePrepModuleFunctions moduleValue)
     pure (name ++ functions)
 
 encodeFunction :: WireLimits -> CorePrepFunction -> Encoder
 encodeFunction limits function = do
     name <- encodeResolvedName limits "function symbol" (corePrepFunctionName function)
-    parameters <- encodeVector limits "parameter count" (maximumParametersPerFunction limits)
-        (encodeParameter limits) (corePrepFunctionParameters function)
+    parameters <-
+        encodeVector
+            limits
+            "parameter count"
+            (maximumParametersPerFunction limits)
+            (encodeParameter limits)
+            (corePrepFunctionParameters function)
     result <- encodeType limits (corePrepFunctionReturnType function)
     entry <- encodeNonNegative32 "entry block" (corePrepFunctionEntry function)
-    blocks <- encodeVector limits "block count" (maximumBlocksPerFunction limits)
-        (encodeBlock limits) (corePrepFunctionBlocks function)
+    blocks <-
+        encodeVector
+            limits
+            "block count"
+            (maximumBlocksPerFunction limits)
+            (encodeBlock limits)
+            (corePrepFunctionBlocks function)
     pure (name ++ parameters ++ result ++ entry ++ blocks)
 
 encodeParameter :: WireLimits -> (ResolvedName, Type) -> Encoder
@@ -50,8 +65,13 @@ encodeParameter limits (name, valueType) = do
 encodeBlock :: WireLimits -> CorePrepBlock -> Encoder
 encodeBlock limits block = do
     identifier <- encodeNonNegative32 "block id" (corePrepBlockId block)
-    instructions <- encodeVector limits "instruction count" (maximumInstructionsPerBlock limits)
-        (encodeInstruction limits) (corePrepBlockInstructions block)
+    instructions <-
+        encodeVector
+            limits
+            "instruction count"
+            (maximumInstructionsPerBlock limits)
+            (encodeInstruction limits)
+            (corePrepBlockInstructions block)
     terminator <- encodeTerminator limits (corePrepBlockTerminator block)
     pure (identifier ++ instructions ++ terminator)
 
@@ -75,6 +95,29 @@ encodeOperation limits operation = case operation of
     CorePrepCopy atom -> encodeTaggedAtoms limits 0 [atom]
     CorePrepCall callee arguments -> encodeTaggedAtoms limits 1 (callee : arguments)
     CorePrepPrimitive primitive arguments -> encodeTaggedAtoms limits (primitiveTag primitive) arguments
+    CorePrepMakeClosure function captures -> do
+        encodedFunction <- encodeResolvedName limits "closure function symbol" function
+        encodedCaptures <-
+            encodeVector
+                limits
+                "closure capture count"
+                (maximumOperandsPerInstruction limits)
+                (encodeCapture limits)
+                captures
+        pure ([18] ++ encodedFunction ++ encodedCaptures)
+
+encodeCapture :: WireLimits -> CorePrepCapture -> Encoder
+encodeCapture limits (CorePrepCapture mode name valueType atom) = do
+    encodedName <- encodeResolvedName limits "capture symbol" name
+    encodedType <- encodeType limits valueType
+    encodedAtom <- encodeAtom limits atom
+    pure (captureModeTag mode : encodedName ++ encodedType ++ encodedAtom)
+
+captureModeTag :: CaptureMode -> Word8
+captureModeTag mode = case mode of
+    StrongCapture -> 0
+    WeakCapture -> 1
+    UnownedCapture -> 2
 
 encodeTaggedAtoms :: WireLimits -> Word8 -> [CorePrepAtom] -> Encoder
 encodeTaggedAtoms limits tag atoms = do
@@ -119,8 +162,12 @@ encodeResolvedName limits context name = do
 
 encodeQualifiedName :: WireLimits -> QualifiedName -> Encoder
 encodeQualifiedName limits (QualifiedName parts) =
-    encodeVector limits "qualified name part count" 65535
-        (encodeText limits "qualified name part" . identifierText) parts
+    encodeVector
+        limits
+        "qualified name part count"
+        65535
+        (encodeText limits "qualified name part" . identifierText)
+        parts
 
 encodeType :: WireLimits -> Type -> Encoder
 encodeType limits = encodeTypeAt limits 0
@@ -134,14 +181,20 @@ encodeTypeAt limits depth valueType
         encodedArguments <- encodeVector limits "type argument count" 65535 (encodeTypeAt limits (depth + 1)) arguments
         pure ([6] ++ encodedName ++ encodedArguments)
     | FunctionType parameters result <- valueType = do
-        encodedParameters <- encodeVector limits "function type parameter count" 65535
-            (encodeTypeAt limits (depth + 1)) parameters
+        encodedParameters <-
+            encodeVector
+                limits
+                "function type parameter count"
+                65535
+                (encodeTypeAt limits (depth + 1))
+                parameters
         encodedResult <- encodeTypeAt limits (depth + 1) result
         pure ([5] ++ encodedParameters ++ encodedResult)
     | TypeVariable name <- valueType = do
         encodedName <- encodeResolvedName limits "type variable symbol" name
         pure ([7] ++ encodedName)
-    | ErrorType <- valueType = Left (wireError UnsupportedType 0 "type" "unresolved ErrorType cannot cross the CorePrep boundary")
+    | ErrorType <- valueType =
+        Left (wireError UnsupportedType 0 "type" "unresolved ErrorType cannot cross the CorePrep boundary")
 
 primitiveTypeTag :: Type -> Maybe Word8
 primitiveTypeTag valueType
@@ -153,10 +206,22 @@ primitiveTypeTag valueType
 
 primitiveTag :: CorePrimitive -> Word8
 primitiveTag primitive = case primitive of
-    CoreAdd -> 2; CoreSubtract -> 3; CoreMultiply -> 4; CoreDivide -> 5
-    CoreFloorDivide -> 6; CoreRemainder -> 7; CoreLessThan -> 8; CoreLessEqual -> 9
-    CoreGreaterThan -> 10; CoreGreaterEqual -> 11; CoreEqual -> 12; CoreNotEqual -> 13
-    CoreLogicalAnd -> 14; CoreLogicalOr -> 15; CoreNegate -> 16; CoreLogicalNot -> 17
+    CoreAdd -> 2
+    CoreSubtract -> 3
+    CoreMultiply -> 4
+    CoreDivide -> 5
+    CoreFloorDivide -> 6
+    CoreRemainder -> 7
+    CoreLessThan -> 8
+    CoreLessEqual -> 9
+    CoreGreaterThan -> 10
+    CoreGreaterEqual -> 11
+    CoreEqual -> 12
+    CoreNotEqual -> 13
+    CoreLogicalAnd -> 14
+    CoreLogicalOr -> 15
+    CoreNegate -> 16
+    CoreLogicalNot -> 17
 
 encodeVector :: WireLimits -> String -> Int -> (a -> Encoder) -> [a] -> Encoder
 encodeVector limits context maximumCount encode values = do
@@ -171,12 +236,14 @@ encodeText limits context value = do
     count <- encodeNonNegative32 context (length value)
     codePoints <- traverse encodeCodePoint value
     pure (count ++ concat codePoints)
-  where
-    encodeCodePoint character
-        | code >= 0xD800 && code <= 0xDFFF = Left (wireError InvalidCodePoint 0 context "surrogate code point is not a scalar value")
-        | code > 0x10FFFF = Left (wireError InvalidCodePoint 0 context "code point exceeds Unicode range")
-        | otherwise = Right (word32 (fromIntegral code))
-      where code = ord character
+    where
+        encodeCodePoint character
+            | code >= 0xD800 && code <= 0xDFFF =
+                Left (wireError InvalidCodePoint 0 context "surrogate code point is not a scalar value")
+            | code > 0x10FFFF = Left (wireError InvalidCodePoint 0 context "code point exceeds Unicode range")
+            | otherwise = Right (word32 (fromIntegral code))
+            where
+                code = ord character
 
 encodeInteger64 :: Integer -> Encoder
 encodeInteger64 value
@@ -201,7 +268,8 @@ encodeBool True = [1]
 
 requireLimit :: WireLimits -> String -> Int -> Int -> Either WireError ()
 requireLimit _ context maximumValue actual
-    | actual > maximumValue = Left (wireError LimitExceeded 0 context ("count " ++ show actual ++ " exceeds limit " ++ show maximumValue))
+    | actual > maximumValue =
+        Left (wireError LimitExceeded 0 context ("count " ++ show actual ++ " exceeds limit " ++ show maximumValue))
     | otherwise = Right ()
 
 word16 :: Word16 -> [Word8]
@@ -211,8 +279,16 @@ word32 :: Word32 -> [Word8]
 word32 value = [byte value 0, byte value 8, byte value 16, byte value 24]
 
 word64 :: Word64 -> [Word8]
-word64 value = [byte value 0, byte value 8, byte value 16, byte value 24,
-                byte value 32, byte value 40, byte value 48, byte value 56]
+word64 value =
+    [ byte value 0
+    , byte value 8
+    , byte value 16
+    , byte value 24
+    , byte value 32
+    , byte value 40
+    , byte value 48
+    , byte value 56
+    ]
 
 byte :: (Integral a, Bits a) => a -> Int -> Word8
 byte value amount = fromIntegral ((value `shiftR` amount) .&. 0xff)

@@ -32,7 +32,8 @@ namespace visual_xsharp::xmm
         AndBool,
         OrBool,
         NegateI64,
-        NotBool
+        NotBool,
+        MakeClosure
     };
     struct Value final
     {
@@ -58,6 +59,8 @@ namespace visual_xsharp::xmm
         core::Type result_type{ core::Type::unit() };
         std::vector<Value> operands;
         bool has_result{};
+        xpp::SymbolId closure_function{};
+        std::vector<core::CaptureMode> capture_modes;
     };
     struct Terminator final
     {

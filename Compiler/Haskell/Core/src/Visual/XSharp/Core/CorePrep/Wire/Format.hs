@@ -1,16 +1,23 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 module Visual.XSharp.Core.CorePrep.Wire.Format
-    ( WireVersion (..), currentWireVersion, wireMagic, WireLimits (..), defaultWireLimits
-    , WireErrorKind (..), WireError (..), wireError ) where
+    ( WireVersion (..)
+    , currentWireVersion
+    , wireMagic
+    , WireLimits (..)
+    , defaultWireLimits
+    , WireErrorKind (..)
+    , WireError (..)
+    , wireError
+    ) where
 
-import Data.Word (Word8, Word16)
+import Data.Word (Word16, Word8)
 
-newtype WireVersion = WireVersion { wireVersionNumber :: Word16 }
+newtype WireVersion = WireVersion {wireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentWireVersion :: WireVersion
-currentWireVersion = WireVersion 1
+currentWireVersion = WireVersion 2
 
 wireMagic :: [Word8]
 wireMagic = map (fromIntegral . fromEnum) "VXCP"
@@ -24,24 +31,35 @@ data WireLimits = WireLimits
     , maximumInstructionsPerBlock :: Int
     , maximumOperandsPerInstruction :: Int
     , maximumTypeDepth :: Int
-    } deriving (Eq, Ord, Read, Show)
+    }
+    deriving (Eq, Ord, Read, Show)
 
 defaultWireLimits :: WireLimits
-defaultWireLimits = WireLimits
-    { maximumWireBytes = 64 * 1024 * 1024
-    , maximumStringCodePoints = 1024 * 1024
-    , maximumFunctions = 65535
-    , maximumParametersPerFunction = 65535
-    , maximumBlocksPerFunction = 1048576
-    , maximumInstructionsPerBlock = 1048576
-    , maximumOperandsPerInstruction = 65535
-    , maximumTypeDepth = 128
-    }
+defaultWireLimits =
+    WireLimits
+        { maximumWireBytes = 64 * 1024 * 1024
+        , maximumStringCodePoints = 1024 * 1024
+        , maximumFunctions = 65535
+        , maximumParametersPerFunction = 65535
+        , maximumBlocksPerFunction = 1048576
+        , maximumInstructionsPerBlock = 1048576
+        , maximumOperandsPerInstruction = 65535
+        , maximumTypeDepth = 128
+        }
 
 data WireErrorKind
-    = InvalidMagic | UnsupportedVersion | TruncatedInput | TrailingInput
-    | InvalidTag | InvalidBoolean | InvalidCodePoint | InvalidCount
-    | InvalidSymbol | InvalidInteger | UnsupportedType | LimitExceeded
+    = InvalidMagic
+    | UnsupportedVersion
+    | TruncatedInput
+    | TrailingInput
+    | InvalidTag
+    | InvalidBoolean
+    | InvalidCodePoint
+    | InvalidCount
+    | InvalidSymbol
+    | InvalidInteger
+    | UnsupportedType
+    | LimitExceeded
     deriving (Eq, Ord, Read, Show)
 
 data WireError = WireError
@@ -49,7 +67,8 @@ data WireError = WireError
     , wireErrorOffset :: Int
     , wireErrorContext :: String
     , wireErrorMessage :: String
-    } deriving (Eq, Ord, Read, Show)
+    }
+    deriving (Eq, Ord, Read, Show)
 
 wireError :: WireErrorKind -> Int -> String -> String -> WireError
 wireError = WireError

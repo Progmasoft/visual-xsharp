@@ -395,7 +395,7 @@ TEST_CASE("semantic verifier rejects inconsistent symbol spelling")
     REQUIRE(has_issue(issues, "VXC1014"));
 }
 
-TEST_CASE("shared wire-v1 golden document decodes to the canonical CorePrep module")
+TEST_CASE("shared wire-v2 golden document decodes to the canonical CorePrep module")
 {
     const auto golden = read_golden_hex();
     const auto decoded = visual_xsharp::core::wire::decode(golden);

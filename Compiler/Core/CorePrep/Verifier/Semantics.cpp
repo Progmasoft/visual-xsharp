@@ -21,6 +21,20 @@ namespace visual_xsharp::core
 
         using Definitions = std::unordered_map<SymbolId, Definition>;
 
+        [[nodiscard]] auto
+        captured_parameter_symbols(const CorePrepModule &module, SymbolId function) -> std::unordered_set<SymbolId>
+        {
+            std::unordered_set<SymbolId> symbols;
+            for (const auto &owner : module.functions)
+                for (const auto &block : owner.blocks)
+                    for (const auto &instruction : block.instructions)
+                        if (instruction.operation == Operation::MakeClosure
+                            && instruction.closure_function.id == function)
+                            for (const auto &capture : instruction.captures)
+                                symbols.insert(capture.symbol.id);
+            return symbols;
+        }
+
         auto
         issue(std::string code, std::string message, const Function &function, BlockId block) -> VerificationIssue
         {
@@ -140,6 +154,8 @@ namespace visual_xsharp::core
                 case Operation::Remainder:
                 case Operation::Negate:
                     return operands.empty() ? std::nullopt : std::optional<Type>(operands.front().type);
+                case Operation::MakeClosure:
+                    return std::nullopt;
             }
             return std::nullopt;
         }
@@ -149,6 +165,48 @@ namespace visual_xsharp::core
         {
             for (const auto &operand : instruction.operands)
                 verify_atom(operand, function, block, definitions, spellings, issues);
+
+            if (instruction.operation == Operation::MakeClosure)
+            {
+                verify_symbol_spelling(instruction.closure_function, function, block, spellings, issues);
+                const auto target = definitions.find(instruction.closure_function.id);
+                if (target == definitions.end() || !target->second.callable)
+                    issues.push_back(issue("VXC1040", "closure target is not a declared lifted function", function, block));
+                if (instruction.type.kind != Type::Kind::Function || instruction.type.components.empty())
+                    issues.push_back(issue("VXC1042", "closure result does not have a callable type", function, block));
+
+                for (const auto &capture : instruction.captures)
+                {
+                    verify_symbol_spelling(capture.symbol, function, block, spellings, issues);
+                    verify_type(capture.type, function, block, 0, spellings, issues);
+                    verify_atom(capture.value, function, block, definitions, spellings, issues);
+                    if (capture.type != capture.value.type)
+                        issues.push_back(issue("VXC1043", "closure capture type differs from its value", function, block));
+                    if (capture.mode != CaptureMode::Strong && capture.type.kind != Type::Kind::Named)
+                        issues.push_back(issue("VXC1044", "weak or unowned capture requires an AARC named type", function, block));
+                }
+
+                if (target != definitions.end() && target->second.callable)
+                {
+                    const auto &lifted = target->second.type.components;
+                    if (lifted.size() <= instruction.captures.size())
+                        issues.push_back(issue("VXC1045", "lifted function has fewer parameters than the capture environment", function, block));
+                    else
+                    {
+                        for (std::size_t index = 0; index < instruction.captures.size(); ++index)
+                            if (instruction.captures[index].type != lifted[index])
+                                issues.push_back(issue("VXC1046", "lifted capture parameter type does not match its slot", function, block));
+
+                        std::vector<Type> public_components(
+                            lifted.begin() + static_cast<std::ptrdiff_t>(instruction.captures.size()),
+                            lifted.end());
+                        const auto public_type = Type{ Type::Kind::Function, {}, std::move(public_components), {} };
+                        if (instruction.type != public_type)
+                            issues.push_back(issue("VXC1047", "closure callable type differs from its lifted function suffix", function, block));
+                    }
+                }
+                return;
+            }
 
             const auto arity = instruction.operands.size();
             switch (instruction.operation)
@@ -180,6 +238,8 @@ namespace visual_xsharp::core
                                 issues.push_back(
                                     issue("VXC1027", "call argument type differs from the callee signature", function, block));
                     }
+                    break;
+                case Operation::MakeClosure:
                     break;
                 case Operation::Negate:
                     if (arity != 1U || !is_integer(instruction.operands.front().type))
@@ -224,6 +284,7 @@ namespace visual_xsharp::core
         void
         collect_definitions(const CorePrepModule &module, const Function &function, Definitions &definitions, std::unordered_map<SymbolId, std::u32string> &spellings, std::vector<VerificationIssue> &issues)
         {
+            const auto capturedParameters = captured_parameter_symbols(module, function.symbol.id);
             for (const auto &candidate : module.functions)
             {
                 verify_symbol_spelling(candidate.symbol, function, 0, spellings, issues);
@@ -233,7 +294,11 @@ namespace visual_xsharp::core
             {
                 verify_symbol_spelling(parameter.symbol, function, function.entry, spellings, issues);
                 verify_type(parameter.type, function, function.entry, 0, spellings, issues);
-                definitions.emplace(parameter.symbol.id, Definition{ parameter.type, false, false });
+                // Hidden environment parameters are mutable closure-private slots. Source
+                // parameters remain immutable unless ordinary lowering introduces storage.
+                definitions.emplace(
+                    parameter.symbol.id,
+                    Definition{ parameter.type, capturedParameters.contains(parameter.symbol.id), false });
             }
             for (const auto &block : function.blocks)
                 for (const auto &instruction : block.instructions)

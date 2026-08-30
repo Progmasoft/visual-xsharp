@@ -431,6 +431,12 @@ namespace Visual::XSharp::Backend::LLVM
                         builder.CreateStore(result, state.slots.at(instruction.destination));
                     return true;
                 }
+                // Closure layout is intentionally not guessed here. CorePrep and Xmm now
+                // preserve lifted targets, ordered captures, and ownership modes; the AARC
+                // runtime ABI must provide the allocation and weak/unowned slot operations
+                // before LLVM emission can materialize a correct first-class value.
+                if (instruction.opcode == xmm::Opcode::MakeClosure)
+                    return false;
                 std::vector<llvm::Value *> operands;
                 operands.reserve(instruction.operands.size());
                 for (const auto &operand : instruction.operands)
@@ -496,6 +502,7 @@ namespace Visual::XSharp::Backend::LLVM
                         result = builder.CreateNot(operands[0], "logical.not");
                         break;
                     case xmm::Opcode::Call:
+                    case xmm::Opcode::MakeClosure:
                         break;
                 }
                 if (instruction.has_result && result != nullptr)
