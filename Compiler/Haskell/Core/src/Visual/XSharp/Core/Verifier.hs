@@ -35,7 +35,8 @@ moduleProblems moduleValue =
 
 verifyFunction :: Environment -> CoreFunction -> [Diagnostic]
 verifyFunction functionEnvironment function =
-    unresolvedType "VXC1003" "Core function has an unresolved return type" (coreFunctionReturnType function)
+    invalidSymbol "VXC1006" "Core function symbol must be positive" (coreFunctionName function)
+        ++ unresolvedType "VXC1003" "Core function has an unresolved return type" (coreFunctionReturnType function)
         ++ duplicates "VXC1004" "duplicate Core parameter symbol" parameterSymbols
         ++ concatMap (uncurry verifyParameter) (coreFunctionParameters function)
         ++ fst (verifyStatements initialEnvironment (coreFunctionReturnType function) (coreFunctionBody function))

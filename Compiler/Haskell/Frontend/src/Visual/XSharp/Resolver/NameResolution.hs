@@ -107,7 +107,18 @@ resolveCallableBody body = case body of
 
 resolveName :: SourceSpan -> RenamedName -> (ResolvedName, [Diagnostic])
 resolveName spanValue name
-    | renamedUnique name >= 0 = (ResolvedName (SymbolId (renamedUnique name)) (renamedSpelling name), [])
+    | renamedUnique name > 0 = (ResolvedName (SymbolId (renamedUnique name)) (renamedSpelling name), [])
+    | renamedUnique name == 0 =
+        ( ResolvedName (SymbolId 0) (renamedSpelling name)
+        ,
+            [ Diagnostic
+                NameResolutionStage
+                Error
+                "VXN0002"
+                (Just spanValue)
+                "reserved symbol id zero reached name resolution"
+            ]
+        )
     | otherwise =
         ( ResolvedName (SymbolId (-1)) (renamedSpelling name)
         ,

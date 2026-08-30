@@ -23,6 +23,7 @@ import Visual.XSharp.Diagnostic
 import Visual.XSharp.Lexer
 import Visual.XSharp.Parser (Token (..), TokenKind (..))
 import Visual.XSharp.Pipeline.Stage
+import Visual.XSharp.Resolver.NameResolution
 
 main :: IO ()
 main = do
@@ -41,6 +42,8 @@ main = do
     check "int Main is rejected for the selected project entry" wrongEntryReturn
     check "top-level runtime functions are rejected" topLevelFunction
     check "unknown names are diagnosed by name resolution" unknownName
+    check "Renamer starts SymbolId allocation above the reserved zero sentinel" positiveSymbolSeed
+    check "name resolution rejects the reserved zero SymbolId" zeroSymbolRejected
     check "immutable assignment is rejected" immutableAssignment
     check "wrong condition types are rejected" wrongCondition
     check "wrong call arity is rejected" wrongArity
@@ -58,6 +61,7 @@ main = do
         (map artifactExtension [Core, CorePrep, Xpp, Xmm] == [Just ".core", Nothing, Just ".xpp", Just ".xmm"])
     check "Haskell CorePrep verifier rejects duplicate blocks" invalidCorePrep
     check "Core verifier rejects an undefined variable" invalidCoreReference
+    check "Core verifier rejects a zero function SymbolId" invalidCoreFunctionSymbol
     check "Core verifier rejects assignment to an immutable binding" invalidCoreMutation
     check "Core verifier requires all non-void paths to return" invalidCoreReturnPath
     check "Core wire codec round-trips optimized Core" coreWireRoundTrip
@@ -189,6 +193,21 @@ rejected :: Either [Diagnostic] a -> Bool
 rejected result = case result of Left _ -> True; Right _ -> False
 unknownName :: Bool
 unknownName = hasCode "VXN0001" (compile "class App { int Read() { return missing; } }")
+
+positiveSymbolSeed :: Bool
+positiveSymbolSeed = case compile "class FirstType { void Run() { return; } }" of
+    Right artifacts -> case syntaxDeclarations (resolvedSyntaxTree (artifactResolvedAST artifacts)) of
+        TypeDeclaration {declarationName = name} : _ -> symbolIdValue (resolvedSymbol name) == 1
+        _ -> False
+    Left _ -> False
+
+zeroSymbolRejected :: Bool
+zeroSymbolRejected =
+    let position = SourcePosition 1 1
+        spanValue = SourceSpan "zero-symbol.vxs" position position
+        declaration = TypeDeclaration spanValue (RenamedName (Identifier "ZeroSymbol") 0) () []
+        renamed = RenamedAST (SyntaxTree Nothing [declaration])
+     in hasCode "VXN0002" (runNameResolution defaultNameResolution renamed)
 immutableAssignment :: Bool
 immutableAssignment = hasCode "VXT0003" (compile "class App { int Read() { final int value = 1; value = 2; return value; } }")
 wrongCondition :: Bool
@@ -305,6 +324,12 @@ invalidCoreReference =
                 intType
                 [CoreReturn (CoreVariable name intType)]
      in hasCode "VXC1020" (verifyCore (CoreModule (QualifiedName [Identifier "CoreTest"]) [function]))
+
+invalidCoreFunctionSymbol :: Bool
+invalidCoreFunctionSymbol =
+    let name = ResolvedName (SymbolId 0) (Identifier "Invalid")
+        function = CoreFunction name [] unitType [CoreReturn (CoreLiteral CoreUnit unitType)]
+     in hasCode "VXC1006" (verifyCore (CoreModule (QualifiedName [Identifier "CoreTest"]) [function]))
 
 invalidCoreMutation :: Bool
 invalidCoreMutation =

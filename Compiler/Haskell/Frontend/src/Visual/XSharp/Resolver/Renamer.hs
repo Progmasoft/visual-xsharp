@@ -19,7 +19,7 @@ renameTree (ParsedAST (SyntaxTree namespace declarations)) =
             declareMany
                 RenamerStage
                 "VXR0001"
-                0
+                1
                 []
                 [(declarationName declaration, declarationSpan declaration) | declaration <- declarations]
         (renamed, _, problems) = renameDeclarations globals next declarations

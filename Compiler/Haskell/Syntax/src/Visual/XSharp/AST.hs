@@ -165,6 +165,9 @@ data BinaryOperator
 newtype ParsedAST = ParsedAST {parsedSyntaxTree :: SyntaxTree Identifier ()}
     deriving (Eq, Ord, Read, Show)
 
+-- Zero is reserved as the wire/native "no symbol" sentinel.  The renamer
+-- allocates positive identities; negative values exist only long enough for
+-- name resolution to diagnose a missing source name.
 data RenamedName = RenamedName {renamedSpelling :: Identifier, renamedUnique :: Int}
     deriving (Eq, Ord, Read, Show)
 
