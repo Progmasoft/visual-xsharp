@@ -183,7 +183,7 @@ validateEntryMethod TypeDeclaration {typeMembers = members} =
             | declarationAccess method /= PublicAccess -> failure method "VXE0005" "entry Main must be public"
             | not (declarationIsStatic method) -> failure method "VXE0006" "entry Main must be static"
             | not (null (declarationParameters method)) -> failure method "VXE0007" "entry Main must not declare parameters"
-            | declarationReturnSyntax method /= ExplicitType (Identifier "unit") ->
+            | declarationReturnSyntax method /= ExplicitType (Identifier "void") ->
                 failure method "VXE0008" "entry Main must return void"
             | otherwise -> Right ()
         _ -> Left [entryProblem "VXE0014" (declarationSpan <$> firstMethod) "entry class must declare exactly one Main method"]

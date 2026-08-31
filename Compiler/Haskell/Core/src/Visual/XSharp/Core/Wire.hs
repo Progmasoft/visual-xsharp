@@ -230,6 +230,7 @@ encodeLiteral limits literal = case literal of
     CoreUnit -> pure [0]
     CoreBoolean value -> pure (1 : encodeBool value)
     CoreInteger value -> (2 :) <$> encodeInteger value
+    CoreFloating _ -> failure CoreUnsupportedType "floating literal" "floating literals are not yet part of Core wire v2"
     CoreString value -> (3 :) <$> encodeText limits "string literal" value
 
 encodeType :: CoreWireLimits -> Int -> Type -> Encoder

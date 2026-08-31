@@ -3,7 +3,10 @@
 module Visual.XSharp.TypeChecker (TypeChecker (..), defaultTypeChecker, runTypeChecker) where
 
 import Visual.XSharp.AST
+import Visual.XSharp.BuiltinTypes
+import Visual.XSharp.ConstantEvaluation
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.NumericSemantics
 
 newtype TypeChecker = TypeChecker {checkResolvedAST :: ResolvedAST -> Either [Diagnostic] TypedAST}
 runTypeChecker :: TypeChecker -> ResolvedAST -> Either [Diagnostic] TypedAST
@@ -39,14 +42,12 @@ checkTopDeclaration declaration = case declaration of
 syntaxType :: TypeSyntax -> Type
 syntaxType AutoType = ErrorType
 syntaxType (ExplicitType (Identifier name)) = case name of
-    "bool" -> boolType
-    "int" -> intType
-    "long" -> named "long"
     "string" -> stringType
     "unit" -> unitType
-    _ -> NamedType (QualifiedName [Identifier name]) []
+    "void" -> voidType
+    _ -> maybe (NamedType (QualifiedName [Identifier name]) []) scalarTypeToType (lookupScalar name)
     where
-        named value = NamedType (QualifiedName [Identifier value]) []
+        lookupScalar spelling = lookup spelling [(scalarTypeName scalar, scalar) | scalar <- scalarTypes]
 
 checkDeclaration :: TypeEnvironment -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
 checkDeclaration globals declaration@FunctionDeclaration {} =
@@ -95,7 +96,7 @@ typeParameter parameter =
 
 inferReturn :: Type -> [Type] -> Type
 inferReturn declared _ | declared /= ErrorType = declared
-inferReturn _ [] = unitType
+inferReturn _ [] = voidType
 inferReturn _ values = case filter (/= ErrorType) values of [] -> ErrorType; first : _ -> first
 
 compatible :: Type -> Type -> Bool
@@ -121,16 +122,18 @@ checkStatement ::
     (Statement ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
 checkStatement environment expected statement = case statement of
     BindingStatement spanValue kind syntax name _ value ->
-        let (typedValue, valueType, problems) = checkExpression environment value
-            declared = syntaxType syntax
+        let declared = syntaxType syntax
+            target = if declared == ErrorType then Nothing else Just declared
+            (typedValue, valueType, problems) = checkExpressionExpected environment target value
             bindingType = if declared == ErrorType then valueType else declared
             mismatch =
                 if compatible bindingType valueType then [] else [problem spanValue "VXT0002" "binding initializer has the wrong type"]
+            constantProblems = constantRangeProblems spanValue bindingType typedValue
             mutable = kind == MutableBinding
          in ( BindingStatement spanValue kind syntax name bindingType typedValue
             , (resolvedSymbol name, (bindingType, mutable)) : environment
             , []
-            , problems ++ mismatch
+            , problems ++ mismatch ++ constantProblems
             )
     AssignmentStatement spanValue name _ value ->
         let (typedValue, valueType, problems) = checkExpression environment value
@@ -140,12 +143,15 @@ checkStatement environment expected statement = case statement of
             mismatch = if compatible targetType valueType then [] else [problem spanValue "VXT0004" "assignment value has the wrong type"]
          in (AssignmentStatement spanValue name targetType typedValue, environment, [], problems ++ immutable ++ mismatch)
     ReturnStatement spanValue value ->
-        let (typedValue, valueType, problems) = checkOptional environment value
+        let (typedValue, valueType, problems) = checkOptionalExpected environment (Just expected) value
             mismatch = if compatible expected valueType then [] else [problem spanValue "VXT0005" "return value has the wrong type"]
          in (ReturnStatement spanValue typedValue, environment, [valueType], problems ++ mismatch)
     IfStatement spanValue condition trueBlock falseBlock ->
         let (typedCondition, conditionType, conditionProblems) = checkExpression environment condition
-            conditionMismatch = if compatible boolType conditionType then [] else [problem spanValue "VXT0006" "if condition must be bool"]
+            conditionMismatch =
+                if booleanContextType conditionType
+                    then []
+                    else [problem spanValue "VXT0006" "if condition must be bool or numeric"]
             (typedTrue, _, trueReturns, trueProblems) = checkBlock environment expected trueBlock
             (typedFalse, falseReturns, falseProblems) = case falseBlock of
                 Nothing -> (Nothing, [], [])
@@ -184,19 +190,43 @@ effectCapable _ = False
 
 checkOptional ::
     TypeEnvironment -> Maybe (Expression ResolvedName ()) -> (Maybe (Expression ResolvedName Type), Type, [Diagnostic])
-checkOptional _ Nothing = (Nothing, unitType, [])
+checkOptional _ Nothing = (Nothing, voidType, [])
 checkOptional environment (Just value) = let (typed, valueType, problems) = checkExpression environment value in (Just typed, valueType, problems)
 
+checkOptionalExpected ::
+    TypeEnvironment ->
+    Maybe Type ->
+    Maybe (Expression ResolvedName ()) ->
+    (Maybe (Expression ResolvedName Type), Type, [Diagnostic])
+checkOptionalExpected _ _ Nothing = (Nothing, voidType, [])
+checkOptionalExpected environment expected (Just value) =
+    let (typed, valueType, problems) = checkExpressionExpected environment expected value
+     in (Just typed, valueType, problems)
+
 checkExpression :: TypeEnvironment -> Expression ResolvedName () -> (Expression ResolvedName Type, Type, [Diagnostic])
-checkExpression environment expression = case expression of
+checkExpression environment = checkExpressionExpected environment Nothing
+
+-- Expected types are semantic context, not conversions.  They choose the
+-- representation of an otherwise untyped numeric literal and allow the
+-- boolean numeric rule, but never silently convert a computed value.
+checkExpressionExpected ::
+    TypeEnvironment -> Maybe Type -> Expression ResolvedName () -> (Expression ResolvedName Type, Type, [Diagnostic])
+checkExpressionExpected environment expected expression = case expression of
     NameExpression spanValue name _ ->
         let valueType = maybe ErrorType fst (lookup (resolvedSymbol name) environment)
             problems = if valueType == ErrorType then [problem spanValue "VXT0007" "name has no known type"] else []
          in (NameExpression spanValue name valueType, valueType, problems)
-    LiteralExpression spanValue literal _ -> let valueType = literalType literal in (LiteralExpression spanValue literal valueType, valueType, [])
+    LiteralExpression spanValue literal _ ->
+        let (valueType, problems) = literalTypeInContext spanValue expected literal
+         in (LiteralExpression spanValue literal valueType, valueType, problems)
     CallExpression spanValue callee arguments _ ->
         let (typedCallee, calleeType, calleeProblems) = checkExpression environment callee
-            checkedArguments = map (checkExpression environment) arguments
+            parameterTypes = case calleeType of FunctionType parameters _ -> parameters; _ -> []
+            checkedArguments =
+                zipWith
+                    (\index argument -> checkExpressionExpected environment (safeIndex parameterTypes index) argument)
+                    [0 ..]
+                    arguments
             argumentTypes = map (\(_, valueType, _) -> valueType) checkedArguments
             (resultType, callProblems) = case calleeType of
                 FunctionType parameters result
@@ -211,21 +241,16 @@ checkExpression environment expression = case expression of
             , calleeProblems ++ concatMap (\(_, _, ps) -> ps) checkedArguments ++ callProblems
             )
     UnaryExpression spanValue operator value _ ->
-        let (typedValue, valueType, problems) = checkExpression environment value
-            expectedType = if operator == LogicalNot then boolType else intType
-            mismatch =
-                if compatible expectedType valueType
-                    then []
-                    else [problem spanValue "VXT0011" "unary operator operand has the wrong type"]
-         in (UnaryExpression spanValue operator typedValue expectedType, expectedType, problems ++ mismatch)
+        let (typedValue, valueType, problems) = checkExpressionExpected environment expected value
+            rule = unaryNumericRule operator valueType
+            mismatch = ruleProblems spanValue "VXT0011" rule
+         in (UnaryExpression spanValue operator typedValue (numericRuleType rule), numericRuleType rule, problems ++ mismatch)
     BinaryExpression spanValue operator left right _ ->
-        let (typedLeft, leftType, leftProblems) = checkExpression environment left
-            (typedRight, rightType, rightProblems) = checkExpression environment right
-            (operandType, resultType) = operatorTypes operator
-            mismatch =
-                if compatible operandType leftType && compatible operandType rightType
-                    then []
-                    else [problem spanValue "VXT0012" "binary operator operands have the wrong type"]
+        let (typedLeft, leftType, leftProblems) = checkExpressionExpected environment expected left
+            (typedRight, rightType, rightProblems) = checkExpressionExpected environment (Just leftType) right
+            rule = binaryNumericRule operator leftType rightType
+            resultType = numericRuleType rule
+            mismatch = ruleProblems spanValue "VXT0012" rule
          in ( BinaryExpression spanValue operator typedLeft typedRight resultType
             , resultType
             , leftProblems ++ rightProblems ++ mismatch
@@ -290,6 +315,7 @@ isReferenceType valueType = case valueType of
             , QualifiedName [Identifier "long"]
             , QualifiedName [Identifier "string"]
             , QualifiedName [Identifier "unit"]
+            , QualifiedName [Identifier "void"]
             ]
 
 typeCallableParameter :: Parameter ResolvedName () -> Parameter ResolvedName Type
@@ -316,17 +342,58 @@ checkCallableBody environment body = case body of
             finalType = maybe (inferReturn ErrorType returns) id (finalExpressionType typed)
          in (CallableBlockBody typed, finalType, problems)
 
-operatorTypes :: BinaryOperator -> (Type, Type)
-operatorTypes operator | operator `elem` [LogicalAnd, LogicalOr] = (boolType, boolType)
-operatorTypes operator | operator `elem` [LessThan, LessEqual, GreaterThan, GreaterEqual, Equal, NotEqual] = (intType, boolType)
-operatorTypes _ = (intType, intType)
+booleanContextType :: Type -> Bool
+booleanContextType = acceptsBooleanContext
 
-literalType :: Literal -> Type
-literalType literal = case literal of
-    IntegerLiteral _ -> intType
-    BooleanLiteral _ -> boolType
-    StringLiteral _ -> stringType
-    UnitLiteral -> unitType
+literalTypeInContext :: SourceSpan -> Maybe Type -> Literal -> (Type, [Diagnostic])
+literalTypeInContext spanValue expected literal = case literal of
+    IntegerLiteral value -> integerLiteralType spanValue expected value
+    FloatingLiteral _ -> floatingLiteralType expected
+    CharacterLiteral _ -> (scalarTypeToType CharacterScalar, [])
+    BooleanLiteral _ -> (boolType, [])
+    StringLiteral _ -> (stringType, [])
+    UnitLiteral -> (unitType, [])
+
+integerLiteralType :: SourceSpan -> Maybe Type -> Integer -> (Type, [Diagnostic])
+integerLiteralType spanValue expected value =
+    let context = maybe NoNumericContext targetContext expected
+        rule = integerLiteralRule context value
+        code = case numericRuleError rule of Just (UntargetedIntegerOutsideInt _) -> "VXT0017"; _ -> "VXT0016"
+     in (numericRuleType rule, ruleProblems spanValue code rule)
+    where
+        targetContext target | target == boolType = BooleanNumericContext
+        targetContext target = TargetNumericType target
+
+floatingLiteralType :: Maybe Type -> (Type, [Diagnostic])
+floatingLiteralType expected =
+    let context = maybe NoNumericContext TargetNumericType expected
+        rule = floatingLiteralRule context
+     in (numericRuleType rule, [])
+
+ruleProblems :: SourceSpan -> String -> NumericRuleResult -> [Diagnostic]
+ruleProblems spanValue code rule = case numericRuleError rule of
+    Nothing -> []
+    Just issue -> [problem spanValue code (renderNumericRuleError issue)]
+
+constantRangeProblems :: SourceSpan -> Type -> Expression ResolvedName Type -> [Diagnostic]
+constantRangeProblems spanValue target expression = case evaluateConstantInteger expression of
+    Left issue -> [problem spanValue "VXT0019" (renderConstantIntegerError issue)]
+    Right (Just value) -> case typeToScalarType target of
+        Just scalar
+            | scalarTypeFamily scalar `elem` [SignedIntegerFamily, UnsignedIntegerFamily]
+            , not (integerFits scalar value) ->
+                [ problem
+                    spanValue
+                    "VXT0018"
+                    ("constant expression result " ++ show value ++ " does not fit " ++ scalarTypeName scalar)
+                ]
+        _ -> []
+    Right Nothing -> []
+
+safeIndex :: [a] -> Int -> Maybe a
+safeIndex values index
+    | index < 0 = Nothing
+    | otherwise = case drop index values of value : _ -> Just value; [] -> Nothing
 
 problem :: SourceSpan -> String -> String -> Diagnostic
 problem spanValue code message = Diagnostic TypeCheckerStage Error code (Just spanValue) message

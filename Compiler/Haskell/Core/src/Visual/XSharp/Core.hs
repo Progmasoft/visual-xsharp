@@ -14,7 +14,7 @@ module Visual.XSharp.Core
 
 import Visual.XSharp.AST (CaptureMode, QualifiedName, ResolvedName, Type)
 
-data CoreLiteral = CoreInteger Integer | CoreString String | CoreBoolean Bool | CoreUnit
+data CoreLiteral = CoreInteger Integer | CoreFloating String | CoreString String | CoreBoolean Bool | CoreUnit
     deriving (Eq, Ord, Read, Show)
 data CorePrimitive
     = CoreAdd

@@ -6,7 +6,10 @@ module Visual.XSharp.Lexer (LexerInput (..), Lexer (..), defaultLexer, runLexer)
 import Data.Char (chr, digitToInt, isAlpha, isAlphaNum, isDigit, isHexDigit, isSpace)
 import Data.List (stripPrefix)
 import Visual.XSharp.AST (SourcePosition (..), SourceSpan (..))
+import Visual.XSharp.CharacterLiteral
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.FloatingLiteral
+import Visual.XSharp.NumericLiteral
 import Visual.XSharp.Parser (Token (..), TokenKind (..))
 
 data LexerInput = LexerInput {lexerSourceFile :: FilePath, lexerSourceText :: String}
@@ -39,10 +42,33 @@ lexVisualXSharp (LexerInput file source) = go 1 1 source []
                     kind = if text `elem` keywords then KeywordToken else IdentifierToken
                  in go line (column + length text) remaining (token kind text line column line (column + length text) : output)
             | isDigit character =
-                let (tailText, remaining) = span (\c -> isDigit c || c == '_') rest
-                    text = character : tailText
-                 in go line (column + length text) remaining (token IntegerToken text line column line (column + length text) : output)
+                let (text, remaining) = scanNumericCandidate input
+                 in if isFloatingCandidate text
+                        then case validateFloatingSpelling text of
+                            Left issue -> Left [diagnostic "VXL0008" line column (renderFloatingLiteralError issue)]
+                            Right _ ->
+                                go
+                                    line
+                                    (column + length text)
+                                    remaining
+                                    (token FloatingToken text line column line (column + length text) : output)
+                        else case parseIntegerSpelling text of
+                            Left issue -> Left [diagnostic "VXL0006" line column (renderIntegerLiteralError issue)]
+                            Right _ ->
+                                go
+                                    line
+                                    (column + length text)
+                                    remaining
+                                    (token IntegerToken text line column line (column + length text) : output)
             | character == '"' = lexString line column rest output
+            | character == '\'' = case scanCharacterLiteral input of
+                Left issue -> Left [diagnostic "VXL0007" line column (renderCharacterLiteralError issue)]
+                Right (text, remaining) ->
+                    go
+                        line
+                        (column + length text)
+                        remaining
+                        (token CharacterToken text line column line (column + length text) : output)
             | otherwise = case longestSymbol input of
                 Just symbol ->
                     go
@@ -203,6 +229,8 @@ keywords :: [String]
 keywords =
     [ "auto"
     , "bool"
+    , "byte"
+    , "char"
     , "class"
     , "else"
     , "false"
@@ -211,6 +239,7 @@ keywords =
     , "int"
     , "internal"
     , "long"
+    , "longint"
     , "namespace"
     , "not"
     , "private"
@@ -219,8 +248,17 @@ keywords =
     , "return"
     , "static"
     , "string"
+    , "sfloat"
+    , "lfloat"
+    , "float"
+    , "double"
     , "true"
     , "unit"
+    , "ubyte"
+    , "ushort"
+    , "ulong"
+    , "uint"
+    , "ulongint"
     , "void"
     ]
 

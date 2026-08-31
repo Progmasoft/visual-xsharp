@@ -12,7 +12,10 @@ build-type: Simple
 library
     exposed-modules:
         Visual.XSharp.Closure.Analysis
+        Visual.XSharp.ConstantEvaluation
+        Visual.XSharp.BuiltinTypes
         Visual.XSharp.Frontend
+        Visual.XSharp.NumericSemantics
         Visual.XSharp.Resolver.NameResolution
         Visual.XSharp.Resolver.Renamer
         Visual.XSharp.SourceSet

@@ -15,10 +15,16 @@ library
         Visual.XSharp.Pipeline.Stage
     reexported-modules:
         visual-xsharp-syntax:Visual.XSharp.AST,
+        visual-xsharp-syntax:Visual.XSharp.CharacterLiteral,
         visual-xsharp-syntax:Visual.XSharp.Diagnostic,
+        visual-xsharp-syntax:Visual.XSharp.FloatingLiteral,
         visual-xsharp-syntax:Visual.XSharp.Lexer,
+        visual-xsharp-syntax:Visual.XSharp.NumericLiteral,
         visual-xsharp-syntax:Visual.XSharp.Parser,
         visual-xsharp-frontend:Visual.XSharp.Frontend,
+        visual-xsharp-frontend:Visual.XSharp.NumericSemantics,
+        visual-xsharp-frontend:Visual.XSharp.BuiltinTypes,
+        visual-xsharp-frontend:Visual.XSharp.ConstantEvaluation,
         visual-xsharp-frontend:Visual.XSharp.Closure.Analysis,
         visual-xsharp-frontend:Visual.XSharp.Resolver.NameResolution,
         visual-xsharp-frontend:Visual.XSharp.Resolver.Renamer,
@@ -59,7 +65,9 @@ test-suite visual-xsharp-compiler-tests
     main-is: Main.hs
     other-modules:
         ClosureTests
+        NumericTests
         SourceSetTests
+        VoidTests
     hs-source-dirs: test
     build-depends:
         base >=4.20 && <4.23,

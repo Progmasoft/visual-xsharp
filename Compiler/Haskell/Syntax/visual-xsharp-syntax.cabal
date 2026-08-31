@@ -12,8 +12,11 @@ build-type: Simple
 library
     exposed-modules:
         Visual.XSharp.AST
+        Visual.XSharp.CharacterLiteral
         Visual.XSharp.Diagnostic
+        Visual.XSharp.FloatingLiteral
         Visual.XSharp.Lexer
+        Visual.XSharp.NumericLiteral
         Visual.XSharp.Parser
     hs-source-dirs: src
     build-depends:

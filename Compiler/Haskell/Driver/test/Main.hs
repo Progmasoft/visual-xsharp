@@ -6,6 +6,7 @@ import ClosureTests (closureTests)
 import Control.Exception (finally)
 import Data.List (isInfixOf)
 import Data.Word (Word8)
+import NumericTests (numericTests)
 import SourceSetTests (sourceSetTests)
 import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
@@ -24,6 +25,7 @@ import Visual.XSharp.Lexer
 import Visual.XSharp.Parser (Token (..), TokenKind (..))
 import Visual.XSharp.Pipeline.Stage
 import Visual.XSharp.Resolver.NameResolution
+import VoidTests (voidTests)
 
 main :: IO ()
 main = do
@@ -45,7 +47,7 @@ main = do
     check "Renamer starts SymbolId allocation above the reserved zero sentinel" positiveSymbolSeed
     check "name resolution rejects the reserved zero SymbolId" zeroSymbolRejected
     check "immutable assignment is rejected" immutableAssignment
-    check "wrong condition types are rejected" wrongCondition
+    check "string conditions are rejected while numeric conditions remain valid" wrongCondition
     check "wrong call arity is rejected" wrongArity
     check "lexer rejects unsupported input" badCharacter
     check "String comment forms obey long-bracket levels" stringCommentForms
@@ -82,6 +84,8 @@ main = do
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
     mapM_ (uncurry checkIO) sourceSetTests
     mapM_ (uncurry check) closureTests
+    mapM_ (uncurry check) numericTests
+    mapM_ (uncurry check) voidTests
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure
@@ -211,7 +215,7 @@ zeroSymbolRejected =
 immutableAssignment :: Bool
 immutableAssignment = hasCode "VXT0003" (compile "class App { int Read() { final int value = 1; value = 2; return value; } }")
 wrongCondition :: Bool
-wrongCondition = hasCode "VXT0006" (compile "class App { void Run() { if (1) { return; } return; } }")
+wrongCondition = hasCode "VXT0006" (compile "class App { void Run() { if (\"yes\") { return; } return; } }")
 wrongArity :: Bool
 wrongArity = hasCode "VXT0008" (compile "class App { int Sum(_ int a, _ int b) { return a+b; } void Run() { Sum(1); } }")
 badCharacter :: Bool

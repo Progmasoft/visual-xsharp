@@ -32,7 +32,9 @@ module Visual.XSharp.AST
     , boolType
     , intType
     , unitType
+    , voidType
     , stringType
+    , namedType
     ) where
 
 newtype Identifier = Identifier {identifierText :: String}
@@ -139,7 +141,13 @@ data Expression name annotation
         annotation
     deriving (Eq, Ord, Read, Show)
 
-data Literal = IntegerLiteral Integer | BooleanLiteral Bool | StringLiteral String | UnitLiteral
+data Literal
+    = IntegerLiteral Integer
+    | FloatingLiteral String
+    | CharacterLiteral Integer
+    | BooleanLiteral Bool
+    | StringLiteral String
+    | UnitLiteral
     deriving (Eq, Ord, Read, Show)
 
 data UnaryOperator = UnaryPlus | UnaryNegate | LogicalNot
@@ -193,11 +201,12 @@ data Type
 newtype TypedAST = TypedAST {typedSyntaxTree :: SyntaxTree ResolvedName Type}
     deriving (Eq, Ord, Read, Show)
 
-named :: String -> Type
-named value = NamedType (QualifiedName [Identifier value]) []
+namedType :: String -> Type
+namedType value = NamedType (QualifiedName [Identifier value]) []
 
-boolType, intType, unitType, stringType :: Type
-boolType = named "bool"
-intType = named "int"
-unitType = named "unit"
-stringType = named "string"
+boolType, intType, unitType, voidType, stringType :: Type
+boolType = namedType "bool"
+intType = namedType "int"
+unitType = namedType "unit"
+voidType = namedType "void"
+stringType = namedType "string"

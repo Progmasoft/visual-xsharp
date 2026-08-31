@@ -3,9 +3,20 @@
 module Visual.XSharp.Parser (TokenKind (..), Token (..), ParserInput (..), Parser (..), defaultParser, runParser) where
 
 import Visual.XSharp.AST
+import Visual.XSharp.CharacterLiteral
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.FloatingLiteral
+import Visual.XSharp.NumericLiteral
 
-data TokenKind = IdentifierToken | KeywordToken | SymbolToken | IntegerToken | StringToken | EndOfFileToken
+data TokenKind
+    = IdentifierToken
+    | KeywordToken
+    | SymbolToken
+    | IntegerToken
+    | FloatingToken
+    | CharacterToken
+    | StringToken
+    | EndOfFileToken
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 data Token = Token {tokenKind :: TokenKind, tokenText :: String, tokenSpan :: SourceSpan}
     deriving (Eq, Ord, Read, Show)
@@ -72,7 +83,7 @@ parseMember = do
     -- A semicolon-free expression is a function result, not an optionally
     -- terminated statement. Only a value-returning function's outer body may
     -- therefore admit that form; nested control-flow blocks may not.
-    body <- parseBlock (returnType /= ExplicitType (Identifier "unit"))
+    body <- parseBlock (returnType /= ExplicitType (Identifier "void"))
     pure
         (FunctionDeclaration (mergeSpan nameSpan (blockSpan body nameSpan)) name () returnType parameters body isStatic access)
 
@@ -106,7 +117,7 @@ parseTypeSyntax = do
     token <- satisfy (\candidate -> tokenKind candidate `elem` [IdentifierToken, KeywordToken]) "type"
     pure $ case tokenText token of
         "auto" -> AutoType
-        "void" -> ExplicitType (Identifier "unit")
+        "void" -> ExplicitType (Identifier "void")
         value -> ExplicitType (Identifier value)
 
 parseBlock :: Bool -> P (Block Identifier ())
@@ -260,7 +271,19 @@ parsePrimary = do
         Just token | tokenText token `elem` ["\\", "["] -> parseCallable
         Just token | tokenKind token == IntegerToken -> do
             _ <- takeToken
-            pure (LiteralExpression (tokenSpan token) (IntegerLiteral (read (filter (/= '_') (tokenText token)))) ())
+            case parseIntegerSpelling (tokenText token) of
+                Right parsed -> pure (LiteralExpression (tokenSpan token) (IntegerLiteral (parsedIntegerValue parsed)) ())
+                Left issue -> failAt (tokenSpan token) "VXP0010" (renderIntegerLiteralError issue)
+        Just token | tokenKind token == FloatingToken -> do
+            _ <- takeToken
+            case validateFloatingSpelling (tokenText token) of
+                Right normalized -> pure (LiteralExpression (tokenSpan token) (FloatingLiteral normalized) ())
+                Left issue -> failAt (tokenSpan token) "VXP0012" (renderFloatingLiteralError issue)
+        Just token | tokenKind token == CharacterToken -> do
+            _ <- takeToken
+            case parseCharacterLiteral (tokenText token) of
+                Right value -> pure (LiteralExpression (tokenSpan token) (CharacterLiteral value) ())
+                Left issue -> failAt (tokenSpan token) "VXP0011" (renderCharacterLiteralError issue)
         Just token | tokenKind token == StringToken -> do _ <- takeToken; pure (LiteralExpression (tokenSpan token) (StringLiteral (tokenText token)) ())
         Just token | tokenText token `elem` ["true", "false"] -> do _ <- takeToken; pure (LiteralExpression (tokenSpan token) (BooleanLiteral (tokenText token == "true")) ())
         Just token | tokenKind token == IdentifierToken -> do _ <- takeToken; pure (NameExpression (tokenSpan token) (Identifier (tokenText token)) ())

@@ -143,15 +143,38 @@ prepareStatements state blockId instructions (statement : remaining) = case stat
          in ([CorePrepBlock blockId (instructions ++ prefix) (CorePrepReturn atom)], after)
     CoreIf condition trueBranch falseBranch ->
         let (conditionPrefix, conditionAtom, afterCondition) = atomize state condition
-            trueId = nextBlock afterCondition
+            (booleanPrefix, booleanAtom, afterBoolean) = booleanizeAtom afterCondition conditionAtom
+            trueId = nextBlock afterBoolean
             falseId = trueId + 1
             joinId = falseId + 1
-            branchState = afterCondition {nextBlock = joinId + 1}
+            branchState = afterBoolean {nextBlock = joinId + 1}
             (trueBlocks, afterTrue) = prepareBranch branchState trueId joinId trueBranch
             (falseBlocks, afterFalse) = prepareBranch afterTrue falseId joinId falseBranch
-            header = CorePrepBlock blockId (instructions ++ conditionPrefix) (CorePrepBranch conditionAtom trueId falseId)
+            header =
+                CorePrepBlock
+                    blockId
+                    (instructions ++ conditionPrefix ++ booleanPrefix)
+                    (CorePrepBranch booleanAtom trueId falseId)
             (tailBlocks, final) = prepareStatements afterFalse joinId [] remaining
          in (header : trueBlocks ++ falseBlocks ++ tailBlocks, final)
+
+-- Numeric conditions are a source-language convenience. Core retains their
+-- numeric type for optimization, while CorePrep makes the zero comparison
+-- explicit so every native branch still consumes a canonical bool atom.
+booleanizeAtom :: PrepState -> CorePrepAtom -> ([CorePrepInstruction], CorePrepAtom, PrepState)
+booleanizeAtom state atom
+    | corePrepAtomType atom == boolType = ([], atom, state)
+    | otherwise =
+        let identifier = nextTemporary state
+            temporary = ResolvedName (SymbolId identifier) (Identifier ("$condition" ++ show identifier))
+            zero = CorePrepLiteral (CoreInteger 0) (corePrepAtomType atom)
+            instruction = CorePrepBind temporary boolType False (CorePrepPrimitive CoreNotEqual [atom, zero])
+         in ([instruction], CorePrepVariable temporary boolType, state {nextTemporary = identifier + 1})
+
+corePrepAtomType :: CorePrepAtom -> Type
+corePrepAtomType atom = case atom of
+    CorePrepVariable _ valueType -> valueType
+    CorePrepLiteral _ valueType -> valueType
 
 prepareBranch :: PrepState -> Int -> Int -> [CoreStatement] -> ([CorePrepBlock], PrepState)
 prepareBranch state blockId joinId statements =

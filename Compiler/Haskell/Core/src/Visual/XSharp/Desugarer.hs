@@ -25,11 +25,13 @@ lowerDeclaration :: Declaration ResolvedName Type -> CoreFunction
 lowerDeclaration declaration@FunctionDeclaration {} =
     CoreFunction
         (declarationName declaration)
-        [(parameterName parameter, parameterAnnotation parameter) | parameter <- declarationParameters declaration]
+        [ (parameterName parameter, lowerBoundaryType (parameterAnnotation parameter))
+        | parameter <- declarationParameters declaration
+        ]
         returnType
         (lowerFunctionBlock returnType (declarationBody declaration))
     where
-        returnType = case declarationAnnotation declaration of FunctionType _ result -> result; value -> value
+        returnType = lowerBoundaryType $ case declarationAnnotation declaration of FunctionType _ result -> result; value -> value
 lowerDeclaration TypeDeclaration {} = error "type declarations are lowered through lowerTop"
 
 lowerBlock :: Block ResolvedName Type -> [CoreStatement]
@@ -44,7 +46,8 @@ lowerFunctionBlock returnType (Block statements) = case reverse statements of
 
 lowerStatement :: Statement ResolvedName Type -> CoreStatement
 lowerStatement statement = case statement of
-    BindingStatement _ kind _ name valueType value -> CoreBind (CoreBinding name valueType (kind == MutableBinding) (lowerExpression value))
+    BindingStatement _ kind _ name valueType value ->
+        CoreBind (CoreBinding name (lowerBoundaryType valueType) (kind == MutableBinding) (lowerExpression value))
     AssignmentStatement _ name _ value -> CoreAssign name (lowerExpression value)
     ReturnStatement _ value -> CoreReturn (maybe (CoreLiteral CoreUnit unitType) lowerExpression value)
     IfStatement _ condition trueBlock falseBlock -> CoreIf (lowerExpression condition) (lowerBlock trueBlock) (maybe [] lowerBlock falseBlock)
@@ -52,32 +55,41 @@ lowerStatement statement = case statement of
 
 lowerExpression :: Expression ResolvedName Type -> CoreExpression
 lowerExpression expression = case expression of
-    NameExpression _ name valueType -> CoreVariable name valueType
-    LiteralExpression _ literal valueType -> CoreLiteral (lowerLiteral literal) valueType
-    CallExpression _ callee arguments valueType -> CoreApply (lowerExpression callee) (map lowerExpression arguments) valueType
+    NameExpression _ name valueType -> CoreVariable name (lowerBoundaryType valueType)
+    LiteralExpression _ literal valueType ->
+        let loweredType = lowerBoundaryType valueType
+         in CoreLiteral (lowerLiteral loweredType literal) loweredType
+    CallExpression _ callee arguments valueType ->
+        CoreApply (lowerExpression callee) (map lowerExpression arguments) (lowerBoundaryType valueType)
     UnaryExpression _ UnaryPlus value _ -> lowerExpression value
-    UnaryExpression _ operator value valueType -> CorePrimitive (lowerUnary operator) [lowerExpression value] valueType
-    BinaryExpression _ operator left right valueType -> CorePrimitive (lowerBinary operator) [lowerExpression left, lowerExpression right] valueType
+    UnaryExpression _ operator value valueType ->
+        CorePrimitive (lowerUnary operator) [lowerExpression value] (lowerBoundaryType valueType)
+    BinaryExpression _ operator left right valueType ->
+        CorePrimitive (lowerBinary operator) [lowerExpression left, lowerExpression right] (lowerBoundaryType valueType)
     CallableExpression _ explicit captures parameters body valueType ->
         let loweredParameters =
-                [(parameterName parameter, parameterAnnotation parameter) | parameter <- parameters]
+                [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
             loweredBody = lowerCallableBody body
             sourceCaptures =
                 if explicit
                     then map lowerCapture captures
                     else discoverImplicitCaptures loweredParameters loweredBody
             returnType = case valueType of
-                FunctionType _ result -> result
+                FunctionType _ result -> lowerBoundaryType result
                 _ -> ErrorType
-         in CoreClosure sourceCaptures loweredParameters returnType loweredBody valueType
+         in CoreClosure sourceCaptures loweredParameters returnType loweredBody (lowerBoundaryType valueType)
 
 lowerCapture :: Capture ResolvedName Type -> CoreCapture
 lowerCapture capture =
     CoreCapture
         (captureMode capture)
         (captureName capture)
-        (captureAnnotation capture)
-        (maybe (CoreVariable (captureName capture) (captureAnnotation capture)) lowerExpression (captureInitializer capture))
+        (lowerBoundaryType (captureAnnotation capture))
+        ( maybe
+            (CoreVariable (captureName capture) (lowerBoundaryType (captureAnnotation capture)))
+            lowerExpression
+            (captureInitializer capture)
+        )
 
 lowerCallableBody :: CallableBody ResolvedName Type -> [CoreStatement]
 lowerCallableBody body = case body of
@@ -143,12 +155,27 @@ uniqueReads = foldl append []
             | any ((== resolvedSymbol name) . resolvedSymbol . fst) output = output
             | otherwise = output ++ [value]
 
-lowerLiteral :: Literal -> CoreLiteral
-lowerLiteral literal = case literal of
-    IntegerLiteral value -> CoreInteger value
+lowerLiteral :: Type -> Literal -> CoreLiteral
+lowerLiteral valueType literal = case literal of
+    IntegerLiteral value
+        | valueType == boolType -> CoreBoolean (value /= 0)
+        | otherwise -> CoreInteger value
+    FloatingLiteral spelling -> CoreFloating spelling
+    CharacterLiteral value -> CoreInteger value
     BooleanLiteral value -> CoreBoolean value
     StringLiteral value -> CoreString value
     UnitLiteral -> CoreUnit
+
+-- The frontend keeps source 'void' separate from value-producing 'unit'. The
+-- native Core contract predates that distinction and represents no-result as
+-- unit, so erasure happens once while crossing from Typed AST into Core.
+lowerBoundaryType :: Type -> Type
+lowerBoundaryType valueType
+    | valueType == voidType = unitType
+    | FunctionType parameters result <- valueType =
+        FunctionType (map lowerBoundaryType parameters) (lowerBoundaryType result)
+    | NamedType name arguments <- valueType = NamedType name (map lowerBoundaryType arguments)
+    | otherwise = valueType
 lowerUnary :: UnaryOperator -> CorePrimitive
 lowerUnary UnaryNegate = CoreNegate
 lowerUnary LogicalNot = CoreLogicalNot

@@ -107,7 +107,9 @@ verifyStatement environment returnType statement = case statement of
     CoreIf condition trueBranch falseBranch ->
         let conditionProblems =
                 verifyExpression environment condition
-                    ++ typeMismatch "VXC1017" "Core condition must be bool" boolType (expressionType condition)
+                    ++ [ problem "VXC1017" "Core condition must be bool or numeric"
+                       | expressionType condition /= boolType && not (isCoreNumericType (expressionType condition))
+                       ]
             (trueProblems, _) = verifyStatements environment returnType trueBranch
             (falseProblems, _) = verifyStatements environment returnType falseBranch
          in (conditionProblems ++ trueProblems ++ falseProblems, environment)
@@ -190,24 +192,67 @@ callProblems callee arguments resultType = case expressionType callee of
 primitiveProblems :: CorePrimitive -> [CoreExpression] -> Type -> [Diagnostic]
 primitiveProblems primitive arguments resultType =
     [problem "VXC1026" "Core primitive has the wrong operand count" | length arguments /= arity]
-        ++ concatMap (typeMismatch "VXC1027" "Core primitive operand has the wrong type" operandType . expressionType) arguments
+        ++ operandProblems
         ++ typeMismatch "VXC1028" "Core primitive result has the wrong type" expectedResult resultType
     where
         unary = primitive `elem` [CoreNegate, CoreLogicalNot]
         logical = primitive `elem` [CoreLogicalAnd, CoreLogicalOr, CoreLogicalNot]
         comparison = primitive `elem` [CoreLessThan, CoreLessEqual, CoreGreaterThan, CoreGreaterEqual, CoreEqual, CoreNotEqual]
         arity = if unary then 1 else 2
-        operandType = if logical then boolType else intType
-        expectedResult = if logical || comparison then boolType else intType
+        argumentTypes = map expressionType arguments
+        firstType = case argumentTypes of first : _ -> first; [] -> ErrorType
+        operandsAgree = all (== firstType) argumentTypes
+        operandsNumeric = all isCoreNumericType argumentTypes
+        operandsBoolean = all (\valueType -> valueType == boolType || isCoreNumericType valueType) argumentTypes
+        operandProblems
+            | logical && not operandsBoolean = [problem "VXC1027" "Core logical primitive requires bool or numeric operands"]
+            | not logical && not operandsNumeric = [problem "VXC1027" "Core numeric primitive requires numeric operands"]
+            | not logical && not operandsAgree = [problem "VXC1027" "Core numeric primitive operands must have the same type"]
+            | otherwise = []
+        expectedResult = if logical || comparison then boolType else firstType
 
 literalProblems :: CoreLiteral -> Type -> [Diagnostic]
-literalProblems literal valueType = typeMismatch "VXC1029" "Core literal payload does not match its type" expected valueType
+literalProblems literal valueType =
+    [problem "VXC1029" "Core literal payload does not match its type" | not matches]
     where
-        expected = case literal of
-            CoreInteger _ -> intType
-            CoreString _ -> stringType
-            CoreBoolean _ -> boolType
-            CoreUnit -> unitType
+        matches = case literal of
+            CoreInteger _ -> isCoreIntegerType valueType
+            CoreFloating _ -> typeSpelling valueType `elem` ["sfloat", "lfloat", "float", "double"]
+            CoreString _ -> valueType == stringType
+            CoreBoolean _ -> valueType == boolType
+            CoreUnit -> valueType == unitType
+
+-- Core depends only on the syntax model, so it recognizes canonical scalar
+-- spellings at this boundary instead of importing frontend policy.  Keeping
+-- the list explicit also prevents a user-defined NamedType from accidentally
+-- acquiring primitive arithmetic semantics.
+isCoreIntegerType :: Type -> Bool
+isCoreIntegerType valueType = typeSpelling valueType `elem` integerTypeNames
+
+isCoreNumericType :: Type -> Bool
+isCoreNumericType valueType = typeSpelling valueType `elem` numericTypeNames
+
+typeSpelling :: Type -> String
+typeSpelling (NamedType (QualifiedName [Identifier name]) []) = name
+typeSpelling _ = ""
+
+integerTypeNames :: [String]
+integerTypeNames =
+    [ "char"
+    , "byte"
+    , "short"
+    , "long"
+    , "int"
+    , "longint"
+    , "ubyte"
+    , "ushort"
+    , "ulong"
+    , "uint"
+    , "ulongint"
+    ]
+
+numericTypeNames :: [String]
+numericTypeNames = integerTypeNames ++ ["sfloat", "lfloat", "float", "double"]
 
 statementsAlwaysReturn :: [CoreStatement] -> Bool
 statementsAlwaysReturn [] = False
