@@ -9,6 +9,20 @@ Visual X# now has one production source route for the implemented language subse
 Haskell frontend, receives bounded verified Core, and continues through CorePrep, Xpp, Xmm, and LLVM. The old C lexer/parser,
 macro, HIR/MIR, and C-to-Rust syntax-packet route has been removed rather than retained as a fallback.
 
+## Status vocabulary
+
+| State | Meaning in this document |
+| --- | --- |
+| Connected | reachable through a supported command and covered by the owning tests |
+| Implemented | code and focused tests exist, although the public route may stop earlier |
+| Partial | a deliberately bounded subset is connected and unsupported cases fail explicitly |
+| Registered | a public spelling/model exists, but execution reports that it is not connected |
+| Planned | design direction only; programs cannot depend on it |
+| Legacy | retained outside the production graph; no new compiler behavior belongs there |
+
+The distinction matters most for the specification. A language rule can be designed in `Spec/`, modeled in an AST, and
+still remain unavailable in native emission because a later representation has no layout or ABI contract.
+
 ## Haskell frontend
 
 The Haskell package exposes separate modules for:
@@ -37,6 +51,17 @@ verification, CorePrep, and CorePrep verification. The configured namespace-qual
 sent over the current private process boundary. Cross-namespace imports and a multi-module Core link unit remain later
 semantic work; an unrelated namespace is validated but is not silently folded into the entry namespace.
 
+### Frontend coverage boundaries
+
+The connected frontend is strongest around scalar expressions, local control flow, calls, callable literals through
+CorePrep, namespace merging, and entry validation. Fixed-width integer/radix/separator behavior, character packing, numeric
+boolean context, source `void`, stable `SymbolId` identity, and constant range checks are represented before Core emission.
+
+The full `Spec/` catalog is not implemented. Object/value layout, the complete standard-library surface, cross-namespace
+imports, full generic/template behavior, exception lowering, ownership runtime operations, generators, FFI, assembly, and
+many advanced declaration forms require additional semantic and native work. Unsupported forms must produce frontend or
+backend diagnostics; they must not be approximated with C-family behavior.
+
 ## C++20 middle end
 
 The repository contains:
@@ -63,6 +88,24 @@ The production process boundary uses public `VXCR` Core. The internal `VXCP` cod
 contract coverage, but the CLI does not expose CorePrep. LLVM target-machine emission and typed C++20 LLD invocation now
 produce `.o`, `.asm`, and `.vxse` artifacts. Remaining work includes cross-namespace Haskell name resolution, a multi-module
 Core link unit, source ownership for project-wide per-file artifacts, and explicit Xpp/Xmm writers and readers.
+
+### Native coverage matrix
+
+| Capability | Status | Boundary |
+| --- | --- | --- |
+| bounded VXCR v2 decode | connected | C++20 Core reader |
+| native Core semantic verification | connected | `Compiler/Core` |
+| Core-to-CorePrep atomization/CFG | connected | dedicated adapter |
+| CorePrep structural/semantic verification | connected | native CorePrep verifier |
+| Xpp lowering/optimization/verification | connected | C++20 Xpp packages |
+| Xmm lowering/optimization/verification | connected | C++20 Xmm packages |
+| scalar/call/branch/return LLVM lowering | partial | LLVM backend |
+| LLVM IR and bitcode output | connected | `.ll` and `.bc` writers |
+| target object and assembly output | connected for supported values | target machine |
+| `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
+| closure object ABI | planned | LLVM/AARC runtime boundary |
+| Xpp/Xmm disk codecs | registered, not connected | public artifact layer |
+| project-wide per-source native outputs | registered contract, not connected | source ownership through Core |
 
 ## Retiring Rust compiler core
 
@@ -97,6 +140,40 @@ Known gaps include:
 - cross-namespace imports and the multi-module Core link unit are not connected yet; and
 - project-wide per-source object/assembly emission and named test-suite execution remain intentionally unavailable rather
   than violating their output contracts or routing through the removed frontend.
+
+## Artifact and command matrix
+
+| Input | `check` | Core emit | LLVM IR/BC | object/assembly | binary/run |
+| --- | --- | --- | --- | --- | --- |
+| explicit `.vxs` | connected | connected | connected subset | connected subset | connected subset |
+| project source set | connected | connected | connected subset | per-source route pending | binary connected subset |
+| public `.core` | connected | not a conversion target | connected subset | connected subset | connected subset |
+| `.xpp` | registered rejection | no | no | no | no |
+| `.xmm` | registered rejection | no | no | no | no |
+| object | not accepted | no | no | already native | build-only handling |
+
+“Connected subset” means the route itself is real and never falls back to removed code. A source using a type or operation
+without a native layout still fails before producing a misleading artifact.
+
+## Ecosystem status
+
+Analyzer, Formatter, and Linter have canonical top-level projects, separate Haskell/Kotlin ownership, and independent CI.
+Their typed Kotlin configuration models are implemented without claiming evaluator completion. `vxs format` and `vxs lint`
+dispatch installed `vfmt`/`vlint` across compiler-discovered project sources; they are not compiler-internal passes.
+
+Visual Formatter and Visual Linter use their own version lines. Visual Analyzer is an LSP service and editor integration, not
+a standalone user binary. See [Ecosystem tools](ECOSYSTEM.md) for the product boundary and current configuration surfaces.
+
+## Data that is intentionally not duplicated
+
+- Namespace identity is not encoded by directories.
+- The project evaluator does not expand source globs into compilation units.
+- CorePrep is not serialized as a public project artifact.
+- The compiler does not contain formatter/linter rule configuration.
+- A ViGet `.vipkg` does not add a second `MANIFEST.TOML` beside `Visual.XSharp.kts`.
+- JVM support does not own an Xmm reader/writer.
+- Standard-library namespaces are not repeated as package dependencies.
+- The native driver does not shell-join LLD arguments or use DIMCLI.
 
 ## Verification
 

@@ -9,7 +9,7 @@ no standalone launcher: `vxs` invokes its main class directly from the bundled J
 command and shares the same libraries.
 
 Production Kotlin DSL plugin JARs use
-`https://viget.xsharp-lang.xyz/dslplugins/<Publisher>/<Name>/`. ViGet is the only remote source. The current host skeleton
+`https://viget.progmasoft.com/dslplugins/<Publisher>/<Name>/`. ViGet is the only remote source. The current host skeleton
 loads installed JARs from the project-local `.visual-xsharp/plugins` cache; this cache is not a second repository. It reads
 the `plugins` preamble before evaluating the script, verifies descriptor compatibility and artifact identity, then loads
 `ProjectPlugin` services. Plugins are trusted project code and run with full JVM access; the runtime does not impose a
@@ -28,5 +28,8 @@ separate `vxdc` tool and are not emitted during ordinary project evaluation.
 Run the component tests with:
 
 ```text
-gradlew check
+.\gradlew.bat check
 ```
+
+For the complete DSL contract, publishing completeness rules, local artifacts, lockfile lifecycle, and CLI precedence, see
+[Visual X# project files](../Documents/PROJECT_FILES.md).

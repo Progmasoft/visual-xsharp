@@ -36,6 +36,26 @@ Stage ownership is deliberate:
 - The retiring Rust tree is not linked, is not a production implementation, and receives no new compiler behavior.
 - C23 implementation code is migrated subsystem by subsystem after replacement behavior is verified.
 
+## Component ownership
+
+| Component | Language/build owner | Responsibility |
+| --- | --- | --- |
+| `Compiler/Haskell/Syntax` | Haskell/Cabal | positioned tokens and parsed AST vocabulary |
+| `Compiler/Haskell/Frontend` | Haskell/Cabal | Lexer, Parser, Renamer, Name Resolution, Type Checker, and Desugarer |
+| `Compiler/Haskell/Core` | Haskell/Cabal | Core/CorePrep models, optimization, verification, and codecs |
+| `Compiler/Haskell/Driver` | Haskell/Cabal | source loading, namespace merge, entry selection, and frontend process |
+| `Compiler/Core` | C++20/Bazel | bounded Core reader, verifier, and CorePrep adapter |
+| `Compiler/Codegen/Xpp` | C++20/Bazel | CorePrep-to-Xpp lowering, optimization, and verification |
+| `Compiler/Codegen/Xmm` | C++20/Bazel | Xpp-to-Xmm lowering, optimization, and verification |
+| `Compiler/Backend/LLVM` | C++20/Bazel | verified Xmm lowering, LLVM optimization, serialization, and target emission |
+| `Compiler/Linker` | C++20/Bazel | typed LLD invocation and executable validation |
+| `Compiler/Cli` | C++20/Bazel | command schema, dispatch, output, and exit status |
+| `ProjectSystem` | Kotlin/Gradle | project DSL, plugins, plan, SQLite lockfile, and VXDC |
+
+This table is a dependency rule as well as a directory map. The frontend must not include LLVM concepts. LLVM must not parse
+source syntax. The project evaluator must not discover `.vxs` files. The CLI coordinates these owners but does not duplicate
+their semantic decisions.
+
 ## Frontend stages
 
 The frontend does not use one mutable syntax tree for every pass. Parsed, renamed, resolved, and typed forms are distinct
@@ -61,6 +81,24 @@ joins explicit without optimizing or reconstructing types. CorePrep can also cro
 the separate internal `VXCP` contract. Both transports enforce resource and Unicode-scalar limits. CorePrep exists only in
 RAM and has no file extension, artifact API, CLI input, or emit option.
 
+## Verification boundaries
+
+Every representation is verified at the boundary that owns it:
+
+```text
+Typed AST --desugar--> Core --Core verifier--> VXCR
+VXCR --bounded reader/Core verifier--> CorePrep --CorePrep verifier-->
+Xpp --Xpp optimizer/verifier--> Xmm --Xmm optimizer/verifier-->
+LLVM module --LLVM verifier--> target artifact
+```
+
+Verification is intentionally repeated across process and library boundaries. A `.core` file may come from the maintained
+frontend or another producer; an embedding client may construct native IR directly; an optimizer may introduce an invalid
+CFG even when its input was valid. No stage treats validation by an earlier, optional caller as proof.
+
+Stable `SymbolId` identity is preserved from semantic binding through CorePrep and the native IRs. Human-readable spelling is
+diagnostic metadata, not a replacement identity. Function symbols remain distinct from local values and Xmm registers.
+
 ## Backend
 
 LLVM is the compiler backend. It consumes Xmm only after the Xmm-owned verifier succeeds and repeats that verifier through a
@@ -85,6 +123,10 @@ public static void Main()
 The method has no parameters and returns `void`. Top-level runtime functions and integer-returning `Main` methods are not
 valid project entry points.
 
+Entry lookup starts from namespace/type identity in the complete discovered source set. It never derives a path such as
+`Namespace/Main.vxs`, and it never requires the final class name to be literally `Main` or `Program`. Those are conventional
+class names only; the selected class may have another valid Visual X# name as long as its method contract is correct.
+
 ## Intermediate artifacts
 
 The current public artifact names are:
@@ -99,3 +141,31 @@ Normal compilation keeps these representations in memory. Haskell writes real `.
 through the full verified pipeline. Explicit `.ll`, `.bc`, `.o`, and `.asm` emission is available after source or Core
 input. Binary emission adds the platform entry bridge, writes a temporary object, links one `.vxse`, and removes the
 temporary object. Xpp/Xmm readers and writers remain later work.
+
+## Process and temporary-file model
+
+The private frontend executable is located relative to `vxs` in the build or installed layout. The current working directory
+is project input, not an executable search mechanism. The driver owns temporary Core and link artifacts through scoped
+cleanup objects so partial runs do not leak files or accidentally reuse an older artifact.
+
+`vxs run` executes only the `.vxse` produced by its current successful build. A failed compile or link cannot fall through to
+an executable left by a previous invocation.
+
+## Extension points
+
+The Kotlin project plugin API extends project configuration and deterministic plan metadata. It is trusted JVM build logic,
+not a compiler backend API. A CMake DSL plugin may remain available for projects that need CMake integration even though the
+Visual X# compiler itself uses Bazel.
+
+Analyzer, Formatter, and Linter share frontend/source-policy contracts but remain independently versioned products. They do
+not become compiler passes merely because `vxs format` and `vxs lint` dispatch them for a project.
+
+## Architecture constraints
+
+- One shipped `vxs` command coordinates frontend and backend; frontend/backend are not separate user binaries.
+- `vxdc` is intentionally separate because it is a lockfile dump tool, not compilation.
+- CorePrep remains internal and cannot appear in `-Emit` or `-Build`.
+- Public artifacts require an explicit, versioned reader/writer contract.
+- Machine-specific LLVM installation paths never enter tracked files.
+- Native C++ uses the LLVM C++ API and `Visual::XSharp` naming for renewed code.
+- New compiler behavior is not added to the retiring Rust tree or a removed C lexer/parser compatibility route.

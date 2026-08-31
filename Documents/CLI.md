@@ -21,6 +21,34 @@ viget
 version
 ```
 
+The general invocation shape is:
+
+```text
+vxs <command> [command options] [command positional values]
+vxs -Help
+vxs <command> -Help
+vxs --version
+```
+
+Command, option, and enumerated-value spelling is case-sensitive. Compiler options use one leading hyphen and Pascal-style
+segments. The special `--version` control is retained; it does not establish a general GNU long-option syntax.
+
+| Command | Purpose | Current connection |
+| --- | --- | --- |
+| `check` | validate source or a supported explicit artifact | connected for project/source/Core |
+| `build` | emit the selected artifact | connected for project/source/Core within documented output limits |
+| `run` | build a fresh binary and execute it | connected for the implemented source subset |
+| `test` | execute a named project test suite | registered; framework runner not linked |
+| `format` | format the complete project source set | connected dispatch; requires installed `vfmt` |
+| `lint` | lint the complete project source set | connected dispatch; requires installed `vlint` |
+| `resolve` | evaluate the project and refresh the lockfile | connected project operation |
+| `update` | reevaluate dependencies and refresh the lockfile | connected project operation |
+| `install` | install a ViGet package | registered; ViGet client not linked |
+| `viget` | perform registry publication/update action | registered; ViGet client not linked |
+| `version` | report compiler version through command form | recognized version outcome |
+
+Registered commands fail explicitly. They never print success while skipping the requested package or test operation.
+
 `check`, `build`, `run`, and `test` accept either a discovered `Visual.XSharp.kts` project or a `.vxs` file selected with
 `-File`.
 
@@ -125,6 +153,33 @@ Xpp optimization passes: true
 Xmm optimization passes: true
 ```
 
+### Option scope
+
+| Option | `check` | `build` | `run` | `test` |
+| --- | :---: | :---: | :---: | :---: |
+| `-File` | yes | yes | yes | yes |
+| `-Standard` | yes | yes | yes | yes |
+| `-Compiler-Version` | yes | yes | yes | yes |
+| `-Target` | yes | yes | yes | yes |
+| warning and backend settings | yes | yes | yes | yes |
+| LLVM and Xpp/Xmm settings | yes | yes | yes | yes |
+| `-Build` | yes | yes | no | no |
+| `-Emit` | no | yes | no | no |
+
+The declarative schema is the authority for scope. A value accepted for one command is not ignored on another command; it is
+reported as out of scope.
+
+### Help behavior
+
+```powershell
+vxs -Help
+vxs check -Help
+vxs build -Help
+```
+
+Help is resolved before project evaluation and compilation. `build` help includes `-Emit`; `check` help does not. Unknown
+options still fail even if their spelling resembles a common convention such as `--help`.
+
 ## Current reliable operation
 
 Single-file validation:
@@ -167,7 +222,7 @@ vxs build -Build core -Emit llvmll -File module.core
 vxs build -Build core -Emit llvmbc -File module.core
 ```
 
-The native C++20 route reads the Haskell `VXCR` v1 contract with byte, collection, text, type-depth, and expression-depth
+The native C++20 route reads the Haskell `VXCR` v2 contract with byte, collection, text, type-depth, and expression-depth
 limits. It verifies Core semantics before adapting nested expressions and source control flow to CorePrep, then runs the
 existing verified CorePrep → Xpp → Xmm → LLVM pipeline entirely in memory. `check` writes nothing. The two `build` examples
 write a sibling `.ll` or `.bc` file. A Core build can also write a sibling `.o` or `.asm`, or link a `.vxse`; binary is the
@@ -198,3 +253,62 @@ build failures and, after a successful link, returns the native process exit sta
 Parse diagnostics retain context. Unknown commands/options name the rejected spelling; invalid typed values name the
 option and its accepted domain; duplicate, missing-value, wrong-command-scope, positional, and invalid process-vector
 errors are reported independently.
+
+## Filesystem and overwrite behavior
+
+Paths are interpreted by the owning command. Project discovery begins at the current/requested location and walks upward for
+`Visual.XSharp.kts`; `-File` names one explicit input. The project evaluator and Haskell source loader canonicalize contained
+roots rather than trusting textual prefixes.
+
+`vxs build` replaces the artifact selected for the current invocation when that build succeeds. It does not preserve an old
+artifact merely because it already exists, and it does not execute that old artifact after a failed `run` build. Temporary
+Core/object files are implementation details and are cleaned on every owned exit path.
+
+## Examples by intent
+
+Validate a project with its evaluated defaults:
+
+```powershell
+vxs check
+```
+
+Override only the current target and warning policy:
+
+```powershell
+vxs check -Target x86_64-pc-windows-msvc -Warnings all -Werror true
+```
+
+Build a project executable using the project output directory:
+
+```powershell
+vxs build
+```
+
+Build one explicit source into LLVM IR without requiring its path to match a namespace:
+
+```powershell
+vxs build -File .\Scratch\Bootstrap.vxs -Emit llvmll
+```
+
+Validate a public Core artifact without writing output:
+
+```powershell
+vxs check -Build core -File .\Artifacts\Bootstrap.core
+```
+
+Convert that Core artifact to a native executable:
+
+```powershell
+vxs build -Build core -File .\Artifacts\Bootstrap.core -Emit binary
+```
+
+Refresh a project's binary lockfile:
+
+```powershell
+vxs resolve
+vxs update
+```
+
+The two package-resolution commands currently share project evaluation and lock refresh behavior. A future transitive solver
+or registry client must preserve their typed command identity instead of collapsing the public command surface into a string
+switch.

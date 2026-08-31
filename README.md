@@ -106,7 +106,7 @@ directory layouts to match.
 Project-wide `format` and `lint` reuse that compiler-owned source discovery. They require the separately installed Visual
 Formatter and Visual Linter packages, respectively; the compiler does not embed either tool.
 
-See [CLI](docs/CLI.md) for the exact accepted surface and implementation status.
+See [CLI](Documents/CLI.md) for the exact accepted surface and implementation status.
 
 ## Project files
 
@@ -133,7 +133,7 @@ sources {
 }
 ```
 
-See [Project files](docs/PROJECT_FILES.md) for the current Kotlin DSL.
+See [Project files](Documents/PROJECT_FILES.md) for the current Kotlin DSL.
 
 The binary project lockfile can be inspected without changing the normal project-evaluation output. The separate `vxdc`
 tool evaluates `Visual.XSharp.kts` and writes deterministic, replayable SQL to the requested output path. VXDC does not
@@ -147,15 +147,19 @@ that every rule is already implemented by `vxs`.
 
 ## Documentation
 
-- [Documentation index](docs/README.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Implementation status](docs/IMPLEMENTATION.md)
-- [Building and testing](docs/BUILDING.md)
-- [CLI](docs/CLI.md)
-- [Project files](docs/PROJECT_FILES.md)
-- [Specification guide](docs/SPECIFICATION.md)
-- [Repository layout](docs/MONOREPO.md)
-- [Contributing](docs/CONTRIBUTING.md)
+- [Documentation index](Documents/README.md)
+- [Architecture](Documents/ARCHITECTURE.md)
+- [Compiler pipeline](Documents/COMPILER-PIPELINE.md)
+- [Implementation status](Documents/IMPLEMENTATION.md)
+- [Building](Documents/BUILDING.md)
+- [Testing](Documents/TESTING.md)
+- [CLI](Documents/CLI.md)
+- [Project files](Documents/PROJECT_FILES.md)
+- [Diagnostics](Documents/DIAGNOSTICS.md)
+- [Ecosystem tools](Documents/ECOSYSTEM.md)
+- [Specification guide](Documents/SPECIFICATION.md)
+- [Repository layout](Documents/MONOREPO.md)
+- [Contributing](Documents/CONTRIBUTING.md)
 
 ## License
 

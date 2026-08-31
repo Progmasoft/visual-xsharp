@@ -17,7 +17,7 @@ yet reached the production `vxs` route.
 When a language rule is implemented, it should gain a focused compiler test in addition to its explanatory example here.
 Compiler behavior must not be inferred from historical fixtures when it conflicts with the current examples.
 
-See [the specification guide](../docs/SPECIFICATION.md) for the topic map and maintenance rules.
+See [the specification guide](../Documents/SPECIFICATION.md) for the topic map and maintenance rules.
 
 ## Catalog
 

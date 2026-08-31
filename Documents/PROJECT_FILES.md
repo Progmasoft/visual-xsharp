@@ -31,6 +31,25 @@ and `Company.Tool.Bootstrap` are valid. A trailing namespace such as `Namespace.
 a parameterless `public static void Main()` method. Entry resolution uses namespace and type identity; it never derives a
 file path from the entry. File names and directory layout do not have to match namespace segments.
 
+The `project` block has a publication-sensitive completeness rule. When `sources.viget.publish` is `true`, `name`, `version`,
+and `stability` are all required. When publishing is disabled, the block may be absent, complete, or contain any useful
+subset; private and internal builds are not forced to invent release metadata.
+
+```kotlin
+project {
+  name = "InternalTool"
+}
+
+sources {
+  main {
+    entry = "Company.Internal.Tool"
+  }
+  viget {
+    publish = false
+  }
+}
+```
+
 ## Compiler settings
 
 ```kotlin
@@ -124,7 +143,7 @@ plugins {
 ```
 
 Production Kotlin DSL plugin JARs use
-`https://viget.xsharp-lang.xyz/dslplugins/<Publisher>/<Name>/`. The catalogue's version-index and JAR filename layout are not
+`https://viget.progmasoft.com/dslplugins/<Publisher>/<Name>/`. The catalog's version-index and JAR filename layout are not
 yet connected to this runtime. ViGet is the only remote source; there is no configurable repository list. The host currently
 loads installed artifacts from the project-local `.visual-xsharp/plugins` cache, which is not another repository. A plugin
 JAR contains
@@ -187,8 +206,11 @@ dependencies {
 The project-relative path must stay inside the project root and use `.vipkg`. The declaration is preserved separately in the
 plan and lockfile; it is not misreported as a solved or downloaded ViGet dependency.
 
-Visual X# packages are distinct from Kotlin DSL plugins. They are Visual X#-authored `.vipkg` artifacts catalogued under
-`https://viget.xsharp-lang.xyz/<Publisher>/<Name>/`; dependency solving and registry transport remain separate work.
+Visual X# packages are distinct from Kotlin DSL plugins. They are Visual X#-authored `.vipkg` artifacts cataloged under
+`https://viget.progmasoft.com/<Publisher>/<Name>/`; dependency solving and registry transport remain separate work.
+
+ViGet is the one hosted registry. These fixed paths do not create a Gradle-like `repositories` block, and the project DSL
+does not accept arbitrary remote repository URLs. Publisher identity is the case-sensitive Progmasoft Account name.
 
 ## Lock file
 
@@ -229,3 +251,47 @@ authors {
   author("Leitwolf", "leitwolf@example.me")
 }
 ```
+
+## Evaluation lifecycle
+
+Project evaluation is an ordered operation rather than serialization of an arbitrary object graph:
+
+1. the native driver discovers the exact `Visual.XSharp.kts`;
+2. the plugin preamble is parsed early enough to resolve trusted Kotlin plugin JARs;
+3. the full script executes with the project DSL;
+4. typed scopes validate and produce an immutable plan;
+5. plugin finalizers add deterministic extension metadata;
+6. the SQLite lockfile is refreshed; and
+7. the native driver consumes the plan and starts the requested compiler/tool route.
+
+The plan transport is an implementation boundary, not a second user manifest. Projects do not contain `MANIFEST.TOML`, and
+`.vipkg` packages keep the project script at their root as `Visual.XSharp.kts` rather than under an extra `XSHARP/`
+directory. Test source files are not included in a published `.vipkg`.
+
+Plugin code is trusted build logic with full JVM access. Safety comes from exact identity, contained local paths, descriptor
+and service agreement, API-version checks, digest verification, deterministic model validation, and explicit failure—not
+from a sandbox that changes Kotlin semantics.
+
+## Output directories and artifact names
+
+Debug and Release output directories are independent DSL values. The defaults are `build/debug` and `build/release`.
+Resolved command-line `-Emit` has higher precedence than the project value, but the chosen output directory continues to
+come from the evaluated project mode.
+
+Binary emission creates one `<project-or-entry>.vxse`. Source-owned emissions use flattened source stems inside the selected
+output directory: `Sources/MyApp/Main.vxs` becomes `build/debug/Main.o` for a debug object build. The original source
+directory is not reproduced below `build/debug`. Multiple sources produce multiple objects/assembly files, and equal stems
+are diagnosed as ambiguous instead of overwriting one another.
+
+Project-wide per-source object and assembly emission is currently disconnected until the Core route preserves file
+ownership. The output naming contract is documented now so the implementation cannot incorrectly collapse a source set into
+one object.
+
+## Case sensitivity and paths
+
+Language identifiers, test-suite names, package coordinates, plugin coordinates, targets, and canonical CLI values are
+case-sensitive. Filesystem containment is evaluated after canonicalization, so a path that textually begins with the project
+directory but resolves outside it is rejected.
+
+Use forward-slash-style project-relative patterns in exclusions. The evaluator preserves null when no `exclude(...)` call is
+present; an explicit empty list and the absence of an exclusion policy must not be conflated by transports or plugins.

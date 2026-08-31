@@ -1,0 +1,156 @@
+<!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
+<!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0 -->
+
+# Repository layout
+
+## Buildable components
+
+```text
+Compiler/     Native vxs driver, public headers, modular C++20 implementation, Haskell packages, and build support
+xslang/       Retiring Rust reference implementation; not a production build dependency
+ProjectSystem/ Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
+Spec/         Public language-design example suites
+tests/        Native compiler and integration tests
+include/      Shared non-compiler ABI headers
+third_party/  Pinned source dependencies
+```
+
+Compiler-owned public headers live physically under `Compiler/Headers/Visual/XSharp/`. Bazel removes the physical
+`Compiler/Headers` prefix from consumers, so the stable include spelling remains `Visual/XSharp/...`.
+
+## Compiler tree
+
+The compiler is decomposed by ownership rather than stored in one `src` directory:
+
+```text
+Compiler/
+├── Backend/LLVM/          verified Xmm-to-LLVM lowering and target emission
+├── Build/Bazel/           toolchain discovery and narrow build support
+├── Cli/
+│   ├── Arguments/         typed command/option schema
+│   └── Commands/          command dispatch
+├── Codegen/Xpp/           Xpp lowering, optimization, and verification
+├── Codegen/Xmm/           Xmm lowering, optimization, and verification
+├── Core/                  native Core reader/verifier and CorePrep adapter
+├── Driver/                connected Core-to-native coordination
+├── Haskell/
+│   ├── Syntax/            tokens and AST vocabulary
+│   ├── Frontend/          Lexer through Desugarer
+│   ├── Core/              Core/CorePrep, optimization, verification, codecs
+│   └── Driver/            source loading and private frontend process
+├── Headers/Visual/XSharp/ public/native interface headers
+├── Linker/                typed LLD execution
+└── ProjectSystem/Bridge/  native-to-Kotlin project boundary
+```
+
+The directory names are architectural seams even though `vxs` is one executable. Splitting them does not create separately
+installed frontend/backend tools.
+
+### Allowed dependency direction
+
+```text
+Cli -> Commands -> Project bridge / Driver / Linker
+Driver -> Core -> Xpp -> Xmm -> LLVM backend
+Haskell Driver -> Frontend -> Syntax
+Haskell Driver -> Core
+Project bridge -> evaluated Kotlin plan
+```
+
+Reverse dependencies are avoided. LLVM does not call the CLI; Core does not depend on Xpp; Syntax does not depend on the
+project evaluator; public headers do not expose private LLVM handles. Shared code belongs in the narrowest package that does
+not reverse this direction.
+
+The ecosystem tools have independent ownership and build systems:
+
+```text
+Analyzer/         Haskell LSP and Kotlin configuration DSL
+Formatter/        Haskell vfmt executable and Kotlin configuration DSL
+Linter/           Haskell vlint executable and Kotlin configuration DSL
+```
+
+These canonical projects replace the retired `xs-analyzer`, `xsfmt`, and `xstidy` prototypes. Their Haskell components use
+Cabal, their Kotlin configuration layers use Gradle with an external JRE 25 and
+Kotlin Script Runner, and the Visual Analyzer editor integrations additionally use their platform-specific build systems.
+
+Their first compiler-connected layer is intentionally narrow: Visual Analyzer exposes syntax, semantic, and full frontend
+analysis without a standalone executable; `vfmt` performs parser-gated physical source normalization; and `vlint` combines
+semantic compiler diagnostics with independently actionable source-hygiene checks. Kotlin configuration and editor hosts
+remain separate ownership layers and are not represented by placeholder implementations.
+
+The analyzer, formatter, and linter Kotlin modules currently provide typed scopes, defaults, validation, and immutable
+snapshots. Their future script evaluators remain a separate integration layer.
+
+Visual Formatter and Visual Linter use independent release lines rather than inheriting the compiler version. Analyzer,
+Formatter, and Linter also have separate CI workflows so each project can evolve without coupling its validation gates to
+the others.
+
+## Build ownership
+
+Bazel owns top-level native orchestration. Language-specific CI jobs call Cabal and Gradle directly; the repository carries
+neither CMake configuration nor a second wrapper such as `just`.
+
+## Nested repositories
+
+The website and IDE are maintained as separate repositories beneath the local working directory. They are not part of the
+root Git index or root Bazel graph.
+
+## Generated directories
+
+Build products, Cargo targets, Cabal `dist-newstyle`, Gradle output, website distribution files, and local service state are
+generated or local-only data and are not source ownership boundaries.
+
+Typical disposable paths include `bazel-*`, `dist-newstyle`, `.gradle`, `build`, `target`, website package-manager output,
+IDE caches, and local service databases. Their presence must not influence source discovery, tests, release content, or
+documentation claims.
+
+## Project-system ownership
+
+`ProjectSystem/` owns `Visual.XSharp.kts`, plugin loading, immutable plan construction, dependency declarations, lockfile
+persistence, and VXDC. `Compiler/ProjectSystem/Bridge/` is only the native transport/launch boundary. Keeping these apart
+prevents the C++ driver from becoming a second implementation of Kotlin validation rules.
+
+The JVM package root is `com.progmasoft.visual.xsharp.project`. Legacy `org.progmasoft` or `xs` package segments are not used
+for renewed project-system code. JVM support does not implement Xmm readers/writers; native IR ownership remains C++20.
+
+## Specification ownership
+
+`Spec/` is grouped by language responsibility:
+
+```text
+Spec/
+├── Language/              syntax and core language behavior
+├── StandardLibrary/       System surfaces and library contracts
+├── Libraries/Databases/   provider and database APIs
+└── Interop/               FFI and inline assembly boundaries
+```
+
+Each `.vxs` file is a topic suite of independent examples. Its directory structure improves navigation and does not impose a
+namespace-to-file mapping on the compiler.
+
+## Repository boundaries
+
+The root index contains compiler, project system, ecosystem tools, specification, tests, shared headers, and scripts. Local
+website, IDE, and service directories may be nested beneath the checkout while remaining separate repositories or ignored
+deployment state. A root change must not assume that committing the root automatically commits or deploys those children.
+
+Scripts are grouped by implementation language under `scripts/java/` and `scripts/go/`. Choose the language based on the
+task's libraries and portability; scripts do not become a parallel build orchestrator. Normal repository commits/pushes use
+the Java update helper, while Bazel, Cabal, and Gradle retain build ownership.
+
+CMake may still appear as a project-system DSL plugin. That plugin integrates user projects with CMake; it is not the build
+system for the Visual X# compiler and therefore does not contradict Bazel ownership.
+
+## Placement checklist
+
+Before adding a directory or target, ask:
+
+1. Which representation or user-facing product owns the behavior?
+2. Which language is authoritative for that stage?
+3. Does the new dependency follow the allowed direction?
+4. Is this shipped source, a test, build support, generated output, or local deployment state?
+5. Can the file remain under 1500 lines through responsibility-based decomposition?
+6. Does a public header need the stable `Visual/XSharp/...` include spelling?
+7. Would the placement accidentally revive a retired compiler route or prototype name?
+
+The goal is a monorepo made of coherent subprojects, not a flat directory and not several competing implementations of the
+same semantic stage.

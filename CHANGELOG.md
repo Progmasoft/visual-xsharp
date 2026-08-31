@@ -976,7 +976,7 @@ source-to-native executable pipeline.
 - XMIR text support gained optimizer analysis writer/parser coverage for optimization pass reports.
 - XMIR text support gained structural verifier analysis writer/parser coverage.
 - XHIR text support gained type-check analysis writer/parser coverage.
-- Root README and strengthened documentation set under `docs/`.
+- Root README and strengthened documentation set under `Documents/`.
 - `xs --version` reports the current compiler version.
 - XLIL text uses register-style value names such as `%r0`.
 
