@@ -56,50 +56,58 @@ namespace
         ScalarCase{ core::Type::float128(), core::ScalarFamily::Floating, 128U, "double" },
     };
 
-    auto integer(bool negative, std::initializer_list<std::uint8_t> magnitude) -> core::IntegerLiteral
+    auto
+    integer(bool negative, std::initializer_list<std::uint8_t> magnitude) -> core::IntegerLiteral
     {
         return core::IntegerLiteral{ negative, std::vector<std::uint8_t>(magnitude) };
     }
 
-    auto maximum_unsigned(std::size_t bytes) -> core::IntegerLiteral
+    auto
+    maximum_unsigned(std::size_t bytes) -> core::IntegerLiteral
     {
         return core::IntegerLiteral{ false, std::vector<std::uint8_t>(bytes, 0xffU) };
     }
 
-    auto maximum_signed(std::size_t bytes) -> core::IntegerLiteral
+    auto
+    maximum_signed(std::size_t bytes) -> core::IntegerLiteral
     {
         auto value = maximum_unsigned(bytes);
         value.magnitude.front() = 0x7fU;
         return value;
     }
 
-    auto minimum_signed(std::size_t bytes) -> core::IntegerLiteral
+    auto
+    minimum_signed(std::size_t bytes) -> core::IntegerLiteral
     {
         core::IntegerLiteral value{ true, std::vector<std::uint8_t>(bytes, 0U) };
         value.magnitude.front() = 0x80U;
         return value;
     }
 
-    auto one_past_signed_maximum(std::size_t bytes) -> core::IntegerLiteral
+    auto
+    one_past_signed_maximum(std::size_t bytes) -> core::IntegerLiteral
     {
         auto value = minimum_signed(bytes);
         value.negative = false;
         return value;
     }
 
-    auto one_past_unsigned_maximum(std::size_t bytes) -> core::IntegerLiteral
+    auto
+    one_past_unsigned_maximum(std::size_t bytes) -> core::IntegerLiteral
     {
         core::IntegerLiteral value{ false, std::vector<std::uint8_t>(bytes + 1U, 0U) };
         value.magnitude.front() = 1U;
         return value;
     }
 
-    auto symbol(core::SymbolId id, std::u32string spelling) -> core::SymbolName
+    auto
+    symbol(core::SymbolId id, std::u32string spelling) -> core::SymbolName
     {
         return core::SymbolName{ id, std::move(spelling) };
     }
 
-    auto literal_for(const core::Type &type) -> core::Literal
+    auto
+    literal_for(const core::Type &type) -> core::Literal
     {
         if (type.kind == core::Type::Kind::Unit)
             return std::monostate{};
@@ -112,7 +120,8 @@ namespace
         return integer(false, { 0x2aU });
     }
 
-    auto coreprep_module(const core::Type &type, core::Literal literal) -> core::CorePrepModule
+    auto
+    coreprep_module(const core::Type &type, core::Literal literal) -> core::CorePrepModule
     {
         core::Terminator terminator;
         terminator.kind = core::Terminator::Kind::Return;
@@ -122,7 +131,8 @@ namespace
         return core::CorePrepModule{ { U"Scalar", U"Wire" }, { std::move(function) } };
     }
 
-    auto binary_module(
+    auto
+    binary_module(
         const core::Type &operandType,
         core::Operation operation,
         const core::Type &resultType) -> core::CorePrepModule
@@ -148,7 +158,8 @@ namespace
         return core::CorePrepModule{ { U"Scalar", U"Operations" }, { std::move(function) } };
     }
 
-    auto core_module(const core::Type &type, core::Literal literal) -> native_core::Module
+    auto
+    core_module(const core::Type &type, core::Literal literal) -> native_core::Module
     {
         native_core::Function function;
         function.symbol = symbol(1U, U"Value");
@@ -157,7 +168,8 @@ namespace
         return native_core::Module{ { U"Scalar", U"Core" }, { std::move(function) } };
     }
 
-    auto wire_round_trips(const core::Type &type) -> bool
+    auto
+    wire_round_trips(const core::Type &type) -> bool
     {
         const auto source = coreprep_module(type, literal_for(type));
         const auto encoded = core_wire::encode(source);
@@ -167,7 +179,8 @@ namespace
         return decoded && *decoded.module == source;
     }
 
-    auto native_wire_round_trips(const core::Type &type) -> bool
+    auto
+    native_wire_round_trips(const core::Type &type) -> bool
     {
         const auto source = core_module(type, literal_for(type));
         const auto encoded = native_wire::Encode(source);
@@ -188,11 +201,8 @@ TEST_CASE("the native scalar catalog matches the language width contract", "[sca
         CHECK(description->family == entry.family);
         CHECK(description->bit_width == entry.width);
         CHECK(description->spelling == entry.spelling);
-        CHECK(description->is_numeric() == (entry.family == core::ScalarFamily::SignedInteger
-                                             || entry.family == core::ScalarFamily::UnsignedInteger
-                                             || entry.family == core::ScalarFamily::Floating));
-        CHECK(description->is_integer() == (entry.family == core::ScalarFamily::SignedInteger
-                                             || entry.family == core::ScalarFamily::UnsignedInteger));
+        CHECK(description->is_numeric() == (entry.family == core::ScalarFamily::SignedInteger || entry.family == core::ScalarFamily::UnsignedInteger || entry.family == core::ScalarFamily::Floating));
+        CHECK(description->is_integer() == (entry.family == core::ScalarFamily::SignedInteger || entry.family == core::ScalarFamily::UnsignedInteger));
         CHECK(description->is_signed() == (entry.family == core::ScalarFamily::SignedInteger));
         CHECK(description->is_floating() == (entry.family == core::ScalarFamily::Floating));
     }
@@ -272,12 +282,41 @@ TEST_CASE("integer normalization is host independent and canonical", "[scalar][i
 TEST_CASE("floating spellings use a strict locale-independent grammar", "[scalar][floating]")
 {
     const std::array valid{
-        "0", "1.0", ".5", "5.", "+1.25", "-1.25", "6.022e23", "1e-9",
-        "1E+9", "nan", "+nan", "-nan", "inf", "+inf", "-inf"
+        "0",
+        "1.0",
+        ".5",
+        "5.",
+        "+1.25",
+        "-1.25",
+        "6.022e23",
+        "1e-9",
+        "1E+9",
+        "nan",
+        "+nan",
+        "-nan",
+        "inf",
+        "+inf",
+        "-inf"
     };
     const std::array invalid{
-        "", "+", "-", ".", "e1", "1e", "1e+", "1e-", "1.2.3", " 1",
-        "1 ", "1,5", "NaN", "Infinity", "0x1p2", "1_000", "1'000", "--1"
+        "",
+        "+",
+        "-",
+        ".",
+        "e1",
+        "1e",
+        "1e+",
+        "1e-",
+        "1.2.3",
+        " 1",
+        "1 ",
+        "1,5",
+        "NaN",
+        "Infinity",
+        "0x1p2",
+        "1_000",
+        "1'000",
+        "--1"
     };
     for (const auto spelling : valid)
     {

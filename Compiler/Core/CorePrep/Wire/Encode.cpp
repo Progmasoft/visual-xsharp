@@ -142,27 +142,48 @@ namespace visual_xsharp::core::wire
                     using enum Type::Kind;
                     switch (kind)
                     {
-                        case Unit: return 0;
-                        case Bool: return 1;
-                        case Int64: return 2;
-                        case Int32: return 3;
-                        case String: return 4;
-                        case Function: return 5;
-                        case Named: return 6;
-                        case TypeVariable: return 7;
-                        case Character: return 8;
-                        case Int8: return 9;
-                        case Int16: return 10;
-                        case Int128: return 11;
-                        case UInt8: return 12;
-                        case UInt16: return 13;
-                        case UInt32: return 14;
-                        case UInt64: return 15;
-                        case UInt128: return 16;
-                        case Float16: return 17;
-                        case Float32: return 18;
-                        case Float64: return 19;
-                        case Float128: return 20;
+                        case Unit:
+                            return 0;
+                        case Bool:
+                            return 1;
+                        case Int64:
+                            return 2;
+                        case Int32:
+                            return 3;
+                        case String:
+                            return 4;
+                        case Function:
+                            return 5;
+                        case Named:
+                            return 6;
+                        case TypeVariable:
+                            return 7;
+                        case Character:
+                            return 8;
+                        case Int8:
+                            return 9;
+                        case Int16:
+                            return 10;
+                        case Int128:
+                            return 11;
+                        case UInt8:
+                            return 12;
+                        case UInt16:
+                            return 13;
+                        case UInt32:
+                            return 14;
+                        case UInt64:
+                            return 15;
+                        case UInt128:
+                            return 16;
+                        case Float16:
+                            return 17;
+                        case Float32:
+                            return 18;
+                        case Float64:
+                            return 19;
+                        case Float128:
+                            return 20;
                     }
                     return std::nullopt;
                 }(value.kind);

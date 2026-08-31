@@ -7,8 +7,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "Visual/XSharp/Xmm/Verifier.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Xmm/Verifier.hpp"
 
 namespace Visual::XSharp::Xmm
 {

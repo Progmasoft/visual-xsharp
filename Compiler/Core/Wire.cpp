@@ -5,8 +5,8 @@
 #include <string_view>
 #include <type_traits>
 
-#include "Visual/XSharp/Core/Wire.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Core/Wire.hpp"
 
 namespace Visual::XSharp::Core::Wire
 {
@@ -513,20 +513,48 @@ namespace Visual::XSharp::Core::Wire
                         Byte(6);
                         Symbol(type.variable, "type variable symbol");
                         return;
-                    case Type::Kind::Character: Byte(7); return;
-                    case Type::Kind::Int8: Byte(8); return;
-                    case Type::Kind::Int16: Byte(9); return;
-                    case Type::Kind::Int32: Byte(10); return;
-                    case Type::Kind::Int128: Byte(11); return;
-                    case Type::Kind::UInt8: Byte(12); return;
-                    case Type::Kind::UInt16: Byte(13); return;
-                    case Type::Kind::UInt32: Byte(14); return;
-                    case Type::Kind::UInt64: Byte(15); return;
-                    case Type::Kind::UInt128: Byte(16); return;
-                    case Type::Kind::Float16: Byte(17); return;
-                    case Type::Kind::Float32: Byte(18); return;
-                    case Type::Kind::Float64: Byte(19); return;
-                    case Type::Kind::Float128: Byte(20); return;
+                    case Type::Kind::Character:
+                        Byte(7);
+                        return;
+                    case Type::Kind::Int8:
+                        Byte(8);
+                        return;
+                    case Type::Kind::Int16:
+                        Byte(9);
+                        return;
+                    case Type::Kind::Int32:
+                        Byte(10);
+                        return;
+                    case Type::Kind::Int128:
+                        Byte(11);
+                        return;
+                    case Type::Kind::UInt8:
+                        Byte(12);
+                        return;
+                    case Type::Kind::UInt16:
+                        Byte(13);
+                        return;
+                    case Type::Kind::UInt32:
+                        Byte(14);
+                        return;
+                    case Type::Kind::UInt64:
+                        Byte(15);
+                        return;
+                    case Type::Kind::UInt128:
+                        Byte(16);
+                        return;
+                    case Type::Kind::Float16:
+                        Byte(17);
+                        return;
+                    case Type::Kind::Float32:
+                        Byte(18);
+                        return;
+                    case Type::Kind::Float64:
+                        Byte(19);
+                        return;
+                    case Type::Kind::Float128:
+                        Byte(20);
+                        return;
                 }
             }
             void

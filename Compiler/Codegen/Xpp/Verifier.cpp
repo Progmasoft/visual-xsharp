@@ -6,8 +6,8 @@
 #include <unordered_set>
 #include <utility>
 
-#include "Visual/XSharp/Xpp/Verifier.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Xpp/Verifier.hpp"
 
 namespace Visual::XSharp::Xpp
 {

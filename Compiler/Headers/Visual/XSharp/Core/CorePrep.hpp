@@ -75,19 +75,71 @@ namespace visual_xsharp::core
         {
             return Type{ Kind::Int32, {}, {}, {} };
         }
-        [[nodiscard]] static auto character() -> Type { return Type{ Kind::Character, {}, {}, {} }; }
-        [[nodiscard]] static auto int8() -> Type { return Type{ Kind::Int8, {}, {}, {} }; }
-        [[nodiscard]] static auto int16() -> Type { return Type{ Kind::Int16, {}, {}, {} }; }
-        [[nodiscard]] static auto int128() -> Type { return Type{ Kind::Int128, {}, {}, {} }; }
-        [[nodiscard]] static auto uint8() -> Type { return Type{ Kind::UInt8, {}, {}, {} }; }
-        [[nodiscard]] static auto uint16() -> Type { return Type{ Kind::UInt16, {}, {}, {} }; }
-        [[nodiscard]] static auto uint32() -> Type { return Type{ Kind::UInt32, {}, {}, {} }; }
-        [[nodiscard]] static auto uint64() -> Type { return Type{ Kind::UInt64, {}, {}, {} }; }
-        [[nodiscard]] static auto uint128() -> Type { return Type{ Kind::UInt128, {}, {}, {} }; }
-        [[nodiscard]] static auto float16() -> Type { return Type{ Kind::Float16, {}, {}, {} }; }
-        [[nodiscard]] static auto float32() -> Type { return Type{ Kind::Float32, {}, {}, {} }; }
-        [[nodiscard]] static auto float64() -> Type { return Type{ Kind::Float64, {}, {}, {} }; }
-        [[nodiscard]] static auto float128() -> Type { return Type{ Kind::Float128, {}, {}, {} }; }
+        [[nodiscard]] static auto
+        character() -> Type
+        {
+            return Type{ Kind::Character, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        int8() -> Type
+        {
+            return Type{ Kind::Int8, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        int16() -> Type
+        {
+            return Type{ Kind::Int16, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        int128() -> Type
+        {
+            return Type{ Kind::Int128, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        uint8() -> Type
+        {
+            return Type{ Kind::UInt8, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        uint16() -> Type
+        {
+            return Type{ Kind::UInt16, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        uint32() -> Type
+        {
+            return Type{ Kind::UInt32, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        uint64() -> Type
+        {
+            return Type{ Kind::UInt64, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        uint128() -> Type
+        {
+            return Type{ Kind::UInt128, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        float16() -> Type
+        {
+            return Type{ Kind::Float16, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        float32() -> Type
+        {
+            return Type{ Kind::Float32, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        float64() -> Type
+        {
+            return Type{ Kind::Float64, {}, {}, {} };
+        }
+        [[nodiscard]] static auto
+        float128() -> Type
+        {
+            return Type{ Kind::Float128, {}, {}, {} };
+        }
         [[nodiscard]] static auto
         string() -> Type
         {
@@ -121,7 +173,8 @@ namespace visual_xsharp::core
     {
         bool negative{};
         std::vector<std::uint8_t> magnitude;
-        [[nodiscard]] auto operator==(const IntegerLiteral &) const -> bool = default;
+        [[nodiscard]] auto
+        operator==(const IntegerLiteral &) const -> bool = default;
     };
 
     // Floating-point literals retain their source-independent decimal spelling until LLVM
@@ -130,7 +183,8 @@ namespace visual_xsharp::core
     struct FloatingLiteral final
     {
         std::string spelling;
-        [[nodiscard]] auto operator==(const FloatingLiteral &) const -> bool = default;
+        [[nodiscard]] auto
+        operator==(const FloatingLiteral &) const -> bool = default;
     };
 
     // int64_t and int32_t remain accepted for source compatibility with native clients that

@@ -10,27 +10,32 @@
 
 namespace visual_xsharp::core
 {
-    auto ScalarDescription::is_numeric() const noexcept -> bool
+    auto
+    ScalarDescription::is_numeric() const noexcept -> bool
     {
         return is_integer() || is_floating();
     }
 
-    auto ScalarDescription::is_integer() const noexcept -> bool
+    auto
+    ScalarDescription::is_integer() const noexcept -> bool
     {
         return family == ScalarFamily::SignedInteger || family == ScalarFamily::UnsignedInteger;
     }
 
-    auto ScalarDescription::is_signed() const noexcept -> bool
+    auto
+    ScalarDescription::is_signed() const noexcept -> bool
     {
         return family == ScalarFamily::SignedInteger;
     }
 
-    auto ScalarDescription::is_floating() const noexcept -> bool
+    auto
+    ScalarDescription::is_floating() const noexcept -> bool
     {
         return family == ScalarFamily::Floating;
     }
 
-    auto describe_scalar(const Type &type) noexcept -> std::optional<ScalarDescription>
+    auto
+    describe_scalar(const Type &type) noexcept -> std::optional<ScalarDescription>
     {
         // This table is the native side of the language scalar catalog. Keep
         // it explicit: deriving widths from C++ types would make the compiler
@@ -87,42 +92,49 @@ namespace visual_xsharp::core
         return std::nullopt;
     }
 
-    auto is_numeric(const Type &type) noexcept -> bool
+    auto
+    is_numeric(const Type &type) noexcept -> bool
     {
         const auto description = describe_scalar(type);
         return description && description->is_numeric();
     }
 
-    auto is_integer(const Type &type) noexcept -> bool
+    auto
+    is_integer(const Type &type) noexcept -> bool
     {
         const auto description = describe_scalar(type);
         return description && description->is_integer();
     }
 
-    auto is_signed_integer(const Type &type) noexcept -> bool
+    auto
+    is_signed_integer(const Type &type) noexcept -> bool
     {
         const auto description = describe_scalar(type);
         return description && description->family == ScalarFamily::SignedInteger;
     }
 
-    auto is_unsigned_integer(const Type &type) noexcept -> bool
+    auto
+    is_unsigned_integer(const Type &type) noexcept -> bool
     {
         const auto description = describe_scalar(type);
         return description && description->family == ScalarFamily::UnsignedInteger;
     }
 
-    auto is_floating(const Type &type) noexcept -> bool
+    auto
+    is_floating(const Type &type) noexcept -> bool
     {
         const auto description = describe_scalar(type);
         return description && description->is_floating();
     }
 
-    auto accepts_boolean_context(const Type &type) noexcept -> bool
+    auto
+    accepts_boolean_context(const Type &type) noexcept -> bool
     {
         return type.kind == Type::Kind::Bool || is_numeric(type);
     }
 
-    auto normalize_integer(IntegerLiteral value) -> IntegerLiteral
+    auto
+    normalize_integer(IntegerLiteral value) -> IntegerLiteral
     {
         const auto first_non_zero = std::ranges::find_if(value.magnitude, [](const std::uint8_t octet) {
             return octet != 0U;
@@ -133,23 +145,26 @@ namespace visual_xsharp::core
         return value;
     }
 
-    auto integer_is_canonical(const IntegerLiteral &value) noexcept -> bool
+    auto
+    integer_is_canonical(const IntegerLiteral &value) noexcept -> bool
     {
         if (value.magnitude.empty())
             return !value.negative;
         return value.magnitude.front() != 0U;
     }
 
-    auto integer_is_zero(const IntegerLiteral &value) noexcept -> bool
+    auto
+    integer_is_zero(const IntegerLiteral &value) noexcept -> bool
     {
         return value.magnitude.empty() || std::ranges::all_of(value.magnitude, [](const std::uint8_t octet) {
-            return octet == 0U;
-        });
+                   return octet == 0U;
+               });
     }
 
     namespace
     {
-        auto significant_bits(const IntegerLiteral &value) noexcept -> std::size_t
+        auto
+        significant_bits(const IntegerLiteral &value) noexcept -> std::size_t
         {
             if (value.magnitude.empty())
                 return 0U;
@@ -160,7 +175,8 @@ namespace visual_xsharp::core
             return (value.magnitude.size() - 1U) * 8U + highBits;
         }
 
-        auto is_exact_signed_minimum(const IntegerLiteral &value, const std::size_t width) noexcept -> bool
+        auto
+        is_exact_signed_minimum(const IntegerLiteral &value, const std::size_t width) noexcept -> bool
         {
             if (!value.negative || significant_bits(value) != width)
                 return false;
@@ -173,7 +189,8 @@ namespace visual_xsharp::core
         }
     } // namespace
 
-    auto integer_fits(const IntegerLiteral &value, const Type &type) noexcept -> bool
+    auto
+    integer_fits(const IntegerLiteral &value, const Type &type) noexcept -> bool
     {
         const auto description = describe_scalar(type);
         if (!description || !integer_is_canonical(value))
@@ -190,7 +207,8 @@ namespace visual_xsharp::core
         return bits < description->bit_width || is_exact_signed_minimum(value, description->bit_width);
     }
 
-    auto integer_from_unsigned(std::uint64_t value) -> IntegerLiteral
+    auto
+    integer_from_unsigned(std::uint64_t value) -> IntegerLiteral
     {
         IntegerLiteral result;
         while (value != 0U)
@@ -202,7 +220,8 @@ namespace visual_xsharp::core
         return result;
     }
 
-    auto integer_from_signed(const std::int64_t value) -> IntegerLiteral
+    auto
+    integer_from_signed(const std::int64_t value) -> IntegerLiteral
     {
         // -(INT64_MIN) is not representable, so compute the magnitude in unsigned space.
         const auto negative = value < 0;
@@ -213,10 +232,26 @@ namespace visual_xsharp::core
         return result;
     }
 
-    auto integer_hex_magnitude(const IntegerLiteral &value) -> std::string
+    auto
+    integer_hex_magnitude(const IntegerLiteral &value) -> std::string
     {
         static constexpr std::array<char, 16> kDigits = {
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+            '0',
+            '1',
+            '2',
+            '3',
+            '4',
+            '5',
+            '6',
+            '7',
+            '8',
+            '9',
+            'a',
+            'b',
+            'c',
+            'd',
+            'e',
+            'f'
         };
         if (value.magnitude.empty())
             return "0";
@@ -232,7 +267,8 @@ namespace visual_xsharp::core
         return result;
     }
 
-    auto floating_spelling_is_valid(const std::string_view spelling) noexcept -> bool
+    auto
+    floating_spelling_is_valid(const std::string_view spelling) noexcept -> bool
     {
         if (spelling.empty())
             return false;
@@ -274,7 +310,8 @@ namespace visual_xsharp::core
         return cursor == spelling.size();
     }
 
-    auto validate_literal(const Literal &literal, const Type &type) -> std::optional<std::string>
+    auto
+    validate_literal(const Literal &literal, const Type &type) -> std::optional<std::string>
     {
         if (std::holds_alternative<std::monostate>(literal))
             return type.kind == Type::Kind::Unit ? std::nullopt : std::optional<std::string>{ "unit payload requires unit type" };

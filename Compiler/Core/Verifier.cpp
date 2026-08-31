@@ -5,8 +5,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "Visual/XSharp/Core/Verifier.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Core/Verifier.hpp"
 
 namespace Visual::XSharp::Core
 {

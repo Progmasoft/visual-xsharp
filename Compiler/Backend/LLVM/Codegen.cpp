@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <array>
 #include <limits>
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/APInt.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -454,8 +454,7 @@ namespace Visual::XSharp::Backend::LLVM
             LowerFloatingFloorDiv(llvm::IRBuilder<> &builder, llvm::Value *left, llvm::Value *right) -> llvm::Value *
             {
                 auto *quotient = builder.CreateFDiv(left, right, "floor.quotient");
-                auto *floorIntrinsic =
-                    llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::floor, { left->getType() });
+                auto *floorIntrinsic = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::floor, { left->getType() });
                 return builder.CreateCall(floorIntrinsic, { quotient }, "floor.result");
             }
 
@@ -528,39 +527,39 @@ namespace Visual::XSharp::Backend::LLVM
                         result = floating ? builder.CreateFMul(operands[0], operands[1], "mul") : builder.CreateMul(operands[0], operands[1], "mul");
                         break;
                     case xmm::Opcode::Divide:
-                        result = floating ? builder.CreateFDiv(operands[0], operands[1], "div")
-                                          : unsignedInteger ? builder.CreateUDiv(operands[0], operands[1], "div")
-                                                            : builder.CreateSDiv(operands[0], operands[1], "div");
+                        result = floating          ? builder.CreateFDiv(operands[0], operands[1], "div")
+                                 : unsignedInteger ? builder.CreateUDiv(operands[0], operands[1], "div")
+                                                   : builder.CreateSDiv(operands[0], operands[1], "div");
                         break;
                     case xmm::Opcode::FloorDivide:
-                        result = floating ? LowerFloatingFloorDiv(builder, operands[0], operands[1])
-                                          : unsignedInteger ? builder.CreateUDiv(operands[0], operands[1], "floor.result")
-                                                            : LowerFloorDiv(builder, operands[0], operands[1]);
+                        result = floating          ? LowerFloatingFloorDiv(builder, operands[0], operands[1])
+                                 : unsignedInteger ? builder.CreateUDiv(operands[0], operands[1], "floor.result")
+                                                   : LowerFloorDiv(builder, operands[0], operands[1]);
                         break;
                     case xmm::Opcode::Remainder:
-                        result = floating ? builder.CreateFRem(operands[0], operands[1], "rem")
-                                          : unsignedInteger ? builder.CreateURem(operands[0], operands[1], "rem")
-                                                            : builder.CreateSRem(operands[0], operands[1], "rem");
+                        result = floating          ? builder.CreateFRem(operands[0], operands[1], "rem")
+                                 : unsignedInteger ? builder.CreateURem(operands[0], operands[1], "rem")
+                                                   : builder.CreateSRem(operands[0], operands[1], "rem");
                         break;
                     case xmm::Opcode::CompareLess:
-                        result = floating ? builder.CreateFCmpOLT(operands[0], operands[1], "less")
-                                          : unsignedInteger ? builder.CreateICmpULT(operands[0], operands[1], "less")
-                                                            : builder.CreateICmpSLT(operands[0], operands[1], "less");
+                        result = floating          ? builder.CreateFCmpOLT(operands[0], operands[1], "less")
+                                 : unsignedInteger ? builder.CreateICmpULT(operands[0], operands[1], "less")
+                                                   : builder.CreateICmpSLT(operands[0], operands[1], "less");
                         break;
                     case xmm::Opcode::CompareLessEqual:
-                        result = floating ? builder.CreateFCmpOLE(operands[0], operands[1], "less.equal")
-                                          : unsignedInteger ? builder.CreateICmpULE(operands[0], operands[1], "less.equal")
-                                                            : builder.CreateICmpSLE(operands[0], operands[1], "less.equal");
+                        result = floating          ? builder.CreateFCmpOLE(operands[0], operands[1], "less.equal")
+                                 : unsignedInteger ? builder.CreateICmpULE(operands[0], operands[1], "less.equal")
+                                                   : builder.CreateICmpSLE(operands[0], operands[1], "less.equal");
                         break;
                     case xmm::Opcode::CompareGreater:
-                        result = floating ? builder.CreateFCmpOGT(operands[0], operands[1], "greater")
-                                          : unsignedInteger ? builder.CreateICmpUGT(operands[0], operands[1], "greater")
-                                                            : builder.CreateICmpSGT(operands[0], operands[1], "greater");
+                        result = floating          ? builder.CreateFCmpOGT(operands[0], operands[1], "greater")
+                                 : unsignedInteger ? builder.CreateICmpUGT(operands[0], operands[1], "greater")
+                                                   : builder.CreateICmpSGT(operands[0], operands[1], "greater");
                         break;
                     case xmm::Opcode::CompareGreaterEqual:
-                        result = floating ? builder.CreateFCmpOGE(operands[0], operands[1], "greater.equal")
-                                          : unsignedInteger ? builder.CreateICmpUGE(operands[0], operands[1], "greater.equal")
-                                                            : builder.CreateICmpSGE(operands[0], operands[1], "greater.equal");
+                        result = floating          ? builder.CreateFCmpOGE(operands[0], operands[1], "greater.equal")
+                                 : unsignedInteger ? builder.CreateICmpUGE(operands[0], operands[1], "greater.equal")
+                                                   : builder.CreateICmpSGE(operands[0], operands[1], "greater.equal");
                         break;
                     case xmm::Opcode::CompareEqual:
                         result = floating ? builder.CreateFCmpOEQ(operands[0], operands[1], "equal") : builder.CreateICmpEQ(operands[0], operands[1], "equal");
