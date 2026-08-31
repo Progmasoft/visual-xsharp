@@ -4,7 +4,7 @@
 #include <array>
 #include <cstddef>
 
-#include "Visual/XSharp/lil-c/model.hh"
+#include "Visual/XSharp/Legacy/lil-c/model.hh"
 
 extern "C" const char *
 xs_lil_type_name(XsLilType type)

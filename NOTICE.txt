@@ -1,4 +1,4 @@
-vxs-project
+visual-xsharp
 Copyright 2026 Progmasoft <support@progmasoft.com>
 
 The original source code in this repository is licensed under the Mozilla

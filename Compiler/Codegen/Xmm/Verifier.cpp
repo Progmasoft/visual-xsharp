@@ -8,6 +8,7 @@
 #include <unordered_set>
 
 #include "Visual/XSharp/Xmm/Verifier.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace Visual::XSharp::Xmm
 {
@@ -42,8 +43,21 @@ namespace Visual::XSharp::Xmm
             {
                 case core::Type::Kind::Unit:
                 case core::Type::Kind::Bool:
+                case core::Type::Kind::Character:
+                case core::Type::Kind::Int8:
+                case core::Type::Kind::Int16:
                 case core::Type::Kind::Int64:
                 case core::Type::Kind::Int32:
+                case core::Type::Kind::Int128:
+                case core::Type::Kind::UInt8:
+                case core::Type::Kind::UInt16:
+                case core::Type::Kind::UInt32:
+                case core::Type::Kind::UInt64:
+                case core::Type::Kind::UInt128:
+                case core::Type::Kind::Float16:
+                case core::Type::Kind::Float32:
+                case core::Type::Kind::Float64:
+                case core::Type::Kind::Float128:
                 case core::Type::Kind::String:
                     return true;
                 case core::Type::Kind::Function:
@@ -66,10 +80,36 @@ namespace Visual::XSharp::Xmm
                     return "Unit";
                 case core::Type::Kind::Bool:
                     return "Bool";
+                case core::Type::Kind::Character:
+                    return "Character";
+                case core::Type::Kind::Int8:
+                    return "Byte";
+                case core::Type::Kind::Int16:
+                    return "Short";
                 case core::Type::Kind::Int64:
-                    return "Long";
-                case core::Type::Kind::Int32:
                     return "Int";
+                case core::Type::Kind::Int32:
+                    return "Long";
+                case core::Type::Kind::Int128:
+                    return "LongInt";
+                case core::Type::Kind::UInt8:
+                    return "UByte";
+                case core::Type::Kind::UInt16:
+                    return "UShort";
+                case core::Type::Kind::UInt32:
+                    return "ULong";
+                case core::Type::Kind::UInt64:
+                    return "UInt";
+                case core::Type::Kind::UInt128:
+                    return "ULongInt";
+                case core::Type::Kind::Float16:
+                    return "SFloat";
+                case core::Type::Kind::Float32:
+                    return "LFloat";
+                case core::Type::Kind::Float64:
+                    return "Float";
+                case core::Type::Kind::Float128:
+                    return "Double";
                 case core::Type::Kind::String:
                     return "String";
                 case core::Type::Kind::Function:
@@ -83,31 +123,25 @@ namespace Visual::XSharp::Xmm
         }
 
         [[nodiscard]] auto
-        IsInteger(const core::Type &type) -> bool
-        {
-            return type.kind == core::Type::Kind::Int64 || type.kind == core::Type::Kind::Int32;
-        }
-
-        [[nodiscard]] auto
         ExpectedOperandCount(xmm::Opcode opcode) -> std::size_t
         {
             switch (opcode)
             {
                 case xmm::Opcode::LoadImmediate:
                 case xmm::Opcode::Move:
-                case xmm::Opcode::NegateI64:
+                case xmm::Opcode::Negate:
                 case xmm::Opcode::NotBool:
                     return 1;
-                case xmm::Opcode::AddI64:
-                case xmm::Opcode::SubI64:
-                case xmm::Opcode::MulI64:
-                case xmm::Opcode::DivI64:
-                case xmm::Opcode::FloorDivI64:
-                case xmm::Opcode::RemI64:
-                case xmm::Opcode::CompareLessI64:
-                case xmm::Opcode::CompareLessEqualI64:
-                case xmm::Opcode::CompareGreaterI64:
-                case xmm::Opcode::CompareGreaterEqualI64:
+                case xmm::Opcode::Add:
+                case xmm::Opcode::Subtract:
+                case xmm::Opcode::Multiply:
+                case xmm::Opcode::Divide:
+                case xmm::Opcode::FloorDivide:
+                case xmm::Opcode::Remainder:
+                case xmm::Opcode::CompareLess:
+                case xmm::Opcode::CompareLessEqual:
+                case xmm::Opcode::CompareGreater:
+                case xmm::Opcode::CompareGreaterEqual:
                 case xmm::Opcode::CompareEqual:
                 case xmm::Opcode::CompareNotEqual:
                 case xmm::Opcode::AndBool:
@@ -125,9 +159,8 @@ namespace Visual::XSharp::Xmm
         {
             if (value.kind != xmm::Value::Kind::Immediate)
                 return;
-            const bool matches = (value.type.kind == core::Type::Kind::Unit && std::holds_alternative<std::monostate>(value.immediate)) || (value.type.kind == core::Type::Kind::Bool && std::holds_alternative<bool>(value.immediate)) || (value.type.kind == core::Type::Kind::Int64 && std::holds_alternative<std::int64_t>(value.immediate)) || (value.type.kind == core::Type::Kind::Int32 && std::holds_alternative<std::int32_t>(value.immediate)) || (value.type.kind == core::Type::Kind::String && std::holds_alternative<std::u32string>(value.immediate));
-            if (!matches)
-                context.add(IssueKind::InvalidLiteral, "VXL1018", "immediate payload does not match its declared type");
+            if (const auto issue = core::validate_literal(value.immediate, value.type))
+                context.add(IssueKind::InvalidLiteral, "VXL1018", "immediate payload is invalid: " + *issue);
         }
 
         void
@@ -222,17 +255,17 @@ namespace Visual::XSharp::Xmm
                         }))
                         context.add(IssueKind::OperandType, "VXL1022", "logical instruction requires Bool operands and result");
                 }
-                else if (instruction.opcode >= xmm::Opcode::CompareLessI64 && instruction.opcode <= xmm::Opcode::CompareNotEqual)
+                else if (instruction.opcode >= xmm::Opcode::CompareLess && instruction.opcode <= xmm::Opcode::CompareNotEqual)
                 {
                     if (instruction.result_type.kind != core::Type::Kind::Bool || (instruction.operands.size() == 2 && instruction.operands[0].type != instruction.operands[1].type))
                         context.add(IssueKind::OperandType, "VXL1023", "comparison requires equal operand types and Bool result");
                 }
                 else if (instruction.opcode != xmm::Opcode::Call)
                 {
-                    if (!IsInteger(instruction.result_type) || std::ranges::any_of(instruction.operands, [&instruction](const xmm::Value &value) {
+                    if (!core::is_numeric(instruction.result_type) || std::ranges::any_of(instruction.operands, [&instruction](const xmm::Value &value) {
                             return value.type != instruction.result_type;
                         }))
-                        context.add(IssueKind::OperandType, "VXL1024", "integer instruction operand and result types must agree");
+                        context.add(IssueKind::OperandType, "VXL1024", "numeric instruction operand and result types must agree");
                 }
             }
 

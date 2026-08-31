@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "Visual/XSharp/Xpp/Verifier.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace Visual::XSharp::Xpp
 {
@@ -34,24 +35,7 @@ namespace Visual::XSharp::Xpp
         {
             if (operand.kind != IR::Operand::Kind::Literal)
                 return true;
-            switch (operand.type.kind)
-            {
-                case Core::Type::Kind::Unit:
-                    return std::holds_alternative<std::monostate>(operand.literal);
-                case Core::Type::Kind::Bool:
-                    return std::holds_alternative<bool>(operand.literal);
-                case Core::Type::Kind::Int64:
-                    return std::holds_alternative<std::int64_t>(operand.literal);
-                case Core::Type::Kind::Int32:
-                    return std::holds_alternative<std::int32_t>(operand.literal);
-                case Core::Type::Kind::String:
-                    return std::holds_alternative<std::u32string>(operand.literal);
-                case Core::Type::Kind::Function:
-                case Core::Type::Kind::Named:
-                case Core::Type::Kind::TypeVariable:
-                    return false;
-            }
-            return false;
+            return !Core::validate_literal(operand.literal, operand.type).has_value();
         }
 
         [[nodiscard]] auto

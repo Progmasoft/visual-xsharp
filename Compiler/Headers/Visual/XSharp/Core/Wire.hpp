@@ -13,7 +13,7 @@
 
 namespace Visual::XSharp::Core::Wire
 {
-    inline constexpr std::uint16_t kCurrentVersion = 1;
+    inline constexpr std::uint16_t kCurrentVersion = 3;
 
     struct Limits final
     {
@@ -25,6 +25,7 @@ namespace Visual::XSharp::Core::Wire
         std::size_t maximumOperands{ 65535U };
         std::size_t maximumTypeDepth{ 128U };
         std::size_t maximumExpressionDepth{ 4096U };
+        std::size_t maximumNumericBytes{ 4096U };
     };
 
     enum class ErrorKind : std::uint8_t

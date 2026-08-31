@@ -6,6 +6,7 @@
 #include <type_traits>
 
 #include "Visual/XSharp/Core/CorePrep/Wire.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace visual_xsharp::core::wire
 {
@@ -194,6 +195,32 @@ namespace visual_xsharp::core::wire
                     }
                     case 7:
                         return Type::type_variable(symbol("type variable symbol"));
+                    case 8:
+                        return Type::character();
+                    case 9:
+                        return Type::int8();
+                    case 10:
+                        return Type::int16();
+                    case 11:
+                        return Type::int128();
+                    case 12:
+                        return Type::uint8();
+                    case 13:
+                        return Type::uint16();
+                    case 14:
+                        return Type::uint32();
+                    case 15:
+                        return Type::uint64();
+                    case 16:
+                        return Type::uint128();
+                    case 17:
+                        return Type::float16();
+                    case 18:
+                        return Type::float32();
+                    case 19:
+                        return Type::float64();
+                    case 20:
+                        return Type::float128();
                     default:
                         fail(ErrorKind::InvalidTag, "type tag", "unknown CorePrep type tag");
                         return Type::unit();
@@ -218,10 +245,51 @@ namespace visual_xsharp::core::wire
                         return std::monostate{};
                     case Type::Kind::Bool:
                         return boolean("boolean literal");
-                    case Type::Kind::Int64:
-                        return static_cast<std::int64_t>(unsigned_integer<std::uint64_t>("int64 literal"));
+                    case Type::Kind::Character:
+                    case Type::Kind::Int8:
+                    case Type::Kind::Int16:
                     case Type::Kind::Int32:
-                        return static_cast<std::int32_t>(unsigned_integer<std::uint32_t>("int32 literal"));
+                    case Type::Kind::Int64:
+                    case Type::Kind::Int128:
+                    case Type::Kind::UInt8:
+                    case Type::Kind::UInt16:
+                    case Type::Kind::UInt32:
+                    case Type::Kind::UInt64:
+                    case Type::Kind::UInt128:
+                    {
+                        IntegerLiteral value;
+                        value.negative = boolean("integer sign");
+                        value.magnitude = vector<std::uint8_t>(limits_.maximum_numeric_bytes, "integer magnitude", [this] {
+                            return byte("integer magnitude");
+                        });
+                        if (!integer_is_canonical(value))
+                            fail(ErrorKind::InvalidInteger, "integer literal", "integer magnitude/sign is not canonical");
+                        else if (!integer_fits(value, value_type) && value_type.kind != Type::Kind::Character)
+                            fail(ErrorKind::InvalidInteger, "integer literal", "integer does not fit its declared scalar type");
+                        else if (value_type.kind == Type::Kind::Character && (value.negative || value.magnitude.size() > 4U))
+                            fail(ErrorKind::InvalidInteger, "character literal", "character payload exceeds unsigned 32-bit range");
+                        return value;
+                    }
+                    case Type::Kind::Float16:
+                    case Type::Kind::Float32:
+                    case Type::Kind::Float64:
+                    case Type::Kind::Float128:
+                    {
+                        const auto size = count(limits_.maximum_numeric_bytes, "floating literal length");
+                        std::string spelling;
+                        spelling.reserve(size);
+                        for (std::size_t index = 0; index < size && !error_; ++index)
+                        {
+                            const auto value = byte("floating literal");
+                            if (value > 0x7fU)
+                                fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling must be ASCII");
+                            else
+                                spelling.push_back(static_cast<char>(value));
+                        }
+                        if (!error_ && !floating_spelling_is_valid(spelling))
+                            fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling is not canonical");
+                        return FloatingLiteral{ std::move(spelling) };
+                    }
                     case Type::Kind::String:
                         return text("string literal");
                     case Type::Kind::Function:

@@ -11,7 +11,7 @@
 #include "Compiler/Cli/Arguments/Options.hpp"
 
 #ifndef XS_PROJECT_VERSION
-#    define XS_PROJECT_VERSION "0.3.3"
+#    define XS_PROJECT_VERSION "0.3.4"
 #endif
 
 namespace
@@ -741,8 +741,6 @@ ParseCommandLine(int argc, char **argv)
     if (argc < 0 || (argc > 0 && argv == nullptr))
         return Failure(std::move(options), "invalid process argument vector");
 
-    if (argc == 2 && argv[1] != nullptr && std::string_view(argv[1]) == "--version")
-        return { XS_CLI_PARSE_VERSION, std::move(options), std::nullopt, {} };
     if (argc < 2 || argv[1] == nullptr)
         return Failure(std::move(options), "a command is required; use -Help to list commands");
     if (std::string_view(argv[1]) == kHelpOption)

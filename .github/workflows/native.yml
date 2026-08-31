@@ -106,5 +106,5 @@ jobs:
       - name: Test native compiler
         shell: pwsh
         run: |
-          bazel build //tests:cli_parser_tests
+          bazel build //Compiler/Cli/Tests:cli_parser_tests
           & .\bazel-bin\tests\cli_parser_tests.exe

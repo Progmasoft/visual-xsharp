@@ -6,6 +6,7 @@
 #include <type_traits>
 
 #include "Visual/XSharp/Core/CorePrep/Wire.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace visual_xsharp::core::wire
 {
@@ -137,13 +138,59 @@ namespace visual_xsharp::core::wire
                     fail(ErrorKind::LimitExceeded, "type", "type nesting exceeds configured limit");
                     return;
                 }
-                byte(static_cast<std::uint8_t>(value.kind));
+                const auto primitive_tag = [](const Type::Kind kind) -> std::optional<std::uint8_t> {
+                    using enum Type::Kind;
+                    switch (kind)
+                    {
+                        case Unit: return 0;
+                        case Bool: return 1;
+                        case Int64: return 2;
+                        case Int32: return 3;
+                        case String: return 4;
+                        case Function: return 5;
+                        case Named: return 6;
+                        case TypeVariable: return 7;
+                        case Character: return 8;
+                        case Int8: return 9;
+                        case Int16: return 10;
+                        case Int128: return 11;
+                        case UInt8: return 12;
+                        case UInt16: return 13;
+                        case UInt32: return 14;
+                        case UInt64: return 15;
+                        case UInt128: return 16;
+                        case Float16: return 17;
+                        case Float32: return 18;
+                        case Float64: return 19;
+                        case Float128: return 20;
+                    }
+                    return std::nullopt;
+                }(value.kind);
+                if (!primitive_tag)
+                {
+                    fail(ErrorKind::UnsupportedType, "type", "type has no CorePrep wire tag");
+                    return;
+                }
+                byte(*primitive_tag);
                 switch (value.kind)
                 {
                     case Type::Kind::Unit:
                     case Type::Kind::Bool:
+                    case Type::Kind::Character:
+                    case Type::Kind::Int8:
+                    case Type::Kind::Int16:
                     case Type::Kind::Int64:
                     case Type::Kind::Int32:
+                    case Type::Kind::Int128:
+                    case Type::Kind::UInt8:
+                    case Type::Kind::UInt16:
+                    case Type::Kind::UInt32:
+                    case Type::Kind::UInt64:
+                    case Type::Kind::UInt128:
+                    case Type::Kind::Float16:
+                    case Type::Kind::Float32:
+                    case Type::Kind::Float64:
+                    case Type::Kind::Float128:
                     case Type::Kind::String:
                         return;
                     case Type::Kind::Function:
@@ -172,6 +219,18 @@ namespace visual_xsharp::core::wire
             void
             literal(const Atom &value)
             {
+                const auto write_integer = [this, &value](IntegerLiteral integer) {
+                    integer = normalize_integer(std::move(integer));
+                    if (const auto issue = validate_literal(integer, value.type))
+                    {
+                        fail(ErrorKind::InvalidInteger, "integer literal", *issue);
+                        return;
+                    }
+                    byte(integer.negative ? 1U : 0U);
+                    vector(integer.magnitude, limits_.maximum_numeric_bytes, "integer magnitude", [this](const std::uint8_t octet) {
+                        byte(octet);
+                    });
+                };
                 switch (value.type.kind)
                 {
                     case Type::Kind::Unit:
@@ -184,17 +243,43 @@ namespace visual_xsharp::core::wire
                         else
                             fail(ErrorKind::UnsupportedType, "bool literal", "literal payload does not match bool type");
                         return;
-                    case Type::Kind::Int64:
-                        if (const auto *integer = std::get_if<std::int64_t>(&value.literal))
-                            unsigned_integer(static_cast<std::uint64_t>(*integer));
-                        else
-                            fail(ErrorKind::UnsupportedType, "int64 literal", "literal payload does not match int64 type");
-                        return;
+                    case Type::Kind::Character:
+                    case Type::Kind::Int8:
+                    case Type::Kind::Int16:
                     case Type::Kind::Int32:
-                        if (const auto *integer = std::get_if<std::int32_t>(&value.literal))
-                            unsigned_integer(static_cast<std::uint32_t>(*integer));
+                    case Type::Kind::Int64:
+                    case Type::Kind::Int128:
+                    case Type::Kind::UInt8:
+                    case Type::Kind::UInt16:
+                    case Type::Kind::UInt32:
+                    case Type::Kind::UInt64:
+                    case Type::Kind::UInt128:
+                        if (const auto *integer = std::get_if<IntegerLiteral>(&value.literal))
+                            write_integer(*integer);
+                        else if (const auto *integer64 = std::get_if<std::int64_t>(&value.literal))
+                            write_integer(integer_from_signed(*integer64));
+                        else if (const auto *integer32 = std::get_if<std::int32_t>(&value.literal))
+                            write_integer(integer_from_signed(*integer32));
                         else
-                            fail(ErrorKind::UnsupportedType, "int32 literal", "literal payload does not match int32 type");
+                            fail(ErrorKind::UnsupportedType, "integer literal", "literal payload does not match integer type");
+                        return;
+                    case Type::Kind::Float16:
+                    case Type::Kind::Float32:
+                    case Type::Kind::Float64:
+                    case Type::Kind::Float128:
+                        if (const auto *floating = std::get_if<FloatingLiteral>(&value.literal))
+                        {
+                            if (const auto issue = validate_literal(*floating, value.type))
+                            {
+                                fail(ErrorKind::InvalidInteger, "floating literal", *issue);
+                                return;
+                            }
+                            count(floating->spelling.size(), limits_.maximum_numeric_bytes, "floating literal length");
+                            for (const auto character : floating->spelling)
+                                byte(static_cast<std::uint8_t>(character));
+                        }
+                        else
+                            fail(ErrorKind::UnsupportedType, "floating literal", "literal payload does not match floating type");
                         return;
                     case Type::Kind::String:
                         if (const auto *string = std::get_if<std::u32string>(&value.literal))

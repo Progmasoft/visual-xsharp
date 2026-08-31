@@ -6,6 +6,7 @@
 #include <unordered_set>
 
 #include "Visual/XSharp/Core/Verifier.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace Visual::XSharp::Core
 {
@@ -144,7 +145,8 @@ namespace Visual::XSharp::Core
                     case Statement::Kind::If:
                     {
                         VerifyExpression(statement.expression, environment);
-                        CheckSameType(Type::boolean(), statement.expression.type, "VXC1017", "Core condition must be bool");
+                        if (!accepts_boolean_context(statement.expression.type))
+                            Add("VXC1017", "Core condition must be bool or numeric");
                         auto trueEnvironment = environment;
                         auto falseEnvironment = environment;
                         VerifyStatements(statement.trueBranch, trueEnvironment);
@@ -190,16 +192,8 @@ namespace Visual::XSharp::Core
             void
             VerifyLiteral(const Expression &expression)
             {
-                Type expected = Type::unit();
-                if (std::holds_alternative<bool>(expression.literal))
-                    expected = Type::boolean();
-                else if (std::holds_alternative<std::int64_t>(expression.literal))
-                    expected = Type::int64();
-                else if (std::holds_alternative<std::u32string>(expression.literal))
-                    expected = Type::string();
-                else if (std::holds_alternative<std::int32_t>(expression.literal))
-                    expected = Type::int32();
-                CheckSameType(expected, expression.type, "VXC1029", "Core literal payload does not match its type");
+                if (const auto issue = validate_literal(expression.literal, expression.type))
+                    Add("VXC1029", "Core literal payload does not match its type: " + *issue);
             }
             void
             VerifyCall(const Expression &expression, const Environment &environment)
@@ -236,11 +230,26 @@ namespace Visual::XSharp::Core
                 const auto comparison = expression.primitive >= Primitive::LessThan && expression.primitive <= Primitive::NotEqual;
                 if (expression.operands.size() != (unary ? 1U : 2U))
                     Add("VXC1026", "Core primitive has the wrong operand count");
-                const auto operandType = logical ? Type::boolean() : Type::int64();
+                if (expression.operands.empty())
+                    return;
+                const auto &operandType = expression.operands.front().type;
                 for (const auto &operand : expression.operands)
-                    CheckSameType(operandType, operand.type, "VXC1027", "Core primitive operand has the wrong type");
-                const auto resultType = logical || comparison ? Type::boolean() : Type::int64();
-                CheckSameType(resultType, expression.type, "VXC1028", "Core primitive result has the wrong type");
+                    CheckSameType(operandType, operand.type, "VXC1027", "Core primitive operands must have matching types");
+
+                if (logical)
+                {
+                    for (const auto &operand : expression.operands)
+                        if (!accepts_boolean_context(operand.type))
+                            Add("VXC1027", "Core logical primitive requires bool or numeric operands");
+                }
+                else if (!is_numeric(operandType) && expression.primitive != Primitive::Equal && expression.primitive != Primitive::NotEqual)
+                    Add("VXC1027", "Core arithmetic or ordering primitive requires numeric operands");
+
+                if (expression.primitive == Primitive::Negate && !is_signed_integer(operandType) && !is_floating(operandType))
+                    Add("VXC1027", "Core negation requires a signed integer or floating operand");
+
+                const auto expectedResult = logical || comparison ? Type::boolean() : operandType;
+                CheckSameType(expectedResult, expression.type, "VXC1028", "Core primitive result has the wrong type");
             }
         };
     } // namespace

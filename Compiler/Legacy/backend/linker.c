@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
  */
 
-#include "Visual/XSharp/backend/linker.h"
+#include "Visual/XSharp/Legacy/backend/linker.h"
 
 #include <errno.h>
 #ifdef _WIN32

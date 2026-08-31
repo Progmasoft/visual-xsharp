@@ -39,25 +39,25 @@ namespace visual_xsharp::xmm
                 case xpp::Opcode::Call:
                     return Opcode::Call;
                 case xpp::Opcode::Add:
-                    return Opcode::AddI64;
+                    return Opcode::Add;
                 case xpp::Opcode::Subtract:
-                    return Opcode::SubI64;
+                    return Opcode::Subtract;
                 case xpp::Opcode::Multiply:
-                    return Opcode::MulI64;
+                    return Opcode::Multiply;
                 case xpp::Opcode::Divide:
-                    return Opcode::DivI64;
+                    return Opcode::Divide;
                 case xpp::Opcode::FloorDivide:
-                    return Opcode::FloorDivI64;
+                    return Opcode::FloorDivide;
                 case xpp::Opcode::Remainder:
-                    return Opcode::RemI64;
+                    return Opcode::Remainder;
                 case xpp::Opcode::CompareLess:
-                    return Opcode::CompareLessI64;
+                    return Opcode::CompareLess;
                 case xpp::Opcode::CompareLessEqual:
-                    return Opcode::CompareLessEqualI64;
+                    return Opcode::CompareLessEqual;
                 case xpp::Opcode::CompareGreater:
-                    return Opcode::CompareGreaterI64;
+                    return Opcode::CompareGreater;
                 case xpp::Opcode::CompareGreaterEqual:
-                    return Opcode::CompareGreaterEqualI64;
+                    return Opcode::CompareGreaterEqual;
                 case xpp::Opcode::CompareEqual:
                     return Opcode::CompareEqual;
                 case xpp::Opcode::CompareNotEqual:
@@ -67,7 +67,7 @@ namespace visual_xsharp::xmm
                 case xpp::Opcode::LogicalOr:
                     return Opcode::OrBool;
                 case xpp::Opcode::Negate:
-                    return Opcode::NegateI64;
+                    return Opcode::Negate;
                 case xpp::Opcode::LogicalNot:
                     return Opcode::NotBool;
                 case xpp::Opcode::MakeClosure:

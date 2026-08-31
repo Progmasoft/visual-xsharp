@@ -4,11 +4,11 @@
 #include <utility>
 #include <vector>
 
-#include "Visual/XSharp/lil-c/function.hh"
-#include "Visual/XSharp/lil-c/module.hh"
-#include "Visual/XSharp/lil-c/text.hh"
-#include "Visual/XSharp/lil/Error.hpp"
-#include "Visual/XSharp/lil/Module.hpp"
+#include "Visual/XSharp/Legacy/lil-c/function.hh"
+#include "Visual/XSharp/Legacy/lil-c/module.hh"
+#include "Visual/XSharp/Legacy/lil-c/text.hh"
+#include "Visual/XSharp/Legacy/lil/Error.hpp"
+#include "Visual/XSharp/Legacy/lil/Module.hpp"
 
 namespace xs::lil
 {

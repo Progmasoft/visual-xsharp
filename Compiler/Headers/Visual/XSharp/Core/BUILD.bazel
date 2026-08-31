@@ -20,6 +20,13 @@ cc_library(
 )
 
 cc_library(
+    name = "scalar",
+    hdrs = ["Scalar.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [":coreprep_model"],
+)
+
+cc_library(
     name = "coreprep",
     hdrs = [
         "CorePrep/Prepare.hpp",

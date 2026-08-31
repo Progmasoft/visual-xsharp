@@ -4,7 +4,6 @@ module Visual.XSharp.Core.CorePrep.Wire.Decode (decodeCorePrep, decodeCorePrepWi
 
 import Data.Bits (Bits, shiftL, (.|.))
 import Data.Char (chr)
-import Data.Int (Int64)
 import Data.Word (Word16, Word32, Word64, Word8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
@@ -144,8 +143,10 @@ decodeLiteral :: Type -> Decoder CoreLiteral
 decodeLiteral valueType
     | valueType == unitType = pure CoreUnit
     | valueType == boolType = CoreBoolean <$> decodeBool "boolean literal"
-    | valueType == intType = CoreInteger . fromIntegral . (fromIntegral :: Word64 -> Int64) <$> readWord64 "integer literal"
     | valueType == stringType = CoreString <$> decodeText "string literal"
+    | typeName valueType == "char" = CoreInteger <$> decodeInteger
+    | typeName valueType `elem` integerTypeNames = CoreInteger <$> decodeInteger
+    | typeName valueType `elem` floatingTypeNames = CoreFloating <$> decodeAscii "floating literal"
     | otherwise = failAt UnsupportedType "literal" "literal uses an unsupported type"
 
 decodeTerminator :: Decoder CorePrepTerminator
@@ -187,7 +188,7 @@ decodeTypeAt depth = do
         1 -> pure boolType
         2 -> pure intType
         4 -> pure stringType
-        3 -> pure (NamedType (QualifiedName [Identifier "int32"]) [])
+        3 -> pure (namedScalar "long")
         5 ->
             FunctionType
                 <$> decodeVectorWithMaximum "function type parameter count" 65535 (decodeTypeAt (depth + 1))
@@ -197,7 +198,33 @@ decodeTypeAt depth = do
                 <$> decodeQualifiedName
                 <*> decodeVectorWithMaximum "type argument count" 65535 (decodeTypeAt (depth + 1))
         7 -> TypeVariable <$> decodeResolvedName "type variable symbol"
+        8 -> pure (namedScalar "char")
+        9 -> pure (namedScalar "byte")
+        10 -> pure (namedScalar "short")
+        11 -> pure (namedScalar "longint")
+        12 -> pure (namedScalar "ubyte")
+        13 -> pure (namedScalar "ushort")
+        14 -> pure (namedScalar "ulong")
+        15 -> pure (namedScalar "uint")
+        16 -> pure (namedScalar "ulongint")
+        17 -> pure (namedScalar "sfloat")
+        18 -> pure (namedScalar "lfloat")
+        19 -> pure (namedScalar "float")
+        20 -> pure (namedScalar "double")
         _ -> invalidTag "type tag" tag
+
+namedScalar :: String -> Type
+namedScalar name = NamedType (QualifiedName [Identifier name]) []
+
+typeName :: Type -> String
+typeName (NamedType (QualifiedName [Identifier name]) []) = name
+typeName _ = ""
+
+integerTypeNames :: [String]
+integerTypeNames = ["byte", "short", "long", "int", "longint", "ubyte", "ushort", "ulong", "uint", "ulongint"]
+
+floatingTypeNames :: [String]
+floatingTypeNames = ["sfloat", "lfloat", "float", "double"]
 
 decodeBlockId :: String -> Decoder Int
 decodeBlockId context = fromIntegral <$> readWord32 context
@@ -227,6 +254,38 @@ decodeText context = do
         context
         "text exceeds configured code point limit"
     sequence (replicate (fromIntegral count) (decodeCodePoint context))
+
+decodeInteger :: Decoder Integer
+decodeInteger = do
+    negative <- decodeBool "integer sign"
+    limits <- currentLimits
+    count <- readWord32 "integer magnitude length"
+    require
+        (toInteger count <= toInteger (maximumNumericBytes limits))
+        LimitExceeded
+        "integer magnitude"
+        "integer magnitude exceeds configured byte limit"
+    magnitude <- takeBytes "integer magnitude" (fromIntegral count)
+    require (canonicalMagnitude magnitude) InvalidInteger "integer magnitude" "integer magnitude is not canonical"
+    require (not negative || not (null magnitude)) InvalidInteger "integer sign" "zero cannot have a negative sign"
+    let value = foldl (\result octet -> result * 256 + fromIntegral octet) 0 magnitude
+    pure (if negative then negate value else value)
+    where
+        canonicalMagnitude [] = True
+        canonicalMagnitude (first : _) = first /= 0
+
+decodeAscii :: String -> Decoder String
+decodeAscii context = do
+    limits <- currentLimits
+    count <- readWord32 (context ++ " length")
+    require
+        (toInteger count <= toInteger (maximumNumericBytes limits))
+        LimitExceeded
+        context
+        "numeric spelling exceeds configured byte limit"
+    bytes <- takeBytes context (fromIntegral count)
+    require (all (<= 0x7f) bytes) InvalidInteger context "numeric spelling must contain ASCII characters only"
+    pure (map (chr . fromIntegral) bytes)
 
 decodeCodePoint :: String -> Decoder Char
 decodeCodePoint context = do

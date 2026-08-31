@@ -7,6 +7,7 @@ import Control.Exception (finally)
 import Data.List (isInfixOf)
 import Data.Word (Word8)
 import NumericTests (numericTests)
+import ScalarWireTests (scalarWireTests)
 import SourceSetTests (sourceSetTests)
 import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
@@ -72,19 +73,20 @@ main = do
     check "Core wire rejects trailing bytes" coreWireRejectsTrailingInput
     check "Core wire rejects unresolved types" coreWireRejectsUnresolvedType
     check "Core wire preserves Unicode scalar values" coreWirePreservesUnicode
-    check "Core wire v2 golden bytes remain stable" coreWireGoldenDocument
+    check "Core wire v3 golden bytes remain stable" coreWireGoldenDocument
     check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
     check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
     check "CorePrep wire codec rejects unsupported types" wireRejectsUnsupportedType
     check "CorePrep wire codec preserves Unicode scalar values" wirePreservesUnicode
-    check "CorePrep wire v2 golden bytes remain stable" wireGoldenDocument
+    check "CorePrep wire v3 golden bytes remain stable" wireGoldenDocument
     checkIO "real Core artifact round-trips through .core I/O" coreArtifactRoundTrip
     checkIO "Core artifact rejects an invalid Core module" coreArtifactRejectsInvalidModule
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
     mapM_ (uncurry checkIO) sourceSetTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) numericTests
+    mapM_ (uncurry check) scalarWireTests
     mapM_ (uncurry check) voidTests
 
 check :: String -> Bool -> IO ()
@@ -417,7 +419,7 @@ coreWireGoldenDocument =
             , 0x58
             , 0x43
             , 0x52
-            , 0x02
+            , 0x03
             , 0x00
             , 0x00
             , 0x00
@@ -555,7 +557,7 @@ goldenBytes =
     , 0x58
     , 0x43
     , 0x50
-    , 0x02
+    , 0x03
     , 0x00
     , 0x00
     , 0x00
@@ -651,7 +653,7 @@ coreArtifactRoundTrip = case compile sample of
     Left _ -> pure False
     Right artifacts -> do
         temporary <- getTemporaryDirectory
-        let path = temporary </> "visual-xsharp-core-wire-v2.core"
+        let path = temporary </> "visual-xsharp-core-wire-v3.core"
             cleanup = doesFileExist path >>= \exists -> if exists then removeFile path else pure ()
             value = artifactOptimizedCore artifacts
         ( do

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <utility>
 #include <variant>
@@ -29,8 +30,21 @@ namespace visual_xsharp::core
         {
             Unit,
             Bool,
+            Character,
+            Int8,
+            Int16,
             Int64,
             Int32,
+            Int128,
+            UInt8,
+            UInt16,
+            UInt32,
+            UInt64,
+            UInt128,
+            Float16,
+            Float32,
+            Float64,
+            Float128,
             String,
             Function,
             Named,
@@ -61,6 +75,19 @@ namespace visual_xsharp::core
         {
             return Type{ Kind::Int32, {}, {}, {} };
         }
+        [[nodiscard]] static auto character() -> Type { return Type{ Kind::Character, {}, {}, {} }; }
+        [[nodiscard]] static auto int8() -> Type { return Type{ Kind::Int8, {}, {}, {} }; }
+        [[nodiscard]] static auto int16() -> Type { return Type{ Kind::Int16, {}, {}, {} }; }
+        [[nodiscard]] static auto int128() -> Type { return Type{ Kind::Int128, {}, {}, {} }; }
+        [[nodiscard]] static auto uint8() -> Type { return Type{ Kind::UInt8, {}, {}, {} }; }
+        [[nodiscard]] static auto uint16() -> Type { return Type{ Kind::UInt16, {}, {}, {} }; }
+        [[nodiscard]] static auto uint32() -> Type { return Type{ Kind::UInt32, {}, {}, {} }; }
+        [[nodiscard]] static auto uint64() -> Type { return Type{ Kind::UInt64, {}, {}, {} }; }
+        [[nodiscard]] static auto uint128() -> Type { return Type{ Kind::UInt128, {}, {}, {} }; }
+        [[nodiscard]] static auto float16() -> Type { return Type{ Kind::Float16, {}, {}, {} }; }
+        [[nodiscard]] static auto float32() -> Type { return Type{ Kind::Float32, {}, {}, {} }; }
+        [[nodiscard]] static auto float64() -> Type { return Type{ Kind::Float64, {}, {}, {} }; }
+        [[nodiscard]] static auto float128() -> Type { return Type{ Kind::Float128, {}, {}, {} }; }
         [[nodiscard]] static auto
         string() -> Type
         {
@@ -86,7 +113,29 @@ namespace visual_xsharp::core
         operator==(const Type &) const -> bool = default;
     };
 
-    using Literal = std::variant<std::monostate, bool, std::int64_t, std::int32_t, std::u32string>;
+    // Arbitrary-width integer payloads are represented independently of the host ABI.
+    // The magnitude is canonical unsigned big-endian data: zero has an empty magnitude,
+    // leading zero octets are forbidden, and zero is never negative.  This lets the same
+    // CorePrep artifact carry u128 and i128 values on every supported host.
+    struct IntegerLiteral final
+    {
+        bool negative{};
+        std::vector<std::uint8_t> magnitude;
+        [[nodiscard]] auto operator==(const IntegerLiteral &) const -> bool = default;
+    };
+
+    // Floating-point literals retain their source-independent decimal spelling until LLVM
+    // selects IEEE semantics for the declared scalar type.  The wire verifier accepts only
+    // a deliberately small ASCII grammar, so this is not an unstructured text escape hatch.
+    struct FloatingLiteral final
+    {
+        std::string spelling;
+        [[nodiscard]] auto operator==(const FloatingLiteral &) const -> bool = default;
+    };
+
+    // int64_t and int32_t remain accepted for source compatibility with native clients that
+    // constructed v2 modules directly. New decoders produce IntegerLiteral consistently.
+    using Literal = std::variant<std::monostate, bool, std::int64_t, std::int32_t, IntegerLiteral, FloatingLiteral, std::u32string>;
 
     struct Atom final
     {

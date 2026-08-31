@@ -6,6 +6,7 @@
 #include <type_traits>
 
 #include "Visual/XSharp/Core/Wire.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace Visual::XSharp::Core::Wire
 {
@@ -178,6 +179,34 @@ namespace Visual::XSharp::Core::Wire
                     }
                     case 6:
                         return Type::type_variable(Symbol("type variable symbol"));
+                    case 7:
+                        return Type::character();
+                    case 8:
+                        return Type::int8();
+                    case 9:
+                        return Type::int16();
+                    case 10:
+                        return Type::int32();
+                    case 11:
+                        return Type::int128();
+                    case 12:
+                        return Type::uint8();
+                    case 13:
+                        return Type::uint16();
+                    case 14:
+                        return Type::uint32();
+                    case 15:
+                        return Type::uint64();
+                    case 16:
+                        return Type::uint128();
+                    case 17:
+                        return Type::float16();
+                    case 18:
+                        return Type::float32();
+                    case 19:
+                        return Type::float64();
+                    case 20:
+                        return Type::float128();
                     default:
                         Fail(ErrorKind::InvalidTag, "type tag", "unknown Core type tag");
                         return Type::unit();
@@ -204,6 +233,34 @@ namespace Visual::XSharp::Core::Wire
                         return static_cast<std::int64_t>(Unsigned<std::uint64_t>("integer literal"));
                     case 3:
                         return Text("string literal");
+                    case 4:
+                    {
+                        ::visual_xsharp::core::IntegerLiteral value;
+                        value.negative = Boolean("integer sign");
+                        value.magnitude = Vector<std::uint8_t>(limits_.maximumNumericBytes, "integer magnitude", [this] {
+                            return Byte("integer magnitude");
+                        });
+                        if (!::visual_xsharp::core::integer_is_canonical(value))
+                            Fail(ErrorKind::InvalidInteger, "integer literal", "integer magnitude/sign is not canonical");
+                        return value;
+                    }
+                    case 5:
+                    {
+                        const auto size = Count(limits_.maximumNumericBytes, "floating literal length");
+                        std::string spelling;
+                        spelling.reserve(size);
+                        for (std::size_t index = 0; index < size && !error_; ++index)
+                        {
+                            const auto value = Byte("floating literal");
+                            if (value > 0x7fU)
+                                Fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling must be ASCII");
+                            else
+                                spelling.push_back(static_cast<char>(value));
+                        }
+                        if (!error_ && !::visual_xsharp::core::floating_spelling_is_valid(spelling))
+                            Fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling is not canonical");
+                        return ::visual_xsharp::core::FloatingLiteral{ std::move(spelling) };
+                    }
                     default:
                         Fail(ErrorKind::InvalidTag, "literal tag", "unknown Core literal tag");
                         return std::monostate{};
@@ -456,9 +513,20 @@ namespace Visual::XSharp::Core::Wire
                         Byte(6);
                         Symbol(type.variable, "type variable symbol");
                         return;
-                    case Type::Kind::Int32:
-                        Fail(ErrorKind::UnsupportedType, "type", "Int32 cannot cross the Core v1 boundary");
-                        return;
+                    case Type::Kind::Character: Byte(7); return;
+                    case Type::Kind::Int8: Byte(8); return;
+                    case Type::Kind::Int16: Byte(9); return;
+                    case Type::Kind::Int32: Byte(10); return;
+                    case Type::Kind::Int128: Byte(11); return;
+                    case Type::Kind::UInt8: Byte(12); return;
+                    case Type::Kind::UInt16: Byte(13); return;
+                    case Type::Kind::UInt32: Byte(14); return;
+                    case Type::Kind::UInt64: Byte(15); return;
+                    case Type::Kind::UInt128: Byte(16); return;
+                    case Type::Kind::Float16: Byte(17); return;
+                    case Type::Kind::Float32: Byte(18); return;
+                    case Type::Kind::Float64: Byte(19); return;
+                    case Type::Kind::Float128: Byte(20); return;
                 }
             }
             void
@@ -481,8 +549,42 @@ namespace Visual::XSharp::Core::Wire
                     Byte(3);
                     Text(*string, "string literal");
                 }
+                else if (const auto *integer = std::get_if<::visual_xsharp::core::IntegerLiteral>(&literal))
+                {
+                    if (!::visual_xsharp::core::integer_is_canonical(*integer))
+                    {
+                        Fail(ErrorKind::InvalidInteger, "integer literal", "integer magnitude/sign is not canonical");
+                        return;
+                    }
+                    Byte(4);
+                    Byte(integer->negative ? 1U : 0U);
+                    Vector(integer->magnitude, limits_.maximumNumericBytes, "integer magnitude", [this](const std::uint8_t octet) {
+                        Byte(octet);
+                    });
+                }
+                else if (const auto *floating = std::get_if<::visual_xsharp::core::FloatingLiteral>(&literal))
+                {
+                    if (!::visual_xsharp::core::floating_spelling_is_valid(floating->spelling))
+                    {
+                        Fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling is not canonical");
+                        return;
+                    }
+                    Byte(5);
+                    Count(floating->spelling.size(), limits_.maximumNumericBytes, "floating literal length");
+                    for (const auto character : floating->spelling)
+                        Byte(static_cast<std::uint8_t>(character));
+                }
+                else if (const auto *integer = std::get_if<std::int32_t>(&literal))
+                {
+                    Byte(4);
+                    const auto normalized = ::visual_xsharp::core::integer_from_signed(*integer);
+                    Byte(normalized.negative ? 1U : 0U);
+                    Vector(normalized.magnitude, limits_.maximumNumericBytes, "integer magnitude", [this](const std::uint8_t octet) {
+                        Byte(octet);
+                    });
+                }
                 else
-                    Fail(ErrorKind::UnsupportedType, "literal", "literal cannot cross the Core v1 boundary");
+                    Fail(ErrorKind::UnsupportedType, "literal", "literal cannot cross the Core v3 boundary");
             }
             void
             WriteExpression(const Expression &expression, std::size_t depth = 0U)

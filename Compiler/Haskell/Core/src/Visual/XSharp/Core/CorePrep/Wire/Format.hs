@@ -17,7 +17,7 @@ newtype WireVersion = WireVersion {wireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentWireVersion :: WireVersion
-currentWireVersion = WireVersion 2
+currentWireVersion = WireVersion 3
 
 wireMagic :: [Word8]
 wireMagic = map (fromIntegral . fromEnum) "VXCP"
@@ -31,6 +31,7 @@ data WireLimits = WireLimits
     , maximumInstructionsPerBlock :: Int
     , maximumOperandsPerInstruction :: Int
     , maximumTypeDepth :: Int
+    , maximumNumericBytes :: Int
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -45,6 +46,7 @@ defaultWireLimits =
         , maximumInstructionsPerBlock = 1048576
         , maximumOperandsPerInstruction = 65535
         , maximumTypeDepth = 128
+        , maximumNumericBytes = 4096
         }
 
 data WireErrorKind

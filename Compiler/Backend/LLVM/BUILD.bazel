@@ -8,6 +8,7 @@ cc_library(
     deps = [
         "//Compiler/Codegen/Xmm:xmm",
         "//Compiler/Headers/Visual/XSharp/Backend:llvm_api",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
         "@llvm//:llvm",
     ],
 )

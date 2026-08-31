@@ -5,6 +5,7 @@
 #include <array>
 #include <limits>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/APInt.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -12,6 +13,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
@@ -34,6 +36,7 @@
 #include <utility>
 
 #include "Visual/XSharp/Backend/LLVM.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace Visual::XSharp::Backend::LLVM
 {
@@ -147,10 +150,31 @@ namespace Visual::XSharp::Backend::LLVM
                         return llvm::Type::getVoidTy(context);
                     case core::Type::Kind::Bool:
                         return llvm::Type::getInt1Ty(context);
+                    case core::Type::Kind::Character:
+                        return llvm::Type::getInt32Ty(context);
+                    case core::Type::Kind::Int8:
+                    case core::Type::Kind::UInt8:
+                        return llvm::Type::getInt8Ty(context);
+                    case core::Type::Kind::Int16:
+                    case core::Type::Kind::UInt16:
+                        return llvm::Type::getInt16Ty(context);
                     case core::Type::Kind::Int64:
+                    case core::Type::Kind::UInt64:
                         return llvm::Type::getInt64Ty(context);
                     case core::Type::Kind::Int32:
+                    case core::Type::Kind::UInt32:
                         return llvm::Type::getInt32Ty(context);
+                    case core::Type::Kind::Int128:
+                    case core::Type::Kind::UInt128:
+                        return llvm::IntegerType::get(context, 128U);
+                    case core::Type::Kind::Float16:
+                        return llvm::Type::getHalfTy(context);
+                    case core::Type::Kind::Float32:
+                        return llvm::Type::getFloatTy(context);
+                    case core::Type::Kind::Float64:
+                        return llvm::Type::getDoubleTy(context);
+                    case core::Type::Kind::Float128:
+                        return llvm::Type::getFP128Ty(context);
                     case core::Type::Kind::String:
                         return stringType;
                     case core::Type::Kind::Function:
@@ -340,18 +364,47 @@ namespace Visual::XSharp::Backend::LLVM
             [[nodiscard]] auto
             Immediate(const xmm::Value &value) -> llvm::Value *
             {
+                const auto integer_constant = [this, &value](core::IntegerLiteral integer) -> llvm::Value * {
+                    integer = core::normalize_integer(std::move(integer));
+                    const auto description = core::describe_scalar(value.type);
+                    if (!description || (description->family != core::ScalarFamily::Character && !description->is_integer()))
+                        return nullptr;
+                    llvm::APInt bits(description->bit_width, core::integer_hex_magnitude(integer), 16);
+                    if (integer.negative)
+                        bits = -bits;
+                    return llvm::ConstantInt::get(context, bits);
+                };
                 switch (value.type.kind)
                 {
                     case core::Type::Kind::Unit:
                         return nullptr;
                     case core::Type::Kind::Bool:
                         return llvm::ConstantInt::get(llvm::Type::getInt1Ty(context), std::get<bool>(value.immediate));
+                    case core::Type::Kind::Character:
+                    case core::Type::Kind::Int8:
+                    case core::Type::Kind::Int16:
                     case core::Type::Kind::Int64:
-                        return llvm::ConstantInt::getSigned(llvm::Type::getInt64Ty(context),
-                                                            std::get<std::int64_t>(value.immediate));
                     case core::Type::Kind::Int32:
-                        return llvm::ConstantInt::getSigned(llvm::Type::getInt32Ty(context),
-                                                            std::get<std::int32_t>(value.immediate));
+                    case core::Type::Kind::Int128:
+                    case core::Type::Kind::UInt8:
+                    case core::Type::Kind::UInt16:
+                    case core::Type::Kind::UInt32:
+                    case core::Type::Kind::UInt64:
+                    case core::Type::Kind::UInt128:
+                        if (const auto *integer = std::get_if<core::IntegerLiteral>(&value.immediate))
+                            return integer_constant(*integer);
+                        if (const auto *integer64 = std::get_if<std::int64_t>(&value.immediate))
+                            return integer_constant(core::integer_from_signed(*integer64));
+                        if (const auto *integer32 = std::get_if<std::int32_t>(&value.immediate))
+                            return integer_constant(core::integer_from_signed(*integer32));
+                        return nullptr;
+                    case core::Type::Kind::Float16:
+                    case core::Type::Kind::Float32:
+                    case core::Type::Kind::Float64:
+                    case core::Type::Kind::Float128:
+                        if (const auto *floating = std::get_if<core::FloatingLiteral>(&value.immediate))
+                            return llvm::ConstantFP::get(types.Lower(value.type), floating->spelling);
+                        return nullptr;
                     case core::Type::Kind::String:
                         return StringLiteral(std::get<std::u32string>(value.immediate));
                     case core::Type::Kind::Function:
@@ -395,6 +448,15 @@ namespace Visual::XSharp::Backend::LLVM
                 auto *adjust = builder.CreateAnd(hasRemainder, signsDiffer, "floor.adjust");
                 auto *adjustment = builder.CreateZExt(adjust, left->getType(), "floor.adjustment");
                 return builder.CreateSub(quotient, adjustment, "floor.result");
+            }
+
+            [[nodiscard]] auto
+            LowerFloatingFloorDiv(llvm::IRBuilder<> &builder, llvm::Value *left, llvm::Value *right) -> llvm::Value *
+            {
+                auto *quotient = builder.CreateFDiv(left, right, "floor.quotient");
+                auto *floorIntrinsic =
+                    llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::floor, { left->getType() });
+                return builder.CreateCall(floorIntrinsic, { quotient }, "floor.result");
             }
 
             [[nodiscard]] auto
@@ -447,47 +509,64 @@ namespace Visual::XSharp::Backend::LLVM
                     return false;
 
                 llvm::Value *result{};
+                const auto &operandType = instruction.operands.empty() ? instruction.result_type : instruction.operands.front().type;
+                const auto floating = core::is_floating(operandType);
+                const auto unsignedInteger = core::is_unsigned_integer(operandType) || operandType.kind == core::Type::Kind::Character;
                 switch (instruction.opcode)
                 {
                     case xmm::Opcode::LoadImmediate:
                     case xmm::Opcode::Move:
                         result = operands[0];
                         break;
-                    case xmm::Opcode::AddI64:
-                        result = builder.CreateAdd(operands[0], operands[1], "add");
+                    case xmm::Opcode::Add:
+                        result = floating ? builder.CreateFAdd(operands[0], operands[1], "add") : builder.CreateAdd(operands[0], operands[1], "add");
                         break;
-                    case xmm::Opcode::SubI64:
-                        result = builder.CreateSub(operands[0], operands[1], "sub");
+                    case xmm::Opcode::Subtract:
+                        result = floating ? builder.CreateFSub(operands[0], operands[1], "sub") : builder.CreateSub(operands[0], operands[1], "sub");
                         break;
-                    case xmm::Opcode::MulI64:
-                        result = builder.CreateMul(operands[0], operands[1], "mul");
+                    case xmm::Opcode::Multiply:
+                        result = floating ? builder.CreateFMul(operands[0], operands[1], "mul") : builder.CreateMul(operands[0], operands[1], "mul");
                         break;
-                    case xmm::Opcode::DivI64:
-                        result = builder.CreateSDiv(operands[0], operands[1], "div");
+                    case xmm::Opcode::Divide:
+                        result = floating ? builder.CreateFDiv(operands[0], operands[1], "div")
+                                          : unsignedInteger ? builder.CreateUDiv(operands[0], operands[1], "div")
+                                                            : builder.CreateSDiv(operands[0], operands[1], "div");
                         break;
-                    case xmm::Opcode::FloorDivI64:
-                        result = LowerFloorDiv(builder, operands[0], operands[1]);
+                    case xmm::Opcode::FloorDivide:
+                        result = floating ? LowerFloatingFloorDiv(builder, operands[0], operands[1])
+                                          : unsignedInteger ? builder.CreateUDiv(operands[0], operands[1], "floor.result")
+                                                            : LowerFloorDiv(builder, operands[0], operands[1]);
                         break;
-                    case xmm::Opcode::RemI64:
-                        result = builder.CreateSRem(operands[0], operands[1], "rem");
+                    case xmm::Opcode::Remainder:
+                        result = floating ? builder.CreateFRem(operands[0], operands[1], "rem")
+                                          : unsignedInteger ? builder.CreateURem(operands[0], operands[1], "rem")
+                                                            : builder.CreateSRem(operands[0], operands[1], "rem");
                         break;
-                    case xmm::Opcode::CompareLessI64:
-                        result = builder.CreateICmpSLT(operands[0], operands[1], "less");
+                    case xmm::Opcode::CompareLess:
+                        result = floating ? builder.CreateFCmpOLT(operands[0], operands[1], "less")
+                                          : unsignedInteger ? builder.CreateICmpULT(operands[0], operands[1], "less")
+                                                            : builder.CreateICmpSLT(operands[0], operands[1], "less");
                         break;
-                    case xmm::Opcode::CompareLessEqualI64:
-                        result = builder.CreateICmpSLE(operands[0], operands[1], "less.equal");
+                    case xmm::Opcode::CompareLessEqual:
+                        result = floating ? builder.CreateFCmpOLE(operands[0], operands[1], "less.equal")
+                                          : unsignedInteger ? builder.CreateICmpULE(operands[0], operands[1], "less.equal")
+                                                            : builder.CreateICmpSLE(operands[0], operands[1], "less.equal");
                         break;
-                    case xmm::Opcode::CompareGreaterI64:
-                        result = builder.CreateICmpSGT(operands[0], operands[1], "greater");
+                    case xmm::Opcode::CompareGreater:
+                        result = floating ? builder.CreateFCmpOGT(operands[0], operands[1], "greater")
+                                          : unsignedInteger ? builder.CreateICmpUGT(operands[0], operands[1], "greater")
+                                                            : builder.CreateICmpSGT(operands[0], operands[1], "greater");
                         break;
-                    case xmm::Opcode::CompareGreaterEqualI64:
-                        result = builder.CreateICmpSGE(operands[0], operands[1], "greater.equal");
+                    case xmm::Opcode::CompareGreaterEqual:
+                        result = floating ? builder.CreateFCmpOGE(operands[0], operands[1], "greater.equal")
+                                          : unsignedInteger ? builder.CreateICmpUGE(operands[0], operands[1], "greater.equal")
+                                                            : builder.CreateICmpSGE(operands[0], operands[1], "greater.equal");
                         break;
                     case xmm::Opcode::CompareEqual:
-                        result = builder.CreateICmpEQ(operands[0], operands[1], "equal");
+                        result = floating ? builder.CreateFCmpOEQ(operands[0], operands[1], "equal") : builder.CreateICmpEQ(operands[0], operands[1], "equal");
                         break;
                     case xmm::Opcode::CompareNotEqual:
-                        result = builder.CreateICmpNE(operands[0], operands[1], "not.equal");
+                        result = floating ? builder.CreateFCmpUNE(operands[0], operands[1], "not.equal") : builder.CreateICmpNE(operands[0], operands[1], "not.equal");
                         break;
                     case xmm::Opcode::AndBool:
                         result = builder.CreateAnd(operands[0], operands[1], "logical.and");
@@ -495,8 +574,8 @@ namespace Visual::XSharp::Backend::LLVM
                     case xmm::Opcode::OrBool:
                         result = builder.CreateOr(operands[0], operands[1], "logical.or");
                         break;
-                    case xmm::Opcode::NegateI64:
-                        result = builder.CreateNeg(operands[0], "negate");
+                    case xmm::Opcode::Negate:
+                        result = floating ? builder.CreateFNeg(operands[0], "negate") : builder.CreateNeg(operands[0], "negate");
                         break;
                     case xmm::Opcode::NotBool:
                         result = builder.CreateNot(operands[0], "logical.not");

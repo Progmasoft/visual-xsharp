@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
  */
 
-#include "Visual/C23/int128.hh"
+#include "Visual/XSharp/Legacy/C23/int128.hh"
 
 XsUInt128 xs_uint128_from_words(uint64_t high, uint64_t low)
 {

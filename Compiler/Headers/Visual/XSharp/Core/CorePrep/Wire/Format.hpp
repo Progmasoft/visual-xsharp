@@ -9,7 +9,7 @@
 namespace visual_xsharp::core::wire
 {
     inline constexpr std::uint8_t magic[] = { 'V', 'X', 'C', 'P' };
-    inline constexpr std::uint16_t current_version = 2;
+    inline constexpr std::uint16_t current_version = 3;
 
     struct Limits final
     {
@@ -21,6 +21,7 @@ namespace visual_xsharp::core::wire
         std::size_t maximum_instructions_per_block{ 1048576U };
         std::size_t maximum_operands_per_instruction{ 65535U };
         std::size_t maximum_type_depth{ 128U };
+        std::size_t maximum_numeric_bytes{ 4096U };
     };
 
     enum class ErrorKind : std::uint8_t

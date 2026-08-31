@@ -13,6 +13,7 @@ cc_library(
         "CorePrep/Wire/Decode.cpp",
         "CorePrep/Wire/Encode.cpp",
         "IR.cpp",
+        "Scalar.cpp",
         "Verifier.cpp",
         "Wire.cpp",
     ],
@@ -21,5 +22,6 @@ cc_library(
         "//Compiler/Headers/Visual/XSharp/Core:coreprep",
         "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
         "//Compiler/Headers/Visual/XSharp/Core:model",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
     ],
 )

@@ -4,7 +4,7 @@ module Visual.XSharp.Core.CorePrep.Wire.Encode (encodeCorePrep, encodeCorePrepWi
 
 import Data.Bits (Bits, shiftR, (.&.))
 import Data.Char (ord)
-import Data.Int (Int64)
+import Data.List (unfoldr)
 import Data.Word (Word16, Word32, Word64, Word8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
@@ -139,7 +139,10 @@ encodeLiteral :: WireLimits -> Type -> CoreLiteral -> Encoder
 encodeLiteral limits valueType literal = case (primitiveTypeTag valueType, literal) of
     (Just 0, CoreUnit) -> pure []
     (Just 1, CoreBoolean value) -> pure (encodeBool value)
-    (Just 2, CoreInteger value) -> encodeInteger64 value
+    (Just tag, CoreInteger value)
+        | integerWireTag tag || tag == 8 -> encodeInteger limits value
+    (Just tag, CoreFloating spelling)
+        | floatingWireTag tag -> encodeAscii limits "floating literal" spelling
     (Just 4, CoreString value) -> encodeText limits "string literal" value
     _ -> Left (wireError UnsupportedType 0 "literal" "literal payload does not match its declared type")
 
@@ -200,9 +203,42 @@ primitiveTypeTag :: Type -> Maybe Word8
 primitiveTypeTag valueType
     | valueType == unitType = Just 0
     | valueType == boolType = Just 1
-    | valueType == intType = Just 2
     | valueType == stringType = Just 4
+    | Just tag <- scalarTypeTag valueType = Just tag
     | otherwise = Nothing
+
+-- Tags 0-7 preserve the v2 structural layout. New scalar tags are append-only,
+-- which keeps corrupted-version diagnostics deterministic and makes wire dumps
+-- easier to compare while the compiler remains pre-1.0.
+scalarTypeTag :: Type -> Maybe Word8
+scalarTypeTag (NamedType (QualifiedName [Identifier name]) []) = lookup name scalarTags
+scalarTypeTag _ = Nothing
+
+scalarTags :: [(String, Word8)]
+scalarTags =
+    [ ("bool", 1)
+    , ("int", 2)
+    , ("long", 3)
+    , ("char", 8)
+    , ("byte", 9)
+    , ("short", 10)
+    , ("longint", 11)
+    , ("ubyte", 12)
+    , ("ushort", 13)
+    , ("ulong", 14)
+    , ("uint", 15)
+    , ("ulongint", 16)
+    , ("sfloat", 17)
+    , ("lfloat", 18)
+    , ("float", 19)
+    , ("double", 20)
+    ]
+
+integerWireTag :: Word8 -> Bool
+integerWireTag tag = tag `elem` [2, 3, 9, 10, 11, 12, 13, 14, 15, 16]
+
+floatingWireTag :: Word8 -> Bool
+floatingWireTag tag = tag `elem` [17, 18, 19, 20]
 
 primitiveTag :: CorePrimitive -> Word8
 primitiveTag primitive = case primitive of
@@ -245,11 +281,30 @@ encodeText limits context value = do
             where
                 code = ord character
 
-encodeInteger64 :: Integer -> Encoder
-encodeInteger64 value
-    | value < fromIntegral (minBound :: Int64) || value > fromIntegral (maxBound :: Int64) =
-        Left (wireError InvalidInteger 0 "integer literal" "integer does not fit signed 64-bit CorePrep wire representation")
-    | otherwise = pure (word64 (fromIntegral (fromIntegral value :: Int64)))
+encodeInteger :: WireLimits -> Integer -> Encoder
+encodeInteger limits value = do
+    let magnitude = integerMagnitude (abs value)
+    requireLimit limits "integer magnitude" (maximumNumericBytes limits) (length magnitude)
+    count <- encodeNonNegative32 "integer magnitude length" (length magnitude)
+    pure (encodeBool (value < 0) ++ count ++ magnitude)
+
+integerMagnitude :: Integer -> [Word8]
+integerMagnitude 0 = []
+integerMagnitude value = reverse (unfoldr step value)
+    where
+        step 0 = Nothing
+        step remaining = Just (fromIntegral (remaining `mod` 256), remaining `div` 256)
+
+encodeAscii :: WireLimits -> String -> String -> Encoder
+encodeAscii limits context value = do
+    requireLimit limits context (maximumNumericBytes limits) (length value)
+    count <- encodeNonNegative32 (context ++ " length") (length value)
+    bytes <- traverse ascii value
+    pure (count ++ bytes)
+    where
+        ascii character
+            | ord character <= 0x7f = Right (fromIntegral (ord character))
+            | otherwise = Left (wireError InvalidInteger 0 context "numeric spelling must contain ASCII characters only")
 
 encodePositive64 :: String -> Int -> Encoder
 encodePositive64 context value

@@ -93,13 +93,13 @@ Core link unit, source ownership for project-wide per-file artifacts, and explic
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| bounded VXCR v2 decode | connected | C++20 Core reader |
+| bounded VXCR v3 decode | connected | C++20 Core reader and scalar payload validation |
 | native Core semantic verification | connected | `Compiler/Core` |
 | Core-to-CorePrep atomization/CFG | connected | dedicated adapter |
 | CorePrep structural/semantic verification | connected | native CorePrep verifier |
 | Xpp lowering/optimization/verification | connected | C++20 Xpp packages |
 | Xmm lowering/optimization/verification | connected | C++20 Xmm packages |
-| scalar/call/branch/return LLVM lowering | partial | LLVM backend |
+| fixed-width scalar/call/branch/return LLVM lowering | connected for verified Xmm | LLVM backend |
 | LLVM IR and bitcode output | connected | `.ll` and `.bc` writers |
 | target object and assembly output | connected for supported values | target machine |
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |

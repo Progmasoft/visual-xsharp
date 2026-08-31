@@ -2,7 +2,7 @@ cabal-version: 3.12
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 name: visual-xsharp-compiler
-version: 0.3.3
+version: 0.3.4
 synopsis: Target-independent Visual X# compiler driver
 license: MPL-2.0
 author: Progmasoft
@@ -66,6 +66,7 @@ test-suite visual-xsharp-compiler-tests
     other-modules:
         ClosureTests
         NumericTests
+        ScalarWireTests
         SourceSetTests
         VoidTests
     hs-source-dirs: test

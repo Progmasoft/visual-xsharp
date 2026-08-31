@@ -7,19 +7,6 @@
 
 #![warn(missing_docs)]
 
-/// Generates a companion XLIL module producer from a supported Rust function.
-///
-/// A function named `max` receives a `max_xlil` companion. The original Rust
-/// function remains unchanged. This export is available with the
-/// `proc-macros` Cargo feature.
-#[cfg(feature = "proc-macros")]
-pub use xslang_proc_macros::xlil_create;
-
-#[allow(
-    missing_docs,
-    reason = "existing codegen API documentation is being completed incrementally"
-)]
-pub mod codegen;
 #[allow(
     missing_docs,
     reason = "existing compiler-core API documentation is being completed incrementally"
@@ -40,8 +27,6 @@ pub mod mir;
     reason = "existing monomorphization API documentation is being completed incrementally"
 )]
 pub mod mono;
-/// Optional Rust integration aliases for application-facing compiler tools.
-pub mod rust;
 pub(crate) mod text;
 
 /// Public, target-independent XLIL model, producer, reader, verifier, and text API.

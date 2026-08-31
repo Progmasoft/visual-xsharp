@@ -6,6 +6,7 @@
 
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier/Semantics.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace visual_xsharp::core
 {
@@ -22,24 +23,7 @@ namespace visual_xsharp::core
         {
             if (atom.kind == Atom::Kind::Variable)
                 return atom.symbol.id != 0;
-            switch (atom.type.kind)
-            {
-                case Type::Kind::Unit:
-                    return std::holds_alternative<std::monostate>(atom.literal);
-                case Type::Kind::Bool:
-                    return std::holds_alternative<bool>(atom.literal);
-                case Type::Kind::Int64:
-                    return std::holds_alternative<std::int64_t>(atom.literal);
-                case Type::Kind::Int32:
-                    return std::holds_alternative<std::int32_t>(atom.literal);
-                case Type::Kind::String:
-                    return std::holds_alternative<std::u32string>(atom.literal);
-                case Type::Kind::Function:
-                case Type::Kind::Named:
-                case Type::Kind::TypeVariable:
-                    return false;
-            }
-            return false;
+            return !validate_literal(atom.literal, atom.type).has_value();
         }
 
         auto

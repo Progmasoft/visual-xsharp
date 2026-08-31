@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "Visual/XSharp/Core/CorePrep/Verifier/Semantics.hpp"
+#include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace visual_xsharp::core
 {
@@ -75,8 +76,21 @@ namespace visual_xsharp::core
             {
                 case Type::Kind::Unit:
                 case Type::Kind::Bool:
+                case Type::Kind::Character:
+                case Type::Kind::Int8:
+                case Type::Kind::Int16:
                 case Type::Kind::Int64:
                 case Type::Kind::Int32:
+                case Type::Kind::Int128:
+                case Type::Kind::UInt8:
+                case Type::Kind::UInt16:
+                case Type::Kind::UInt32:
+                case Type::Kind::UInt64:
+                case Type::Kind::UInt128:
+                case Type::Kind::Float16:
+                case Type::Kind::Float32:
+                case Type::Kind::Float64:
+                case Type::Kind::Float128:
                 case Type::Kind::String:
                     if (!type.name.empty() || !type.components.empty() || type.variable.id != 0)
                         issues.push_back(issue("VXC1016", "primitive type contains unexpected payload", function, block));
@@ -104,12 +118,6 @@ namespace visual_xsharp::core
             }
         }
 
-        auto
-        is_integer(const Type &type) -> bool
-        {
-            return type.kind == Type::Kind::Int64 || type.kind == Type::Kind::Int32;
-        }
-
         void
         verify_atom(const Atom &atom, const Function &function, BlockId block, const Definitions &definitions, std::unordered_map<SymbolId, std::u32string> &spellings, std::vector<VerificationIssue> &issues)
         {
@@ -123,6 +131,8 @@ namespace visual_xsharp::core
                 else if (found->second.type != atom.type)
                     issues.push_back(issue("VXC1022", "atom type differs from its symbol definition", function, block));
             }
+            else if (const auto literal_issue = validate_literal(atom.literal, atom.type))
+                issues.push_back(issue("VXC1048", "literal payload is invalid: " + *literal_issue, function, block));
         }
 
         auto
@@ -242,17 +252,17 @@ namespace visual_xsharp::core
                 case Operation::MakeClosure:
                     break;
                 case Operation::Negate:
-                    if (arity != 1U || !is_integer(instruction.operands.front().type))
-                        issues.push_back(issue("VXC1028", "negate requires one integer operand", function, block));
+                    if (arity != 1U || (!is_signed_integer(instruction.operands.front().type) && !is_floating(instruction.operands.front().type)))
+                        issues.push_back(issue("VXC1028", "negate requires one signed integer or floating operand", function, block));
                     break;
                 case Operation::LogicalNot:
-                    if (arity != 1U || instruction.operands.front().type.kind != Type::Kind::Bool)
-                        issues.push_back(issue("VXC1029", "logical not requires one bool operand", function, block));
+                    if (arity != 1U || !accepts_boolean_context(instruction.operands.front().type))
+                        issues.push_back(issue("VXC1029", "logical not requires one bool or numeric operand", function, block));
                     break;
                 case Operation::LogicalAnd:
                 case Operation::LogicalOr:
-                    if (arity != 2U || instruction.operands.front().type.kind != Type::Kind::Bool || instruction.operands.back().type.kind != Type::Kind::Bool)
-                        issues.push_back(issue("VXC1030", "logical operation requires two bool operands", function, block));
+                    if (arity != 2U || !accepts_boolean_context(instruction.operands.front().type) || instruction.operands.front().type != instruction.operands.back().type)
+                        issues.push_back(issue("VXC1030", "logical operation requires two equal bool or numeric operands", function, block));
                     break;
                 case Operation::Equal:
                 case Operation::NotEqual:
@@ -263,13 +273,13 @@ namespace visual_xsharp::core
                 case Operation::LessEqual:
                 case Operation::GreaterThan:
                 case Operation::GreaterEqual:
-                    if (arity != 2U || !is_integer(instruction.operands.front().type) || instruction.operands.front().type != instruction.operands.back().type)
-                        issues.push_back(issue("VXC1032", "ordered comparison requires two equal integer types", function, block));
+                    if (arity != 2U || !is_numeric(instruction.operands.front().type) || instruction.operands.front().type != instruction.operands.back().type)
+                        issues.push_back(issue("VXC1032", "ordered comparison requires two equal numeric types", function, block));
                     break;
                 default:
-                    if (arity != 2U || !is_integer(instruction.operands.front().type) || instruction.operands.front().type != instruction.operands.back().type)
+                    if (arity != 2U || !is_numeric(instruction.operands.front().type) || instruction.operands.front().type != instruction.operands.back().type)
                         issues.push_back(
-                            issue("VXC1033", "arithmetic operation requires two equal integer types", function, block));
+                            issue("VXC1033", "arithmetic operation requires two equal numeric types", function, block));
                     break;
             }
 

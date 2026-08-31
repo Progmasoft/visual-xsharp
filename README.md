@@ -68,7 +68,7 @@ MSVC library/include directories available in the environment:
 
 ```powershell
 bazelisk build //Compiler/Cli:vxs
-bazelisk build //tests:cli_parser_tests
+bazelisk build //Compiler/Cli/Tests:cli_parser_tests
 .\bazel-bin\tests\cli_parser_tests.exe
 ```
 

@@ -3,7 +3,7 @@
 
 #include <utility>
 
-#include "Visual/XSharp/lil/Error.hpp"
+#include "Visual/XSharp/Legacy/lil/Error.hpp"
 
 namespace xs::lil
 {

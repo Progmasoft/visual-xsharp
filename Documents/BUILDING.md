@@ -60,7 +60,7 @@ The native CLI uses its own typed C++20 command schema. Catch2 remains the only 
 
 ```powershell
 bazelisk build //Compiler/Cli:vxs
-bazelisk build //tests:cli_parser_tests
+bazelisk build //Compiler/Cli/Tests:cli_parser_tests
 .\bazel-bin\tests\cli_parser_tests.exe
 ```
 

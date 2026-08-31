@@ -78,8 +78,8 @@ Initialize recursive submodules and make the standalone LLVM development environ
 ```powershell
 git submodule update --init --recursive
 bazelisk build //Compiler/Cli:vxs
-bazelisk build //tests:cli_parser_tests
-.\bazel-bin\tests\cli_parser_tests.exe
+bazelisk build //Compiler/Cli/Tests:cli_parser_tests
+.\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
 ```
 
 The Catch2 binary is executed directly on Windows. This avoids adding a POSIX shell dependency only for Bazel's conventional
@@ -93,9 +93,49 @@ bazelisk build //Compiler/Codegen/Xpp:xpp
 bazelisk build //Compiler/Codegen/Xmm:xmm
 bazelisk build //Compiler/Backend/LLVM:llvm_backend
 bazelisk build //Compiler/Driver:core_pipeline
+bazelisk build //Compiler/Core/Tests:core_pipeline_tests
+bazelisk build //Compiler/Driver/Tests:closure_pipeline_tests
+bazelisk build //Compiler/Driver/Tests:scalar_pipeline_tests
+bazelisk build //Compiler/Backend/LLVM/Tests:llvm_backend_tests
 ```
 
 The exact label names are source-owned API. If a package is reorganized, update this guide and CI with the same change.
+
+### Component-local ownership
+
+Native tests do not live in a root `tests/` directory. The directory holding a
+test identifies the contract that owns its maintenance:
+
+| Test package | Contract |
+| --- | --- |
+| `Compiler/Cli/Tests` | command grammar, option scope, and output behavior |
+| `Compiler/Core/Tests` | Core model, verification, artifacts, and golden wire |
+| `Compiler/Driver/Tests` | connected CorePrep, Xpp, and Xmm stage behavior |
+| `Compiler/Backend/LLVM/Tests` | LLVM IR and native artifact lowering |
+| `Compiler/Package/Tests` | package archive implementation |
+| `Compiler/Legacy/Tests` | retained compatibility code scheduled for removal |
+
+Fixtures follow the same rule. A Core golden document is stored below the Core
+test package, while multi-file `.vxs` projects used by the connected pipeline
+belong to Driver tests. Retired textual-intermediate fixtures remain below the
+Legacy boundary and are never an input promise for the current CLI.
+
+When a test crosses several components, choose the narrowest owner of the
+asserted contract. For example, scalar preservation from CorePrep through Xmm
+belongs to Driver; the exact LLVM `sdiv` versus `udiv` choice belongs to the
+LLVM backend. This prevents integration suites from becoming an unowned common
+bucket.
+
+Test targets use private default visibility. Production libraries may be test
+dependencies, but production targets must never depend on a `Tests` package.
+See [Test ownership](TEST-OWNERSHIP.md) for fixture, naming, and review rules.
+
+After moving a suite, scan build labels, workflow commands, documentation,
+REUSE annotations, compile-time fixture paths, and generated manifests for the
+old location. A successful compiler build alone does not prove the move is
+complete: a release-only workflow or license scanner may still carry the stale
+path. Remove an empty root directory instead of preserving it as a future
+fallback.
 
 ### What native tests should cover
 

@@ -25,6 +25,7 @@ following vocabulary:
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
 | Run the correct verification layers | [Testing](TESTING.md) |
+| Place tests and fixtures | [Test ownership](TEST-OWNERSHIP.md) |
 | Use `vxs` | [CLI](CLI.md) |
 | Write `Visual.XSharp.kts` | [Project files](PROJECT_FILES.md) |
 | Understand diagnostics and exit behavior | [Diagnostics](DIAGNOSTICS.md) |
@@ -32,6 +33,8 @@ following vocabulary:
 | Work on LLVM lowering | [LLVM backend](LLVM-BACKEND.md) |
 | Work on callable literals | [Closure pipeline](CLOSURE-PIPELINE.md) |
 | Work on scalar types and literals | [Numeric types](NUMERIC-TYPES.md) |
+| Trace scalars through native lowering | [Scalar pipeline](SCALAR-PIPELINE.md) |
+| Maintain compiler wire contracts | [Artifact wire](ARTIFACT-WIRE.md) |
 | Read or change language examples | [Specification guide](SPECIFICATION.md) |
 | Prepare a change | [Contributing](CONTRIBUTING.md) |
 | See intended sequencing | [Roadmap](ROADMAP.md) |
@@ -46,6 +49,8 @@ following vocabulary:
 - [Closure pipeline](CLOSURE-PIPELINE.md) explains capture analysis and the currently deliberate LLVM rejection boundary.
 - [Numeric types](NUMERIC-TYPES.md) records fixed scalar widths and the gap between frontend semantics and the current Core
   transport.
+- [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, wire v3, Xpp, Xmm, and LLVM.
+- [Artifact wire](ARTIFACT-WIRE.md) defines the bounded internal Core and CorePrep transport contracts.
 
 ## User and project set
 
@@ -59,6 +64,7 @@ following vocabulary:
 
 - [Building](BUILDING.md) contains prerequisites, environment discovery, component builds, and troubleshooting.
 - [Testing](TESTING.md) maps changes to local gates and GitHub workflows.
+- [Test ownership](TEST-OWNERSHIP.md) assigns suites, fixtures, and Bazel targets to their compiler components.
 - [Repository layout](MONOREPO.md) explains ownership boundaries and allowed dependency direction.
 - [Contributing](CONTRIBUTING.md) records code style, file naming, decomposition, generated-file hygiene, and update flow.
 

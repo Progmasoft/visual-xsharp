@@ -16,10 +16,6 @@ keywords = ["compiler", "xsharp", "compiler-ir", "xlil"]
 categories = ["compilers"]
 exclude = ["target/"]
 
-[features]
-default = []
-proc-macros = ["dep:xslang-proc-macros"]
-
 [lib]
 name = "xslang"
 path = "sources/lib.rs"
@@ -41,7 +37,6 @@ typed-arena = "2.0"
 bitflags = "2.13"
 camino = "1.2"
 lasso = "0.7"
-xslang-proc-macros = { version = "=0.3.1", path = "proc-macros/xlil-create", optional = true }
 
 [dev-dependencies]
 proptest = "1.11"

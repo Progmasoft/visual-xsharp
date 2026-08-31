@@ -83,10 +83,10 @@ verifyPrimitive :: Core.CorePrimitive -> [CorePrepAtom] -> Type -> [Diagnostic]
 verifyPrimitive primitive atoms resultType
     | length atoms /= expectedArity = [problem "VXC0007" "CorePrep primitive has the wrong arity"]
     | any ((== ErrorType) . atomType) atoms = [problem "VXC0008" "CorePrep primitive contains an unresolved type"]
-    | otherwise = resultProblems
+    | otherwise = operandProblems ++ resultProblems
     where
         expectedArity = if primitive `elem` [Core.CoreNegate, Core.CoreLogicalNot] then 1 else 2
-        expectedResult =
+        comparisonOrLogical =
             if primitive
                 `elem` [ Core.CoreLessThan
                        , Core.CoreLessEqual
@@ -98,8 +98,24 @@ verifyPrimitive primitive atoms resultType
                        , Core.CoreLogicalOr
                        , Core.CoreLogicalNot
                        ]
-                then boolType
-                else intType
+                then True
+                else False
+        operandTypes = map atomType atoms
+        firstType = case operandTypes of valueType : _ -> valueType; [] -> ErrorType
+        operandsAgree = all (== firstType) operandTypes
+        logical = primitive `elem` [Core.CoreLogicalAnd, Core.CoreLogicalOr, Core.CoreLogicalNot]
+        numeric = all isNumericType operandTypes
+        booleanContext = all (\valueType -> valueType == boolType || isNumericType valueType) operandTypes
+        negatable = isSignedIntegerType firstType || isFloatingType firstType
+        operandProblems
+            | not operandsAgree = [problem "VXC0019" "CorePrep primitive operand types do not agree"]
+            | logical && not booleanContext = [problem "VXC0020" "CorePrep logical primitive requires bool or numeric operands"]
+            | primitive == Core.CoreNegate && not negatable =
+                [problem "VXC0021" "CorePrep negation requires a signed integer or floating operand"]
+            | not logical && not numeric && primitive `notElem` [Core.CoreEqual, Core.CoreNotEqual] =
+                [problem "VXC0022" "CorePrep arithmetic or ordering primitive requires numeric operands"]
+            | otherwise = []
+        expectedResult = if comparisonOrLogical then boolType else firstType
         resultProblems = if resultType == expectedResult then [] else [problem "VXC0009" "CorePrep primitive result type is inconsistent"]
 
 verifyTerminator :: [Int] -> CorePrepTerminator -> [Diagnostic]
@@ -113,7 +129,80 @@ verifyTerminator blockIds terminator = case terminator of
         requireBool atom = [problem "VXC0011" "CorePrep branch condition must be bool" | atomType atom /= boolType]
 
 verifyAtom :: CorePrepAtom -> [Diagnostic]
-verifyAtom atom = [problem "VXC0012" "CorePrep atom has an unresolved type" | atomType atom == ErrorType]
+verifyAtom atom =
+    [problem "VXC0012" "CorePrep atom has an unresolved type" | atomType atom == ErrorType]
+        ++ case atom of
+            CorePrepLiteral literal valueType -> verifyLiteral literal valueType
+            CorePrepVariable _ _ -> []
+
+verifyLiteral :: Core.CoreLiteral -> Type -> [Diagnostic]
+verifyLiteral literal valueType =
+    [problem "VXC0023" "CorePrep literal payload does not match its declared scalar type" | not matches]
+    where
+        matches = case literal of
+            Core.CoreInteger value -> integerFits valueType value
+            Core.CoreFloating spelling -> isFloatingType valueType && validFloatingSpelling spelling
+            Core.CoreString _ -> valueType == stringType
+            Core.CoreBoolean _ -> valueType == boolType
+            Core.CoreUnit -> valueType == unitType
+
+typeSpelling :: Type -> String
+typeSpelling (NamedType (QualifiedName [Identifier name]) []) = name
+typeSpelling _ = ""
+
+integerWidths :: [(String, Bool, Int)]
+integerWidths =
+    [ ("char", False, 32)
+    , ("byte", True, 8)
+    , ("short", True, 16)
+    , ("long", True, 32)
+    , ("int", True, 64)
+    , ("longint", True, 128)
+    , ("ubyte", False, 8)
+    , ("ushort", False, 16)
+    , ("ulong", False, 32)
+    , ("uint", False, 64)
+    , ("ulongint", False, 128)
+    ]
+
+integerFits :: Type -> Integer -> Bool
+integerFits valueType value = case [(signed, width) | (name, signed, width) <- integerWidths, name == typeSpelling valueType] of
+    [(True, width)] -> value >= negate (2 ^ (width - 1)) && value <= 2 ^ (width - 1) - 1
+    [(False, width)] -> value >= 0 && value <= 2 ^ width - 1
+    _ -> False
+
+isIntegerType :: Type -> Bool
+isIntegerType valueType = any (\(name, _, _) -> name == typeSpelling valueType) integerWidths
+
+isSignedIntegerType :: Type -> Bool
+isSignedIntegerType valueType = any (\(name, signed, _) -> signed && name == typeSpelling valueType) integerWidths
+
+isFloatingType :: Type -> Bool
+isFloatingType valueType = typeSpelling valueType `elem` ["sfloat", "lfloat", "float", "double"]
+
+isNumericType :: Type -> Bool
+isNumericType valueType = isIntegerType valueType || isFloatingType valueType
+
+validFloatingSpelling :: String -> Bool
+validFloatingSpelling spelling
+    | spelling `elem` ["nan", "+nan", "-nan", "inf", "+inf", "-inf"] = True
+    | otherwise = case stripSign spelling of
+        [] -> False
+        unsignedSpelling ->
+            let (mantissa, exponentPart) = break (`elem` "eE") unsignedSpelling
+             in validSignificand mantissa && validExponent exponentPart
+    where
+        stripSign ('+' : remaining) = remaining
+        stripSign ('-' : remaining) = remaining
+        stripSign value = value
+        validSignificand value = case break (== '.') value of
+            (whole, []) -> not (null whole) && all digit whole
+            (whole, _ : fraction) -> (not (null whole) || not (null fraction)) && all digit whole && all digit fraction
+        validExponent [] = True
+        validExponent (_ : remaining) = case stripSign remaining of
+            [] -> False
+            digits -> all digit digits
+        digit character = character >= '0' && character <= '9'
 
 atomType :: CorePrepAtom -> Type
 atomType atom = case atom of CorePrepVariable _ valueType -> valueType; CorePrepLiteral _ valueType -> valueType

@@ -4,9 +4,9 @@
 #include <string>
 #include <utility>
 
-#include "Visual/XSharp/lil-c/builder.hh"
-#include "Visual/XSharp/lil/Builder.hpp"
-#include "Visual/XSharp/lil/Error.hpp"
+#include "Visual/XSharp/Legacy/lil-c/builder.hh"
+#include "Visual/XSharp/Legacy/lil/Builder.hpp"
+#include "Visual/XSharp/Legacy/lil/Error.hpp"
 
 namespace xs::lil
 {

@@ -15,6 +15,7 @@ module Visual.XSharp.Core.Wire
 import Data.Bits (Bits, shiftL, shiftR, (.&.), (.|.))
 import Data.Char (chr, ord)
 import Data.Int (Int64)
+import Data.List (unfoldr)
 import Data.Word (Word16, Word32, Word64, Word8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
@@ -23,7 +24,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 2
+currentCoreWireVersion = CoreWireVersion 3
 
 data CoreWireLimits = CoreWireLimits
     { maximumCoreWireBytes :: Int
@@ -34,6 +35,7 @@ data CoreWireLimits = CoreWireLimits
     , maximumCoreOperands :: Int
     , maximumCoreTypeDepth :: Int
     , maximumCoreExpressionDepth :: Int
+    , maximumCoreNumericBytes :: Int
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -48,6 +50,7 @@ defaultCoreWireLimits =
         , maximumCoreOperands = 65535
         , maximumCoreTypeDepth = 128
         , maximumCoreExpressionDepth = 4096
+        , maximumCoreNumericBytes = 4096
         }
 
 data CoreWireErrorKind
@@ -229,8 +232,8 @@ encodeLiteral :: CoreWireLimits -> CoreLiteral -> Encoder
 encodeLiteral limits literal = case literal of
     CoreUnit -> pure [0]
     CoreBoolean value -> pure (1 : encodeBool value)
-    CoreInteger value -> (2 :) <$> encodeInteger value
-    CoreFloating _ -> failure CoreUnsupportedType "floating literal" "floating literals are not yet part of Core wire v2"
+    CoreInteger value -> (4 :) <$> encodeInteger limits value
+    CoreFloating spelling -> (5 :) <$> encodeAscii limits "floating literal" spelling
     CoreString value -> (3 :) <$> encodeText limits "string literal" value
 
 encodeType :: CoreWireLimits -> Int -> Type -> Encoder
@@ -240,6 +243,7 @@ encodeType limits depth valueType
     | valueType == boolType = pure [1]
     | valueType == intType = pure [2]
     | valueType == stringType = pure [3]
+    | Just scalarTag <- scalarTypeTag valueType = pure [scalarTag]
     | NamedType name arguments <- valueType = do
         encodedName <- encodeQualifiedName limits name
         encodedArguments <-
@@ -298,11 +302,49 @@ encodeText limits context value = do
             where
                 code = ord character
 
-encodeInteger :: Integer -> Encoder
-encodeInteger value
-    | value < fromIntegral (minBound :: Int64) || value > fromIntegral (maxBound :: Int64) =
-        failure CoreInvalidInteger "integer literal" "integer does not fit signed 64-bit Core representation"
-    | otherwise = pure (word64 (fromIntegral (fromIntegral value :: Int64)))
+scalarTypeTag :: Type -> Maybe Word8
+scalarTypeTag (NamedType (QualifiedName [Identifier name]) []) = lookup name tags
+    where
+        tags =
+            [ ("char", 7)
+            , ("byte", 8)
+            , ("short", 9)
+            , ("long", 10)
+            , ("longint", 11)
+            , ("ubyte", 12)
+            , ("ushort", 13)
+            , ("ulong", 14)
+            , ("uint", 15)
+            , ("ulongint", 16)
+            , ("sfloat", 17)
+            , ("lfloat", 18)
+            , ("float", 19)
+            , ("double", 20)
+            ]
+scalarTypeTag _ = Nothing
+
+encodeInteger :: CoreWireLimits -> Integer -> Encoder
+encodeInteger limits value = do
+    let magnitude = integerMagnitude (abs value)
+    requireEncode limits "integer magnitude" (maximumCoreNumericBytes limits) (length magnitude)
+    pure (encodeBool (value < 0) ++ word32 (fromIntegral (length magnitude)) ++ magnitude)
+
+integerMagnitude :: Integer -> [Word8]
+integerMagnitude 0 = []
+integerMagnitude value = reverse (unfoldr step value)
+    where
+        step 0 = Nothing
+        step remaining = Just (fromIntegral (remaining `mod` 256), remaining `div` 256)
+
+encodeAscii :: CoreWireLimits -> String -> String -> Encoder
+encodeAscii limits context value = do
+    requireEncode limits context (maximumCoreNumericBytes limits) (length value)
+    bytes <- traverse ascii value
+    pure (word32 (fromIntegral (length bytes)) ++ bytes)
+    where
+        ascii character
+            | ord character <= 0x7f = Right (fromIntegral (ord character))
+            | otherwise = failure CoreInvalidInteger context "numeric spelling must contain ASCII characters only"
 
 requireEncode :: CoreWireLimits -> String -> Int -> Int -> Either CoreWireError ()
 requireEncode _ context maximumValue actual
@@ -438,6 +480,8 @@ decodeLiteral = do
         1 -> CoreBoolean <$> decodeBool "boolean literal"
         2 -> CoreInteger . fromIntegral . (fromIntegral :: Word64 -> Int64) <$> readWord64 "integer literal"
         3 -> CoreString <$> decodeText "string literal"
+        4 -> CoreInteger <$> decodeInteger
+        5 -> CoreFloating <$> decodeAscii "floating literal"
         _ -> invalidTag "literal tag" tag
 
 decodeType :: Int -> Decoder Type
@@ -457,7 +501,24 @@ decodeType depth = do
                 <$> decodeVector "function type parameter count" maximumCoreParameters (decodeType (depth + 1))
                 <*> decodeType (depth + 1)
         6 -> TypeVariable <$> decodeResolvedName "type variable symbol"
+        7 -> pure (namedScalar "char")
+        8 -> pure (namedScalar "byte")
+        9 -> pure (namedScalar "short")
+        10 -> pure (namedScalar "long")
+        11 -> pure (namedScalar "longint")
+        12 -> pure (namedScalar "ubyte")
+        13 -> pure (namedScalar "ushort")
+        14 -> pure (namedScalar "ulong")
+        15 -> pure (namedScalar "uint")
+        16 -> pure (namedScalar "ulongint")
+        17 -> pure (namedScalar "sfloat")
+        18 -> pure (namedScalar "lfloat")
+        19 -> pure (namedScalar "float")
+        20 -> pure (namedScalar "double")
         _ -> invalidTag "type tag" tag
+
+namedScalar :: String -> Type
+namedScalar name = NamedType (QualifiedName [Identifier name]) []
 
 decodeResolvedName :: String -> Decoder ResolvedName
 decodeResolvedName context = do
@@ -496,6 +557,46 @@ decodeText context = do
                 context
                 "invalid Unicode scalar"
             pure (chr (fromIntegral value))
+
+decodeInteger :: Decoder Integer
+decodeInteger = do
+    negative <- decodeBool "integer sign"
+    limits <- currentLimits
+    count <- readWord32 "integer magnitude length"
+    requireDecode
+        (toInteger count <= toInteger (maximumCoreNumericBytes limits))
+        CoreLimitExceeded
+        "integer magnitude"
+        "integer magnitude exceeds configured limit"
+    magnitude <- takeBytes "integer magnitude" (fromIntegral count)
+    requireDecode
+        (canonicalMagnitude magnitude)
+        CoreInvalidInteger
+        "integer magnitude"
+        "integer magnitude is not canonical"
+    requireDecode
+        (not negative || not (null magnitude))
+        CoreInvalidInteger
+        "integer sign"
+        "zero cannot have a negative sign"
+    let value = foldl (\result octet -> result * 256 + fromIntegral octet) 0 magnitude
+    pure (if negative then negate value else value)
+    where
+        canonicalMagnitude [] = True
+        canonicalMagnitude (first : _) = first /= 0
+
+decodeAscii :: String -> Decoder String
+decodeAscii context = do
+    limits <- currentLimits
+    count <- readWord32 (context ++ " length")
+    requireDecode
+        (toInteger count <= toInteger (maximumCoreNumericBytes limits))
+        CoreLimitExceeded
+        context
+        "numeric spelling exceeds configured limit"
+    bytes <- takeBytes context (fromIntegral count)
+    requireDecode (all (<= 0x7f) bytes) CoreInvalidInteger context "numeric spelling must contain ASCII characters only"
+    pure (map (chr . fromIntegral) bytes)
 
 decodeBool :: String -> Decoder Bool
 decodeBool context =

@@ -5,7 +5,6 @@
 
 use std::io::Cursor;
 
-use xslang::rust::XSResult;
 use xslang::xlil::*;
 
 #[test]
@@ -108,23 +107,4 @@ fn verified_and_stream_apis_preserve_the_model()
     write_verified(&verified, &mut bytes).unwrap();
     let reread = read_verified(Cursor::new(bytes)).unwrap();
     assert_eq!(reread, verified);
-}
-
-#[test]
-fn rust_result_alias_accepts_xlil_errors()
-{
-    fn load(text: &str) -> XSResult<VerifiedModule>
-    {
-        Ok(parse_verified(text)?)
-    }
-
-    let error = load("not xlil").unwrap_err();
-    assert!(error.to_string().contains("XLIL parsing failed"));
-}
-
-#[test]
-fn root_printf_macro_uses_c_format_specifiers()
-{
-    let result = xslang::printf!("public printf smoke test: %s=%d\n", "value", 1);
-    assert!(result.is_ok());
 }

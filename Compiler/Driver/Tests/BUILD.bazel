@@ -1,0 +1,27 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_binary(
+    name = "closure_pipeline_tests",
+    srcs = ["ClosurePipelineTests.cpp"],
+    deps = [
+        "//Compiler/Codegen/Xmm:xmm",
+        "//Compiler/Codegen/Xpp:xpp",
+        "//Compiler/Core:core",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
+        "@catch2//:catch2_main",
+    ],
+)
+
+cc_binary(
+    name = "scalar_pipeline_tests",
+    srcs = ["ScalarPipelineTests.cpp"],
+    deps = [
+        "//Compiler/Codegen/Xmm:xmm",
+        "//Compiler/Codegen/Xpp:xpp",
+        "//Compiler/Core:core",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
+        "@catch2//:catch2_main",
+    ],
+)

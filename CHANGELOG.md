@@ -5,9 +5,40 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 # Changelog
 
-This file summarizes user-visible and developer-visible changes in the vxs-project repository.
+## 0.3.4 - 2026-08-31
 
-The 0.0.x development period is the pre-1.0 vxs-project compiler infrastructure line. It does not imply a complete X#
+### Compiler
+
+- Connected the complete fixed-width Visual X# scalar catalog across Core,
+  CorePrep, Xpp, Xmm, and the C++ LLVM backend without host-width narrowing.
+- Added canonical sign-and-magnitude integer literals and preserved decimal
+  floating spellings, including 128-bit integer and fp128 paths.
+- Advanced the Core and CorePrep internal wire contracts to version 3 with
+  explicit scalar tags, bounded numeric payloads, and strict validation.
+- Extended Haskell and native verifiers to reject payload/type mismatches,
+  out-of-range values, malformed floating spellings, and corrupted numeric
+  transports before native lowering.
+- Added signed, unsigned, and floating LLVM arithmetic selection, including
+  floor-division behavior appropriate to each scalar family.
+
+### CLI and repository
+
+- Kept `vxs version` as the single compiler-version command and rejected the
+  removed GNU-style `vxs --version` spelling.
+- Distributed tests and fixtures into their owning compiler components instead
+  of retaining a repository-wide test bucket.
+- Centralized current public headers below
+  `Compiler/Headers/Visual/XSharp` and isolated retained C23/LIL headers below
+  `Compiler/Legacy/Headers/Visual/XSharp/Legacy`.
+- Removed the unused Rust proc-macro package, standalone codegen-unit model,
+  and Rust-only formatting/error convenience APIs while retaining reference
+  HIR, MIR, and XLIL algorithms that still require deliberate migration.
+- Expanded public documentation for scalar lowering, bounded artifact wires,
+  and component-local test ownership.
+
+This file summarizes user-visible and developer-visible changes in the visual-xsharp repository.
+
+The 0.0.x development period is the pre-1.0 visual-xsharp compiler infrastructure line. It does not imply a complete X#
 source-to-native executable pipeline.
 
 ## 0.3.3 - 2026-08-30

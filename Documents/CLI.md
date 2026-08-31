@@ -27,11 +27,10 @@ The general invocation shape is:
 vxs <command> [command options] [command positional values]
 vxs -Help
 vxs <command> -Help
-vxs --version
 ```
 
 Command, option, and enumerated-value spelling is case-sensitive. Compiler options use one leading hyphen and Pascal-style
-segments. The special `--version` control is retained; it does not establish a general GNU long-option syntax.
+segments. Version reporting is available only through the explicit `vxs version` command.
 
 | Command | Purpose | Current connection |
 | --- | --- | --- |
@@ -100,7 +99,7 @@ vxs viget push|update
 ```
 
 Canonical compiler settings use one leading hyphen and the displayed capitalization. `-Help` is the canonical help
-control; `--version` remains a special version control. Other legacy long options, including `--help`, are rejected.
+control. Legacy GNU-style controls, including `--help` and `--version`, are rejected.
 
 ## Parser model
 

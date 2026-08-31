@@ -6,7 +6,7 @@
 #ifndef XS_BACKEND_LLVM_INTEGER_H
 #define XS_BACKEND_LLVM_INTEGER_H
 
-#include "Visual/XSharp/backend/llvm_backend.h"
+#include "Visual/XSharp/Legacy/backend/llvm_backend.h"
 
 bool
 xs_llvm_is_integer_constant(XsLilInstructionKind kind);
