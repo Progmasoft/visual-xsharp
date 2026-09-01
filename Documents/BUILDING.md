@@ -61,7 +61,7 @@ The native CLI uses its own typed C++20 command schema. Catch2 remains the only 
 ```powershell
 bazelisk build //Compiler/Cli:vxs
 bazelisk build //Compiler/Cli/Tests:cli_parser_tests
-.\bazel-bin\tests\cli_parser_tests.exe
+.\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
 ```
 
 The native Catch2 program is executed directly from PowerShell. This avoids introducing a Git Bash/MSYS runtime solely for

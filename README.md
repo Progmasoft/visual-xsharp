@@ -69,7 +69,7 @@ MSVC library/include directories available in the environment:
 ```powershell
 bazelisk build //Compiler/Cli:vxs
 bazelisk build //Compiler/Cli/Tests:cli_parser_tests
-.\bazel-bin\tests\cli_parser_tests.exe
+.\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
 ```
 
 The Bazel graph discovers LLVM from `LLVM_ROOT` or `llvm-config`; it does not store a machine-specific installation path.
