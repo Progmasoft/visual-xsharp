@@ -107,4 +107,4 @@ jobs:
         shell: pwsh
         run: |
           bazel build //Compiler/Cli/Tests:cli_parser_tests
-          & .\bazel-bin\tests\cli_parser_tests.exe
+          & .\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
