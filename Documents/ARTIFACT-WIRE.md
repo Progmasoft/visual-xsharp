@@ -1,11 +1,11 @@
 <!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
 <!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0 -->
 
-# Internal artifact wire contracts
+# Artifact wire contracts
 
-Visual X# uses bounded binary documents at the Haskell/native boundary. These
-documents are compiler implementation contracts, not source formats and not
-user-facing `-Emit` choices.
+Visual X# uses bounded binary documents at compiler stage boundaries. They are
+compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
+`-Emit`/`-Build` choices; CorePrep remains a private adapter contract.
 
 ## Contract families
 
@@ -13,9 +13,16 @@ user-facing `-Emit` choices.
 | --- | --- | ---: | --- | --- |
 | Core | `VXCR` | 3 | Haskell frontend | native Core reader |
 | CorePrep | `VXCP` | 3 | CorePrep adapter | native pipeline tools |
+| Xpp | `VXPP` | 1 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
+| Xmm | `VXMM` | 1 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
 The contracts have related scalar encodings but separate structural schemas.
 Their magic values must never be treated as aliases.
+
+Core and CorePrep have a Haskell producer. Xpp and Xmm are C++20-owned
+contracts on both sides of their codec. This distinction does not weaken the
+reader boundary: an artifact loaded from disk is untrusted and is verified
+again before the next lowering stage.
 
 ## General encoding rules
 
@@ -185,11 +192,112 @@ A CorePrep document contains:
 CorePrep serializes the adapter model after evaluation order and control flow
 are explicit. It must not be exposed as a stable package or CLI artifact.
 
+## Xpp and Xmm common scalar records
+
+Xpp and Xmm share a C++20 artifact support layer for types, literals, Unicode
+text, qualified names, and resolved symbols. They do not share instruction or
+control-flow records. Reusing only scalar records prevents a generic object
+serializer from erasing which stage owns an invariant.
+
+The v1 Xpp/Xmm type tag catalog follows the native Core type model exactly:
+
+| Tag | Type | Tag | Type |
+| ---: | --- | ---: | --- |
+| 0 | no-result/unit marker | 11 | `uint` |
+| 1 | `bool` | 12 | `ulongint` |
+| 2 | `char` | 13 | `sfloat` |
+| 3 | `byte` | 14 | `lfloat` |
+| 4 | `short` | 15 | `float` |
+| 5 | `int` | 16 | `double` |
+| 6 | `long` | 17 | `String` |
+| 7 | `longint` | 18 | function type |
+| 8 | `ubyte` | 19 | named type |
+| 9 | `ushort` | 20 | type variable |
+| 10 | `ulong` | | |
+
+Literal tags are independent of the type tag:
+
+| Tag | Payload |
+| ---: | --- |
+| 0 | unit/no-result |
+| 1 | boolean byte |
+| 2 | canonical sign plus integer magnitude |
+| 3 | validated ASCII floating spelling |
+| 4 | Unicode-scalar string |
+
+The reader validates the literal against its separately encoded type before
+returning a stage model. Legacy host-width integer alternatives accepted by
+the in-memory model are normalized to the canonical arbitrary-width payload
+when written; decoding never recreates a host-width alternative.
+
+## Xpp document order
+
+An Xpp v1 document contains:
+
+1. `VXPP`, version, and zero reserved flags;
+2. qualified module name;
+3. ordered resolved functions;
+4. parameter symbols/types, return type, and entry block;
+5. ordered blocks and instructions;
+6. instruction effect, opcode, destination, result type, and operands;
+7. closure function identity and capture modes; and
+8. one typed terminator with explicit CFG targets per block.
+
+The instruction effect preserves definition, store, and discard as distinct
+operations. A destination of zero is therefore meaningful only for discard.
+The codec does not derive effect from the opcode or fabricate storage.
+
+Xpp function operands carry stable symbol identity plus their callable type.
+They are not serialized as storage reads. Closure targets similarly occupy a
+dedicated symbol field rather than an untyped extra operand.
+
+## Xmm document order
+
+An Xmm v1 document contains:
+
+1. `VXMM`, version, and zero reserved flags;
+2. qualified module name;
+3. ordered functions and resolved function identity;
+4. parameter virtual registers and a parallel ordered type vector;
+5. return type and entry block;
+6. blocks and instructions;
+7. opcode, destination register, result type, explicit has-result bit, values,
+   closure function, and capture modes; and
+8. a typed terminator with CFG targets.
+
+Xmm values have three disjoint tags: data register, immediate, and function.
+This prevents a direct function call from consuming a virtual register or an
+immediate from being interpreted as register zero. Parameter register/type
+vectors remain separate because the ABI cannot be reconstructed from first
+instruction use.
+
+## Public conversion routes
+
+The CLI connects the public stage artifacts without exposing CorePrep:
+
+```powershell
+vxs build -File Main.vxs -Emit xpp
+vxs build -Build xpp -File Main.xpp -Emit xmm
+vxs check -Build xmm -File Main.xmm
+vxs build -Build xmm -File Main.xmm -Emit llvmll
+```
+
+An artifact can move forward or be rewritten at its current stage. It cannot
+be raised back to an earlier representation: Xmm cannot emit Xpp or Core, and
+Xpp cannot emit Core. `check` writes nothing and continues through the next
+connected verification/lowering boundary. `build` replaces the selected
+output only after the input has decoded and verified successfully.
+
+Stage optimization flags apply at the owning boundary. A loaded Xpp/Xmm
+document is verified before optimization, optimized only when enabled, and
+verified again before serialization or forward lowering.
+
 ## Compatibility policy
 
-The version byte describes the entire schema. Version 3 is not a permissive
-extension of version 2: the scalar type and literal tag space changed. Current
-readers reject v2 and future versions.
+The version field describes the entire schema. Core/CorePrep version 3 is not
+a permissive extension of version 2: their scalar type and literal tag spaces
+changed. Xpp/Xmm begin independently at version 1. Every current reader rejects
+earlier and future versions for its own magic.
 
 If migration is needed later, it should be implemented as an explicit reader
 for the old version followed by model conversion. The current decoder must not
@@ -251,8 +359,10 @@ Every contract revision should cover:
 - each configurable limit; and
 - trailing-byte rejection.
 
-Cross-language tests are essential. A Haskell-only round trip can preserve a
-bug that the C++ decoder does not share, and the inverse is equally possible.
+Cross-language tests are essential for Core/CorePrep. Xpp/Xmm instead require
+stage-crossing tests: lowered output, codec round trip, verifier, and the next
+lowering owner must all agree. A codec-only equality test can preserve a model
+bug just as easily as a single-language Core round trip.
 
 When one side changes a tag, a golden-byte test should fail before a large
 module reaches LLVM. When one side changes only a verifier rule, the same bytes

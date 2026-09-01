@@ -191,6 +191,8 @@ The Haskell frontend can emit verified Core, LLVM forms, target-machine output, 
 
 ```powershell
 vxs build -File .\Sources\Main.vxs -Emit core
+vxs build -File .\Sources\Main.vxs -Emit xpp
+vxs build -File .\Sources\Main.vxs -Emit xmm
 vxs build -File .\Sources\Main.vxs -Emit llvmll
 vxs build -File .\Sources\Main.vxs -Emit llvmbc
 vxs build -File .\Sources\Main.vxs -Emit object
@@ -221,18 +223,34 @@ vxs build -Build core -Emit llvmll -File module.core
 vxs build -Build core -Emit llvmbc -File module.core
 ```
 
-The native C++20 route reads the Haskell `VXCR` v2 contract with byte, collection, text, type-depth, and expression-depth
+The native C++20 route reads the Haskell `VXCR` v3 contract with byte, collection, text, type-depth, and expression-depth
 limits. It verifies Core semantics before adapting nested expressions and source control flow to CorePrep, then runs the
 existing verified CorePrep → Xpp → Xmm → LLVM pipeline entirely in memory. `check` writes nothing. The two `build` examples
 write a sibling `.ll` or `.bc` file. A Core build can also write a sibling `.o` or `.asm`, or link a `.vxse`; binary is the
 default emit kind. The older `VXCP` transport remains internal and is rejected when supplied as `.core`.
 
+### Xpp and Xmm artifact routes
+
+```powershell
+vxs check -Build xpp -File module.xpp
+vxs build -Build xpp -File module.xpp -Emit xmm
+vxs check -Build xmm -File module.xmm
+vxs build -Build xmm -File module.xmm -Emit llvmll
+```
+
+`VXPP` and `VXMM` are bounded, versioned binary contracts. Both readers reject
+invalid magic/version/flags, malformed tags, invalid Unicode, non-canonical
+numeric payloads, excessive counts, truncated fields, and trailing bytes.
+Decoded models pass their stage verifier before optimization or lowering.
+
+Conversions move forward through the pipeline. Xmm cannot be converted back
+to Xpp or Core, and Xpp cannot be converted back to Core. Rewriting the same
+stage is permitted and replaces the artifact after successful verification.
+
 ## Registered but not connected
 
 The CLI reserves the renewed artifact vocabulary before all routes are implemented:
 
-- `.xpp` and `.xmm` input routes report that the selected input is not connected;
-- `.xpp` and `.xmm` output codecs are not connected;
 - `install` and `viget` report that the ViGet client is not linked into the compiler build.
 
 `resolve` and `update` evaluate the project configuration and refresh `Visual.XSharp.Lockfile.sqlite3`.

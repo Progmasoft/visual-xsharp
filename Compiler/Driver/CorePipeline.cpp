@@ -98,6 +98,16 @@ namespace
             fmt::print(stderr, "vxs: Core artifact error at byte {} ({}): {}\n", result.coreWireError->offset, result.coreWireError->context, result.coreWireError->message);
             return;
         }
+        if (result.xppWireError)
+        {
+            fmt::print(stderr, "vxs: Xpp artifact error at byte {} ({}): {}\n", result.xppWireError->offset, result.xppWireError->context, result.xppWireError->message);
+            return;
+        }
+        if (result.xmmWireError)
+        {
+            fmt::print(stderr, "vxs: Xmm artifact error at byte {} ({}): {}\n", result.xmmWireError->offset, result.xmmWireError->context, result.xmmWireError->message);
+            return;
+        }
         for (const auto &issue : result.coreVerificationIssues)
             fmt::print(stderr, "vxs: {}: {} [function={}, symbol={}]\n", issue.code, issue.message, issue.function, issue.symbol);
         for (const auto &issue : result.verification_issues)
@@ -159,6 +169,51 @@ namespace
     }
 
     [[nodiscard]] auto
+    WriteBytes(const std::filesystem::path &path, std::span<const std::uint8_t> bytes, std::string_view stage) -> bool
+    {
+        std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+        if (!stream)
+        {
+            fmt::print(stderr, "vxs: could not open {} artifact '{}' for writing\n", stage, path.string());
+            return false;
+        }
+        stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!stream)
+        {
+            fmt::print(stderr, "vxs: could not finish writing {} artifact '{}'\n", stage, path.string());
+            return false;
+        }
+        fmt::print(stderr, "vxs: wrote verified {} artifact '{}'\n", stage, path.string());
+        return true;
+    }
+
+    [[nodiscard]] auto
+    WriteIntermediate(const char *artifactBasePath, XsBuildOutput output, const visual_xsharp::PipelineResult &result) -> bool
+    {
+        if (output == XS_BUILD_OUTPUT_XPP && result.xpp)
+        {
+            auto encoded = Visual::XSharp::Xpp::Wire::Encode(*result.xpp);
+            if (!encoded)
+            {
+                fmt::print(stderr, "vxs: Xpp encode error at byte {} ({}): {}\n", encoded.error->offset, encoded.error->context, encoded.error->message);
+                return false;
+            }
+            return WriteBytes(ArtifactPath(artifactBasePath, ".xpp"), encoded.bytes, "Xpp");
+        }
+        if (output == XS_BUILD_OUTPUT_XMM && result.xmm)
+        {
+            auto encoded = Visual::XSharp::Xmm::Wire::Encode(*result.xmm);
+            if (!encoded)
+            {
+                fmt::print(stderr, "vxs: Xmm encode error at byte {} ({}): {}\n", encoded.error->offset, encoded.error->context, encoded.error->message);
+                return false;
+            }
+            return WriteBytes(ArtifactPath(artifactBasePath, ".xmm"), encoded.bytes, "Xmm");
+        }
+        return false;
+    }
+
+    [[nodiscard]] auto
     WriteExecutable(const char *inputPath, const Llvm::Artifact &artifact) -> bool
     {
         const auto output = ArtifactPath(inputPath, ".vxse");
@@ -182,66 +237,98 @@ namespace
     }
 } // namespace
 
+namespace
+{
+    enum class InputStage : std::uint8_t
+    {
+        Core,
+        Xpp,
+        Xmm
+    };
+
+    [[nodiscard]] auto
+    ProcessArtifact(InputStage inputStage, const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple) -> bool
+    {
+        if (path == nullptr || artifactBasePath == nullptr || settings == nullptr)
+            return false;
+        std::error_code sizeError;
+        const auto artifactSize = std::filesystem::file_size(path, sizeError);
+        constexpr auto kMaximumArtifactBytes = std::uintmax_t{ 64U * 1024U * 1024U };
+        if (!sizeError && artifactSize > kMaximumArtifactBytes)
+        {
+            fmt::print(stderr, "vxs: compiler artifact '{}' exceeds the 64 MiB input limit\n", path);
+            return false;
+        }
+        const auto bytes = ReadFile(path);
+        if (!bytes)
+        {
+            fmt::print(stderr, "vxs: could not read compiler artifact '{}'\n", path);
+            return false;
+        }
+
+        visual_xsharp::PipelineOptions options;
+        options.optimize_xpp = settings->xpp_optimization_passes;
+        options.optimize_xmm = settings->xmm_optimization_passes;
+        options.llvm.optimization = Optimization(*settings);
+        options.llvm.target_triple = targetTriple == nullptr ? "" : targetTriple;
+        if (output == XS_BUILD_OUTPUT_XPP)
+            options.stop_after = visual_xsharp::PipelineStop::Xpp;
+        else if (output == XS_BUILD_OUTPUT_XMM)
+            options.stop_after = visual_xsharp::PipelineStop::Xmm;
+        if (command != XS_CLI_COMMAND_CHECK)
+        {
+            if (output == XS_BUILD_OUTPUT_BINARY || output == XS_BUILD_OUTPUT_OBJECT)
+                options.llvm.machineCode = Llvm::MachineCodeEmission::Object;
+            else if (output == XS_BUILD_OUTPUT_ASSEMBLY)
+                options.llvm.machineCode = Llvm::MachineCodeEmission::Assembly;
+            options.llvm.executableEntry = output == XS_BUILD_OUTPUT_BINARY;
+        }
+
+        auto result = inputStage == InputStage::Core  ? Visual::XSharp::Pipeline::ConsumeCore(*bytes, options)
+                      : inputStage == InputStage::Xpp ? Visual::XSharp::Pipeline::ConsumeXpp(*bytes, options)
+                                                      : Visual::XSharp::Pipeline::ConsumeXmm(*bytes, options);
+        if (!result)
+        {
+            PrintFailure(result);
+            return false;
+        }
+        if (command == XS_CLI_COMMAND_CHECK)
+        {
+            fmt::print(stderr, "vxs: compiler artifact '{}' is valid through its requested pipeline boundary\n", path);
+            return true;
+        }
+        if (output == XS_BUILD_OUTPUT_XPP || output == XS_BUILD_OUTPUT_XMM)
+            return WriteIntermediate(artifactBasePath, output, result);
+        if (output == XS_BUILD_OUTPUT_BINARY)
+            return WriteExecutable(artifactBasePath, *result.llvm);
+        if (output == XS_BUILD_OUTPUT_OBJECT || output == XS_BUILD_OUTPUT_ASSEMBLY
+            || output == XS_BUILD_OUTPUT_LLVM_LL || output == XS_BUILD_OUTPUT_LLVM_BC)
+            return WriteArtifact(artifactBasePath, output, *result.llvm);
+        fmt::print(stderr, "vxs: requested artifact conversion is not supported from this input stage\n");
+        return false;
+    }
+} // namespace
+
 bool
 xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
 {
-    if (path == nullptr || artifactBasePath == nullptr || settings == nullptr)
-        return false;
-    std::error_code sizeError;
-    const auto fileSize = std::filesystem::file_size(path, sizeError);
-    const Visual::XSharp::Core::Wire::Limits coreLimits;
-    if (!sizeError && fileSize > coreLimits.maximumWireBytes)
-    {
-        fmt::print(stderr, "vxs: Core artifact '{}' exceeds the {}-byte input limit\n", path, coreLimits.maximumWireBytes);
-        return false;
-    }
-    const auto bytes = ReadFile(path);
-    if (!bytes)
-    {
-        fmt::print(stderr, "vxs: could not read Core artifact '{}'\n", path);
-        return false;
-    }
-
-    visual_xsharp::PipelineOptions options;
-    options.optimize_xpp = settings->xpp_optimization_passes;
-    options.optimize_xmm = settings->xmm_optimization_passes;
-    options.llvm.optimization = Optimization(*settings);
-    // An empty target deliberately delegates to LLVM's host-dependent default.
-    // Explicit CLI targets have already passed parser and project-catalog checks.
-    options.llvm.target_triple = targetTriple == nullptr ? "" : targetTriple;
-    if (command != XS_CLI_COMMAND_CHECK)
-    {
-        // Translate the typed emit kind once at the driver/backend boundary;
-        // lower layers never reinterpret command-line strings.
-        if (output == XS_BUILD_OUTPUT_BINARY || output == XS_BUILD_OUTPUT_OBJECT)
-            options.llvm.machineCode = Llvm::MachineCodeEmission::Object;
-        else if (output == XS_BUILD_OUTPUT_ASSEMBLY)
-            options.llvm.machineCode = Llvm::MachineCodeEmission::Assembly;
-        options.llvm.executableEntry = output == XS_BUILD_OUTPUT_BINARY;
-    }
-    const auto result = Visual::XSharp::Pipeline::ConsumeCore(*bytes, options);
-    if (!result)
-    {
-        PrintFailure(result);
-        return false;
-    }
-    if (command == XS_CLI_COMMAND_CHECK)
-    {
-        fmt::print(stderr, "vxs: Core artifact '{}' is valid through the LLVM boundary\n", path);
-        return true;
-    }
-    if (output == XS_BUILD_OUTPUT_BINARY)
-        return WriteExecutable(artifactBasePath, *result.llvm);
-    if (output == XS_BUILD_OUTPUT_OBJECT || output == XS_BUILD_OUTPUT_ASSEMBLY || output == XS_BUILD_OUTPUT_LLVM_LL || output == XS_BUILD_OUTPUT_LLVM_BC)
-        return WriteArtifact(artifactBasePath, output, *result.llvm);
-    fmt::print(stderr,
-               "vxs: Core input does not yet serialize Xpp or Xmm artifacts; choose binary, object, assembly, llvmll, "
-               "or llvmbc\n");
-    return false;
+    return ProcessArtifact(InputStage::Core, path, artifactBasePath, command, output, settings, targetTriple);
 }
 
 bool
 xs_driver_process_core_artifact(const char *path, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
 {
     return xs_driver_process_core_artifact_as(path, path, command, output, settings, targetTriple);
+}
+
+bool
+xs_driver_process_xpp_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
+{
+    return ProcessArtifact(InputStage::Xpp, path, artifactBasePath, command, output, settings, targetTriple);
+}
+
+bool
+xs_driver_process_xmm_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
+{
+    return ProcessArtifact(InputStage::Xmm, path, artifactBasePath, command, output, settings, targetTriple);
 }

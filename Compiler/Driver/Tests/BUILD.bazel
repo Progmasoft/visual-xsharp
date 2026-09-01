@@ -25,3 +25,21 @@ cc_binary(
         "@catch2//:catch2_main",
     ],
 )
+
+cc_binary(
+    name = "artifact_wire_tests",
+    srcs = [
+        "ArtifactWireTests.cpp",
+        "WireSupportTests.cpp",
+    ],
+    deps = [
+        "//Compiler/Artifact:wire_support",
+        "//Compiler/Codegen/Xmm:xmm",
+        "//Compiler/Codegen/Xpp:xpp",
+        "//Compiler/Core:core",
+        "//Compiler/Driver:pipeline",
+        "//Compiler/Headers/Visual/XSharp:pipeline_api",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
+        "@catch2//:catch2_main",
+    ],
+)

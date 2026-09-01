@@ -45,6 +45,8 @@ namespace visual_xsharp::xpp
         core::Type type{ core::Type::unit() };
         SymbolId symbol{};
         core::Literal literal{};
+        [[nodiscard]] auto
+        operator==(const Operand &) const -> bool = default;
     };
     struct Instruction final
     {
@@ -60,6 +62,8 @@ namespace visual_xsharp::xpp
         std::vector<Operand> operands;
         SymbolId closure_function{};
         std::vector<core::CaptureMode> capture_modes;
+        [[nodiscard]] auto
+        operator==(const Instruction &) const -> bool = default;
     };
     struct Terminator final
     {
@@ -73,12 +77,16 @@ namespace visual_xsharp::xpp
         Operand value{};
         BlockId true_target{};
         BlockId false_target{};
+        [[nodiscard]] auto
+        operator==(const Terminator &) const -> bool = default;
     };
     struct Block final
     {
         BlockId id{};
         std::vector<Instruction> instructions;
         Terminator terminator;
+        [[nodiscard]] auto
+        operator==(const Block &) const -> bool = default;
     };
     struct Function final
     {
@@ -87,11 +95,15 @@ namespace visual_xsharp::xpp
         core::Type return_type{ core::Type::unit() };
         BlockId entry{};
         std::vector<Block> blocks;
+        [[nodiscard]] auto
+        operator==(const Function &) const -> bool = default;
     };
     struct Module final
     {
         std::vector<std::u32string> name;
         std::vector<Function> functions;
+        [[nodiscard]] auto
+        operator==(const Module &) const -> bool = default;
     };
 
     [[nodiscard]] auto

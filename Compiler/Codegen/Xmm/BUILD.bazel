@@ -4,8 +4,9 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "xmm",
-    srcs = ["Lower.cpp", "Verifier.cpp"],
+    srcs = ["Lower.cpp", "Verifier.cpp", "Wire.cpp"],
     deps = [
+        "//Compiler/Artifact:wire_support",
         "//Compiler/Codegen/Xpp:xpp",
         "//Compiler/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",

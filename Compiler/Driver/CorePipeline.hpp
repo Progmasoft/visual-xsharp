@@ -11,3 +11,7 @@
 xs_driver_process_core_artifact(const char *path, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);
 [[nodiscard]] bool
 xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);
+[[nodiscard]] bool
+xs_driver_process_xpp_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);
+[[nodiscard]] bool
+xs_driver_process_xmm_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);

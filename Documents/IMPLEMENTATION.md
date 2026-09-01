@@ -85,9 +85,10 @@ The repository contains:
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The production process boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
-contract coverage, but the CLI does not expose CorePrep. LLVM target-machine emission and typed C++20 LLD invocation now
-produce `.o`, `.asm`, and `.vxse` artifacts. Remaining work includes cross-namespace Haskell name resolution, a multi-module
-Core link unit, source ownership for project-wide per-file artifacts, and explicit Xpp/Xmm writers and readers.
+contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v1 codecs now own public Xpp/Xmm disk
+artifacts and forward-only pipeline resumption. LLVM target-machine emission and typed C++20 LLD invocation produce `.o`,
+`.asm`, and `.vxse` artifacts. Remaining work includes cross-namespace Haskell name resolution, a multi-module Core link
+unit, and source ownership for project-wide per-file artifacts.
 
 ### Native coverage matrix
 
@@ -104,7 +105,7 @@ Core link unit, source ownership for project-wide per-file artifacts, and explic
 | target object and assembly output | connected for supported values | target machine |
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
 | closure object ABI | planned | LLVM/AARC runtime boundary |
-| Xpp/Xmm disk codecs | registered, not connected | public artifact layer |
+| Xpp/Xmm disk codecs | connected | bounded v1 `VXPP`/`VXMM` readers and writers |
 | project-wide per-source native outputs | registered contract, not connected | source ownership through Core |
 
 ## Retiring Rust compiler core
@@ -134,8 +135,8 @@ guessed from the entry spelling.
 Known gaps include:
 
 - Core input can be checked through LLVM and can emit `.ll`, `.bc`, `.o`, `.asm`, or a native `.vxse`;
-- explicit Core emission from source is connected; Xpp/Xmm emission is not;
-- Xpp/Xmm and other later non-source `-Build` inputs are registered but not connected;
+- explicit Core, Xpp, and Xmm emission from source is connected;
+- Xpp and Xmm inputs decode, verify, optionally optimize, and continue forward without CorePrep exposure;
 - package publication and installation require a ViGet client not linked into this build;
 - cross-namespace imports and the multi-module Core link unit are not connected yet; and
 - project-wide per-source object/assembly emission and named test-suite execution remain intentionally unavailable rather
@@ -148,8 +149,8 @@ Known gaps include:
 | explicit `.vxs` | connected | connected | connected subset | connected subset | connected subset |
 | project source set | connected | connected | connected subset | per-source route pending | binary connected subset |
 | public `.core` | connected | not a conversion target | connected subset | connected subset | connected subset |
-| `.xpp` | registered rejection | no | no | no | no |
-| `.xmm` | registered rejection | no | no | no | no |
+| `.xpp` | connected | not an earlier conversion target | connected subset | connected subset | connected subset |
+| `.xmm` | connected | not an earlier conversion target | connected subset | connected subset | connected subset |
 | object | not accepted | no | no | already native | build-only handling |
 
 “Connected subset” means the route itself is real and never falls back to removed code. A source using a type or operation

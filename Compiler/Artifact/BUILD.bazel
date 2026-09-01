@@ -3,11 +3,11 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
-    name = "xmm",
-    hdrs = ["IR.hpp", "Verifier.hpp", "Wire.hpp"],
-    strip_include_prefix = "/Compiler/Headers",
+    name = "wire_support",
+    srcs = ["WireSupport.cpp"],
     deps = [
+        "//Compiler/Core:core",
         "//Compiler/Headers/Visual/XSharp/Artifact:wire_support_api",
-        "//Compiler/Headers/Visual/XSharp/Xpp:xpp",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
     ],
 )

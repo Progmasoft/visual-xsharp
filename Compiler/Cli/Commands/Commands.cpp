@@ -502,9 +502,32 @@ namespace
                 return 1;
             return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse")) : 0;
         }
+        if (options.input == XS_BUILD_INPUT_XPP || options.input == XS_BUILD_INPUT_XMM)
+        {
+            const bool isXpp = options.input == XS_BUILD_INPUT_XPP;
+            const std::string_view expectedExtension = isXpp ? ".xpp" : ".xmm";
+            if (!options.filePath || options.filePath->extension() != expectedExtension)
+            {
+                fmt::print(stderr, "vxs: -Build {} requires a {} -File\n", isXpp ? "xpp" : "xmm", expectedExtension);
+                return 2;
+            }
+            const auto output = options.command == XS_CLI_COMMAND_RUN ? XS_BUILD_OUTPUT_BINARY : effective.output;
+            if (output == XS_BUILD_OUTPUT_CORE || (!isXpp && output == XS_BUILD_OUTPUT_XPP))
+            {
+                fmt::print(stderr, "vxs: compiler artifacts cannot be raised back to an earlier pipeline stage\n");
+                return 2;
+            }
+            const auto fileText = PathText(*options.filePath);
+            const bool built = isXpp
+                                   ? xs_driver_process_xpp_artifact_as(fileText.c_str(), fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr)
+                                   : xs_driver_process_xmm_artifact_as(fileText.c_str(), fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
+            if (!built)
+                return 1;
+            return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse")) : 0;
+        }
         if (options.input != XS_BUILD_INPUT_VXS)
         {
-            fmt::print(stderr, "vxs: only vxs and core inputs belong to the renewed pipeline\n");
+            fmt::print(stderr, "vxs: only vxs, core, xpp, and xmm inputs belong to the renewed pipeline\n");
             return 2;
         }
         return options.filePath && ProcessSource(*options.filePath, options, effective) ? 0 : 1;

@@ -3,6 +3,46 @@
 
 #include "Visual/XSharp/Pipeline.hpp"
 
+namespace
+{
+    void
+    ContinueFromXmm(visual_xsharp::PipelineResult &result, const visual_xsharp::PipelineOptions &options)
+    {
+        result.xmmVerificationIssues = Visual::XSharp::Xmm::Verify(*result.xmm);
+        if (!result.xmmVerificationIssues.empty())
+            return;
+        if (options.stop_after == visual_xsharp::PipelineStop::Xmm)
+        {
+            result.succeeded = true;
+            return;
+        }
+        auto loweredLlvm = Visual::XSharp::Backend::LLVM::Lower(*result.xmm, options.llvm);
+        if (!loweredLlvm)
+        {
+            result.llvm_error = std::move(loweredLlvm.error);
+            return;
+        }
+        result.llvm = std::move(loweredLlvm.artifact);
+        result.succeeded = true;
+    }
+
+    void
+    ContinueFromXpp(visual_xsharp::PipelineResult &result, const visual_xsharp::PipelineOptions &options)
+    {
+        result.xppVerificationIssues = Visual::XSharp::Xpp::Verify(*result.xpp);
+        if (!result.xppVerificationIssues.empty())
+            return;
+        if (options.stop_after == visual_xsharp::PipelineStop::Xpp)
+        {
+            result.succeeded = true;
+            return;
+        }
+        auto loweredXmm = ::visual_xsharp::xmm::lower(*result.xpp);
+        result.xmm = options.optimize_xmm ? ::visual_xsharp::xmm::optimize(std::move(loweredXmm)) : std::move(loweredXmm);
+        ContinueFromXmm(result, options);
+    }
+} // namespace
+
 namespace visual_xsharp
 {
     auto
@@ -29,23 +69,7 @@ namespace visual_xsharp
         // Optimization toggles select identity-vs-optimized forms; they never skip a stage.
         // Xmm therefore receives the same typed Xpp contract in debug and release modes.
         result.xpp = options.optimize_xpp ? xpp::optimize(std::move(lowered_xpp)) : std::move(lowered_xpp);
-        result.xppVerificationIssues = ::Visual::XSharp::Xpp::Verify(*result.xpp);
-        if (!result.xppVerificationIssues.empty())
-            return result;
-        auto lowered_xmm = xmm::lower(*result.xpp);
-        result.xmm = options.optimize_xmm ? xmm::optimize(std::move(lowered_xmm)) : std::move(lowered_xmm);
-        result.xmmVerificationIssues = ::Visual::XSharp::Xmm::Verify(*result.xmm);
-        if (!result.xmmVerificationIssues.empty())
-            return result;
-        auto loweredLlvm = ::Visual::XSharp::Backend::LLVM::Lower(*result.xmm, options.llvm);
-        // LLVM failures stay structured instead of being flattened into a pipeline boolean.
-        // Frontends can render VXL diagnostics while still inspecting the verified Xmm.
-        if (!loweredLlvm)
-        {
-            result.llvm_error = std::move(loweredLlvm.error);
-            return result;
-        }
-        result.llvm = std::move(loweredLlvm.artifact);
+        ContinueFromXpp(result, options);
         return result;
     }
 } // namespace visual_xsharp
@@ -78,21 +102,57 @@ namespace Visual::XSharp::Pipeline
 
         auto loweredXpp = ::visual_xsharp::xpp::lower(*result.core_prep);
         result.xpp = options.optimize_xpp ? ::visual_xsharp::xpp::optimize(std::move(loweredXpp)) : std::move(loweredXpp);
+        ContinueFromXpp(result, options);
+        return result;
+    }
+
+    auto
+    ConsumeXpp(std::span<const std::uint8_t> bytes, const Options &options) -> Result
+    {
+        Result result;
+        auto decoded = Xpp::Wire::Decode(bytes, options.artifactWireLimits);
+        if (!decoded)
+        {
+            result.xppWireError = std::move(decoded.error);
+            return result;
+        }
+        result.xpp = std::move(decoded.module);
         result.xppVerificationIssues = Xpp::Verify(*result.xpp);
         if (!result.xppVerificationIssues.empty())
             return result;
-        auto loweredXmm = ::visual_xsharp::xmm::lower(*result.xpp);
-        result.xmm = options.optimize_xmm ? ::visual_xsharp::xmm::optimize(std::move(loweredXmm)) : std::move(loweredXmm);
+        if (options.optimize_xpp)
+            result.xpp = ::visual_xsharp::xpp::optimize(std::move(*result.xpp));
+        ContinueFromXpp(result, options);
+        return result;
+    }
+
+    auto
+    ConsumeXmm(std::span<const std::uint8_t> bytes, const Options &options) -> Result
+    {
+        Result result;
+        auto decoded = Xmm::Wire::Decode(bytes, options.artifactWireLimits);
+        if (!decoded)
+        {
+            result.xmmWireError = std::move(decoded.error);
+            return result;
+        }
+        result.xmm = std::move(decoded.module);
+        if (options.stop_after == Stop::Xpp)
+        {
+            result.xmmWireError = Xmm::Wire::Error{
+                Xmm::Wire::ErrorKind::InvalidModel,
+                0U,
+                "pipeline boundary",
+                "Xmm input cannot move backward to Xpp",
+            };
+            return result;
+        }
         result.xmmVerificationIssues = Xmm::Verify(*result.xmm);
         if (!result.xmmVerificationIssues.empty())
             return result;
-        auto loweredLlvm = Backend::LLVM::Lower(*result.xmm, options.llvm);
-        if (!loweredLlvm)
-        {
-            result.llvm_error = std::move(loweredLlvm.error);
-            return result;
-        }
-        result.llvm = std::move(loweredLlvm.artifact);
+        if (options.optimize_xmm)
+            result.xmm = ::visual_xsharp::xmm::optimize(std::move(*result.xmm));
+        ContinueFromXmm(result, options);
         return result;
     }
 } // namespace Visual::XSharp::Pipeline
