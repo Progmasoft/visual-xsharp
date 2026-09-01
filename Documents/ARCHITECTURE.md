@@ -65,6 +65,11 @@ expressions, calls, conditions, returns, and assignments; desugaring produces ta
 CorePrep converts nested Core expressions into explicit atoms and operations, then represents control flow with basic blocks
 and terminators. A verifier rejects malformed symbols, blocks, branch targets, and unresolved types before native lowering.
 
+Core optimization is a verified fixed-point pipeline rather than a single expression rewrite. Immutable literal propagation,
+range-safe integer folding, effect-preserving branch cleanup, and declaration-aware backward liveness run before CorePrep.
+Each enabled pass emits deterministic typed metrics, and the final tree is verified again. The detailed contracts are in
+[Core IR](CORE-IR.md) and [Core optimization](CORE-OPTIMIZER.md).
+
 ## Native middle end
 
 Xpp is a target-independent typed representation consumed from verified CorePrep. Its stage verifier checks optimized

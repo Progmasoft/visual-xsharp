@@ -7,6 +7,7 @@ import Data.List (group, sort)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Scalar
 import Visual.XSharp.Diagnostic
 
 type Environment = Map.Map SymbolId (Type, Bool)
@@ -216,89 +217,11 @@ literalProblems literal valueType =
     [problem "VXC1029" "Core literal payload does not match its type or scalar range" | not matches]
     where
         matches = case literal of
-            CoreInteger value -> integerLiteralFits valueType value
-            CoreFloating spelling -> typeSpelling valueType `elem` floatingTypeNames && validFloatingSpelling spelling
+            CoreInteger value -> integerFitsCoreType valueType value
+            CoreFloating spelling -> isCoreFloatingType valueType && validCoreFloatingSpelling spelling
             CoreString _ -> valueType == stringType
             CoreBoolean _ -> valueType == boolType
             CoreUnit -> valueType == unitType
-
--- Core depends only on the syntax model, so it recognizes canonical scalar
--- spellings at this boundary instead of importing frontend policy. Keeping
--- the list explicit also prevents a user-defined NamedType from accidentally
--- acquiring primitive arithmetic semantics.
-isCoreNumericType :: Type -> Bool
-isCoreNumericType valueType = typeSpelling valueType `elem` numericTypeNames
-
-typeSpelling :: Type -> String
-typeSpelling (NamedType (QualifiedName [Identifier name]) []) = name
-typeSpelling _ = ""
-
-integerTypeNames :: [String]
-integerTypeNames =
-    [ "char"
-    , "byte"
-    , "short"
-    , "long"
-    , "int"
-    , "longint"
-    , "ubyte"
-    , "ushort"
-    , "ulong"
-    , "uint"
-    , "ulongint"
-    ]
-
-numericTypeNames :: [String]
-numericTypeNames = integerTypeNames ++ floatingTypeNames
-
-floatingTypeNames :: [String]
-floatingTypeNames = ["sfloat", "lfloat", "float", "double"]
-
-integerLiteralFits :: Type -> Integer -> Bool
-integerLiteralFits valueType value = case lookup (typeSpelling valueType) integerRanges of
-    Just (minimumValue, maximumValue) -> value >= minimumValue && value <= maximumValue
-    Nothing -> False
-    where
-        signed :: Int -> (Integer, Integer)
-        signed width = (negate (2 ^ (width - 1)), 2 ^ (width - 1) - 1)
-        unsigned :: Int -> (Integer, Integer)
-        unsigned width = (0, 2 ^ width - 1)
-        integerRanges :: [(String, (Integer, Integer))]
-        integerRanges =
-            [ ("char", unsigned 32)
-            , ("byte", signed 8)
-            , ("short", signed 16)
-            , ("long", signed 32)
-            , ("int", signed 64)
-            , ("longint", signed 128)
-            , ("ubyte", unsigned 8)
-            , ("ushort", unsigned 16)
-            , ("ulong", unsigned 32)
-            , ("uint", unsigned 64)
-            , ("ulongint", unsigned 128)
-            ]
-
-validFloatingSpelling :: String -> Bool
-validFloatingSpelling spelling
-    | spelling `elem` ["nan", "+nan", "-nan", "inf", "+inf", "-inf"] = True
-    | otherwise = case dropSign spelling of
-        [] -> False
-        unsignedSpelling ->
-            let (mantissa, exponentPart) = break (`elem` "eE") unsignedSpelling
-             in validSignificand mantissa && validExponent exponentPart
-    where
-        dropSign ('+' : remaining) = remaining
-        dropSign ('-' : remaining) = remaining
-        dropSign value = value
-        validSignificand value = case break (== '.') value of
-            (whole, []) -> not (null whole) && all isAsciiDigit whole
-            (whole, _ : fraction) ->
-                (not (null whole) || not (null fraction)) && all isAsciiDigit whole && all isAsciiDigit fraction
-        validExponent [] = True
-        validExponent (_ : remaining) = case dropSign remaining of
-            [] -> False
-            digits -> all isAsciiDigit digits
-        isAsciiDigit character = character >= '0' && character <= '9'
 
 statementsAlwaysReturn :: [CoreStatement] -> Bool
 statementsAlwaysReturn [] = False

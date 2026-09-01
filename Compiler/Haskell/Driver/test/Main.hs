@@ -4,6 +4,9 @@ module Main (main) where
 
 import ClosureTests (closureTests)
 import Control.Exception (finally)
+import CoreOptimizerSourceTests (coreOptimizerSourceTests)
+import CoreOptimizerTests (coreOptimizerTests)
+import CoreVerifierTests (coreVerifierTests)
 import Data.List (isInfixOf)
 import Data.Word (Word8)
 import NumericTests (numericTests)
@@ -40,7 +43,8 @@ main = do
     check "call expression statements require semicolons" callRequiresSemicolon
     check "void functions cannot use a final result expression" voidFinalExpression
     check "nested blocks cannot use a final result expression" nestedFinalExpression
-    check "CorePrep atomizes calls and creates explicit control flow" preparedControlFlow
+    check "CorePrep atomizes calls after dead control flow is removed" preparedControlFlow
+    check "CorePrep creates explicit control flow for a live branch" preparedBranchControlFlow
     check "project entry resolves namespace, class, and public static void Main" entryContract
     check "int Main is rejected for the selected project entry" wrongEntryReturn
     check "top-level runtime functions are rejected" topLevelFunction
@@ -85,6 +89,9 @@ main = do
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
     mapM_ (uncurry checkIO) sourceSetTests
     mapM_ (uncurry check) closureTests
+    mapM_ (uncurry check) coreOptimizerTests
+    mapM_ (uncurry check) coreOptimizerSourceTests
+    mapM_ (uncurry check) coreVerifierTests
     mapM_ (uncurry check) numericTests
     mapM_ (uncurry check) scalarWireTests
     mapM_ (uncurry check) voidTests
@@ -170,12 +177,28 @@ preparedControlFlow = case compileEntryToCorePrep (QualifiedName [Identifier "Na
         let functions = corePrepModuleFunctions (artifactCorePrep artifacts)
             mainFunction = functions !! 1
             blocks = corePrepFunctionBlocks mainFunction
-         in length blocks >= 4 && any isBranch blocks && any hasCall blocks
+         in not (null blocks) && any hasCall blocks && not (any isBranch blocks)
     Left _ -> False
     where
         isBranch block = case corePrepBlockTerminator block of CorePrepBranch _ _ _ -> True; _ -> False
         hasCall block = any callInstruction (corePrepBlockInstructions block)
-        callInstruction instruction = case instruction of CorePrepBind _ _ _ (CorePrepCall _ _) -> True; _ -> False
+        callInstruction instruction = case instruction of
+            CorePrepBind _ _ _ (CorePrepCall _ _) -> True
+            CorePrepEvaluate (CorePrepCall _ _) -> True
+            _ -> False
+
+preparedBranchControlFlow :: Bool
+preparedBranchControlFlow = case compile source of
+    Right artifacts -> case corePrepModuleFunctions (artifactCorePrep artifacts) of
+        [function] ->
+            let blocks = corePrepFunctionBlocks function
+             in length blocks >= 3 && any isBranch blocks
+        _ -> False
+    Left _ -> False
+    where
+        source =
+            "class Flow { int Choose(_ int value) { if (value) { return 1; } else { return 2; } } }"
+        isBranch block = case corePrepBlockTerminator block of CorePrepBranch _ _ _ -> True; _ -> False
 
 entryContract :: Bool
 entryContract = case compile sample of
@@ -272,14 +295,20 @@ normalStringSemantics =
 
 stringPipeline :: Bool
 stringPipeline = case compile source of
-    Right artifacts -> case coreModuleFunctions (artifactOptimizedCore artifacts) of
-        [function] -> case coreFunctionBody function of
-            [CoreBind (CoreBinding _ _ _ (CoreLiteral (CoreString text) _)), CoreReturn (CoreLiteral (CoreInteger 1) _)] ->
-                text == "-- remains raw\n[=[ remains raw"
-            _ -> False
-        _ -> False
+    Right artifacts ->
+        sourceCorePreservesLiteral (artifactCore artifacts)
+            && optimizedCoreRemovesDeadLiteral (artifactOptimizedCore artifacts)
     Left _ -> False
     where
+        sourceCorePreservesLiteral moduleValue = case coreModuleFunctions moduleValue of
+            [function] -> case coreFunctionBody function of
+                [CoreBind (CoreBinding _ _ _ (CoreLiteral (CoreString text) _)), CoreReturn (CoreLiteral (CoreInteger 1) _)] ->
+                    text == "-- remains raw\n[=[ remains raw"
+                _ -> False
+            _ -> False
+        optimizedCoreRemovesDeadLiteral moduleValue = case coreModuleFunctions moduleValue of
+            [function] -> coreFunctionBody function == [CoreReturn (CoreLiteral (CoreInteger 1) intType)]
+            _ -> False
         source =
             unlines
                 [ "--! Pipeline namespace documentation"

@@ -404,14 +404,14 @@ parseExpressionModule tokens = do
     case syntaxDeclarations tree of
         [ TypeDeclaration {typeMembers = [FunctionDeclaration {declarationBody = Block [ExpressionStatement _ expression False]}]}
             ] ->
-            case expression of
-                LiteralExpression _ (IntegerLiteral value) _ -> Right value
-                _ -> Left []
+                case expression of
+                    LiteralExpression _ (IntegerLiteral value) _ -> Right value
+                    _ -> Left []
         _ -> Left []
 
 coreLiteralHasType :: String -> Integer -> Bool
 coreLiteralHasType typeName expected = case compileBody (typeName ++ " value = " ++ show expected ++ ";") of
-    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactOptimizedCore artifacts)))
+    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactCore artifacts)))
     Left _ -> False
     where
         matches (CoreBind binding) =
@@ -423,7 +423,7 @@ coreLiteralHasType typeName expected = case compileBody (typeName ++ " value = "
 
 numericBoolLowers :: Bool
 numericBoolLowers = case compileBody "bool enabled = 1;" of
-    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactOptimizedCore artifacts)))
+    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactCore artifacts)))
     Left _ -> False
     where
         matches (CoreBind binding) = case coreBindingValue binding of CoreLiteral (CoreBoolean True) valueType -> valueType == boolType; _ -> False
@@ -431,7 +431,7 @@ numericBoolLowers = case compileBody "bool enabled = 1;" of
 
 coreCharacterValue :: Bool
 coreCharacterValue = case compileBody "char letter = 'A';" of
-    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactOptimizedCore artifacts)))
+    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactCore artifacts)))
     Left _ -> False
     where
         matches (CoreBind binding) = case coreBindingValue binding of
@@ -441,7 +441,7 @@ coreCharacterValue = case compileBody "char letter = 'A';" of
 
 coreFloatingSpelling :: Bool
 coreFloatingSpelling = case compileBody "double precise = 1'000.250'000;" of
-    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactOptimizedCore artifacts)))
+    Right artifacts -> any matches (concatMap coreFunctionBody (coreModuleFunctions (artifactCore artifacts)))
     Left _ -> False
     where
         matches (CoreBind binding) = case coreBindingValue binding of

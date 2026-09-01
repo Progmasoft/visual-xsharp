@@ -20,9 +20,17 @@ library
         Visual.XSharp.Core.CorePrep.Wire.Encode
         Visual.XSharp.Core.CorePrep.Wire.Format
         Visual.XSharp.Core.Optimizer
+        Visual.XSharp.Core.Scalar
         Visual.XSharp.Core.Verifier
         Visual.XSharp.Core.Wire
         Visual.XSharp.Desugarer
+    other-modules:
+        Visual.XSharp.Core.Optimizer.Analysis
+        Visual.XSharp.Core.Optimizer.Constant
+        Visual.XSharp.Core.Optimizer.ControlFlow
+        Visual.XSharp.Core.Optimizer.Liveness
+        Visual.XSharp.Core.Optimizer.Pipeline
+        Visual.XSharp.Core.Optimizer.Types
     hs-source-dirs: src
     build-depends:
         base >=4.20 && <4.23,

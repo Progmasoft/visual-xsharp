@@ -22,6 +22,7 @@ following vocabulary:
 | --- | --- |
 | Understand the whole repository | [Architecture](ARCHITECTURE.md) and [repository layout](MONOREPO.md) |
 | Follow one source file through the compiler | [Compiler pipeline](COMPILER-PIPELINE.md) |
+| Understand the typed Core contract | [Core IR](CORE-IR.md) and [Core optimization](CORE-OPTIMIZER.md) |
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
 | Run the correct verification layers | [Testing](TESTING.md) |
@@ -44,6 +45,8 @@ following vocabulary:
 - [Architecture](ARCHITECTURE.md) defines stage ownership and the major process boundaries.
 - [Compiler pipeline](COMPILER-PIPELINE.md) follows discovery, parsing, semantic analysis, verified IRs, native lowering,
   emission, and linking in execution order.
+- [Core IR](CORE-IR.md) defines the typed tree, symbol, verifier, closure, and wire contracts.
+- [Core optimization](CORE-OPTIMIZER.md) documents fixed-point passes, effects, liveness, metrics, and reporting.
 - [Implementation status](IMPLEMENTATION.md) distinguishes connected, partial, registered, planned, and legacy surfaces.
 - [LLVM backend](LLVM-BACKEND.md) defines the Xmm-to-LLVM contract, supported values, verification, and artifact ownership.
 - [Closure pipeline](CLOSURE-PIPELINE.md) explains capture analysis and the currently deliberate LLVM rejection boundary.

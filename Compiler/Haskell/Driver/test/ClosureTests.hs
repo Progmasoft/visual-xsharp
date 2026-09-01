@@ -204,7 +204,7 @@ hiddenCaptureParameters = case compiled "int seed = 1; auto f = \\(int value) ->
     Left _ -> False
 
 closureResultType :: Bool
-closureResultType = case preparedBinding "auto f = \\(int value) -> value;" of
+closureResultType = case preparedBinding "auto f = \\(int value) -> value; f(1);" of
     Just (CorePrepBind _ valueType _ CorePrepMakeClosure {}) ->
         valueType == FunctionType [intType] intType
     _ -> False
@@ -424,10 +424,12 @@ preparedBinding statements = case compiled statements of
 
 isClosureBinding :: CorePrepInstruction -> Bool
 isClosureBinding (CorePrepBind _ _ _ CorePrepMakeClosure {}) = True
+isClosureBinding (CorePrepEvaluate CorePrepMakeClosure {}) = True
 isClosureBinding _ = False
 
 operationOf :: CorePrepInstruction -> Maybe CorePrepOperation
 operationOf (CorePrepBind _ _ _ operation) = Just operation
+operationOf (CorePrepEvaluate operation) = Just operation
 operationOf _ = Nothing
 
 hasDiagnostic :: String -> Either [Diagnostic] value -> Bool
