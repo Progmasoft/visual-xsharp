@@ -74,10 +74,17 @@ verifyCapture (CorePrepCapture mode name valueType atom) =
     [problem "VXC0015" "CorePrep capture symbol must be positive" | symbolIdValue (resolvedSymbol name) <= 0]
         ++ [problem "VXC0016" "CorePrep capture has an unresolved type" | valueType == ErrorType]
         ++ [problem "VXC0017" "CorePrep capture atom type does not match its slot" | atomType atom /= valueType]
-        ++ [problem "VXC0018" "non-owning capture cannot store a primitive value" | mode /= StrongCapture && primitive valueType]
+        ++ [ problem "VXC0018" "non-owning capture requires an AARC reference value"
+           | mode /= StrongCapture && not (aarcReference valueType)
+           ]
         ++ verifyAtom atom
     where
-        primitive value = value `elem` [unitType, boolType, intType, stringType]
+        -- Core currently lacks nominal-declaration metadata, so every resolved
+        -- named type remains conservatively reference-like at this boundary.
+        aarcReference value = case value of
+            FunctionType _ _ -> True
+            NamedType _ _ -> value /= unitType && value /= boolType && value /= intType
+            _ -> False
 
 verifyPrimitive :: Core.CorePrimitive -> [CorePrepAtom] -> Type -> [Diagnostic]
 verifyPrimitive primitive atoms resultType

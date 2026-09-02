@@ -10,6 +10,13 @@ cc_library(
 )
 
 cc_library(
+    name = "ownership_api",
+    hdrs = ["Ownership.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [":coreprep_model"],
+)
+
+cc_library(
     name = "model",
     hdrs = ["IR.hpp"],
     strip_include_prefix = "/Compiler/Headers",

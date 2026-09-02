@@ -23,6 +23,7 @@ following vocabulary:
 | Understand the whole repository | [Architecture](ARCHITECTURE.md) and [repository layout](MONOREPO.md) |
 | Follow one source file through the compiler | [Compiler pipeline](COMPILER-PIPELINE.md) |
 | Understand the typed Core contract | [Core IR](CORE-IR.md) and [Core optimization](CORE-OPTIMIZER.md) |
+| Understand object ownership and lifetime | [AARC ABI](AARC-ABI.md) |
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
 | Run the correct verification layers | [Testing](TESTING.md) |
@@ -47,9 +48,10 @@ following vocabulary:
   emission, and linking in execution order.
 - [Core IR](CORE-IR.md) defines the typed tree, symbol, verifier, closure, and wire contracts.
 - [Core optimization](CORE-OPTIMIZER.md) documents fixed-point passes, effects, liveness, metrics, and reporting.
+- [AARC ABI](AARC-ABI.md) defines value/reference classification, object headers, ownership operations, and closure teardown.
 - [Implementation status](IMPLEMENTATION.md) distinguishes connected, partial, registered, planned, and legacy surfaces.
 - [LLVM backend](LLVM-BACKEND.md) defines the Xmm-to-LLVM contract, supported values, verification, and artifact ownership.
-- [Closure pipeline](CLOSURE-PIPELINE.md) explains capture analysis and the currently deliberate LLVM rejection boundary.
+- [Closure pipeline](CLOSURE-PIPELINE.md) explains capture analysis, owned environments, and LLVM closure lowering.
 - [Numeric types](NUMERIC-TYPES.md) records fixed scalar widths and the gap between frontend semantics and the current Core
   transport.
 - [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, wire v3, Xpp, Xmm, and LLVM.

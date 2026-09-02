@@ -33,7 +33,19 @@ namespace visual_xsharp::xpp
         LogicalOr,
         Negate,
         LogicalNot,
-        MakeClosure
+        MakeClosure,
+
+        // Ownership is explicit from Xpp onward. Strong operations consume object
+        // pointers; weak and unowned operations consume/produce control handles while
+        // preserving the source language type in result_type.
+        RetainStrong,
+        ReleaseStrong,
+        MakeWeak,
+        LockWeak,
+        ReleaseWeak,
+        MakeUnowned,
+        LoadUnowned,
+        ReleaseUnowned
     };
     struct Operand final
     {

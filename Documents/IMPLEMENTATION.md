@@ -87,11 +87,12 @@ The repository contains:
   existing LLVM verification API for compatibility;
 - C++20 Xmm-to-LLVM lowering for the implemented scalar, call, branch, jump, and return operations;
 - LLVM O0/O1/O2/O3 pass-pipeline selection followed by module verification;
-- Unicode-scalar `String` constant storage; and
+- Unicode-scalar `String` constants materialized as AARC objects;
+- AARC object headers, strong/weak/unowned runtime calls, and closure payload destructors; and
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The production process boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
-contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v1 codecs now own public Xpp/Xmm disk
+contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v2 codecs now own public Xpp/Xmm disk
 artifacts and forward-only pipeline resumption. LLVM target-machine emission and typed C++20 LLD invocation produce `.o`,
 `.asm`, and `.vxse` artifacts. Remaining work includes cross-namespace Haskell name resolution, a multi-module Core link
 unit, and source ownership for project-wide per-file artifacts.
@@ -110,8 +111,8 @@ unit, and source ownership for project-wide per-file artifacts.
 | LLVM IR and bitcode output | connected | `.ll` and `.bc` writers |
 | target object and assembly output | connected for supported values | target machine |
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
-| closure object ABI | planned | LLVM/AARC runtime boundary |
-| Xpp/Xmm disk codecs | connected | bounded v1 `VXPP`/`VXMM` readers and writers |
+| closure object ABI | connected | Xpp/Xmm, LLVM, and AARC runtime boundary |
+| Xpp/Xmm disk codecs | connected | bounded v2 `VXPP`/`VXMM` readers and writers |
 | project-wide per-source native outputs | registered contract, not connected | source ownership through Core |
 
 ## Retiring Rust compiler core

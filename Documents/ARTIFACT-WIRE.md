@@ -13,8 +13,8 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 | --- | --- | ---: | --- | --- |
 | Core | `VXCR` | 3 | Haskell frontend | native Core reader |
 | CorePrep | `VXCP` | 3 | CorePrep adapter | native pipeline tools |
-| Xpp | `VXPP` | 1 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
-| Xmm | `VXMM` | 1 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
+| Xpp | `VXPP` | 2 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
+| Xmm | `VXMM` | 2 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
 The contracts have related scalar encodings but separate structural schemas.
 Their magic values must never be treated as aliases.
@@ -199,7 +199,7 @@ text, qualified names, and resolved symbols. They do not share instruction or
 control-flow records. Reusing only scalar records prevents a generic object
 serializer from erasing which stage owns an invariant.
 
-The v1 Xpp/Xmm type tag catalog follows the native Core type model exactly:
+The v2 Xpp/Xmm type tag catalog follows the native Core type model exactly:
 
 | Tag | Type | Tag | Type |
 | ---: | --- | ---: | --- |
@@ -232,7 +232,7 @@ when written; decoding never recreates a host-width alternative.
 
 ## Xpp document order
 
-An Xpp v1 document contains:
+An Xpp v2 document contains:
 
 1. `VXPP`, version, and zero reserved flags;
 2. qualified module name;
@@ -253,7 +253,7 @@ dedicated symbol field rather than an untyped extra operand.
 
 ## Xmm document order
 
-An Xmm v1 document contains:
+An Xmm v2 document contains:
 
 1. `VXMM`, version, and zero reserved flags;
 2. qualified module name;
@@ -296,7 +296,8 @@ verified again before serialization or forward lowering.
 
 The version field describes the entire schema. Core/CorePrep version 3 is not
 a permissive extension of version 2: their scalar type and literal tag spaces
-changed. Xpp/Xmm begin independently at version 1. Every current reader rejects
+changed. Xpp/Xmm began independently at version 1; version 2 adds the explicit
+strong/weak/unowned opcode catalog used by AARC lowering. Every current reader rejects
 earlier and future versions for its own magic.
 
 If migration is needed later, it should be implemented as an explicit reader

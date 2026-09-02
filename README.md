@@ -80,7 +80,7 @@ The compiler executable is `vxs`. Its C++20 command parser uses one typed schema
 rejection, defaults, and value conversion; it has no third-party CLI dependency. For `.vxs`, `check` runs the Haskell
 frontend and the complete in-memory Core/CorePrep/Xpp/Xmm/LLVM validation route. `build` produces a native `.vxse` by
 default; `-Emit core|object|assembly|llvmll|llvmbc` selects another supported artifact. `run` builds and executes the
-native binary. Public Xpp/Xmm readers and writers remain later work.
+native binary. Public bounded Xpp/Xmm v2 readers and writers support verified forward pipeline resumption.
 CorePrep wire bytes are never accepted under the public `.core` extension.
 
 The reliable single-file validation form is:
@@ -144,6 +144,10 @@ require a particular output filename extension.
 The [Spec](Spec/README.md) directory contains 24 topic-oriented `.vxs` example suites. They record current language design
 intent, including valid and invalid fragments, but they are not concatenated applications and must not be treated as a claim
 that every rule is already implemented by `vxs`.
+
+The [Visual X# EBNF](Grammar/visual-xsharp.ebnf) summarizes the concrete syntax, while the
+[TextMate grammar](Grammar/visual-xsharp.tmLanguage.json) provides matching editor token scopes for `.vxs` files. Semantic
+restrictions remain defined by `Spec/`, not by syntax highlighting.
 
 ## Documentation
 

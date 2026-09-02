@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Xmm/Verifier.hpp"
 
@@ -65,6 +66,7 @@ namespace Visual::XSharp::Xmm
                         return SupportedType(component);
                     });
                 case core::Type::Kind::Named:
+                    return true;
                 case core::Type::Kind::TypeVariable:
                     return false;
             }
@@ -131,6 +133,14 @@ namespace Visual::XSharp::Xmm
                 case xmm::Opcode::Move:
                 case xmm::Opcode::Negate:
                 case xmm::Opcode::NotBool:
+                case xmm::Opcode::RetainStrong:
+                case xmm::Opcode::ReleaseStrong:
+                case xmm::Opcode::MakeWeak:
+                case xmm::Opcode::LockWeak:
+                case xmm::Opcode::ReleaseWeak:
+                case xmm::Opcode::MakeUnowned:
+                case xmm::Opcode::LoadUnowned:
+                case xmm::Opcode::ReleaseUnowned:
                     return 1;
                 case xmm::Opcode::Add:
                 case xmm::Opcode::Subtract:
@@ -152,6 +162,18 @@ namespace Visual::XSharp::Xmm
                     return 0;
             }
             return 0;
+        }
+
+        [[nodiscard]] auto
+        IsAarcType(const core::Type &type) -> bool
+        {
+            return core::UsesAarc(type) || type.kind == core::Type::Kind::Named;
+        }
+
+        [[nodiscard]] auto
+        IsOwnershipOpcode(xmm::Opcode opcode) -> bool
+        {
+            return opcode >= xmm::Opcode::RetainStrong && opcode <= xmm::Opcode::ReleaseUnowned;
         }
 
         void
@@ -238,6 +260,25 @@ namespace Visual::XSharp::Xmm
                                 context.add(IssueKind::OperandType, "VXL1036", "closure capture type differs from its lifted parameter");
                 }
             }
+            else if (IsOwnershipOpcode(instruction.opcode))
+            {
+                if (instruction.operands.size() != 1U)
+                    context.add(IssueKind::OperandCount, "VXL1037", "ownership instruction requires exactly one operand");
+                else if (!IsAarcType(instruction.operands.front().type))
+                    context.add(IssueKind::OperandType, "VXL1038", "ownership instruction requires an AARC reference type");
+
+                const auto releases = instruction.opcode == xmm::Opcode::ReleaseStrong
+                                      || instruction.opcode == xmm::Opcode::ReleaseWeak
+                                      || instruction.opcode == xmm::Opcode::ReleaseUnowned;
+                if (releases)
+                {
+                    if (instruction.has_result || instruction.result_type.kind != core::Type::Kind::Unit)
+                        context.add(IssueKind::ResultType, "VXL1039", "release ownership instruction must have no result");
+                }
+                else if (!instruction.has_result || instruction.operands.empty()
+                         || instruction.result_type != instruction.operands.front().type)
+                    context.add(IssueKind::ResultType, "VXL1040", "producing ownership instruction must preserve its operand type");
+            }
             else
             {
                 const auto expected = ExpectedOperandCount(instruction.opcode);
@@ -280,7 +321,8 @@ namespace Visual::XSharp::Xmm
                     // two unrelated layouts on different control-flow paths.
                     context.add(IssueKind::RegisterRedefinition, "VXL1026", "virtual register is written with a type that differs from its established storage type");
             }
-            else if (instruction.result_type.kind != core::Type::Kind::Unit && instruction.opcode != xmm::Opcode::Call)
+            else if (instruction.result_type.kind != core::Type::Kind::Unit
+                     && instruction.opcode != xmm::Opcode::Call)
                 context.add(IssueKind::ResultType, "VXL1027", "discarded non-call instruction must have Unit result");
         }
 

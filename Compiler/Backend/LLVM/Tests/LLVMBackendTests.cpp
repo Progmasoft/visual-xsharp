@@ -43,6 +43,12 @@ namespace
     }
 
     auto
+    Register(std::uint32_t reg, Type type) -> visual_xsharp::xmm::Value
+    {
+        return { visual_xsharp::xmm::Value::Kind::Register, std::move(type), reg, 0U, {} };
+    }
+
+    auto
     ArithmeticModule() -> CorePrepModule
     {
         Function calculate{ { 10, U"Calculate" },
@@ -239,7 +245,8 @@ TEST_CASE("Visual X# String literals use Unicode scalar storage instead of UTF-8
     REQUIRE(result);
     REQUIRE(result.artifact->llvm_ir.find("[10 x i32]") != std::string::npos);
     REQUIRE(result.artifact->llvm_ir.find("i32 127757") != std::string::npos);
-    REQUIRE(result.artifact->llvm_ir.find("{ ptr, i64 }") != std::string::npos);
+    REQUIRE(result.artifact->llvm_ir.find("call ptr @vxs_aarc_string_literal") != std::string::npos);
+    REQUIRE(result.artifact->llvm_ir.find("declare ptr @vxs_aarc_string_literal") != std::string::npos);
     REQUIRE(result.artifact->llvm_ir.find("c\"Merhaba") == std::string::npos);
 }
 
@@ -396,15 +403,125 @@ TEST_CASE("Xmm verifier rejects call signature and control-flow corruption")
     REQUIRE(HasIssue(issues, "VXL1030"));
 }
 
-TEST_CASE("Xmm verifier rejects unsupported named types before LLVM construction")
+TEST_CASE("Xmm verifier rejects unresolved type variables before LLVM construction")
 {
     auto xmm = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(ArithmeticModule()));
-    xmm.functions.front().return_type = Type::named({ U"User", U"Record" });
+    xmm.functions.front().return_type = Type::type_variable({ 900U, U"T" });
     const auto issues = Llvm::Verify(xmm);
     REQUIRE(HasIssue(issues, "VXL1005"));
     const auto result = Llvm::Lower(xmm);
     REQUIRE_FALSE(result);
     REQUIRE(result.error->code == "VXL2000");
+}
+
+TEST_CASE("LLVM lowers explicit AARC ownership instructions to the stable runtime ABI")
+{
+    const auto objectType = Type::named({ U"Tests", U"Object" });
+    using XmmInstruction = visual_xsharp::xmm::Instruction;
+    using XmmOpcode = visual_xsharp::xmm::Opcode;
+    visual_xsharp::xmm::Function function{
+        { 500U, U"Manage" },
+        { 1U },
+        { objectType },
+        Type::unit(),
+        0U,
+        { visual_xsharp::xmm::Block{
+            0U,
+            {
+                XmmInstruction{ XmmOpcode::RetainStrong, 2U, objectType, { Register(1U, objectType) }, true, 0U, {} },
+                XmmInstruction{ XmmOpcode::MakeWeak, 3U, objectType, { Register(2U, objectType) }, true, 0U, {} },
+                XmmInstruction{ XmmOpcode::LockWeak, 4U, objectType, { Register(3U, objectType) }, true, 0U, {} },
+                XmmInstruction{ XmmOpcode::MakeUnowned, 5U, objectType, { Register(4U, objectType) }, true, 0U, {} },
+                XmmInstruction{ XmmOpcode::LoadUnowned, 6U, objectType, { Register(5U, objectType) }, true, 0U, {} },
+                XmmInstruction{ XmmOpcode::ReleaseStrong, 0U, Type::unit(), { Register(2U, objectType) }, false, 0U, {} },
+                XmmInstruction{ XmmOpcode::ReleaseStrong, 0U, Type::unit(), { Register(4U, objectType) }, false, 0U, {} },
+                XmmInstruction{ XmmOpcode::ReleaseWeak, 0U, Type::unit(), { Register(3U, objectType) }, false, 0U, {} },
+                XmmInstruction{ XmmOpcode::ReleaseUnowned, 0U, Type::unit(), { Register(5U, objectType) }, false, 0U, {} },
+            },
+            { visual_xsharp::xmm::Terminator::Kind::Return, { visual_xsharp::xmm::Value::Kind::Immediate, Type::unit(), 0U, 0U, {} }, 0U, 0U } } }
+    };
+    const visual_xsharp::xmm::Module module{ { U"Aarc", U"Operations" }, { std::move(function) } };
+    Llvm::Options options;
+    options.optimization = Llvm::OptimizationLevel::Debug;
+    const auto result = Llvm::Lower(module, options);
+    REQUIRE(result);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_retain_strong") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_make_weak") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_lock_weak") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_make_unowned") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_load_unowned") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_release_strong") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_release_weak") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("@vxs_aarc_release_unowned") != std::string::npos);
+}
+
+TEST_CASE("LLVM materializes closure payload ownership and its AARC destructor")
+{
+    using XmmBlock = visual_xsharp::xmm::Block;
+    using XmmFunction = visual_xsharp::xmm::Function;
+    using XmmInstruction = visual_xsharp::xmm::Instruction;
+    using XmmOpcode = visual_xsharp::xmm::Opcode;
+    using XmmTerminator = visual_xsharp::xmm::Terminator;
+    using CaptureMode = visual_xsharp::core::CaptureMode;
+
+    const auto objectType = Type::named({ U"Tests", U"Captured" });
+    const auto callableType = Type::function({}, Type::unit());
+    const auto unitReturn = XmmTerminator{
+        XmmTerminator::Kind::Return,
+        { visual_xsharp::xmm::Value::Kind::Immediate, Type::unit(), 0U, 0U, {} },
+        0U,
+        0U
+    };
+    XmmFunction lifted{
+        { 610U, U"ClosureBody" },
+        { 1U },
+        { objectType },
+        Type::unit(),
+        0U,
+        { XmmBlock{ 0U, {}, unitReturn } }
+    };
+    XmmFunction factory{
+        { 611U, U"Factory" },
+        { 1U },
+        { objectType },
+        Type::unit(),
+        0U,
+        { XmmBlock{
+            0U,
+            {
+                XmmInstruction{
+                    XmmOpcode::MakeClosure,
+                    2U,
+                    callableType,
+                    { Register(1U, objectType) },
+                    true,
+                    610U,
+                    { CaptureMode::Strong } },
+                XmmInstruction{
+                    XmmOpcode::ReleaseStrong,
+                    0U,
+                    Type::unit(),
+                    { Register(2U, callableType) },
+                    false,
+                    0U,
+                    {} },
+            },
+            unitReturn } }
+    };
+    const visual_xsharp::xmm::Module module{
+        { U"Aarc", U"Closure" },
+        { std::move(lifted), std::move(factory) }
+    };
+    Llvm::Options options;
+    options.optimization = Llvm::OptimizationLevel::Debug;
+    const auto result = Llvm::Lower(module, options);
+    REQUIRE(result);
+    CHECK(result.artifact->llvm_ir.find("vxs.aarc.closure.payload") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("vxs.aarc.closure.metadata") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("vxs.aarc.closure.destroy") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("call ptr @vxs_aarc_allocate") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("capture.strong") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("call void @vxs_aarc_release_strong") != std::string::npos);
 }
 
 TEST_CASE("Xmm verifier reports module and parameter shape independently")

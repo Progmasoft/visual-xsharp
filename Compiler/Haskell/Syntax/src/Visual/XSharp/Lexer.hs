@@ -247,7 +247,6 @@ keywords =
     , "public"
     , "return"
     , "static"
-    , "string"
     , "sfloat"
     , "lfloat"
     , "float"

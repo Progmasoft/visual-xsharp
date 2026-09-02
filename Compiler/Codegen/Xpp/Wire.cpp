@@ -110,7 +110,7 @@ namespace Visual::XSharp::Xpp::Wire
             IR::Instruction instruction;
             instruction.effect = static_cast<IR::Instruction::Effect>(ReadTag(reader, 2U, "Xpp instruction effect"));
             instruction.opcode = static_cast<IR::Opcode>(
-                ReadTag(reader, static_cast<std::uint8_t>(IR::Opcode::MakeClosure), "Xpp opcode"));
+                ReadTag(reader, static_cast<std::uint8_t>(IR::Opcode::ReleaseUnowned), "Xpp opcode"));
             instruction.destination = reader.U64("Xpp destination");
             instruction.result_type = reader.Type("Xpp instruction result");
             const auto operandCount = reader.Count(limits.maximumOperands, "Xpp operand count");

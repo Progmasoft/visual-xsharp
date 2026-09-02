@@ -22,6 +22,8 @@ cc_library(
         "//Compiler/Headers/Visual/XSharp/Core:coreprep",
         "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
         "//Compiler/Headers/Visual/XSharp/Core:model",
+        "//Compiler/Headers/Visual/XSharp/Core:ownership_api",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
+        "//Compiler/Core/Ownership:ownership",
     ],
 )

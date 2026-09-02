@@ -12,7 +12,7 @@
 
 namespace Visual::XSharp::Xmm::Wire
 {
-    inline constexpr std::uint16_t kCurrentVersion = 1U;
+    inline constexpr std::uint16_t kCurrentVersion = 2U;
     using Limits = Artifact::Wire::Limits;
     using Error = Artifact::Wire::Error;
     using ErrorKind = Artifact::Wire::ErrorKind;

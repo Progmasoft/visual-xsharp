@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "Visual/XSharp/Core/CorePrep/Verifier/Semantics.hpp"
+#include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace visual_xsharp::core
@@ -50,6 +51,16 @@ namespace visual_xsharp::core
             for (const auto &parameter : function.parameters)
                 parameters.push_back(parameter.type);
             return Type::function(std::move(parameters), function.return_type);
+        }
+
+        [[nodiscard]] auto
+        is_aarc_reference(const Type &type) noexcept -> bool
+        {
+            // Named declarations cannot be classified precisely until their
+            // declaration kind is serialized into Core. Treat them as the
+            // conservative reference case; String and callable types are
+            // unconditionally AARC according to the public language model.
+            return UsesAarc(type) || type.kind == Type::Kind::Named;
         }
 
         void
@@ -192,8 +203,8 @@ namespace visual_xsharp::core
                     verify_atom(capture.value, function, block, definitions, spellings, issues);
                     if (capture.type != capture.value.type)
                         issues.push_back(issue("VXC1043", "closure capture type differs from its value", function, block));
-                    if (capture.mode != CaptureMode::Strong && capture.type.kind != Type::Kind::Named)
-                        issues.push_back(issue("VXC1044", "weak or unowned capture requires an AARC named type", function, block));
+                    if (capture.mode != CaptureMode::Strong && !is_aarc_reference(capture.type))
+                        issues.push_back(issue("VXC1044", "weak or unowned capture requires an AARC reference value", function, block));
                 }
 
                 if (target != definitions.end() && target->second.callable)

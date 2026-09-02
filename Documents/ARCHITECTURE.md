@@ -109,8 +109,9 @@ diagnostic metadata, not a replacement identity. Function symbols remain distinc
 LLVM is the compiler backend. It consumes Xmm only after the Xmm-owned verifier succeeds and repeats that verifier through a
 compatibility adapter for direct embedding clients. It then constructs an LLVM module, lowers supported scalar and
 control-flow operations, runs the selected LLVM optimization pipeline, verifies the resulting module, and serializes LLVM IR
-and bitcode in memory. Visual X# `String` constants are represented as Unicode scalar (`i32`) storage plus a 64-bit scalar
-count; they are not encoded as UTF-8 byte strings. LLVM types and handles do not escape the backend API.
+and bitcode in memory. Visual X# `String` constants retain Unicode scalar (`i32`) storage and are materialized through the
+AARC string factory instead of a UTF-8 or embedded value-struct ABI. Object headers, closure destruction, and ownership
+operations follow the [AARC ABI](AARC-ABI.md). LLVM types and handles do not escape the backend API.
 
 The Bazel graph discovers LLVM through `LLVM_ROOT` or `llvm-config`. The renewed C++20 backend uses LLVM's C++ IR, bitcode, support,
 new-pass-manager, target-machine, and native-code-generation libraries; LLVM C handles do not enter this pipeline. A target
@@ -145,7 +146,7 @@ The current public artifact names are:
 Normal compilation keeps these representations in memory. Haskell writes real `.core` artifacts and C++20 consumes them
 through the full verified pipeline. Explicit `.ll`, `.bc`, `.o`, and `.asm` emission is available after source or Core
 input. Binary emission adds the platform entry bridge, writes a temporary object, links one `.vxse`, and removes the
-temporary object. Xpp/Xmm readers and writers remain later work.
+temporary object. Bounded Xpp/Xmm v2 readers and writers support verified forward pipeline resumption.
 
 ## Process and temporary-file model
 

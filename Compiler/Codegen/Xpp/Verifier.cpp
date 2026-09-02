@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Xpp/Verifier.hpp"
 
@@ -46,6 +47,14 @@ namespace Visual::XSharp::Xpp
                 case IR::Opcode::Copy:
                 case IR::Opcode::Negate:
                 case IR::Opcode::LogicalNot:
+                case IR::Opcode::RetainStrong:
+                case IR::Opcode::ReleaseStrong:
+                case IR::Opcode::MakeWeak:
+                case IR::Opcode::LockWeak:
+                case IR::Opcode::ReleaseWeak:
+                case IR::Opcode::MakeUnowned:
+                case IR::Opcode::LoadUnowned:
+                case IR::Opcode::ReleaseUnowned:
                     return 1U;
                 case IR::Opcode::Call:
                 case IR::Opcode::MakeClosure:
@@ -53,6 +62,21 @@ namespace Visual::XSharp::Xpp
                 default:
                     return 2U;
             }
+        }
+
+        [[nodiscard]] auto
+        IsAarcType(const Core::Type &type) -> bool
+        {
+            // Nominal declarations are resolved before Xpp in the complete frontend. The
+            // current Core wire has no nominal-kind slot, so a surviving Named value is the
+            // reference-layout branch; CoW values must be expanded before this boundary.
+            return Core::UsesAarc(type) || type.kind == Core::Type::Kind::Named;
+        }
+
+        [[nodiscard]] auto
+        IsOwnershipOpcode(IR::Opcode opcode) -> bool
+        {
+            return opcode >= IR::Opcode::RetainStrong && opcode <= IR::Opcode::ReleaseUnowned;
         }
 
         [[nodiscard]] auto
@@ -138,8 +162,27 @@ namespace Visual::XSharp::Xpp
                 }
                 for (std::size_t index = 0; index < value.capture_modes.size(); ++index)
                     if (value.capture_modes[index] != Core::CaptureMode::Strong
-                        && value.operands[index].type.kind != Core::Type::Kind::Named)
-                        context.Add("VXP1033", "weak and unowned captures require an AARC named type");
+                        && !IsAarcType(value.operands[index].type))
+                        context.Add("VXP1033", "weak and unowned captures require an AARC reference type");
+            }
+            else if (IsOwnershipOpcode(value.opcode))
+            {
+                if (value.operands.size() != 1U)
+                    context.Add("VXP1034", "ownership instruction requires exactly one operand");
+                else if (!IsAarcType(value.operands.front().type))
+                    context.Add("VXP1035", "ownership instruction requires an AARC reference type");
+
+                const auto releases = value.opcode == IR::Opcode::ReleaseStrong
+                                      || value.opcode == IR::Opcode::ReleaseWeak
+                                      || value.opcode == IR::Opcode::ReleaseUnowned;
+                if (releases)
+                {
+                    if (value.effect != IR::Instruction::Effect::Discard || value.result_type.kind != Core::Type::Kind::Unit)
+                        context.Add("VXP1036", "release ownership instruction must discard a Unit result");
+                }
+                else if (value.effect == IR::Instruction::Effect::Discard
+                         || value.operands.empty() || value.result_type != value.operands.front().type)
+                    context.Add("VXP1037", "producing ownership instruction must preserve its operand type");
             }
             else if (value.operands.size() != ExpectedArity(value.opcode))
                 context.Add("VXP1016", "instruction has the wrong operand count");

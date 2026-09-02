@@ -9,6 +9,7 @@ cc_library(
         "//Compiler/Artifact:wire_support",
         "//Compiler/Codegen/Xpp:xpp",
         "//Compiler/Core:core",
+        "//Compiler/Core/Ownership:ownership",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
         "//Compiler/Headers/Visual/XSharp/Xmm:xmm",
     ],

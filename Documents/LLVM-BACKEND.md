@@ -26,9 +26,10 @@ naming convention and is not the target C++ namespace.
 
 ## Supported values
 
-The connected slice lowers `Unit`, `Bool`, `Int`, `Long`, and `String`. Function types are used for checked call signatures.
-Named types and unresolved type variables are rejected at the backend boundary until their concrete layout contract exists.
-The backend never guesses a layout.
+The connected slice lowers the scalar catalog, `String`, opaque nominal AARC pointers, direct calls, closure allocation,
+and explicit strong/weak/unowned operations. Function types serve checked call signatures and callable values use an opaque
+AARC pointer representation. Unresolved type variables remain rejected. Nominal field layout stays in type metadata; the
+backend never guesses fields from a name.
 
 Source scalar names do not inherit C widths. The frontend/Core contract selects the Visual X# width, and LLVM lowering must
 construct the corresponding integer or floating type explicitly. The current Core wire revision does not yet transport the
@@ -38,9 +39,9 @@ to the older connected subset.
 Source `void` is not a value. The frontend maps it once to the current resultless Core ABI marker. Value-producing source
 `unit` remains semantically distinct even when a legacy native enum still contains a unit-like spelling.
 
-`String` is not a UTF-8 byte string. A constant uses an immutable LLVM array of 32-bit Unicode scalar values, followed by a
-zero sentinel for interoperation convenience, and a value containing a pointer plus the scalar count. The count excludes the
-sentinel. Invalid Unicode scalar values are rejected.
+`String` is not a UTF-8 byte string. A constant uses an immutable LLVM array of 32-bit Unicode scalar values followed by a
+zero sentinel, then calls `vxs_aarc_string_literal` with the scalar count. The runtime creates an AARC `System.String` object;
+the count excludes the sentinel. Invalid Unicode scalar values are rejected.
 
 ## Registers and control flow
 
@@ -68,8 +69,8 @@ Project entry selection names a class whose parameterless `public static void Ma
 adds the platform bridge required by the target executable format; source code does not change to an integer-returning C
 `main`. The bridge is an emission concern and does not appear in Core/Xpp/Xmm as a user declaration.
 
-Indirect callable invocation remains blocked with closure allocation. It requires a defined AARC closure object containing
-target and environment information, not a raw function pointer approximation.
+Closure allocation is connected and uses an AARC payload containing the lifted target and ordered environment slots.
+Indirect invocation through that allocated value remains pending; it will use this object rather than a raw function pointer.
 
 ## Optimization and verification
 
@@ -136,7 +137,7 @@ The backend rejects rather than guesses when it encounters:
 - a return inconsistent with the declared result;
 - a named/type-variable value without a layout;
 - an invalid Unicode scalar in a string constant;
-- closure construction without the AARC ABI;
+- indirect invocation through an allocated closure value;
 - an unsupported target or target-machine emission kind; or
 - a requested file extension inconsistent with the writer API.
 

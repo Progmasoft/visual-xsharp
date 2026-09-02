@@ -47,6 +47,8 @@ closureTests =
     , ("callable invocation checks argument types", callableArgumentType)
     , ("weak primitive capture is rejected", weakPrimitiveCapture)
     , ("unowned primitive capture is rejected", unownedPrimitiveCapture)
+    , ("weak String capture is accepted", weakStringCapture)
+    , ("weak callable capture is accepted", weakCallableCapture)
     , ("implicit capture is discovered during Core lowering", implicitCaptureDiscovery)
     , ("explicit capture lowers its initializer", explicitCaptureLowering)
     , ("capture alias evaluates outside the callable body", aliasLowering)
@@ -167,6 +169,14 @@ weakPrimitiveCapture = hasDiagnostic "VXT0014" (compileSource "int value = 1; au
 
 unownedPrimitiveCapture :: Bool
 unownedPrimitiveCapture = hasDiagnostic "VXT0015" (compileSource "int value = 1; auto f = [unowned value] \\ -> value;")
+
+weakStringCapture :: Bool
+weakStringCapture =
+    not (hasDiagnostic "VXT0014" (compileSource "String value = \"Wolf\"; auto f = [weak value] \\ -> value;"))
+
+weakCallableCapture :: Bool
+weakCallableCapture =
+    not (hasDiagnostic "VXT0014" (compileSource "auto first = \\ -> 1; auto second = [weak first] \\ -> first;"))
 
 implicitCaptureDiscovery :: Bool
 implicitCaptureDiscovery = case coreClosure "int seed = 1; auto f = \\ -> seed;" of

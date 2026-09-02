@@ -1,0 +1,13 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_binary(
+    name = "aarc_runtime_tests",
+    srcs = ["AARCRuntimeTests.cpp"],
+    deps = [
+        "//Compiler/Core/Ownership:ownership",
+        "//Compiler/Runtime/AARC:aarc",
+        "@catch2//:catch2_main",
+    ],
+)

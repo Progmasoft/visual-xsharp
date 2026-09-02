@@ -36,6 +36,7 @@
 #include <utility>
 
 #include "Visual/XSharp/Backend/LLVM.hpp"
+#include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace Visual::XSharp::Backend::LLVM
@@ -129,16 +130,10 @@ namespace Visual::XSharp::Backend::LLVM
         struct TypeLowerer final
         {
             llvm::LLVMContext &context;
-            llvm::StructType *stringType{};
 
             explicit TypeLowerer(llvm::LLVMContext &llvmContext)
                 : context(llvmContext)
             {
-                // String is { pointer-to-Unicode-scalar, scalar-count }. The count is i64 so
-                // indexing capacity is target-independent, and it excludes the sentinel used
-                // to make debugger inspection convenient.
-                std::array<llvm::Type *, 2> fields{ llvm::PointerType::get(context, 0), llvm::Type::getInt64Ty(context) };
-                stringType = llvm::StructType::get(context, fields, false);
             }
 
             [[nodiscard]] auto
@@ -176,23 +171,15 @@ namespace Visual::XSharp::Backend::LLVM
                     case core::Type::Kind::Float128:
                         return llvm::Type::getFP128Ty(context);
                     case core::Type::Kind::String:
-                        return stringType;
+                        return llvm::PointerType::get(context, 0);
                     case core::Type::Kind::Function:
-                    {
-                        if (type.components.empty())
-                            return nullptr;
-                        std::vector<llvm::Type *> parameters;
-                        parameters.reserve(type.components.size() - 1U);
-                        for (std::size_t index = 0; index + 1U < type.components.size(); ++index)
-                            parameters.push_back(Lower(type.components[index]));
-                        if (std::ranges::any_of(parameters, [](const llvm::Type *item) {
-                                return item == nullptr;
-                            }))
-                            return nullptr;
-                        auto *result = Lower(type.components.back());
-                        return result == nullptr ? nullptr : llvm::FunctionType::get(result, parameters, false);
-                    }
+                        // A function value is an AARC closure pointer. Direct function
+                        // declarations build their LLVM FunctionType in FunctionType().
+                        return llvm::PointerType::get(context, 0);
                     case core::Type::Kind::Named:
+                        // Nominal AARC values are opaque at this boundary. Concrete field
+                        // layout belongs to the type metadata and allocation lowering.
+                        return llvm::PointerType::get(context, 0);
                     case core::Type::Kind::TypeVariable:
                         return nullptr;
                 }
@@ -220,6 +207,7 @@ namespace Visual::XSharp::Backend::LLVM
             TypeLowerer types;
             std::unordered_map<core::SymbolId, FunctionState> functions;
             std::uint64_t string_index{};
+            std::uint64_t closure_index{};
             std::optional<Error> error;
 
             Generator(llvm::LLVMContext &llvmContext, llvm::Module &llvmModule)
@@ -330,7 +318,7 @@ namespace Visual::XSharp::Backend::LLVM
             }
 
             [[nodiscard]] auto
-            StringLiteral(const std::u32string &text) -> llvm::Constant *
+            StringLiteral(llvm::IRBuilder<> &builder, const std::u32string &text) -> llvm::Value *
             {
                 // Store one i32 per Unicode scalar. Visual X# String is intentionally not UTF-8:
                 // scalar indexing must not depend on the encoded byte width of earlier text.
@@ -354,15 +342,21 @@ namespace Visual::XSharp::Backend::LLVM
                 const auto name = ".vxs.string." + std::to_string(string_index++);
                 auto *global = new llvm::GlobalVariable(module, arrayType, true, llvm::GlobalValue::PrivateLinkage, initializer, name);
                 global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-                std::array<llvm::Constant *, 2> fields{
-                    global,
-                    llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), text.size(), false)
-                };
-                return llvm::ConstantStruct::get(types.stringType, fields);
+                auto *pointer = llvm::PointerType::get(context, 0);
+                auto *sizeType = llvm::Triple(module.getTargetTriple()).isArch64Bit()
+                                     ? llvm::Type::getInt64Ty(context)
+                                     : llvm::Type::getInt32Ty(context);
+                auto literalFactory = module.getOrInsertFunction(
+                    "vxs_aarc_string_literal",
+                    llvm::FunctionType::get(pointer, { pointer, sizeType }, false));
+                return builder.CreateCall(
+                    literalFactory,
+                    { global, llvm::ConstantInt::get(sizeType, text.size(), false) },
+                    "string.literal");
             }
 
             [[nodiscard]] auto
-            Immediate(const xmm::Value &value) -> llvm::Value *
+            Immediate(llvm::IRBuilder<> &builder, const xmm::Value &value) -> llvm::Value *
             {
                 const auto integer_constant = [this, &value](core::IntegerLiteral integer) -> llvm::Value * {
                     integer = core::normalize_integer(std::move(integer));
@@ -406,7 +400,7 @@ namespace Visual::XSharp::Backend::LLVM
                             return llvm::ConstantFP::get(types.Lower(value.type), floating->spelling);
                         return nullptr;
                     case core::Type::Kind::String:
-                        return StringLiteral(std::get<std::u32string>(value.immediate));
+                        return StringLiteral(builder, std::get<std::u32string>(value.immediate));
                     case core::Type::Kind::Function:
                     case core::Type::Kind::Named:
                     case core::Type::Kind::TypeVariable:
@@ -420,7 +414,7 @@ namespace Visual::XSharp::Backend::LLVM
                 -> llvm::Value *
             {
                 if (value.kind == xmm::Value::Kind::Immediate)
-                    return Immediate(value);
+                    return Immediate(builder, value);
                 if (value.kind == xmm::Value::Kind::Function)
                 {
                     const auto found = functions.find(value.symbol);
@@ -481,6 +475,188 @@ namespace Visual::XSharp::Backend::LLVM
             }
 
             [[nodiscard]] auto
+            RuntimeFunction(std::string_view name, llvm::Type *result, std::initializer_list<llvm::Type *> arguments)
+                -> llvm::FunctionCallee
+            {
+                return module.getOrInsertFunction(std::string(name), llvm::FunctionType::get(result, arguments, false));
+            }
+
+            [[nodiscard]] auto
+            IsPointerAarcType(const core::Type &type) const -> bool
+            {
+                // String is semantically AARC but still uses the scalar-buffer bridge in
+                // this backend revision. Ownership instructions are emitted only after a
+                // value has the opaque pointer representation used by Named/callable values.
+                return core::UsesAarc(type) || type.kind == core::Type::Kind::Named;
+            }
+
+            [[nodiscard]] auto
+            LowerOwnership(llvm::IRBuilder<> &builder,
+                           FunctionState &state,
+                           const xmm::Instruction &instruction) -> bool
+            {
+                if (instruction.operands.size() != 1U || !IsPointerAarcType(instruction.operands.front().type))
+                    return false;
+                auto *value = LoadValue(builder, state, instruction.operands.front());
+                if (value == nullptr || !value->getType()->isPointerTy())
+                    return false;
+
+                auto *pointer = llvm::PointerType::get(context, 0);
+                llvm::Value *result{};
+                switch (instruction.opcode)
+                {
+                    case xmm::Opcode::RetainStrong:
+                        result = builder.CreateCall(RuntimeFunction("vxs_aarc_retain_strong", pointer, { pointer }), { value }, "aarc.strong");
+                        break;
+                    case xmm::Opcode::ReleaseStrong:
+                        builder.CreateCall(RuntimeFunction("vxs_aarc_release_strong", llvm::Type::getVoidTy(context), { pointer }), { value });
+                        return true;
+                    case xmm::Opcode::MakeWeak:
+                        result = builder.CreateCall(RuntimeFunction("vxs_aarc_make_weak", pointer, { pointer }), { value }, "aarc.weak");
+                        break;
+                    case xmm::Opcode::LockWeak:
+                        result = builder.CreateCall(RuntimeFunction("vxs_aarc_lock_weak", pointer, { pointer }), { value }, "aarc.locked");
+                        break;
+                    case xmm::Opcode::ReleaseWeak:
+                        builder.CreateCall(RuntimeFunction("vxs_aarc_release_weak", llvm::Type::getVoidTy(context), { pointer }), { value });
+                        return true;
+                    case xmm::Opcode::MakeUnowned:
+                        result = builder.CreateCall(RuntimeFunction("vxs_aarc_make_unowned", pointer, { pointer }), { value }, "aarc.unowned");
+                        break;
+                    case xmm::Opcode::LoadUnowned:
+                        result = builder.CreateCall(RuntimeFunction("vxs_aarc_load_unowned", pointer, { pointer }), { value }, "aarc.borrowed");
+                        break;
+                    case xmm::Opcode::ReleaseUnowned:
+                        builder.CreateCall(RuntimeFunction("vxs_aarc_release_unowned", llvm::Type::getVoidTy(context), { pointer }), { value });
+                        return true;
+                    default:
+                        return false;
+                }
+                if (result == nullptr || !instruction.has_result)
+                    return false;
+                builder.CreateStore(result, state.slots.at(instruction.destination));
+                return true;
+            }
+
+            [[nodiscard]] auto
+            CreateClosureDestructor(llvm::StructType *payload,
+                                    const xmm::Instruction &instruction,
+                                    const std::vector<llvm::Type *> &captureTypes) -> llvm::Function *
+            {
+                auto *pointer = llvm::PointerType::get(context, 0);
+                auto *type = llvm::FunctionType::get(llvm::Type::getVoidTy(context), { pointer }, false);
+                const auto name = ".vxs.aarc.closure.destroy." + std::to_string(closure_index);
+                auto *destructor = llvm::Function::Create(type, llvm::GlobalValue::InternalLinkage, name, module);
+                auto *entry = llvm::BasicBlock::Create(context, "entry", destructor);
+                llvm::IRBuilder<> builder(entry);
+                auto *object = destructor->getArg(0);
+
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    const auto mode = instruction.capture_modes[index];
+                    const auto pointerCapture = captureTypes[index]->isPointerTy();
+                    if (mode == core::CaptureMode::Strong && !pointerCapture)
+                        continue;
+                    auto *slot = builder.CreateStructGEP(payload, object, static_cast<unsigned>(index + 1U));
+                    auto *captured = builder.CreateLoad(captureTypes[index], slot);
+                    if (mode == core::CaptureMode::Strong)
+                        builder.CreateCall(RuntimeFunction("vxs_aarc_release_strong", llvm::Type::getVoidTy(context), { pointer }), { captured });
+                    else if (mode == core::CaptureMode::Weak)
+                        builder.CreateCall(RuntimeFunction("vxs_aarc_release_weak", llvm::Type::getVoidTy(context), { pointer }), { captured });
+                    else
+                        builder.CreateCall(RuntimeFunction("vxs_aarc_release_unowned", llvm::Type::getVoidTy(context), { pointer }), { captured });
+                }
+                builder.CreateRetVoid();
+                return destructor;
+            }
+
+            [[nodiscard]] auto
+            LowerClosure(llvm::IRBuilder<> &builder,
+                         FunctionState &state,
+                         const xmm::Instruction &instruction) -> llvm::Value *
+            {
+                const auto target = functions.find(instruction.closure_function);
+                if (target == functions.end() || instruction.capture_modes.size() != instruction.operands.size())
+                    return nullptr;
+
+                auto *pointer = llvm::PointerType::get(context, 0);
+                std::vector<llvm::Type *> captureTypes;
+                captureTypes.reserve(instruction.operands.size());
+                std::vector<llvm::Type *> fields{ pointer };
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    auto *type = instruction.capture_modes[index] == core::CaptureMode::Strong
+                                     ? types.Lower(instruction.operands[index].type)
+                                     : pointer;
+                    if (type == nullptr || type->isVoidTy())
+                        return nullptr;
+                    captureTypes.push_back(type);
+                    fields.push_back(type);
+                }
+                auto *payload = llvm::StructType::create(context, fields, ".vxs.aarc.closure.payload." + std::to_string(closure_index));
+                auto *destructor = CreateClosureDestructor(payload, instruction, captureTypes);
+
+                // TypeMetadata mirrors the public runtime ABI. Size is expressed as an LLVM
+                // constant expression so the target data layout, not the host compiler,
+                // determines the closure payload size.
+                auto *sizeType = llvm::Triple(module.getTargetTriple()).isArch64Bit()
+                                     ? llvm::Type::getInt64Ty(context)
+                                     : llvm::Type::getInt32Ty(context);
+                std::array<llvm::Type *, 6U> metadataFields{
+                    llvm::Type::getInt32Ty(context),
+                    llvm::Type::getInt32Ty(context),
+                    sizeType,
+                    sizeType,
+                    pointer,
+                    pointer
+                };
+                auto *metadataType = llvm::StructType::get(context, metadataFields, false);
+                auto *payloadSize = llvm::ConstantExpr::getSizeOf(payload);
+                if (payloadSize->getType() != sizeType)
+                {
+                    const auto sourceWidth = llvm::cast<llvm::IntegerType>(payloadSize->getType())->getBitWidth();
+                    const auto targetWidth = llvm::cast<llvm::IntegerType>(sizeType)->getBitWidth();
+                    payloadSize = llvm::ConstantExpr::getCast(
+                        sourceWidth < targetWidth ? llvm::Instruction::ZExt : llvm::Instruction::Trunc,
+                        payloadSize,
+                        sizeType);
+                }
+                std::array<llvm::Constant *, 6U> metadataValues{
+                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1U),
+                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0U),
+                    payloadSize,
+                    llvm::ConstantInt::get(sizeType, 16U),
+                    destructor,
+                    llvm::ConstantPointerNull::get(pointer)
+                };
+                auto *metadata = new llvm::GlobalVariable(
+                    module,
+                    metadataType,
+                    true,
+                    llvm::GlobalValue::PrivateLinkage,
+                    llvm::ConstantStruct::get(metadataType, metadataValues),
+                    ".vxs.aarc.closure.metadata." + std::to_string(closure_index++));
+                auto *object = builder.CreateCall(RuntimeFunction("vxs_aarc_allocate", pointer, { pointer }), { metadata }, "closure");
+                builder.CreateStore(target->second.value, builder.CreateStructGEP(payload, object, 0U));
+
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    auto *captured = LoadValue(builder, state, instruction.operands[index]);
+                    if (captured == nullptr)
+                        return nullptr;
+                    const auto mode = instruction.capture_modes[index];
+                    if (mode == core::CaptureMode::Strong && captureTypes[index]->isPointerTy())
+                        captured = builder.CreateCall(RuntimeFunction("vxs_aarc_retain_strong", pointer, { pointer }), { captured }, "capture.strong");
+                    else if (mode == core::CaptureMode::Weak)
+                        captured = builder.CreateCall(RuntimeFunction("vxs_aarc_make_weak", pointer, { pointer }), { captured }, "capture.weak");
+                    else if (mode == core::CaptureMode::Unowned)
+                        captured = builder.CreateCall(RuntimeFunction("vxs_aarc_make_unowned", pointer, { pointer }), { captured }, "capture.unowned");
+                    builder.CreateStore(captured, builder.CreateStructGEP(payload, object, static_cast<unsigned>(index + 1U)));
+                }
+                return object;
+            }
+
+            [[nodiscard]] auto
             LowerInstruction(llvm::IRBuilder<> &builder, FunctionState &state, const xmm::Instruction &instruction) -> bool
             {
                 if (instruction.opcode == xmm::Opcode::Call)
@@ -492,12 +668,17 @@ namespace Visual::XSharp::Backend::LLVM
                         builder.CreateStore(result, state.slots.at(instruction.destination));
                     return true;
                 }
-                // Closure layout is intentionally not guessed here. CorePrep and Xmm now
-                // preserve lifted targets, ordered captures, and ownership modes; the AARC
-                // runtime ABI must provide the allocation and weak/unowned slot operations
-                // before LLVM emission can materialize a correct first-class value.
                 if (instruction.opcode == xmm::Opcode::MakeClosure)
-                    return false;
+                {
+                    auto *result = LowerClosure(builder, state, instruction);
+                    if (result == nullptr || !instruction.has_result)
+                        return false;
+                    builder.CreateStore(result, state.slots.at(instruction.destination));
+                    return true;
+                }
+                if (instruction.opcode >= xmm::Opcode::RetainStrong
+                    && instruction.opcode <= xmm::Opcode::ReleaseUnowned)
+                    return LowerOwnership(builder, state, instruction);
                 std::vector<llvm::Value *> operands;
                 operands.reserve(instruction.operands.size());
                 for (const auto &operand : instruction.operands)
@@ -581,6 +762,14 @@ namespace Visual::XSharp::Backend::LLVM
                         break;
                     case xmm::Opcode::Call:
                     case xmm::Opcode::MakeClosure:
+                    case xmm::Opcode::RetainStrong:
+                    case xmm::Opcode::ReleaseStrong:
+                    case xmm::Opcode::MakeWeak:
+                    case xmm::Opcode::LockWeak:
+                    case xmm::Opcode::ReleaseWeak:
+                    case xmm::Opcode::MakeUnowned:
+                    case xmm::Opcode::LoadUnowned:
+                    case xmm::Opcode::ReleaseUnowned:
                         break;
                 }
                 if (instruction.has_result && result != nullptr)

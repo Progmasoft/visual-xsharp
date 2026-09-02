@@ -42,7 +42,7 @@ checkTopDeclaration declaration = case declaration of
 syntaxType :: TypeSyntax -> Type
 syntaxType AutoType = ErrorType
 syntaxType (ExplicitType (Identifier name)) = case name of
-    "string" -> stringType
+    "String" -> stringType
     "unit" -> unitType
     "void" -> voidType
     _ -> maybe (NamedType (QualifiedName [Identifier name]) []) scalarTypeToType (lookupScalar name)
@@ -301,11 +301,12 @@ checkCaptures environment = map checkCapture
                     UnownedCapture -> [problem spanValue "VXT0015" "unowned capture requires an AARC reference value"]
              in (Capture spanValue mode name valueType typedInitializer, problems ++ ownershipProblems)
 
--- Primitive and callable values use value semantics here.  Named user and
--- library types are the current front-end representation of AARC references;
--- a later ownership pass may refine specific named types to CoW.
+-- String and callable values are AARC references. Named user and library
+-- types are conservatively treated as references until declaration metadata
+-- lets the ownership pass distinguish AARC declarations from CoW values.
 isReferenceType :: Type -> Bool
 isReferenceType valueType = case valueType of
+    FunctionType _ _ -> True
     NamedType name _ -> name `notElem` primitiveNames
     _ -> False
     where
@@ -313,7 +314,6 @@ isReferenceType valueType = case valueType of
             [ QualifiedName [Identifier "bool"]
             , QualifiedName [Identifier "int"]
             , QualifiedName [Identifier "long"]
-            , QualifiedName [Identifier "string"]
             , QualifiedName [Identifier "unit"]
             , QualifiedName [Identifier "void"]
             ]

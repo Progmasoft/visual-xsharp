@@ -72,6 +72,22 @@ namespace visual_xsharp::xmm
                     return Opcode::NotBool;
                 case xpp::Opcode::MakeClosure:
                     return Opcode::MakeClosure;
+                case xpp::Opcode::RetainStrong:
+                    return Opcode::RetainStrong;
+                case xpp::Opcode::ReleaseStrong:
+                    return Opcode::ReleaseStrong;
+                case xpp::Opcode::MakeWeak:
+                    return Opcode::MakeWeak;
+                case xpp::Opcode::LockWeak:
+                    return Opcode::LockWeak;
+                case xpp::Opcode::ReleaseWeak:
+                    return Opcode::ReleaseWeak;
+                case xpp::Opcode::MakeUnowned:
+                    return Opcode::MakeUnowned;
+                case xpp::Opcode::LoadUnowned:
+                    return Opcode::LoadUnowned;
+                case xpp::Opcode::ReleaseUnowned:
+                    return Opcode::ReleaseUnowned;
             }
             return Opcode::Move;
         }

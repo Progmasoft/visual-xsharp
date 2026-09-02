@@ -157,6 +157,42 @@ namespace
         return lowered;
     }
 
+    [[nodiscard]] auto
+    OwnershipXppModule() -> Xpp::Module
+    {
+        auto module = XppModule(ScalarModule());
+        auto &instructions = module.functions.front().blocks.front().instructions;
+        const auto text = Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 13U, {} };
+        const auto appendProducing = [&instructions](Xpp::Opcode opcode, Core::SymbolId destination, Xpp::Operand operand) {
+            Xpp::Instruction instruction;
+            instruction.effect = Xpp::Instruction::Effect::Define;
+            instruction.opcode = opcode;
+            instruction.destination = destination;
+            instruction.result_type = Core::Type::string();
+            instruction.operands = { std::move(operand) };
+            instructions.push_back(std::move(instruction));
+        };
+        const auto appendRelease = [&instructions](Xpp::Opcode opcode, Core::SymbolId source) {
+            Xpp::Instruction instruction;
+            instruction.effect = Xpp::Instruction::Effect::Discard;
+            instruction.opcode = opcode;
+            instruction.result_type = Core::Type::unit();
+            instruction.operands = { Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), source, {} } };
+            instructions.push_back(std::move(instruction));
+        };
+        appendProducing(Xpp::Opcode::RetainStrong, 16U, text);
+        appendProducing(Xpp::Opcode::MakeWeak, 17U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 16U, {} });
+        appendProducing(Xpp::Opcode::LockWeak, 18U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 17U, {} });
+        appendProducing(Xpp::Opcode::MakeUnowned, 19U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 18U, {} });
+        appendProducing(Xpp::Opcode::LoadUnowned, 20U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 19U, {} });
+        appendRelease(Xpp::Opcode::ReleaseStrong, 16U);
+        appendRelease(Xpp::Opcode::ReleaseStrong, 18U);
+        appendRelease(Xpp::Opcode::ReleaseWeak, 17U);
+        appendRelease(Xpp::Opcode::ReleaseUnowned, 19U);
+        REQUIRE(::Visual::XSharp::Xpp::Verify(module).empty());
+        return module;
+    }
+
     template<typename Decode>
     void
     CheckFramingFailures(std::vector<std::uint8_t> bytes, Decode decode)
@@ -231,6 +267,25 @@ TEST_CASE("Xmm wire preserves virtual-register ABI and typed immediates")
         REQUIRE(*decoded.module == original);
         REQUIRE(::Visual::XSharp::Xmm::Verify(*decoded.module).empty());
     }
+}
+
+TEST_CASE("Xpp and Xmm v2 wire preserve explicit ownership operations")
+{
+    const auto xpp = OwnershipXppModule();
+    const auto encodedXpp = XppWire::Encode(xpp);
+    REQUIRE(encodedXpp);
+    const auto decodedXpp = XppWire::Decode(encodedXpp.bytes);
+    REQUIRE(decodedXpp);
+    REQUIRE(*decodedXpp.module == xpp);
+
+    const auto xmm = XmmModule(*decodedXpp.module);
+    const auto encodedXmm = XmmWire::Encode(xmm);
+    REQUIRE(encodedXmm);
+    const auto decodedXmm = XmmWire::Decode(encodedXmm.bytes);
+    REQUIRE(decodedXmm);
+    REQUIRE(*decodedXmm.module == xmm);
+    CHECK(XppWire::kCurrentVersion == 2U);
+    CHECK(XmmWire::kCurrentVersion == 2U);
 }
 
 TEST_CASE("Xpp wire rejects malformed framing without constructing a module")
