@@ -4,7 +4,10 @@ package(default_visibility = ["//visibility:private"])
 
 cc_binary(
     name = "llvm_backend_tests",
-    srcs = ["LLVMBackendTests.cpp"],
+    srcs = [
+        "CallableInvocationTests.cpp",
+        "LLVMBackendTests.cpp",
+    ],
     deps = [
         "//Compiler/Backend/LLVM:llvm_backend",
         "//Compiler/Driver:core_pipeline",

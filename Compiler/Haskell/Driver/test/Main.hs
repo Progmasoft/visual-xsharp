@@ -55,6 +55,8 @@ main = do
     check "string conditions are rejected while numeric conditions remain valid" wrongCondition
     check "wrong call arity is rejected" wrongArity
     check "lexer rejects unsupported input" badCharacter
+    check "if requires a parenthesized condition" ifRequiresParentheses
+    check "logical NOT has only the not spelling" logicalNotHasOneSpelling
     check "String comment forms obey long-bracket levels" stringCommentForms
     check "raw strings preserve content and trim boundary newlines" rawStringBoundaries
     check "higher raw-string levels admit lower closing delimiters" rawStringLevels
@@ -241,6 +243,16 @@ immutableAssignment :: Bool
 immutableAssignment = hasCode "VXT0003" (compile "class App { int Read() { final int value = 1; value = 2; return value; } }")
 wrongCondition :: Bool
 wrongCondition = hasCode "VXT0006" (compile "class App { void Run() { if (\"yes\") { return; } return; } }")
+
+ifRequiresParentheses :: Bool
+ifRequiresParentheses =
+    rejected (compile "class App { void Run() { if true { return; } return; } }")
+        && not (rejected (compile "class App { void Run() { if (true) { return; } return; } }"))
+
+logicalNotHasOneSpelling :: Bool
+logicalNotHasOneSpelling =
+    not (rejected (compile "class App { void Run() { if (not false) { return; } return; } }"))
+        && rejected (compile "class App { void Run() { if (!false) { return; } return; } }")
 wrongArity :: Bool
 wrongArity = hasCode "VXT0008" (compile "class App { int Sum(_ int a, _ int b) { return a+b; } void Run() { Sum(1); } }")
 badCharacter :: Bool

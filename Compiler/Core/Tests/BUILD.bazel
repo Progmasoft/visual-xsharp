@@ -3,6 +3,15 @@ load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 package(default_visibility = ["//visibility:private"])
 
 cc_binary(
+    name = "callable_contract_tests",
+    srcs = ["CallableContractTests.cpp"],
+    deps = [
+        "//Compiler/Core/Callable:callable",
+        "@catch2//:catch2_main",
+    ],
+)
+
+cc_binary(
     name = "core_pipeline_tests",
     srcs = ["CorePipelineTests.cpp"],
     deps = [

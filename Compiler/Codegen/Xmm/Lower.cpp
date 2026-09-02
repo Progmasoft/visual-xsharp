@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "Visual/XSharp/Xmm/IR.hpp"
@@ -93,13 +94,18 @@ namespace visual_xsharp::xmm
         }
 
         auto
-        LowerValue(const xpp::Operand &operand, RegisterMap &map) -> Value
+        LowerValue(
+            const xpp::Operand &operand,
+            RegisterMap &map,
+            const std::unordered_set<xpp::SymbolId> &directFunctions) -> Value
         {
             if (operand.kind == xpp::Operand::Kind::Symbol)
             {
-                if (operand.type.kind == core::Type::Kind::Function)
+                if (operand.type.kind == core::Type::Kind::Function
+                    && directFunctions.contains(operand.symbol))
                     // Direct callees retain symbol identity and never consume a data register.
-                    // This lets the backend resolve forward and recursive calls uniformly.
+                    // Function-typed local storage is deliberately excluded: it contains an
+                    // AARC closure pointer and must become an ordinary Xmm register.
                     return Value{ Value::Kind::Function, operand.type, 0U, operand.symbol, {} };
                 return Value{ Value::Kind::Register, operand.type, map.Get(operand.symbol), 0U, {} };
             }
@@ -107,9 +113,17 @@ namespace visual_xsharp::xmm
         }
 
         auto
-        LowerTerminator(const xpp::Terminator &terminator, RegisterMap &map) -> Terminator
+        LowerTerminator(
+            const xpp::Terminator &terminator,
+            RegisterMap &map,
+            const std::unordered_set<xpp::SymbolId> &directFunctions) -> Terminator
         {
-            return { static_cast<Terminator::Kind>(terminator.kind), LowerValue(terminator.value, map), terminator.true_target, terminator.false_target };
+            return {
+                static_cast<Terminator::Kind>(terminator.kind),
+                LowerValue(terminator.value, map, directFunctions),
+                terminator.true_target,
+                terminator.false_target
+            };
         }
     } // namespace
 
@@ -118,6 +132,10 @@ namespace visual_xsharp::xmm
     {
         Module lowered{ module.name, {} };
         lowered.functions.reserve(module.functions.size());
+        std::unordered_set<xpp::SymbolId> directFunctions;
+        directFunctions.reserve(module.functions.size());
+        for (const auto &function : module.functions)
+            directFunctions.insert(function.symbol.id);
         for (const auto &function : module.functions)
         {
             RegisterMap registerMap;
@@ -141,12 +159,16 @@ namespace visual_xsharp::xmm
                     if (loweredInstruction.has_result)
                         loweredInstruction.destination = registerMap.Get(instruction.destination);
                     for (const auto &operand : instruction.operands)
-                        loweredInstruction.operands.push_back(LowerValue(operand, registerMap));
+                        loweredInstruction.operands.push_back(
+                            LowerValue(operand, registerMap, directFunctions));
                     loweredInstruction.closure_function = instruction.closure_function;
                     loweredInstruction.capture_modes = instruction.capture_modes;
                     loweredBlock.instructions.push_back(std::move(loweredInstruction));
                 }
-                loweredBlock.terminator = LowerTerminator(block.terminator, registerMap);
+                loweredBlock.terminator = LowerTerminator(
+                    block.terminator,
+                    registerMap,
+                    directFunctions);
                 loweredFunction.blocks.push_back(std::move(loweredBlock));
             }
             lowered.functions.push_back(std::move(loweredFunction));

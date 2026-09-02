@@ -64,7 +64,7 @@ CorePrep, namespace merging, and entry validation. Fixed-width integer/radix/sep
 boolean context, source `void`, stable `SymbolId` identity, and constant range checks are represented before Core emission.
 
 The full `Spec/` catalog is not implemented. Object/value layout, the complete standard-library surface, cross-namespace
-imports, full generic/template behavior, exception lowering, ownership runtime operations, generators, FFI, assembly, and
+imports, the monomorphization engine for full generic/template behavior, exception lowering, ownership runtime operations, generators, FFI, assembly, and
 many advanced declaration forms require additional semantic and native work. Unsupported forms must produce frontend or
 backend diagnostics; they must not be approximated with C-family behavior.
 

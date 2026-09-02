@@ -7,6 +7,7 @@ cc_library(
     srcs = ["Artifact.cpp", "Codegen.cpp", "Verifier.cpp"],
     deps = [
         "//Compiler/Codegen/Xmm:xmm",
+        "//Compiler/Core/Callable:callable",
         "//Compiler/Core/Ownership:ownership",
         "//Compiler/Headers/Visual/XSharp/Backend:llvm_api",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",

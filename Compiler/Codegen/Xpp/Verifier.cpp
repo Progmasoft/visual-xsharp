@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Xpp/Verifier.hpp"
@@ -105,11 +106,20 @@ namespace Visual::XSharp::Xpp
             }
             if (operand.type.kind == Core::Type::Kind::Function)
             {
-                const auto found = functions.find(operand.symbol);
-                if (found == functions.end())
-                    context.Add("VXP1012", "function operand refers to an unknown function symbol");
-                else if (operand.type != FunctionType(*found->second))
-                    context.Add("VXP1024", "function operand signature differs from its declaration");
+                // A function-typed symbol can denote either a module function or local
+                // storage containing an AARC closure. Function ids are globally unique,
+                // so checking the declaration catalog first is deterministic and retains
+                // direct-call identity without misclassifying closure registers.
+                if (const auto direct = functions.find(operand.symbol); direct != functions.end())
+                {
+                    if (operand.type != FunctionType(*direct->second))
+                        context.Add("VXP1024", "function operand signature differs from its declaration");
+                    return;
+                }
+                if (const auto local = storage.find(operand.symbol); local == storage.end())
+                    context.Add("VXP1012", "callable operand refers to neither a function nor local storage");
+                else if (local->second != operand.type)
+                    context.Add("VXP1014", "callable operand type differs from its storage declaration");
                 return;
             }
             const auto found = storage.find(operand.symbol);
@@ -125,18 +135,18 @@ namespace Visual::XSharp::Xpp
             if (value.opcode == IR::Opcode::Call)
             {
                 if (value.operands.empty() || value.operands.front().kind != IR::Operand::Kind::Symbol || value.operands.front().type.kind != Core::Type::Kind::Function)
-                    context.Add("VXP1015", "call must begin with a typed function-symbol operand");
+                    context.Add("VXP1015", "call must begin with a typed direct-function or closure-storage operand");
                 else
                 {
-                    const auto &signature = value.operands.front().type.components;
-                    if (signature.empty() || value.operands.size() != signature.size())
+                    const auto signature = ::Visual::XSharp::Core::Callable::Decompose(value.operands.front().type);
+                    if (!signature || value.operands.size() != signature->parameters.size() + 1U)
                         context.Add("VXP1025", "call argument count does not match its signature");
                     else
                     {
                         for (std::size_t index = 1; index < value.operands.size(); ++index)
-                            if (value.operands[index].type != signature[index - 1U])
+                            if (value.operands[index].type != signature->parameters[index - 1U])
                                 context.Add("VXP1026", "call argument type does not match its signature");
-                        if (value.result_type != signature.back())
+                        if (value.result_type != signature->result)
                             context.Add("VXP1027", "call result type does not match its signature");
                     }
                 }
@@ -153,12 +163,43 @@ namespace Visual::XSharp::Xpp
                 if (target != functions.end())
                 {
                     const auto &parameters = target->second->parameters;
-                    if (parameters.size() < value.operands.size())
-                        context.Add("VXP1031", "lifted function has fewer parameters than closure captures");
-                    else
-                        for (std::size_t index = 0; index < value.operands.size(); ++index)
-                            if (parameters[index].type != value.operands[index].type)
-                                context.Add("VXP1032", "closure capture type differs from its lifted parameter");
+                    std::vector<Core::Type> targetParameters;
+                    targetParameters.reserve(parameters.size());
+                    for (const auto &parameter : parameters)
+                        targetParameters.push_back(parameter.type);
+                    std::vector<Core::Type> captures;
+                    captures.reserve(value.operands.size());
+                    for (const auto &operand : value.operands)
+                        captures.push_back(operand.type);
+                    const auto contract = ::Visual::XSharp::Core::Callable::ValidateClosure(
+                        captures,
+                        targetParameters,
+                        target->second->return_type,
+                        value.result_type);
+                    using ContractError = ::Visual::XSharp::Core::Callable::ClosureContractError;
+                    switch (contract.error)
+                    {
+                        case ContractError::None:
+                            break;
+                        case ContractError::ResultIsNotCallable:
+                            // VXP1029 already reports this shape without duplicating it.
+                            break;
+                        case ContractError::TargetHasTooFewParameters:
+                            context.Add("VXP1031", "lifted function has fewer parameters than closure captures");
+                            break;
+                        case ContractError::CaptureTypeMismatch:
+                            context.Add("VXP1032", "closure capture type differs from its lifted parameter");
+                            break;
+                        case ContractError::PublicParameterCountMismatch:
+                            context.Add("VXP1038", "lifted function public parameter count differs from the closure signature");
+                            break;
+                        case ContractError::PublicParameterTypeMismatch:
+                            context.Add("VXP1039", "lifted function public parameter type differs from the closure signature");
+                            break;
+                        case ContractError::ResultTypeMismatch:
+                            context.Add("VXP1040", "lifted function result differs from the closure signature");
+                            break;
+                    }
                 }
                 for (std::size_t index = 0; index < value.capture_modes.size(); ++index)
                     if (value.capture_modes[index] != Core::CaptureMode::Strong

@@ -36,6 +36,7 @@
 #include <utility>
 
 #include "Visual/XSharp/Backend/LLVM.hpp"
+#include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 
@@ -456,11 +457,7 @@ namespace Visual::XSharp::Backend::LLVM
             LowerCall(llvm::IRBuilder<> &builder, FunctionState &state, const xmm::Instruction &instruction)
                 -> llvm::Value *
             {
-                // Operand zero is a function identity, not a virtual register containing a
-                // raw address. Resolving the preserved symbol id here keeps calls deterministic
-                // and leaves room for a later linkage/mangling policy without changing Xmm.
-                const auto target = functions.find(instruction.operands.front().symbol);
-                if (target == functions.end())
+                if (instruction.operands.empty())
                     return nullptr;
                 std::vector<llvm::Value *> arguments;
                 arguments.reserve(instruction.operands.size() - 1U);
@@ -471,7 +468,54 @@ namespace Visual::XSharp::Backend::LLVM
                     }))
                     return nullptr;
                 const auto *name = instruction.result_type.kind == core::Type::Kind::Unit ? "" : "call.result";
-                return builder.CreateCall(target->second.type, target->second.value, arguments, name);
+
+                if (instruction.operands.front().kind == xmm::Value::Kind::Function)
+                {
+                    // Direct functions retain symbol identity through Xmm. Resolving that
+                    // identity here keeps recursion and forward calls independent of source
+                    // order without allocating a closure for ordinary declarations.
+                    const auto target = functions.find(instruction.operands.front().symbol);
+                    if (target == functions.end())
+                        return nullptr;
+                    return builder.CreateCall(
+                        target->second.type,
+                        target->second.value,
+                        arguments,
+                        name);
+                }
+
+                if (instruction.operands.front().kind != xmm::Value::Kind::Register)
+                    return nullptr;
+                const auto signature = ::Visual::XSharp::Core::Callable::Decompose(
+                    instruction.operands.front().type);
+                if (!signature)
+                    return nullptr;
+                auto *closure = LoadValue(builder, state, instruction.operands.front());
+                if (closure == nullptr || !closure->getType()->isPointerTy())
+                    return nullptr;
+
+                auto *pointer = llvm::PointerType::get(context, 0);
+                std::vector<llvm::Type *> thunkParameters{ pointer };
+                thunkParameters.reserve(signature->parameters.size() + 1U);
+                for (const auto &parameter : signature->parameters)
+                {
+                    auto *lowered = types.Lower(parameter);
+                    if (lowered == nullptr || lowered->isVoidTy())
+                        return nullptr;
+                    thunkParameters.push_back(lowered);
+                }
+                auto *resultType = types.Lower(signature->result);
+                if (resultType == nullptr)
+                    return nullptr;
+                auto *thunkType = llvm::FunctionType::get(resultType, thunkParameters, false);
+
+                // Every closure payload begins with its invoke thunk. The call site can load
+                // this stable prefix without knowing capture count or layout; only the private
+                // thunk interprets the remainder of the environment.
+                auto *thunk = builder.CreateLoad(pointer, closure, "closure.invoke");
+                std::vector<llvm::Value *> thunkArguments{ closure };
+                thunkArguments.insert(thunkArguments.end(), arguments.begin(), arguments.end());
+                return builder.CreateCall(thunkType, thunk, thunkArguments, name);
             }
 
             [[nodiscard]] auto
@@ -539,6 +583,113 @@ namespace Visual::XSharp::Backend::LLVM
             }
 
             [[nodiscard]] auto
+            CreateClosureThunk(llvm::StructType *payload,
+                               const xmm::Instruction &instruction,
+                               const std::vector<llvm::Type *> &captureTypes,
+                               const FunctionState &target) -> llvm::Function *
+            {
+                const auto signature = ::Visual::XSharp::Core::Callable::Decompose(
+                    instruction.result_type);
+                if (!signature)
+                    return nullptr;
+
+                auto *pointer = llvm::PointerType::get(context, 0);
+                std::vector<llvm::Type *> parameterTypes{ pointer };
+                parameterTypes.reserve(signature->parameters.size() + 1U);
+                for (const auto &parameter : signature->parameters)
+                {
+                    auto *lowered = types.Lower(parameter);
+                    if (lowered == nullptr || lowered->isVoidTy())
+                        return nullptr;
+                    parameterTypes.push_back(lowered);
+                }
+                auto *resultType = types.Lower(signature->result);
+                if (resultType == nullptr)
+                    return nullptr;
+
+                auto *thunkType = llvm::FunctionType::get(resultType, parameterTypes, false);
+                const auto name = ".vxs.aarc.closure.invoke." + std::to_string(closure_index);
+                auto *thunk = llvm::Function::Create(
+                    thunkType,
+                    llvm::GlobalValue::InternalLinkage,
+                    name,
+                    module);
+                auto *entry = llvm::BasicBlock::Create(context, "entry", thunk);
+                llvm::IRBuilder<> thunkBuilder(entry);
+                auto *environment = thunk->getArg(0U);
+
+                // The lifted target ABI starts with one parameter per capture. Strong
+                // captures can be borrowed directly because invoking code holds the closure
+                // alive. Weak and unowned slots must be atomically upgraded and balanced
+                // around the call so destruction cannot race the body.
+                std::vector<llvm::Value *> arguments;
+                arguments.reserve(instruction.operands.size() + signature->parameters.size());
+                std::vector<llvm::Value *> temporaryStrong;
+                temporaryStrong.reserve(instruction.operands.size());
+                for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+                {
+                    auto *slot = thunkBuilder.CreateStructGEP(
+                        payload,
+                        environment,
+                        static_cast<unsigned>(index + 1U));
+                    llvm::Value *captured = thunkBuilder.CreateLoad(
+                        captureTypes[index],
+                        slot,
+                        "capture.load");
+                    switch (instruction.capture_modes[index])
+                    {
+                        case core::CaptureMode::Strong:
+                            break;
+                        case core::CaptureMode::Weak:
+                            captured = thunkBuilder.CreateCall(
+                                RuntimeFunction(
+                                    "vxs_aarc_lock_weak",
+                                    pointer,
+                                    { pointer }),
+                                { captured },
+                                "capture.locked");
+                            temporaryStrong.push_back(captured);
+                            break;
+                        case core::CaptureMode::Unowned:
+                            captured = thunkBuilder.CreateCall(
+                                RuntimeFunction(
+                                    "vxs_aarc_load_unowned",
+                                    pointer,
+                                    { pointer }),
+                                { captured },
+                                "capture.loaded");
+                            temporaryStrong.push_back(captured);
+                            break;
+                    }
+                    arguments.push_back(captured);
+                }
+                for (std::size_t index = 1U; index < thunk->arg_size(); ++index)
+                    arguments.push_back(thunk->getArg(static_cast<unsigned>(index)));
+
+                const auto *callName = signature->result.kind == core::Type::Kind::Unit
+                                           ? ""
+                                           : "closure.result";
+                auto *result = thunkBuilder.CreateCall(
+                    target.type,
+                    target.value,
+                    arguments,
+                    callName);
+                for (auto *temporary : temporaryStrong)
+                    thunkBuilder.CreateCall(
+                        RuntimeFunction(
+                            "vxs_aarc_release_strong",
+                            llvm::Type::getVoidTy(context),
+                            { pointer }),
+                        { temporary });
+
+                if (signature->result.kind == core::Type::Kind::Unit)
+                    thunkBuilder.CreateRetVoid();
+                else
+                    thunkBuilder.CreateRet(result);
+                return thunk;
+            }
+
+            [[nodiscard]] auto
             CreateClosureDestructor(llvm::StructType *payload,
                                     const xmm::Instruction &instruction,
                                     const std::vector<llvm::Type *> &captureTypes) -> llvm::Function *
@@ -594,7 +745,14 @@ namespace Visual::XSharp::Backend::LLVM
                     fields.push_back(type);
                 }
                 auto *payload = llvm::StructType::create(context, fields, ".vxs.aarc.closure.payload." + std::to_string(closure_index));
+                auto *thunk = CreateClosureThunk(
+                    payload,
+                    instruction,
+                    captureTypes,
+                    target->second);
                 auto *destructor = CreateClosureDestructor(payload, instruction, captureTypes);
+                if (thunk == nullptr || destructor == nullptr)
+                    return nullptr;
 
                 // TypeMetadata mirrors the public runtime ABI. Size is expressed as an LLVM
                 // constant expression so the target data layout, not the host compiler,
@@ -637,7 +795,7 @@ namespace Visual::XSharp::Backend::LLVM
                     llvm::ConstantStruct::get(metadataType, metadataValues),
                     ".vxs.aarc.closure.metadata." + std::to_string(closure_index++));
                 auto *object = builder.CreateCall(RuntimeFunction("vxs_aarc_allocate", pointer, { pointer }), { metadata }, "closure");
-                builder.CreateStore(target->second.value, builder.CreateStructGEP(payload, object, 0U));
+                builder.CreateStore(thunk, builder.CreateStructGEP(payload, object, 0U));
 
                 for (std::size_t index = 0; index < instruction.operands.size(); ++index)
                 {

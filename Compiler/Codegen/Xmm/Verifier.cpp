@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Xmm/Verifier.hpp"
@@ -221,21 +222,27 @@ namespace Visual::XSharp::Xmm
             if (instruction.opcode == xmm::Opcode::Call)
             {
                 // A function type stores parameters followed by its result. The instruction
-                // stores the function operand first, followed by actual arguments; therefore
-                // operand count equals signature component count even though their roles differ.
-                if (instruction.operands.empty() || instruction.operands.front().kind != xmm::Value::Kind::Function)
-                    context.add(IssueKind::InvalidCall, "VXL1015", "call must begin with a function-symbol operand");
-                else if (instruction.operands.front().type.kind == core::Type::Kind::Function)
+                // stores either a direct Function identity or a Register-backed closure first.
+                // Capture parameters remain private to the closure thunk and never appear at
+                // an ordinary call site.
+                if (instruction.operands.empty()
+                    || (instruction.operands.front().kind != xmm::Value::Kind::Function
+                        && instruction.operands.front().kind != xmm::Value::Kind::Register))
+                    context.add(IssueKind::InvalidCall, "VXL1015", "call must begin with a direct function or closure register");
+                else
                 {
-                    const auto &signature = instruction.operands.front().type.components;
-                    if (signature.empty() || instruction.operands.size() != signature.size())
+                    const auto signature = ::Visual::XSharp::Core::Callable::Decompose(
+                        instruction.operands.front().type);
+                    if (!signature)
+                        context.add(IssueKind::InvalidCall, "VXL1041", "call operand does not carry a callable type");
+                    else if (instruction.operands.size() != signature->parameters.size() + 1U)
                         context.add(IssueKind::OperandCount, "VXL1016", "call argument count does not match its signature");
                     else
                     {
                         for (std::size_t index = 1; index < instruction.operands.size(); ++index)
-                            if (instruction.operands[index].type != signature[index - 1])
+                            if (instruction.operands[index].type != signature->parameters[index - 1U])
                                 context.add(IssueKind::OperandType, "VXL1017", "call argument type does not match its signature");
-                        if (instruction.result_type != signature.back())
+                        if (instruction.result_type != signature->result)
                             context.add(IssueKind::ResultType, "VXL1019", "call result type does not match its signature");
                     }
                 }
@@ -252,12 +259,39 @@ namespace Visual::XSharp::Xmm
                 if (target != functions.end())
                 {
                     const auto &types = target->second->parameter_types;
-                    if (types.size() < instruction.operands.size())
-                        context.add(IssueKind::ParameterShape, "VXL1035", "lifted function has fewer parameters than closure captures");
-                    else
-                        for (std::size_t index = 0; index < instruction.operands.size(); ++index)
-                            if (types[index] != instruction.operands[index].type)
-                                context.add(IssueKind::OperandType, "VXL1036", "closure capture type differs from its lifted parameter");
+                    std::vector<core::Type> captures;
+                    captures.reserve(instruction.operands.size());
+                    for (const auto &operand : instruction.operands)
+                        captures.push_back(operand.type);
+                    const auto contract = ::Visual::XSharp::Core::Callable::ValidateClosure(
+                        captures,
+                        types,
+                        target->second->return_type,
+                        instruction.result_type);
+                    using ContractError = ::Visual::XSharp::Core::Callable::ClosureContractError;
+                    switch (contract.error)
+                    {
+                        case ContractError::None:
+                            break;
+                        case ContractError::ResultIsNotCallable:
+                            // VXL1033 already reports the public result shape.
+                            break;
+                        case ContractError::TargetHasTooFewParameters:
+                            context.add(IssueKind::ParameterShape, "VXL1035", "lifted function has fewer parameters than closure captures");
+                            break;
+                        case ContractError::CaptureTypeMismatch:
+                            context.add(IssueKind::OperandType, "VXL1036", "closure capture type differs from its lifted parameter");
+                            break;
+                        case ContractError::PublicParameterCountMismatch:
+                            context.add(IssueKind::ParameterShape, "VXL1042", "lifted function public parameter count differs from the closure signature");
+                            break;
+                        case ContractError::PublicParameterTypeMismatch:
+                            context.add(IssueKind::OperandType, "VXL1043", "lifted function public parameter type differs from the closure signature");
+                            break;
+                        case ContractError::ResultTypeMismatch:
+                            context.add(IssueKind::ResultType, "VXL1044", "lifted function result differs from the closure signature");
+                            break;
+                    }
                 }
             }
             else if (IsOwnershipOpcode(instruction.opcode))

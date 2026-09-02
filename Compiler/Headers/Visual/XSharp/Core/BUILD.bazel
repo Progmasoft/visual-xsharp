@@ -58,6 +58,13 @@ cc_library(
 )
 
 cc_library(
+    name = "callable_api",
+    hdrs = ["Callable.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [":coreprep"],
+)
+
+cc_library(
     name = "core",
     hdrs = [
         "Verifier.hpp",

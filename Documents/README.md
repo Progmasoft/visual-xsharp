@@ -34,6 +34,8 @@ following vocabulary:
 | Use Analyzer, Formatter, or Linter | [Ecosystem tools](ECOSYSTEM.md) |
 | Work on LLVM lowering | [LLVM backend](LLVM-BACKEND.md) |
 | Work on callable literals | [Closure pipeline](CLOSURE-PIPELINE.md) |
+| Work on native callable invocation | [First-class callable ABI](CALLABLE-ABI.md) |
+| Work on templates and specialization | [Template monomorphization](MONOMORPHIZATION.md) |
 | Work on scalar types and literals | [Numeric types](NUMERIC-TYPES.md) |
 | Trace scalars through native lowering | [Scalar pipeline](SCALAR-PIPELINE.md) |
 | Maintain compiler wire contracts | [Artifact wire](ARTIFACT-WIRE.md) |
@@ -52,6 +54,8 @@ following vocabulary:
 - [Implementation status](IMPLEMENTATION.md) distinguishes connected, partial, registered, planned, and legacy surfaces.
 - [LLVM backend](LLVM-BACKEND.md) defines the Xmm-to-LLVM contract, supported values, verification, and artifact ownership.
 - [Closure pipeline](CLOSURE-PIPELINE.md) explains capture analysis, owned environments, and LLVM closure lowering.
+- [First-class callable ABI](CALLABLE-ABI.md) defines direct versus closure calls, invoke thunks, and capture-call ownership.
+- [Template monomorphization](MONOMORPHIZATION.md) defines concrete specialization identity, placement, demand discovery, and current limits.
 - [Numeric types](NUMERIC-TYPES.md) records fixed scalar widths and the gap between frontend semantics and the current Core
   transport.
 - [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, wire v3, Xpp, Xmm, and LLVM.

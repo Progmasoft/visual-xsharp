@@ -6,7 +6,8 @@
 This document describes the first executable Automatic Atomic Reference Counting
 (AARC) contract shared by type classification, Xpp, Xmm, LLVM, and the native
 runtime. It covers ordinary acyclic lifetime management. The optional concurrent
-cycle collector is a later layer and is disabled by default.
+cycle collector is a later layer, combines Bacon–Rajan processing with trial
+deletion, and is disabled by default.
 
 ## Storage classification
 
@@ -70,11 +71,14 @@ Producing operations preserve the operand's language type. Release operations
 have no destination and carry `Unit` as the result marker. Both stage verifiers
 reject scalar ownership, wrong arity, producing releases, and discarded loads.
 
-`MakeClosure` creates a payload containing the lifted function pointer followed
-by ordered capture slots. LLVM emits a payload type, private metadata, a private
-destructor, allocation, and capture initialization. Strong AARC captures are
-retained; weak and unowned captures store control handles; strong scalar captures
-remain inline. The generated destructor balances every owning/control slot.
+`MakeClosure` creates a payload containing an invoke-thunk pointer followed by
+ordered capture slots. LLVM emits a payload type, private metadata, a private
+destructor, allocation, capture initialization, and a thunk whose first argument
+is the environment. The thunk loads hidden captures and appends public call
+arguments before invoking the lifted target. Strong AARC captures are borrowed
+for the duration of a call because the closure keeps them alive. Weak and
+unowned captures are upgraded to temporary strong references and released after
+the lifted call. The generated destructor balances every owning/control slot.
 
 String constants keep `i32` Unicode-scalar storage and call
 `vxs_aarc_string_literal`, which creates a `System.String` AARC object without
@@ -83,9 +87,10 @@ introducing UTF-8 storage.
 ## Current boundary
 
 This slice does not yet insert whole-program retain/release placement for every
-source binding, invoke first-class closures indirectly, package the runtime into
-every final native link, or collect cycles. It establishes the checked IR
-vocabulary, concrete object ABI, runtime primitives, String and closure lowering,
-and regression coverage that those later passes target. The future concurrent
-collector remains opt-in with `-Cycle-Collector true`; the ordinary acyclic path
-must not pay its cost when disabled.
+source binding, package the runtime into every final native link, or collect
+cycles. It establishes the checked IR vocabulary, concrete object ABI, runtime
+primitives, String and first-class closure invocation lowering, and regression
+coverage that those later passes target. The future concurrent Bacon–Rajan plus
+trial-deletion collector remains opt-in with `-Cycle-Collector true`. The
+ordinary acyclic path must not pay its cost when disabled, and no trial begins
+when no candidate exists or the program has already broken the candidate cycle.

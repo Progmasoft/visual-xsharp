@@ -10,21 +10,19 @@ import Visual.XSharp.Diagnostic
 
 voidTests :: [(String, Bool)]
 voidTests =
-    [ ("void and unit are distinct source types", voidType /= unitType)
-    , ("void helper retains source spelling", voidType == namedType "void")
-    , ("unit helper retains value spelling", unitType == namedType "unit")
+    [ ("void helper retains source spelling", voidType == namedType "void")
+    , ("unit remains an internal no-result marker", unitType == namedType "unit")
     , ("void function is typed as void", typedReturnType voidFunction == Just voidType)
-    , ("unit function is typed as unit", typedReturnType unitFunction == Just unitType)
-    , ("void is erased to resultless Core unit", coreReturnType voidFunction == Just unitType)
-    , ("unit remains Core unit", coreReturnType unitFunction == Just unitType)
+    , ("source unit type is rejected", rejected unitFunction)
+    , ("empty parentheses are not a unit literal", rejected emptyParenthesesFunction)
+    , ("void is erased to the internal Core no-result marker", coreReturnType voidFunction == Just unitType)
     , ("void bare return becomes CoreUnit", coreHasUnitReturn voidFunction)
     , ("void function rejects a value return", rejected "class App { void Run() { return 1; } }")
     , ("void function rejects a final expression", rejected "class App { void Run() { 1 } }")
-    , ("unit function may return unit literal", accepted unitFunction)
     , ("void call is typed void before Core", typedCallResult == Just voidType)
-    , ("void call result is erased at Core boundary", coreCallResult == Just unitType)
+    , ("void call result uses the internal marker after Core lowering", coreCallResult == Just unitType)
     , ("entry contract accepts public static void Main", entryAccepted)
-    , ("entry contract rejects public static unit Main", entryUnitRejected)
+    , ("entry contract rejects source unit before entry validation", entryUnitRejected)
     , ("entry contract rejects public static int Main", entryIntRejected)
     ]
 
@@ -34,11 +32,11 @@ voidFunction = "class App { void Run() { return; } }"
 unitFunction :: String
 unitFunction = "class App { unit Value() { () } }"
 
-accepted :: String -> Bool
-accepted source = case compileSource source of Right _ -> True; Left _ -> False
+emptyParenthesesFunction :: String
+emptyParenthesesFunction = "class App { int Value() { () } }"
 
 rejected :: String -> Bool
-rejected = not . accepted
+rejected source = case compileSource source of Left _ -> True; Right _ -> False
 
 typedReturnType :: String -> Maybe Type
 typedReturnType source = do
@@ -100,7 +98,7 @@ entryAccepted = case compileEntry entry "namespace Demo; class Program { public 
     Left _ -> False
 
 entryUnitRejected :: Bool
-entryUnitRejected = hasDiagnostic "VXE0008" (compileEntry entry "namespace Demo; class Program { public static unit Main() { () } }")
+entryUnitRejected = rejectedEntry (compileEntry entry "namespace Demo; class Program { public static unit Main() { () } }")
 
 entryIntRejected :: Bool
 entryIntRejected =
@@ -118,6 +116,11 @@ compileSource source = compileToCorePrep (CompilerInput "void-test.vxs" source)
 hasDiagnostic :: String -> Either [Diagnostic] a -> Bool
 hasDiagnostic code result = case result of
     Left problems -> any ((== code) . diagnosticCode) problems
+    Right _ -> False
+
+rejectedEntry :: Either [Diagnostic] a -> Bool
+rejectedEntry result = case result of
+    Left _ -> True
     Right _ -> False
 
 firstFunction :: TypedAST -> Maybe (Declaration ResolvedName Type)

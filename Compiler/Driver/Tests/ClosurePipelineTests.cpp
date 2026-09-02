@@ -66,6 +66,21 @@ namespace
     }
 
     [[nodiscard]] auto
+    ClosureCallInstruction() -> Core::Instruction
+    {
+        Core::Instruction instruction;
+        instruction.kind = Core::Instruction::Kind::Bind;
+        instruction.destination = Name(6U, U"value");
+        instruction.type = Core::Type::int64();
+        instruction.mutable_binding = false;
+        instruction.operation = Core::Operation::Call;
+        instruction.operands = {
+            Variable(3U, Core::Type::function({}, Core::Type::int64())),
+        };
+        return instruction;
+    }
+
+    [[nodiscard]] auto
     ClosureModule() -> Core::CorePrepModule
     {
         Core::Instruction seed;
@@ -83,7 +98,7 @@ namespace
         main.blocks = {
             Core::Block{
                 0U,
-                { std::move(seed), ClosureInstruction() },
+                { std::move(seed), ClosureInstruction(), ClosureCallInstruction() },
                 Core::Terminator{ Core::Terminator::Kind::Return, Unit(), 0U, 0U },
             },
         };
@@ -168,6 +183,28 @@ namespace
                         return &instruction;
         return nullptr;
     }
+
+    [[nodiscard]] auto
+    FindCall(const Xpp::Module &module) -> const Xpp::Instruction *
+    {
+        for (const auto &function : module.functions)
+            for (const auto &block : function.blocks)
+                for (const auto &instruction : block.instructions)
+                    if (instruction.opcode == Xpp::Opcode::Call)
+                        return &instruction;
+        return nullptr;
+    }
+
+    [[nodiscard]] auto
+    FindCall(const Xmm::Module &module) -> const Xmm::Instruction *
+    {
+        for (const auto &function : module.functions)
+            for (const auto &block : function.blocks)
+                for (const auto &instruction : block.instructions)
+                    if (instruction.opcode == Xmm::Opcode::Call)
+                        return &instruction;
+        return nullptr;
+    }
 } // namespace
 
 TEST_CASE("CorePrep v3 round-trips closure targets captures and modes")
@@ -193,14 +230,14 @@ TEST_CASE("CorePrep verifier accepts a well-formed closure conversion")
 TEST_CASE("CorePrep verifier rejects a missing lifted closure target")
 {
     auto module = ClosureModule();
-    module.functions.front().blocks.front().instructions.back().closure_function = Name(99U, U"missing");
+    module.functions.front().blocks.front().instructions[1].closure_function = Name(99U, U"missing");
     CHECK(HasIssue(Core::verify(module), "VXC1040"));
 }
 
 TEST_CASE("CorePrep verifier rejects mismatched capture storage")
 {
     auto module = ClosureModule();
-    auto &capture = module.functions.front().blocks.front().instructions.back().captures.front();
+    auto &capture = module.functions.front().blocks.front().instructions[1].captures.front();
     capture.type = Core::Type::boolean();
     CHECK_FALSE(Core::verify(module).empty());
 }
@@ -215,6 +252,36 @@ TEST_CASE("Xpp preserves closure target capture order and ownership")
     REQUIRE(closure->capture_modes.size() == 1U);
     CHECK(closure->capture_modes.front() == Core::CaptureMode::Strong);
     CHECK(closure->operands.front().type == Core::Type::int64());
+}
+
+TEST_CASE("Xpp distinguishes a callable local from a direct function symbol")
+{
+    const auto xpp = Xpp::lower(ClosureModule());
+    REQUIRE(Visual::XSharp::Xpp::Verify(xpp).empty());
+    const auto *call = FindCall(xpp);
+    REQUIRE(call != nullptr);
+    REQUIRE(call->operands.size() == 1U);
+    CHECK(call->operands.front().kind == Xpp::Operand::Kind::Symbol);
+    CHECK(call->operands.front().symbol == 3U);
+    CHECK(call->operands.front().type == Core::Type::function({}, Core::Type::int64()));
+}
+
+TEST_CASE("Xpp rejects a closure whose public arity disagrees with its target")
+{
+    auto xpp = Xpp::lower(ClosureModule());
+    auto *closure = const_cast<Xpp::Instruction *>(FindClosure(xpp));
+    REQUIRE(closure != nullptr);
+    closure->result_type = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
+    CHECK(HasXppIssue(Visual::XSharp::Xpp::Verify(xpp), "VXP1038"));
+}
+
+TEST_CASE("Xpp rejects a closure whose public result disagrees with its target")
+{
+    auto xpp = Xpp::lower(ClosureModule());
+    auto *closure = const_cast<Xpp::Instruction *>(FindClosure(xpp));
+    REQUIRE(closure != nullptr);
+    closure->result_type = Core::Type::function({}, Core::Type::boolean());
+    CHECK(HasXppIssue(Visual::XSharp::Xpp::Verify(xpp), "VXP1040"));
 }
 
 TEST_CASE("Xpp verifier checks the lifted closure signature")
@@ -244,6 +311,35 @@ TEST_CASE("Xmm preserves closure metadata without inventing an ABI")
     CHECK(closure->capture_modes.front() == Core::CaptureMode::Strong);
 }
 
+TEST_CASE("Xmm lowers a closure callee to a data register")
+{
+    const auto xmm = Xmm::lower(Xpp::lower(ClosureModule()));
+    REQUIRE(Visual::XSharp::Xmm::Verify(xmm).empty());
+    const auto *call = FindCall(xmm);
+    REQUIRE(call != nullptr);
+    REQUIRE(call->operands.size() == 1U);
+    CHECK(call->operands.front().kind == Xmm::Value::Kind::Register);
+    CHECK(call->operands.front().type == Core::Type::function({}, Core::Type::int64()));
+}
+
+TEST_CASE("Xmm rejects a closure whose public arity disagrees with its target")
+{
+    auto xmm = Xmm::lower(Xpp::lower(ClosureModule()));
+    auto *closure = const_cast<Xmm::Instruction *>(FindClosure(xmm));
+    REQUIRE(closure != nullptr);
+    closure->result_type = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
+    CHECK(HasXmmIssue(Visual::XSharp::Xmm::Verify(xmm), "VXL1042"));
+}
+
+TEST_CASE("Xmm rejects a closure whose public result disagrees with its target")
+{
+    auto xmm = Xmm::lower(Xpp::lower(ClosureModule()));
+    auto *closure = const_cast<Xmm::Instruction *>(FindClosure(xmm));
+    REQUIRE(closure != nullptr);
+    closure->result_type = Core::Type::function({}, Core::Type::boolean());
+    CHECK(HasXmmIssue(Visual::XSharp::Xmm::Verify(xmm), "VXL1044"));
+}
+
 TEST_CASE("Xmm verifier checks closure metadata independently of LLVM")
 {
     auto xmm = Xmm::lower(Xpp::lower(ClosureModule()));
@@ -257,6 +353,6 @@ TEST_CASE("Xmm verifier checks closure metadata independently of LLVM")
 TEST_CASE("non-owning primitive capture is rejected before backend lowering")
 {
     auto module = ClosureModule();
-    module.functions.front().blocks.front().instructions.back().captures.front().mode = Core::CaptureMode::Weak;
+    module.functions.front().blocks.front().instructions[1].captures.front().mode = Core::CaptureMode::Weak;
     CHECK_FALSE(Core::verify(module).empty());
 }

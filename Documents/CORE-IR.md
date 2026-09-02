@@ -64,9 +64,9 @@ with an LLVM integer width or encode `String` as host bytes. Type lowering is a
 later stage decision.
 
 Source `void` is checked before Core. At the current boundary, resultless
-functions use `unit` plus `CoreUnit` as the explicit return marker. This is a
-documented compatibility mapping, not evidence that source `void` and source
-`unit` are the same type.
+functions use the historically named `unit` marker plus `CoreUnit` as the
+explicit return marker. Visual X# has no source-language `unit` type. Source-
+facing tools must spell the result `void` and keep this representation private.
 
 ## Functions
 
@@ -84,9 +84,10 @@ module. Duplicate function symbols are invalid even if spellings differ.
 Parameters are immutable Core storage. Their symbols must be unique within the
 function and their types must be fully resolved.
 
-A non-unit function must return on every reachable path represented by the
-tree. A unit function still carries an explicit `CoreReturn CoreUnit` in normal
-desugared output.
+A value-returning function must return on every reachable path represented by
+the tree. A source `void` function still carries an explicit
+`CoreReturn CoreUnit` after lowering; both `CoreUnit` and its type are private
+no-result markers.
 
 ## Statements
 
@@ -164,7 +165,7 @@ inference to inspect an expression.
 - exact floating source spelling, validated without host rounding;
 - Unicode scalar `String` content;
 - boolean; and
-- unit.
+- the internal `CoreUnit` no-result marker.
 
 The payload and declared type must match. For example, an integer payload is
 not valid merely because its number could later convert to a float.
@@ -202,7 +203,7 @@ Unary primitives take one operand; other primitives take two.
 - a callable expression type.
 
 Its expression type must be a `FunctionType` whose parameter and return types
-match the closure declaration. A non-unit closure body must return on every
+match the closure declaration. A value-returning closure body must return on every
 path.
 
 ## Captures

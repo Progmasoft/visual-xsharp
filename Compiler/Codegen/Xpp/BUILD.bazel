@@ -8,6 +8,7 @@ cc_library(
     deps = [
         "//Compiler/Artifact:wire_support",
         "//Compiler/Core:core",
+        "//Compiler/Core/Callable:callable",
         "//Compiler/Core/Ownership:ownership",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
         "//Compiler/Headers/Visual/XSharp/Xpp:xpp",

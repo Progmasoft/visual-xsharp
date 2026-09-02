@@ -140,7 +140,7 @@ Important current invariants include:
 
 - a project entry names a namespace-qualified class;
 - the selected class provides parameterless `public static void Main()`;
-- source `void` means no returned value and remains distinct from value-producing `unit`;
+- source `void` is the only no-result type; the native `unit` spelling is an internal marker;
 - scalar widths are Visual X# widths, not C or host widths;
 - numeric boolean context treats zero as false and nonzero as true;
 - two computed arithmetic operands must already have the same scalar type; and
@@ -161,8 +161,8 @@ The Core verifier is not optional. It checks artifacts produced by the frontend 
 and C++20 implementations share the versioned `VXCR` contract and equivalent structural expectations. Limits cover document
 size, collection counts, text lengths, nesting depth, expression depth, Unicode scalars, and closure structure.
 
-Source `void` is mapped once to the current resultless Core ABI marker. That compatibility mapping does not make `void` and
-`unit` interchangeable in source semantics.
+Source `void` is mapped once to the current resultless Core ABI marker. The marker's historical implementation name is
+`unit`, but `unit` is not a source-language type and must not escape in source-facing diagnostics or artifacts.
 
 ## 8. Process transport
 

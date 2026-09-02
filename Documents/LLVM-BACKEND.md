@@ -36,8 +36,8 @@ construct the corresponding integer or floating type explicitly. The current Cor
 complete scalar catalog, so unsupported widths and floating payloads fail before target emission rather than being narrowed
 to the older connected subset.
 
-Source `void` is not a value. The frontend maps it once to the current resultless Core ABI marker. Value-producing source
-`unit` remains semantically distinct even when a legacy native enum still contains a unit-like spelling.
+Source `void` is not a value. The frontend maps it once to the current resultless Core ABI marker. Visual X# has no source
+`unit` type; the legacy native enum's unit-like spelling is private implementation vocabulary.
 
 `String` is not a UTF-8 byte string. A constant uses an immutable LLVM array of 32-bit Unicode scalar values followed by a
 zero sentinel, then calls `vxs_aarc_string_literal` with the scalar count. The runtime creates an AARC `System.String` object;

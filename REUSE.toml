@@ -4,7 +4,7 @@ SPDX-PackageSupplier = "Organization: Progmasoft"
 SPDX-PackageDownloadLocation = "https://github.com/Progmasoft/visual-xsharp"
 
 [[annotations]]
-path = ["vcpkg.json", ".bazelversion", "MODULE.bazel.lock", "Compiler/Core/Tests/Fixtures/Core/**", "Compiler/Driver/Tests/Fixtures/CorePrep/**", "Compiler/Legacy/Tests/Fixtures/Intermediate/**", "Compiler/Driver/Tests/Fixtures/Source/projects/native_call/sources/Generated/**"]
+path = [".bazelversion", "MODULE.bazel.lock", "Compiler/Core/Tests/Fixtures/Core/**", "Compiler/Driver/Tests/Fixtures/CorePrep/**", "Compiler/Legacy/Tests/Fixtures/Intermediate/**", "Compiler/Driver/Tests/Fixtures/Source/projects/native_call/sources/Generated/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Progmasoft <support@progmasoft.com>"
 SPDX-License-Identifier = "MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0"

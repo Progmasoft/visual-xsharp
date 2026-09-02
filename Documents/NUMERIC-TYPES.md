@@ -137,15 +137,16 @@ The Typed AST retains the numeric expression type. CorePrep makes conversion
 explicit as `value != 0`, so a native branch always receives a canonical
 boolean atom.
 
-## `void` and `unit`
+## `void` and the internal no-result marker
 
-`void` is the source type for a function that returns no value. `unit` is a
-distinct value-producing type. The Typed AST preserves that distinction.
+`void` is the only source spelling for a function that returns no value.
+Visual X# has no source-language `unit` type and does not admit `unit` in a
+declaration, type argument, cast, or callable signature.
 
-The current native Core ABI historically names its no-result marker `unit`.
-The compiler erases source `void` to that marker once, at the Typed AST to
-Core boundary. This compatibility mapping does not make the source types
-interchangeable.
+The current native Core ABI historically names its private no-result marker
+`unit`. The compiler erases source `void` to that marker once, at the Typed AST
+to Core boundary. Tools must render it as `void` at a source-facing boundary;
+the implementation name is never a second language type.
 
 ## Current artifact boundary
 

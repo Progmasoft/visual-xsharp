@@ -115,10 +115,11 @@ parseParameter = do
 parseTypeSyntax :: P TypeSyntax
 parseTypeSyntax = do
     token <- satisfy (\candidate -> tokenKind candidate `elem` [IdentifierToken, KeywordToken]) "type"
-    pure $ case tokenText token of
-        "auto" -> AutoType
-        "void" -> ExplicitType (Identifier "void")
-        value -> ExplicitType (Identifier value)
+    case tokenText token of
+        "unit" -> failAt (tokenSpan token) "VXP0013" "Visual X# has no source-language unit type; use void for a no-result function"
+        "auto" -> pure AutoType
+        "void" -> pure (ExplicitType (Identifier "void"))
+        value -> pure (ExplicitType (Identifier value))
 
 parseBlock :: Bool -> P (Block Identifier ())
 parseBlock allowFinalExpression = do _ <- symbol "{"; statements <- go; _ <- symbol "}"; pure (Block statements)
@@ -163,9 +164,9 @@ parseReturn = do
 parseIf :: P (Statement Identifier ())
 parseIf = do
     start <- keyword "if"
-    hasParen <- optionalSymbol "("
+    _ <- symbol "("
     condition <- parseExpression
-    if hasParen then do _ <- symbol ")"; pure () else pure ()
+    _ <- symbol ")"
     trueBlock <- parseBlock False
     falseBlock <- optionalParser (keyword "else" >> parseBlock False)
     pure
@@ -245,7 +246,7 @@ parseUnary :: P (Expression Identifier ())
 parseUnary = do
     next <- peekToken
     case next
-        >>= (\token -> lookup (tokenText token) [("+", UnaryPlus), ("-", UnaryNegate), ("!", LogicalNot), ("not", LogicalNot)]) of
+        >>= (\token -> lookup (tokenText token) [("+", UnaryPlus), ("-", UnaryNegate), ("not", LogicalNot)]) of
         Just operator -> do
             start <- takeToken
             value <- parseUnary
@@ -288,11 +289,10 @@ parsePrimary = do
         Just token | tokenText token `elem` ["true", "false"] -> do _ <- takeToken; pure (LiteralExpression (tokenSpan token) (BooleanLiteral (tokenText token == "true")) ())
         Just token | tokenKind token == IdentifierToken -> do _ <- takeToken; pure (NameExpression (tokenSpan token) (Identifier (tokenText token)) ())
         Just token | tokenText token == "(" -> do
-            open <- takeToken
-            unit <- peekText ")"
-            if unit
-                then do close <- symbol ")"; pure (LiteralExpression (mergeSpan (tokenSpan open) (tokenSpan close)) UnitLiteral ())
-                else do value <- parseExpression; _ <- symbol ")"; pure value
+            _ <- takeToken
+            value <- parseExpression
+            _ <- symbol ")"
+            pure value
         Just token -> failAt (tokenSpan token) "VXP0004" ("expected expression, found " ++ show (tokenText token))
         Nothing -> failCurrent "VXP0005" "expected expression at end of input"
 

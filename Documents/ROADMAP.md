@@ -41,7 +41,7 @@ runtime features must not displace completion of that pipeline.
 - introduce the multi-module Core link unit required by cross-namespace projects;
 - carry physical source ownership when an output kind is per source;
 - version complete fixed-width integer and floating payloads without changing old bytes in place;
-- preserve `void` versus value-producing `unit` until the one documented ABI mapping;
+- preserve source `void` while keeping the historically named internal no-result marker private;
 - keep CorePrep an internal adapter rather than a public artifact; and
 - add compatibility fixtures for every supported public Core wire version.
 
@@ -92,8 +92,11 @@ Registering a CLI spelling or adding a DSL key alone does not satisfy these cond
 
 ## Concurrent cycle collection
 
-Concurrent Bacon–Rajan cycle collection is planned only after the compiler is
-complete. It is not implemented by the current runtime or compiler.
+Concurrent Bacon–Rajan cycle collection with trial deletion is planned only
+after the compiler is complete. It is not implemented by the current runtime or
+compiler. Bacon–Rajan supplies the concurrent candidate-processing framework;
+trial deletion proves that a candidate component has no external strong owner
+before reclamation. Neither half is an optional alias for the other.
 
 The intended project/CLI setting is:
 
@@ -110,12 +113,16 @@ When enabled, the collector must remain demand-driven:
 - it does not run after a candidate cycle has already been broken manually;
 - ordinary acyclic AARC objects stay on retain/release paths;
 - collection work is concurrent rather than a global stop-the-world scan;
+- trial deletion is limited to buffered candidate components rather than the
+  complete object graph;
+- a trial is cancelled when concurrent mutation restores an external owner;
 - weak and unowned reference semantics remain unchanged;
 - a strong cycle remains programmer-managed when the option is disabled.
 
 The future design must specify candidate detection, color/state transitions,
-root buffering, synchronization, safe-point interaction, shutdown behavior,
-diagnostics, and deterministic testing before implementation begins.
+root buffering, trial-reference accounting, restoration after a failed trial,
+synchronization, safe-point interaction, shutdown behavior, diagnostics, and
+deterministic testing before implementation begins.
 
 No compiler pass should currently assume that a cycle collector exists. Closure
 conversion and ownership lowering must preserve enough AARC information for the
