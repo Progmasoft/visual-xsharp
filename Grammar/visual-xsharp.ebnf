@@ -14,7 +14,9 @@
    stated lexically because ordinary EBNF cannot bind and replay a delimiter.
    The lexical scanner resolves '--' after a postfix-capable expression as the
    decrement operator; elsewhere it begins a comment. The token '//' is integer
-   division, not a C-style comment delimiter.
+   division, not a C-style comment delimiter. Identifiers are normalized to NFC
+   before comparison; the Unicode character classes named below are scanner
+   primitives rather than productions over individual code points.
 *)
 
 source-file = { file-item } ;
@@ -52,7 +54,7 @@ declaration = { attribute }, [ template-clause ], [ requires-clause ],
 declaration-modifiers = { access-modifier
                         | "static" | "final" | "sealed" | "abstract"
                         | "inline" | "extern" | "virtual" | "override"
-                        | "op" | "async" | "repeatable" } ;
+                        | "op" | "async" | "repeatable" | "explicit" } ;
 
 access-modifier = "public" | "internal" | "fileprivate" | "protected" | "private" ;
 
@@ -151,13 +153,16 @@ callable-body = block | ";" | "=", expression, ";" ;
 throws-clause = "throws", type-list ;
 
 property-declaration = { attribute }, declaration-modifiers,
-                       type, identifier, property-body, [ "=", expression ], [ ";" ] ;
+                       type, identifier, member-suffix,
+                       property-body, [ "=", expression ], [ ";" ] ;
 property-body = "{", { property-accessor }, "}" ;
 property-accessor = { attribute }, [ access-modifier ],
                     ( "get" | "set" ), ( block | ";" ) ;
 
 indexer-declaration = { attribute }, declaration-modifiers,
-                      type, "self", "[", parameter-list, "]", property-body ;
+                      type, "self", "[", parameter-list, "]", member-suffix,
+                      property-body ;
+member-suffix = { "final" | "override" } ;
 static-initializer = "static", block ;
 
 parameter-list = parameter, { ",", parameter } ;
@@ -166,14 +171,16 @@ parameter = { parameter-attribute }, [ access-modifier ], [ parameter-label ], t
 parameter-label = "_" | identifier, ":" ;
 
 type-list = type, { ",", type } ;
-type = type-primary, { "?" } ;
+type = type-primary ;
 type-primary = builtin-type
              | qualified-name, [ type-arguments ]
              | array-type
              | "(", type-list, ")", "->", type
              | "Self"
              | "auto" ;
-array-type = "[", type, [ ";", expression ], "]" ;
+array-type = "[", "]", type
+           | "[", type, [ ";", expression ], "]"
+           | "[", type, "to", type, "]" ;
 type-arguments = "<", type-argument-list, ">" ;
 type-argument-list = type, { ",", type }, [ "..." ] ;
 
@@ -198,6 +205,10 @@ statement = block
           | for-statement
           | try-statement
           | defer-statement
+          | await-block-statement
+          | goto-statement
+          | label-block
+          | asm-statement
           | return-statement
           | throw-statement
           | yield-statement
@@ -208,7 +219,7 @@ local-declaration = [ "final" ], ( type | "auto" ), identifier,
                     [ "=", expression ], ";" ;
 assignment-statement = assignable, assignment-operator, expression, ";" ;
 expression-statement = expression, ";" ;
-discard-statement = "=", expression, ";" ;
+discard-statement = "_", "=", expression, ";" ;
 
 if-statement = "if", "(", condition, ")", block, [ "else", ( block | if-statement ) ] ;
 guard-statement = "guard", "(", condition, ")", "else", block ;
@@ -228,12 +239,31 @@ do-while-statement = "do", block, "while", "(", expression, ")", ";" ;
 for-statement = "for", "(", for-binding, ":", expression, ")", block
               | "for", "(", [ for-initializer ], ";", [ expression ], ";",
                 [ expression-list ], ")", block ;
-for-binding = ( type | "auto" ), identifier ;
+for-binding = [ "final" ], ( type | "auto" ), identifier ;
 for-initializer = local-binding-condition | expression-list ;
 
 try-statement = "try", block, catch-clause, { catch-clause } ;
-catch-clause = "catch", "(", type, identifier, ")", block ;
-defer-statement = "defer", block ;
+catch-clause = "catch", "(", catch-type-list, identifier, ")", block ;
+catch-type-list = type, { "|", type } ;
+defer-statement = "defer", ( block | expression, ";" ) ;
+await-block-statement = "await", block ;
+goto-statement = "goto", identifier, ";" ;
+label-block = ":", identifier, block ;
+asm-statement = "asm", [ "goto" ], { asm-modifier }, "(", asm-template,
+                [ asm-sections ], ")", ";" ;
+asm-modifier = "volatile" | "alignstack" | "inteldialect" | "unwind" ;
+asm-template = normal-string | raw-string ;
+asm-sections = ":", [ asm-operand-list ],
+               [ ":", [ asm-operand-list ],
+                 [ ":", [ asm-clobber-list ],
+                   [ ":", [ asm-label-list ] ] ] ] ;
+asm-operand-list = asm-operand, { ",", asm-operand } ;
+asm-operand = [ "[", identifier, "]" ], asm-constraint,
+              "(", expression, ")" ;
+asm-constraint = normal-string | raw-string ;
+asm-clobber-list = asm-clobber, { ",", asm-clobber } ;
+asm-clobber = normal-string | raw-string ;
+asm-label-list = identifier, { ",", identifier } ;
 return-statement = "return", [ expression ], ";" ;
 throw-statement = "throw", [ expression ], ";" ;
 yield-statement = "yield", expression, ";" ;
@@ -242,7 +272,10 @@ continue-statement = "continue", ";" ;
 final-expression = expression ;
 
 expression-list = expression, { ",", expression } ;
-expression = conditional-expression ;
+expression = assignment-expression ;
+
+assignment-expression = conditional-expression,
+                        [ assignment-operator, assignment-expression ] ;
 
 conditional-expression = coalescing-expression,
                          [ "?", [ expression ], ":", conditional-expression ] ;
@@ -252,10 +285,11 @@ logical-or-expression = logical-and-expression,
 logical-and-expression = equality-expression,
                          { ( "&&" | "and" ), equality-expression } ;
 equality-expression = relational-expression,
-                      { ( "==" | "!=" | "\\=" ), relational-expression } ;
+                      [ ( "==" | "!=" | "\\=" ), relational-expression ] ;
 relational-expression = stepped-range-expression,
-                        { ( "<" | "<=" | ">" | ">=" | "in" | "is" | "as" ),
-                          stepped-range-expression } ;
+                        [ relational-operator, stepped-range-expression ] ;
+relational-operator = "<" | "<=" | ">" | ">=" | "in"
+                    | "not", "in" | "is" | "as" | "as?" | "as!" ;
 stepped-range-expression = range-expression, [ "by", range-expression ] ;
 range-expression = bitwise-or-expression,
                    [ ( ".." | "..<" | "..." ), bitwise-or-expression ] ;
@@ -267,19 +301,17 @@ additive-expression = multiplicative-expression,
                       { ( "+" | "-" ), multiplicative-expression } ;
 multiplicative-expression = prefix-expression,
                             { ( "*" | "/" | "//" | "%" ), prefix-expression } ;
-prefix-expression = { "+" | "-" | "not" | "!" | "~" | "await" | "throw"
+prefix-expression = { "+" | "-" | "++" | "--" | "not" | "!" | "await" | "throw"
                     | "copy" | "move" }, power-expression ;
 power-expression = postfix-expression, [ "**", prefix-expression ] ;
 
 postfix-expression = primary-expression, { postfix-part } ;
 postfix-part = argument-list
              | type-arguments
+             | object-initializer
              | ".", identifier
-             | "?.", identifier
              | "::", identifier
              | "[", expression-list, "]"
-             | "?"
-             | "!"
              | "++"
              | "--"
              | "..." ;
@@ -299,7 +331,10 @@ primary-expression = literal
                    | requires-expression ;
 
 if-expression = "if", "(", condition, ")", block, "else", block ;
-array-literal = "[", [ expression-list ], "]" ;
+array-literal = "[", [ collection-elements ], "]" ;
+collection-elements = dictionary-entry, { ",", dictionary-entry }, [ "," ]
+                    | expression, { ",", expression }, [ "," ] ;
+dictionary-entry = expression, "to", expression ;
 object-initializer = "{", [ member-initializer, { ",", member-initializer }, [ "," ] ], "}" ;
 member-initializer = identifier, "=", expression ;
 
@@ -313,7 +348,7 @@ callable-parameter-list = callable-parameter, { ",", callable-parameter } ;
 callable-parameter = [ type ], identifier ;
 
 argument-list = "(", [ argument, { ",", argument } ], ")" ;
-argument = [ identifier, ":" ], expression ;
+argument = [ identifier, ":" ], ( dictionary-entry | expression ) ;
 
 assignable = postfix-expression ;
 assignment-operator = "=" | "+=" | "-=" | "*=" | "/=" | "%="
@@ -347,22 +382,21 @@ literal = number-literal | character-literal | normal-string | raw-string
         | "true" | "false" | "null" ;
 
 qualified-name = identifier, { ".", identifier } ;
-identifier = identifier-start, { identifier-continue } ;
-identifier-start = ASCII-letter | "_" ;
-identifier-continue = ASCII-letter | ASCII-digit | "_" ;
+identifier = identifier-letter, { identifier-continue }
+           | "_", identifier-continue, { identifier-continue } ;
+identifier-letter = Latin-letter ;
+identifier-continue = Latin-letter | Unicode-mark | Unicode-identifier-digit | "_" ;
 
-number-literal = integer-literal | floating-literal ;
-integer-literal = decimal-digit, { decimal-digit | "'" }
-                | "0x", hexadecimal-digit, { hexadecimal-digit | "'" }
-                | "0X", hexadecimal-digit, { hexadecimal-digit | "'" }
-                | "0b", binary-digit, { binary-digit | "'" }
-                | "0B", binary-digit, { binary-digit | "'" }
-                | "0o", octal-digit, { octal-digit | "'" }
-                | "0O", octal-digit, { octal-digit | "'" } ;
-floating-literal = decimal-digit, { decimal-digit | "'" }, ".", decimal-digit,
-                   { decimal-digit | "'" }, [ exponent ]
-                 | decimal-digit, { decimal-digit | "'" }, exponent ;
+number-literal = floating-literal | integer-literal ;
+integer-literal = decimal-digits
+                | ( "0x" | "0X" ), hexadecimal-digits
+                | ( "0b" | "0B" ), binary-digits ;
+floating-literal = decimal-digits, ".", decimal-digits, [ exponent ]
+                 | decimal-digits, exponent ;
 exponent = ( "e" | "E" ), [ "+" | "-" ], decimal-digit, { decimal-digit } ;
+decimal-digits = decimal-digit, { [ "'" ], decimal-digit } ;
+binary-digits = binary-digit, { [ "'" ], binary-digit } ;
+hexadecimal-digits = hexadecimal-digit, { [ "'" ], hexadecimal-digit } ;
 
 character-literal = "'", character-element, { character-element }, "'" ;
 normal-string = '"', { string-element }, '"' ;
@@ -394,17 +428,14 @@ whitespace = " " | tab | line-end ;
 line-text = { source-character-except-newline } ;
 line-end = CRLF | LF ;
 
-ASCII-letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J"
-             | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T"
-             | "U" | "V" | "W" | "X" | "Y" | "Z"
-             | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
-             | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
-             | "u" | "v" | "w" | "x" | "y" | "z" ;
 decimal-digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
 binary-digit = "0" | "1" ;
-octal-digit = binary-digit | "2" | "3" | "4" | "5" | "6" | "7" ;
 hexadecimal-digit = decimal-digit | "a" | "b" | "c" | "d" | "e" | "f"
                   | "A" | "B" | "C" | "D" | "E" | "F" ;
 
 (* source-character, the excluded-character sets, tab, CRLF, LF, and
-   start-of-file are scanner primitives over Unicode scalar source text. *)
+   start-of-file are scanner primitives over Unicode scalar source text.
+   Latin-letter accepts Unicode Latin-script letters; Unicode-mark accepts
+   combining marks attached to an identifier; Unicode-identifier-digit accepts
+   decimal and explicitly supported numeric identifier characters such as ₂.
+   Other scripts, emoji, punctuation, and a bare '_' are not identifiers. *)
