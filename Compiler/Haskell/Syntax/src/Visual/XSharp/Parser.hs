@@ -7,19 +7,9 @@ import Visual.XSharp.CharacterLiteral
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.FloatingLiteral
 import Visual.XSharp.NumericLiteral
+import Visual.XSharp.Parser.Cursor
+import Visual.XSharp.Parser.Token
 
-data TokenKind
-    = IdentifierToken
-    | KeywordToken
-    | SymbolToken
-    | IntegerToken
-    | FloatingToken
-    | CharacterToken
-    | StringToken
-    | EndOfFileToken
-    deriving (Bounded, Enum, Eq, Ord, Read, Show)
-data Token = Token {tokenKind :: TokenKind, tokenText :: String, tokenSpan :: SourceSpan}
-    deriving (Eq, Ord, Read, Show)
 data ParserInput = ParserInput {parserSourceFile :: FilePath, parserTokens :: [Token]}
     deriving (Eq, Ord, Read, Show)
 newtype Parser = Parser {parseTokens :: ParserInput -> Either [Diagnostic] ParsedAST}
@@ -28,18 +18,10 @@ runParser = parseTokens
 defaultParser :: Parser
 defaultParser = Parser parseVisualXSharp
 
-newtype P a = P {runP :: [Token] -> Either Diagnostic (a, [Token])}
-instance Functor P where fmap f parser = P $ \ts -> do (a, rest) <- runP parser ts; pure (f a, rest)
-instance Applicative P where
-    pure a = P $ \ts -> Right (a, ts)
-    pf <*> pa = P $ \ts -> do (f, rest) <- runP pf ts; (a, final) <- runP pa rest; pure (f a, final)
-instance Monad P where p >>= f = P $ \ts -> do (a, rest) <- runP p ts; runP (f a) rest
-
 parseVisualXSharp :: ParserInput -> Either [Diagnostic] ParsedAST
-parseVisualXSharp input = case runP parseModule (parserTokens input) of
+parseVisualXSharp input = case runP (parseModule <* endOfInput) (parserTokens input) of
     Left problem -> Left [problem]
     Right (tree, []) -> Right (ParsedAST tree)
-    Right (tree, token : _) | tokenKind token == EndOfFileToken -> Right (ParsedAST tree)
     Right (_, token : _) -> Left [problemAt token "VXP0001" ("unexpected token " ++ show (tokenText token))]
     where
         parseModule = do
@@ -59,7 +41,12 @@ parseNamespace = do
             if dot then do (part, _) <- identifier; (part :) <$> moreParts else pure []
 
 manyUntilEof :: P a -> P [a]
-manyUntilEof parser = do done <- peekKind EndOfFileToken; if done then pure [] else (:) <$> parser <*> manyUntilEof parser
+manyUntilEof parser = do
+    next <- peekToken
+    case next of
+        Nothing -> pure []
+        Just token | tokenKind token == EndOfFileToken -> pure []
+        _ -> (:) <$> parser <*> manyUntilEof parser
 
 parseDeclaration :: P (Declaration Identifier ())
 parseDeclaration = do
@@ -73,8 +60,13 @@ parseDeclaration = do
 
 parseMember :: P (Declaration Identifier ())
 parseMember = do
+    (member, spanValue) <- withSpan parseMemberBody
+    pure member {declarationSpan = spanValue}
+
+parseMemberBody :: P (Declaration Identifier ())
+parseMemberBody = do
     access <- parseAccess
-    isStatic <- optionalSymbol "static"
+    isStatic <- maybe False (const True) <$> optionalParser (keyword "static")
     returnType <- parseTypeSyntax
     (name, nameSpan) <- identifier
     _ <- symbol "("
@@ -107,7 +99,7 @@ manyUntil closing parser = do
 
 parseParameter :: P (Parameter Identifier ())
 parseParameter = do
-    _ <- optionalSymbol "_"
+    _ <- optionalParser (satisfy (\token -> tokenKind token == IdentifierToken && tokenText token == "_") "parameter label")
     parameterType <- parseTypeSyntax
     (name, spanValue) <- identifier
     pure (Parameter spanValue name () parameterType)
@@ -148,14 +140,27 @@ statementSpan statement = case statement of
 
 parseStatement :: Bool -> P (Statement Identifier ())
 parseStatement allowFinalExpression =
-    parseReturn <|?> parseIf <|?> parseBinding <|?> parseAssignmentOrExpression allowFinalExpression
+    do
+        tokens <- peekTokens 2
+        -- Dispatch before parsing: a failed binding must not be retried as an
+        -- expression. Two tokens suffice for the current scalar type syntax.
+        case tokens of
+            first : _ | tokenKind first == KeywordToken && tokenText first == "return" -> parseReturn
+            first : _ | tokenKind first == KeywordToken && tokenText first == "if" -> parseIf
+            first : _ | tokenKind first == KeywordToken && tokenText first == "final" -> parseBinding
+            first : second : _
+                | tokenKind first `elem` [IdentifierToken, KeywordToken]
+                , tokenKind second == IdentifierToken
+                , tokenText first /= "not" ->
+                    parseBinding
+            _ -> parseAssignmentOrExpression allowFinalExpression
 
 parseReturn :: P (Statement Identifier ())
 parseReturn = do
     start <- keyword "return"
     empty <- peekText ";"
     if empty
-        then do _ <- symbol ";"; pure (ReturnStatement (tokenSpan start) Nothing)
+        then do end <- symbol ";"; pure (ReturnStatement (mergeSpan (tokenSpan start) (tokenSpan end)) Nothing)
         else do
             value <- parseExpression
             end <- symbol ";"
@@ -163,29 +168,29 @@ parseReturn = do
 
 parseIf :: P (Statement Identifier ())
 parseIf = do
-    start <- keyword "if"
-    _ <- symbol "("
-    condition <- parseExpression
-    _ <- symbol ")"
-    trueBlock <- parseBlock False
-    falseBlock <- optionalParser (keyword "else" >> parseBlock False)
-    pure
-        ( IfStatement
-            (mergeSpan (tokenSpan start) (blockSpan (maybe trueBlock id falseBlock) (tokenSpan start)))
-            condition
-            trueBlock
-            falseBlock
-        )
+    ((condition, trueBlock, falseBlock), spanValue) <- withSpan $ do
+        _ <- keyword "if"
+        _ <- symbol "("
+        condition <- parseExpression
+        _ <- symbol ")"
+        trueBlock <- parseBlock False
+        falseBlock <- optionalParser $ do
+            _ <- keyword "else"
+            chained <- peekText "if"
+            if chained then Block . (: []) <$> parseIf else parseBlock False
+        pure (condition, trueBlock, falseBlock)
+    pure (IfStatement spanValue condition trueBlock falseBlock)
 
 parseBinding :: P (Statement Identifier ())
 parseBinding = do
+    start <- peekToken
     finalToken <- optionalParser (keyword "final")
     bindingType <- parseTypeSyntax
     (name, nameSpan) <- identifier
     _ <- symbol "="
     value <- parseExpression
     end <- symbol ";"
-    let startSpan = maybe nameSpan tokenSpan finalToken
+    let startSpan = maybe nameSpan tokenSpan start
         kind = maybe MutableBinding (const ImmutableBinding) finalToken
     pure (BindingStatement (mergeSpan startSpan (tokenSpan end)) kind bindingType name () value)
 
@@ -225,8 +230,9 @@ parseLogicalOr
         P (Expression Identifier ())
 parseLogicalOr = chainLeft parseLogicalAnd [("||", LogicalOr)]
 parseLogicalAnd = chainLeft parseEquality [("&&", LogicalAnd)]
-parseEquality = chainLeft parseComparison [("==", Equal), ("\\=", NotEqual)]
-parseComparison = chainLeft parseAdditive [("<", LessThan), ("<=", LessEqual), (">", GreaterThan), (">=", GreaterEqual)]
+parseEquality = nonAssociative "equality" parseComparison [("==", Equal), ("\\=", NotEqual)]
+parseComparison =
+    nonAssociative "relational" parseAdditive [("<", LessThan), ("<=", LessEqual), (">", GreaterThan), (">=", GreaterEqual)]
 parseAdditive = chainLeft parseMultiplicative [("+", Add), ("-", Subtract)]
 parseMultiplicative = chainLeft parseUnary [("*", Multiply), ("/", Divide), ("//", FloorDivide), ("%", Remainder)]
 
@@ -235,7 +241,7 @@ chainLeft operand operators = operand >>= continue
     where
         continue left = do
             next <- peekToken
-            case next >>= (\token -> lookup (tokenText token) operators) of
+            case next >>= operatorToken operators of
                 Nothing -> pure left
                 Just operator -> do
                     _ <- takeToken
@@ -246,12 +252,33 @@ parseUnary :: P (Expression Identifier ())
 parseUnary = do
     next <- peekToken
     case next
-        >>= (\token -> lookup (tokenText token) [("+", UnaryPlus), ("-", UnaryNegate), ("not", LogicalNot)]) of
+        >>= operatorToken [("+", UnaryPlus), ("-", UnaryNegate), ("not", LogicalNot)] of
         Just operator -> do
             start <- takeToken
             value <- parseUnary
             pure (UnaryExpression (mergeSpan (tokenSpan start) (expressionSpan value)) operator value ())
         Nothing -> parsePostfix
+
+-- Equality and relational groups are non-associative. A parenthesized operand
+-- starts a fresh level; a second operator at this level is a syntax error.
+nonAssociative :: String -> P (Expression Identifier ()) -> [(String, BinaryOperator)] -> P (Expression Identifier ())
+nonAssociative group operand operators = do
+    left <- operand
+    next <- peekToken
+    case next >>= operatorToken operators of
+        Nothing -> pure left
+        Just operator -> do
+            _ <- takeToken
+            right <- operand
+            following <- peekToken
+            case following >>= operatorToken operators of
+                Just _ -> failCurrent "VXP0014" (group ++ " operators cannot be chained; use parentheses or an explicit logical conjunction")
+                Nothing -> pure (BinaryExpression (mergeSpan (expressionSpan left) (expressionSpan right)) operator left right ())
+
+operatorToken :: [(String, a)] -> Token -> Maybe a
+operatorToken operators token
+    | tokenKind token `elem` [SymbolToken, KeywordToken] = lookup (tokenText token) operators
+    | otherwise = Nothing
 
 parsePostfix :: P (Expression Identifier ())
 parsePostfix = parsePrimary >>= calls
@@ -269,7 +296,7 @@ parsePrimary :: P (Expression Identifier ())
 parsePrimary = do
     next <- peekToken
     case next of
-        Just token | tokenText token `elem` ["\\", "["] -> parseCallable
+        Just token | tokenKind token == SymbolToken && tokenText token `elem` ["\\", "["] -> parseCallable
         Just token | tokenKind token == IntegerToken -> do
             _ <- takeToken
             case parseIntegerSpelling (tokenText token) of
@@ -286,7 +313,7 @@ parsePrimary = do
                 Right value -> pure (LiteralExpression (tokenSpan token) (CharacterLiteral value) ())
                 Left issue -> failAt (tokenSpan token) "VXP0011" (renderCharacterLiteralError issue)
         Just token | tokenKind token == StringToken -> do _ <- takeToken; pure (LiteralExpression (tokenSpan token) (StringLiteral (tokenText token)) ())
-        Just token | tokenText token `elem` ["true", "false"] -> do _ <- takeToken; pure (LiteralExpression (tokenSpan token) (BooleanLiteral (tokenText token == "true")) ())
+        Just token | tokenKind token == KeywordToken && tokenText token `elem` ["true", "false"] -> do _ <- takeToken; pure (LiteralExpression (tokenSpan token) (BooleanLiteral (tokenText token == "true")) ())
         Just token | tokenKind token == IdentifierToken -> do _ <- takeToken; pure (NameExpression (tokenSpan token) (Identifier (tokenText token)) ())
         Just token | tokenText token == "(" -> do
             _ <- takeToken
@@ -301,21 +328,14 @@ parsePrimary = do
 -- preventing binary operators from becoming part of capture initializers.
 parseCallable :: P (Expression Identifier ())
 parseCallable = do
-    (explicitCaptures, captures) <- optionalCaptureList
-    slash <- symbol "\\"
-    parameters <- parseCallableParameters
-    _ <- symbol "->"
-    body <- parseCallableBody
-    let endSpan = callableBodySpan body
-    pure
-        ( CallableExpression
-            (mergeSpan (maybe (tokenSpan slash) captureSpanStart (safeHead captures)) endSpan)
-            explicitCaptures
-            captures
-            parameters
-            body
-            ()
-        )
+    ((explicitCaptures, captures, parameters, body), spanValue) <- withSpan $ do
+        (explicitCaptures, captures) <- optionalCaptureList
+        _ <- symbol "\\"
+        parameters <- parseCallableParameters
+        _ <- symbol "->"
+        body <- parseCallableBody
+        pure (explicitCaptures, captures, parameters, body)
+    pure (CallableExpression spanValue explicitCaptures captures parameters body ())
 
 optionalCaptureList :: P (Bool, [Capture Identifier ()])
 optionalCaptureList = do
@@ -356,12 +376,14 @@ parseCallableParameters = do
             if arrow then pure [] else separatedUntil "->" "," parseInferredCallableParameter
 
 parseCallableParameter :: P (Parameter Identifier ())
-parseCallableParameter = P $ \tokens -> case tokens of
-    first : second : _
-        | tokenKind first `elem` [IdentifierToken, KeywordToken]
-        , tokenKind second == IdentifierToken ->
-            runP parseParameter tokens
-    _ -> runP parseInferredCallableParameter tokens
+parseCallableParameter = do
+    tokens <- peekTokens 2
+    case tokens of
+        first : second : _
+            | tokenKind first `elem` [IdentifierToken, KeywordToken]
+            , tokenKind second == IdentifierToken ->
+                parseParameter
+        _ -> parseInferredCallableParameter
 
 parseInferredCallableParameter :: P (Parameter Identifier ())
 parseInferredCallableParameter = do
@@ -374,18 +396,6 @@ parseCallableBody = do
     if block
         then CallableBlockBody <$> parseBlock True
         else CallableExpressionBody <$> parseExpression
-
-callableBodySpan :: CallableBody name annotation -> SourceSpan
-callableBodySpan body = case body of
-    CallableExpressionBody expression -> expressionSpan expression
-    CallableBlockBody block -> blockSpan block (SourceSpan "" (SourcePosition 1 1) (SourcePosition 1 1))
-
-captureSpanStart :: Capture name annotation -> SourceSpan
-captureSpanStart = captureSpan
-
-safeHead :: [a] -> Maybe a
-safeHead [] = Nothing
-safeHead (value : _) = Just value
 
 separatedUntil :: String -> String -> P a -> P [a]
 separatedUntil closing separator parser = do
@@ -406,10 +416,6 @@ expressionSpan expression = case expression of
     BinaryExpression value _ _ _ _ -> value
     CallableExpression value _ _ _ _ _ -> value
 
-(<|?>) :: P a -> P a -> P a
-left <|?> right = P $ \tokens -> case runP left tokens of Left _ -> runP right tokens; success -> success
-optionalParser :: P a -> P (Maybe a)
-optionalParser parser = (Just <$> parser) <|?> pure Nothing
 separated :: String -> P a -> P [a]
 separated separator parser = do
     done <- peekText ")"
@@ -422,32 +428,5 @@ separated separator parser = do
 identifier :: P (Identifier, SourceSpan)
 identifier = do
     token <- satisfy ((== IdentifierToken) . tokenKind) "identifier"; pure (Identifier (tokenText token), tokenSpan token)
-keyword :: String -> P Token
-keyword text = satisfy ((== text) . tokenText) (show text)
-symbol :: String -> P Token
-symbol text = satisfy ((== text) . tokenText) (show text)
-optionalSymbol :: String -> P Bool
-optionalSymbol text = do matches <- peekText text; if matches then takeToken >> pure True else pure False
-satisfy :: (Token -> Bool) -> String -> P Token
-satisfy predicate expectation = P $ \tokens -> case tokens of
-    token : rest | predicate token -> Right (token, rest)
-    token : _ -> Left (problemAt token "VXP0006" ("expected " ++ expectation ++ ", found " ++ show (tokenText token)))
-    [] -> Left (Diagnostic ParserStage Error "VXP0007" Nothing ("expected " ++ expectation ++ " at end of input"))
-takeToken :: P Token
-takeToken = P $ \tokens -> case tokens of
-    token : rest -> Right (token, rest)
-    [] -> Left (Diagnostic ParserStage Error "VXP0008" Nothing "unexpected end of input")
-peekToken :: P (Maybe Token)
-peekToken = P $ \tokens -> Right (case tokens of [] -> Nothing; token : _ -> Just token, tokens)
-peekText :: String -> P Bool
-peekText text = maybe False ((== text) . tokenText) <$> peekToken
-peekKind :: TokenKind -> P Bool
-peekKind kind = maybe False ((== kind) . tokenKind) <$> peekToken
-failCurrent :: String -> String -> P a
-failCurrent code message = P $ \tokens -> Left $ case tokens of token : _ -> problemAt token code message; [] -> Diagnostic ParserStage Error code Nothing message
-failAt :: SourceSpan -> String -> String -> P a
-failAt value code message = P $ \_ -> Left (Diagnostic ParserStage Error code (Just value) message)
-problemAt :: Token -> String -> String -> Diagnostic
-problemAt token code message = Diagnostic ParserStage Error code (Just (tokenSpan token)) message
 mergeSpan :: SourceSpan -> SourceSpan -> SourceSpan
 mergeSpan left right = SourceSpan (sourceFile left) (sourceStart left) (sourceEnd right)

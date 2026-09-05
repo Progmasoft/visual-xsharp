@@ -207,6 +207,7 @@ primitiveProblems primitive arguments resultType =
         operandsBoolean = all (\valueType -> valueType == boolType || isCoreNumericType valueType) argumentTypes
         operandProblems
             | logical && not operandsBoolean = [problem "VXC1027" "Core logical primitive requires bool or numeric operands"]
+            | primitive `elem` [CoreEqual, CoreNotEqual] && firstType == boolType && operandsAgree = []
             | not logical && not operandsNumeric = [problem "VXC1027" "Core numeric primitive requires numeric operands"]
             | not logical && not operandsAgree = [problem "VXC1027" "Core numeric primitive operands must have the same type"]
             | otherwise = []

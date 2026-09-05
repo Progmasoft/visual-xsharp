@@ -1,0 +1,360 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+module ParserContractTests (parserContractTests) where
+
+import Data.List (isInfixOf)
+import Visual.XSharp.AST
+import Visual.XSharp.Compiler
+import Visual.XSharp.Core
+import Visual.XSharp.Diagnostic
+import Visual.XSharp.Lexer
+import Visual.XSharp.Parser
+
+-- These tests exercise the public source/token boundary rather than testing
+-- individual combinators against copies of their own implementation. Diagnostic
+-- assertions include the offending source location, not just a Left result.
+parserContractTests :: [(String, Bool)]
+parserContractTests =
+    diagnosticTests
+        ++ comparisonTests
+        ++ literalTests
+        ++ spanTests
+        ++ tokenStreamTests
+        ++ pipelineTests
+        ++ booleanOperandTests
+
+parseSource :: String -> Either [Diagnostic] ParsedAST
+parseSource source = do
+    tokens <- runLexer defaultLexer (LexerInput "parser-contract.vxs" source)
+    runParser defaultParser (ParserInput "parser-contract.vxs" tokens)
+
+sourceWith :: String -> String
+sourceWith body = "class Program { int Value() { " ++ body ++ " } }"
+
+accepted :: String -> Bool
+accepted source = case parseSource source of
+    Right _ -> True
+    Left _ -> False
+
+rejectedAt :: String -> String -> String -> Int -> Int -> Bool
+rejectedAt source code message line column = case parseSource source of
+    Left [problem] ->
+        diagnosticStage problem == ParserStage
+            && diagnosticSeverity problem == Error
+            && diagnosticCode problem == code
+            && message `isInfixOf` diagnosticMessage problem
+            && fmap sourceStart (diagnosticSpan problem) == Just (SourcePosition line column)
+            && fmap sourceFile (diagnosticSpan problem) == Just "parser-contract.vxs"
+    _ -> False
+
+-- Keep each failure on a separate line so expected columns are independent of
+-- the enclosing class spelling. Consumed optional constructs must retain their
+-- own errors: namespace, else, and capture modes are especially important.
+diagnosticTests :: [(String, Bool)]
+diagnosticTests =
+    [ bad "namespace missing name" "namespace ;" "VXP0006" "identifier" 1 11
+    , bad "namespace missing terminator" "namespace Demo class C {}" "VXP0006" ";" 1 16
+    , bad "namespace missing component" "namespace Demo.;" "VXP0006" "identifier" 1 16
+    , bad "namespace keyword is not an identifier" "namespace class;" "VXP0006" "identifier" 1 11
+    , bodyBad "return missing value" "return +;" "VXP0004" "expression" 9
+    , bodyBad "return missing semicolon" "return 1 }" "VXP0006" ";" 10
+    , bodyBad "binding missing initializer" "int value = ;" "VXP0004" "expression" 13
+    , bodyBad "binding missing equals" "int value 1;" "VXP0006" "=" 11
+    , bodyBad "binding missing semicolon" "int value = 1 }" "VXP0006" ";" 15
+    , bodyBad "final binding missing name" "final int = 1;" "VXP0006" "identifier" 11
+    , bodyBad "if missing parentheses" "if true {}" "VXP0006" "(" 4
+    , bodyBad "if missing condition" "if () {}" "VXP0004" "expression" 5
+    , bodyBad "if missing close paren" "if (true {}" "VXP0006" ")" 10
+    , bodyBad "if missing block" "if (true) return 1;" "VXP0006" "{" 11
+    , bodyBad "else missing block" "if (true) {} else return 1;" "VXP0006" "{" 19
+    , bodyBad "else if missing parentheses" "if (true) {} else if true {}" "VXP0006" "(" 22
+    , bodyBad "else if missing expression" "if (true) {} else if () {}" "VXP0004" "expression" 23
+    , bodyBad "call missing argument" "Call(,);" "VXP0004" "expression" 6
+    , bodyBad "call missing close paren" "Call(1;" "VXP0006" ")" 7
+    , bodyBad "assignment missing value" "value = ;" "VXP0004" "expression" 9
+    , bodyBad "assignment missing semicolon" "value = 1 }" "VXP0006" ";" 11
+    , bodyBad "non-name assignment" "Call() = 1;" "VXP0003" "target" 1
+    , bodyBad "parenthesized incomplete expression" "return (1 +);" "VXP0004" "expression" 12
+    , bodyBad "lambda missing arrow" "auto f = \\(int x) x;" "VXP0006" "->" 19
+    , bodyBad "lambda missing typed parameter" "auto f = \\(int) -> 1;" "VXP0006" "identifier" 12
+    , bodyBad "capture missing name" "auto f = [weak ]\\ -> 1;" "VXP0006" "identifier" 16
+    , bodyBad "capture missing initializer" "auto f = [x = ]\\ -> 1;" "VXP0004" "expression" 15
+    , bodyBad "capture missing closing bracket" "auto f = [x;" "VXP0009" "]" 12
+    , bodyBad "unit diagnostic survives dispatch" "unit value = 1;" "VXP0013" "unit" 1
+    ]
+    where
+        bad label source code message line column = (label, rejectedAt source code message line column)
+        bodyBad label body code message column =
+            bad label ("class Program { int Value() {\n" ++ body ++ "\n} }") code message 2 column
+
+comparisonTests :: [(String, Bool)]
+comparisonTests =
+    [ parses "single less comparison" "return a < b;"
+    , parses "single less-equal comparison" "return a <= b;"
+    , parses "single greater comparison" "return a > b;"
+    , parses "single greater-equal comparison" "return a >= b;"
+    , parses "single equality" "return a == b;"
+    , parses "single inequality" "return a \\= b;"
+    , parses "logical conjunction of comparisons" "return a < b && b < c;"
+    , parses "logical disjunction of equalities" "return a == b || b == c;"
+    , parses "left parenthesized comparison" "return (a < b) < c;"
+    , parses "right parenthesized comparison" "return a < (b < c);"
+    , parses "left parenthesized equality" "return (a == b) == c;"
+    , parses "right parenthesized equality" "return a == (b == c);"
+    , parses "separate precedence groups" "return a < b == c < d;"
+    , parses "arithmetic inside comparison" "return a + b < c * d;"
+    , parses "negated comparison" "return not (a < b);"
+    , chain "less chain" "a < b < c" 7
+    , chain "greater chain" "a > b > c" 7
+    , chain "mixed relational chain" "a <= b > c" 8
+    , chain "reverse mixed relational chain" "a >= b < c" 8
+    , chain "equality chain" "a == b == c" 8
+    , chain "inequality chain" "a \\= b \\= c" 8
+    , chain "mixed equality chain" "a == b \\= c" 8
+    , chain "chain inside parentheses" "(a < b < c)" 8
+    ]
+    where
+        parses label body = (label, accepted (sourceWith body))
+        chain label expression column =
+            ( label
+            , rejectedAt
+                ("class Program { int Value() {\n" ++ expression ++ "\n} }")
+                "VXP0014"
+                "cannot be chained"
+                2
+                column
+            )
+
+-- A string payload that happens to spell punctuation must remain a literal.
+-- In particular a closing-brace payload must not terminate a block early.
+literalTests :: [(String, Bool)]
+literalTests =
+    [ ("literal payload remains data: " ++ show payload, literalResult payload)
+    | payload <-
+        [ "if"
+        , "else"
+        , "return"
+        , "final"
+        , "class"
+        , "namespace"
+        , "static"
+        , "not"
+        , "+"
+        , "-"
+        , "*"
+        , "=="
+        , "{"
+        , "}"
+        , "("
+        , ")"
+        , "["
+        , "]"
+        , ";"
+        , ","
+        , "->"
+        , "true"
+        , "false"
+        ]
+    ]
+        ++ [ ("keyword text cannot act as class keyword", not (accepted "\"class\" Program {}"))
+           , ("String brace cannot open a class", not (accepted "class Program \"{\" }"))
+           , ("String semicolon cannot terminate namespace", not (accepted "namespace Demo \";\" class Program {}"))
+           , ("String else cannot introduce branch", not (accepted (sourceWith "if (true) {} \"else\" {}")))
+           , ("String operator cannot connect operands", not (accepted (sourceWith "return 1 \"+\" 2;")))
+           ]
+
+literalResult :: String -> Bool
+literalResult payload = case statements (sourceWith ("return " ++ show payload ++ ";")) of
+    Just [ReturnStatement _ (Just (LiteralExpression _ (StringLiteral value) ()))] -> value == payload
+    _ -> False
+
+statements :: String -> Maybe [Statement Identifier ()]
+statements source = case parseSource source of
+    Right (ParsedAST (SyntaxTree _ [TypeDeclaration _ _ _ [FunctionDeclaration _ _ _ _ _ (Block body) _ _]])) -> Just body
+    _ -> Nothing
+
+spanTests :: [(String, Bool)]
+spanTests =
+    [ ("empty closure retains source file and closing brace", closureSpan "\\ -> {}")
+    , ("explicit empty capture span includes brackets", closureSpan "[]\\ -> {}")
+    , ("strong capture span includes opening bracket", closureSpan "[value]\\ -> {}")
+    , ("weak capture span includes mode and delimiters", closureSpan "[weak value]\\ -> {}")
+    , ("unowned capture span includes mode and delimiters", closureSpan "[unowned value]\\ -> {}")
+    , ("expression closure span includes expression", closureSpan "\\x -> x + 1")
+    , ("typed closure span includes parameter syntax", closureSpan "\\(int x) -> x")
+    , ("empty if span includes closing block delimiter", ifSpan "if (true) {}")
+    , ("empty else span includes final delimiter", ifSpan "if (true) {} else {}")
+    , ("else-if span includes complete chain", ifSpan "if (true) {} else if (false) {} else {}")
+    , ("return span includes semicolon", returnSpan)
+    , ("binding span starts at type", bindingSpan)
+    , ("member span includes access and closing brace", memberSpan)
+    ]
+
+closureSpan :: String -> Bool
+closureSpan spelling = case statements ("class Program { int Value() {\nauto f = " ++ spelling ++ ";\nreturn 1; } }") of
+    Just (BindingStatement _ _ _ _ _ (CallableExpression value _ _ _ _ _) : _) ->
+        exactSpan value 2 10 (10 + length spelling)
+    _ -> False
+
+ifSpan :: String -> Bool
+ifSpan spelling = case statements ("class Program { int Value() {\n" ++ spelling ++ "\nreturn 1; } }") of
+    Just (IfStatement value _ _ _ : _) -> exactSpan value 2 1 (1 + length spelling)
+    _ -> False
+
+returnSpan :: Bool
+returnSpan = case statements "class Program { void Value() {\nreturn;\n} }" of
+    Just [ReturnStatement value Nothing] -> exactSpan value 2 1 8
+    _ -> False
+
+bindingSpan :: Bool
+bindingSpan = case statements "class Program { int Value() {\nint value = 1;\nreturn value; } }" of
+    Just (BindingStatement value _ _ _ _ _ : _) -> exactSpan value 2 1 15
+    _ -> False
+
+memberSpan :: Bool
+memberSpan = case parseSource "class Program {\npublic static void Main() {}\n}" of
+    Right (ParsedAST (SyntaxTree _ [TypeDeclaration _ _ _ [member]])) -> exactSpan (declarationSpan member) 2 1 29
+    _ -> False
+
+exactSpan :: SourceSpan -> Int -> Int -> Int -> Bool
+exactSpan value line start end =
+    sourceFile value == "parser-contract.vxs"
+        && sourceStart value == SourcePosition line start
+        && sourceEnd value == SourcePosition line end
+
+tokenStreamTests :: [(String, Bool)]
+tokenStreamTests =
+    [ ("empty token stream is an empty module", parsesTokens [])
+    , ("single EOF is an empty module", parsesTokens [eofToken])
+    ,
+        ( "valid supplied stream need not have EOF"
+        , case tokensOf "class Program {}" of
+            Just tokens -> parsesTokens (filter ((/= EndOfFileToken) . tokenKind) tokens)
+            Nothing -> False
+        )
+    , ("EOF cannot hide a declaration suffix", rejectsTokens [eofToken, wordToken] "VXP0015")
+    , ("duplicate EOF cannot hide trailing input", rejectsTokens [eofToken, eofToken] "VXP0015")
+    ,
+        ( "missing namespace terminator without EOF retains error"
+        , case tokensOf "namespace Demo" of
+            Just tokens -> rejectsTokens (filter ((/= EndOfFileToken) . tokenKind) tokens) "VXP0007"
+            Nothing -> False
+        )
+    ,
+        ( "truncated class without EOF terminates"
+        , case tokensOf "class Program {" of
+            Just tokens -> not (parsesTokens (filter ((/= EndOfFileToken) . tokenKind) tokens))
+            Nothing -> False
+        )
+    , ("String token cannot masquerade as keyword", rejectsTokens [wordToken {tokenKind = StringToken}, eofToken] "VXP0006")
+    ]
+    where
+        spanValue = SourceSpan "tokens.vxs" (SourcePosition 1 1) (SourcePosition 1 2)
+        eofToken = Token EndOfFileToken "" spanValue
+        wordToken = Token KeywordToken "class" spanValue
+
+tokensOf :: String -> Maybe [Token]
+tokensOf source = case runLexer defaultLexer (LexerInput "tokens.vxs" source) of
+    Left _ -> Nothing
+    Right tokens -> Just tokens
+
+parsesTokens :: [Token] -> Bool
+parsesTokens tokens = case runParser defaultParser (ParserInput "tokens.vxs" tokens) of
+    Right _ -> True
+    Left _ -> False
+
+rejectsTokens :: [Token] -> String -> Bool
+rejectsTokens tokens code = case runParser defaultParser (ParserInput "tokens.vxs" tokens) of
+    Left [problem] -> diagnosticCode problem == code
+    _ -> False
+
+-- Complete compilation proves that the nested representation of else-if is
+-- understood by name resolution, typing, Core optimization, and CorePrep.
+pipelineTests :: [(String, Bool)]
+pipelineTests =
+    [
+        ( "first branch of else-if folds"
+        , returnsInteger "if (true) { return 1; } else if (true) { return 2; } else { return 3; }" 1
+        )
+    ,
+        ( "middle branch of else-if folds"
+        , returnsInteger "if (false) { return 1; } else if (true) { return 2; } else { return 3; }" 2
+        )
+    ,
+        ( "last branch of else-if folds"
+        , returnsInteger "if (false) { return 1; } else if (false) { return 2; } else { return 3; }" 3
+        )
+    ,
+        ( "unbraced else-if still requires condition parentheses"
+        , not (accepted (sourceWith "if (false) {} else if true {} return 0;"))
+        )
+    , ("parenthesized comparison results type-check", compiles "return (1 < 2) == (2 < 3);")
+    , ("explicit conjunction reaches CorePrep", compiles "return 1 < 2 && 2 < 3;")
+    , ("mutable local dispatch reaches CorePrep", returnsInteger "int value = 1; value = 2; return 3;" 3)
+    , ("immutable local dispatch reaches CorePrep", returnsInteger "final int value = 7; return value;" 7)
+    , ("logical not of name is not a declaration", compiles "bool flag = true; return not flag;")
+    , ("floating comparison reaches CorePrep", compiles "return 2.5 < 3.5;")
+    , ("floating equality reaches CorePrep", compiles "return 2.5 == 3.5;")
+    ,
+        ( "live Boolean equality reaches CorePrep"
+        , case compileToCorePrep
+            (CompilerInput "live.vxs" "class Program { bool Same(bool left, bool right) { return left == right; } }") of
+            Right _ -> True
+            Left _ -> False
+        )
+    ]
+
+returnsInteger :: String -> Integer -> Bool
+returnsInteger body expected = case compileToCorePrep (CompilerInput "parser-contract.vxs" (sourceWith body)) of
+    Right artifacts -> case coreModuleFunctions (artifactOptimizedCore artifacts) of
+        [function] -> case reverse (coreFunctionBody function) of
+            CoreReturn (CoreLiteral (CoreInteger value) _) : _ -> value == expected
+            _ -> False
+        _ -> False
+    Left _ -> False
+
+compiles :: String -> Bool
+compiles body = case compileToCorePrep (CompilerInput "parser-contract.vxs" ("class Program { bool Value() { " ++ body ++ " } }")) of
+    Right _ -> True
+    Left _ -> False
+
+-- Check the computed result, not only successful compilation. Coercing every
+-- integer operand to bool can otherwise make equality silently return true.
+booleanOperandTests :: [(String, Bool)]
+booleanOperandTests =
+    [ ("Boolean result preserves operands: " ++ expression, returnsBoolean expression expected)
+    | (expression, expected) <-
+        [ ("1 == 2", False)
+        , ("2 == 2", True)
+        , ("1 \\= 2", True)
+        , ("2 \\= 2", False)
+        , ("1 < 2", True)
+        , ("2 < 1", False)
+        , ("2 <= 2", True)
+        , ("2 > 1", True)
+        , ("1 >= 2", False)
+        , ("(1 < 2) == (3 < 4)", True)
+        , ("1 < 2 && 3 > 4", False)
+        , ("1 > 2 || 3 < 4", True)
+        , ("not (1 == 2)", True)
+        , ("not (1 < 2)", False)
+        , ("not 0", True)
+        , ("not 7", False)
+        , ("1 + 2 == 3", True)
+        , ("1 + 2 == 4", False)
+        , ("true == false", False)
+        , ("true \\= false", True)
+        ]
+    ]
+
+returnsBoolean :: String -> Bool -> Bool
+returnsBoolean expression expected =
+    case compileToCorePrep
+        (CompilerInput "parser-contract.vxs" ("class Program { bool Value() { return " ++ expression ++ "; } }")) of
+        Right artifacts -> case coreModuleFunctions (artifactOptimizedCore artifacts) of
+            [function] -> case coreFunctionBody function of
+                [CoreReturn (CoreLiteral (CoreBoolean value) _)] -> value == expected
+                _ -> False
+            _ -> False
+        Left _ -> False

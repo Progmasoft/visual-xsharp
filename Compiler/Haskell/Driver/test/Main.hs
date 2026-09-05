@@ -10,6 +10,7 @@ import CoreVerifierTests (coreVerifierTests)
 import Data.List (isInfixOf)
 import Data.Word (Word8)
 import NumericTests (numericTests)
+import ParserContractTests (parserContractTests)
 import ScalarWireTests (scalarWireTests)
 import SourceSetTests (sourceSetTests)
 import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
@@ -95,6 +96,7 @@ main = do
     mapM_ (uncurry check) coreOptimizerSourceTests
     mapM_ (uncurry check) coreVerifierTests
     mapM_ (uncurry check) numericTests
+    mapM_ (uncurry check) parserContractTests
     mapM_ (uncurry check) scalarWireTests
     mapM_ (uncurry check) voidTests
 

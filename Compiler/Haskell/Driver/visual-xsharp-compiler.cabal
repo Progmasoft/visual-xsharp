@@ -70,6 +70,7 @@ test-suite visual-xsharp-compiler-tests
         CoreOptimizerSourceTests
         CoreVerifierTests
         NumericTests
+        ParserContractTests
         ScalarWireTests
         SourceSetTests
         VoidTests

@@ -119,12 +119,20 @@ evaluatePrimitive primitive arguments valueType =
 
 evaluateBoolean :: CorePrimitive -> [CoreExpression] -> Maybe CoreExpression
 evaluateBoolean primitive arguments = case (primitive, mapM truthValue arguments) of
+    -- Equality compares Boolean values only here. Numeric equality has its own
+    -- exact-value rule above and must never fall back to truthiness comparison.
+    (CoreEqual, Just [left, right]) | all booleanLiteral arguments -> Just (boolean (left == right))
+    (CoreNotEqual, Just [left, right]) | all booleanLiteral arguments -> Just (boolean (left /= right))
     (CoreLogicalNot, Just [value]) -> Just (boolean (not value))
     (CoreLogicalAnd, Just [left, right]) -> Just (boolean (left && right))
     (CoreLogicalOr, Just [left, right]) -> Just (boolean (left || right))
     _ -> Nothing
     where
         boolean result = CoreLiteral (CoreBoolean result) boolType
+
+booleanLiteral :: CoreExpression -> Bool
+booleanLiteral (CoreLiteral (CoreBoolean _) _) = True
+booleanLiteral _ = False
 
 -- View patterns would obscure the data-flow rules in diagnostics, so literal
 -- extraction remains explicit and total.

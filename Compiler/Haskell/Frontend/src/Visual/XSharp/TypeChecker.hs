@@ -241,13 +241,20 @@ checkExpressionExpected environment expected expression = case expression of
             , calleeProblems ++ concatMap (\(_, _, ps) -> ps) checkedArguments ++ callProblems
             )
     UnaryExpression spanValue operator value _ ->
-        let (typedValue, valueType, problems) = checkExpressionExpected environment expected value
+        let operandExpected = if operator == LogicalNot then Nothing else expected
+            (typedValue, valueType, problems) = checkExpressionExpected environment operandExpected value
             rule = unaryNumericRule operator valueType
             mismatch = ruleProblems spanValue "VXT0011" rule
          in (UnaryExpression spanValue operator typedValue (numericRuleType rule), numericRuleType rule, problems ++ mismatch)
     BinaryExpression spanValue operator left right _ ->
-        let (typedLeft, leftType, leftProblems) = checkExpressionExpected environment expected left
-            (typedRight, rightType, rightProblems) = checkExpressionExpected environment (Just leftType) right
+        -- A Boolean result does not imply Boolean operands: pushing the return
+        -- context into 1 == 2 would convert both literals to true. Comparisons
+        -- infer their operand domain; logical operands may use distinct numeric
+        -- types and therefore do not borrow each other's expected type.
+        let operandExpected = if booleanResult operator then Nothing else expected
+            (typedLeft, leftType, leftProblems) = checkExpressionExpected environment operandExpected left
+            rightExpected = if operator `elem` [LogicalAnd, LogicalOr] then Nothing else Just leftType
+            (typedRight, rightType, rightProblems) = checkExpressionExpected environment rightExpected right
             rule = binaryNumericRule operator leftType rightType
             resultType = numericRuleType rule
             mismatch = ruleProblems spanValue "VXT0012" rule
@@ -282,6 +289,10 @@ checkExpressionExpected environment expected expression = case expression of
             )
 
 type CheckedCapture = (Capture ResolvedName Type, [Diagnostic])
+
+booleanResult :: BinaryOperator -> Bool
+booleanResult operator =
+    operator `elem` [LogicalAnd, LogicalOr, Equal, NotEqual, LessThan, LessEqual, GreaterThan, GreaterEqual]
 
 firstCapture :: CheckedCapture -> Capture ResolvedName Type
 firstCapture = fst

@@ -60,6 +60,20 @@ coreVerifierTests =
     , ("Core verifier rejects a capture initializer mismatch", rejectedWith "VXC1039" captureInitializerMismatch)
     , ("Core verifier accepts numeric conditions", accepted numericCondition)
     , ("Core verifier accepts boolean conditions", accepted booleanCondition)
+    , ("Core verifier accepts Boolean equality", accepted (primitiveModule CoreEqual [boolValue, boolValue] boolType))
+    , ("Core verifier accepts Boolean inequality", accepted (primitiveModule CoreNotEqual [boolValue, boolValue] boolType))
+    ,
+        ( "Core verifier rejects mixed Boolean equality"
+        , rejectedWith "VXC1027" (primitiveModule CoreEqual [boolValue, intValue] boolType)
+        )
+    ,
+        ( "Core verifier rejects Boolean ordering"
+        , rejectedWith "VXC1027" (primitiveModule CoreLessThan [boolValue, boolValue] boolType)
+        )
+    ,
+        ( "Core verifier rejects numeric Boolean equality result"
+        , rejectedWith "VXC1028" (primitiveModule CoreEqual [boolValue, boolValue] intType)
+        )
     , ("Core verifier accepts all-returning branches", accepted allReturningBranch)
     , ("Core verifier accepts a well-typed direct call", accepted validDirectCall)
     , ("Core verifier accepts a well-typed closure", accepted validClosure)
@@ -67,6 +81,10 @@ coreVerifierTests =
 
 resolved :: Int -> String -> ResolvedName
 resolved symbol spelling = ResolvedName (SymbolId symbol) (Identifier spelling)
+
+primitiveModule :: CorePrimitive -> [CoreExpression] -> Type -> CoreModule
+primitiveModule primitive arguments result =
+    coreModule [function mainName [] result [CoreReturn (CorePrimitive primitive arguments result)]]
 
 moduleName :: QualifiedName
 moduleName = QualifiedName [Identifier "Verifier", Identifier "Tests"]

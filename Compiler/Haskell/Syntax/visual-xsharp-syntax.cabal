@@ -18,6 +18,9 @@ library
         Visual.XSharp.Lexer
         Visual.XSharp.NumericLiteral
         Visual.XSharp.Parser
+    other-modules:
+        Visual.XSharp.Parser.Cursor
+        Visual.XSharp.Parser.Token
     hs-source-dirs: src
     build-depends:
         base >=4.20 && <4.23

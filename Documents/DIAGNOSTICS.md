@@ -65,6 +65,74 @@ check -Help` does not. Help is a successful outcome and does not start project e
 
 ## Source positions
 
+### Source parser commitments
+
+The Haskell parser records token consumption while it recognizes a construct.
+An alternative may run only if the previous branch consumed no tokens. After
+`namespace`, `if`, `return`, or `else` has been recognized, errors belong to that
+construct. Optional syntax therefore means absent syntax; it does not mean
+silently ignoring an incomplete construct.
+
+For example, `namespace Example class Program {}` reports the missing `;` at
+`class`. It does not restart at `namespace` and report a missing class declaration.
+Similarly, `if (true) {} else return;` reports the missing block at `return`.
+The same rule preserves errors inside optional capture modes and closure bodies.
+
+Identifier-led local declarations and expression statements share a prefix.
+The implemented scalar-type grammar uses bounded token lookahead to select the
+declaration path before parsing its initializer. A missing initializer or `;`
+therefore remains a declaration error. Extending the type grammar requires
+extending this discriminator alongside the new syntax.
+
+### Token kinds and literal payloads
+
+Grammar punctuation is recognized by both token kind and spelling. The lexer
+decodes normal String content before the parser consumes it, so token text alone
+cannot distinguish `"}"` from `}` or `"not"` from `not`.
+
+String payloads never close blocks, introduce statements, or become operators.
+The contextual capture modifiers `weak` and `unowned` are recognized only in
+their capture-list context; their identifier tokens remain usable elsewhere.
+
+### Comparison errors
+
+The equality and relational precedence groups are non-associative, following
+the examples in `Spec/Language/Operators.vxs`. `a < b < c` and `a == b == c`
+produce `VXP0014` at the second operator. Parentheses establish a separate
+expression level: `(a < b) == (b < c)` is syntactically valid and is subsequently
+checked for type compatibility.
+
+Use `a < b && b < c` for an ordered pair of comparisons. The parser does not
+guess whether a chain was intended to mean a conjunction or nested comparison.
+
+Type checking separates the expected result from the operands of comparisons
+and logical operators. A `bool` return type does not turn the integers in
+`1 == 2` into Boolean literals. Core verification accepts matching Boolean
+equality operands, and constant folding compares their actual values. Numeric
+equality never falls back to comparing truthiness.
+
+### Supplied token streams
+
+Embedding clients may supply a token list through `ParserInput`. An empty list
+is an empty module, and a complete token list may omit the final EOF marker.
+If a marker is present, it must be the final token. A suffix after EOF produces
+`VXP0015`; it cannot be silently discarded as unparsed input.
+
+When physical exhaustion occurs after a token, the parser retains a zero-width
+span at that token's end. This preserves the source filename even for truncated
+supplied streams. Lexer-produced EOF tokens retain their own source positions.
+
+### Construct ranges
+
+Function spans include access modifiers and the closing body delimiter. Branch
+spans include the final closing brace, including empty branches and complete
+`else if` chains. Callable spans include explicit capture brackets and their
+body delimiter, including empty closures. Return statement spans include `;`.
+
+These ranges support downstream diagnostics and editor selection without
+reconstructing a construct's extent from its last nonempty child. The public
+AST and token constructors remain unchanged by this cursor implementation.
+
 Source diagnostics should retain:
 
 - canonical project-relative file identity;
