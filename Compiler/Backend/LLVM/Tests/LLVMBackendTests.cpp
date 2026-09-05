@@ -131,10 +131,22 @@ namespace
         const auto xmm = visual_xsharp::xmm::optimize(visual_xsharp::xmm::lower(xpp));
         Llvm::Options options;
         options.optimization = Llvm::OptimizationLevel::Debug;
-        options.target_triple = "x86_64-pc-windows-msvc";
         options.machineCode = emission;
         options.executableEntry = executable;
         return Llvm::Lower(xmm, options);
+    }
+
+    [[nodiscard]] auto
+    HasValidBitcodeMagic(const std::vector<std::uint8_t> &bytes) -> bool
+    {
+        if (bytes.size() < 4U)
+            return false;
+        // LLVM writes either the raw `BC C0 DE` stream or the Darwin-compatible
+        // wrapper beginning `DE C0 17 0B`. Both containers carry the same bitcode
+        // module and are accepted by LLVM's readers.
+        const bool raw = bytes[0] == 0x42U && bytes[1] == 0x43U && bytes[2] == 0xC0U && bytes[3] == 0xDEU;
+        const bool wrapped = bytes[0] == 0xDEU && bytes[1] == 0xC0U && bytes[2] == 0x17U && bytes[3] == 0x0BU;
+        return raw || wrapped;
     }
 
     auto
@@ -225,8 +237,7 @@ TEST_CASE("verified Xmm lowers to valid in-memory LLVM IR and bitcode")
     REQUIRE(result.artifact->llvm_ir.find("Backend.Contract.Main.20") != std::string::npos);
     REQUIRE(result.artifact->llvm_ir.find("call i64") != std::string::npos);
     REQUIRE(result.artifact->bitcode.size() > 100);
-    REQUIRE(result.artifact->bitcode[0] == 'B');
-    REQUIRE(result.artifact->bitcode[1] == 'C');
+    REQUIRE(HasValidBitcodeMagic(result.artifact->bitcode));
 }
 
 TEST_CASE("LLVM lowering preserves signed floor division semantics in IR")
@@ -563,23 +574,35 @@ TEST_CASE("LLVM artifact records an explicit target triple without repository pa
     REQUIRE(result.artifact->llvm_ir.find("C:/LLVM") == std::string::npos);
 }
 
-TEST_CASE("LLVM target machine emits COFF object and assembly artifacts")
+TEST_CASE("LLVM native target machine emits host object and assembly artifacts")
 {
     const auto object = LowerMachineArtifact(ArithmeticModule(), Llvm::MachineCodeEmission::Object, true);
     REQUIRE(object);
+#ifdef _WIN32
     REQUIRE(object.artifact->objectFormat == Llvm::ObjectFormat::Coff);
-    REQUIRE(object.artifact->object.size() > 100U);
     // AMD64 COFF starts with IMAGE_FILE_MACHINE_AMD64 in little-endian order.
     // This catches accidental bitcode/text output hidden behind an `.o` name.
     REQUIRE(object.artifact->object.at(0) == 0x64U);
     REQUIRE(object.artifact->object.at(1) == 0x86U);
     REQUIRE(object.artifact->llvm_ir.find("mainCRTStartup") != std::string::npos);
+#else
+    REQUIRE(object.artifact->objectFormat == Llvm::ObjectFormat::MachO);
+    // Official macOS hosts emit little-endian 64-bit Mach-O objects on both
+    // Apple Silicon and Intel. Assert the complete magic, not the CPU subtype.
+    REQUIRE(object.artifact->object.at(0) == 0xCFU);
+    REQUIRE(object.artifact->object.at(1) == 0xFAU);
+    REQUIRE(object.artifact->object.at(2) == 0xEDU);
+    REQUIRE(object.artifact->object.at(3) == 0xFEU);
+    REQUIRE(object.artifact->llvm_ir.find("define i32 @main()") != std::string::npos);
+#endif
+    REQUIRE(object.artifact->object.size() > 100U);
 
     const auto assembly = LowerMachineArtifact(ArithmeticModule(), Llvm::MachineCodeEmission::Assembly);
     REQUIRE(assembly);
     REQUIRE_FALSE(assembly.artifact->assembly.empty());
     REQUIRE(assembly.artifact->assembly.find("Backend.Contract.Calculate.10") != std::string::npos);
     REQUIRE(assembly.artifact->llvm_ir.find("mainCRTStartup") == std::string::npos);
+    REQUIRE(assembly.artifact->llvm_ir.find("define i32 @main()") == std::string::npos);
 }
 
 TEST_CASE("native executable emission requires one valid Main function")
