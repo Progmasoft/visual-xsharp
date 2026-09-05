@@ -40,17 +40,17 @@ The remaining Rust tree is transitional reference material, not a production dep
 Core, CorePrep, Xpp, and Xmm are target-independent. Their public artifact extensions are `.core`, `.xpp`, and `.xmm`;
 normal compilation keeps intermediate data in memory unless explicit emission is requested.
 
-## Supported development environment
+## Supported development environments
 
-The supported native build is Windows with:
+The official native development hosts are Windows 10/11, macOS 15 Sequoia, and macOS 26 Tahoe. Both host families use:
 
 - Bazelisk for the production C++20 graph;
-- ClangCL and LLD from an LLVM installation;
-- Windows SDK headers and import libraries;
-- MSVC CRT and C++ standard-library development files;
 - an LLVM development package containing headers, libraries, and `llvm-config`;
 - GHC 9.10 and Cabal for the Haskell frontend;
 - JDK 25 and the Kotlin runner for the project DSL.
+
+Windows uses standalone ClangCL/LLD plus Windows SDK and MSVC CRT/STL development files. macOS uses Clang/LLD plus the
+Apple SDK supplied by the Xcode Command Line Tools. Visual Studio and Xcode IDEs are not required.
 
 Repository configuration does not contain a machine-specific LLVM installation path. Set `LLVM_ROOT` or put
 `llvm-config` on `PATH`.
@@ -63,16 +63,18 @@ Initialize the recursive submodules first:
 git submodule update --init --recursive
 ```
 
-Build the production C++20 compiler and its first native contract suite from PowerShell after making the Windows SDK and
-MSVC library/include directories available in the environment:
+The portable developer command detects the host, checks its toolchain, and keeps Bazel's private configuration names out of
+the normal workflow:
 
 ```powershell
-bazelisk build //Compiler/Cli:vxs
-bazelisk build //Compiler/Cli/Tests:cli_parser_tests
-.\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
+go run scripts/develop.go doctor
+go run scripts/develop.go build
+go run scripts/develop.go test
 ```
 
-The Bazel graph discovers LLVM from `LLVM_ROOT` or `llvm-config`; it does not store a machine-specific installation path.
+The same commands run from Terminal on macOS. Direct `bazelisk build //Compiler/...` remains supported and selects the host
+configuration automatically; ordinary builds never need `--config`. The Bazel graph discovers LLVM from `LLVM_ROOT` or
+`llvm-config` and does not store a machine-specific installation path.
 
 ## Command-line status
 

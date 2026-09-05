@@ -107,7 +107,8 @@ Run the checks appropriate to the changed ownership boundary:
 
 - Haskell: `cabal build all`, `cabal test all`, and `cabal check`.
 - Kotlin: `ProjectSystem\gradlew.bat -p ProjectSystem test`.
-- Native: Bazel `vxs` build plus the Windows-native Catch2 contract executable.
+- Native: `go run scripts/develop.go test` on an official Windows 10/11 or macOS Sequoia/Tahoe host.
+- Sanitizers: `go run scripts/develop.go sanitize address`; macOS also exposes `undefined` and `thread`.
 - C/C++ style: LLVM 23.1.0 `clang-format --dry-run --Werror` over project-owned `.cpp`, `.hpp`, `.hh`, and `.h` files.
 - Documentation: link scan, spelling scan, and `git diff --check`.
 
@@ -116,10 +117,10 @@ configuration.
 
 ## Commits
 
-Use the repository Java helper for normal updates:
+Use the repository Go helper for normal updates:
 
 ```powershell
-java --source=21 scripts\java\git.java update "Detailed change description"
+go run scripts/githelper.go update "Detailed change description"
 ```
 
 The helper excludes generated and local-only paths, applies recursive submodule file-mode hygiene, commits, and pushes the

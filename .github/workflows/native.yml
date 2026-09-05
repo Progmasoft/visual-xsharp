@@ -69,6 +69,12 @@ jobs:
           lld-link --version
           llvm-config --version
 
+      - name: Test repository Go helpers
+        shell: pwsh
+        run: |
+          go test scripts/develop.go scripts/develop_test.go
+          go test scripts/githelper.go scripts/githelper_test.go
+
       - name: Verify project C and C++ formatting
         shell: pwsh
         run: |
@@ -101,10 +107,60 @@ jobs:
 
       - name: Build native compiler
         shell: pwsh
-        run: bazel build //Compiler/Cli:vxs
+        run: go run scripts/develop.go doctor
 
       - name: Test native compiler
         shell: pwsh
+        run: go run scripts/develop.go test
+
+  macos-clang:
+    name: ${{ matrix.name }} Clang
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Sequoia
+            runner: macos-15
+            sanitizer: address
+          - name: macOS Tahoe
+            runner: macos-26
+            sanitizer: undefined
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Configure Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: native-${{ matrix.runner }}-clang
+          repository-cache: true
+
+      - name: Install LLVM development package
+        shell: bash
         run: |
-          bazel build //Compiler/Cli/Tests:cli_parser_tests
-          & .\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
+          brew list llvm >/dev/null 2>&1 || brew install llvm
+          llvm_root="$(brew --prefix llvm)"
+          echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
+          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+
+      - name: Verify macOS toolchain
+        shell: bash
+        run: go run scripts/develop.go doctor
+
+      - name: Test repository Go helpers
+        shell: bash
+        run: |
+          go test scripts/develop.go scripts/develop_test.go
+          go test scripts/githelper.go scripts/githelper_test.go
+
+      - name: Test native compiler
+        shell: bash
+        run: go run scripts/develop.go test
+
+      - name: Test native compiler with ${{ matrix.sanitizer }} sanitizer
+        shell: bash
+        run: go run scripts/develop.go sanitize ${{ matrix.sanitizer }}

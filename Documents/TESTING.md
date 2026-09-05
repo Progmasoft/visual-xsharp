@@ -77,13 +77,21 @@ Initialize recursive submodules and make the standalone LLVM development environ
 
 ```powershell
 git submodule update --init --recursive
-bazelisk build //Compiler/Cli:vxs
-bazelisk build //Compiler/Cli/Tests:cli_parser_tests
-.\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
+go run scripts/develop.go doctor
+go run scripts/develop.go test
 ```
 
-The Catch2 binary is executed directly on Windows. This avoids adding a POSIX shell dependency only for Bazel's conventional
-`cc_test` launcher.
+The command executes all eight Catch2 binaries directly on Windows 10/11 and macOS Sequoia/Tahoe. Bazel selects the host
+configuration automatically; no public test instruction requires `--config`.
+
+Run native memory diagnostics through the same entry point:
+
+```powershell
+go run scripts/develop.go sanitize address
+```
+
+macOS additionally supports `sanitize undefined` and `sanitize thread`. Each sanitizer instruments both compilation and
+linking and runs the complete native suite set rather than merely proving that instrumented objects compile.
 
 Use Bazel target boundaries to keep iteration focused:
 
@@ -245,7 +253,7 @@ The repository currently separates six workflow ownership areas:
 
 | Workflow | Responsibility |
 | --- | --- |
-| `native.yml` | Windows ClangCL/Bazel native graph and CLI contracts |
+| `native.yml` | Windows 10/11 and macOS Sequoia/Tahoe native graph, contracts, and sanitizers |
 | `language-layers.yml` | Kotlin project system plus Haskell compiler layers |
 | `haskell-coverage.yml` | Haskell coverage reporting |
 | `analyzer.yml` | Visual Analyzer layers |

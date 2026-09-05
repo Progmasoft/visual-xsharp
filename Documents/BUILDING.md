@@ -3,27 +3,34 @@
 
 # Building Visual X#
 
-The repository has no secondary orchestration wrapper. Bazel is the top-level native build and test interface; Cabal and
-Gradle remain the direct build interfaces for their Haskell and Kotlin ownership boundaries.
+The repository has one native build graph: Bazel. The portable Go developer command provides host detection, toolchain
+diagnostics, native-suite execution, and sanitizer selection without becoming a second graph. Cabal and Gradle remain the
+direct build interfaces for their Haskell and Kotlin ownership boundaries.
 
-## Supported host
+## Official hosts
 
-The supported native development host is Windows. Production C++20 code is compiled with standalone LLVM `clang-cl` under
-Bazel and linked with LLD. Visual Studio-bundled build executables are not part of the toolchain.
+Official Visual X# development is supported on:
+
+- Windows 10 and Windows 11, using standalone LLVM `clang-cl` and LLD;
+- macOS 15 Sequoia, using Clang/LLD and the Apple SDK; and
+- macOS 26 Tahoe, using Clang/LLD and the Apple SDK.
+
+Bazel chooses `windows` or `macos` settings automatically. A developer does not pass `--config=windows` or
+`--config=macos`. Visual Studio-bundled compilers are not part of the Windows toolchain, and the full Xcode IDE is not a
+macOS prerequisite.
 
 Required tools:
 
 - Bazelisk;
-- ClangCL and LLD from a standalone LLVM installation;
-- Windows SDK headers and import libraries;
-- MSVC CRT and C++ standard-library development files;
+- Clang and LLD from an LLVM installation appropriate to the host;
 - an LLVM development package containing LLVM headers, libraries, and `llvm-config`;
 - GHC 9.10 and Cabal;
 - JDK 25; and
 - the Kotlin command used by project-evaluator tests.
 
-The Windows SDK and MSVC development files provide platform headers and libraries only. Make their `include`, `lib`, and
-tool directories available to the PowerShell build environment; ClangCL, LLD, and Bazelisk remain independent tools.
+Windows additionally needs Windows SDK headers/import libraries and MSVC CRT/STL development files. These provide platform
+headers and libraries only; ClangCL, LLD, and Bazelisk remain independent tools. macOS needs the Xcode Command Line Tools,
+which provide `xcrun` and the selected Apple SDK.
 
 ## LLVM discovery
 
@@ -34,14 +41,14 @@ Do not write a machine-specific LLVM path into the repository. Use one of these 
 
 The Bazel repository rule fails during analysis if it cannot discover a complete LLVM development tree.
 
-Before starting a native build, verify discovery in the same PowerShell session:
+The preferred preflight is identical in PowerShell and macOS Terminal:
 
 ```powershell
-clang-cl --version
-lld-link --version
-bazelisk version
-llvm-config --version
+go run scripts/develop.go doctor
 ```
+
+Doctor recognizes `LLVM_ROOT/bin/llvm-config` even when that directory is intentionally absent from global `PATH`. On
+macOS it also validates the OS release and asks `xcrun` for the active SDK.
 
 If `llvm-config` is intentionally not on `PATH`, verify that `LLVM_ROOT` names the installation prefix rather than its
 `bin`, `include`, or `lib/cmake/llvm` child. The repository rule derives component paths from the prefix.
@@ -56,16 +63,16 @@ git submodule update --init --recursive
 
 The native CLI uses its own typed C++20 command schema. Catch2 remains the only native test submodule.
 
-## Production C++20 build
+## Production C++20 build and tests
 
 ```powershell
-bazelisk build //Compiler/Cli:vxs
-bazelisk build //Compiler/Cli/Tests:cli_parser_tests
-.\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
+go run scripts/develop.go build
+go run scripts/develop.go test
 ```
 
-The native Catch2 program is executed directly from PowerShell. This avoids introducing a Git Bash/MSYS runtime solely for
-Bazel's POSIX-oriented `cc_test` launcher on Windows.
+The command builds `vxs` and all eight component-owned native suites, then executes each native program directly. This
+avoids introducing Git Bash/MSYS solely for Bazel's POSIX-oriented `cc_test` launcher on Windows while retaining the same
+suite set on macOS.
 
 Useful component targets for incremental work are:
 
@@ -131,7 +138,7 @@ The native graph is configured by tracked Bazel files and a small environment di
 | Input | Purpose |
 | --- | --- |
 | `.bazelversion` | Bazelisk-selected Bazel version |
-| `.bazelrc` | repository-wide Windows/ClangCL build options |
+| `.bazelrc` | automatically selected Windows/ClangCL or macOS/Clang options |
 | `MODULE.bazel` | module identity and native dependencies |
 | `Compiler/Build/Bazel/llvm.bzl` | LLVM development-tree discovery |
 | `LLVM_ROOT` | optional LLVM installation prefix |
@@ -143,6 +150,26 @@ The native graph is configured by tracked Bazel files and a small environment di
 The rules_cc patch under `Compiler/Build/Bazel` is a narrow ClangCL toolchain workaround. It is not permission to accumulate
 general third-party patches in the compiler tree; remove it when the selected upstream release contains the fix.
 
+## Sanitizers
+
+Do not memorize Bazel profile names or manually combine compile/link flags. Select the diagnostic by purpose:
+
+```powershell
+go run scripts/develop.go sanitize address
+go run scripts/develop.go sanitize undefined
+go run scripts/develop.go sanitize thread
+```
+
+AddressSanitizer is available on both official host families. UndefinedBehaviorSanitizer and ThreadSanitizer are exposed on
+macOS; requesting either on Windows fails before a build and explains the supported alternative. The command rebuilds all
+native suites with matching compiler and linker instrumentation, sets fail-fast runtime options, identifies the exact suite
+being executed, and returns a nonzero status at the first violation. It accepts `asan`, `ubsan`, and `tsan` as convenient
+aliases.
+
+Advanced Bazel options may follow a `--` separator, for example
+`go run scripts/develop.go sanitize address -- --jobs=4`. Platform and sanitizer `--config` values are deliberately
+owned by the command so compile and link instrumentation cannot accidentally diverge.
+
 ## Clean rebuilds
 
 Generated trees are disposable. Prefer deleting only the build system's known output rather than source or workspace roots:
@@ -153,6 +180,8 @@ Push-Location Compiler
 try { cabal clean } finally { Pop-Location }
 .\ProjectSystem\gradlew.bat -p ProjectSystem clean
 ```
+
+For the native-only cleanup, `go run scripts/develop.go clean` performs an expunging Bazel clean.
 
 Do not commit `bazel-*`, Cabal `dist-newstyle`, Gradle `.gradle`/`build`, IDE caches, local service state, or compiler-emitted
 artifacts used only for smoke tests. Before removing a large tree manually, resolve the exact absolute target and verify that

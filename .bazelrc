@@ -1,16 +1,15 @@
 common --enable_bzlmod
 common --announce_rc
-common --repo_env=USE_CLANG_CL=1
+common --enable_platform_specific_config
 
 build --incompatible_strict_action_env
-build --config=windows
 build --verbose_failures
 build --show_timestamps
 build --keep_going
-build --features=static_link_msvcrt
 
 # rules_cc selects its Windows clang-cl branch through USE_CLANG_CL. LLVM_ROOT
 # remains an environment-owned discovery input rather than a committed path.
+build:windows --repo_env=USE_CLANG_CL=1
 build:windows --compiler=clang-cl
 build:windows --cxxopt=/std:c++20
 build:windows --cxxopt=/permissive-
@@ -18,6 +17,43 @@ build:windows --cxxopt=/Zc:__cplusplus
 build:windows --cxxopt=/W4
 build:windows --cxxopt=/utf-8
 build:windows --host_cxxopt=/std:c++20
+build:windows --features=static_link_msvcrt
+
+# Platform-specific configs are selected by Bazel itself. Developers use the
+# ordinary build command on both supported hosts; they never need to remember a
+# repository-private --config spelling.
+build:macos --compiler=clang
+build:macos --cxxopt=-std=c++20
+build:macos --cxxopt=-Wall
+build:macos --cxxopt=-Wextra
+build:macos --cxxopt=-Wpedantic
+build:macos --host_cxxopt=-std=c++20
+
+# These profiles are implementation details of scripts/develop.go. Keeping the
+# compiler and linker flags here makes sanitizer builds reproducible while the
+# command presents host-aware names and diagnostics to developers.
+build:asan-windows --copt=/fsanitize=address
+# Clang's implicit absolute ignorelist otherwise appears as an undeclared input
+# to Bazel's Windows include scanner. The project currently owns no suppressions.
+build:asan-windows --copt=/clang:-fno-sanitize-ignorelist
+# The official LLVM development archive is not built with MSVC STL container
+# annotations. Disable only those annotations so instrumented project code can
+# link the prebuilt LLVM libraries without /FAILIFMISMATCH conflicts.
+build:asan-windows --copt=/D_DISABLE_STRING_ANNOTATION
+build:asan-windows --copt=/D_DISABLE_VECTOR_ANNOTATION
+# rules_cc invokes lld-link directly rather than the clang driver. Name the
+# matching dynamic runtime and force its registration thunk into each binary;
+# LIB discovery still supplies the version-specific installation directory.
+build:asan-windows --linkopt=/DEFAULTLIB:clang_rt.asan_dynamic-x86_64.lib
+build:asan-windows --linkopt=/DEFAULTLIB:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib
+build:asan-windows --linkopt=/WHOLEARCHIVE:clang_rt.asan_dynamic_runtime_thunk-x86_64.lib
+
+build:asan-macos --copt=-fsanitize=address
+build:asan-macos --linkopt=-fsanitize=address
+build:ubsan-macos --copt=-fsanitize=undefined
+build:ubsan-macos --linkopt=-fsanitize=undefined
+build:tsan-macos --copt=-fsanitize=thread
+build:tsan-macos --linkopt=-fsanitize=thread
 
 test --test_output=errors
 test --test_summary=detailed

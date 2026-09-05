@@ -14,9 +14,11 @@ def _quote(value):
 
 def _llvm_repository_impl(repository_ctx):
     root = repository_ctx.os.environ.get("LLVM_ROOT")
+    is_windows = repository_ctx.os.name.lower().startswith("windows")
     config = None
     if root:
-        candidate = repository_ctx.path(root).get_child("bin").get_child("llvm-config.exe")
+        executable = "llvm-config.exe" if is_windows else "llvm-config"
+        candidate = repository_ctx.path(root).get_child("bin").get_child(executable)
         if candidate.exists:
             config = candidate
     if config == None:
@@ -36,15 +38,46 @@ def _llvm_repository_impl(repository_ctx):
         fail("LLVM_ROOT must contain include/ and lib/: {}".format(root))
 
     libraries = repository_ctx.execute(
-        [config, "--libnames"] + _COMPONENTS,
+        [config, "--link-static", "--libnames"] + _COMPONENTS,
         quiet = True,
     )
     if libraries.return_code != 0:
         fail("llvm-config could not resolve backend components:\n{}".format(libraries.stderr))
 
-    library_names = [name for name in libraries.stdout.replace("\r", " ").replace("\n", " ").split(" ") if name.endswith(".lib")]
+    library_suffix = ".lib" if is_windows else ".a"
+    library_names = [
+        name
+        for name in libraries.stdout.replace("\r", " ").replace("\n", " ").split(" ")
+        if name.endswith(library_suffix)
+    ]
     if not library_names:
-        fail("llvm-config returned no Windows static libraries for the native backend")
+        fail("llvm-config returned no static libraries for the native backend")
+
+    # Query non-LLVM dependencies from the chosen development package. LLVM's
+    # compression, terminal, and XML dependencies differ between installations,
+    # so a checked-in macOS library list would be brittle.
+    if is_windows:
+        system_linkopts = [
+            "/DEFAULTLIB:advapi32.lib",
+            "/DEFAULTLIB:ntdll.lib",
+            "/DEFAULTLIB:ole32.lib",
+            "/DEFAULTLIB:psapi.lib",
+            "/DEFAULTLIB:shell32.lib",
+            "/DEFAULTLIB:uuid.lib",
+            "/DEFAULTLIB:ws2_32.lib",
+        ]
+    else:
+        system_libraries = repository_ctx.execute(
+            [config, "--link-static", "--system-libs"] + _COMPONENTS,
+            quiet = True,
+        )
+        if system_libraries.return_code != 0:
+            fail("llvm-config could not resolve platform libraries:\n{}".format(system_libraries.stderr))
+        system_linkopts = [
+            option
+            for option in system_libraries.stdout.replace("\r", " ").replace("\n", " ").split(" ")
+            if option
+        ]
 
     repository_ctx.symlink(include_dir, "include")
     repository_ctx.symlink(library_dir, "lib")
@@ -75,17 +108,9 @@ cc_library(
 cc_library(
     name = \"llvm\",
     deps = {},
-    linkopts = [
-        \"/DEFAULTLIB:advapi32.lib\",
-        \"/DEFAULTLIB:ntdll.lib\",
-        \"/DEFAULTLIB:ole32.lib\",
-        \"/DEFAULTLIB:psapi.lib\",
-        \"/DEFAULTLIB:shell32.lib\",
-        \"/DEFAULTLIB:uuid.lib\",
-        \"/DEFAULTLIB:ws2_32.lib\",
-    ],
+    linkopts = {},
 )
-""".format("\n".join(imports), repr(dependencies))
+""".format("\n".join(imports), repr(dependencies), repr(system_linkopts))
     repository_ctx.file("BUILD.bazel", build)
 
 _llvm_repository = repository_rule(

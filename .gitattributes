@@ -2,3 +2,23 @@
 # SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 * text=auto eol=crlf
+
+# Cross-platform build metadata and Go repository automation are consumed
+# directly on Windows and macOS. Keep their repository and checkout bytes LF so
+# generated lock digests, YAML parsing, and source-file execution do not depend
+# on the developer's core.autocrlf setting.
+/.bazelrc text eol=lf
+/.bazelversion text eol=lf
+/.gitattributes text eol=lf
+/MODULE.bazel text eol=lf
+/MODULE.bazel.lock text eol=lf
+*.bazel text eol=lf
+*.bzl text eol=lf
+*.go text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Windows-native launchers remain comfortable in cmd.exe and PowerShell.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

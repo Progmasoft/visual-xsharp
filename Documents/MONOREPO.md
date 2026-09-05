@@ -87,8 +87,10 @@ the others.
 
 ## Build ownership
 
-Bazel owns top-level native orchestration. Language-specific CI jobs call Cabal and Gradle directly; the repository carries
-neither CMake configuration nor a second wrapper such as `just`.
+Bazel owns top-level native orchestration. `scripts/develop.go` is a thin, portable user interface over that graph for
+host discovery, suite execution, and sanitizers; it defines no targets or dependency edges of its own. Language-specific CI
+jobs call Cabal and Gradle directly, and the repository carries neither CMake configuration nor a second build graph such as
+`just`.
 
 ## Nested repositories
 
@@ -134,9 +136,10 @@ The root index contains compiler, project system, ecosystem tools, specification
 website, IDE, and service directories may be nested beneath the checkout while remaining separate repositories or ignored
 deployment state. A root change must not assume that committing the root automatically commits or deploys those children.
 
-Scripts are grouped by implementation language under `scripts/java/` and `scripts/go/`. Choose the language based on the
-task's libraries and portability; scripts do not become a parallel build orchestrator. Normal repository commits/pushes use
-the Java update helper, while Bazel, Cabal, and Gradle retain build ownership.
+Go is the only language used for repository automation scripts. Portable helpers live directly under `scripts/`; their
+filenames state their purpose instead of introducing one-child language directories. Shell, PowerShell, Java source-file,
+and mixed-language script implementations are not added. Scripts do not become a parallel build orchestrator. Normal
+repository commits and pushes use `githelper.go`, while Bazel, Cabal, and Gradle retain build ownership.
 
 CMake may still appear as a project-system DSL plugin. That plugin integrates user projects with CMake; it is not the build
 system for the Visual X# compiler and therefore does not contradict Bazel ownership.
