@@ -79,6 +79,22 @@ def _llvm_repository_impl(repository_ctx):
             if option
         ]
 
+        # Homebrew keeps zstd keg-only on Apple Silicon and Intel hosts. LLVM's
+        # system library list therefore names -lzstd without making its cellar
+        # visible to Apple's linker. Discover that prefix at repository analysis
+        # time instead of committing an architecture-specific /opt path.
+        if "-lzstd" in system_linkopts:
+            brew = repository_ctx.which("brew")
+            if brew:
+                zstd_prefix = repository_ctx.execute(
+                    [brew, "--prefix", "zstd"],
+                    quiet = True,
+                )
+                if zstd_prefix.return_code == 0:
+                    zstd_library = repository_ctx.path(zstd_prefix.stdout.strip()).get_child("lib")
+                    if zstd_library.exists:
+                        system_linkopts.insert(0, "-L{}".format(zstd_library))
+
     repository_ctx.symlink(include_dir, "include")
     repository_ctx.symlink(library_dir, "lib")
 
