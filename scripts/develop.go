@@ -286,9 +286,11 @@ func selectSanitizer(currentHost host, requested string) (sanitizer, error) {
 			}, nil
 		}
 		return sanitizer{
-			name:        "AddressSanitizer",
-			config:      "asan-macos",
-			environment: []string{"ASAN_OPTIONS=halt_on_error=1:detect_leaks=1:strict_string_checks=1"},
+			name:   "AddressSanitizer",
+			config: "asan-macos",
+			// Apple's AddressSanitizer runtime aborts when detect_leaks is set;
+			// address, bounds, and use-after-free diagnostics remain enabled.
+			environment: []string{"ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1"},
 		}, nil
 	case "undefined", "ubsan":
 		if currentHost.kind != hostMacOS {
