@@ -55,6 +55,26 @@ renameDeclarations globals next (declaration : remaining) =
                 renamed = TypeDeclaration spanValue name () renamedMembers
                 (rest, final, restProblems) = renameDeclarations globals afterBody remaining
              in (renamed : rest, final, duplicateProblems ++ memberProblems ++ restProblems)
+        TemplateTypeDeclaration spanValue sourceName _ sourceTemplateParameters members ->
+            let name = valueOrMissing sourceName globals
+                (templateParameters, templateEnvironment, afterTemplateParameters, templateProblems) =
+                    renameTemplateParameters globals next sourceTemplateParameters
+                (declaredMembers, afterMembers, duplicateProblems) =
+                    declareMany
+                        RenamerStage
+                        "VXR0004"
+                        afterTemplateParameters
+                        []
+                        [(declarationName member, declarationSpan member) | member <- members]
+                memberEnvironment = declaredMembers ++ templateEnvironment
+                (renamedMembers, afterBody, memberProblems) =
+                    renameDeclarations memberEnvironment afterMembers members
+                renamed = TemplateTypeDeclaration spanValue name () templateParameters renamedMembers
+                (rest, final, restProblems) = renameDeclarations globals afterBody remaining
+             in ( renamed : rest
+                , final
+                , templateProblems ++ duplicateProblems ++ memberProblems ++ restProblems
+                )
         FunctionDeclaration spanValue sourceName _ returnSyntax sourceParameters sourceBody isStatic access ->
             let name = valueOrMissing sourceName globals
                 (parameters, parameterEnvironment, afterParameters, parameterProblems) = renameParameters globals next sourceParameters
@@ -62,6 +82,30 @@ renameDeclarations globals next (declaration : remaining) =
                 renamed = FunctionDeclaration spanValue name () returnSyntax parameters body isStatic access
                 (rest, final, restProblems) = renameDeclarations globals afterBody remaining
              in (renamed : rest, final, parameterProblems ++ bodyProblems ++ restProblems)
+
+-- All template parameters enter scope together.  This permits the documented
+-- default `T = U, U = int` while keeping source-order SymbolIds deterministic.
+-- Defaults remain syntax trees; their spelling is resolved by the type checker
+-- against the semantic parameter catalog created here.
+renameTemplateParameters ::
+    Environment ->
+    Int ->
+    [TemplateParameter Identifier ()] ->
+    ([TemplateParameter RenamedName ()], Environment, Int, [Diagnostic])
+renameTemplateParameters outer next parameters =
+    let declarations = [(templateParameterName parameter, templateParameterSpan parameter) | parameter <- parameters]
+        (environment, after, problems) = declareMany RenamerStage "VXR0006" next outer declarations
+        renamed =
+            [ TemplateParameter
+                (templateParameterSpan parameter)
+                (valueOrMissing (templateParameterName parameter) environment)
+                ()
+                (templateParameterKind parameter)
+                (templateParameterIsPack parameter)
+                (templateParameterDefault parameter)
+            | parameter <- parameters
+            ]
+     in (renamed, environment, after, problems)
 
 renameParameters ::
     Environment -> Int -> [Parameter Identifier ()] -> ([Parameter RenamedName ()], Environment, Int, [Diagnostic])

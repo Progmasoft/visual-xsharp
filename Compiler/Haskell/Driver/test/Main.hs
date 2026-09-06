@@ -19,7 +19,11 @@ import SpecializationTests (specializationTests)
 import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
+import TemplateApplicationTests (templateApplicationTests)
+import TemplateDeclarationTests (templateDeclarationTests)
+import TemplateInstantiationTests (templateInstantiationTests)
 import TemplateTests (templateTests)
+import TemplateVerifierTests (templateVerifierTests)
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
@@ -97,6 +101,10 @@ main = do
     mapM_ (uncurry checkIO) sourceSetTests
     mapM_ (uncurry check) sourceTextTests
     mapM_ (uncurry check) templateTests
+    mapM_ (uncurry check) templateDeclarationTests
+    mapM_ (uncurry check) templateApplicationTests
+    mapM_ (uncurry check) templateInstantiationTests
+    mapM_ (uncurry check) templateVerifierTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests
     mapM_ (uncurry check) coreOptimizerSourceTests

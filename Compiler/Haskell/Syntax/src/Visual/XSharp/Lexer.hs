@@ -247,6 +247,8 @@ keywords =
     , "public"
     , "return"
     , "static"
+    , "template"
+    , "typename"
     , "sfloat"
     , "lfloat"
     , "float"
@@ -264,7 +266,8 @@ keywords =
 longestSymbol :: String -> Maybe String
 longestSymbol source =
     firstMatch
-        [ "=="
+        [ "..."
+        , "=="
         , "\\="
         , "<="
         , ">="

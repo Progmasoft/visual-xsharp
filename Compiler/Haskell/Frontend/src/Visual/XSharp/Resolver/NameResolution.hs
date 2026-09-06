@@ -25,6 +25,18 @@ resolveDeclaration declaration = case declaration of
     TypeDeclaration spanValue sourceName _ members ->
         let name = resolveName spanValue sourceName; resolvedMembers = map resolveDeclaration members
          in (TypeDeclaration spanValue (fst name) () (map fst resolvedMembers), snd name ++ concatMap snd resolvedMembers)
+    TemplateTypeDeclaration spanValue sourceName _ sourceParameters members ->
+        let name = resolveName spanValue sourceName
+            parameters = map resolveTemplateParameter sourceParameters
+            resolvedMembers = map resolveDeclaration members
+         in ( TemplateTypeDeclaration
+                spanValue
+                (fst name)
+                ()
+                (map fst parameters)
+                (map fst resolvedMembers)
+            , snd name ++ concatMap snd parameters ++ concatMap snd resolvedMembers
+            )
     FunctionDeclaration spanValue sourceName _ returnSyntax sourceParameters sourceBody isStatic access ->
         let name = resolveName spanValue sourceName
             parameters = map resolveParameter sourceParameters
@@ -35,6 +47,21 @@ resolveDeclaration declaration = case declaration of
 
 resolveParameter :: Parameter RenamedName () -> (Parameter ResolvedName (), [Diagnostic])
 resolveParameter (Parameter spanValue name _ syntax) = let (resolved, problems) = resolveName spanValue name in (Parameter spanValue resolved () syntax, problems)
+
+resolveTemplateParameter ::
+    TemplateParameter RenamedName () ->
+    (TemplateParameter ResolvedName (), [Diagnostic])
+resolveTemplateParameter parameter =
+    let (resolved, problems) = resolveName (templateParameterSpan parameter) (templateParameterName parameter)
+     in ( TemplateParameter
+            (templateParameterSpan parameter)
+            resolved
+            ()
+            (templateParameterKind parameter)
+            (templateParameterIsPack parameter)
+            (templateParameterDefault parameter)
+        , problems
+        )
 
 resolveBlock :: Block RenamedName () -> (Block ResolvedName (), [Diagnostic])
 resolveBlock (Block statements) = let values = map resolveStatement statements in (Block (map fst values), concatMap snd values)

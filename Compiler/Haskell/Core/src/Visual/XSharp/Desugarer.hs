@@ -19,6 +19,10 @@ lowerTree (TypedAST (SyntaxTree namespace declarations)) = CoreModule (maybe def
 
 lowerTop :: Declaration ResolvedName Type -> [CoreFunction]
 lowerTop TypeDeclaration {typeMembers = members} = map lowerDeclaration members
+-- Open template bodies are retained in TypedAST until specialization chooses
+-- concrete arguments. Lowering them here would leak unresolved type variables
+-- into Core and create one fake unspecialized native function.
+lowerTop TemplateTypeDeclaration {} = []
 lowerTop function@FunctionDeclaration {} = [lowerDeclaration function]
 
 lowerDeclaration :: Declaration ResolvedName Type -> CoreFunction
@@ -33,6 +37,7 @@ lowerDeclaration declaration@FunctionDeclaration {} =
     where
         returnType = lowerBoundaryType $ case declarationAnnotation declaration of FunctionType _ result -> result; value -> value
 lowerDeclaration TypeDeclaration {} = error "type declarations are lowered through lowerTop"
+lowerDeclaration TemplateTypeDeclaration {} = error "template declarations require specialization before Core lowering"
 
 lowerBlock :: Block ResolvedName Type -> [CoreStatement]
 lowerBlock (Block statements) = map lowerStatement statements

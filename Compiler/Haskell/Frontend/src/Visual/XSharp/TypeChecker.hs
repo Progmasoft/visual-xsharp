@@ -17,100 +17,213 @@ defaultTypeChecker = TypeChecker checkTree
 
 type TypeEnvironment = [(SymbolId, (Type, Bool))]
 
+-- Type syntax deliberately keeps source spellings.  This side environment is
+-- the bridge from those spellings to the SymbolIds assigned by the renamer.
+-- Type and value parameters are separate because `T` in a type position and
+-- `N` in `[T; N]` have different semantic representations.
+data TemplateContext = TemplateContext
+    { templateTypeNames :: [(Identifier, ResolvedName)]
+    , templateValueNames :: [(Identifier, ResolvedName)]
+    }
+
+emptyTemplateContext :: TemplateContext
+emptyTemplateContext = TemplateContext [] []
+
 checkTree :: ResolvedAST -> Either [Diagnostic] TypedAST
 checkTree (ResolvedAST (SyntaxTree namespace declarations)) =
     let checked = map checkTopDeclaration declarations
         problems = concatMap snd checked
      in if null problems then Right (TypedAST (SyntaxTree namespace (map fst checked))) else Left problems
 
-signature :: Declaration ResolvedName () -> Type
-signature declaration = case declaration of
+signature :: TemplateContext -> Declaration ResolvedName () -> Type
+signature context declaration = case declaration of
     FunctionDeclaration _ _ _ returnSyntax parameters _ _ _ ->
         FunctionType
-            (map (syntaxType . parameterTypeSyntax) parameters)
-            (syntaxType returnSyntax)
+            (map (syntaxTypeIn context . parameterTypeSyntax) parameters)
+            (syntaxTypeIn context returnSyntax)
     TypeDeclaration _ name _ _ -> NamedType (QualifiedName [resolvedSpelling name]) []
+    TemplateTypeDeclaration _ name _ parameters _ ->
+        NamedType
+            (QualifiedName [resolvedSpelling name])
+            (map templateParameterAsArgument parameters)
 
 checkTopDeclaration :: Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
 checkTopDeclaration declaration = case declaration of
     TypeDeclaration spanValue name _ members ->
-        let signatures = [(resolvedSymbol (declarationName member), (signature member, False)) | member <- members]
-            checked = map (checkDeclaration signatures) members
+        let signatures = [(resolvedSymbol (declarationName member), (signature emptyTemplateContext member, False)) | member <- members]
+            checked = map (checkDeclarationWith emptyTemplateContext signatures) members
             valueType = NamedType (QualifiedName [resolvedSpelling name]) []
          in (TypeDeclaration spanValue name valueType (map fst checked), concatMap snd checked)
-    FunctionDeclaration {} -> checkDeclaration [] declaration
+    TemplateTypeDeclaration spanValue name _ parameters members ->
+        let context = templateContext parameters
+            typedTemplateParameters = map (typeTemplateParameter context) parameters
+            templateValues =
+                [ (resolvedSymbol (templateParameterName parameter), (templateParameterAnnotation parameter, False))
+                | parameter <- typedTemplateParameters
+                , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
+                ]
+            signatures = [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
+            checked = map (checkDeclarationWith context (templateValues ++ signatures)) members
+            parameterProblems = validateTemplateParameters context parameters
+            valueType =
+                NamedType
+                    (QualifiedName [resolvedSpelling name])
+                    (map templateParameterAsArgument typedTemplateParameters)
+         in ( TemplateTypeDeclaration spanValue name valueType typedTemplateParameters (map fst checked)
+            , parameterProblems ++ concatMap snd checked
+            )
+    FunctionDeclaration {} -> checkDeclarationWith emptyTemplateContext [] declaration
 
-syntaxType :: TypeSyntax -> Type
-syntaxType AutoType = ErrorType
-syntaxType (QualifiedTypeSyntax name arguments) = NamedType name (map syntaxTemplateArgument arguments)
-syntaxType (BuiltinArrayTypeSyntax element) =
+templateContext :: [TemplateParameter ResolvedName annotation] -> TemplateContext
+templateContext parameters =
+    TemplateContext
+        [ (resolvedSpelling name, name)
+        | parameter <- parameters
+        , case templateParameterKind parameter of
+            TemplateTypeParameter -> True
+            TemplateTemplateParameter _ -> True
+            _ -> False
+        , let name = templateParameterName parameter
+        ]
+        [ (resolvedSpelling name, name)
+        | parameter <- parameters
+        , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
+        , let name = templateParameterName parameter
+        ]
+
+templateParameterAsArgument :: TemplateParameter ResolvedName annotation -> TemplateArgument
+templateParameterAsArgument parameter = case templateParameterKind parameter of
+    TemplateValueParameterKind _ -> ValueTemplateArgument (TemplateValueParameter (templateParameterName parameter))
+    _ -> TypeTemplateArgument (TypeVariable (templateParameterName parameter))
+
+syntaxTypeIn :: TemplateContext -> TypeSyntax -> Type
+syntaxTypeIn _ AutoType = ErrorType
+syntaxTypeIn context (QualifiedTypeSyntax name arguments) =
+    case name of
+        QualifiedName [identifier] | Just resolved <- lookup identifier (templateTypeNames context) -> TypeVariable resolved
+        _ -> NamedType name (map (syntaxTemplateArgumentIn context) arguments)
+syntaxTypeIn context (BuiltinArrayTypeSyntax element) =
     -- `[]T` is a language type, not a public class invented by the compiler.
     -- Its structural spelling keeps that distinction visible through Core
     -- until ownership-aware lowering assigns the final runtime layout.
-    NamedType (QualifiedName [Identifier "[]"]) [TypeTemplateArgument (syntaxType element)]
-syntaxType (ArrayTypeSyntax element) =
-    NamedType (QualifiedName [Identifier "System", Identifier "Array"]) [TypeTemplateArgument (syntaxType element)]
-syntaxType (FixedArrayTypeSyntax element size) =
+    NamedType (QualifiedName [Identifier "[]"]) [TypeTemplateArgument (syntaxTypeIn context element)]
+syntaxTypeIn context (ArrayTypeSyntax element) =
     NamedType
         (QualifiedName [Identifier "System", Identifier "Array"])
-        [TypeTemplateArgument (syntaxType element), ValueTemplateArgument (syntaxTemplateValue size)]
-syntaxType (DictionaryTypeSyntax key value) =
+        [TypeTemplateArgument (syntaxTypeIn context element)]
+syntaxTypeIn context (FixedArrayTypeSyntax element size) =
+    NamedType
+        (QualifiedName [Identifier "System", Identifier "Array"])
+        [TypeTemplateArgument (syntaxTypeIn context element), ValueTemplateArgument (syntaxTemplateValueIn context size)]
+syntaxTypeIn context (DictionaryTypeSyntax key value) =
     NamedType
         (QualifiedName [Identifier "System", Identifier "Dictionary"])
-        [TypeTemplateArgument (syntaxType key), TypeTemplateArgument (syntaxType value)]
-syntaxType (CallableTypeSyntax parameters result) = FunctionType (map syntaxType parameters) (syntaxType result)
-syntaxType (ExplicitType (Identifier name)) = case name of
-    "String" -> stringType
-    "unit" -> unitType
-    "void" -> voidType
-    _ -> maybe (NamedType (QualifiedName [Identifier name]) []) scalarTypeToType (lookupScalar name)
+        [TypeTemplateArgument (syntaxTypeIn context key), TypeTemplateArgument (syntaxTypeIn context value)]
+syntaxTypeIn context (CallableTypeSyntax parameters result) = FunctionType (map (syntaxTypeIn context) parameters) (syntaxTypeIn context result)
+syntaxTypeIn context (ExplicitType identifier@(Identifier name)) = case lookup identifier (templateTypeNames context) of
+    Just resolved -> TypeVariable resolved
+    Nothing -> case name of
+        "String" -> stringType
+        "unit" -> unitType
+        "void" -> voidType
+        _ -> maybe (NamedType (QualifiedName [Identifier name]) []) scalarTypeToType (lookupScalar name)
     where
         lookupScalar spelling = lookup spelling [(scalarTypeName scalar, scalar) | scalar <- scalarTypes]
 
-syntaxTemplateArgument :: TemplateArgumentSyntax -> TemplateArgument
-syntaxTemplateArgument argument = case argument of
-    TemplateTypeSyntax valueType -> TypeTemplateArgument (syntaxType valueType)
-    TemplateValueArgumentSyntax value -> ValueTemplateArgument (syntaxTemplateValue value)
+syntaxTemplateArgumentIn :: TemplateContext -> TemplateArgumentSyntax -> TemplateArgument
+syntaxTemplateArgumentIn context argument = case argument of
+    TemplateTypeSyntax valueType -> TypeTemplateArgument (syntaxTypeIn context valueType)
+    TemplateValueArgumentSyntax value -> ValueTemplateArgument (syntaxTemplateValueIn context value)
 
 -- Parser construction guarantees the expression tree is side-effect free.
 -- Exact evaluation here gives every concrete specialization one canonical
 -- identity. Invalid arithmetic becomes a sentinel and is diagnosed by the
 -- type-syntax validation pass before Core can be emitted.
-syntaxTemplateValue :: TemplateValueSyntax -> TemplateValue
-syntaxTemplateValue value = case evaluateTemplateValue value of
-    Right result -> result
-    _ -> IntegerTemplateValue 0
+syntaxTemplateValueIn :: TemplateContext -> TemplateValueSyntax -> TemplateValue
+syntaxTemplateValueIn context value = case value of
+    TemplateNameSyntax _ (QualifiedName [identifier])
+        | Just resolved <- lookup identifier (templateValueNames context) -> TemplateValueParameter resolved
+    _ -> case evaluateTemplateValue value of
+        Right result -> result
+        _ -> IntegerTemplateValue 0
 
-typeSyntaxProblems :: TypeSyntax -> [Diagnostic]
-typeSyntaxProblems syntax = case syntax of
+typeTemplateParameter :: TemplateContext -> TemplateParameter ResolvedName () -> TemplateParameter ResolvedName Type
+typeTemplateParameter context parameter =
+    TemplateParameter
+        (templateParameterSpan parameter)
+        (templateParameterName parameter)
+        annotation
+        (templateParameterKind parameter)
+        (templateParameterIsPack parameter)
+        (templateParameterDefault parameter)
+    where
+        annotation = case templateParameterKind parameter of
+            TemplateValueParameterKind valueType -> syntaxTypeIn context valueType
+            _ -> TypeVariable (templateParameterName parameter)
+
+validateTemplateParameters :: TemplateContext -> [TemplateParameter ResolvedName ()] -> [Diagnostic]
+validateTemplateParameters context = concatMap validate
+    where
+        validate parameter =
+            kindProblems parameter
+                ++ defaultProblems parameter
+                ++ packDefaultProblems parameter
+        kindProblems parameter = case templateParameterKind parameter of
+            TemplateTypeParameter -> []
+            TemplateValueParameterKind valueType -> typeSyntaxProblemsIn context valueType
+            TemplateTemplateParameter shapes -> concatMap shapeProblems shapes
+        shapeProblems shape = case templateParameterShapeKind shape of
+            TemplateTypeParameterShape -> []
+            TemplateValueParameterShape valueType -> typeSyntaxProblemsIn context valueType
+            TemplateTemplateParameterShape shapes -> concatMap shapeProblems shapes
+        defaultProblems parameter = case templateParameterDefault parameter of
+            Nothing -> []
+            Just (TemplateTypeDefault valueType) -> typeSyntaxProblemsIn context valueType
+            Just (TemplateValueDefault value) -> templateValueProblemsIn context "VXT0020" value
+        packDefaultProblems parameter
+            | templateParameterIsPack parameter
+            , Just _ <- templateParameterDefault parameter =
+                [problem (templateParameterSpan parameter) "VXT0019" "a template parameter pack cannot have a default"]
+            | otherwise = []
+
+typeSyntaxProblemsIn :: TemplateContext -> TypeSyntax -> [Diagnostic]
+typeSyntaxProblemsIn context syntax = case syntax of
     ExplicitType _ -> []
     AutoType -> []
-    BuiltinArrayTypeSyntax element -> typeSyntaxProblems element
-    ArrayTypeSyntax element -> typeSyntaxProblems element
-    DictionaryTypeSyntax key value -> typeSyntaxProblems key ++ typeSyntaxProblems value
-    CallableTypeSyntax parameters result -> concatMap typeSyntaxProblems parameters ++ typeSyntaxProblems result
-    QualifiedTypeSyntax _ arguments -> concatMap templateArgumentProblems arguments
+    BuiltinArrayTypeSyntax element -> typeSyntaxProblemsIn context element
+    ArrayTypeSyntax element -> typeSyntaxProblemsIn context element
+    DictionaryTypeSyntax key value -> typeSyntaxProblemsIn context key ++ typeSyntaxProblemsIn context value
+    CallableTypeSyntax parameters result -> concatMap (typeSyntaxProblemsIn context) parameters ++ typeSyntaxProblemsIn context result
+    QualifiedTypeSyntax _ arguments -> concatMap (templateArgumentProblemsIn context) arguments
     FixedArrayTypeSyntax element size ->
-        typeSyntaxProblems element
-            ++ case evaluateFixedArraySize size of
-                Left issue -> [problem (templateValueSyntaxSpan size) "VXT0016" (renderTemplateValueError issue)]
-                Right _ -> []
+        typeSyntaxProblemsIn context element
+            ++ case syntaxTemplateValueIn context size of
+                TemplateValueParameter _ -> []
+                _ -> case evaluateFixedArraySize size of
+                    Left issue -> [problem (templateValueSyntaxSpan size) "VXT0016" (renderTemplateValueError issue)]
+                    Right _ -> []
 
-templateArgumentProblems :: TemplateArgumentSyntax -> [Diagnostic]
-templateArgumentProblems argument = case argument of
-    TemplateTypeSyntax valueType -> typeSyntaxProblems valueType
-    TemplateValueArgumentSyntax value -> case evaluateTemplateValue value of
-        Left issue -> [problem (templateValueSyntaxSpan value) "VXT0017" (renderTemplateValueError issue)]
+templateArgumentProblemsIn :: TemplateContext -> TemplateArgumentSyntax -> [Diagnostic]
+templateArgumentProblemsIn context argument = case argument of
+    TemplateTypeSyntax valueType -> typeSyntaxProblemsIn context valueType
+    TemplateValueArgumentSyntax value -> templateValueProblemsIn context "VXT0017" value
+
+templateValueProblemsIn :: TemplateContext -> String -> TemplateValueSyntax -> [Diagnostic]
+templateValueProblemsIn context code value = case syntaxTemplateValueIn context value of
+    TemplateValueParameter _ -> []
+    _ -> case evaluateTemplateValue value of
+        Left issue -> [problem (templateValueSyntaxSpan value) code (renderTemplateValueError issue)]
         Right _ -> []
 
-checkDeclaration :: TypeEnvironment -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
-checkDeclaration globals declaration@FunctionDeclaration {} =
+checkDeclarationWith ::
+    TemplateContext -> TypeEnvironment -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
+checkDeclarationWith context globals declaration@FunctionDeclaration {} =
     let parameters =
-            [ (resolvedSymbol (parameterName parameter), (syntaxType (parameterTypeSyntax parameter), False))
+            [ (resolvedSymbol (parameterName parameter), (syntaxTypeIn context (parameterTypeSyntax parameter), False))
             | parameter <- declarationParameters declaration
             ]
-        expected = syntaxType (declarationReturnSyntax declaration)
-        (body, _, explicitReturns, problems) = checkBlock (parameters ++ globals) expected (declarationBody declaration)
+        expected = syntaxTypeIn context (declarationReturnSyntax declaration)
+        (body, _, explicitReturns, problems) = checkBlockWith context (parameters ++ globals) expected (declarationBody declaration)
         finalReturn = finalExpressionType body
         returns = explicitReturns ++ maybe [] (: []) finalReturn
         inferred = inferReturn expected returns
@@ -125,10 +238,10 @@ checkDeclaration globals declaration@FunctionDeclaration {} =
                         "return expression does not match the declared function type"
                     ]
                 else []
-        typedParameters = map typeParameter (declarationParameters declaration)
+        typedParameters = map (typeParameterWith context) (declarationParameters declaration)
         signatureProblems =
-            typeSyntaxProblems (declarationReturnSyntax declaration)
-                ++ concatMap (typeSyntaxProblems . parameterTypeSyntax) (declarationParameters declaration)
+            typeSyntaxProblemsIn context (declarationReturnSyntax declaration)
+                ++ concatMap (typeSyntaxProblemsIn context . parameterTypeSyntax) (declarationParameters declaration)
         functionType = FunctionType (map parameterAnnotation typedParameters) inferred
      in ( FunctionDeclaration
             (declarationSpan declaration)
@@ -141,14 +254,15 @@ checkDeclaration globals declaration@FunctionDeclaration {} =
             (declarationAccess declaration)
         , signatureProblems ++ problems ++ returnProblems
         )
-checkDeclaration _ declaration@TypeDeclaration {} = checkTopDeclaration declaration
+checkDeclarationWith _ _ declaration@TypeDeclaration {} = checkTopDeclaration declaration
+checkDeclarationWith _ _ declaration@TemplateTypeDeclaration {} = checkTopDeclaration declaration
 
-typeParameter :: Parameter ResolvedName () -> Parameter ResolvedName Type
-typeParameter parameter =
+typeParameterWith :: TemplateContext -> Parameter ResolvedName () -> Parameter ResolvedName Type
+typeParameterWith context parameter =
     Parameter
         (parameterSpan parameter)
         (parameterName parameter)
-        (syntaxType (parameterTypeSyntax parameter))
+        (syntaxTypeIn context (parameterTypeSyntax parameter))
         (parameterTypeSyntax parameter)
 
 inferReturn :: Type -> [Type] -> Type
@@ -161,27 +275,32 @@ compatible ErrorType _ = True
 compatible _ ErrorType = True
 compatible left right = left == right
 
-checkBlock ::
-    TypeEnvironment -> Type -> Block ResolvedName () -> (Block ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
-checkBlock environment expected (Block statements) =
+checkBlockWith ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Type ->
+    Block ResolvedName () ->
+    (Block ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
+checkBlockWith context environment expected (Block statements) =
     let (checked, final, returns, problems) = go environment statements in (Block checked, final, returns, problems)
     where
         go env [] = ([], env, [], [])
         go env (statement : rest) =
-            let (typed, next, returned, firstProblems) = checkStatement env expected statement
+            let (typed, next, returned, firstProblems) = checkStatementWith context env expected statement
                 (remaining, final, laterReturns, laterProblems) = go next rest
              in (typed : remaining, final, returned ++ laterReturns, firstProblems ++ laterProblems)
 
-checkStatement ::
+checkStatementWith ::
+    TemplateContext ->
     TypeEnvironment ->
     Type ->
     Statement ResolvedName () ->
     (Statement ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
-checkStatement environment expected statement = case statement of
+checkStatementWith context environment expected statement = case statement of
     BindingStatement spanValue kind syntax name _ value ->
-        let declared = syntaxType syntax
+        let declared = syntaxTypeIn context syntax
             target = if declared == ErrorType then Nothing else Just declared
-            (typedValue, valueType, problems) = checkExpressionExpected environment target value
+            (typedValue, valueType, problems) = checkExpressionExpectedWith context environment target value
             bindingType = if declared == ErrorType then valueType else declared
             mismatch =
                 if compatible bindingType valueType then [] else [problem spanValue "VXT0002" "binding initializer has the wrong type"]
@@ -190,36 +309,37 @@ checkStatement environment expected statement = case statement of
          in ( BindingStatement spanValue kind syntax name bindingType typedValue
             , (resolvedSymbol name, (bindingType, mutable)) : environment
             , []
-            , typeSyntaxProblems syntax ++ problems ++ mismatch ++ constantProblems
+            , typeSyntaxProblemsIn context syntax ++ problems ++ mismatch ++ constantProblems
             )
     AssignmentStatement spanValue name _ value ->
-        let (typedValue, valueType, problems) = checkExpression environment value
+        let (typedValue, valueType, problems) = checkExpressionWith context environment value
             target = lookup (resolvedSymbol name) environment
             targetType = maybe ErrorType fst target
             immutable = case target of Just (_, False) -> [problem spanValue "VXT0003" "cannot assign to an immutable binding"]; _ -> []
             mismatch = if compatible targetType valueType then [] else [problem spanValue "VXT0004" "assignment value has the wrong type"]
          in (AssignmentStatement spanValue name targetType typedValue, environment, [], problems ++ immutable ++ mismatch)
     ReturnStatement spanValue value ->
-        let (typedValue, valueType, problems) = checkOptionalExpected environment (Just expected) value
+        let (typedValue, valueType, problems) = checkOptionalExpectedWith context environment (Just expected) value
             mismatch = if compatible expected valueType then [] else [problem spanValue "VXT0005" "return value has the wrong type"]
          in (ReturnStatement spanValue typedValue, environment, [valueType], problems ++ mismatch)
     IfStatement spanValue condition trueBlock falseBlock ->
-        let (typedCondition, conditionType, conditionProblems) = checkExpression environment condition
+        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
             conditionMismatch =
                 if booleanContextType conditionType
                     then []
                     else [problem spanValue "VXT0006" "if condition must be bool or numeric"]
-            (typedTrue, _, trueReturns, trueProblems) = checkBlock environment expected trueBlock
+            (typedTrue, _, trueReturns, trueProblems) = checkBlockWith context environment expected trueBlock
             (typedFalse, falseReturns, falseProblems) = case falseBlock of
                 Nothing -> (Nothing, [], [])
-                Just value -> let (block, _, returns, problems) = checkBlock environment expected value in (Just block, returns, problems)
+                Just value ->
+                    let (block, _, returns, problems) = checkBlockWith context environment expected value in (Just block, returns, problems)
          in ( IfStatement spanValue typedCondition typedTrue typedFalse
             , environment
             , trueReturns ++ falseReturns
             , conditionProblems ++ conditionMismatch ++ trueProblems ++ falseProblems
             )
     ExpressionStatement spanValue value terminated ->
-        let (typedValue, _, problems) = checkExpression environment value
+        let (typedValue, _, problems) = checkExpressionWith context environment value
             effectProblems =
                 if terminated && not (effectCapable value)
                     then [problem spanValue "VXT0013" "pure value expression cannot be used as a statement"]
@@ -245,30 +365,44 @@ effectCapable CallExpression {} = True
 effectCapable CallableExpression {} = False
 effectCapable _ = False
 
-checkOptional ::
-    TypeEnvironment -> Maybe (Expression ResolvedName ()) -> (Maybe (Expression ResolvedName Type), Type, [Diagnostic])
-checkOptional _ Nothing = (Nothing, voidType, [])
-checkOptional environment (Just value) = let (typed, valueType, problems) = checkExpression environment value in (Just typed, valueType, problems)
+checkOptionalWith ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Maybe (Expression ResolvedName ()) ->
+    (Maybe (Expression ResolvedName Type), Type, [Diagnostic])
+checkOptionalWith _ _ Nothing = (Nothing, voidType, [])
+checkOptionalWith context environment (Just value) =
+    let (typed, valueType, problems) = checkExpressionWith context environment value
+     in (Just typed, valueType, problems)
 
-checkOptionalExpected ::
+checkOptionalExpectedWith ::
+    TemplateContext ->
     TypeEnvironment ->
     Maybe Type ->
     Maybe (Expression ResolvedName ()) ->
     (Maybe (Expression ResolvedName Type), Type, [Diagnostic])
-checkOptionalExpected _ _ Nothing = (Nothing, voidType, [])
-checkOptionalExpected environment expected (Just value) =
-    let (typed, valueType, problems) = checkExpressionExpected environment expected value
+checkOptionalExpectedWith _ _ _ Nothing = (Nothing, voidType, [])
+checkOptionalExpectedWith context environment expected (Just value) =
+    let (typed, valueType, problems) = checkExpressionExpectedWith context environment expected value
      in (Just typed, valueType, problems)
 
-checkExpression :: TypeEnvironment -> Expression ResolvedName () -> (Expression ResolvedName Type, Type, [Diagnostic])
-checkExpression environment = checkExpressionExpected environment Nothing
+checkExpressionWith ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Expression ResolvedName () ->
+    (Expression ResolvedName Type, Type, [Diagnostic])
+checkExpressionWith context environment = checkExpressionExpectedWith context environment Nothing
 
 -- Expected types are semantic context, not conversions.  They choose the
 -- representation of an otherwise untyped numeric literal and allow the
 -- boolean numeric rule, but never silently convert a computed value.
-checkExpressionExpected ::
-    TypeEnvironment -> Maybe Type -> Expression ResolvedName () -> (Expression ResolvedName Type, Type, [Diagnostic])
-checkExpressionExpected environment expected expression = case expression of
+checkExpressionExpectedWith ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Maybe Type ->
+    Expression ResolvedName () ->
+    (Expression ResolvedName Type, Type, [Diagnostic])
+checkExpressionExpectedWith context environment expected expression = case expression of
     NameExpression spanValue name _ ->
         let valueType = maybe ErrorType fst (lookup (resolvedSymbol name) environment)
             problems = if valueType == ErrorType then [problem spanValue "VXT0007" "name has no known type"] else []
@@ -277,11 +411,11 @@ checkExpressionExpected environment expected expression = case expression of
         let (valueType, problems) = literalTypeInContext spanValue expected literal
          in (LiteralExpression spanValue literal valueType, valueType, problems)
     CallExpression spanValue callee arguments _ ->
-        let (typedCallee, calleeType, calleeProblems) = checkExpression environment callee
+        let (typedCallee, calleeType, calleeProblems) = checkExpressionWith context environment callee
             parameterTypes = case calleeType of FunctionType parameters _ -> parameters; _ -> []
             checkedArguments =
                 zipWith
-                    (\index argument -> checkExpressionExpected environment (safeIndex parameterTypes index) argument)
+                    (\index argument -> checkExpressionExpectedWith context environment (safeIndex parameterTypes index) argument)
                     [0 ..]
                     arguments
             argumentTypes = map (\(_, valueType, _) -> valueType) checkedArguments
@@ -299,7 +433,7 @@ checkExpressionExpected environment expected expression = case expression of
             )
     UnaryExpression spanValue operator value _ ->
         let operandExpected = if operator == LogicalNot then Nothing else expected
-            (typedValue, valueType, problems) = checkExpressionExpected environment operandExpected value
+            (typedValue, valueType, problems) = checkExpressionExpectedWith context environment operandExpected value
             rule = unaryNumericRule operator valueType
             mismatch = ruleProblems spanValue "VXT0011" rule
          in (UnaryExpression spanValue operator typedValue (numericRuleType rule), numericRuleType rule, problems ++ mismatch)
@@ -309,9 +443,9 @@ checkExpressionExpected environment expected expression = case expression of
         -- infer their operand domain; logical operands may use distinct numeric
         -- types and therefore do not borrow each other's expected type.
         let operandExpected = if booleanResult operator then Nothing else expected
-            (typedLeft, leftType, leftProblems) = checkExpressionExpected environment operandExpected left
+            (typedLeft, leftType, leftProblems) = checkExpressionExpectedWith context environment operandExpected left
             rightExpected = if operator `elem` [LogicalAnd, LogicalOr] then Nothing else Just leftType
-            (typedRight, rightType, rightProblems) = checkExpressionExpected environment rightExpected right
+            (typedRight, rightType, rightProblems) = checkExpressionExpectedWith context environment rightExpected right
             rule = binaryNumericRule operator leftType rightType
             resultType = numericRuleType rule
             mismatch = ruleProblems spanValue "VXT0012" rule
@@ -320,21 +454,21 @@ checkExpressionExpected environment expected expression = case expression of
             , leftProblems ++ rightProblems ++ mismatch
             )
     CallableExpression spanValue explicit captures parameters body _ ->
-        let checkedCaptures = checkCaptures environment captures
+        let checkedCaptures = checkCapturesWith context environment captures
             captureEnvironment =
                 [ (resolvedSymbol (captureName capture), (captureAnnotation capture, True))
                 | capture <- map firstCapture checkedCaptures
                 ]
-            typedParameters = map typeCallableParameter parameters
+            typedParameters = map (typeCallableParameterWith context) parameters
             parameterEnvironment =
                 [ (resolvedSymbol (parameterName parameter), (parameterAnnotation parameter, False))
                 | parameter <- typedParameters
                 ]
             callableEnvironment = parameterEnvironment ++ captureEnvironment ++ environment
-            (typedBody, resultType, bodyProblems) = checkCallableBody callableEnvironment body
+            (typedBody, resultType, bodyProblems) = checkCallableBodyWith context callableEnvironment body
             callableType = FunctionType (map parameterAnnotation typedParameters) resultType
             captureProblems = concatMap captureDiagnostics checkedCaptures
-            parameterProblems = concatMap (typeSyntaxProblems . parameterTypeSyntax) parameters
+            parameterProblems = concatMap (typeSyntaxProblemsIn context . parameterTypeSyntax) parameters
          in ( CallableExpression
                 spanValue
                 explicit
@@ -358,11 +492,11 @@ firstCapture = fst
 captureDiagnostics :: CheckedCapture -> [Diagnostic]
 captureDiagnostics = snd
 
-checkCaptures :: TypeEnvironment -> [Capture ResolvedName ()] -> [CheckedCapture]
-checkCaptures environment = map checkCapture
+checkCapturesWith :: TemplateContext -> TypeEnvironment -> [Capture ResolvedName ()] -> [CheckedCapture]
+checkCapturesWith context environment = map checkCapture
     where
         checkCapture (Capture spanValue mode name _ initializer) =
-            let (typedInitializer, valueType, problems) = checkOptional environment initializer
+            let (typedInitializer, valueType, problems) = checkOptionalWith context environment initializer
                 ownershipProblems = case mode of
                     StrongCapture -> []
                     _ | isReferenceType valueType -> []
@@ -387,27 +521,28 @@ isReferenceType valueType = case valueType of
             , QualifiedName [Identifier "void"]
             ]
 
-typeCallableParameter :: Parameter ResolvedName () -> Parameter ResolvedName Type
-typeCallableParameter parameter =
+typeCallableParameterWith :: TemplateContext -> Parameter ResolvedName () -> Parameter ResolvedName Type
+typeCallableParameterWith context parameter =
     let valueType = case parameterTypeSyntax parameter of
             AutoType -> TypeVariable (parameterName parameter)
-            syntax -> syntaxType syntax
+            syntax -> syntaxTypeIn context syntax
      in Parameter
             (parameterSpan parameter)
             (parameterName parameter)
             valueType
             (parameterTypeSyntax parameter)
 
-checkCallableBody ::
+checkCallableBodyWith ::
+    TemplateContext ->
     TypeEnvironment ->
     CallableBody ResolvedName () ->
     (CallableBody ResolvedName Type, Type, [Diagnostic])
-checkCallableBody environment body = case body of
+checkCallableBodyWith context environment body = case body of
     CallableExpressionBody expression ->
-        let (typed, valueType, problems) = checkExpression environment expression
+        let (typed, valueType, problems) = checkExpressionWith context environment expression
          in (CallableExpressionBody typed, valueType, problems)
     CallableBlockBody block ->
-        let (typed, _, returns, problems) = checkBlock environment ErrorType block
+        let (typed, _, returns, problems) = checkBlockWith context environment ErrorType block
             finalType = maybe (inferReturn ErrorType returns) id (finalExpressionType typed)
          in (CallableBlockBody typed, finalType, problems)
 

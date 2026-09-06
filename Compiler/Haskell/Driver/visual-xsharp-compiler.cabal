@@ -31,6 +31,9 @@ library
         visual-xsharp-frontend:Visual.XSharp.Resolver.Renamer,
         visual-xsharp-frontend:Visual.XSharp.SourceSet,
         visual-xsharp-frontend:Visual.XSharp.TemplateValue,
+        visual-xsharp-frontend:Visual.XSharp.Template.Application,
+        visual-xsharp-frontend:Visual.XSharp.Template.Instantiation,
+        visual-xsharp-frontend:Visual.XSharp.Template.Verifier,
         visual-xsharp-frontend:Visual.XSharp.TypeChecker,
         visual-xsharp-core:Visual.XSharp.Core,
         visual-xsharp-core:Visual.XSharp.Core.Artifact,
@@ -82,6 +85,10 @@ test-suite visual-xsharp-compiler-tests
         SourceSetTests
         SourceTextTests
         TemplateTests
+        TemplateApplicationTests
+        TemplateDeclarationTests
+        TemplateInstantiationTests
+        TemplateVerifierTests
         VoidTests
     hs-source-dirs: test
     build-depends:

@@ -50,6 +50,11 @@ manyUntilEof parser = do
 
 parseDeclaration :: P (Declaration Identifier ())
 parseDeclaration = do
+    isTemplate <- peekText "template"
+    if isTemplate then parseTemplateDeclaration else parseOrdinaryTypeDeclaration
+
+parseOrdinaryTypeDeclaration :: P (Declaration Identifier ())
+parseOrdinaryTypeDeclaration = do
     _ <- parseAccess
     start <- keyword "class"
     (name, _) <- identifier
@@ -57,6 +62,129 @@ parseDeclaration = do
     members <- manyUntil "}" parseMember
     close <- symbol "}"
     pure (TypeDeclaration (mergeSpan (tokenSpan start) (tokenSpan close)) name () members)
+
+-- The template prefix owns lexical parameter declarations.  It is parsed as
+-- part of the class rather than discarded as decoration because later passes
+-- need parameter category and order to distinguish type and value arguments.
+parseTemplateDeclaration :: P (Declaration Identifier ())
+parseTemplateDeclaration = do
+    start <- keyword "template"
+    _ <- symbol "<"
+    empty <- peekText ">"
+    if empty
+        then failCurrent "VXP0019" "a template parameter list cannot be empty"
+        else pure ()
+    parameters <- separatedUntil ">" "," parseTemplateParameter
+    _ <- symbol ">"
+    _ <- parseAccess
+    _ <- keyword "class"
+    (name, _) <- identifier
+    _ <- symbol "{"
+    members <- manyUntil "}" parseMember
+    close <- symbol "}"
+    pure
+        ( TemplateTypeDeclaration
+            (mergeSpan (tokenSpan start) (tokenSpan close))
+            name
+            ()
+            parameters
+            members
+        )
+
+parseTemplateParameter :: P (TemplateParameter Identifier ())
+parseTemplateParameter = do
+    (parameter, spanValue) <- withSpan parseTemplateParameterBody
+    pure parameter {templateParameterSpan = spanValue}
+
+parseTemplateParameterBody :: P (TemplateParameter Identifier ())
+parseTemplateParameterBody = do
+    nested <- peekText "template"
+    if nested then parseTemplateTemplateParameter else parseDirectTemplateParameter
+
+parseDirectTemplateParameter :: P (TemplateParameter Identifier ())
+parseDirectTemplateParameter = do
+    typeParameter <- peekText "typename"
+    if typeParameter
+        then do
+            _ <- keyword "typename"
+            packed <- optionalSymbol "..."
+            (name, spanValue) <- identifier
+            defaultValue <- optionalTemplateTypeDefault
+            pure (TemplateParameter spanValue name () TemplateTypeParameter packed defaultValue)
+        else do
+            parameterType <- parseTypeSyntax
+            packed <- optionalSymbol "..."
+            (name, spanValue) <- identifier
+            defaultValue <- optionalTemplateValueDefault
+            pure
+                ( TemplateParameter
+                    spanValue
+                    name
+                    ()
+                    (TemplateValueParameterKind parameterType)
+                    packed
+                    defaultValue
+                )
+
+parseTemplateTemplateParameter :: P (TemplateParameter Identifier ())
+parseTemplateTemplateParameter = do
+    _ <- keyword "template"
+    _ <- symbol "<"
+    empty <- peekText ">"
+    if empty
+        then failCurrent "VXP0020" "a template-template parameter signature cannot be empty"
+        else pure ()
+    shapes <- separatedUntil ">" "," parseTemplateParameterShape
+    _ <- symbol ">"
+    _ <- keyword "class"
+    packed <- optionalSymbol "..."
+    (name, spanValue) <- identifier
+    defaultValue <- optionalTemplateTypeDefault
+    pure
+        ( TemplateParameter
+            spanValue
+            name
+            ()
+            (TemplateTemplateParameter shapes)
+            packed
+            defaultValue
+        )
+
+parseTemplateParameterShape :: P TemplateParameterShape
+parseTemplateParameterShape = do
+    nested <- peekText "template"
+    if nested
+        then do
+            _ <- keyword "template"
+            _ <- symbol "<"
+            shapes <- separatedUntil ">" "," parseTemplateParameterShape
+            _ <- symbol ">"
+            _ <- keyword "class"
+            packed <- optionalSymbol "..."
+            pure (TemplateParameterShape (TemplateTemplateParameterShape shapes) packed)
+        else do
+            isType <- peekText "typename"
+            if isType
+                then do
+                    _ <- keyword "typename"
+                    packed <- optionalSymbol "..."
+                    pure (TemplateParameterShape TemplateTypeParameterShape packed)
+                else do
+                    valueType <- parseTypeSyntax
+                    packed <- optionalSymbol "..."
+                    pure (TemplateParameterShape (TemplateValueParameterShape valueType) packed)
+
+optionalTemplateTypeDefault :: P (Maybe TemplateDefault)
+optionalTemplateTypeDefault = do
+    equals <- optionalSymbol "="
+    if equals then Just . TemplateTypeDefault <$> parseTypeSyntax else pure Nothing
+
+optionalTemplateValueDefault :: P (Maybe TemplateDefault)
+optionalTemplateValueDefault = do
+    equals <- optionalSymbol "="
+    if equals
+        then Just . TemplateValueDefault <$> (parseAdditive >>= requireTemplateValue)
+        else pure Nothing
 
 parseMember :: P (Declaration Identifier ())
 parseMember = do

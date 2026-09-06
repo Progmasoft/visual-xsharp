@@ -100,6 +100,10 @@ foldDeclarations declarations initial = foldl walkDeclaration initial declaratio
 walkDeclaration :: WalkState -> Declaration ResolvedName Type -> WalkState
 walkDeclaration state declaration = case declaration of
     TypeDeclaration {typeMembers = members} -> foldl walkDeclaration state members
+    -- Open template members can contain closures even though they do not lower
+    -- before specialization. Analyze them now so tooling sees the same capture
+    -- relationships before and after concrete declaration instantiation.
+    TemplateTypeDeclaration {typeMembers = members} -> foldl walkDeclaration state members
     FunctionDeclaration {declarationBody = body} -> walkBlock Nothing state body
 
 walkBlock :: Maybe ClosureId -> WalkState -> Block ResolvedName Type -> WalkState

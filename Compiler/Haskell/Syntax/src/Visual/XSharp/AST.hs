@@ -8,6 +8,11 @@ module Visual.XSharp.AST
     , SourceSpan (..)
     , SyntaxTree (..)
     , Declaration (..)
+    , TemplateParameter (..)
+    , TemplateParameterKind (..)
+    , TemplateParameterShape (..)
+    , TemplateParameterShapeKind (..)
+    , TemplateDefault (..)
     , Parameter (..)
     , Block (..)
     , Statement (..)
@@ -108,6 +113,53 @@ data Declaration name annotation
         , declarationIsStatic :: Bool
         , declarationAccess :: Access
         }
+    | TemplateTypeDeclaration
+        { declarationSpan :: SourceSpan
+        , declarationName :: name
+        , declarationAnnotation :: annotation
+        , declarationTemplateParameters :: [TemplateParameter name annotation]
+        , typeMembers :: [Declaration name annotation]
+        }
+    deriving (Eq, Ord, Read, Show)
+
+-- Template declarations retain parameter kind, pack status, and defaults all
+-- the way through TypedAST.  They are semantic declarations rather than a
+-- parser-only prefix: renaming gives every parameter a stable symbol and type
+-- checking uses those symbols when a body mentions T or a fixed-array size N.
+data TemplateParameter name annotation = TemplateParameter
+    { templateParameterSpan :: SourceSpan
+    , templateParameterName :: name
+    , templateParameterAnnotation :: annotation
+    , templateParameterKind :: TemplateParameterKind
+    , templateParameterIsPack :: Bool
+    , templateParameterDefault :: Maybe TemplateDefault
+    }
+    deriving (Eq, Ord, Read, Show)
+
+data TemplateParameterKind
+    = TemplateTypeParameter
+    | TemplateValueParameterKind TypeSyntax
+    | TemplateTemplateParameter [TemplateParameterShape]
+    deriving (Eq, Ord, Read, Show)
+
+-- A nested template-template signature has no binding names in the source
+-- examples.  Its shape therefore describes accepted argument categories
+-- without manufacturing symbols that could accidentally enter lexical scope.
+data TemplateParameterShape = TemplateParameterShape
+    { templateParameterShapeKind :: TemplateParameterShapeKind
+    , templateParameterShapeIsPack :: Bool
+    }
+    deriving (Eq, Ord, Read, Show)
+
+data TemplateParameterShapeKind
+    = TemplateTypeParameterShape
+    | TemplateValueParameterShape TypeSyntax
+    | TemplateTemplateParameterShape [TemplateParameterShape]
+    deriving (Eq, Ord, Read, Show)
+
+data TemplateDefault
+    = TemplateTypeDefault TypeSyntax
+    | TemplateValueDefault TemplateValueSyntax
     deriving (Eq, Ord, Read, Show)
 
 data Parameter name annotation = Parameter

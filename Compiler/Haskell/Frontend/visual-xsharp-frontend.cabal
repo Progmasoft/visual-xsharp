@@ -20,6 +20,9 @@ library
         Visual.XSharp.Resolver.Renamer
         Visual.XSharp.SourceSet
         Visual.XSharp.TemplateValue
+        Visual.XSharp.Template.Application
+        Visual.XSharp.Template.Instantiation
+        Visual.XSharp.Template.Verifier
         Visual.XSharp.TypeChecker
     hs-source-dirs: src
     build-depends:
