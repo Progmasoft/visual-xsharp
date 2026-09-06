@@ -11,7 +11,7 @@
 -- Example 1: 1. Namespace and core types
 -- Demonstrates: The core threading API is available through:
 
-using System.Threading.Sync;
+using System.Threading.Mpsc;
 
 -- ============================================================================
 -- Example 2: 3.1 Untyped parameters
@@ -313,16 +313,16 @@ void Start() {
 
 -- ============================================================================
 -- Example 34: 15. MPSC channels
--- Demonstrates: A channel is created through Mpsc.Channel<T>():
+-- Demonstrates: A channel is a normal generic reference type constructed with new.
 
-Mpsc.Channel<String> channel = Mpsc.Channel<String>();
+Channel<String> channel = new Channel<String>();
 
 -- ============================================================================
 -- Example 35: 15.1 Multiple producers
 -- Demonstrates: Multiple concurrent tasks or threads may send values into the same channel.
 
 void Start() {
-    Mpsc.Channel<String> channel = Mpsc.Channel<String>();
+    Channel<String> channel = new Channel<String>();
 
     Thread.Spawn(\ -> {
         channel.Send("A");

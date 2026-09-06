@@ -9,6 +9,7 @@ import CoreOptimizerTests (coreOptimizerTests)
 import CoreVerifierTests (coreVerifierTests)
 import Data.List (isInfixOf)
 import Data.Word (Word8)
+import MonomorphizationTests (monomorphizationTests)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
 import ScalarWireTests (scalarWireTests)
@@ -101,6 +102,7 @@ main = do
     mapM_ (uncurry check) coreOptimizerSourceTests
     mapM_ (uncurry check) coreVerifierTests
     mapM_ (uncurry check) numericTests
+    mapM_ (uncurry check) monomorphizationTests
     mapM_ (uncurry check) parserContractTests
     mapM_ (uncurry check) scalarWireTests
     mapM_ (uncurry check) specializationTests

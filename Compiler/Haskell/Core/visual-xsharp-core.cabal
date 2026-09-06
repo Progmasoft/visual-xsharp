@@ -19,6 +19,7 @@ library
         Visual.XSharp.Core.CorePrep.Wire.Decode
         Visual.XSharp.Core.CorePrep.Wire.Encode
         Visual.XSharp.Core.CorePrep.Wire.Format
+        Visual.XSharp.Core.Monomorphization
         Visual.XSharp.Core.Optimizer
         Visual.XSharp.Core.Scalar
         Visual.XSharp.Core.Specialization
@@ -33,6 +34,9 @@ library
         Visual.XSharp.Core.Optimizer.Liveness
         Visual.XSharp.Core.Optimizer.Pipeline
         Visual.XSharp.Core.Optimizer.Types
+        Visual.XSharp.Core.Monomorphization.Discovery
+        Visual.XSharp.Core.Monomorphization.Graph
+        Visual.XSharp.Core.Monomorphization.Types
     hs-source-dirs: src
     build-depends:
         base >=4.20 && <4.23,

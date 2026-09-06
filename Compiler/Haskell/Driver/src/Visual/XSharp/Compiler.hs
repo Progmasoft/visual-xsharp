@@ -27,6 +27,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
 import Visual.XSharp.Core.CorePrep.Verifier
+import Visual.XSharp.Core.Monomorphization
 import Visual.XSharp.Core.Optimizer
 import Visual.XSharp.Core.Verifier
 import Visual.XSharp.Desugarer
@@ -43,6 +44,7 @@ data FrontendArtifacts = FrontendArtifacts
     , artifactResolvedAST :: ResolvedAST
     , artifactTypedAST :: TypedAST
     , artifactCore :: CoreModule
+    , artifactMonomorphizationPlan :: MonomorphizationPlan
     , artifactOptimizedCore :: CoreModule
     , artifactCorePrep :: CorePrepModule
     }
@@ -110,9 +112,28 @@ compileSemanticToCorePrep semantic = do
         resolved = semanticResolvedAST semantic
         typed = semanticTypedAST semantic
     core <- runDesugarer defaultDesugarer typed >>= verifyCore
+    -- Demand discovery runs before optimization so dead-code elimination
+    -- cannot silently erase a type required by the checked source contract.
+    -- Declaration cloning will consume this stable plan in a later slice.
+    specializationPlan <- mapLeft monomorphizationDiagnostic (planCoreMonomorphization core)
     optimized <- runCoreOptimizer defaultCoreOptimizer core >>= verifyCore
     prepared <- prepareCore optimized >>= verifyCorePrep
-    pure (FrontendArtifacts parsed renamed resolved typed core optimized prepared)
+    pure (FrontendArtifacts parsed renamed resolved typed core specializationPlan optimized prepared)
+
+mapLeft :: (failure -> mapped) -> Either failure value -> Either mapped value
+mapLeft transform result = case result of
+    Left failure -> Left (transform failure)
+    Right value -> Right value
+
+monomorphizationDiagnostic :: MonomorphizationError -> [Diagnostic]
+monomorphizationDiagnostic failure =
+    [ Diagnostic
+        CoreStage
+        Error
+        "VXM1001"
+        Nothing
+        (renderMonomorphizationError failure)
+    ]
 
 data ParsedNamespace = ParsedNamespace
     { parsedNamespaceName :: Maybe QualifiedName

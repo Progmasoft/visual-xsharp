@@ -93,9 +93,17 @@ The table interns only valid concrete types, starts identifiers above zero,
 coalesces concurrent insertion races, and preserves insertion order in
 snapshots.
 
-These facilities are infrastructure for the future monomorphization pass. They
-do not claim that template declarations, constraints, packs, or lazy members
-are fully instantiated by the current frontend.
+These facilities now feed the connected Haskell specialization-demand pass.
+After initial Core verification, it discovers concrete parameterized types at
+every signature, statement, expression, and closure boundary, closes nested
+dependencies to a fixed point, and derives child-before-parent processing
+order. It does not claim that template declarations, constraints, packs, or
+lazy members are fully instantiated by the current frontend.
+
+The resulting demand graph is derived compiler state, not part of the `VXCR`
+schema. `FrontendArtifacts` retains it beside Core for the later declaration
+cloner. Loading Core from disk reconstructs the same plan from structural type
+identity rather than trusting serialized queue identifiers.
 
 ## Functions
 
@@ -298,7 +306,10 @@ could drift from the wire and optimizer models.
 
 ## Optimization boundary
 
-The Core optimizer runs only after verification and verifies its result again.
+The Core optimizer runs only after verification and specialization-demand
+planning, then verifies its result again. Planning observes checked Core before
+dead-code elimination so optimization cannot erase the only evidence of an
+invalid open or malformed specialization. Its passes may:
 Its passes may:
 
 - propagate immutable literal bindings;

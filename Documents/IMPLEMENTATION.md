@@ -32,6 +32,7 @@ The Haskell package exposes separate modules for:
 - renamer and name resolution;
 - type checker;
 - desugarer;
+- Core specialization-demand discovery and graph validation;
 - Core and Core optimization;
 - CorePrep and CorePrep verification; and
 - pipeline diagnostics and orchestration.
@@ -52,7 +53,8 @@ stable path ordering. Each physical file is parsed independently. Files declarin
 Renamer, so duplicate declarations and cross-file members share one semantic namespace without requiring directory names to
 mirror namespace segments.
 
-Every discovered namespace passes through Renamer, Name Resolution, Type Checker, Desugarer, Core optimization, Core
+Every discovered namespace passes through Renamer, Name Resolution, Type Checker, Desugarer, Core verification,
+specialization-demand planning, Core optimization, Core
 verification, CorePrep, and CorePrep verification. The configured namespace-qualified class then selects the one Core module
 sent over the current private process boundary. Cross-namespace imports and a multi-module Core link unit remain later
 semantic work; an unrelated namespace is validated but is not silently folded into the entry namespace.
@@ -64,7 +66,7 @@ CorePrep, namespace merging, and entry validation. Fixed-width integer/radix/sep
 boolean context, source `void`, stable `SymbolId` identity, and constant range checks are represented before Core emission.
 
 The full `Spec/` catalog is not implemented. Object/value layout, the complete standard-library surface, cross-namespace
-imports, the monomorphization engine for full generic/template behavior, exception lowering, ownership runtime operations, generators, FFI, assembly, and
+imports, template declaration cloning and constraint selection, exception lowering, ownership runtime operations, generators, FFI, assembly, and
 many advanced declaration forms require additional semantic and native work. Unsupported forms must produce frontend or
 backend diagnostics; they must not be approximated with C-family behavior.
 
@@ -112,7 +114,7 @@ unit, and source ownership for project-wide per-file artifacts.
 | target object and assembly output | connected for supported values | target machine |
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
 | closure object ABI | connected | Xpp/Xmm, LLVM, and AARC runtime boundary |
-| Xpp/Xmm disk codecs | connected | bounded v2 `VXPP`/`VXMM` readers and writers |
+| Xpp/Xmm disk codecs | connected | bounded v3 `VXPP`/`VXMM` readers and writers |
 | project-wide per-source native outputs | registered contract, not connected | source ownership through Core |
 
 ## Retiring Rust compiler core

@@ -40,6 +40,7 @@ library
         visual-xsharp-core:Visual.XSharp.Core.CorePrep.Wire.Decode,
         visual-xsharp-core:Visual.XSharp.Core.CorePrep.Wire.Encode,
         visual-xsharp-core:Visual.XSharp.Core.CorePrep.Wire.Format,
+        visual-xsharp-core:Visual.XSharp.Core.Monomorphization,
         visual-xsharp-core:Visual.XSharp.Core.Optimizer,
         visual-xsharp-core:Visual.XSharp.Core.Scalar,
         visual-xsharp-core:Visual.XSharp.Core.Specialization,
@@ -74,6 +75,7 @@ test-suite visual-xsharp-compiler-tests
         CoreOptimizerSourceTests
         CoreVerifierTests
         NumericTests
+        MonomorphizationTests
         ParserContractTests
         ScalarWireTests
         SpecializationTests

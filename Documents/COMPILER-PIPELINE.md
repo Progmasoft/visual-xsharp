@@ -22,7 +22,10 @@ source-set discovery and strict UTF-8 decoding
 Lexer -> Parser -> Renamer -> Name Resolution -> Type Checker
         |
         v
-Desugarer -> Core -> Core optimizer -> Core verifier
+Desugarer -> Core verifier -> specialization demand graph
+        |
+        v
+Core optimizer -> Core verifier
         |
         v
 bounded VXCR transport
@@ -164,6 +167,18 @@ choose LLVM layouts, calling conventions, object formats, or target triples.
 Core retains stable symbols, typed functions, expressions, calls, branches, returns, literals, and closure metadata. The
 Core optimizer may simplify expressions while preserving types, evaluation order, source behavior, and symbol identity.
 
+After initial Core verification, the Haskell specialization-demand pass walks
+all type-bearing Core boundaries. It interns concrete parameterized types,
+retains semantic origin paths, follows nested type arguments to a fixed point,
+checks resource limits, validates dependency-graph invariants, and derives a
+stable child-before-parent emission order. The plan is available to later
+declaration cloning but is not serialized as part of `VXCR`.
+
+This connected pass is not the complete template engine. Constraint selection,
+template declaration parsing, lazy member reachability, capture-avoiding body
+cloning, generated symbols, and re-verification of produced declarations remain
+separate work. The backend never guesses those source semantics.
+
 The Core verifier is not optional. It checks artifacts produced by the frontend and artifacts loaded from disk. The Haskell
 and C++20 implementations share the versioned `VXCR` contract and equivalent structural expectations. Limits cover document
 size, collection counts, text lengths, nesting depth, expression depth, Unicode scalars, and closure structure.
@@ -206,7 +221,8 @@ Xpp optimization is a separate phase. The currently connected passes include con
 elimination. Every optimized module passes the Xpp-owned verifier; an optimization is not allowed to rely on the later Xmm
 or LLVM verifier to catch its mistakes.
 
-The public `.xpp` name is reserved, but a versioned reader/writer is not connected. Ordinary compilation keeps Xpp in RAM.
+The public `.xpp` artifact uses the bounded versioned `VXPP` reader/writer. Ordinary compilation still keeps Xpp in RAM
+unless the user explicitly selects Xpp input or output.
 
 ## 11. Xmm
 
@@ -270,10 +286,7 @@ The major unfinished seams are:
 
 - cross-namespace import binding;
 - a multi-module Core link unit;
-- complete fixed-width scalar payloads in a later Core wire revision;
 - source ownership for project-wide per-file artifacts;
-- versioned Xpp and Xmm codecs;
-- the AARC closure object and invocation ABI;
 - broader object, value, exception, ownership, and standard-library lowering; and
 - named test-suite execution through its framework runner.
 

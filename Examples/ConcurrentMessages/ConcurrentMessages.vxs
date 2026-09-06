@@ -3,11 +3,11 @@
 
 namespace Examples.ConcurrentMessages;
 
-using System.Threading.Sync;
+using System.Threading.Mpsc;
 
 public class ConcurrentMessages {
     public static void Main() {
-        Mpsc.Channel<String> channel = Mpsc.Channel<String>();
+        Channel<String> channel = new Channel<String>();
 
         Thread.Spawn(\ -> {
             channel.Send("Lexer finished");

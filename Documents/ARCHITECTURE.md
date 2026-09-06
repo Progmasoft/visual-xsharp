@@ -17,6 +17,7 @@
 → Typed AST
 → Desugarer
 → Core
+→ Specialization Demand Planning
 → Core Optimizer
 → CorePrep
 → Xpp
@@ -42,7 +43,7 @@ Stage ownership is deliberate:
 | --- | --- | --- |
 | `Compiler/Haskell/Syntax` | Haskell/Cabal | positioned tokens and parsed AST vocabulary |
 | `Compiler/Haskell/Frontend` | Haskell/Cabal | Lexer, Parser, Renamer, Name Resolution, Type Checker, and Desugarer |
-| `Compiler/Haskell/Core` | Haskell/Cabal | Core/CorePrep models, optimization, verification, and codecs |
+| `Compiler/Haskell/Core` | Haskell/Cabal | Core/CorePrep models, specialization-demand planning, optimization, verification, and codecs |
 | `Compiler/Haskell/Driver` | Haskell/Cabal | source loading, namespace merge, entry selection, and frontend process |
 | `Compiler/Core` | C++20/Bazel | bounded Core reader, verifier, and CorePrep adapter |
 | `Compiler/Codegen/Xpp` | C++20/Bazel | CorePrep-to-Xpp lowering, optimization, and verification |
@@ -69,6 +70,12 @@ Core optimization is a verified fixed-point pipeline rather than a single expres
 range-safe integer folding, effect-preserving branch cleanup, and declaration-aware backward liveness run before CorePrep.
 Each enabled pass emits deterministic typed metrics, and the final tree is verified again. The detailed contracts are in
 [Core IR](CORE-IR.md) and [Core optimization](CORE-OPTIMIZER.md).
+
+Specialization-demand planning runs on verified Core before that optimization
+pipeline. It is Haskell-owned because template identity, source semantics, and
+future declaration selection must be settled before CorePrep and native Xpp.
+The current graph closes concrete type dependencies and provides deterministic
+emission order; it does not yet represent completed declaration cloning.
 
 ## Native middle end
 

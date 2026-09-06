@@ -9,11 +9,13 @@ as the default execution model. Each required concrete template argument set
 produces a concrete declaration with concrete storage and callable signatures.
 
 This is the intended compiler contract. The current frontend transports ordered
-type and compile-time value arguments and the native layer can validate,
-substitute, identify, and intern concrete type specializations. It does not yet
-clone template declarations or execute the complete instantiation engine.
-Until that engine lands, documents and diagnostics must not claim that all
-template programs are executable.
+type and compile-time value arguments, discovers concrete specialization
+demands from verified Core, closes their nested dependency graph to a fixed
+point, and validates that graph before optimization. The native layer can also
+validate, substitute, identify, and intern concrete type specializations. The
+compiler does not yet clone template declarations or execute the complete
+instantiation engine. Until that engine lands, documents and diagnostics must
+not claim that all template programs are executable.
 
 ## Current implementation boundary
 
@@ -28,6 +30,12 @@ The implemented slice includes:
 - independent type-parameter and value-parameter substitution;
 - deterministic structural identity rendering;
 - immutable Haskell worklist planning with atomic batch failure;
+- Core-wide demand discovery for signatures, bindings, expressions, closures,
+  and captures;
+- fixed-point dependency planning with stable root-first demand identifiers;
+- child-before-parent emission ordering and graph invariant validation;
+- semantic demand locations, root/dependency origins, limits, statistics, and
+  readable traces;
 - thread-safe native interning of valid concrete types; and
 - explicit classification of `[]T`, `System.Array<T>`, and
   `System.Array<T, N>`.
@@ -39,7 +47,7 @@ The slice deliberately does not include:
 - lookup of source constants used as fixed-array sizes;
 - template-template arguments, packs, defaults, or wildcard deduction;
 - constraint ordering and specialization selection;
-- demand discovery or declaration/body cloning; or
+- reachability-aware declaration demand discovery or declaration/body cloning;
 - generated symbol mangling and incremental cache persistence.
 
 A bare identifier in an ordinary angle-bracket argument therefore remains a
@@ -198,6 +206,79 @@ compile every method body. Layout-required fields and bases are instantiated;
 method bodies enter the queue when called, explicitly instantiated, or required
 by an exported interface.
 
+### Implemented Core demand pass
+
+The Haskell compiler now runs a bounded demand pass after the Desugarer and
+first Core verification, before Core optimization. It walks every currently
+lowered Core function because the small declaration model does not yet retain
+export visibility or a call-graph root set. This conservative choice may plan a
+specialization that later liveness removes, but it never lets optimization hide
+an invalid checked-source type.
+
+The pass observes types at all of these Core boundaries:
+
+- function parameters and result;
+- local binding declarations and initializers;
+- assignment, return, condition, and evaluated expressions;
+- call targets, arguments, and result types;
+- primitive operands and result types;
+- closure callable signatures;
+- capture declarations and capture initializers; and
+- closure parameters, results, and nested bodies.
+
+A named type with one or more ordered template arguments is a specialization
+candidate. A structural callable type is not itself a specialization: its
+parameter and result types are visited independently. Plain nominal types,
+unbound type variables, error sentinels, and compile-time value arguments do not
+manufacture demands. An unbound parameter inside an otherwise parameterized
+candidate is rejected rather than entering the concrete plan.
+
+Root occurrences retain a semantic Core location. A location starts with the
+positive resolved function identity and then records structural steps such as
+parameter index, statement index, branch, call argument, closure capture, or
+expression result. This location remains available even if the compiler input
+was a `.core` artifact and no source span exists. A later diagnostic adapter may
+attach frontend provenance without changing the plan identity.
+
+When a candidate contains another parameterized type, the child enters the
+queue with a dependency origin naming the parent demand and ordered argument
+index. The queue is deterministic and reaches a fixed point when no unseen
+structural identity remains. Repeated occurrences share one demand while
+retaining distinct origins. Repeated identical origins and repeated dependency
+edges are coalesced.
+
+Demand identifiers are positive and reflect first discovery order. They are
+local planning handles, not serialized names and not ABI. Discovery is
+root-first for useful diagnostics. Code generation needs layout dependencies
+first, so the graph layer derives a deterministic child-before-parent emission
+order without changing identifiers.
+
+The completed graph is checked for:
+
+- positive and unique demand identifiers;
+- references to existing dependencies;
+- duplicate and self dependency edges;
+- completed queue states;
+- dependency cycles; and
+- agreement between recorded demand, edge, and depth statistics and the actual
+  graph.
+
+The default resource contract permits 4096 unique demands, dependency depth
+128, and 16384 retained origins per Core module. Invalid limits fail before
+discovery. Exceeding a limit reports the demand location or dependency origin
+that crossed it; the compiler does not silently truncate the plan.
+
+The plan is stored in `FrontendArtifacts` beside the verified unoptimized Core.
+It is not encoded into `VXCR`: it is deterministic derived data and can be
+reconstructed from a loaded Core module. Keeping it out of the wire also avoids
+turning local queue identifiers into an accidental artifact ABI.
+
+This pass deliberately stops before declaration instantiation. It proves and
+orders concrete type demand; it does not claim to have selected constraints,
+cloned a body, allocated a generated symbol, recomputed ownership, or verified
+the resulting concrete declaration. Those remain the next monomorphization
+layer.
+
 ## Constraint and overload order
 
 Constraint evaluation precedes body cloning. Candidates whose `requires`
@@ -272,6 +353,8 @@ explicit instantiation, recursive failure, deterministic discovery order,
 ownership-class changes, closure signatures, serialization, and cache
 reproducibility.
 
-Until those behavior tests and the instantiation pass exist, monomorphization is
-a documented architectural decision and roadmap item—not a completed compiler
-feature.
+Demand discovery, graph validation, deterministic ordering, type/value identity,
+and specialization interning have behavior tests. Until declaration parsing,
+selection, cloning, and produced-declaration verification also exist,
+monomorphization remains a partially connected compiler feature rather than a
+completed source-language implementation.
