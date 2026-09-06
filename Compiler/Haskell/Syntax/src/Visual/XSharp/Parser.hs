@@ -99,19 +99,110 @@ manyUntil closing parser = do
 
 parseParameter :: P (Parameter Identifier ())
 parseParameter = do
-    _ <- optionalParser (satisfy (\token -> tokenKind token == IdentifierToken && tokenText token == "_") "parameter label")
+    _ <- optionalParameterLabel
     parameterType <- parseTypeSyntax
     (name, spanValue) <- identifier
     pure (Parameter spanValue name () parameterType)
 
+-- External parameter labels are independent from the implementation name. An
+-- underscore suppresses a label, while `label:` gives one explicitly. The AST
+-- intentionally stores only the implementation name until call-site labels
+-- become part of name resolution rather than pretending both names are equal.
+optionalParameterLabel :: P (Maybe Token)
+optionalParameterLabel = do
+    tokens <- peekTokens 2
+    case tokens of
+        first : _
+            | tokenKind first == IdentifierToken
+            , tokenText first == "_" ->
+                Just <$> takeToken
+        first : colon : _
+            | tokenKind first == IdentifierToken
+            , tokenKind colon == SymbolToken
+            , tokenText colon == ":" -> do
+                label <- takeToken
+                _ <- takeToken
+                pure (Just label)
+        _ -> pure Nothing
+
 parseTypeSyntax :: P TypeSyntax
-parseTypeSyntax = do
+parseTypeSyntax = parseCallableTypeSyntax <|?> parseArrayTypeSyntax <|?> parseNamedTypeSyntax
+
+-- Function types use the same arrow as callable literals, but are unambiguous
+-- in a type position because their left hand side is a parenthesized type list.
+parseCallableTypeSyntax :: P TypeSyntax
+parseCallableTypeSyntax = do
+    _ <- symbol "("
+    empty <- peekText ")"
+    parameters <- if empty then pure [] else separatedUntil ")" "," parseTypeSyntax
+    _ <- symbol ")"
+    _ <- symbol "->"
+    CallableTypeSyntax parameters <$> parseTypeSyntax
+
+-- Bracket spelling is surface sugar. `[T]` and `[K to V]` lower to the public
+-- System collection types in the type checker. The compact `[]T` built-in form
+-- stays distinct because its runtime representation is not System.Array.
+parseArrayTypeSyntax :: P TypeSyntax
+parseArrayTypeSyntax = do
+    open <- symbol "["
+    builtin <- optionalSymbol "]"
+    if builtin
+        then BuiltinArrayTypeSyntax <$> parseTypeSyntax
+        else do
+            first <- parseTypeSyntax
+            separator <- peekToken
+            case separator of
+                Just token | tokenText token == "to" && tokenKind token `elem` [IdentifierToken, KeywordToken] -> do
+                    _ <- contextualWord "to"
+                    value <- parseTypeSyntax
+                    _ <- symbol "]"
+                    pure (DictionaryTypeSyntax first value)
+                Just token
+                    | tokenKind token == SymbolToken && tokenText token == ";" ->
+                        failAt
+                            (tokenSpan open)
+                            "VXP0017"
+                            "fixed array sugar requires value-template arguments; use System.Array<T, N> until that syntax model is available"
+                _ -> do
+                    _ <- symbol "]"
+                    pure (ArrayTypeSyntax first)
+
+parseNamedTypeSyntax :: P TypeSyntax
+parseNamedTypeSyntax = do
     token <- satisfy (\candidate -> tokenKind candidate `elem` [IdentifierToken, KeywordToken]) "type"
     case tokenText token of
         "unit" -> failAt (tokenSpan token) "VXP0013" "Visual X# has no source-language unit type; use void for a no-result function"
         "auto" -> pure AutoType
-        "void" -> pure (ExplicitType (Identifier "void"))
-        value -> pure (ExplicitType (Identifier value))
+        value -> do
+            remaining <- qualifiedTypeParts
+            arguments <- optionalTypeArguments
+            let parts = Identifier value : remaining
+            pure $ case (parts, arguments) of
+                ([name], []) -> ExplicitType name
+                _ -> QualifiedTypeSyntax (QualifiedName parts) arguments
+
+qualifiedTypeParts :: P [Identifier]
+qualifiedTypeParts = do
+    dot <- optionalSymbol "."
+    if dot
+        then do
+            (part, _) <- identifier
+            (part :) <$> qualifiedTypeParts
+        else pure []
+
+optionalTypeArguments :: P [TypeSyntax]
+optionalTypeArguments = do
+    open <- optionalSymbol "<"
+    if not open
+        then pure []
+        else do
+            empty <- peekText ">"
+            if empty
+                then failCurrent "VXP0016" "a generic type argument list cannot be empty"
+                else do
+                    arguments <- separatedUntil ">" "," parseTypeSyntax
+                    _ <- symbol ">"
+                    pure arguments
 
 parseBlock :: Bool -> P (Block Identifier ())
 parseBlock allowFinalExpression = do _ <- symbol "{"; statements <- go; _ <- symbol "}"; pure (Block statements)
@@ -141,19 +232,21 @@ statementSpan statement = case statement of
 parseStatement :: Bool -> P (Statement Identifier ())
 parseStatement allowFinalExpression =
     do
-        tokens <- peekTokens 2
-        -- Dispatch before parsing: a failed binding must not be retried as an
-        -- expression. Two tokens suffice for the current scalar type syntax.
+        tokens <- peekTokens 1
+        -- Compound types make a fixed token-count heuristic incorrect. Probe
+        -- the complete declaration prefix without consuming it, then commit to
+        -- that grammar branch so a later initializer error remains precise.
         case tokens of
             first : _ | tokenKind first == KeywordToken && tokenText first == "return" -> parseReturn
             first : _ | tokenKind first == KeywordToken && tokenText first == "if" -> parseIf
             first : _ | tokenKind first == KeywordToken && tokenText first == "final" -> parseBinding
-            first : second : _
-                | tokenKind first `elem` [IdentifierToken, KeywordToken]
-                , tokenKind second == IdentifierToken
-                , tokenText first /= "not" ->
-                    parseBinding
-            _ -> parseAssignmentOrExpression allowFinalExpression
+            -- `unit` is forbidden specifically in type position. Commit here
+            -- so declaration lookahead cannot hide VXP0013 behind an unrelated
+            -- expression diagnostic.
+            first : _ | tokenKind first == KeywordToken && tokenText first == "unit" -> parseBinding
+            _ -> do
+                binding <- matchesAhead (parseTypeSyntax >> identifier)
+                if binding then parseBinding else parseAssignmentOrExpression allowFinalExpression
 
 parseReturn :: P (Statement Identifier ())
 parseReturn = do
@@ -377,13 +470,8 @@ parseCallableParameters = do
 
 parseCallableParameter :: P (Parameter Identifier ())
 parseCallableParameter = do
-    tokens <- peekTokens 2
-    case tokens of
-        first : second : _
-            | tokenKind first `elem` [IdentifierToken, KeywordToken]
-            , tokenKind second == IdentifierToken ->
-                parseParameter
-        _ -> parseInferredCallableParameter
+    typed <- matchesAhead (optionalParameterLabel >> parseTypeSyntax >> identifier)
+    if typed then parseParameter else parseInferredCallableParameter
 
 parseInferredCallableParameter :: P (Parameter Identifier ())
 parseInferredCallableParameter = do

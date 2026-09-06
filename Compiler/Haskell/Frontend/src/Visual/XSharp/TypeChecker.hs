@@ -41,6 +41,17 @@ checkTopDeclaration declaration = case declaration of
 
 syntaxType :: TypeSyntax -> Type
 syntaxType AutoType = ErrorType
+syntaxType (QualifiedTypeSyntax name arguments) = NamedType name (map syntaxType arguments)
+syntaxType (BuiltinArrayTypeSyntax element) =
+    -- `[]T` is a language type, not a public class invented by the compiler.
+    -- Its structural spelling keeps that distinction visible through Core
+    -- until ownership-aware lowering assigns the final runtime layout.
+    NamedType (QualifiedName [Identifier "[]"]) [syntaxType element]
+syntaxType (ArrayTypeSyntax element) =
+    NamedType (QualifiedName [Identifier "System", Identifier "Array"]) [syntaxType element]
+syntaxType (DictionaryTypeSyntax key value) =
+    NamedType (QualifiedName [Identifier "System", Identifier "Dictionary"]) [syntaxType key, syntaxType value]
+syntaxType (CallableTypeSyntax parameters result) = FunctionType (map syntaxType parameters) (syntaxType result)
 syntaxType (ExplicitType (Identifier name)) = case name of
     "String" -> stringType
     "unit" -> unitType

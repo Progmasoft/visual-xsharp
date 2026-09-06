@@ -6,6 +6,7 @@ module Visual.XSharp.Parser.Cursor
     , runP
     , (<|?>)
     , optionalParser
+    , matchesAhead
     , peekToken
     , peekTokens
     , peekText
@@ -13,6 +14,7 @@ module Visual.XSharp.Parser.Cursor
     , takeToken
     , satisfy
     , keyword
+    , contextualWord
     , symbol
     , optionalSymbol
     , failCurrent
@@ -74,6 +76,13 @@ left <|?> right = P $ \cursor -> case step left cursor of
 optionalParser :: P a -> P (Maybe a)
 optionalParser parser = (Just <$> parser) <|?> pure Nothing
 
+-- Lookahead is deliberately explicit. It is used only to choose an ambiguous
+-- grammar branch and never exposes a parsed value whose cursor was discarded.
+matchesAhead :: P a -> P Bool
+matchesAhead parser = P $ \cursor -> case step parser cursor of
+    Accepted _ _ -> Accepted True cursor
+    Rejected _ _ -> Accepted False cursor
+
 peekToken :: P (Maybe Token)
 peekToken = P $ \cursor ->
     Accepted
@@ -120,6 +129,14 @@ keyword text = satisfy matches (show text)
                 && ( tokenKind token == KeywordToken
                         || (text `elem` ["weak", "unowned"] && tokenKind token == IdentifierToken)
                    )
+
+-- Contextual separators remain ordinary identifiers outside their owning
+-- syntax. This avoids reserving words such as `to` throughout the language.
+contextualWord :: String -> P Token
+contextualWord text =
+    satisfy
+        (\token -> tokenKind token `elem` [IdentifierToken, KeywordToken] && tokenText token == text)
+        (show text)
 
 symbol :: String -> P Token
 symbol text = satisfy (\token -> tokenKind token == SymbolToken && tokenText token == text) (show text)

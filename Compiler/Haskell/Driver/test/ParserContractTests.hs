@@ -21,6 +21,7 @@ parserContractTests =
         ++ literalTests
         ++ spanTests
         ++ tokenStreamTests
+        ++ typeSyntaxTests
         ++ pipelineTests
         ++ booleanOperandTests
 
@@ -268,6 +269,186 @@ rejectsTokens :: [Token] -> String -> Bool
 rejectsTokens tokens code = case runParser defaultParser (ParserInput "tokens.vxs" tokens) of
     Left [problem] -> diagnosticCode problem == code
     _ -> False
+
+-- Type spelling is tested at the parsed boundary. This makes sugar choices
+-- observable without relying on later passes that may normalize System types.
+-- In particular Array<T, N> keeps two generic arguments: fixed versus dynamic
+-- behavior belongs to overload and template resolution, not to a second class.
+typeSyntaxTests :: [(String, Bool)]
+typeSyntaxTests =
+    [ ("simple type keeps compact syntax", returnSyntax "int" == Just (ExplicitType (Identifier "int")))
+    ,
+        ( "qualified type preserves every name component"
+        , returnSyntax "System.Text.String"
+            == Just
+                ( QualifiedTypeSyntax
+                    (QualifiedName [Identifier "System", Identifier "Text", Identifier "String"])
+                    []
+                )
+        )
+    ,
+        ( "generic type preserves its type argument"
+        , returnSyntax "System.Array<int>"
+            == Just
+                ( QualifiedTypeSyntax
+                    (QualifiedName [Identifier "System", Identifier "Array"])
+                    [ExplicitType (Identifier "int")]
+                )
+        )
+    ,
+        ( "Array<T, N> remains one overloaded generic family"
+        , returnSyntax "System.Array<Element, Length>"
+            == Just
+                ( QualifiedTypeSyntax
+                    (QualifiedName [Identifier "System", Identifier "Array"])
+                    [ExplicitType (Identifier "Element"), ExplicitType (Identifier "Length")]
+                )
+        )
+    ,
+        ( "nested generic closing delimiters remain independent"
+        , returnSyntax "System.Array<System.Array<int>>"
+            == Just
+                ( QualifiedTypeSyntax
+                    (QualifiedName [Identifier "System", Identifier "Array"])
+                    [ QualifiedTypeSyntax
+                        (QualifiedName [Identifier "System", Identifier "Array"])
+                        [ExplicitType (Identifier "int")]
+                    ]
+                )
+        )
+    ,
+        ( "built-in fixed array remains distinct from System.Array"
+        , returnSyntax "[]int" == Just (BuiltinArrayTypeSyntax (ExplicitType (Identifier "int")))
+        )
+    ,
+        ( "dynamic array sugar has one element type"
+        , returnSyntax "[String]" == Just (ArrayTypeSyntax (ExplicitType (Identifier "String")))
+        )
+    ,
+        ( "dictionary sugar preserves key and value types"
+        , returnSyntax "[String to int]"
+            == Just (DictionaryTypeSyntax (ExplicitType (Identifier "String")) (ExplicitType (Identifier "int")))
+        )
+    ,
+        ( "callable type preserves parameters and result"
+        , returnSyntax "(int, String) -> bool"
+            == Just
+                ( CallableTypeSyntax
+                    [ExplicitType (Identifier "int"), ExplicitType (Identifier "String")]
+                    (ExplicitType (Identifier "bool"))
+                )
+        )
+    ,
+        ( "zero-parameter callable type is accepted"
+        , returnSyntax "() -> void" == Just (CallableTypeSyntax [] (ExplicitType (Identifier "void")))
+        )
+    ,
+        ( "compound binding dispatch recognizes a qualified generic type"
+        , bindingSyntax "System.Array<int> values = Source();"
+            == Just
+                ( QualifiedTypeSyntax
+                    (QualifiedName [Identifier "System", Identifier "Array"])
+                    [ExplicitType (Identifier "int")]
+                )
+        )
+    ,
+        ( "compound binding dispatch recognizes dictionary sugar"
+        , bindingSyntax "[String to int] values = Source();"
+            == Just (DictionaryTypeSyntax (ExplicitType (Identifier "String")) (ExplicitType (Identifier "int")))
+        )
+    ,
+        ( "callable parameter dispatch recognizes a compound type"
+        , callableParameterSyntax "\\(System.Array<int> values) -> 1"
+            == Just
+                ( QualifiedTypeSyntax
+                    (QualifiedName [Identifier "System", Identifier "Array"])
+                    [ExplicitType (Identifier "int")]
+                )
+        )
+    , ("underscore parameter label remains accepted", parameterNameFor "_ int value" == Just (Identifier "value"))
+    , ("explicit parameter label is accepted", parameterNameFor "input: int value" == Just (Identifier "value"))
+    , ("generic argument list cannot be empty", hasParserCode "VXP0016" (functionWithReturn "Array<>"))
+    , ("qualified type cannot end after a dot", rejected (parseSource (functionWithReturn "System.")))
+    , ("generic type requires a closing delimiter", rejected (parseSource (functionWithReturn "Array<int")))
+    ,
+        ( "fixed array sugar waits for value-template representation"
+        , hasParserCode "VXP0017" (functionWithReturn "[int; 3]")
+        )
+    ,
+        ( "dynamic array sugar normalizes to System.Array<T>"
+        , typedParameterType "[int]"
+            == Just
+                ( NamedType
+                    (QualifiedName [Identifier "System", Identifier "Array"])
+                    [intType]
+                )
+        )
+    ,
+        ( "dictionary sugar normalizes to System.Dictionary<K, V>"
+        , typedParameterType "[String to int]"
+            == Just
+                ( NamedType
+                    (QualifiedName [Identifier "System", Identifier "Dictionary"])
+                    [stringType, intType]
+                )
+        )
+    ,
+        ( "built-in array has no invented public class name"
+        , typedParameterType "[]int"
+            == Just (NamedType (QualifiedName [Identifier "[]"]) [intType])
+        )
+    ,
+        ( "callable syntax becomes a structural FunctionType"
+        , typedParameterType "(int, String) -> bool"
+            == Just (FunctionType [intType, stringType] boolType)
+        )
+    ]
+
+functionWithReturn :: String -> String
+functionWithReturn spelling = "class Program { " ++ spelling ++ " Value() { return Source(); } }"
+
+returnSyntax :: String -> Maybe TypeSyntax
+returnSyntax spelling = case parseSource (functionWithReturn spelling) of
+    Right (ParsedAST (SyntaxTree _ [TypeDeclaration _ _ _ [FunctionDeclaration _ _ _ syntax _ _ _ _]])) -> Just syntax
+    _ -> Nothing
+
+bindingSyntax :: String -> Maybe TypeSyntax
+bindingSyntax spelling = case statements (sourceWith spelling) of
+    Just (BindingStatement _ _ syntax _ _ _ : _) -> Just syntax
+    _ -> Nothing
+
+callableParameterSyntax :: String -> Maybe TypeSyntax
+callableParameterSyntax spelling = case statements (sourceWith ("auto value = " ++ spelling ++ ";")) of
+    Just (BindingStatement _ _ _ _ _ (CallableExpression _ _ _ [parameter] _ _) : _) ->
+        Just (parameterTypeSyntax parameter)
+    _ -> Nothing
+
+parameterNameFor :: String -> Maybe Identifier
+parameterNameFor spelling = case parseSource ("class Program { void Apply(" ++ spelling ++ ") { return; } }") of
+    Right (ParsedAST (SyntaxTree _ [TypeDeclaration _ _ _ [FunctionDeclaration _ _ _ _ [parameter] _ _ _]])) ->
+        Just (parameterName parameter)
+    _ -> Nothing
+
+typedParameterType :: String -> Maybe Type
+typedParameterType spelling =
+    case compileToCorePrep
+        (CompilerInput "type-contract.vxs" ("class Program { void Apply(_ " ++ spelling ++ " value) { return; } }")) of
+        Right artifacts ->
+            case syntaxDeclarations (typedSyntaxTree (artifactTypedAST artifacts)) of
+                [TypeDeclaration _ _ _ [FunctionDeclaration _ _ _ _ [parameter] _ _ _]] ->
+                    Just (parameterAnnotation parameter)
+                _ -> Nothing
+        Left _ -> Nothing
+
+hasParserCode :: String -> String -> Bool
+hasParserCode code source = case parseSource source of
+    Left problems -> any (\problem -> diagnosticStage problem == ParserStage && diagnosticCode problem == code) problems
+    Right _ -> False
+
+rejected :: Either problems value -> Bool
+rejected result = case result of
+    Left _ -> True
+    Right _ -> False
 
 -- Complete compilation proves that the nested representation of else-if is
 -- understood by name resolution, typing, Core optimization, and CorePrep.

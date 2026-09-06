@@ -50,7 +50,14 @@ data SourceSpan = SourceSpan
     {sourceFile :: FilePath, sourceStart :: SourcePosition, sourceEnd :: SourcePosition}
     deriving (Eq, Ord, Read, Show)
 
-data TypeSyntax = ExplicitType Identifier | AutoType
+data TypeSyntax
+    = ExplicitType Identifier
+    | QualifiedTypeSyntax QualifiedName [TypeSyntax]
+    | BuiltinArrayTypeSyntax TypeSyntax
+    | ArrayTypeSyntax TypeSyntax
+    | DictionaryTypeSyntax TypeSyntax TypeSyntax
+    | CallableTypeSyntax [TypeSyntax] TypeSyntax
+    | AutoType
     deriving (Eq, Ord, Read, Show)
 data Access = DefaultAccess | PublicAccess | InternalAccess | ProtectedAccess | PrivateAccess
     deriving (Eq, Ord, Read, Show)

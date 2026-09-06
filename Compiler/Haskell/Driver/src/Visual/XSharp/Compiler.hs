@@ -183,7 +183,7 @@ validateEntryMethod TypeDeclaration {typeMembers = members} =
             | declarationAccess method /= PublicAccess -> failure method "VXE0005" "entry Main must be public"
             | not (declarationIsStatic method) -> failure method "VXE0006" "entry Main must be static"
             | not (null (declarationParameters method)) -> failure method "VXE0007" "entry Main must not declare parameters"
-            | declarationReturnSyntax method /= ExplicitType (Identifier "void") ->
+            | not (syntaxSpellsVoid (declarationReturnSyntax method)) ->
                 failure method "VXE0008" "entry Main must return void"
             | otherwise -> Right ()
         _ -> Left [entryProblem "VXE0014" (declarationSpan <$> firstMethod) "entry class must declare exactly one Main method"]
@@ -198,6 +198,12 @@ validateEntryMethod TypeDeclaration {typeMembers = members} =
             method : _ -> Just method
         failure method code message = Left [entryProblem code (Just (declarationSpan method)) message]
 validateEntryMethod _ = Left [entryProblem "VXE0009" Nothing "entry target is not a class"]
+
+syntaxSpellsVoid :: TypeSyntax -> Bool
+syntaxSpellsVoid syntax = case syntax of
+    ExplicitType (Identifier "void") -> True
+    QualifiedTypeSyntax (QualifiedName [Identifier "void"]) [] -> True
+    _ -> False
 
 entryNamespaceName :: QualifiedName -> Either [Diagnostic] QualifiedName
 entryNamespaceName (QualifiedName parts)
