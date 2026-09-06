@@ -21,6 +21,7 @@ library
         visual-xsharp-syntax:Visual.XSharp.Lexer,
         visual-xsharp-syntax:Visual.XSharp.NumericLiteral,
         visual-xsharp-syntax:Visual.XSharp.Parser,
+        visual-xsharp-syntax:Visual.XSharp.SourceText,
         visual-xsharp-frontend:Visual.XSharp.Frontend,
         visual-xsharp-frontend:Visual.XSharp.NumericSemantics,
         visual-xsharp-frontend:Visual.XSharp.BuiltinTypes,
@@ -73,6 +74,7 @@ test-suite visual-xsharp-compiler-tests
         ParserContractTests
         ScalarWireTests
         SourceSetTests
+        SourceTextTests
         VoidTests
     hs-source-dirs: test
     build-depends:

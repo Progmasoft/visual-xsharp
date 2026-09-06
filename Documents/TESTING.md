@@ -216,6 +216,11 @@ Formatter tests need parser-gated idempotence: formatting valid input twice must
 once. Dry-run must not write, in-place mode must replace only the selected source, and malformed input must not be silently
 rewritten.
 
+Lossless-source tests independently assert exact reconstruction, CRLF-aware spans, protected-fragment classification,
+delimiter-level termination, structural masks, and multi-line protected ranges. Formatter indentation tests must include
+braces inside every protected fragment kind; a green ordinary block test alone is not evidence that literal payloads are
+safe.
+
 Linter tests should assert rule identity, severity, source range, explanation metadata, safe/unsafe fix classification, and
 suppression behavior independently. A rule catalog entry is planned surface until an analysis implementation and focused
 test exist.

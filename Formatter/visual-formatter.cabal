@@ -16,16 +16,21 @@ build-type: Simple
 library
     exposed-modules:
         Visual.Formatter
+    other-modules:
+        Visual.Formatter.Layout
+        Visual.Formatter.Options
     hs-source-dirs: sources/main/haskell
     build-depends:
         base >=4.20 && <4.23,
-        visual-xsharp-compiler >=0.3.2 && <0.4
+        visual-xsharp-compiler >=0.3.4 && <0.4
     default-language: GHC2021
 
 executable vfmt
     main-is: Visual/Formatter/Main.hs
     other-modules:
         Visual.Formatter
+        Visual.Formatter.Layout
+        Visual.Formatter.Options
     hs-source-dirs: sources/main/haskell
     build-depends:
         base >=4.20 && <4.23,

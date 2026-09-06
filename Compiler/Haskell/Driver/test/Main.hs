@@ -13,6 +13,7 @@ import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
 import ScalarWireTests (scalarWireTests)
 import SourceSetTests (sourceSetTests)
+import SourceTextTests (sourceTextTests)
 import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
@@ -91,6 +92,7 @@ main = do
     checkIO "Core artifact rejects an invalid Core module" coreArtifactRejectsInvalidModule
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
     mapM_ (uncurry checkIO) sourceSetTests
+    mapM_ (uncurry check) sourceTextTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests
     mapM_ (uncurry check) coreOptimizerSourceTests

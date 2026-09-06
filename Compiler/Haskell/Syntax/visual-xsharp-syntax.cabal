@@ -18,6 +18,7 @@ library
         Visual.XSharp.Lexer
         Visual.XSharp.NumericLiteral
         Visual.XSharp.Parser
+        Visual.XSharp.SourceText
     other-modules:
         Visual.XSharp.Parser.Cursor
         Visual.XSharp.Parser.Token

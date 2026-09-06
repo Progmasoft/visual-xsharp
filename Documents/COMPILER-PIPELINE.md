@@ -95,6 +95,13 @@ The Haskell lexer creates positioned tokens and retains enough source informatio
 structure early: radix digits, separators, escapes, Unicode scalar values, and unterminated constructs are lexical
 responsibilities.
 
+Source-oriented tools do not reconstruct text from those semantic tokens. `Visual.XSharp.SourceText` provides a parallel,
+lossless fragment stream whose concatenation is exactly the original source. Code, line comments, long comments, character
+literals, normal strings, and raw strings retain their original spelling and half-open source spans. A masked view preserves
+line endings and character positions while hiding protected payloads, allowing structural tools to inspect braces without
+mistaking literal or comment text for syntax. Multi-line protected ranges are explicit so a formatter cannot accidentally
+trim or reindent payload data.
+
 The parser constructs a parsed AST rather than a mutable tree shared by later passes. It owns grammar and precedence, but it
 does not decide which declaration an identifier denotes. Recovery must preserve the first useful source error and avoid
 turning one malformed token into a cascade of unrelated names.

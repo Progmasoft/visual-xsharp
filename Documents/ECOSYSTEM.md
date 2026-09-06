@@ -104,6 +104,12 @@ Formatting must be parser-gated and idempotent. The formatter may normalize phys
 language forms, change name identity, turn an invalid source into a different valid program, or apply C-family `switch/case`
 rules to a language without those constructs.
 
+The implemented layout engine normalizes block indentation in addition to line endings, trailing horizontal whitespace,
+and final-newline policy. It consumes the compiler's lossless source-fragment model: braces in comments and literals do not
+alter nesting, and lines crossed by raw strings or long comments retain payload whitespace. The executable engine supports
+space or tab indentation with independent indent and tab widths. Remaining configuration keys stay typed configuration
+surface until their corresponding layout passes exist; they are not silently treated as implemented behavior.
+
 Install the package globally through ViGet:
 
 ```text
