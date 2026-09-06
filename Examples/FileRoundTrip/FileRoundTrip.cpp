@@ -7,7 +7,8 @@
 #include <string>
 #include <string_view>
 
-int main()
+int
+main()
 {
     constexpr std::string_view path = "visual-xsharp-example.txt";
     constexpr std::string_view expected = "Lexer -> Parser -> Core -> Xpp -> Xmm";

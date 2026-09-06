@@ -6,15 +6,16 @@
 #include <map>
 #include <string>
 
-int main()
+int
+main()
 {
     constexpr std::array words = { "visual", "xsharp", "visual", "compiler", "xsharp", "visual" };
     std::map<std::string, int> counts;
-    for (const auto* word : words)
+    for (const auto *word : words)
     {
         ++counts[word];
     }
-    for (const auto& [word, count] : counts)
+    for (const auto &[word, count] : counts)
     {
         std::cout << word << ": " << count << '\n';
     }

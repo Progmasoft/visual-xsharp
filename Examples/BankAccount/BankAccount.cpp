@@ -9,13 +9,19 @@ class Account
 {
 public:
     Account(std::string owner, const int openingBalance)
-        : owner_(std::move(owner)), balance_(openingBalance)
+        : owner_(std::move(owner))
+        , balance_(openingBalance)
     {
     }
 
-    void Deposit(const int amount) { balance_ += amount; }
+    void
+    Deposit(const int amount)
+    {
+        balance_ += amount;
+    }
 
-    bool Withdraw(const int amount)
+    bool
+    Withdraw(const int amount)
     {
         if (amount > balance_)
         {
@@ -25,14 +31,19 @@ public:
         return true;
     }
 
-    void Print() const { std::cout << owner_ << ": " << balance_ << '\n'; }
+    void
+    Print() const
+    {
+        std::cout << owner_ << ": " << balance_ << '\n';
+    }
 
 private:
     std::string owner_;
     int balance_;
 };
 
-int main()
+int
+main()
 {
     Account account("Ada", 250);
     account.Deposit(75);

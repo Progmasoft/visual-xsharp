@@ -5,7 +5,8 @@
 #include <iostream>
 #include <vector>
 
-std::vector<std::int64_t> Generate(const int count)
+std::vector<std::int64_t>
+Generate(const int count)
 {
     std::vector<std::int64_t> values;
     values.reserve(static_cast<std::size_t>(count));
@@ -22,7 +23,8 @@ std::vector<std::int64_t> Generate(const int count)
     return values;
 }
 
-int main()
+int
+main()
 {
     for (const auto value : Generate(12))
     {

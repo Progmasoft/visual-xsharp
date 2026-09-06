@@ -12,7 +12,8 @@
 class Channel
 {
 public:
-    void Send(std::string value)
+    void
+    Send(std::string value)
     {
         {
             std::lock_guard lock(mutex_);
@@ -21,10 +22,13 @@ public:
         ready_.notify_one();
     }
 
-    std::string Receive()
+    std::string
+    Receive()
     {
         std::unique_lock lock(mutex_);
-        ready_.wait(lock, [this] { return !values_.empty(); });
+        ready_.wait(lock, [this] {
+            return !values_.empty();
+        });
         auto value = std::move(values_.front());
         values_.pop();
         return value;
@@ -36,11 +40,16 @@ private:
     std::queue<std::string> values_;
 };
 
-int main()
+int
+main()
 {
     Channel channel;
-    std::jthread lexer([&channel] { channel.Send("Lexer finished"); });
-    std::jthread parser([&channel] { channel.Send("Parser finished"); });
+    std::jthread lexer([&channel] {
+        channel.Send("Lexer finished");
+    });
+    std::jthread parser([&channel] {
+        channel.Send("Parser finished");
+    });
     std::cout << channel.Receive() << '\n';
     std::cout << channel.Receive() << '\n';
 }

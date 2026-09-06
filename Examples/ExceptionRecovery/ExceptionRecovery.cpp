@@ -5,7 +5,8 @@
 #include <iostream>
 #include <stdexcept>
 
-int RequirePositive(const int value)
+int
+RequirePositive(const int value)
 {
     if (value <= 0)
     {
@@ -14,7 +15,8 @@ int RequirePositive(const int value)
     return value;
 }
 
-int main()
+int
+main()
 {
     constexpr std::array inputs = { 3, 0, 7 };
     for (const int input : inputs)
@@ -23,7 +25,7 @@ int main()
         {
             std::cout << RequirePositive(input) << '\n';
         }
-        catch (const std::invalid_argument& error)
+        catch (const std::invalid_argument &error)
         {
             std::cerr << error.what() << '\n';
         }

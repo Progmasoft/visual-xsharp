@@ -4,7 +4,8 @@
 #include <iostream>
 #include <ranges>
 
-int main()
+int
+main()
 {
     for (const int number : std::views::iota(1, 31))
     {

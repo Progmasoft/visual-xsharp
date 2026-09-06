@@ -20,11 +20,11 @@ struct Rectangle
 
 using Shape = std::variant<Circle, Rectangle>;
 
-double Area(const Shape& shape)
+double
+Area(const Shape &shape)
 {
     return std::visit(
-        [](const auto& value)
-        {
+        [](const auto &value) {
             using T = std::decay_t<decltype(value)>;
             if constexpr (std::is_same_v<T, Circle>)
             {
@@ -38,10 +38,11 @@ double Area(const Shape& shape)
         shape);
 }
 
-int main()
+int
+main()
 {
     const std::array<Shape, 2> shapes = { Circle{ 3.0 }, Rectangle{ 4.0, 5.0 } };
-    for (const auto& shape : shapes)
+    for (const auto &shape : shapes)
     {
         std::cout << Area(shape) << '\n';
     }

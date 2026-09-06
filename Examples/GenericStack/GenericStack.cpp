@@ -10,23 +10,37 @@ template<typename T>
 class Stack
 {
 public:
-    void Push(T value) { items_.push_back(std::move(value)); }
-    const T& Peek() const { return items_.back(); }
+    void
+    Push(T value)
+    {
+        items_.push_back(std::move(value));
+    }
+    const T &
+    Peek() const
+    {
+        return items_.back();
+    }
 
-    T Pop()
+    T
+    Pop()
     {
         T value = std::move(items_.back());
         items_.pop_back();
         return value;
     }
 
-    std::size_t Count() const { return items_.size(); }
+    std::size_t
+    Count() const
+    {
+        return items_.size();
+    }
 
 private:
     std::vector<T> items_;
 };
 
-int main()
+int
+main()
 {
     Stack<std::string> names;
     names.Push("Lexer");
