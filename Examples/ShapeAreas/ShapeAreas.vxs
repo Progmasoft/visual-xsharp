@@ -1,0 +1,35 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+namespace Examples.ShapeAreas;
+
+public class Shape {}
+public data class Circle(float radius) : Shape;
+public data class Rectangle(float width, float height) : Shape;
+
+public class ShapeAreas {
+    public static float Area(Shape shape) {
+        match (shape) {
+            Circle circle -> {
+                return 3.141592653589793 * circle.radius * circle.radius;
+            },
+            Rectangle rectangle -> {
+                return rectangle.width * rectangle.height;
+            },
+            _ -> {
+                return 0.0;
+            },
+        }
+    }
+
+    public static void Main() {
+        [Shape] shapes = [
+            new Circle(radius: 3.0),
+            new Rectangle(width: 4.0, height: 5.0),
+        ];
+
+        for (Shape shape : shapes) {
+            Console.Println(Area(shape: shape));
+        }
+    }
+}

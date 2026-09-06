@@ -1,0 +1,23 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+namespace Examples.FizzBuzz;
+
+public class FizzBuzz {
+    public static void Main() {
+        for (int number : 1 ... 30) {
+            if (number % 15 == 0) {
+                Console.Println("FizzBuzz");
+            }
+            else if (number % 3 == 0) {
+                Console.Println("Fizz");
+            }
+            else if (number % 5 == 0) {
+                Console.Println("Buzz");
+            }
+            else {
+                Console.Println(number);
+            }
+        }
+    }
+}

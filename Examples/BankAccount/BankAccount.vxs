@@ -1,0 +1,39 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+namespace Examples.BankAccount;
+
+public class Account {
+    private String owner;
+    private int balance;
+
+    public Account(String owner, int openingBalance) {
+        self.owner = owner;
+        self.balance = openingBalance;
+    }
+
+    public void Deposit(int amount) {
+        self.balance += amount;
+    }
+
+    public bool Withdraw(int amount) {
+        if (amount > self.balance) {
+            return false;
+        }
+        self.balance -= amount;
+        return true;
+    }
+
+    public void Print() {
+        Console.Printfn("%s: %d", self.owner, self.balance);
+    }
+}
+
+public class BankAccount {
+    public static void Main() {
+        Account account = new Account(owner: "Ada", openingBalance: 250);
+        account.Deposit(amount: 75);
+        account.Withdraw(amount: 40);
+        account.Print();
+    }
+}

@@ -1,0 +1,24 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+namespace Examples.Fibonacci;
+
+public class Fibonacci {
+    public static System.Utils.Enumerable<int> Generate(int count) {
+        int previous = 0;
+        int current = 1;
+
+        for (int index = 0; index < count; index++) {
+            yield previous;
+            int next = previous + current;
+            previous = current;
+            current = next;
+        }
+    }
+
+    public static void Main() {
+        for (int value : Generate(count: 12)) {
+            Console.Println(value);
+        }
+    }
+}

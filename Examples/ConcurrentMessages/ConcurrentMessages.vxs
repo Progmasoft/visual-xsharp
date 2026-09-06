@@ -1,0 +1,24 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+namespace Examples.ConcurrentMessages;
+
+using System.Threading.Sync;
+
+public class ConcurrentMessages {
+    public static void Main() {
+        Mpsc.Channel<String> channel = Mpsc.Channel<String>();
+
+        Thread.Spawn(\ -> {
+            channel.Send("Lexer finished");
+        });
+        Thread.Spawn(\ -> {
+            channel.Send("Parser finished");
+        });
+
+        String first = channel.Receive();
+        String second = channel.Receive();
+        Console.Println(first);
+        Console.Println(second);
+    }
+}

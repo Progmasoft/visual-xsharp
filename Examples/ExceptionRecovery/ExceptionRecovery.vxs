@@ -1,0 +1,26 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+namespace Examples.ExceptionRecovery;
+
+public class ExceptionRecovery {
+    public static int RequirePositive(int value)
+        throws IllegalArgumentException {
+        if (value <= 0) {
+            throw new IllegalArgumentException("value must be positive");
+        }
+        return value;
+    }
+
+    public static void Main() {
+        [int] inputs = [3, 0, 7];
+        for (int input : inputs) {
+            try {
+                Console.Println(RequirePositive(value: input));
+            }
+            catch (IllegalArgumentException error) {
+                Console.Errorln(error);
+            }
+        }
+    }
+}

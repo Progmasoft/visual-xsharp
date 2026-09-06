@@ -151,6 +151,9 @@ The [Visual X# EBNF](Grammar/visual-xsharp.ebnf) summarizes the concrete syntax,
 [TextMate grammar](Grammar/visual-xsharp.tmLanguage.json) provides matching editor token scopes for `.vxs` files. Semantic
 restrictions remain defined by `Spec/`, not by syntax highlighting.
 
+The [comparative programs](Examples/README.md) provide ten complete examples side by side in Visual X#, C# 13, C++20,
+and Java 21. The C# and Java variants are educational comparisons and do not add compiler-development prerequisites.
+
 ## Documentation
 
 - [Documentation index](Documents/README.md)
