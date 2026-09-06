@@ -166,10 +166,35 @@ namespace Visual::XSharp::Core::Wire
                     case 3:
                         return Type::string();
                     case 4:
-                        return Type::named(QualifiedName("named type"),
-                                           Vector<Type>(limits_.maximumOperands, "type argument count", [this, depth] {
-                                               return ReadType(depth + 1U);
-                                           }));
+                    {
+                        auto name = QualifiedName("named type");
+                        auto arguments = Vector<::visual_xsharp::core::TemplateArgument>(
+                            limits_.maximumOperands,
+                            "template argument count",
+                            [this, depth] {
+                                switch (Byte("template argument tag"))
+                                {
+                                    case 0:
+                                        return ::visual_xsharp::core::TemplateArgument::type_argument(ReadType(depth + 1U));
+                                    case 1:
+                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
+                                            ::visual_xsharp::core::TemplateValue::integer_value(ReadInteger("template integer")));
+                                    case 2:
+                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
+                                            ::visual_xsharp::core::TemplateValue::boolean_value(Boolean("template boolean")));
+                                    case 3:
+                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
+                                            ::visual_xsharp::core::TemplateValue::character_value(ReadInteger("template character")));
+                                    case 4:
+                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
+                                            ::visual_xsharp::core::TemplateValue::parameter_value(Symbol("template value parameter")));
+                                    default:
+                                        Fail(ErrorKind::InvalidTag, "template argument tag", "unknown template argument tag");
+                                        return ::visual_xsharp::core::TemplateArgument{};
+                                }
+                            });
+                        return Type::named_template(std::move(name), std::move(arguments));
+                    }
                     case 5:
                     {
                         auto parameters = Vector<Type>(limits_.maximumParameters, "function type parameter count", [this, depth] {
@@ -219,6 +244,18 @@ namespace Visual::XSharp::Core::Wire
                 if (value > 1U)
                     Fail(ErrorKind::InvalidBoolean, std::string(context), "boolean byte must be zero or one");
                 return value == 1U;
+            }
+            [[nodiscard]] auto
+            ReadInteger(std::string_view context) -> ::visual_xsharp::core::IntegerLiteral
+            {
+                ::visual_xsharp::core::IntegerLiteral value;
+                value.negative = Boolean(std::string(context) + " sign");
+                value.magnitude = Vector<std::uint8_t>(limits_.maximumNumericBytes, std::string(context) + " magnitude", [this, context] {
+                    return Byte(std::string(context) + " magnitude");
+                });
+                if (!::visual_xsharp::core::integer_is_canonical(value))
+                    Fail(ErrorKind::InvalidInteger, std::string(context), "integer magnitude/sign is not canonical");
+                return value;
             }
             [[nodiscard]] auto
             ReadLiteral() -> Literal
@@ -493,8 +530,37 @@ namespace Visual::XSharp::Core::Wire
                     case Type::Kind::Named:
                         Byte(4);
                         QualifiedName(type.name, "named type");
-                        Vector(type.components, limits_.maximumOperands, "type argument count", [this, depth](const Type &argument) {
-                            WriteType(argument, depth + 1U);
+                        Vector(type.templateArguments, limits_.maximumOperands, "template argument count", [this, depth](const auto &argument) {
+                            if (argument.kind == ::visual_xsharp::core::TemplateArgument::Kind::Type)
+                            {
+                                Byte(0);
+                                if (!argument.type)
+                                {
+                                    Fail(ErrorKind::UnsupportedType, "template argument", "type argument has no payload");
+                                    return;
+                                }
+                                WriteType(*argument.type, depth + 1U);
+                                return;
+                            }
+                            switch (argument.value.kind)
+                            {
+                                case ::visual_xsharp::core::TemplateValue::Kind::Integer:
+                                    Byte(1);
+                                    WriteInteger(argument.value.integer, "template integer");
+                                    return;
+                                case ::visual_xsharp::core::TemplateValue::Kind::Boolean:
+                                    Byte(2);
+                                    Byte(argument.value.boolean ? 1U : 0U);
+                                    return;
+                                case ::visual_xsharp::core::TemplateValue::Kind::Character:
+                                    Byte(3);
+                                    WriteInteger(argument.value.integer, "template character");
+                                    return;
+                                case ::visual_xsharp::core::TemplateValue::Kind::Parameter:
+                                    Byte(4);
+                                    Symbol(argument.value.parameter, "template value parameter");
+                                    return;
+                            }
                         });
                         return;
                     case Type::Kind::Function:
@@ -558,6 +624,19 @@ namespace Visual::XSharp::Core::Wire
                 }
             }
             void
+            WriteInteger(const ::visual_xsharp::core::IntegerLiteral &integer, std::string_view context)
+            {
+                if (!::visual_xsharp::core::integer_is_canonical(integer))
+                {
+                    Fail(ErrorKind::InvalidInteger, std::string(context), "integer magnitude/sign is not canonical");
+                    return;
+                }
+                Byte(integer.negative ? 1U : 0U);
+                Vector(integer.magnitude, limits_.maximumNumericBytes, std::string(context) + " magnitude", [this](const auto octet) {
+                    Byte(octet);
+                });
+            }
+            void
             WriteLiteral(const Literal &literal)
             {
                 if (std::holds_alternative<std::monostate>(literal))
@@ -612,7 +691,7 @@ namespace Visual::XSharp::Core::Wire
                     });
                 }
                 else
-                    Fail(ErrorKind::UnsupportedType, "literal", "literal cannot cross the Core v3 boundary");
+                    Fail(ErrorKind::UnsupportedType, "literal", "literal cannot cross the Core v4 boundary");
             }
             void
             WriteExpression(const Expression &expression, std::size_t depth = 0U)

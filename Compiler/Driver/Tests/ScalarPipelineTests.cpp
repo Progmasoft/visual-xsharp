@@ -345,9 +345,9 @@ TEST_CASE("literal validation combines payload kind and scalar range", "[scalar]
     CHECK(core::validate_literal(std::u32string(U"text"), core::Type::boolean()));
 }
 
-TEST_CASE("CorePrep wire v3 round-trips every scalar family", "[scalar][wire][coreprep]")
+TEST_CASE("CorePrep wire v4 round-trips every scalar family", "[scalar][wire][coreprep]")
 {
-    CHECK(core_wire::current_version == 3U);
+    CHECK(core_wire::current_version == 4U);
     CHECK(wire_round_trips(core::Type::unit()));
     CHECK(wire_round_trips(core::Type::string()));
     for (const auto &entry : kScalarCases)
@@ -357,9 +357,9 @@ TEST_CASE("CorePrep wire v3 round-trips every scalar family", "[scalar][wire][co
     }
 }
 
-TEST_CASE("Core wire v3 round-trips every scalar family", "[scalar][wire][core]")
+TEST_CASE("Core wire v4 round-trips every scalar family", "[scalar][wire][core]")
 {
-    CHECK(native_wire::kCurrentVersion == 3U);
+    CHECK(native_wire::kCurrentVersion == 4U);
     CHECK(native_wire_round_trips(core::Type::unit()));
     CHECK(native_wire_round_trips(core::Type::string()));
     for (const auto &entry : kScalarCases)

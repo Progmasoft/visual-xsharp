@@ -174,8 +174,13 @@ lowerBoundaryType valueType
     | valueType == voidType = unitType
     | FunctionType parameters result <- valueType =
         FunctionType (map lowerBoundaryType parameters) (lowerBoundaryType result)
-    | NamedType name arguments <- valueType = NamedType name (map lowerBoundaryType arguments)
+    | NamedType name arguments <- valueType = NamedType name (map lowerTemplateArgument arguments)
     | otherwise = valueType
+
+lowerTemplateArgument :: TemplateArgument -> TemplateArgument
+lowerTemplateArgument argument = case argument of
+    TypeTemplateArgument valueType -> TypeTemplateArgument (lowerBoundaryType valueType)
+    ValueTemplateArgument value -> ValueTemplateArgument value
 lowerUnary :: UnaryOperator -> CorePrimitive
 lowerUnary UnaryNegate = CoreNegate
 lowerUnary LogicalNot = CoreLogicalNot

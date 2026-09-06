@@ -67,7 +67,10 @@ namespace Visual::XSharp::Xmm
                         return SupportedType(component);
                     });
                 case core::Type::Kind::Named:
-                    return true;
+                    return std::ranges::all_of(type.templateArguments, [](const auto &argument) {
+                        return argument.kind == core::TemplateArgument::Kind::Value
+                               || (argument.type && SupportedType(*argument.type));
+                    });
                 case core::Type::Kind::TypeVariable:
                     return false;
             }

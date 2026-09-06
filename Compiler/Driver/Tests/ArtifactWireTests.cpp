@@ -141,6 +141,36 @@ namespace
     }
 
     [[nodiscard]] auto
+    TemplateModule() -> Core::CorePrepModule
+    {
+        const auto fixed = Core::Type::named_template(
+            { U"System", U"Array" },
+            { Core::TemplateArgument::type_argument(Core::Type::string()),
+              Core::TemplateArgument::value_argument(
+                  Core::TemplateValue::integer_value(Core::integer_from_unsigned(64U))) });
+        const auto mixed = Core::Type::named_template(
+            { U"Example", U"Matrix" },
+            { Core::TemplateArgument::type_argument(fixed),
+              Core::TemplateArgument::value_argument(Core::TemplateValue::boolean_value(true)),
+              Core::TemplateArgument::value_argument(
+                  Core::TemplateValue::character_value(Core::integer_from_unsigned(0x1f642U))) });
+
+        Core::Function main;
+        main.symbol = Name(40U, U"Main");
+        main.parameters = { Core::Parameter{ Name(41U, U"matrix"), mixed } };
+        main.return_type = Core::Type::unit();
+        main.entry = 1U;
+        main.blocks = {
+            Core::Block{
+                1U,
+                {},
+                Core::Terminator{ Core::Terminator::Kind::Return, Unit(), 0U, 0U },
+            },
+        };
+        return Core::CorePrepModule{ { U"Artifacts", U"Templates" }, { std::move(main) } };
+    }
+
+    [[nodiscard]] auto
     XppModule(const Core::CorePrepModule &module) -> Xpp::Module
     {
         REQUIRE(Core::verify(module).empty());
@@ -269,7 +299,7 @@ TEST_CASE("Xmm wire preserves virtual-register ABI and typed immediates")
     }
 }
 
-TEST_CASE("Xpp and Xmm v2 wire preserve explicit ownership operations")
+TEST_CASE("Xpp and Xmm v3 wire preserve explicit ownership operations")
 {
     const auto xpp = OwnershipXppModule();
     const auto encodedXpp = XppWire::Encode(xpp);
@@ -284,8 +314,58 @@ TEST_CASE("Xpp and Xmm v2 wire preserve explicit ownership operations")
     const auto decodedXmm = XmmWire::Decode(encodedXmm.bytes);
     REQUIRE(decodedXmm);
     REQUIRE(*decodedXmm.module == xmm);
-    CHECK(XppWire::kCurrentVersion == 2U);
-    CHECK(XmmWire::kCurrentVersion == 2U);
+    CHECK(XppWire::kCurrentVersion == 3U);
+    CHECK(XmmWire::kCurrentVersion == 3U);
+}
+
+TEST_CASE("Xpp v3 wire preserves ordered type and value template arguments")
+{
+    const auto original = XppModule(TemplateModule());
+    const auto encoded = XppWire::Encode(original);
+    REQUIRE(encoded);
+    CHECK(encoded.bytes[4] == 3U);
+    const auto decoded = XppWire::Decode(encoded.bytes);
+    REQUIRE(decoded);
+    CHECK(*decoded.module == original);
+
+    const auto &parameterType = decoded.module->functions.front().parameters.front().type;
+    REQUIRE(parameterType.templateArguments.size() == 3U);
+    CHECK(parameterType.templateArguments[0].kind == Core::TemplateArgument::Kind::Type);
+    CHECK(parameterType.templateArguments[1].kind == Core::TemplateArgument::Kind::Value);
+    CHECK(parameterType.templateArguments[1].value.kind == Core::TemplateValue::Kind::Boolean);
+    CHECK(parameterType.templateArguments[1].value.boolean);
+    CHECK(parameterType.templateArguments[2].value.kind == Core::TemplateValue::Kind::Character);
+}
+
+TEST_CASE("Xmm v3 wire preserves ordered type and value template arguments")
+{
+    const auto original = XmmModule(XppModule(TemplateModule()));
+    const auto encoded = XmmWire::Encode(original);
+    REQUIRE(encoded);
+    CHECK(encoded.bytes[4] == 3U);
+    const auto decoded = XmmWire::Decode(encoded.bytes);
+    REQUIRE(decoded);
+    CHECK(*decoded.module == original);
+
+    const auto &parameterType = decoded.module->functions.front().parameter_types.front();
+    REQUIRE(parameterType.templateArguments.size() == 3U);
+    REQUIRE(parameterType.templateArguments.front().type);
+    const auto &fixed = *parameterType.templateArguments.front().type;
+    REQUIRE(fixed.templateArguments.size() == 2U);
+    CHECK(fixed.templateArguments[0].kind == Core::TemplateArgument::Kind::Type);
+    CHECK(fixed.templateArguments[1].value.kind == Core::TemplateValue::Kind::Integer);
+    CHECK(fixed.templateArguments[1].value.integer == Core::integer_from_unsigned(64U));
+}
+
+TEST_CASE("shared artifact writer rejects missing recursive template type payload")
+{
+    auto xpp = XppModule(TemplateModule());
+    auto &type = xpp.functions.front().parameters.front().type;
+    REQUIRE_FALSE(type.templateArguments.empty());
+    type.templateArguments.front().type.reset();
+    const auto result = XppWire::Encode(xpp);
+    REQUIRE_FALSE(result);
+    CHECK(result.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
 }
 
 TEST_CASE("Xpp wire rejects malformed framing without constructing a module")

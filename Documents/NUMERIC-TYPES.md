@@ -152,7 +152,7 @@ the implementation name is never a second language type.
 
 Lexer, parser, target-aware type checking, Core verification, constant
 integer operations, and CorePrep boolean normalization understand this scalar
-model. Core and CorePrep wire v3 transport the complete fixed-width catalog,
+model. Core and CorePrep wire v4 transport the complete fixed-width catalog,
 structured arbitrary-width integer magnitudes, and preserved floating
 spellings. Xpp and Xmm retain those types, and LLVM lowers them without a
 host-width conversion. See [Scalar pipeline](SCALAR-PIPELINE.md) for the

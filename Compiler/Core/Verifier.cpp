@@ -6,6 +6,7 @@
 #include <unordered_set>
 
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Core/Template.hpp"
 #include "Visual/XSharp/Core/Verifier.hpp"
 
 namespace Visual::XSharp::Core
@@ -71,6 +72,8 @@ namespace Visual::XSharp::Core
             {
                 if (ContainsInvalidType(type))
                     Add(std::move(code), std::move(message));
+                for (const auto &templateIssue : Template::Validate(type))
+                    Add("VXC1040", "invalid Core template type: " + templateIssue.message);
             }
             void
             CheckSameType(const Type &expected, const Type &actual, std::string code, std::string message, SymbolId symbol = 0U)
@@ -87,7 +90,16 @@ namespace Visual::XSharp::Core
                     return true;
                 if (type.kind == Type::Kind::Function && type.components.empty())
                     return true;
-                return std::ranges::any_of(type.components, ContainsInvalidType);
+                if (std::ranges::any_of(type.components, ContainsInvalidType))
+                    return true;
+                return std::ranges::any_of(type.templateArguments, [](const auto &argument) {
+                    if (argument.kind == ::visual_xsharp::core::TemplateArgument::Kind::Type)
+                        return !argument.type || ContainsInvalidType(*argument.type);
+                    if (argument.value.kind == ::visual_xsharp::core::TemplateValue::Kind::Parameter)
+                        return argument.value.parameter.id == 0U;
+                    return !::visual_xsharp::core::integer_is_canonical(argument.value.integer)
+                           && argument.value.kind != ::visual_xsharp::core::TemplateValue::Kind::Boolean;
+                });
             }
             [[nodiscard]] static auto
             AlwaysReturns(const std::vector<Statement> &statements) -> bool

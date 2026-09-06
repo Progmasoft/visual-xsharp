@@ -60,8 +60,8 @@ closureTests =
     , ("Core verifier accepts a well-formed closure", coreVerifierAcceptsClosure)
     , ("Core verifier rejects mismatched closure type", coreVerifierRejectsTypeMismatch)
     , ("Core verifier rejects capture initializer mismatch", coreVerifierRejectsCaptureMismatch)
-    , ("Core wire v3 round-trips closure values", coreWireClosureRoundTrip)
-    , ("CorePrep wire v3 round-trips closure creation", corePrepWireClosureRoundTrip)
+    , ("Core wire v4 round-trips closure values", coreWireClosureRoundTrip)
+    , ("CorePrep wire v4 round-trips closure creation", corePrepWireClosureRoundTrip)
     , ("CorePrep verifier accepts converted closure", corePrepVerifierAcceptsClosure)
     , ("CorePrep verifier rejects primitive weak capture", corePrepVerifierRejectsWeakPrimitive)
     ]

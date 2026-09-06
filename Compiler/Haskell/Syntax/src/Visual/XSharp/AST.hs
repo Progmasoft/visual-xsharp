@@ -19,6 +19,8 @@ module Visual.XSharp.AST
     , UnaryOperator (..)
     , BinaryOperator (..)
     , TypeSyntax (..)
+    , TemplateValueSyntax (..)
+    , TemplateArgumentSyntax (..)
     , BindingKind (..)
     , Access (..)
     , ParsedAST (..)
@@ -28,6 +30,8 @@ module Visual.XSharp.AST
     , ResolvedName (..)
     , ResolvedAST (..)
     , Type (..)
+    , TemplateArgument (..)
+    , TemplateValue (..)
     , TypedAST (..)
     , boolType
     , intType
@@ -52,12 +56,31 @@ data SourceSpan = SourceSpan
 
 data TypeSyntax
     = ExplicitType Identifier
-    | QualifiedTypeSyntax QualifiedName [TypeSyntax]
+    | QualifiedTypeSyntax QualifiedName [TemplateArgumentSyntax]
     | BuiltinArrayTypeSyntax TypeSyntax
     | ArrayTypeSyntax TypeSyntax
+    | FixedArrayTypeSyntax TypeSyntax TemplateValueSyntax
     | DictionaryTypeSyntax TypeSyntax TypeSyntax
     | CallableTypeSyntax [TypeSyntax] TypeSyntax
     | AutoType
+    deriving (Eq, Ord, Read, Show)
+
+-- Template values live in type syntax, but they are not types.  Keeping this
+-- deliberately small expression tree prevents a call, closure, or other
+-- runtime-only expression from leaking into a specialization identity.  The
+-- type checker evaluates the tree exactly before Core is constructed.
+data TemplateValueSyntax
+    = TemplateIntegerSyntax SourceSpan Integer
+    | TemplateCharacterSyntax SourceSpan Integer
+    | TemplateBooleanSyntax SourceSpan Bool
+    | TemplateNameSyntax SourceSpan QualifiedName
+    | TemplateUnarySyntax SourceSpan UnaryOperator TemplateValueSyntax
+    | TemplateBinarySyntax SourceSpan BinaryOperator TemplateValueSyntax TemplateValueSyntax
+    deriving (Eq, Ord, Read, Show)
+
+data TemplateArgumentSyntax
+    = TemplateTypeSyntax TypeSyntax
+    | TemplateValueArgumentSyntax TemplateValueSyntax
     deriving (Eq, Ord, Read, Show)
 data Access = DefaultAccess | PublicAccess | InternalAccess | ProtectedAccess | PrivateAccess
     deriving (Eq, Ord, Read, Show)
@@ -199,10 +222,29 @@ newtype ResolvedAST = ResolvedAST {resolvedSyntaxTree :: SyntaxTree ResolvedName
     deriving (Eq, Ord, Read, Show)
 
 data Type
-    = NamedType QualifiedName [Type]
+    = NamedType QualifiedName [TemplateArgument]
     | FunctionType [Type] Type
     | TypeVariable ResolvedName
     | ErrorType
+    deriving (Eq, Ord, Read, Show)
+
+-- A template argument is either a type or a compile-time value.  This is an
+-- ordered sum rather than two parallel lists: `Example<int, 4, String>` and
+-- `Example<int, String, 4>` must never acquire the same specialization key.
+data TemplateArgument
+    = TypeTemplateArgument Type
+    | ValueTemplateArgument TemplateValue
+    deriving (Eq, Ord, Read, Show)
+
+-- Values reaching Core are already evaluated and canonical.  A parameter is
+-- retained for future generic bodies; concrete fixed-array sugar currently
+-- produces only IntegerTemplateValue.  Integer is intentionally unbounded so
+-- the frontend does not inherit the host machine's word size.
+data TemplateValue
+    = IntegerTemplateValue Integer
+    | BooleanTemplateValue Bool
+    | CharacterTemplateValue Integer
+    | TemplateValueParameter ResolvedName
     deriving (Eq, Ord, Read, Show)
 
 newtype TypedAST = TypedAST {typedSyntaxTree :: SyntaxTree ResolvedName Type}

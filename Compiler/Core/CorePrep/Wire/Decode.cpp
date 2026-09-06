@@ -188,10 +188,25 @@ namespace visual_xsharp::core::wire
                     case 6:
                     {
                         auto name = qualified_name("named type");
-                        auto arguments = vector<Type>(65535U, "type argument count", [this, depth] {
-                            return type(depth + 1U);
+                        auto arguments = vector<TemplateArgument>(65535U, "template argument count", [this, depth] {
+                            switch (byte("template argument tag"))
+                            {
+                                case 0:
+                                    return TemplateArgument::type_argument(type(depth + 1U));
+                                case 1:
+                                    return TemplateArgument::value_argument(TemplateValue::integer_value(integer("template integer")));
+                                case 2:
+                                    return TemplateArgument::value_argument(TemplateValue::boolean_value(boolean("template boolean")));
+                                case 3:
+                                    return TemplateArgument::value_argument(TemplateValue::character_value(integer("template character")));
+                                case 4:
+                                    return TemplateArgument::value_argument(TemplateValue::parameter_value(symbol("template value parameter")));
+                                default:
+                                    fail(ErrorKind::InvalidTag, "template argument tag", "unknown template argument tag");
+                                    return TemplateArgument{};
+                            }
                         });
-                        return Type::named(std::move(name), std::move(arguments));
+                        return Type::named_template(std::move(name), std::move(arguments));
                     }
                     case 7:
                         return Type::type_variable(symbol("type variable symbol"));
@@ -234,6 +249,19 @@ namespace visual_xsharp::core::wire
                 if (value > 1U)
                     fail(ErrorKind::InvalidBoolean, std::string(context), "boolean byte must be zero or one");
                 return value == 1U;
+            }
+
+            [[nodiscard]] auto
+            integer(std::string_view context) -> IntegerLiteral
+            {
+                IntegerLiteral value;
+                value.negative = boolean(std::string(context) + " sign");
+                value.magnitude = vector<std::uint8_t>(limits_.maximum_numeric_bytes, std::string(context) + " magnitude", [this, context] {
+                    return byte(std::string(context) + " magnitude");
+                });
+                if (!integer_is_canonical(value))
+                    fail(ErrorKind::InvalidInteger, std::string(context), "integer magnitude/sign is not canonical");
+                return value;
             }
 
             [[nodiscard]] auto

@@ -70,7 +70,7 @@ namespace
     [[nodiscard]] auto
     ReadGoldenHex() -> std::vector<std::uint8_t>
     {
-        const auto path = std::filesystem::path(__FILE__).parent_path() / "Fixtures" / "Core" / "wire-v3.hex";
+        const auto path = std::filesystem::path(__FILE__).parent_path() / "Fixtures" / "Core" / "wire-v4.hex";
         std::ifstream stream(path);
         REQUIRE(stream);
         std::vector<std::uint8_t> bytes;

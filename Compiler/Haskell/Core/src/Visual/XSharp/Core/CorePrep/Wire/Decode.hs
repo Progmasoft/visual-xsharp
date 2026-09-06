@@ -196,7 +196,7 @@ decodeTypeAt depth = do
         6 ->
             NamedType
                 <$> decodeQualifiedName
-                <*> decodeVectorWithMaximum "type argument count" 65535 (decodeTypeAt (depth + 1))
+                <*> decodeVectorWithMaximum "template argument count" 65535 (decodeTemplateArgument (depth + 1))
         7 -> TypeVariable <$> decodeResolvedName "type variable symbol"
         8 -> pure (namedScalar "char")
         9 -> pure (namedScalar "byte")
@@ -212,6 +212,17 @@ decodeTypeAt depth = do
         19 -> pure (namedScalar "float")
         20 -> pure (namedScalar "double")
         _ -> invalidTag "type tag" tag
+
+decodeTemplateArgument :: Int -> Decoder TemplateArgument
+decodeTemplateArgument depth = do
+    tag <- readWord8 "template argument tag"
+    case tag of
+        0 -> TypeTemplateArgument <$> decodeTypeAt depth
+        1 -> ValueTemplateArgument . IntegerTemplateValue <$> decodeInteger
+        2 -> ValueTemplateArgument . BooleanTemplateValue <$> decodeBool "template boolean value"
+        3 -> ValueTemplateArgument . CharacterTemplateValue <$> decodeInteger
+        4 -> ValueTemplateArgument . TemplateValueParameter <$> decodeResolvedName "template value parameter"
+        _ -> invalidTag "template argument tag" tag
 
 namedScalar :: String -> Type
 namedScalar name = NamedType (QualifiedName [Identifier name]) []

@@ -6,6 +6,7 @@ import Data.List (nub)
 import Visual.XSharp.AST
 import Visual.XSharp.Core qualified as Core
 import Visual.XSharp.Core.CorePrep
+import Visual.XSharp.Core.Template
 import Visual.XSharp.Diagnostic
 
 verifyCorePrep :: CorePrepModule -> Either [Diagnostic] CorePrepModule
@@ -25,11 +26,14 @@ verifyFunction function =
         parameterIds = map (resolvedSymbol . fst) (corePrepFunctionParameters function)
         definitionIds = concatMap blockDefinitions blocks
      in missingEntry blockIds
+            ++ verifyType "function result" (corePrepFunctionReturnType function)
+            ++ concatMap (verifyParameterType . snd) (corePrepFunctionParameters function)
             ++ duplicateIds "VXC0003" "duplicate CorePrep block id" blockIds
             ++ duplicateIds "VXC0004" "duplicate CorePrep parameter symbol" parameterIds
             ++ duplicateIds "VXC0005" "CorePrep symbol is defined more than once" (parameterIds ++ definitionIds)
             ++ concatMap (verifyBlock blockIds) blocks
     where
+        verifyParameterType = verifyType "function parameter"
         missingEntry ids =
             if corePrepFunctionEntry function `elem` ids
                 then []
@@ -45,7 +49,7 @@ verifyBlock blockIds block =
 
 verifyInstruction :: CorePrepInstruction -> [Diagnostic]
 verifyInstruction instruction = case instruction of
-    CorePrepBind _ valueType _ operation -> verifyOperation valueType operation
+    CorePrepBind _ valueType _ operation -> verifyType "binding" valueType ++ verifyOperation valueType operation
     CorePrepAssign _ atom -> verifyAtom atom
     CorePrepEvaluate operation -> verifyOperation ErrorType operation
 
@@ -77,6 +81,7 @@ verifyCapture (CorePrepCapture mode name valueType atom) =
         ++ [ problem "VXC0018" "non-owning capture requires an AARC reference value"
            | mode /= StrongCapture && not (aarcReference valueType)
            ]
+        ++ verifyType "capture" valueType
         ++ verifyAtom atom
     where
         -- Core currently lacks nominal-declaration metadata, so every resolved
@@ -138,6 +143,7 @@ verifyTerminator blockIds terminator = case terminator of
 verifyAtom :: CorePrepAtom -> [Diagnostic]
 verifyAtom atom =
     [problem "VXC0012" "CorePrep atom has an unresolved type" | atomType atom == ErrorType]
+        ++ verifyType "atom" (atomType atom)
         ++ case atom of
             CorePrepLiteral literal valueType -> verifyLiteral literal valueType
             CorePrepVariable _ _ -> []
@@ -213,6 +219,26 @@ validFloatingSpelling spelling
 
 atomType :: CorePrepAtom -> Type
 atomType atom = case atom of CorePrepVariable _ valueType -> valueType; CorePrepLiteral _ valueType -> valueType
+
+-- CorePrep may be constructed directly by tests and tooling, so it cannot
+-- rely on the Core verifier having run. Revalidating structural template keys
+-- here makes the stage boundary self-contained and protects Xpp lowering from
+-- malformed fixed-array and value-parameter payloads.
+verifyType :: String -> Type -> [Diagnostic]
+verifyType context valueType = map templateProblem (validateTemplateType 128 valueType)
+    where
+        templateProblem issue =
+            problem
+                "VXC0024"
+                ( "invalid CorePrep "
+                    ++ context
+                    ++ " template type at "
+                    ++ renderPath (templateIssuePath issue)
+                    ++ ": "
+                    ++ templateIssueMessage issue
+                )
+        renderPath [] = "the type root"
+        renderPath indexes = "argument " ++ concatMap (\index -> "[" ++ show index ++ "]") indexes
 
 duplicateIds :: (Eq a) => String -> String -> [a] -> [Diagnostic]
 duplicateIds code message values = [problem code message | length values /= length (nub values)]

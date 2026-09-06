@@ -146,7 +146,7 @@ The current public artifact names are:
 Normal compilation keeps these representations in memory. Haskell writes real `.core` artifacts and C++20 consumes them
 through the full verified pipeline. Explicit `.ll`, `.bc`, `.o`, and `.asm` emission is available after source or Core
 input. Binary emission adds the platform entry bridge, writes a temporary object, links one `.vxse`, and removes the
-temporary object. Bounded Xpp/Xmm v2 readers and writers support verified forward pipeline resumption.
+temporary object. Bounded Xpp/Xmm v3 readers and writers support verified forward pipeline resumption.
 
 ## Process and temporary-file model
 

@@ -144,7 +144,7 @@ parseCallableTypeSyntax = do
 -- stays distinct because its runtime representation is not System.Array.
 parseArrayTypeSyntax :: P TypeSyntax
 parseArrayTypeSyntax = do
-    open <- symbol "["
+    _ <- symbol "["
     builtin <- optionalSymbol "]"
     if builtin
         then BuiltinArrayTypeSyntax <$> parseTypeSyntax
@@ -159,10 +159,11 @@ parseArrayTypeSyntax = do
                     pure (DictionaryTypeSyntax first value)
                 Just token
                     | tokenKind token == SymbolToken && tokenText token == ";" ->
-                        failAt
-                            (tokenSpan open)
-                            "VXP0017"
-                            "fixed array sugar requires value-template arguments; use System.Array<T, N> until that syntax model is available"
+                        do
+                            _ <- takeToken
+                            value <- parseExpression >>= requireTemplateValue
+                            _ <- symbol "]"
+                            pure (FixedArrayTypeSyntax first value)
                 _ -> do
                     _ <- symbol "]"
                     pure (ArrayTypeSyntax first)
@@ -190,7 +191,7 @@ qualifiedTypeParts = do
             (part :) <$> qualifiedTypeParts
         else pure []
 
-optionalTypeArguments :: P [TypeSyntax]
+optionalTypeArguments :: P [TemplateArgumentSyntax]
 optionalTypeArguments = do
     open <- optionalSymbol "<"
     if not open
@@ -200,9 +201,47 @@ optionalTypeArguments = do
             if empty
                 then failCurrent "VXP0016" "a generic type argument list cannot be empty"
                 else do
-                    arguments <- separatedUntil ">" "," parseTypeSyntax
+                    arguments <- separatedUntil ">" "," parseTemplateArgumentSyntax
                     _ <- symbol ">"
                     pure arguments
+
+-- A leading literal or unary operator makes a generic argument unambiguously
+-- a value.  A bare identifier remains a type until declaration-aware template
+-- lookup exists; fixed-array sugar has an explicit semicolon and therefore
+-- supports named values without that ambiguity today.
+parseTemplateArgumentSyntax :: P TemplateArgumentSyntax
+parseTemplateArgumentSyntax = do
+    next <- peekToken
+    case next of
+        Just token
+            | tokenKind token `elem` [IntegerToken, CharacterToken]
+                || (tokenKind token == KeywordToken && tokenText token `elem` ["true", "false", "not"])
+                || (tokenKind token == SymbolToken && tokenText token `elem` ["+", "-"]) ->
+                -- The outer '>' terminates this argument and is also a binary
+                -- comparison token. Parsing the unparenthesized prefix only
+                -- through additive precedence prevents the delimiter from
+                -- being consumed as an operator. Comparisons remain available
+                -- when explicitly parenthesized, for example Flag<(1 > 0)>.
+                TemplateValueArgumentSyntax <$> (parseAdditive >>= requireTemplateValue)
+        _ -> TemplateTypeSyntax <$> parseTypeSyntax
+
+requireTemplateValue :: Expression Identifier () -> P TemplateValueSyntax
+requireTemplateValue expression = case expression of
+    NameExpression spanValue name _ -> pure (TemplateNameSyntax spanValue (QualifiedName [name]))
+    LiteralExpression spanValue literal _ -> case literal of
+        IntegerLiteral value -> pure (TemplateIntegerSyntax spanValue value)
+        CharacterLiteral value -> pure (TemplateCharacterSyntax spanValue value)
+        BooleanLiteral value -> pure (TemplateBooleanSyntax spanValue value)
+        _ -> unsupported spanValue
+    UnaryExpression spanValue operator value _ ->
+        TemplateUnarySyntax spanValue operator <$> requireTemplateValue value
+    BinaryExpression spanValue operator left right _ ->
+        TemplateBinarySyntax spanValue operator <$> requireTemplateValue left <*> requireTemplateValue right
+    CallExpression spanValue _ _ _ -> unsupported spanValue
+    CallableExpression spanValue _ _ _ _ _ -> unsupported spanValue
+    where
+        unsupported spanValue =
+            failAt spanValue "VXP0018" "template value arguments must be compile-time scalar expressions"
 
 parseBlock :: Bool -> P (Block Identifier ())
 parseBlock allowFinalExpression = do _ <- symbol "{"; statements <- go; _ <- symbol "}"; pure (Block statements)

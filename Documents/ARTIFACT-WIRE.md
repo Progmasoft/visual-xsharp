@@ -11,10 +11,10 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 
 | Contract | Magic | Current version | Producer | Consumer |
 | --- | --- | ---: | --- | --- |
-| Core | `VXCR` | 3 | Haskell frontend | native Core reader |
-| CorePrep | `VXCP` | 3 | CorePrep adapter | native pipeline tools |
-| Xpp | `VXPP` | 2 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
-| Xmm | `VXMM` | 2 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
+| Core | `VXCR` | 4 | Haskell frontend | native Core reader |
+| CorePrep | `VXCP` | 4 | CorePrep adapter | native pipeline tools |
+| Xpp | `VXPP` | 3 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
+| Xmm | `VXMM` | 3 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
 The contracts have related scalar encodings but separate structural schemas.
 Their magic values must never be treated as aliases.
@@ -50,7 +50,7 @@ still fit its declared scalar width.
 
 ## Scalar type tags
 
-Wire v3 assigns an explicit tag to unit/no-result, boolean, string, function,
+Wire v4 assigns an explicit tag to unit/no-result, boolean, string, function,
 named, variable, character, every signed and unsigned integer width, and every
 floating width. A decoder reconstructs the exact type; it does not infer width
 from the literal byte count.
@@ -59,10 +59,10 @@ That separation is required because the same magnitude can inhabit several
 types and because signedness affects native instruction selection even when
 the bit pattern is identical.
 
-### Core v3 scalar tag map
+### Core v4 scalar tag map
 
 The native and Haskell Core codecs use the following assignments for version
-3. This table is an implementation-maintenance aid, not a user extension API.
+4. This table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
 | ---: | --- | ---: | --- |
@@ -82,7 +82,7 @@ The compatibility entry retains an in-memory historical slot. It does not
 create another source spelling, and new numeric values still carry their exact
 declared scalar type.
 
-### CorePrep v3 scalar tag map
+### CorePrep v4 scalar tag map
 
 CorePrep retains historical `int` and `long` positions before the extended
 catalog. Its assignments must therefore not be copied blindly from Core:
@@ -103,6 +103,68 @@ catalog. Its assignments must therefore not be copied blindly from Core:
 
 The distinct table is one reason magic and version are verified before any
 type record is decoded.
+
+## Ordered template arguments
+
+Core and CorePrep v4 no longer encode every named-type argument as another
+type. Each argument starts with a kind tag and is decoded in source order:
+
+| Tag | Argument payload |
+| ---: | --- |
+| 0 | recursive type argument |
+| 1 | arbitrary-precision integer value |
+| 2 | Boolean value |
+| 3 | Unicode scalar character value |
+| 4 | resolved compile-time value parameter |
+
+The order is semantic. `Matrix<int, 4>` and `Matrix<4, int>` cannot share an
+artifact identity, even if a malformed declaration would later reject both.
+Readers therefore build one ordered sum rather than parallel type and value
+vectors.
+
+Integer and character values use the same canonical sign/magnitude payload
+rules as integer literals. A character receives an additional Unicode-scalar
+check. Boolean values use exactly one zero-or-one byte. Parameter values carry
+both positive `SymbolId` and diagnostic spelling; spelling alone is never the
+identity.
+
+Named types recursively consume the configured type-depth budget only for type
+arguments. A value argument is a leaf. Its integer magnitude still consumes
+the numeric-byte budget, and its parameter spelling consumes the text-scalar
+budget.
+
+The Xpp and Xmm shared type encoder uses the same semantic model with its own
+stage-local record layout. Their versions moved to 3 because an older reader
+would otherwise interpret an argument-kind byte as a type tag. The formats are
+not byte aliases: only their validation rules and in-memory type model are
+shared.
+
+### Array encodings
+
+The three array forms remain structurally distinct:
+
+| Source family | Named identity | Arguments |
+| --- | --- | --- |
+| `[]T` | built-in `[]` marker | `type(T)` |
+| `[T]` | `System.Array` | `type(T)` |
+| `[T; N]` | `System.Array` | `type(T), value(integer N)` |
+
+Fixed and dynamic `System.Array` are overloads of one public family. The wire
+does not invent a `FixedArray` class name. The built-in `[]T` representation is
+not rewritten to `System.Array`, because the language specification gives it a
+different role.
+
+### Version transition
+
+Versions are strict, not feature-negotiated. A v3 Core/CorePrep document or v2
+Xpp/Xmm document fails at the version field when presented to the current
+reader. The compiler does not guess whether a named type happened to contain
+only old type arguments. Recompile the owning source or regenerate the
+intermediate artifact with the current compiler.
+
+Golden fixtures cover the header transition, while mixed type/value round-trip
+tests cover payload ordering, negative arbitrary-precision integers, Boolean
+values, Unicode characters, and unresolved value-parameter identities.
 
 ## Integer payloads
 
@@ -232,7 +294,7 @@ when written; decoding never recreates a host-width alternative.
 
 ## Xpp document order
 
-An Xpp v2 document contains:
+An Xpp v3 document contains:
 
 1. `VXPP`, version, and zero reserved flags;
 2. qualified module name;
@@ -253,7 +315,7 @@ dedicated symbol field rather than an untyped extra operand.
 
 ## Xmm document order
 
-An Xmm v2 document contains:
+An Xmm v3 document contains:
 
 1. `VXMM`, version, and zero reserved flags;
 2. qualified module name;
@@ -294,11 +356,13 @@ verified again before serialization or forward lowering.
 
 ## Compatibility policy
 
-The version field describes the entire schema. Core/CorePrep version 3 is not
-a permissive extension of version 2: their scalar type and literal tag spaces
-changed. Xpp/Xmm began independently at version 1; version 2 adds the explicit
-strong/weak/unowned opcode catalog used by AARC lowering. Every current reader rejects
-earlier and future versions for its own magic.
+The version field describes the entire schema. Core/CorePrep version 3 was not
+a permissive extension of version 2: its scalar type and literal tag spaces
+changed. Version 4 adds ordered type/value template arguments to recursive type
+records. Xpp/Xmm began independently at version 1; version 2 added the explicit
+strong/weak/unowned opcode catalog used by AARC lowering, and version 3 adds the
+same ordered template-argument type records used at their stage boundary. Every
+current reader rejects earlier and future versions for its own magic.
 
 If migration is needed later, it should be implemented as an explicit reader
 for the old version followed by model conversion. The current decoder must not

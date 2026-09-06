@@ -145,7 +145,7 @@ integerTypes = map namedType coreIntegerTypeNames
 floatingTypes = map namedType coreFloatingTypeNames
 
 appliedIntType :: Type
-appliedIntType = NamedType (QualifiedName [Identifier "int"]) [intType]
+appliedIntType = NamedType (QualifiedName [Identifier "int"]) [TypeTemplateArgument intType]
 
 integer :: Integer -> CoreExpression
 integer value = CoreLiteral (CoreInteger value) intType

@@ -8,10 +8,45 @@ type erasure, a universal boxed representation, or a runtime generic dictionary
 as the default execution model. Each required concrete template argument set
 produces a concrete declaration with concrete storage and callable signatures.
 
-This is the intended compiler contract. The current frontend transports generic
-type structure but does not yet implement the complete instantiation engine.
+This is the intended compiler contract. The current frontend transports ordered
+type and compile-time value arguments and the native layer can validate,
+substitute, identify, and intern concrete type specializations. It does not yet
+clone template declarations or execute the complete instantiation engine.
 Until that engine lands, documents and diagnostics must not claim that all
 template programs are executable.
+
+## Current implementation boundary
+
+The implemented slice includes:
+
+- parsed `[T; expression]` fixed-array sugar;
+- unambiguous literal value arguments such as `Buffer<32>`;
+- exact integer, character, Boolean, unary, and binary constant evaluation;
+- an ordered `TemplateArgument` sum in typed AST, Core, CorePrep, Xpp, and Xmm;
+- strict Core/CorePrep v4 and Xpp/Xmm v3 codecs;
+- recursive structural validation and parameter collection;
+- independent type-parameter and value-parameter substitution;
+- deterministic structural identity rendering;
+- immutable Haskell worklist planning with atomic batch failure;
+- thread-safe native interning of valid concrete types; and
+- explicit classification of `[]T`, `System.Array<T>`, and
+  `System.Array<T, N>`.
+
+The slice deliberately does not include:
+
+- parsing template declarations into the current small declaration AST;
+- declaration-aware disambiguation of a bare identifier in `Example<T>`;
+- lookup of source constants used as fixed-array sizes;
+- template-template arguments, packs, defaults, or wildcard deduction;
+- constraint ordering and specialization selection;
+- demand discovery or declaration/body cloning; or
+- generated symbol mangling and incremental cache persistence.
+
+A bare identifier in an ordinary angle-bracket argument therefore remains a
+type in the current parser. The semicolon in `[T; N]` is unambiguous, but an
+unresolved `N` is diagnosed by TypeChecker until constant and template-
+parameter declarations enter the semantic environment. Numeric, Boolean, and
+character arguments do not have that ambiguity.
 
 ## Source contract
 
@@ -71,6 +106,79 @@ from different namespaces remain different.
 The key is deterministic and independent of discovery order. It is used for the
 in-memory specialization cache and stable symbol derivation, but its serialized
 form is a compiler implementation detail rather than a source mangling promise.
+
+### Structural identity now
+
+The implemented identity renderer is intentionally not a linker mangling. It
+kind-tags every node, length-prefixes qualified-name components, records ordered
+argument boundaries, keeps value kinds distinct, and includes both `SymbolId`
+and spelling for unresolved parameters. This prevents collisions between:
+
+- `System.Array<int>` and `System.Array<int, 0>`;
+- `Example<int, 4>` and `Example<4, int>`;
+- integer `65` and character `'A'`;
+- one qualified component named `A.B` and two components `A` plus `B`; and
+- two parameter identities that happen to have the same spelling.
+
+The renderer is deterministic for an already resolved `Type`; it does not make
+aliases equivalent by itself. Alias resolution and selected declaration
+identity must be added before the final monomorphization key is considered
+complete.
+
+### Validation and metrics
+
+Validation walks the same structure before interning. It rejects empty names,
+missing recursive type payloads, invalid parameter symbols, noncanonical
+integer payloads, invalid Unicode character values, negative fixed-array sizes,
+and malformed array-family arity or argument kinds. A caller-supplied nesting
+limit bounds recursive work.
+
+Metrics report type nodes, type arguments, value arguments, parameter
+references, and maximum depth. They are not optimization estimates. Their
+purpose is deterministic diagnostics, tracing, and future resource limits.
+
+### Substitution
+
+Type and value binding maps are separate. Substitution descends through named
+arguments and callable signatures, replaces only matching positive semantic
+identities, and leaves missing bindings intact. That makes partial
+specialization representable without manufacturing an `ErrorType`.
+
+The current substitution function transforms types, not declarations. Capture-
+avoiding body cloning, ownership reclassification, constraint checking, and
+new generated symbols remain work for the monomorphization pass.
+
+### Native specialization table
+
+The native table accepts only structurally valid concrete types. It derives the
+internal identity, checks for an existing entry under a shared lock, then
+rechecks under an exclusive lock before allocating a positive identifier. Two
+parallel compilation jobs racing to intern the same type therefore receive the
+same entry.
+
+Identifiers reflect deterministic insertion order within one table; they are
+not stable across processes and must not be serialized as an ABI promise.
+Snapshots preserve insertion order for tracing. Lookup supports either the
+table-local identifier or a concrete structural type.
+
+### Haskell specialization planner
+
+The Haskell Core package owns the target-independent planning boundary. It
+accepts separate type and value binding lists, rejects duplicate keys and keys
+used for both parameter kinds, performs recursive substitution, validates the
+result, and refuses to intern a type while any semantic parameter remains open.
+
+The planner's catalog is immutable. Interning returns an updated catalog and a
+flag that distinguishes a new demand from a cache hit. Batch interning threads
+that catalog through a request list; if any request is invalid, the operation
+returns no catalog at all. Callers therefore cannot accidentally retain a
+partially accepted worklist after a later request fails.
+
+Catalog identifiers are positive and follow first-insertion order. Repeated
+requests in one batch retain their corresponding result positions but share
+the same entry. Lookup is available by table-local identifier or by concrete
+structural type, and snapshots are ordered by identifier for deterministic
+tracing. As with the native table, these identifiers are not serialized ABI.
 
 ## Demand discovery
 

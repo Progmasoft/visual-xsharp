@@ -127,7 +127,7 @@ the remaining callable boundary; construction and destruction are connected.
 Tests cover delimiter and parameter forms, expression/block bodies, empty and
 populated capture lists, aliases and order, duplicate/omitted captures, private
 symbols, invocation checking, non-owning restrictions, implicit free-variable
-discovery, nested conversion, Core/CorePrep verification, and both v3 codecs.
+discovery, nested conversion, Core/CorePrep verification, and both v4 codecs.
 
 Native tests independently verify codec symmetry and metadata preservation
 through Xpp and Xmm. Each stage rejects malformed closures at the boundary it

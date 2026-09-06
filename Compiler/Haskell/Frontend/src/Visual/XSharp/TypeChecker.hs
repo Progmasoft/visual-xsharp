@@ -7,6 +7,7 @@ import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.ConstantEvaluation
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
+import Visual.XSharp.TemplateValue
 
 newtype TypeChecker = TypeChecker {checkResolvedAST :: ResolvedAST -> Either [Diagnostic] TypedAST}
 runTypeChecker :: TypeChecker -> ResolvedAST -> Either [Diagnostic] TypedAST
@@ -41,16 +42,22 @@ checkTopDeclaration declaration = case declaration of
 
 syntaxType :: TypeSyntax -> Type
 syntaxType AutoType = ErrorType
-syntaxType (QualifiedTypeSyntax name arguments) = NamedType name (map syntaxType arguments)
+syntaxType (QualifiedTypeSyntax name arguments) = NamedType name (map syntaxTemplateArgument arguments)
 syntaxType (BuiltinArrayTypeSyntax element) =
     -- `[]T` is a language type, not a public class invented by the compiler.
     -- Its structural spelling keeps that distinction visible through Core
     -- until ownership-aware lowering assigns the final runtime layout.
-    NamedType (QualifiedName [Identifier "[]"]) [syntaxType element]
+    NamedType (QualifiedName [Identifier "[]"]) [TypeTemplateArgument (syntaxType element)]
 syntaxType (ArrayTypeSyntax element) =
-    NamedType (QualifiedName [Identifier "System", Identifier "Array"]) [syntaxType element]
+    NamedType (QualifiedName [Identifier "System", Identifier "Array"]) [TypeTemplateArgument (syntaxType element)]
+syntaxType (FixedArrayTypeSyntax element size) =
+    NamedType
+        (QualifiedName [Identifier "System", Identifier "Array"])
+        [TypeTemplateArgument (syntaxType element), ValueTemplateArgument (syntaxTemplateValue size)]
 syntaxType (DictionaryTypeSyntax key value) =
-    NamedType (QualifiedName [Identifier "System", Identifier "Dictionary"]) [syntaxType key, syntaxType value]
+    NamedType
+        (QualifiedName [Identifier "System", Identifier "Dictionary"])
+        [TypeTemplateArgument (syntaxType key), TypeTemplateArgument (syntaxType value)]
 syntaxType (CallableTypeSyntax parameters result) = FunctionType (map syntaxType parameters) (syntaxType result)
 syntaxType (ExplicitType (Identifier name)) = case name of
     "String" -> stringType
@@ -59,6 +66,42 @@ syntaxType (ExplicitType (Identifier name)) = case name of
     _ -> maybe (NamedType (QualifiedName [Identifier name]) []) scalarTypeToType (lookupScalar name)
     where
         lookupScalar spelling = lookup spelling [(scalarTypeName scalar, scalar) | scalar <- scalarTypes]
+
+syntaxTemplateArgument :: TemplateArgumentSyntax -> TemplateArgument
+syntaxTemplateArgument argument = case argument of
+    TemplateTypeSyntax valueType -> TypeTemplateArgument (syntaxType valueType)
+    TemplateValueArgumentSyntax value -> ValueTemplateArgument (syntaxTemplateValue value)
+
+-- Parser construction guarantees the expression tree is side-effect free.
+-- Exact evaluation here gives every concrete specialization one canonical
+-- identity. Invalid arithmetic becomes a sentinel and is diagnosed by the
+-- type-syntax validation pass before Core can be emitted.
+syntaxTemplateValue :: TemplateValueSyntax -> TemplateValue
+syntaxTemplateValue value = case evaluateTemplateValue value of
+    Right result -> result
+    _ -> IntegerTemplateValue 0
+
+typeSyntaxProblems :: TypeSyntax -> [Diagnostic]
+typeSyntaxProblems syntax = case syntax of
+    ExplicitType _ -> []
+    AutoType -> []
+    BuiltinArrayTypeSyntax element -> typeSyntaxProblems element
+    ArrayTypeSyntax element -> typeSyntaxProblems element
+    DictionaryTypeSyntax key value -> typeSyntaxProblems key ++ typeSyntaxProblems value
+    CallableTypeSyntax parameters result -> concatMap typeSyntaxProblems parameters ++ typeSyntaxProblems result
+    QualifiedTypeSyntax _ arguments -> concatMap templateArgumentProblems arguments
+    FixedArrayTypeSyntax element size ->
+        typeSyntaxProblems element
+            ++ case evaluateFixedArraySize size of
+                Left issue -> [problem (templateValueSyntaxSpan size) "VXT0016" (renderTemplateValueError issue)]
+                Right _ -> []
+
+templateArgumentProblems :: TemplateArgumentSyntax -> [Diagnostic]
+templateArgumentProblems argument = case argument of
+    TemplateTypeSyntax valueType -> typeSyntaxProblems valueType
+    TemplateValueArgumentSyntax value -> case evaluateTemplateValue value of
+        Left issue -> [problem (templateValueSyntaxSpan value) "VXT0017" (renderTemplateValueError issue)]
+        Right _ -> []
 
 checkDeclaration :: TypeEnvironment -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
 checkDeclaration globals declaration@FunctionDeclaration {} =
@@ -83,6 +126,9 @@ checkDeclaration globals declaration@FunctionDeclaration {} =
                     ]
                 else []
         typedParameters = map typeParameter (declarationParameters declaration)
+        signatureProblems =
+            typeSyntaxProblems (declarationReturnSyntax declaration)
+                ++ concatMap (typeSyntaxProblems . parameterTypeSyntax) (declarationParameters declaration)
         functionType = FunctionType (map parameterAnnotation typedParameters) inferred
      in ( FunctionDeclaration
             (declarationSpan declaration)
@@ -93,7 +139,7 @@ checkDeclaration globals declaration@FunctionDeclaration {} =
             body
             (declarationIsStatic declaration)
             (declarationAccess declaration)
-        , problems ++ returnProblems
+        , signatureProblems ++ problems ++ returnProblems
         )
 checkDeclaration _ declaration@TypeDeclaration {} = checkTopDeclaration declaration
 
@@ -144,7 +190,7 @@ checkStatement environment expected statement = case statement of
          in ( BindingStatement spanValue kind syntax name bindingType typedValue
             , (resolvedSymbol name, (bindingType, mutable)) : environment
             , []
-            , problems ++ mismatch ++ constantProblems
+            , typeSyntaxProblems syntax ++ problems ++ mismatch ++ constantProblems
             )
     AssignmentStatement spanValue name _ value ->
         let (typedValue, valueType, problems) = checkExpression environment value
@@ -288,6 +334,7 @@ checkExpressionExpected environment expected expression = case expression of
             (typedBody, resultType, bodyProblems) = checkCallableBody callableEnvironment body
             callableType = FunctionType (map parameterAnnotation typedParameters) resultType
             captureProblems = concatMap captureDiagnostics checkedCaptures
+            parameterProblems = concatMap (typeSyntaxProblems . parameterTypeSyntax) parameters
          in ( CallableExpression
                 spanValue
                 explicit
@@ -296,7 +343,7 @@ checkExpressionExpected environment expected expression = case expression of
                 typedBody
                 callableType
             , callableType
-            , captureProblems ++ bodyProblems
+            , captureProblems ++ parameterProblems ++ bodyProblems
             )
 
 type CheckedCapture = (Capture ResolvedName Type, [Diagnostic])

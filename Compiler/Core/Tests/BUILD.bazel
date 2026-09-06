@@ -13,11 +13,16 @@ cc_binary(
 
 cc_binary(
     name = "core_pipeline_tests",
-    srcs = ["CorePipelineTests.cpp"],
+    srcs = [
+        "CorePipelineTests.cpp",
+        "TemplateTests.cpp",
+    ],
     deps = [
         "//Compiler/Core:core",
         "//Compiler/Driver:core_pipeline",
         "//Compiler/Headers/Visual/XSharp:pipeline_api",
+        "//Compiler/Headers/Visual/XSharp/Core:template_api",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
         "@catch2//:catch2_main",
     ],
 )

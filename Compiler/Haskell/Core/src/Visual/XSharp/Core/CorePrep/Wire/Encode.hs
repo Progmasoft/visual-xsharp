@@ -181,7 +181,8 @@ encodeTypeAt limits depth valueType
     | Just tag <- primitiveTypeTag valueType = pure [tag]
     | NamedType name arguments <- valueType = do
         encodedName <- encodeQualifiedName limits name
-        encodedArguments <- encodeVector limits "type argument count" 65535 (encodeTypeAt limits (depth + 1)) arguments
+        encodedArguments <-
+            encodeVector limits "template argument count" 65535 (encodeTemplateArgument limits (depth + 1)) arguments
         pure ([6] ++ encodedName ++ encodedArguments)
     | FunctionType parameters result <- valueType = do
         encodedParameters <-
@@ -198,6 +199,20 @@ encodeTypeAt limits depth valueType
         pure ([7] ++ encodedName)
     | ErrorType <- valueType =
         Left (wireError UnsupportedType 0 "type" "unresolved ErrorType cannot cross the CorePrep boundary")
+
+encodeTemplateArgument :: WireLimits -> Int -> TemplateArgument -> Encoder
+encodeTemplateArgument limits depth argument = case argument of
+    TypeTemplateArgument valueType -> (0 :) <$> encodeTypeAt limits depth valueType
+    ValueTemplateArgument value -> encodeTemplateValue limits value
+
+encodeTemplateValue :: WireLimits -> TemplateValue -> Encoder
+encodeTemplateValue limits value = case value of
+    IntegerTemplateValue integer -> (1 :) <$> encodeInteger limits integer
+    BooleanTemplateValue boolean -> pure [2, if boolean then 1 else 0]
+    CharacterTemplateValue scalar -> (3 :) <$> encodeInteger limits scalar
+    TemplateValueParameter name -> do
+        encoded <- encodeResolvedName limits "template value parameter" name
+        pure (4 : encoded)
 
 primitiveTypeTag :: Type -> Maybe Word8
 primitiveTypeTag valueType

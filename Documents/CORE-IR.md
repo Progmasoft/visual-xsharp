@@ -54,7 +54,7 @@ a value.
 
 Core reuses the resolved frontend `Type` model:
 
-- named types with qualified names and type arguments;
+- named types with qualified names and ordered type-or-value template arguments;
 - function types with ordered parameters and one result;
 - resolved type variables; and
 - `ErrorType`, which is forbidden in verified Core.
@@ -67,6 +67,35 @@ Source `void` is checked before Core. At the current boundary, resultless
 functions use the historically named `unit` marker plus `CoreUnit` as the
 explicit return marker. Visual X# has no source-language `unit` type. Source-
 facing tools must spell the result `void` and keep this representation private.
+
+### Template arguments
+
+A named type argument is an ordered sum:
+
+- `TypeTemplateArgument` recursively contains a resolved Core type; or
+- `ValueTemplateArgument` contains a canonical compile-time integer, Boolean,
+  character, or resolved value parameter.
+
+This distinction is implemented before declaration cloning. Treating the
+second argument of `System.Array<T, N>` as a type would make specialization
+identity unsound and prevent `[T; N]` from reaching Core.
+
+Concrete fixed-array size expressions are evaluated exactly by TypeChecker.
+Host integer width is irrelevant. Division, floor division, and remainder by
+zero are diagnosed; a negative or non-integer fixed size is rejected. Calls,
+closures, strings, and floating values cannot enter fixed-array type syntax as
+compile-time sizes.
+
+The structural model exposes validation, metrics, parameter collection,
+substitution, array-family classification, and a deterministic internal
+identity renderer. Native code also owns a thread-safe specialization table.
+The table interns only valid concrete types, starts identifiers above zero,
+coalesces concurrent insertion races, and preserves insertion order in
+snapshots.
+
+These facilities are infrastructure for the future monomorphization pass. They
+do not claim that template declarations, constraints, packs, or lazy members
+are fully instantiated by the current frontend.
 
 ## Functions
 

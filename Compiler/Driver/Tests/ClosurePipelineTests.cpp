@@ -207,13 +207,13 @@ namespace
     }
 } // namespace
 
-TEST_CASE("CorePrep v3 round-trips closure targets captures and modes")
+TEST_CASE("CorePrep v4 round-trips closure targets captures and modes")
 {
     const auto source = ClosureModule();
     const auto encoded = Core::wire::encode(source);
     REQUIRE_FALSE(encoded.error);
     REQUIRE(encoded.bytes.size() > 8U);
-    CHECK(encoded.bytes[4] == 3U);
+    CHECK(encoded.bytes[4] == 4U);
     CHECK(encoded.bytes[5] == 0U);
 
     const auto decoded = Core::wire::decode(encoded.bytes);

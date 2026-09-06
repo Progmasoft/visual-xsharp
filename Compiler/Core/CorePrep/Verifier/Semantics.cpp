@@ -9,6 +9,7 @@
 #include "Visual/XSharp/Core/CorePrep/Verifier/Semantics.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Core/Template.hpp"
 
 namespace visual_xsharp::core
 {
@@ -78,6 +79,14 @@ namespace visual_xsharp::core
         void
         verify_type(const Type &type, const Function &function, BlockId block, std::size_t depth, std::unordered_map<SymbolId, std::u32string> &spellings, std::vector<VerificationIssue> &issues)
         {
+            // This boundary also accepts CorePrep assembled by tooling rather
+            // than the Haskell pipeline. Validate the root specialization key
+            // independently before recursively checking native model payloads.
+            if (depth == 0U)
+            {
+                for (const auto &templateIssue : ::Visual::XSharp::Core::Template::Validate(type))
+                    issues.push_back(issue("VXC1052", "invalid CorePrep template type: " + templateIssue.message, function, block));
+            }
             if (depth > 128U)
             {
                 issues.push_back(issue("VXC1015", "type nesting exceeds the native verifier limit", function, block));
@@ -103,7 +112,7 @@ namespace visual_xsharp::core
                 case Type::Kind::Float64:
                 case Type::Kind::Float128:
                 case Type::Kind::String:
-                    if (!type.name.empty() || !type.components.empty() || type.variable.id != 0)
+                    if (!type.name.empty() || !type.components.empty() || !type.templateArguments.empty() || type.variable.id != 0)
                         issues.push_back(issue("VXC1016", "primitive type contains unexpected payload", function, block));
                     return;
                 case Type::Kind::Function:
@@ -118,8 +127,26 @@ namespace visual_xsharp::core
                     for (const auto &part : type.name)
                         if (part.empty())
                             issues.push_back(issue("VXC1019", "named type contains an empty name part", function, block));
-                    for (const auto &argument : type.components)
-                        verify_type(argument, function, block, depth + 1U, spellings, issues);
+                    for (const auto &argument : type.templateArguments)
+                    {
+                        if (argument.kind == TemplateArgument::Kind::Type)
+                        {
+                            if (!argument.type)
+                                issues.push_back(issue("VXC1049", "type template argument has no payload", function, block));
+                            else
+                                verify_type(*argument.type, function, block, depth + 1U, spellings, issues);
+                            continue;
+                        }
+                        if (argument.value.kind == TemplateValue::Kind::Parameter)
+                        {
+                            verify_symbol_spelling(argument.value.parameter, function, block, spellings, issues);
+                            if (argument.value.parameter.id == 0)
+                                issues.push_back(issue("VXC1050", "template value parameter has no symbol", function, block));
+                        }
+                        else if (argument.value.kind != TemplateValue::Kind::Boolean
+                                 && !integer_is_canonical(argument.value.integer))
+                            issues.push_back(issue("VXC1051", "template integer value is not canonical", function, block));
+                    }
                     return;
                 case Type::Kind::TypeVariable:
                     verify_symbol_spelling(type.variable, function, block, spellings, issues);
@@ -221,7 +248,7 @@ namespace visual_xsharp::core
                         std::vector<Type> public_components(
                             lifted.begin() + static_cast<std::ptrdiff_t>(instruction.captures.size()),
                             lifted.end());
-                        const auto public_type = Type{ Type::Kind::Function, {}, std::move(public_components), {} };
+                        const auto public_type = Type{ Type::Kind::Function, {}, std::move(public_components), {}, {} };
                         if (instruction.type != public_type)
                             issues.push_back(issue("VXC1047", "closure callable type differs from its lifted function suffix", function, block));
                     }

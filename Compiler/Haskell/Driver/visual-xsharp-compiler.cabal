@@ -2,7 +2,7 @@ cabal-version: 3.12
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 name: visual-xsharp-compiler
-version: 0.3.4
+version: 0.3.5
 synopsis: Target-independent Visual X# compiler driver
 license: MPL-2.0
 author: Progmasoft
@@ -30,6 +30,7 @@ library
         visual-xsharp-frontend:Visual.XSharp.Resolver.NameResolution,
         visual-xsharp-frontend:Visual.XSharp.Resolver.Renamer,
         visual-xsharp-frontend:Visual.XSharp.SourceSet,
+        visual-xsharp-frontend:Visual.XSharp.TemplateValue,
         visual-xsharp-frontend:Visual.XSharp.TypeChecker,
         visual-xsharp-core:Visual.XSharp.Core,
         visual-xsharp-core:Visual.XSharp.Core.Artifact,
@@ -41,6 +42,8 @@ library
         visual-xsharp-core:Visual.XSharp.Core.CorePrep.Wire.Format,
         visual-xsharp-core:Visual.XSharp.Core.Optimizer,
         visual-xsharp-core:Visual.XSharp.Core.Scalar,
+        visual-xsharp-core:Visual.XSharp.Core.Specialization,
+        visual-xsharp-core:Visual.XSharp.Core.Template,
         visual-xsharp-core:Visual.XSharp.Core.Verifier,
         visual-xsharp-core:Visual.XSharp.Core.Wire,
         visual-xsharp-core:Visual.XSharp.Desugarer
@@ -73,8 +76,10 @@ test-suite visual-xsharp-compiler-tests
         NumericTests
         ParserContractTests
         ScalarWireTests
+        SpecializationTests
         SourceSetTests
         SourceTextTests
+        TemplateTests
         VoidTests
     hs-source-dirs: test
     build-depends:

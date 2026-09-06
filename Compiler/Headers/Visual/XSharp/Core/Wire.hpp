@@ -13,7 +13,7 @@
 
 namespace Visual::XSharp::Core::Wire
 {
-    inline constexpr std::uint16_t kCurrentVersion = 3;
+    inline constexpr std::uint16_t kCurrentVersion = 4;
 
     struct Limits final
     {

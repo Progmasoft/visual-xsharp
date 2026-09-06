@@ -8,6 +8,7 @@ import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Scalar
+import Visual.XSharp.Core.Template
 import Visual.XSharp.Diagnostic
 
 type Environment = Map.Map SymbolId (Type, Bool)
@@ -243,14 +244,41 @@ invalidSymbol :: String -> String -> ResolvedName -> [Diagnostic]
 invalidSymbol code message name = [problem code message | symbolIdValue (resolvedSymbol name) <= 0]
 
 unresolvedType :: String -> String -> Type -> [Diagnostic]
-unresolvedType code message valueType = [problem code message | containsError valueType]
+unresolvedType code message valueType =
+    [problem code message | containsError valueType]
+        ++ map templateProblem (validateTemplateType 128 valueType)
+
+-- Template validation belongs at the Core boundary rather than only in the
+-- artifact writer. Keeping malformed specialization keys out of verified Core
+-- ensures optimization caches and every later stage observe the same type
+-- identity, even when no artifact is emitted for the compilation.
+templateProblem :: TemplateIssue -> Diagnostic
+templateProblem issue =
+    problem
+        "VXC1040"
+        ( "invalid Core template type at "
+            ++ renderTemplatePath (templateIssuePath issue)
+            ++ ": "
+            ++ templateIssueMessage issue
+        )
+
+renderTemplatePath :: [Int] -> String
+renderTemplatePath [] = "the type root"
+renderTemplatePath indexes = "argument " ++ concatMap renderIndex indexes
+    where
+        renderIndex index = "[" ++ show index ++ "]"
 
 containsError :: Type -> Bool
 containsError valueType = case valueType of
     ErrorType -> True
-    NamedType _ arguments -> any containsError arguments
+    NamedType _ arguments -> any templateArgumentContainsError arguments
     FunctionType parameters result -> any containsError parameters || containsError result
     TypeVariable _ -> False
+
+templateArgumentContainsError :: TemplateArgument -> Bool
+templateArgumentContainsError argument = case argument of
+    TypeTemplateArgument nested -> containsError nested
+    ValueTemplateArgument _ -> False
 
 typeMismatch :: String -> String -> Type -> Type -> [Diagnostic]
 typeMismatch code message expected actual = [problem code message | expected /= actual]

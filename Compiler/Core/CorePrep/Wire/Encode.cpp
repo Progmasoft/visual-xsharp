@@ -227,14 +227,58 @@ namespace visual_xsharp::core::wire
                         return;
                     case Type::Kind::Named:
                         qualified_name(value.name, "named type");
-                        vector(value.components, 65535U, "type argument count", [this, depth](const Type &argument) {
-                            type(argument, depth + 1U);
+                        vector(value.templateArguments, 65535U, "template argument count", [this, depth](const TemplateArgument &argument) {
+                            if (argument.kind == TemplateArgument::Kind::Type)
+                            {
+                                byte(0);
+                                if (!argument.type)
+                                {
+                                    fail(ErrorKind::UnsupportedType, "template argument", "type argument has no payload");
+                                    return;
+                                }
+                                type(*argument.type, depth + 1U);
+                                return;
+                            }
+                            switch (argument.value.kind)
+                            {
+                                case TemplateValue::Kind::Integer:
+                                    byte(1);
+                                    template_integer(argument.value.integer, "template integer");
+                                    return;
+                                case TemplateValue::Kind::Boolean:
+                                    byte(2);
+                                    byte(argument.value.boolean ? 1U : 0U);
+                                    return;
+                                case TemplateValue::Kind::Character:
+                                    byte(3);
+                                    template_integer(argument.value.integer, "template character");
+                                    return;
+                                case TemplateValue::Kind::Parameter:
+                                    byte(4);
+                                    symbol(argument.value.parameter, "template value parameter");
+                                    return;
+                            }
                         });
                         return;
                     case Type::Kind::TypeVariable:
                         symbol(value.variable, "type variable symbol");
                         return;
                 }
+            }
+
+            void
+            template_integer(IntegerLiteral value, std::string_view context)
+            {
+                value = normalize_integer(std::move(value));
+                if (!integer_is_canonical(value))
+                {
+                    fail(ErrorKind::InvalidInteger, std::string(context), "integer magnitude/sign is not canonical");
+                    return;
+                }
+                byte(value.negative ? 1U : 0U);
+                vector(value.magnitude, limits_.maximum_numeric_bytes, std::string(context) + " magnitude", [this](const auto octet) {
+                    byte(octet);
+                });
             }
 
             void

@@ -223,7 +223,7 @@ vxs build -Build core -Emit llvmll -File module.core
 vxs build -Build core -Emit llvmbc -File module.core
 ```
 
-The native C++20 route reads the Haskell `VXCR` v3 contract with byte, collection, text, type-depth, and expression-depth
+The native C++20 route reads the Haskell `VXCR` v4 contract with byte, collection, text, type-depth, and expression-depth
 limits. It verifies Core semantics before adapting nested expressions and source control flow to CorePrep, then runs the
 existing verified CorePrep → Xpp → Xmm → LLVM pipeline entirely in memory. `check` writes nothing. The two `build` examples
 write a sibling `.ll` or `.bc` file. A Core build can also write a sibling `.o` or `.asm`, or link a `.vxse`; binary is the

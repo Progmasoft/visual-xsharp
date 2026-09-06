@@ -65,7 +65,7 @@ reference.
 
 ## Xpp, Xmm, and LLVM
 
-Xpp and Xmm wire version 2 preserve `RetainStrong`, `ReleaseStrong`, `MakeWeak`,
+Xpp and Xmm wire version 3 preserve `RetainStrong`, `ReleaseStrong`, `MakeWeak`,
 `LockWeak`, `ReleaseWeak`, `MakeUnowned`, `LoadUnowned`, and `ReleaseUnowned`.
 Producing operations preserve the operand's language type. Release operations
 have no destination and carry `Unit` as the result marker. Both stage verifiers

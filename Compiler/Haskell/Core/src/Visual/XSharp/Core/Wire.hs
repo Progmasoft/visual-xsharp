@@ -24,7 +24,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 3
+currentCoreWireVersion = CoreWireVersion 4
 
 data CoreWireLimits = CoreWireLimits
     { maximumCoreWireBytes :: Int
@@ -251,7 +251,7 @@ encodeType limits depth valueType
                 limits
                 "type argument count"
                 (maximumCoreOperands limits)
-                (encodeType limits (depth + 1))
+                (encodeTemplateArgument limits (depth + 1))
                 arguments
         pure ([4] ++ encodedName ++ encodedArguments)
     | FunctionType parameters result <- valueType = do
@@ -266,6 +266,18 @@ encodeType limits depth valueType
         pure ([5] ++ encodedParameters ++ encodedResult)
     | TypeVariable name <- valueType = (6 :) <$> encodeResolvedName limits "type variable symbol" name
     | ErrorType <- valueType = failure CoreUnsupportedType "type" "ErrorType cannot cross the Core boundary"
+
+encodeTemplateArgument :: CoreWireLimits -> Int -> TemplateArgument -> Encoder
+encodeTemplateArgument limits depth argument = case argument of
+    TypeTemplateArgument valueType -> (0 :) <$> encodeType limits depth valueType
+    ValueTemplateArgument value -> encodeTemplateValue limits value
+
+encodeTemplateValue :: CoreWireLimits -> TemplateValue -> Encoder
+encodeTemplateValue limits value = case value of
+    IntegerTemplateValue integer -> (1 :) <$> encodeInteger limits integer
+    BooleanTemplateValue boolean -> pure [2, if boolean then 1 else 0]
+    CharacterTemplateValue scalar -> (3 :) <$> encodeInteger limits scalar
+    TemplateValueParameter name -> (4 :) <$> encodeResolvedName limits "template value parameter" name
 
 encodeResolvedName :: CoreWireLimits -> String -> ResolvedName -> Encoder
 encodeResolvedName limits context name
@@ -495,7 +507,9 @@ decodeType depth = do
         2 -> pure intType
         3 -> pure stringType
         4 ->
-            NamedType <$> decodeQualifiedName <*> decodeVector "type argument count" maximumCoreOperands (decodeType (depth + 1))
+            NamedType
+                <$> decodeQualifiedName
+                <*> decodeVector "template argument count" maximumCoreOperands (decodeTemplateArgument (depth + 1))
         5 ->
             FunctionType
                 <$> decodeVector "function type parameter count" maximumCoreParameters (decodeType (depth + 1))
@@ -516,6 +530,17 @@ decodeType depth = do
         19 -> pure (namedScalar "float")
         20 -> pure (namedScalar "double")
         _ -> invalidTag "type tag" tag
+
+decodeTemplateArgument :: Int -> Decoder TemplateArgument
+decodeTemplateArgument depth = do
+    tag <- readWord8 "template argument tag"
+    case tag of
+        0 -> TypeTemplateArgument <$> decodeType depth
+        1 -> ValueTemplateArgument . IntegerTemplateValue <$> decodeInteger
+        2 -> ValueTemplateArgument . BooleanTemplateValue <$> decodeBool "template boolean value"
+        3 -> ValueTemplateArgument . CharacterTemplateValue <$> decodeInteger
+        4 -> ValueTemplateArgument . TemplateValueParameter <$> decodeResolvedName "template value parameter"
+        _ -> invalidTag "template argument tag" tag
 
 namedScalar :: String -> Type
 namedScalar name = NamedType (QualifiedName [Identifier name]) []

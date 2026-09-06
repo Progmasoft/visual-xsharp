@@ -292,7 +292,7 @@ typeSyntaxTests =
             == Just
                 ( QualifiedTypeSyntax
                     (QualifiedName [Identifier "System", Identifier "Array"])
-                    [ExplicitType (Identifier "int")]
+                    [TemplateTypeSyntax (ExplicitType (Identifier "int"))]
                 )
         )
     ,
@@ -301,7 +301,9 @@ typeSyntaxTests =
             == Just
                 ( QualifiedTypeSyntax
                     (QualifiedName [Identifier "System", Identifier "Array"])
-                    [ExplicitType (Identifier "Element"), ExplicitType (Identifier "Length")]
+                    [ TemplateTypeSyntax (ExplicitType (Identifier "Element"))
+                    , TemplateTypeSyntax (ExplicitType (Identifier "Length"))
+                    ]
                 )
         )
     ,
@@ -310,9 +312,11 @@ typeSyntaxTests =
             == Just
                 ( QualifiedTypeSyntax
                     (QualifiedName [Identifier "System", Identifier "Array"])
-                    [ QualifiedTypeSyntax
-                        (QualifiedName [Identifier "System", Identifier "Array"])
-                        [ExplicitType (Identifier "int")]
+                    [ TemplateTypeSyntax
+                        ( QualifiedTypeSyntax
+                            (QualifiedName [Identifier "System", Identifier "Array"])
+                            [TemplateTypeSyntax (ExplicitType (Identifier "int"))]
+                        )
                     ]
                 )
         )
@@ -348,7 +352,7 @@ typeSyntaxTests =
             == Just
                 ( QualifiedTypeSyntax
                     (QualifiedName [Identifier "System", Identifier "Array"])
-                    [ExplicitType (Identifier "int")]
+                    [TemplateTypeSyntax (ExplicitType (Identifier "int"))]
                 )
         )
     ,
@@ -362,7 +366,7 @@ typeSyntaxTests =
             == Just
                 ( QualifiedTypeSyntax
                     (QualifiedName [Identifier "System", Identifier "Array"])
-                    [ExplicitType (Identifier "int")]
+                    [TemplateTypeSyntax (ExplicitType (Identifier "int"))]
                 )
         )
     , ("underscore parameter label remains accepted", parameterNameFor "_ int value" == Just (Identifier "value"))
@@ -371,8 +375,10 @@ typeSyntaxTests =
     , ("qualified type cannot end after a dot", rejected (parseSource (functionWithReturn "System.")))
     , ("generic type requires a closing delimiter", rejected (parseSource (functionWithReturn "Array<int")))
     ,
-        ( "fixed array sugar waits for value-template representation"
-        , hasParserCode "VXP0017" (functionWithReturn "[int; 3]")
+        ( "fixed array sugar preserves its compile-time size"
+        , case returnSyntax "[int; 3]" of
+            Just (FixedArrayTypeSyntax (ExplicitType (Identifier "int")) (TemplateIntegerSyntax _ 3)) -> True
+            _ -> False
         )
     ,
         ( "dynamic array sugar normalizes to System.Array<T>"
@@ -380,7 +386,7 @@ typeSyntaxTests =
             == Just
                 ( NamedType
                     (QualifiedName [Identifier "System", Identifier "Array"])
-                    [intType]
+                    [TypeTemplateArgument intType]
                 )
         )
     ,
@@ -389,13 +395,13 @@ typeSyntaxTests =
             == Just
                 ( NamedType
                     (QualifiedName [Identifier "System", Identifier "Dictionary"])
-                    [stringType, intType]
+                    [TypeTemplateArgument stringType, TypeTemplateArgument intType]
                 )
         )
     ,
         ( "built-in array has no invented public class name"
         , typedParameterType "[]int"
-            == Just (NamedType (QualifiedName [Identifier "[]"]) [intType])
+            == Just (NamedType (QualifiedName [Identifier "[]"]) [TypeTemplateArgument intType])
         )
     ,
         ( "callable syntax becomes a structural FunctionType"

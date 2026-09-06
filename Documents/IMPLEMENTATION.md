@@ -92,7 +92,7 @@ The repository contains:
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The production process boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
-contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v2 codecs now own public Xpp/Xmm disk
+contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v3 codecs now own public Xpp/Xmm disk
 artifacts and forward-only pipeline resumption. LLVM target-machine emission and typed C++20 LLD invocation produce `.o`,
 `.asm`, and `.vxse` artifacts. Remaining work includes cross-namespace Haskell name resolution, a multi-module Core link
 unit, and source ownership for project-wide per-file artifacts.
@@ -101,7 +101,7 @@ unit, and source ownership for project-wide per-file artifacts.
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| bounded VXCR v3 decode | connected | C++20 Core reader and scalar payload validation |
+| bounded VXCR v4 decode | connected | C++20 Core reader, template arguments, and scalar payload validation |
 | native Core semantic verification | connected | `Compiler/Core` |
 | Core-to-CorePrep atomization/CFG | connected | dedicated adapter |
 | CorePrep structural/semantic verification | connected | native CorePrep verifier |

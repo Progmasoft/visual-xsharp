@@ -113,7 +113,7 @@ For a wire change, cover at least:
 ## Test naming
 
 Names describe behavior and boundary, not implementation trivia. Prefer
-`Core wire v3 rejects a noncanonical integer magnitude` over `test decode 7`.
+`Core wire v4 rejects a noncanonical integer magnitude` over `test decode 7`.
 Use tags where the framework supports them so scalar, verifier, wire, and LLVM
 groups can be selected without changing ownership.
 
@@ -184,4 +184,3 @@ Before completing a test change, verify that:
 
 This structure makes the monorepo read as a collection of independently owned
 compiler components while preserving one connected toolchain.
-

@@ -79,7 +79,7 @@ canonical. These rules make the representation independent of endianness and
 make equality deterministic.
 
 Compatibility alternatives for the historical signed 32-bit and 64-bit
-payloads remain readable in the in-memory variant. New wire-v3 producers use
+payloads remain readable in the in-memory variant. New wire-v4 producers use
 the structured representation for the complete scalar catalog.
 
 `FloatingLiteral` contains a validated ASCII spelling. Accepted finite forms
@@ -106,9 +106,9 @@ operands must use one matching numeric type. Relational operations consume a
 matching numeric pair and produce `bool`. Logical and branch operations
 consume a canonical boolean after frontend normalization.
 
-## Core wire v3
+## Core wire v4
 
-Core wire v3 writes a distinct type tag for every catalog member. Integer
+Core wire v4 writes a distinct type tag for every catalog member. Integer
 payloads contain:
 
 1. a literal tag;
@@ -126,7 +126,7 @@ range checking. A decoder rejects unknown versions, unknown tags, invalid sign
 bytes, over-limit lengths, truncated payloads, and trailing bytes.
 
 There is no implicit v2-to-v3 reinterpretation. A v2 document is rejected by
-the v3 decoder so an older tag cannot silently acquire a new meaning.
+the v4 decoder so an older tag cannot silently acquire a new meaning.
 
 ## CorePrep adaptation
 
@@ -139,7 +139,7 @@ Numeric boolean context is lowered before or during CorePrep construction.
 The resulting branch receives a boolean atom rather than asking Xpp or LLVM to
 repeat source-language truthiness rules.
 
-CorePrep has its own verifier and wire-v3 codec. Its tags and payload rules
+CorePrep has its own verifier and wire-v4 codec. Its tags and payload rules
 match Core where the models overlap, but the magic and structural records are
 separate. This prevents a Core document from being accepted as CorePrep merely
 because both carry scalar constants.
@@ -226,4 +226,3 @@ A future scalar addition is incomplete until all of these are updated:
 9. public implementation documentation.
 
 Adding only a parser spelling or only an LLVM type is not a connected feature.
-

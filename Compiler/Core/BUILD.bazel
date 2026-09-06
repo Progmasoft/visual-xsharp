@@ -14,6 +14,7 @@ cc_library(
         "CorePrep/Wire/Encode.cpp",
         "IR.cpp",
         "Scalar.cpp",
+        "Template.cpp",
         "Verifier.cpp",
         "Wire.cpp",
     ],
@@ -24,6 +25,7 @@ cc_library(
         "//Compiler/Headers/Visual/XSharp/Core:model",
         "//Compiler/Headers/Visual/XSharp/Core:ownership_api",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
+        "//Compiler/Headers/Visual/XSharp/Core:template_api",
         "//Compiler/Core/Ownership:ownership",
     ],
 )

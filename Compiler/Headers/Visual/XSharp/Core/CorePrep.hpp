@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <utility>
@@ -22,6 +23,70 @@ namespace visual_xsharp::core
         std::u32string spelling;
         [[nodiscard]] auto
         operator==(const SymbolName &) const -> bool = default;
+    };
+
+    // Arbitrary-width values in specialization keys use the same canonical
+    // sign/magnitude representation as runtime integer literals.  Keeping the
+    // model ahead of Type lets a template argument refer to it without losing
+    // host-independent integer width.
+    struct IntegerLiteral final
+    {
+        bool negative{};
+        std::vector<std::uint8_t> magnitude;
+        [[nodiscard]] auto
+        operator==(const IntegerLiteral &) const -> bool = default;
+    };
+
+    struct TemplateValue final
+    {
+        enum class Kind : std::uint8_t
+        {
+            Integer,
+            Boolean,
+            Character,
+            Parameter
+        };
+
+        Kind kind{ Kind::Integer };
+        IntegerLiteral integer;
+        bool boolean{};
+        SymbolName parameter;
+
+        [[nodiscard]] static auto
+        integer_value(IntegerLiteral value) -> TemplateValue;
+        [[nodiscard]] static auto
+        boolean_value(bool value) -> TemplateValue;
+        [[nodiscard]] static auto
+        character_value(IntegerLiteral value) -> TemplateValue;
+        [[nodiscard]] static auto
+        parameter_value(SymbolName value) -> TemplateValue;
+        [[nodiscard]] auto
+        operator==(const TemplateValue &) const -> bool = default;
+    };
+
+    struct Type;
+
+    // shared_ptr breaks the recursive Type/TemplateArgument layout without
+    // imposing pointer identity on equality. Constructors always allocate a
+    // private immutable copy; operator== compares the pointed-to type value.
+    struct TemplateArgument final
+    {
+        enum class Kind : std::uint8_t
+        {
+            Type,
+            Value
+        };
+
+        Kind kind{ Kind::Type };
+        std::shared_ptr<const Type> type;
+        TemplateValue value;
+
+        [[nodiscard]] static auto
+        type_argument(Type value) -> TemplateArgument;
+        [[nodiscard]] static auto
+        value_argument(TemplateValue value) -> TemplateArgument;
+        [[nodiscard]] auto
+        operator==(const TemplateArgument &other) const -> bool;
     };
 
     struct Type final
@@ -52,130 +117,184 @@ namespace visual_xsharp::core
         };
         Kind kind{ Kind::Unit };
         std::vector<std::u32string> name;
+        // Function types keep parameters followed by the result in components.
+        // Named types use ordered templateArguments exclusively.
         std::vector<Type> components;
+        std::vector<TemplateArgument> templateArguments;
         SymbolName variable;
 
         [[nodiscard]] static auto
         unit() -> Type
         {
-            return Type{ Kind::Unit, {}, {}, {} };
+            return Type{ Kind::Unit, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         boolean() -> Type
         {
-            return Type{ Kind::Bool, {}, {}, {} };
+            return Type{ Kind::Bool, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         int64() -> Type
         {
-            return Type{ Kind::Int64, {}, {}, {} };
+            return Type{ Kind::Int64, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         int32() -> Type
         {
-            return Type{ Kind::Int32, {}, {}, {} };
+            return Type{ Kind::Int32, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         character() -> Type
         {
-            return Type{ Kind::Character, {}, {}, {} };
+            return Type{ Kind::Character, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         int8() -> Type
         {
-            return Type{ Kind::Int8, {}, {}, {} };
+            return Type{ Kind::Int8, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         int16() -> Type
         {
-            return Type{ Kind::Int16, {}, {}, {} };
+            return Type{ Kind::Int16, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         int128() -> Type
         {
-            return Type{ Kind::Int128, {}, {}, {} };
+            return Type{ Kind::Int128, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         uint8() -> Type
         {
-            return Type{ Kind::UInt8, {}, {}, {} };
+            return Type{ Kind::UInt8, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         uint16() -> Type
         {
-            return Type{ Kind::UInt16, {}, {}, {} };
+            return Type{ Kind::UInt16, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         uint32() -> Type
         {
-            return Type{ Kind::UInt32, {}, {}, {} };
+            return Type{ Kind::UInt32, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         uint64() -> Type
         {
-            return Type{ Kind::UInt64, {}, {}, {} };
+            return Type{ Kind::UInt64, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         uint128() -> Type
         {
-            return Type{ Kind::UInt128, {}, {}, {} };
+            return Type{ Kind::UInt128, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         float16() -> Type
         {
-            return Type{ Kind::Float16, {}, {}, {} };
+            return Type{ Kind::Float16, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         float32() -> Type
         {
-            return Type{ Kind::Float32, {}, {}, {} };
+            return Type{ Kind::Float32, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         float64() -> Type
         {
-            return Type{ Kind::Float64, {}, {}, {} };
+            return Type{ Kind::Float64, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         float128() -> Type
         {
-            return Type{ Kind::Float128, {}, {}, {} };
+            return Type{ Kind::Float128, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         string() -> Type
         {
-            return Type{ Kind::String, {}, {}, {} };
+            return Type{ Kind::String, {}, {}, {}, {} };
         }
         [[nodiscard]] static auto
         function(std::vector<Type> parameters, Type result) -> Type
         {
             parameters.push_back(std::move(result));
-            return Type{ Kind::Function, {}, std::move(parameters), {} };
+            return Type{ Kind::Function, {}, std::move(parameters), {}, {} };
         }
         [[nodiscard]] static auto
         named(std::vector<std::u32string> qualified_name, std::vector<Type> arguments = {}) -> Type
         {
-            return Type{ Kind::Named, std::move(qualified_name), std::move(arguments), {} };
+            std::vector<TemplateArgument> converted;
+            converted.reserve(arguments.size());
+            for (auto &argument : arguments)
+                converted.push_back(TemplateArgument::type_argument(std::move(argument)));
+            return Type{ Kind::Named, std::move(qualified_name), {}, std::move(converted), {} };
+        }
+        [[nodiscard]] static auto
+        named_template(std::vector<std::u32string> qualified_name, std::vector<TemplateArgument> arguments) -> Type
+        {
+            return Type{ Kind::Named, std::move(qualified_name), {}, std::move(arguments), {} };
         }
         [[nodiscard]] static auto
         type_variable(SymbolName symbol) -> Type
         {
-            return Type{ Kind::TypeVariable, {}, {}, std::move(symbol) };
+            return Type{ Kind::TypeVariable, {}, {}, {}, std::move(symbol) };
         }
         [[nodiscard]] auto
         operator==(const Type &) const -> bool = default;
     };
 
-    // Arbitrary-width integer payloads are represented independently of the host ABI.
-    // The magnitude is canonical unsigned big-endian data: zero has an empty magnitude,
-    // leading zero octets are forbidden, and zero is never negative.  This lets the same
-    // CorePrep artifact carry u128 and i128 values on every supported host.
-    struct IntegerLiteral final
+    inline auto
+    TemplateValue::integer_value(IntegerLiteral value) -> TemplateValue
     {
-        bool negative{};
-        std::vector<std::uint8_t> magnitude;
-        [[nodiscard]] auto
-        operator==(const IntegerLiteral &) const -> bool = default;
-    };
+        return TemplateValue{ Kind::Integer, std::move(value), false, {} };
+    }
+
+    inline auto
+    TemplateValue::boolean_value(const bool value) -> TemplateValue
+    {
+        return TemplateValue{ Kind::Boolean, {}, value, {} };
+    }
+
+    inline auto
+    TemplateValue::character_value(IntegerLiteral value) -> TemplateValue
+    {
+        return TemplateValue{ Kind::Character, std::move(value), false, {} };
+    }
+
+    inline auto
+    TemplateValue::parameter_value(SymbolName value) -> TemplateValue
+    {
+        return TemplateValue{ Kind::Parameter, {}, false, std::move(value) };
+    }
+
+    inline auto
+    TemplateArgument::type_argument(Type value) -> TemplateArgument
+    {
+        TemplateArgument result;
+        result.kind = Kind::Type;
+        result.type = std::make_shared<const Type>(std::move(value));
+        return result;
+    }
+
+    inline auto
+    TemplateArgument::value_argument(TemplateValue value) -> TemplateArgument
+    {
+        TemplateArgument result;
+        result.kind = Kind::Value;
+        result.value = std::move(value);
+        return result;
+    }
+
+    inline auto
+    TemplateArgument::operator==(const TemplateArgument &other) const -> bool
+    {
+        if (kind != other.kind)
+            return false;
+        if (kind == Kind::Value)
+            return value == other.value;
+        if (!type || !other.type)
+            return type == other.type;
+        return *type == *other.type;
+    }
 
     // Floating-point literals retain their source-independent decimal spelling until LLVM
     // selects IEEE semantics for the declared scalar type.  The wire verifier accepts only

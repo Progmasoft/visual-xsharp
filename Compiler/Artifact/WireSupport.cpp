@@ -170,9 +170,49 @@ namespace Visual::XSharp::Artifact::Wire
         {
             case Core::Type::Kind::Named:
                 QualifiedName(value.name, "named type");
-                Count(value.components.size(), limits_.maximumOperands, "type argument count");
-                for (const auto &component : value.components)
-                    Type(component, context, depth + 1U);
+                if (!value.components.empty())
+                {
+                    Fail(ErrorKind::InvalidModel, std::string(context), "named type contains function components");
+                    break;
+                }
+                Count(value.templateArguments.size(), limits_.maximumOperands, "template argument count");
+                for (const auto &argument : value.templateArguments)
+                {
+                    Byte(static_cast<std::uint8_t>(argument.kind));
+                    if (argument.kind == Core::TemplateArgument::Kind::Type)
+                    {
+                        if (!argument.type)
+                        {
+                            Fail(ErrorKind::InvalidModel, std::string(context), "type template argument has no type payload");
+                            break;
+                        }
+                        Type(*argument.type, context, depth + 1U);
+                        continue;
+                    }
+
+                    const auto &templateValue = argument.value;
+                    Byte(static_cast<std::uint8_t>(templateValue.kind));
+                    if (templateValue.kind == Core::TemplateValue::Kind::Boolean)
+                    {
+                        Boolean(templateValue.boolean);
+                    }
+                    else if (templateValue.kind == Core::TemplateValue::Kind::Parameter)
+                    {
+                        Symbol(templateValue.parameter, "template value parameter");
+                    }
+                    else
+                    {
+                        if (!Core::integer_is_canonical(templateValue.integer))
+                        {
+                            Fail(ErrorKind::InvalidInteger, std::string(context), "template integer payload is not canonical");
+                            break;
+                        }
+                        Boolean(templateValue.integer.negative);
+                        Count(templateValue.integer.magnitude.size(), limits_.maximumNumericBytes, "template integer magnitude");
+                        for (const auto octet : templateValue.integer.magnitude)
+                            Byte(octet);
+                    }
+                }
                 break;
             case Core::Type::Kind::Function:
                 if (value.components.empty())
@@ -188,7 +228,7 @@ namespace Visual::XSharp::Artifact::Wire
                 Symbol(value.variable, "type variable");
                 break;
             default:
-                if (!value.name.empty() || !value.components.empty() || value.variable.id != 0U)
+                if (!value.name.empty() || !value.components.empty() || !value.templateArguments.empty() || value.variable.id != 0U)
                     Fail(ErrorKind::InvalidModel, std::string(context), "scalar type contains aggregate payload");
                 break;
         }
@@ -382,12 +422,52 @@ namespace Visual::XSharp::Artifact::Wire
         if (kind == Core::Type::Kind::Named)
         {
             auto name = QualifiedName("named type");
-            const auto count = Count(limits_.maximumOperands, "type argument count");
-            std::vector<Core::Type> arguments;
+            const auto count = Count(limits_.maximumOperands, "template argument count");
+            std::vector<Core::TemplateArgument> arguments;
             arguments.reserve(count);
             for (std::size_t index = 0; index < count && !error_; ++index)
-                arguments.push_back(Type(context, depth + 1U));
-            return Core::Type::named(std::move(name), std::move(arguments));
+            {
+                const auto argumentKind = Byte("template argument kind");
+                if (argumentKind == static_cast<std::uint8_t>(Core::TemplateArgument::Kind::Type))
+                {
+                    arguments.push_back(Core::TemplateArgument::type_argument(Type(context, depth + 1U)));
+                    continue;
+                }
+                if (argumentKind != static_cast<std::uint8_t>(Core::TemplateArgument::Kind::Value))
+                {
+                    Fail(ErrorKind::InvalidTag, "template argument kind", "unknown template argument kind");
+                    break;
+                }
+
+                const auto valueKindByte = Byte("template value kind");
+                if (valueKindByte > static_cast<std::uint8_t>(Core::TemplateValue::Kind::Parameter))
+                {
+                    Fail(ErrorKind::InvalidTag, "template value kind", "unknown template value kind");
+                    break;
+                }
+                const auto valueKind = static_cast<Core::TemplateValue::Kind>(valueKindByte);
+                Core::TemplateValue value;
+                if (valueKind == Core::TemplateValue::Kind::Boolean)
+                    value = Core::TemplateValue::boolean_value(Boolean("template boolean value"));
+                else if (valueKind == Core::TemplateValue::Kind::Parameter)
+                    value = Core::TemplateValue::parameter_value(Symbol("template value parameter"));
+                else
+                {
+                    Core::IntegerLiteral integer;
+                    integer.negative = Boolean("template integer sign");
+                    const auto magnitudeCount = Count(limits_.maximumNumericBytes, "template integer magnitude");
+                    integer.magnitude.reserve(magnitudeCount);
+                    for (std::size_t magnitudeIndex = 0; magnitudeIndex < magnitudeCount && !error_; ++magnitudeIndex)
+                        integer.magnitude.push_back(Byte("template integer magnitude"));
+                    if (!error_ && !Core::integer_is_canonical(integer))
+                        Fail(ErrorKind::InvalidInteger, std::string(context), "template integer payload is not canonical");
+                    value = valueKind == Core::TemplateValue::Kind::Character
+                                ? Core::TemplateValue::character_value(std::move(integer))
+                                : Core::TemplateValue::integer_value(std::move(integer));
+                }
+                arguments.push_back(Core::TemplateArgument::value_argument(std::move(value)));
+            }
+            return Core::Type::named_template(std::move(name), std::move(arguments));
         }
         if (kind == Core::Type::Kind::Function)
         {
@@ -406,7 +486,7 @@ namespace Visual::XSharp::Artifact::Wire
         }
         if (kind == Core::Type::Kind::TypeVariable)
             return Core::Type::type_variable(Symbol("type variable"));
-        return Core::Type{ kind, {}, {}, {} };
+        return Core::Type{ kind, {}, {}, {}, {} };
     }
 
     auto

@@ -17,7 +17,7 @@ newtype WireVersion = WireVersion {wireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentWireVersion :: WireVersion
-currentWireVersion = WireVersion 3
+currentWireVersion = WireVersion 4
 
 wireMagic :: [Word8]
 wireMagic = map (fromIntegral . fromEnum) "VXCP"
