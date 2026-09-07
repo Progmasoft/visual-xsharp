@@ -6,41 +6,84 @@
 namespace Visual::XSharp::Core
 {
     auto
+    Capture::operator==(const Capture &other) const -> bool
+    {
+        const auto equalValue = (!value && !other.value) || (value && other.value && *value == *other.value);
+        return mode == other.mode && symbol == other.symbol && type == other.type && equalValue;
+    }
+
+    auto
     Expression::Variable(SymbolName name, Type valueType) -> Expression
     {
-        return Expression{ Kind::Variable, std::move(valueType), std::move(name), {}, Primitive::Add, {}, {} };
+        Expression expression;
+        expression.kind = Kind::Variable;
+        expression.type = std::move(valueType);
+        expression.symbol = std::move(name);
+        return expression;
     }
 
     auto
     Expression::Constant(Literal value, Type valueType) -> Expression
     {
-        return Expression{ Kind::Literal, std::move(valueType), {}, std::move(value), Primitive::Add, {}, {} };
+        Expression expression;
+        expression.kind = Kind::Literal;
+        expression.type = std::move(valueType);
+        expression.literal = std::move(value);
+        return expression;
     }
 
     auto
     Expression::Apply(Expression target, std::vector<Expression> arguments, Type resultType) -> Expression
     {
-        return Expression{ Kind::Apply,
-                           std::move(resultType),
-                           {},
-                           {},
-                           Primitive::Add,
-                           std::make_shared<Expression>(std::move(target)),
-                           std::move(arguments) };
+        Expression expression;
+        expression.kind = Kind::Apply;
+        expression.type = std::move(resultType);
+        expression.callee = std::make_shared<Expression>(std::move(target));
+        expression.operands = std::move(arguments);
+        return expression;
     }
 
     auto
     Expression::InvokePrimitive(Core::Primitive operation, std::vector<Expression> arguments, Type resultType)
         -> Expression
     {
-        return Expression{ Kind::Primitive, std::move(resultType), {}, {}, operation, {}, std::move(arguments) };
+        Expression expression;
+        expression.kind = Kind::Primitive;
+        expression.type = std::move(resultType);
+        expression.primitive = operation;
+        expression.operands = std::move(arguments);
+        return expression;
+    }
+
+    auto
+    Expression::Closure(
+        std::vector<Capture> captured,
+        std::vector<std::pair<SymbolName, Type>> parameters,
+        Type returnType,
+        std::vector<Statement> body,
+        Type valueType) -> Expression
+    {
+        Expression expression;
+        expression.kind = Kind::Closure;
+        expression.type = std::move(valueType);
+        expression.captures = std::move(captured);
+        expression.closureParameters = std::move(parameters);
+        expression.closureReturnType = std::move(returnType);
+        expression.closureBody = std::make_shared<std::vector<Statement>>(std::move(body));
+        return expression;
     }
 
     auto
     Expression::operator==(const Expression &other) const -> bool
     {
         const auto equalCallee = (!callee && !other.callee) || (callee && other.callee && *callee == *other.callee);
-        return kind == other.kind && type == other.type && symbol == other.symbol && literal == other.literal && primitive == other.primitive && equalCallee && operands == other.operands;
+        const auto equalBody = (!closureBody && !other.closureBody)
+                               || (closureBody && other.closureBody && *closureBody == *other.closureBody);
+        return kind == other.kind && type == other.type && symbol == other.symbol
+               && literal == other.literal && primitive == other.primitive
+               && equalCallee && operands == other.operands && captures == other.captures
+               && closureParameters == other.closureParameters
+               && closureReturnType == other.closureReturnType && equalBody;
     }
 
     auto

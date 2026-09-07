@@ -6,7 +6,7 @@
 use super::aggregate_registry;
 use super::declarations::{Base, EnumVariant, NominalKind, NominalType, TypeRef, Visibility};
 use super::type_check::PrimitiveType;
-use crate::compiler_core::SourceSpan;
+use crate::hir::SourceSpan;
 use crate::xlil::Type;
 
 fn span() -> SourceSpan

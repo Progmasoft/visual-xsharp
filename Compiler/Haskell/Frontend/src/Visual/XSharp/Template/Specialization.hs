@@ -7,8 +7,10 @@ Declaration-level template specialization planning.
 The application binder answers whether arguments fit a declaration and the
 instantiator substitutes them. This module joins those operations into an
 immutable batch plan suitable for a later demand-driven Core lowering pass.
-It deliberately accepts explicit semantic demands: call/member resolution is
-not guessed here, and constraint ordering remains a separate future stage.
+It deliberately accepts explicit semantic demands.  Resolved calls between
+members of the selected declaration are followed by SymbolId so a lazy member
+request remains closed under its internal call dependencies.  Constraint
+ordering and cross-declaration dispatch remain separate future stages.
 -}
 module Visual.XSharp.Template.Specialization
     ( TemplateDemandScope (..)
@@ -36,6 +38,7 @@ import Visual.XSharp.Template.Application
 import Visual.XSharp.Template.Freshen
 import Visual.XSharp.Template.Instantiation
 import Visual.XSharp.Template.Mangling
+import Visual.XSharp.Template.MemberReachability
 
 {- | Layout-only requests do not instantiate method bodies. Member requests
 select every overload carrying one of the requested spellings. Complete is
@@ -110,6 +113,7 @@ data TemplateSpecializationError
     | TemplateSpecializationLimitExceeded Int String
     | TemplateOriginLimitExceeded Int String
     | TemplateMemberLimitExceeded QualifiedName Int Int
+    | TemplateMemberReachabilityFailed QualifiedName [TemplateMemberReachabilityError]
     | TemplateMangleFailed String [TemplateMangleError]
     deriving (Eq, Ord, Read, Show)
 
@@ -259,7 +263,7 @@ materializeAll limits typed sources prepared = go firstFresh 1 [] ordered
 
         go _ _ output [] = Right (reverse output)
         go next identifier output (demand : remaining) = do
-            (selected, memberTotal) <- selectDeclarationMembers limits sources demand
+            (selected, selectedScope, memberTotal) <- selectDeclarationMembers limits sources demand
             instantiated <- mapInstantiation demand (instantiateTemplateType (preparedBinding demand) selected)
             -- The source annotation may retain a namespace-relative spelling.
             -- The planner owns the canonical concrete application, so the
@@ -276,7 +280,7 @@ materializeAll limits typed sources prepared = go firstFresh 1 [] ordered
                         { templateSpecializationId = TemplateSpecializationId identifier
                         , templateSpecializationIdentity = preparedIdentity demand
                         , templateSpecializationType = preparedType demand
-                        , templateSpecializationScope = preparedScope demand
+                        , templateSpecializationScope = selectedScope
                         , templateSpecializationOrigins = preparedOrigins demand
                         , templateSpecializationDependencies = []
                         , templateSpecializationDeclaration = freshenedDeclaration freshened
@@ -298,15 +302,15 @@ selectDeclarationMembers ::
     TemplateSpecializationLimits ->
     Map SymbolId (Declaration ResolvedName Type) ->
     PreparedDemand ->
-    Either [TemplateSpecializationError] (Declaration ResolvedName Type, Int)
+    Either [TemplateSpecializationError] (Declaration ResolvedName Type, TemplateDemandScope, Int)
 selectDeclarationMembers _ sources demand = do
     source <- case Map.lookup symbol sources of
         Just declaration -> Right declaration
         Nothing -> Left [TemplateDeclarationSourceMissing name symbol]
     case source of
         declaration@TemplateTypeDeclaration {typeMembers = members} -> do
-            selected <- selectMembers name (preparedScope demand) members
-            pure (declaration {typeMembers = selected}, length selected)
+            (selected, selectedScope) <- selectMembers name (preparedScope demand) members
+            pure (declaration {typeMembers = selected}, selectedScope, length selected)
         _ -> Left [TemplateDeclarationSourceMissing name symbol]
     where
         descriptor = templateBindingDeclaration (preparedBinding demand)
@@ -317,16 +321,25 @@ selectMembers ::
     QualifiedName ->
     TemplateDemandScope ->
     [Declaration ResolvedName Type] ->
-    Either [TemplateSpecializationError] [Declaration ResolvedName Type]
-selectMembers _ TemplateLayoutDemand _ = Right []
-selectMembers _ TemplateCompleteDemand members = Right members
+    Either [TemplateSpecializationError] ([Declaration ResolvedName Type], TemplateDemandScope)
+selectMembers _ TemplateLayoutDemand _ = Right ([], TemplateLayoutDemand)
+selectMembers _ TemplateCompleteDemand members = Right (members, TemplateCompleteDemand)
 selectMembers owner (TemplateMemberDemand requested) members =
-    case missing of
-        [] -> Right [member | member <- members, memberSpelling member `elem` requested]
-        names -> Left [TemplateMemberNotFound owner name | name <- names]
-    where
-        available = map memberSpelling members
-        missing = [name | name <- requested, name `notElem` available]
+    case selectReachableMembersByName requested members of
+        Left failures -> Left (mapReachabilityFailures owner failures)
+        Right reachability ->
+            let selected = memberReachabilityMembers reachability
+                selectedNames = unique (map memberSpelling selected)
+             in Right (selected, TemplateMemberDemand selectedNames)
+
+mapReachabilityFailures ::
+    QualifiedName ->
+    [TemplateMemberReachabilityError] ->
+    [TemplateSpecializationError]
+mapReachabilityFailures owner failures =
+    case [name | MissingTemplateMemberName name <- failures] of
+        [] -> [TemplateMemberReachabilityFailed owner failures]
+        names -> map (TemplateMemberNotFound owner) names
 
 memberSpelling :: Declaration ResolvedName Type -> Identifier
 memberSpelling = resolvedSpelling . declarationName
@@ -545,6 +558,11 @@ renderTemplateSpecializationError issue = case issue of
             ++ show actual
             ++ " members, exceeding limit "
             ++ show limit
+    TemplateMemberReachabilityFailed name failures ->
+        "template declaration "
+            ++ renderPlainName name
+            ++ " has an invalid member call graph: "
+            ++ intercalate "; " (map renderTemplateMemberReachabilityError failures)
     TemplateMangleFailed identity failures ->
         "template specialization "
             ++ identity

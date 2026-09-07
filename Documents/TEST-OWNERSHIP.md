@@ -15,8 +15,6 @@ labels, fixtures, and review ownership aligned with production boundaries.
 | Core | `Compiler/Core/Tests` | Core model, verifier, artifacts, golden wire |
 | Driver | `Compiler/Driver/Tests` | connected stage and end-to-end compiler flow |
 | LLVM backend | `Compiler/Backend/LLVM/Tests` | LLVM IR, object, and native artifact lowering |
-| Package support | `Compiler/Package/Tests` | package archive primitives |
-| Legacy compiler | `Compiler/Legacy/Tests` | isolated compatibility code only |
 | Haskell frontend | package-local `test/` trees | lexer through CorePrep semantics |
 
 A new component creates its own `Tests` directory when it gains tests. It does
@@ -52,8 +50,8 @@ or the number of stages involved.
 
 Fixtures follow their tests. Core wire golden files live below
 `Compiler/Core/Tests/Fixtures`. Source projects used by the connected driver
-live below `Compiler/Driver/Tests/Fixtures`. Retired intermediate examples used
-only to guard legacy readers live below `Compiler/Legacy/Tests/Fixtures`.
+live below `Compiler/Driver/Tests/Fixtures`. Retired intermediate examples and
+their readers are removed rather than retained as a second pipeline.
 
 Do not create a common fixture directory merely because two components use the
 same file today. If the file represents a stable boundary, the producer owns
@@ -139,16 +137,6 @@ Filesystem tests use exact `.vxs` case rules and avoid assumptions about the
 current working directory. Paths should derive from declared Bazel data,
 package-local fixtures, or the source file location when the test is only
 built and run from a checkout.
-
-## Legacy tests
-
-Legacy tests exist to prevent retained compatibility code from becoming
-silently unsafe during removal. They do not justify new dependencies from the
-current compiler into `Compiler/Legacy`.
-
-Legacy headers live under
-`Compiler/Legacy/Headers/Visual/XSharp/Legacy`. Include paths must contain the
-`Legacy` segment so current code cannot accidentally select an old API.
 
 ## Required local gates
 

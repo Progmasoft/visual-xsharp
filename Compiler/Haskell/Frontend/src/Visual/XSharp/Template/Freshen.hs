@@ -16,6 +16,7 @@ module Visual.XSharp.Template.Freshen
     , freshenDeclaration
     ) where
 
+import Data.Foldable (traverse_)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
@@ -83,6 +84,11 @@ freshDeclaration declaration = case declaration of
     TypeDeclaration spanValue name annotation members -> do
         closedName <- freshDefinition name
         closedAnnotation <- freshType annotation
+        -- A type scope is recursive: a member body may call a member declared
+        -- later in source order. Reserve every immediate member identity before
+        -- rewriting any body so forward calls and mutually recursive methods
+        -- cannot retain the template declaration's old SymbolIds.
+        traverse_ reserveDeclarationName members
         closedMembers <- traverse freshDeclaration members
         pure (TypeDeclaration spanValue closedName closedAnnotation closedMembers)
     FunctionDeclaration spanValue name annotation returnSyntax parameters body isStatic access -> do
@@ -108,6 +114,15 @@ freshDeclaration declaration = case declaration of
         -- A nested template introduces a separate substitution/freshening
         -- environment. It will be selected independently when demanded.
         pure declaration
+
+reserveDeclarationName :: Declaration ResolvedName Type -> Fresh ()
+reserveDeclarationName declaration = case declaration of
+    TypeDeclaration _ name _ _ -> freshDefinition name >> pure ()
+    FunctionDeclaration _ name _ _ _ _ _ _ -> freshDefinition name >> pure ()
+    TemplateTypeDeclaration {} ->
+        -- Nested templates own a separate specialization environment and must
+        -- not leak definitions into the enclosing concrete type's map.
+        pure ()
 
 freshParameterDefinition :: Parameter ResolvedName Type -> Fresh (Parameter ResolvedName Type)
 freshParameterDefinition parameter = do

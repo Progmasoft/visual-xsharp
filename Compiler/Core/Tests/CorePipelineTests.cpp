@@ -68,9 +68,44 @@ namespace
     }
 
     [[nodiscard]] auto
-    ReadGoldenHex() -> std::vector<std::uint8_t>
+    ClosureModule() -> Core::Module
     {
-        const auto path = std::filesystem::path(__FILE__).parent_path() / "Fixtures" / "Core" / "wire-v4.hex";
+        const auto integer = [](std::int64_t value) {
+            return Core::Expression::Constant(value, Core::Type::int64());
+        };
+        const auto variable = [](std::uint64_t id, std::u32string spelling, Core::Type type) {
+            return Core::Expression::Variable({ id, std::move(spelling) }, std::move(type));
+        };
+        const auto callableType = Core::Type::function({}, Core::Type::int64());
+        Core::Capture capture{
+            Core::CaptureMode::Strong,
+            { 4U, U"captured" },
+            Core::Type::int64(),
+            std::make_shared<Core::Expression>(variable(2U, U"seed", Core::Type::int64())),
+        };
+        auto closure = Core::Expression::Closure(
+            { std::move(capture) },
+            {},
+            Core::Type::int64(),
+            { Core::Statement::Return(variable(4U, U"captured", Core::Type::int64())) },
+            callableType);
+        Core::Function main{
+            { 1U, U"Main" },
+            {},
+            Core::Type::unit(),
+            {
+                Core::Statement::Bind({ { 2U, U"seed" }, Core::Type::int64(), false, integer(42) }),
+                Core::Statement::Bind({ { 3U, U"answer" }, callableType, false, std::move(closure) }),
+                Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())),
+            },
+        };
+        return { { U"ClosureBoundary" }, { std::move(main) } };
+    }
+
+    [[nodiscard]] auto
+    ReadGoldenHex(std::string_view filename = "wire-v4.hex") -> std::vector<std::uint8_t>
+    {
+        const auto path = std::filesystem::path(__FILE__).parent_path() / "Fixtures" / "Core" / std::filesystem::path(filename);
         std::ifstream stream(path);
         REQUIRE(stream);
         std::vector<std::uint8_t> bytes;
@@ -146,6 +181,165 @@ TEST_CASE("VXCR reader rejects malformed boundaries and configured limits")
     }
 }
 
+TEST_CASE("VXCR v4 carries Haskell Core closure fields into native Core")
+{
+    const auto source = ClosureModule();
+    REQUIRE(Core::Verify(source).empty());
+    const auto encoded = Core::Wire::Encode(source);
+    REQUIRE(encoded);
+
+    const auto decoded = Core::Wire::Decode(encoded.bytes);
+    REQUIRE(decoded);
+    CHECK(decoded.module == source);
+    const auto &closure = decoded.module->functions.front().body.at(1).binding.value;
+    REQUIRE(closure.kind == Core::Expression::Kind::Closure);
+    REQUIRE(closure.captures.size() == 1U);
+    CHECK(closure.captures.front().mode == Core::CaptureMode::Strong);
+    CHECK(closure.captures.front().symbol.id == 4U);
+    REQUIRE(closure.closureBody);
+    CHECK(closure.closureBody->size() == 1U);
+}
+
+TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
+{
+    // This golden file is emitted from closure-boundary.vxs by vxs-frontend,
+    // rather than re-encoded by the C++ model. It therefore locks the actual
+    // cross-language expression tag and field order that production uses.
+    const auto bytes = ReadGoldenHex("wire-v4-closure.hex");
+    const auto decoded = Core::Wire::Decode(bytes);
+    REQUIRE(decoded);
+    REQUIRE(Core::Verify(*decoded.module).empty());
+    const auto &body = decoded.module->functions.front().body;
+    REQUIRE(body.size() == 3U);
+    REQUIRE(body.at(1).kind == Core::Statement::Kind::Evaluate);
+    CHECK(body.at(1).expression.kind == Core::Expression::Kind::Closure);
+    CHECK(body.at(1).expression.type.kind == Core::Type::Kind::Function);
+    INFO("closure type kind=" << static_cast<int>(body.at(1).expression.type.kind)
+                              << " components=" << body.at(1).expression.type.components.size());
+
+    const auto result = Visual::XSharp::Pipeline::ConsumeCore(bytes);
+    INFO("core verification issues=" << result.coreVerificationIssues.size());
+    INFO("CorePrep verification issues=" << result.verification_issues.size());
+    INFO("Xpp verification issues=" << result.xppVerificationIssues.size());
+    INFO("Xmm verification issues=" << result.xmmVerificationIssues.size());
+    std::string corePrepDiagnostics;
+    for (const auto &issue : result.verification_issues)
+        corePrepDiagnostics += issue.code + ": " + issue.message + "\n";
+    INFO(corePrepDiagnostics);
+    std::string xmmDiagnostics;
+    for (const auto &issue : result.xmmVerificationIssues)
+        xmmDiagnostics += issue.code + ": " + issue.message + "\n";
+    INFO(xmmDiagnostics);
+    for (const auto &issue : result.coreVerificationIssues)
+        INFO(issue.code << ": " << issue.message);
+    for (const auto &issue : result.verification_issues)
+        INFO(issue.code << ": " << issue.message);
+    for (const auto &issue : result.xppVerificationIssues)
+        INFO(issue.code << ": " << issue.message);
+    for (const auto &issue : result.xmmVerificationIssues)
+        INFO(issue.code << ": " << issue.message);
+    if (result.llvm_error)
+        INFO(result.llvm_error->code << ": " << result.llvm_error->message);
+    INFO("core=" << result.core.has_value()
+                 << " coreprep=" << result.core_prep.has_value()
+                 << " xpp=" << result.xpp.has_value()
+                 << " xmm=" << result.xmm.has_value()
+                 << " llvm=" << result.llvm.has_value());
+    REQUIRE(result);
+    REQUIRE(result.core_prep);
+    CHECK(result.core_prep->functions.size() == 2U);
+    CHECK(result.xmmVerificationIssues.empty());
+}
+
+TEST_CASE("Core closure conversion lifts a target and preserves capture metadata")
+{
+    const auto prepared = Core::CorePrep::Prepare(ClosureModule());
+    REQUIRE(prepared.functions.size() == 2U);
+    const auto &main = prepared.functions.front();
+    const auto &lifted = prepared.functions.back();
+    REQUIRE(main.blocks.size() == 1U);
+    const auto closure = std::ranges::find_if(main.blocks.front().instructions, [](const auto &instruction) {
+        return instruction.operation == visual_xsharp::core::Operation::MakeClosure;
+    });
+    REQUIRE(closure != main.blocks.front().instructions.end());
+    CHECK(closure->closure_function.id == lifted.symbol.id);
+    REQUIRE(closure->captures.size() == 1U);
+    CHECK(closure->captures.front().symbol.id == lifted.parameters.front().symbol.id);
+    CHECK(closure->captures.front().value.symbol.id == 2U);
+    CHECK(visual_xsharp::core::verify(prepared).empty());
+}
+
+TEST_CASE("VXCR closure survives the complete RAM compiler pipeline")
+{
+    const auto encoded = Core::Wire::Encode(ClosureModule());
+    REQUIRE(encoded);
+    const auto result = Visual::XSharp::Pipeline::ConsumeCore(encoded.bytes);
+    REQUIRE(result);
+    REQUIRE(result.core_prep);
+    REQUIRE(result.xpp);
+    REQUIRE(result.xmm);
+    REQUIRE(result.llvm);
+    CHECK(result.core_prep->functions.size() == 2U);
+    CHECK(result.verification_issues.empty());
+    CHECK(result.xppVerificationIssues.empty());
+    CHECK(result.xmmVerificationIssues.empty());
+}
+
+TEST_CASE("Core verifier rejects incomplete closure payloads before wire lowering")
+{
+    SECTION("missing capture initializer")
+    {
+        auto module = ClosureModule();
+        module.functions.front().body.at(1).binding.value.captures.front().value.reset();
+        CHECK(HasIssue(Core::Verify(module), "VXC1035"));
+    }
+    SECTION("callable arity mismatch")
+    {
+        auto module = ClosureModule();
+        auto &closure = module.functions.front().body.at(1).binding.value;
+        closure.type = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
+        CHECK(HasIssue(Core::Verify(module), "VXC1041"));
+    }
+    SECTION("closure result mismatch")
+    {
+        auto module = ClosureModule();
+        auto &closure = module.functions.front().body.at(1).binding.value;
+        closure.closureReturnType = Core::Type::boolean();
+        CHECK(HasIssue(Core::Verify(module), "VXC1041"));
+    }
+    SECTION("invalid capture ownership mode")
+    {
+        auto module = ClosureModule();
+        module.functions.front().body.at(1).binding.value.captures.front().mode = static_cast<Core::CaptureMode>(255U);
+        CHECK(HasIssue(Core::Verify(module), "VXC1043"));
+        CHECK_FALSE(Core::Wire::Encode(module));
+    }
+    SECTION("non-owning scalar capture")
+    {
+        auto module = ClosureModule();
+        module.functions.front().body.at(1).binding.value.captures.front().mode = Core::CaptureMode::Weak;
+        CHECK(HasIssue(Core::Verify(module), "VXC1044"));
+    }
+}
+
+TEST_CASE("native Core accepts mutation of captured closure storage")
+{
+    auto module = ClosureModule();
+    auto &closure = module.functions.front().body.at(1).binding.value;
+    closure.closureBody = std::make_shared<std::vector<Core::Statement>>(
+        std::vector<Core::Statement>{
+            Core::Statement::Assign(
+                { 4U, U"captured" },
+                Core::Expression::Constant(std::int64_t{ 43 }, Core::Type::int64())),
+            Core::Statement::Return(
+                Core::Expression::Variable({ 4U, U"captured" }, Core::Type::int64())),
+        });
+    CHECK(Core::Verify(module).empty());
+    const auto encoded = Core::Wire::Encode(module);
+    REQUIRE(encoded);
+    CHECK(Visual::XSharp::Pipeline::ConsumeCore(encoded.bytes));
+}
+
 TEST_CASE("native Core verifier blocks invalid references mutation and returns")
 {
     SECTION("undefined symbol")
@@ -191,6 +385,63 @@ TEST_CASE("Core adapter creates explicit CorePrep CFG and temporaries")
     REQUIRE(prepared.functions.at(1).blocks.front().terminator.kind == visual_xsharp::core::Terminator::Kind::Branch);
     REQUIRE(prepared.functions.at(1).blocks.at(1).instructions.size() == 2U);
     REQUIRE(visual_xsharp::core::verify(prepared).empty());
+}
+
+TEST_CASE("CorePrep canonicalizes numeric branch conditions before Xpp")
+{
+    Core::Module module{
+        { U"NumericBranch" },
+        { Core::Function{
+            { 1U, U"Main" },
+            {},
+            Core::Type::unit(),
+            { Core::Statement::If(
+                Core::Expression::Constant(std::int64_t{ 7 }, Core::Type::int64()),
+                { Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())) },
+                { Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())) }) },
+        } },
+    };
+    REQUIRE(Core::Verify(module).empty());
+    const auto prepared = Core::CorePrep::Prepare(module);
+    REQUIRE(visual_xsharp::core::verify(prepared).empty());
+    const auto &entry = prepared.functions.front().blocks.front();
+    REQUIRE(entry.terminator.kind == visual_xsharp::core::Terminator::Kind::Branch);
+    CHECK(entry.terminator.value.type == Core::Type::boolean());
+    REQUIRE(entry.instructions.size() == 1U);
+    CHECK(entry.instructions.front().operation == visual_xsharp::core::Operation::NotEqual);
+}
+
+TEST_CASE("logical operands with distinct numeric types become canonical booleans")
+{
+    auto logical = Core::Expression::InvokePrimitive(
+        Core::Primitive::LogicalAnd,
+        {
+            Core::Expression::Constant(std::int64_t{ 1 }, Core::Type::int64()),
+            Core::Expression::Constant(
+                visual_xsharp::core::FloatingLiteral{ "2" },
+                Core::Type::float32()),
+        },
+        Core::Type::boolean());
+    Core::Module module{
+        { U"NumericLogical" },
+        { Core::Function{
+            { 1U, U"Evaluate" },
+            {},
+            Core::Type::boolean(),
+            { Core::Statement::Return(std::move(logical)) },
+        } },
+    };
+    REQUIRE(Core::Verify(module).empty());
+    const auto prepared = Core::CorePrep::Prepare(module);
+    REQUIRE(visual_xsharp::core::verify(prepared).empty());
+    const auto &instructions = prepared.functions.front().blocks.front().instructions;
+    REQUIRE(instructions.size() == 3U);
+    CHECK(instructions.at(0).operation == visual_xsharp::core::Operation::NotEqual);
+    CHECK(instructions.at(1).operation == visual_xsharp::core::Operation::NotEqual);
+    CHECK(instructions.at(2).operation == visual_xsharp::core::Operation::LogicalAnd);
+    const auto result = Visual::XSharp::Pipeline::ConsumeCore(Core::Wire::Encode(module).bytes);
+    REQUIRE(result);
+    CHECK(result.xmmVerificationIssues.empty());
 }
 
 TEST_CASE("VXCR RAM pipeline reaches optimized Xpp Xmm and LLVM")

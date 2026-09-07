@@ -454,14 +454,8 @@ mod binary_types;
 mod call_lowering;
 #[path = "collection.rs"]
 mod collection;
-#[cfg(test)]
-#[path = "collection_tests.rs"]
-mod collection_tests;
 #[path = "control_flow.rs"]
 mod control_flow;
-#[cfg(test)]
-#[path = "control_flow_tests.rs"]
-mod control_flow_tests;
 #[cfg(test)]
 #[path = "desugar_tests.rs"]
 mod desugar_tests;
@@ -471,27 +465,11 @@ mod desugared;
 mod function_lowering;
 #[path = "integer_literal.rs"]
 mod integer_literal;
-#[cfg(test)]
-#[path = "match_tests.rs"]
-mod match_tests;
 #[path = "short_circuit.rs"]
 mod short_circuit;
-#[cfg(test)]
-#[path = "short_circuit_tests.rs"]
-mod short_circuit_tests;
 #[path = "tuple.rs"]
 mod tuple;
-#[cfg(test)]
-#[path = "tuple_tests.rs"]
-mod tuple_tests;
 #[path = "update.rs"]
 mod update;
 #[path = "value_lowering.rs"]
 mod value_lowering;
-#[cfg(test)]
-#[path = "value_tests.rs"]
-mod value_tests;
-
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests;

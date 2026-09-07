@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 #include <algorithm>
+#include <cstdlib>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -90,7 +91,9 @@ namespace visual_xsharp::xmm
                 case xpp::Opcode::ReleaseUnowned:
                     return Opcode::ReleaseUnowned;
             }
-            return Opcode::Move;
+            // Never turn a newly added Xpp opcode into a plausible Move. The
+            // explicit failure keeps stage-version drift observable in tests.
+            std::abort();
         }
 
         auto
@@ -118,12 +121,28 @@ namespace visual_xsharp::xmm
             RegisterMap &map,
             const std::unordered_set<xpp::SymbolId> &directFunctions) -> Terminator
         {
-            return {
-                static_cast<Terminator::Kind>(terminator.kind),
+            Terminator lowered{
+                Terminator::Kind::Unreachable,
                 LowerValue(terminator.value, map, directFunctions),
                 terminator.true_target,
-                terminator.false_target
+                terminator.false_target,
             };
+            switch (terminator.kind)
+            {
+                case xpp::Terminator::Kind::Return:
+                    lowered.kind = Terminator::Kind::Return;
+                    break;
+                case xpp::Terminator::Kind::Branch:
+                    lowered.kind = Terminator::Kind::Branch;
+                    break;
+                case xpp::Terminator::Kind::Jump:
+                    lowered.kind = Terminator::Kind::Jump;
+                    break;
+                case xpp::Terminator::Kind::Unreachable:
+                    lowered.kind = Terminator::Kind::Unreachable;
+                    break;
+            }
+            return lowered;
         }
     } // namespace
 

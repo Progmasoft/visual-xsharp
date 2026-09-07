@@ -10,11 +10,6 @@ pub fn format_units(units: &[u32]) -> String
     format_with_prefix("utf32", units)
 }
 
-pub fn format_encoded(encoding: crate::xlil::Utf32Encoding, units: &[u32]) -> String
-{
-    format_with_prefix(encoding.text_name(), units)
-}
-
 fn format_with_prefix(prefix: &str, units: &[u32]) -> String
 {
     let mut output = format!("{prefix} [");
@@ -33,21 +28,6 @@ fn format_with_prefix(prefix: &str, units: &[u32]) -> String
 pub fn parse_units(value: &str) -> Option<Vec<u32>>
 {
     parse_with_prefix(value, "utf32")
-}
-
-pub fn parse_encoded(value: &str) -> Option<(crate::xlil::Utf32Encoding, Vec<u32>)>
-{
-    for encoding in [
-        crate::xlil::Utf32Encoding::LittleEndian,
-        crate::xlil::Utf32Encoding::BigEndian,
-    ]
-    {
-        if let Some(units) = parse_with_prefix(value, encoding.text_name())
-        {
-            return Some((encoding, units));
-        }
-    }
-    None
 }
 
 fn parse_with_prefix(value: &str, prefix: &str) -> Option<Vec<u32>>
@@ -84,9 +64,5 @@ mod tests
         assert_eq!(parse_units(&format_units(&units)), Some(units));
         assert_eq!(parse_units("utf32 [0x0000d800]"), None);
         assert_eq!(parse_units("utf32 [0x41]"), None);
-        assert_eq!(
-            parse_encoded("utf32le [0x00000041]"),
-            Some((crate::xlil::Utf32Encoding::LittleEndian, vec![0x41]))
-        );
     }
 }

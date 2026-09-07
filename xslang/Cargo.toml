@@ -6,14 +6,11 @@ name = "xslang"
 version = "0.3.1"
 edition = "2024"
 authors = ["Progmasoft <support@progmasoft.com>"]
-description = "Target-independent semantic analysis and IR core for the Visual X# compiler"
+description = "Retained semantic-analysis experiments for the Visual X# compiler"
 license = "MPL-2.0"
 repository = "https://github.com/Progmasoft/visual-xsharp"
 homepage = "https://github.com/Progmasoft/visual-xsharp"
 readme = "README.md"
-documentation = "https://docs.rs/xslang"
-keywords = ["compiler", "xsharp", "compiler-ir", "xlil"]
-categories = ["compilers"]
 exclude = ["target/"]
 
 [lib]
@@ -25,31 +22,7 @@ bench = false
 [dependencies]
 bit-set = "0.11"
 indexmap = "2.14"
-rustc-hash = "2"
-smallvec = "1.15"
-arrayvec = "0.7"
-miette = { version = "7.6", features = ["fancy", "derive"] }
-ariadne = "0.6"
-parking_lot = "0.12"
 petgraph = "0.8"
-thiserror = "2.0"
-typed-arena = "2.0"
-bitflags = "2.13"
-camino = "1.2"
-lasso = "0.7"
-
-[dev-dependencies]
-proptest = "1.11"
-insta = "1.48"
-criterion = "0.8"
-libfuzzer-sys = "0.4"
-
-[package.metadata.vxs]
-component = "compiler-core"
-syntax-abi-version = 1
-xhir-version = 1
-xmir-version = 1
-xlil-version = 1
 
 [lints.rust]
 missing_docs = "warn"

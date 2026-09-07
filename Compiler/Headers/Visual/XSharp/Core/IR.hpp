@@ -38,6 +38,27 @@ namespace Visual::XSharp::Core
         LogicalNot
     };
 
+    using CaptureMode = ::visual_xsharp::core::CaptureMode;
+
+    struct Expression;
+
+    // The captured value belongs to the enclosing lexical environment, while
+    // symbol and type describe the binding visible inside the lifted closure.
+    // shared_ptr breaks the recursive Expression/Capture representation
+    // without assigning semantic meaning to pointer identity.
+    struct Capture final
+    {
+        CaptureMode mode{ CaptureMode::Strong };
+        SymbolName symbol{};
+        Type type{ Type::unit() };
+        std::shared_ptr<Expression> value;
+
+        [[nodiscard]] auto
+        operator==(const Capture &other) const -> bool;
+    };
+
+    struct Statement;
+
     struct Expression final
     {
         enum class Kind : std::uint8_t
@@ -45,7 +66,8 @@ namespace Visual::XSharp::Core
             Variable,
             Literal,
             Apply,
-            Primitive
+            Primitive,
+            Closure
         };
 
         Kind kind{ Kind::Literal };
@@ -55,6 +77,10 @@ namespace Visual::XSharp::Core
         Core::Primitive primitive{ Core::Primitive::Add };
         std::shared_ptr<Expression> callee;
         std::vector<Expression> operands;
+        std::vector<Capture> captures;
+        std::vector<std::pair<SymbolName, Type>> closureParameters;
+        Type closureReturnType{ Type::unit() };
+        std::shared_ptr<std::vector<Statement>> closureBody;
 
         [[nodiscard]] static auto
         Variable(SymbolName name, Type valueType) -> Expression;
@@ -65,6 +91,13 @@ namespace Visual::XSharp::Core
             -> Expression;
         [[nodiscard]] static auto
         InvokePrimitive(Core::Primitive operation, std::vector<Expression> arguments, Type resultType) -> Expression;
+        [[nodiscard]] static auto
+        Closure(
+            std::vector<Capture> captured,
+            std::vector<std::pair<SymbolName, Type>> parameters,
+            Type returnType,
+            std::vector<Statement> body,
+            Type valueType) -> Expression;
         [[nodiscard]] auto
         operator==(const Expression &other) const -> bool;
     };

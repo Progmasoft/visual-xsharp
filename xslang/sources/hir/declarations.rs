@@ -6,7 +6,21 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-use crate::compiler_core::SourceSpan;
+/// Stable source interval used by retained declaration-analysis algorithms.
+///
+/// The retired Rust compiler driver used to own this neutral data record. It
+/// belongs to HIR now that the driver/session and XLIL production path are gone.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SourceSpan
+{
+    pub file_id: u64,
+    pub start_offset: u64,
+    pub end_offset: u64,
+    pub start_line: u64,
+    pub start_column: u64,
+    pub end_line: u64,
+    pub end_column: u64,
+}
 
 use super::type_check::{self, PrimitiveType};
 

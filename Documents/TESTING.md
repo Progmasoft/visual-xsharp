@@ -120,13 +120,11 @@ test identifies the contract that owns its maintenance:
 | `Compiler/Core/Tests` | Core model, verification, artifacts, and golden wire |
 | `Compiler/Driver/Tests` | connected CorePrep, Xpp, and Xmm stage behavior |
 | `Compiler/Backend/LLVM/Tests` | LLVM IR and native artifact lowering |
-| `Compiler/Package/Tests` | package archive implementation |
-| `Compiler/Legacy/Tests` | retained compatibility code scheduled for removal |
 
 Fixtures follow the same rule. A Core golden document is stored below the Core
 test package, while multi-file `.vxs` projects used by the connected pipeline
-belong to Driver tests. Retired textual-intermediate fixtures remain below the
-Legacy boundary and are never an input promise for the current CLI.
+belong to Driver tests. Retired textual-intermediate fixtures are not kept in
+the current source tree and are never an input promise for the CLI.
 
 When a test crosses several components, choose the narrowest owner of the
 asserted contract. For example, scalar preservation from CorePrep through Xmm

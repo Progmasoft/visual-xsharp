@@ -9,6 +9,7 @@ import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.CharacterLiteral
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
+import Visual.XSharp.Core.CorePrep
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.FloatingLiteral
 import Visual.XSharp.Lexer
@@ -232,6 +233,8 @@ corePropagationTests =
     , ("targeted byte literal reaches Core with byte type", coreLiteralHasType "byte" 42)
     , ("targeted uint literal reaches Core with uint type", coreLiteralHasType "uint" 42)
     , ("numeric bool lowering emits a Core boolean", numericBoolLowers)
+    , ("numeric branch reaches CorePrep as a canonical boolean", numericBranchCorePrep)
+    , ("mixed numeric logical operands become CorePrep booleans", numericLogicalCorePrep)
     ]
 
 semanticRuleTests :: [(String, Bool)]
@@ -428,6 +431,62 @@ numericBoolLowers = case compileBody "bool enabled = 1;" of
     where
         matches (CoreBind binding) = case coreBindingValue binding of CoreLiteral (CoreBoolean True) valueType -> valueType == boolType; _ -> False
         matches _ = False
+
+numericBranchCorePrep :: Bool
+numericBranchCorePrep = case prepareCore source of
+    Right prepared -> any branchIsBoolean (concatMap corePrepFunctionBlocks (corePrepModuleFunctions prepared))
+    Left _ -> False
+    where
+        parameter = ResolvedName (SymbolId 2) (Identifier "condition")
+        unit = CoreLiteral CoreUnit unitType
+        source =
+            CoreModule
+                (QualifiedName [Identifier "NumericBranch"])
+                [ CoreFunction
+                    (ResolvedName (SymbolId 1) (Identifier "Run"))
+                    [(parameter, intType)]
+                    unitType
+                    [CoreIf (CoreVariable parameter intType) [CoreReturn unit] [CoreReturn unit]]
+                ]
+        branchIsBoolean block = case corePrepBlockTerminator block of
+            CorePrepBranch condition _ _ -> corePrepAtomTypeForTest condition == boolType
+            _ -> False
+
+numericLogicalCorePrep :: Bool
+numericLogicalCorePrep = case prepareCore source of
+    Right prepared -> any normalizedLogical instructions
+        where
+            instructions =
+                concatMap
+                    corePrepBlockInstructions
+                    (concatMap corePrepFunctionBlocks (corePrepModuleFunctions prepared))
+    Left _ -> False
+    where
+        left = ResolvedName (SymbolId 2) (Identifier "left")
+        right = ResolvedName (SymbolId 3) (Identifier "right")
+        source =
+            CoreModule
+                (QualifiedName [Identifier "NumericLogical"])
+                [ CoreFunction
+                    (ResolvedName (SymbolId 1) (Identifier "Evaluate"))
+                    [(left, intType), (right, namedType "float")]
+                    boolType
+                    [ CoreReturn
+                        ( CorePrimitive
+                            CoreLogicalAnd
+                            [CoreVariable left intType, CoreVariable right (namedType "float")]
+                            boolType
+                        )
+                    ]
+                ]
+        normalizedLogical (CorePrepBind _ resultType _ (CorePrepPrimitive CoreLogicalAnd operands)) =
+            resultType == boolType && map corePrepAtomTypeForTest operands == [boolType, boolType]
+        normalizedLogical _ = False
+
+corePrepAtomTypeForTest :: CorePrepAtom -> Type
+corePrepAtomTypeForTest atom = case atom of
+    CorePrepVariable _ valueType -> valueType
+    CorePrepLiteral _ valueType -> valueType
 
 coreCharacterValue :: Bool
 coreCharacterValue = case compileBody "char letter = 'A';" of

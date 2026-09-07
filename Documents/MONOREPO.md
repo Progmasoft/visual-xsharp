@@ -15,8 +15,8 @@ third_party/  Pinned source dependencies
 
 Compiler-owned public headers live physically under `Compiler/Headers/Visual/XSharp/`. Bazel removes the physical
 `Compiler/Headers` prefix from consumers, so the stable include spelling remains `Visual/XSharp/...`.
-Tests and fixtures live below their owning component rather than in a root bucket. Retained C23 and superseded LIL
-headers are isolated below `Compiler/Legacy/Headers/Visual/XSharp/Legacy/`; current compiler code must not include them.
+Tests and fixtures live below their owning component rather than in a root bucket. The superseded C23/LIL implementation
+has been removed; current compiler code has no legacy include boundary.
 
 ## Compiler tree
 
@@ -40,7 +40,6 @@ Compiler/
 │   └── Driver/            source loading and private frontend process
 ├── Headers/Visual/XSharp/ public/native interface headers
 ├── Linker/                typed LLD execution
-├── Legacy/                isolated retained C23/LIL implementation, headers, and tests
 └── ProjectSystem/Bridge/  native-to-Kotlin project boundary
 ```
 

@@ -21,5 +21,6 @@ pub mod text;
 pub mod type_check;
 
 pub use async_check::Span;
+pub use declarations::SourceSpan;
 pub use match_model::{MatchArm, MatchPattern};
 pub use type_check::*;

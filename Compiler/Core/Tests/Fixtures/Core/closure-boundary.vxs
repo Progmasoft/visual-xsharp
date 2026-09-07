@@ -1,0 +1,12 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+
+namespace ClosureBoundary;
+
+class Program {
+    public static void Main() {
+        int seed = 42;
+        auto answer = [seed] \ -> seed;
+        return;
+    }
+}

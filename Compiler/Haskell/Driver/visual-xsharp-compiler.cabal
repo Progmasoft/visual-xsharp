@@ -36,6 +36,7 @@ library
         visual-xsharp-frontend:Visual.XSharp.Template.Freshen,
         visual-xsharp-frontend:Visual.XSharp.Template.Instantiation,
         visual-xsharp-frontend:Visual.XSharp.Template.Mangling,
+        visual-xsharp-frontend:Visual.XSharp.Template.MemberReachability,
         visual-xsharp-frontend:Visual.XSharp.Template.Specialization,
         visual-xsharp-frontend:Visual.XSharp.Template.Specialization.Verifier,
         visual-xsharp-frontend:Visual.XSharp.Template.Verifier,
@@ -95,6 +96,7 @@ test-suite visual-xsharp-compiler-tests
         TemplateDiscoveryTests
         TemplateInstantiationTests
         TemplateManglingTests
+        TemplateMemberReachabilityTests
         TemplatePlanVerifierTests
         TemplateSpecializationPlannerTests
         TemplateVerifierTests

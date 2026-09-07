@@ -171,6 +171,13 @@ booleanizeAtom state atom
             instruction = CorePrepBind temporary boolType False (CorePrepPrimitive CoreNotEqual [atom, zero])
          in ([instruction], CorePrepVariable temporary boolType, state {nextTemporary = identifier + 1})
 
+booleanizeMany :: PrepState -> [CorePrepAtom] -> ([CorePrepInstruction], [CorePrepAtom], PrepState)
+booleanizeMany state [] = ([], [], state)
+booleanizeMany state (atom : remaining) =
+    let (prefix, boolean, after) = booleanizeAtom state atom
+        (laterPrefix, later, final) = booleanizeMany after remaining
+     in (prefix ++ laterPrefix, boolean : later, final)
+
 corePrepAtomType :: CorePrepAtom -> Type
 corePrepAtomType atom = case atom of
     CorePrepVariable _ valueType -> valueType
@@ -208,7 +215,11 @@ atomizeOperation state expression = case expression of
             (argumentPrefix, argumentAtoms, afterArguments) = atomizeMany afterCallee arguments
          in (calleePrefix ++ argumentPrefix, CorePrepCall calleeAtom argumentAtoms, afterArguments)
     CorePrimitive primitive arguments _ ->
-        let (prefix, atoms, after) = atomizeMany state arguments in (prefix, CorePrepPrimitive primitive atoms, after)
+        let (prefix, atoms, after) = atomizeMany state arguments
+            logical = primitive `elem` [CoreLogicalAnd, CoreLogicalOr, CoreLogicalNot]
+            (booleanPrefix, preparedAtoms, final) =
+                if logical then booleanizeMany after atoms else ([], atoms, after)
+         in (prefix ++ booleanPrefix, CorePrepPrimitive primitive preparedAtoms, final)
     CoreClosure captures parameters returnType body _ ->
         let closureId = nextTemporary state
             closureName =

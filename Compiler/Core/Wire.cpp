@@ -337,10 +337,49 @@ namespace Visual::XSharp::Core::Wire
                         });
                         return Expression::InvokePrimitive(static_cast<Primitive>(primitiveTag), std::move(arguments), std::move(valueType));
                     }
+                    case 4:
+                    {
+                        auto captures = Vector<Capture>(limits_.maximumOperands, "closure capture count", [this, depth] {
+                            return ReadCapture(depth + 1U);
+                        });
+                        auto parameters = Vector<std::pair<SymbolName, Type>>(
+                            limits_.maximumParameters,
+                            "closure parameter count",
+                            [this] {
+                                auto parameter = ReadParameter();
+                                return std::pair{ std::move(parameter.symbol), std::move(parameter.type) };
+                            });
+                        auto returnType = ReadType();
+                        auto body = Vector<Statement>(limits_.maximumStatements, "closure statement count", [this] {
+                            return ReadStatement();
+                        });
+                        return Expression::Closure(
+                            std::move(captures),
+                            std::move(parameters),
+                            std::move(returnType),
+                            std::move(body),
+                            std::move(valueType));
+                    }
                     default:
                         Fail(ErrorKind::InvalidTag, "expression tag", "unknown Core expression tag");
                         return {};
                 }
+            }
+            [[nodiscard]] auto
+            ReadCapture(std::size_t depth) -> Capture
+            {
+                const auto tag = Byte("closure capture mode");
+                if (tag > 2U)
+                    Fail(ErrorKind::InvalidTag, "closure capture mode", "unknown Core closure capture mode");
+                auto symbol = Symbol("closure capture symbol");
+                auto type = ReadType();
+                auto value = ReadExpression(depth);
+                Capture capture;
+                capture.mode = static_cast<CaptureMode>(tag);
+                capture.symbol = std::move(symbol);
+                capture.type = std::move(type);
+                capture.value = std::make_shared<Expression>(std::move(value));
+                return capture;
             }
             [[nodiscard]] auto
             ReadStatement() -> Statement
@@ -727,6 +766,39 @@ namespace Visual::XSharp::Core::Wire
                     case Expression::Kind::Primitive:
                         Vector(expression.operands, limits_.maximumOperands, "primitive operand count", [this, depth](const Expression &value) {
                             WriteExpression(value, depth + 1U);
+                        });
+                        return;
+                    case Expression::Kind::Closure:
+                        Vector(expression.captures, limits_.maximumOperands, "closure capture count", [this, depth](const Capture &capture) {
+                            if (capture.mode != CaptureMode::Strong
+                                && capture.mode != CaptureMode::Weak
+                                && capture.mode != CaptureMode::Unowned)
+                            {
+                                Fail(ErrorKind::InvalidTag, "closure capture mode", "unknown Core closure capture mode");
+                                return;
+                            }
+                            Byte(static_cast<std::uint8_t>(capture.mode));
+                            Symbol(capture.symbol, "closure capture symbol");
+                            WriteType(capture.type);
+                            if (!capture.value)
+                            {
+                                Fail(ErrorKind::InvalidCount, "closure capture value", "Core closure capture must contain a value");
+                                return;
+                            }
+                            WriteExpression(*capture.value, depth + 1U);
+                        });
+                        Vector(expression.closureParameters, limits_.maximumParameters, "closure parameter count", [this](const auto &parameter) {
+                            Symbol(parameter.first, "parameter symbol");
+                            WriteType(parameter.second);
+                        });
+                        WriteType(expression.closureReturnType);
+                        if (!expression.closureBody)
+                        {
+                            Fail(ErrorKind::InvalidCount, "closure body", "Core closure must contain a body");
+                            return;
+                        }
+                        Vector(*expression.closureBody, limits_.maximumStatements, "closure statement count", [this](const Statement &statement) {
+                            WriteStatement(statement);
                         });
                         return;
                 }

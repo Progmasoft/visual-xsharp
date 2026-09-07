@@ -24,6 +24,7 @@ import TemplateDeclarationTests (templateDeclarationTests)
 import TemplateDiscoveryTests (templateDiscoveryTests)
 import TemplateInstantiationTests (templateInstantiationTests)
 import TemplateManglingTests (templateManglingTests)
+import TemplateMemberReachabilityTests (templateMemberReachabilityTests)
 import TemplatePlanVerifierTests (templatePlanVerifierTests)
 import TemplateSpecializationPlannerTests (templateSpecializationPlannerTests)
 import TemplateTests (templateTests)
@@ -110,6 +111,7 @@ main = do
     mapM_ (uncurry check) templateApplicationTests
     mapM_ (uncurry check) templateInstantiationTests
     mapM_ (uncurry check) templateManglingTests
+    mapM_ (uncurry check) templateMemberReachabilityTests
     mapM_ (uncurry check) templatePlanVerifierTests
     mapM_ (uncurry check) templateSpecializationPlannerTests
     mapM_ (uncurry check) templateVerifierTests

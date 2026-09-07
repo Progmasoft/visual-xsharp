@@ -25,6 +25,7 @@ library
         Visual.XSharp.Template.Freshen
         Visual.XSharp.Template.Instantiation
         Visual.XSharp.Template.Mangling
+        Visual.XSharp.Template.MemberReachability
         Visual.XSharp.Template.Specialization
         Visual.XSharp.Template.Specialization.Verifier
         Visual.XSharp.Template.Verifier

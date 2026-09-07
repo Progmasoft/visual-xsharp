@@ -103,8 +103,10 @@ For each constant, the verifier checks:
 
 Primitive verification then checks operand and result types. Arithmetic
 operands must use one matching numeric type. Relational operations consume a
-matching numeric pair and produce `bool`. Logical and branch operations
-consume a canonical boolean after frontend normalization.
+matching numeric pair and produce `bool`. Logical operands may use distinct
+numeric types; CorePrep compares each numeric operand with a same-typed zero so
+Xpp, Xmm, and LLVM receive canonical booleans. Numeric branch conditions use
+the same conversion.
 
 ## Core wire v4
 

@@ -359,7 +359,8 @@ namespace Visual::XSharp::Xmm
                     context.add(IssueKind::RegisterRedefinition, "VXL1026", "virtual register is written with a type that differs from its established storage type");
             }
             else if (instruction.result_type.kind != core::Type::Kind::Unit
-                     && instruction.opcode != xmm::Opcode::Call)
+                     && instruction.opcode != xmm::Opcode::Call
+                     && instruction.opcode != xmm::Opcode::MakeClosure)
                 context.add(IssueKind::ResultType, "VXL1027", "discarded non-call instruction must have Unit result");
         }
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
  */
 
-use crate::compiler_core::SourceSpan;
+use crate::hir::SourceSpan;
 use crate::hir::declarations::{Base, EnumVariant, NominalKind, NominalType, TypeRef, Visibility};
 use crate::hir::type_check::{PrimitiveType, Type};
 

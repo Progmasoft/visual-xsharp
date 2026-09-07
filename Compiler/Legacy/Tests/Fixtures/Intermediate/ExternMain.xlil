@@ -1,3 +1,0 @@
-.xlil version 1
-.xlil module Invalid
-.extern main : () -> i32

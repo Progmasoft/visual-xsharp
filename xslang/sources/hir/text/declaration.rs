@@ -5,7 +5,7 @@
 
 use std::fmt::Write;
 
-use crate::compiler_core::SourceSpan;
+use crate::hir::SourceSpan;
 use crate::hir::declarations::{
     Base, EnumVariant, Field, NominalKind, NominalType, TupleFieldRef, TypeRef, Visibility,
 };

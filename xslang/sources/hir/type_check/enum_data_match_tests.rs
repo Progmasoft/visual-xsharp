@@ -4,7 +4,7 @@
  */
 
 use super::*;
-use crate::compiler_core::SourceSpan;
+use crate::hir::SourceSpan;
 use crate::hir::declarations::{Base, EnumVariant, NominalKind, NominalType, TypeRef, Visibility};
 
 fn span() -> Span

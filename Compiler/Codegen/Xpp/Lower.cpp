@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
 
 #include <algorithm>
+#include <cstdlib>
 #include <unordered_set>
 #include <utility>
 
@@ -63,7 +64,9 @@ namespace visual_xsharp::xpp
                 case core::Operation::MakeClosure:
                     return Opcode::MakeClosure;
             }
-            return Opcode::Copy;
+            // An unknown CorePrep operation indicates an adapter/version bug;
+            // translating it to Copy would silently change program semantics.
+            std::abort();
         }
 
         auto
@@ -99,7 +102,21 @@ namespace visual_xsharp::xpp
         LowerTerminator(const core::Terminator &terminator) -> Terminator
         {
             Terminator lowered{};
-            lowered.kind = static_cast<Terminator::Kind>(terminator.kind);
+            switch (terminator.kind)
+            {
+                case core::Terminator::Kind::Return:
+                    lowered.kind = Terminator::Kind::Return;
+                    break;
+                case core::Terminator::Kind::Branch:
+                    lowered.kind = Terminator::Kind::Branch;
+                    break;
+                case core::Terminator::Kind::Jump:
+                    lowered.kind = Terminator::Kind::Jump;
+                    break;
+                case core::Terminator::Kind::Unreachable:
+                    lowered.kind = Terminator::Kind::Unreachable;
+                    break;
+            }
             lowered.value = LowerOperand(terminator.value);
             lowered.true_target = terminator.true_target;
             lowered.false_target = terminator.false_target;

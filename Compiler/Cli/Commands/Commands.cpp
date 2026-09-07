@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fmt/format.h>
@@ -29,6 +28,7 @@
 #else
 #    include <spawn.h>
 #    include <sys/wait.h>
+#    include <unistd.h>
 extern char **environ;
 #endif
 
@@ -47,14 +47,35 @@ namespace
             if (error)
                 return;
 #ifdef _WIN32
-            wchar_t candidate[MAX_PATH]{};
-            if (GetTempFileNameW(directory.c_str(), L"vxc", 0, candidate) == 0)
-                return;
-            path_ = candidate;
-            path_.replace_extension(L".core");
-            std::filesystem::remove(candidate, error);
+            // GetTempFileName creates the candidate atomically. Rename that
+            // reserved file without MOVEFILE_REPLACE_EXISTING so the required
+            // .core suffix remains reserved throughout the hand-off.
+            for (unsigned attempt = 0U; attempt < 128U; ++attempt)
+            {
+                wchar_t candidate[MAX_PATH]{};
+                if (GetTempFileNameW(directory.c_str(), L"vxc", 0, candidate) == 0)
+                    return;
+                auto corePath = std::filesystem::path(candidate).replace_extension(L".core");
+                if (MoveFileExW(candidate, corePath.c_str(), MOVEFILE_WRITE_THROUGH) != 0)
+                {
+                    path_ = std::move(corePath);
+                    return;
+                }
+                std::filesystem::remove(candidate, error);
+                error.clear();
+            }
 #else
-            path_ = directory / ("vxs-" + std::to_string(static_cast<unsigned long long>(std::rand())) + ".core");
+            // mkstemps preserves the semantic suffix while providing O_EXCL
+            // creation. std::rand-based names allowed another user/process to
+            // pre-create the Core hand-off path between selection and write.
+            auto pattern = (directory / "vxs-XXXXXX.core").string();
+            std::vector<char> candidate(pattern.begin(), pattern.end());
+            candidate.push_back('\0');
+            const auto descriptor = mkstemps(candidate.data(), 5);
+            if (descriptor < 0)
+                return;
+            close(descriptor);
+            path_ = candidate.data();
 #endif
         }
 

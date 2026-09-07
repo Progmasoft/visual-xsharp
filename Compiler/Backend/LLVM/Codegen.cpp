@@ -829,9 +829,20 @@ namespace Visual::XSharp::Backend::LLVM
                 if (instruction.opcode == xmm::Opcode::MakeClosure)
                 {
                     auto *result = LowerClosure(builder, state, instruction);
-                    if (result == nullptr || !instruction.has_result)
+                    if (result == nullptr)
                         return false;
-                    builder.CreateStore(result, state.slots.at(instruction.destination));
+                    if (instruction.has_result)
+                        builder.CreateStore(result, state.slots.at(instruction.destination));
+                    else
+                    {
+                        // Closure construction retains every strong capture.  A discarded
+                        // source closure still performs those observable ownership actions,
+                        // but its temporary owner must be released immediately or a dead
+                        // expression leaks both the environment and its captured values.
+                        builder.CreateCall(
+                            RuntimeFunction("vxs_aarc_release_strong", llvm::Type::getVoidTy(context), { llvm::PointerType::get(context, 0) }),
+                            { result });
+                    }
                     return true;
                 }
                 if (instruction.opcode >= xmm::Opcode::RetainStrong

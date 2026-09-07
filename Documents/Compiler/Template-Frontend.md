@@ -33,8 +33,8 @@ semantic type and value variables have been replaced. This rule prevents Core,
 CorePrep, Xpp, and Xmm from acquiring unresolved source-language variables.
 
 Constraint parsing and ordering, explicit instantiation declarations, template
-function declarations, template aliases, template extensions, deduction,
-member-call reachability, and a stable public ABI remain separate work. Their
+function declarations, template aliases, template extensions, deduction, and
+a stable public ABI remain separate work. Their
 absence must not be hidden by manufacturing a generic runtime function. The
 compiler now has a structural internal symbol spelling for closed template
 types and selected members, but that spelling is deliberately not a public ABI
@@ -249,9 +249,10 @@ The compiler driver exposes this boundary as an explicit specialization batch.
 For the normal pipeline, a TypedAST traversal supplies concrete layout demands,
 the planner materializes a closed typed view, the plan verifier checks the
 result, and the existing Desugarer and Core verifier consume that view. The
-planner never scans source text. It also does not infer member calls on its own;
-that later semantic traversal will add member-scoped demands through the same
-API.
+planner never scans source text. For a member-scoped demand it builds a
+resolved, `SymbolId`-keyed call graph within the selected template declaration
+and expands the root to its transitive member closure. Calls to functions
+outside that declaration remain evidence, but do not become template members.
 
 Ordinary declarations and generated specializations are desugared separately.
 Their verified Core functions are merged and verified again before the existing
@@ -286,11 +287,11 @@ Repeated uses remain repeated discovery evidence. Coalescing belongs to the
 planner, which combines equivalent applications while retaining distinct
 origins.
 
-Discovery currently emits layout-only demands. It never upgrades a type use to
-a method-body request. A future resolved-call traversal will request only the
-selected member spelling or overload identity; until then, template methods are
-available through the explicit specialization batch API used by compiler tests
-and later semantic stages.
+Discovery currently emits layout-only demands. It never upgrades an ordinary
+type use to a method-body request. Explicit member demands select roots by
+spelling or exact semantic identity; the reachability traversal then includes
+only resolved same-template callees. Name roots deliberately select all
+overloads, while symbol roots remain exact.
 
 ## Specialization demands
 
@@ -344,6 +345,11 @@ becomes visible after its initializer has been rewritten, preventing a newly
 allocated symbol from capturing an outer reference with the same spelling.
 Nested templates keep their independent parameter environment and are not
 blindly alpha-renamed as part of an outer specialization.
+
+Template type member scopes are recursive. Every immediate member definition
+is allocated before any member body is rewritten, so forward calls and mutual
+recursion cannot retain source-template identities. This two-phase reservation
+is required independently of source order.
 
 ## Structural internal names
 
@@ -442,8 +448,8 @@ resolution, or Core lowering.
 
 ## Next integration slice
 
-The next template compiler slice should connect resolved member calls to the
-explicit demand API. It should then:
+The next template compiler slice should connect ordinary source call sites to
+member-scoped demand creation. It should then:
 
 1. evaluate and order constraints;
 2. distinguish overload/member identities beyond source spelling;
@@ -452,10 +458,10 @@ explicit demand API. It should then:
 4. merge declaration dependencies with the existing Core demand graph;
 5. cache the closed result across incremental compilations.
 
-Stable canonical keys, lazy member scopes, batch coalescing, fresh semantic
-symbols, dependency-first scheduling, and verified Core lowering are already
-implemented. Later work should reuse them rather than reconstructing argument
-matching in Core or the C++ backend.
+Stable canonical keys, lazy member scopes, resolved member-call closure, batch
+coalescing, fresh semantic symbols, dependency-first scheduling, and verified
+Core lowering are already implemented. Later work should reuse them rather
+than reconstructing argument matching in Core or the C++ backend.
 
 The integration must also retain deterministic source-order diagnostics while
 allowing independent specializations to be prepared concurrently. The current

@@ -67,36 +67,12 @@ mod conditional;
 mod diagnostic;
 mod enum_data;
 mod enum_data_match;
-#[cfg(test)]
-mod enum_data_match_tests;
-#[cfg(test)]
-mod enum_data_tests;
 mod enum_value;
-#[cfg(test)]
-mod float_tests;
-#[cfg(test)]
-mod for_tests;
-#[cfg(test)]
-mod integer_operator_tests;
-#[cfg(test)]
-mod integer_width_tests;
 mod nominal;
-#[cfg(test)]
-mod nominal_return_tests;
-#[cfg(test)]
-mod operator_tests;
 mod optional;
-#[cfg(test)]
-mod optional_member_tests;
-#[cfg(test)]
-mod optional_tests;
 mod result;
 mod result_match;
-#[cfg(test)]
-mod result_tests;
 mod unary;
-#[cfg(test)]
-mod unary_tests;
 
 impl HirToMirLowerer
 {

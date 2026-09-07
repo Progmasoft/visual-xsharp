@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Core/Template.hpp"
 #include "Visual/XSharp/Core/Verifier.hpp"
@@ -46,7 +47,7 @@ namespace Visual::XSharp::Core
                     environment_.insert_or_assign(parameter.symbol.id,
                                                   Definition{ parameter.type, false, parameter.symbol.spelling });
                 }
-                VerifyStatements(function_.body, environment_);
+                VerifyStatements(function_.body, environment_, function_.returnType);
                 if (function_.returnType != Type::unit() && !AlwaysReturns(function_.body))
                     Add("VXC1005", "non-void Core function may complete without returning a value");
             }
@@ -114,13 +115,19 @@ namespace Visual::XSharp::Core
                 return false;
             }
             void
-            VerifyStatements(const std::vector<Statement> &statements, Environment &environment)
+            VerifyStatements(
+                const std::vector<Statement> &statements,
+                Environment &environment,
+                const Type &expectedReturnType)
             {
                 for (const auto &statement : statements)
-                    VerifyStatement(statement, environment);
+                    VerifyStatement(statement, environment, expectedReturnType);
             }
             void
-            VerifyStatement(const Statement &statement, Environment &environment)
+            VerifyStatement(
+                const Statement &statement,
+                Environment &environment,
+                const Type &expectedReturnType)
             {
                 switch (statement.kind)
                 {
@@ -152,7 +159,7 @@ namespace Visual::XSharp::Core
                     }
                     case Statement::Kind::Return:
                         VerifyExpression(statement.expression, environment);
-                        CheckSameType(function_.returnType, statement.expression.type, "VXC1016", "Core return value has the wrong type");
+                        CheckSameType(expectedReturnType, statement.expression.type, "VXC1016", "Core return value has the wrong type");
                         return;
                     case Statement::Kind::If:
                     {
@@ -161,8 +168,8 @@ namespace Visual::XSharp::Core
                             Add("VXC1017", "Core condition must be bool or numeric");
                         auto trueEnvironment = environment;
                         auto falseEnvironment = environment;
-                        VerifyStatements(statement.trueBranch, trueEnvironment);
-                        VerifyStatements(statement.falseBranch, falseEnvironment);
+                        VerifyStatements(statement.trueBranch, trueEnvironment, expectedReturnType);
+                        VerifyStatements(statement.falseBranch, falseEnvironment, expectedReturnType);
                         return;
                     }
                     case Statement::Kind::Evaluate:
@@ -198,6 +205,9 @@ namespace Visual::XSharp::Core
                         return;
                     case Expression::Kind::Primitive:
                         VerifyPrimitive(expression, environment);
+                        return;
+                    case Expression::Kind::Closure:
+                        VerifyClosure(expression, environment);
                         return;
                 }
             }
@@ -245,8 +255,9 @@ namespace Visual::XSharp::Core
                 if (expression.operands.empty())
                     return;
                 const auto &operandType = expression.operands.front().type;
-                for (const auto &operand : expression.operands)
-                    CheckSameType(operandType, operand.type, "VXC1027", "Core primitive operands must have matching types");
+                if (!logical)
+                    for (const auto &operand : expression.operands)
+                        CheckSameType(operandType, operand.type, "VXC1027", "Core primitive operands must have matching types");
 
                 if (logical)
                 {
@@ -262,6 +273,76 @@ namespace Visual::XSharp::Core
 
                 const auto expectedResult = logical || comparison ? Type::boolean() : operandType;
                 CheckSameType(expectedResult, expression.type, "VXC1028", "Core primitive result has the wrong type");
+            }
+            void
+            VerifyClosure(const Expression &expression, const Environment &outerEnvironment)
+            {
+                if (!expression.closureBody)
+                {
+                    Add("VXC1031", "Core closure body is missing");
+                    return;
+                }
+
+                CheckType(expression.closureReturnType, "VXC1032", "Core closure has an unresolved return type");
+                Environment closureEnvironment = outerEnvironment;
+                std::unordered_set<SymbolId> localSymbols;
+
+                for (const auto &capture : expression.captures)
+                {
+                    CheckSymbol(capture.symbol, "VXC1033", "Core closure capture symbol must be positive");
+                    CheckType(capture.type, "VXC1034", "Core closure capture has an unresolved type");
+                    if (capture.mode != CaptureMode::Strong
+                        && capture.mode != CaptureMode::Weak
+                        && capture.mode != CaptureMode::Unowned)
+                        Add("VXC1043", "Core closure capture has an invalid ownership mode", capture.symbol.id);
+                    if (capture.mode != CaptureMode::Strong
+                        && !UsesAarc(capture.type)
+                        && capture.type.kind != Type::Kind::Named)
+                        Add("VXC1044", "weak or unowned Core capture requires an AARC reference value", capture.symbol.id);
+                    if (!capture.value)
+                    {
+                        Add("VXC1035", "Core closure capture value is missing", capture.symbol.id);
+                        continue;
+                    }
+                    VerifyExpression(*capture.value, outerEnvironment);
+                    CheckSameType(
+                        capture.type,
+                        capture.value->type,
+                        "VXC1036",
+                        "Core closure capture value type does not match its binding",
+                        capture.symbol.id);
+                    if (!localSymbols.insert(capture.symbol.id).second)
+                        Add("VXC1037", "duplicate Core closure local symbol", capture.symbol.id);
+                    closureEnvironment.insert_or_assign(
+                        capture.symbol.id,
+                        // Captured storage is addressable inside the callable.
+                        // Haskell Core verification uses the same mutability
+                        // rule; rejecting assignment here split the two VXCR
+                        // consumers for otherwise identical closure bodies.
+                        Definition{ capture.type, true, capture.symbol.spelling });
+                }
+
+                std::vector<Type> parameterTypes;
+                parameterTypes.reserve(expression.closureParameters.size());
+                for (const auto &[symbol, type] : expression.closureParameters)
+                {
+                    CheckSymbol(symbol, "VXC1038", "Core closure parameter symbol must be positive");
+                    CheckType(type, "VXC1039", "Core closure parameter has an unresolved type");
+                    parameterTypes.push_back(type);
+                    if (!localSymbols.insert(symbol.id).second)
+                        Add("VXC1037", "duplicate Core closure local symbol", symbol.id);
+                    closureEnvironment.insert_or_assign(symbol.id, Definition{ type, false, symbol.spelling });
+                }
+
+                const auto expectedType = Type::function(parameterTypes, expression.closureReturnType);
+                CheckSameType(
+                    expectedType,
+                    expression.type,
+                    "VXC1041",
+                    "Core closure value type disagrees with its parameter and return types");
+                VerifyStatements(*expression.closureBody, closureEnvironment, expression.closureReturnType);
+                if (expression.closureReturnType != Type::unit() && !AlwaysReturns(*expression.closureBody))
+                    Add("VXC1042", "non-void Core closure may complete without returning a value");
             }
         };
     } // namespace

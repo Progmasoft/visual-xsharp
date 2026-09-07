@@ -235,7 +235,7 @@ fn diagnostic(line: usize, message: String) -> XhirParseDiagnostic
 mod tests
 {
     use super::*;
-    use crate::compiler_core::SourceSpan;
+    use crate::hir::SourceSpan;
     use crate::hir::declarations::{Base, EnumVariant, Field, NominalKind, TypeRef, Visibility};
     use crate::hir::{Function, Local, PrimitiveType, Span, Statement, Type};
 
