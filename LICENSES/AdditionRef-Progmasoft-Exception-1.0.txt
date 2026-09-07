@@ -18,7 +18,7 @@ This Exception is an additional permission to the Mozilla Public License, versio
 
 8. If any provision of this Exception is held unenforceable, the remaining provisions continue to apply to the maximum extent permitted by law.
 
-9. The Progmasoft Patent Grant, Version 1.0, identified as AdditionRef-Progmasoft-Patent-Grant-1.0 and published in LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt, applies independently and is incorporated into this Exception by reference. The patent grant does not remove or reduce any copyright obligation in MPL-2.0 or this Exception.
+9. The Progmasoft Patent Grant, Version 1.0, identified as AdditionRef-Progmasoft-Patent-Grant-1.0 and published in LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt, is a separate grant. It is not incorporated into, a condition of, or a limitation on this Exception. Eligibility for, or termination of, rights under that Patent Grant affects only the patent rights granted there and does not terminate, restrict, or condition the copyright permissions granted by MPL-2.0 or this Exception. This Exception grants no patent rights beyond those, if any, granted by MPL-2.0.
 
 10. This Exception applies only to a file that expressly identifies it using the following SPDX license expression:
 

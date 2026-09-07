@@ -8,7 +8,9 @@ Progmasoft Patent Grant, Version 1.0
 
 Progmasoft "controls" a patent claim when Progmasoft has the right to grant the patent license in this Patent Grant without a duty to pay a third party for the grant, other than compensation owed to Progmasoft personnel.
 
-"Essential Claim" means a claim of a patent that Progmasoft owns or controls, now or in the future, that would necessarily be infringed by making, having made, using, offering to sell, selling, importing, or otherwise transferring a Progmasoft Contribution, either by itself or in a combination or interface expressly designed, documented, or provided by Progmasoft for use with that Contribution. Essential Claims do not include claims infringed only because of a downstream modification or a combination not expressly designed, documented, or provided by Progmasoft.
+"Specified Combination" means a particular combination or interface that Progmasoft has expressly identified, by name and version or by another unambiguous identifier, in public technical documentation as intended for use with the relevant Progmasoft Contribution. A general compatibility statement, an example, publication or availability of an API, ABI, protocol, file format, SDK, or software, and the act of making or distributing software do not by themselves create a Specified Combination.
+
+"Essential Claim" means a claim of a patent that Progmasoft owns or controls, now or in the future, that would necessarily be infringed by making, having made, using, offering to sell, selling, importing, or otherwise transferring a Progmasoft Contribution, either by itself or as part of a Specified Combination. Essential Claims do not include claims infringed only because of a downstream modification or a combination that is not a Specified Combination.
 
 2. Patent License
 
@@ -18,7 +20,7 @@ This license includes the right to distribute Covered Software and to pass the b
 
 3. Independent Components and Outputs
 
-The patent license covers use of Covered Software with independent software, libraries, modules, plugins, extensions, applications, and processes, including proprietary or closed-source components, to the extent an Essential Claim is necessarily infringed by an interface or combination expressly designed, documented, or provided by Progmasoft.
+The patent license covers use of Covered Software with independent software, libraries, modules, plugins, extensions, applications, and processes, including proprietary or closed-source components, only to the extent an Essential Claim is necessarily infringed by a Specified Combination.
 
 Running Covered Software to compile, generate, transform, format, analyze, or otherwise process input does not impose this repository's copyright license on the resulting output merely because the output was produced by Covered Software. This paragraph does not grant rights in third-party patents or alter the copyright status of material incorporated into an output.
 
