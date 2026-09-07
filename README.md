@@ -1,6 +1,6 @@
 <!--
 SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
-SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 -->
 
 # Visual X#
@@ -172,8 +172,8 @@ and Java 21. The C# and Java variants are educational comparisons and do not add
 
 ## License
 
-Project-owned source files use `MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0`. The exception permits static and
+Project-owned source files use `MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1`. The exception permits static and
 dynamic linking with independent components under licenses of their choice, including proprietary licenses, without
 removing MPL-2.0 obligations from covered files or modifications to those files. See `LICENSE.txt`,
-`LICENSES/AdditionRef-Progmasoft-Exception-1.0.txt`, `PATENTS`,
-`LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt`, and `NOTICE.txt`.
+`LICENSES/AdditionRef-Progmasoft-Exception-1.1.txt`, `PATENTS`,
+`LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.1.txt`, and `NOTICE.txt`.

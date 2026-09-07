@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
-# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 name: Native
 
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   windows-clangcl:
     name: Windows ClangCL
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
@@ -28,6 +28,9 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: 1.26.x
+          # Repository automation intentionally consists of standalone Go source
+          # files. There is no root go.mod/go.sum dependency graph to cache.
+          cache: false
 
       - name: Configure Bazel
         uses: bazel-contrib/setup-bazel@0.19.0
@@ -36,13 +39,8 @@ jobs:
           disk-cache: native-windows-clangcl
           repository-cache: true
 
-      - name: Enter Visual Studio 2026 developer environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
       - name: Restore LLVM development package
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.tool_cache }}\llvm-dev-22.1.6
           key: llvm-dev-22.1.6-x86_64-windows-msvc
@@ -80,7 +78,7 @@ jobs:
           go test scripts/develop.go scripts/develop_test.go
           go test scripts/githelper.go scripts/githelper_test.go
 
-      - name: Verify project C and C++ formatting
+      - name: Verify project C++ formatting
         shell: pwsh
         run: |
           $wheel = Join-Path $env:RUNNER_TEMP "clang_format-23.1.0-py2.py3-none-win_amd64.whl"
@@ -141,6 +139,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: 1.26.x
+          cache: false
 
       - name: Configure Bazel
         uses: bazel-contrib/setup-bazel@0.19.0

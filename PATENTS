@@ -1,12 +1,21 @@
 Progmasoft Patent Grant
 
-Project-owned software in this repository is accompanied by the Progmasoft Patent Grant, Version 1.0.
+Project-owned software in this repository that carries an SPDX expression containing
+AdditionRef-Progmasoft-Patent-Grant-1.1 is covered by the Progmasoft Patent Grant,
+Version 1.1.
 
 Canonical grant text:
-LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.0.txt
+LICENSES/AdditionRef-Progmasoft-Patent-Grant-1.1.txt
 
 SPDX custom addition identifier:
-AdditionRef-Progmasoft-Patent-Grant-1.0
+AdditionRef-Progmasoft-Patent-Grant-1.1
 
-This patent grant is additional to the repository's copyright license. It does not change the license of third-party material and does not remove source-code obligations imposed by MPL-2.0 or AGPL-3.0-or-later.
+The grant is additional to the repository's copyright license. It neither changes the
+license of third-party material nor removes source-code, network-source, notice, or
+attribution duties imposed by MPL-2.0, AGPL-3.0-or-later, or another applicable
+copyright license.
 
+A file's presence in this repository does not by itself make it project-owned or covered.
+Third-party directories and material carrying a different SPDX expression remain under
+their stated terms. The retained Version 1.0 text applies only to historical material that
+expressly identifies AdditionRef-Progmasoft-Patent-Grant-1.0.

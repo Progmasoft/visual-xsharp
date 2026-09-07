@@ -1,6 +1,6 @@
 cabal-version: 3.12
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
--- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 name: visual-xsharp-core
 version: 0.3.5
 synopsis: Visual X# Core and CorePrep models, verification, and wire codecs

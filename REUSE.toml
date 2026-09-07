@@ -7,4 +7,4 @@ SPDX-PackageDownloadLocation = "https://github.com/Progmasoft/visual-xsharp"
 path = [".bazelversion", "MODULE.bazel.lock", "Compiler/Core/Tests/Fixtures/Core/**", "Compiler/Driver/Tests/Fixtures/CorePrep/**", "Compiler/Driver/Tests/Fixtures/Source/projects/native_call/sources/Generated/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Progmasoft <support@progmasoft.com>"
-SPDX-License-Identifier = "MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0"
+SPDX-License-Identifier = "MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1"

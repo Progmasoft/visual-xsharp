@@ -1,5 +1,5 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
--- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 -- | Side-effect-free constant evaluation used for target-range diagnostics.
 module Visual.XSharp.ConstantEvaluation

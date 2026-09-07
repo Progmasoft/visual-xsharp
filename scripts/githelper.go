@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
-// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.0
+// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 // githelper preserves the repository's guarded update workflow without making
 // commits or pushes part of the build graph. It intentionally passes arguments
