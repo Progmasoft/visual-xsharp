@@ -8,7 +8,7 @@ Progmasoft Patent Grant, Version 1.0
 
 Progmasoft "controls" a patent claim when Progmasoft has the right to grant the patent license in this Patent Grant without a duty to pay a third party for the grant, other than compensation owed to Progmasoft personnel.
 
-"Specified Combination" means a particular combination or interface that Progmasoft has expressly identified, by name and version or by another unambiguous identifier, in public technical documentation as intended for use with the relevant Progmasoft Contribution. A general compatibility statement, an example, publication or availability of an API, ABI, protocol, file format, SDK, or software, and the act of making or distributing software do not by themselves create a Specified Combination.
+"Specified Combination" means a particular combination or interface that Progmasoft has expressly identified, by name and version or by another unambiguous identifier, in public technical documentation as intended for use with the relevant Progmasoft Contribution. None of the following, standing alone, creates a Specified Combination: (a) a general statement of compatibility; (b) sample or illustrative code; (c) publication or availability of an API, ABI, protocol, file format, SDK, or software; or (d) making or distributing software.
 
 "Essential Claim" means a claim of a patent that Progmasoft owns or controls, now or in the future, that would necessarily be infringed by making, having made, using, offering to sell, selling, importing, or otherwise transferring a Progmasoft Contribution, either by itself or as part of a Specified Combination. Essential Claims do not include claims infringed only because of a downstream modification or a combination that is not a Specified Combination.
 
