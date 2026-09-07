@@ -46,4 +46,12 @@ The patent rights are granted without warranties or conditions of any kind. The 
 
 If any provision of this Patent Grant is held unenforceable, the remaining provisions continue to apply to the maximum extent permitted by law.
 
+8. Applicability
+
+This Patent Grant applies to Covered Software distributed in a repository, source distribution, or binary distribution that includes a PATENTS notice expressly identifying AdditionRef-Progmasoft-Patent-Grant-1.0 and the canonical text of this Patent Grant, and to Covered Software that Progmasoft otherwise expressly identifies in writing as covered by that identifier.
+
+Compatibility with Covered Software, use of the same API, ABI, protocol, file format, or SDK, inclusion in the same distribution, or authorship or publication by Progmasoft does not by itself make other software subject to or covered by this Patent Grant.
+
+Removal or omission of the notice from a later copy does not retroactively terminate patent rights that a recipient already received under this Patent Grant. It also does not establish applicability to software that was not Covered Software when those rights were received.
+
 SPDX custom addition identifier: AdditionRef-Progmasoft-Patent-Grant-1.0
