@@ -34,7 +34,9 @@ import Visual.XSharp.Core.Verifier
 import Visual.XSharp.Desugarer
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.Frontend
+import Visual.XSharp.Template.Discovery
 import Visual.XSharp.Template.Specialization
+import Visual.XSharp.Template.Specialization.Verifier
 
 {- | Artifacts for one semantic namespace after all of its physical source
 units have been merged. Keeping every stage visible makes stage ownership and
@@ -45,6 +47,8 @@ data FrontendArtifacts = FrontendArtifacts
     , artifactRenamedAST :: RenamedAST
     , artifactResolvedAST :: ResolvedAST
     , artifactTypedAST :: TypedAST
+    , artifactTemplateDemandDiscovery :: TemplateDemandDiscovery
+    , artifactTemplateSpecializations :: TemplateSpecializationPlan
     , artifactCore :: CoreModule
     , artifactMonomorphizationPlan :: MonomorphizationPlan
     , artifactOptimizedCore :: CoreModule
@@ -91,7 +95,9 @@ compileTemplateSpecializations ::
     [TemplateSpecializationDemand] ->
     Either [Diagnostic] (TemplateSpecializationPlan, CoreModule)
 compileTemplateSpecializations limits typed demands = do
-    plan <- mapLeft templateSpecializationDiagnostics (planTemplateSpecializations limits typed demands)
+    plan <-
+        mapLeft templateSpecializationDiagnostics (planTemplateSpecializations limits typed demands)
+            >>= mapLeft templatePlanDiagnostics . verifyTemplateSpecializationPlan
     core <- runDesugarer defaultDesugarer (specializationTypedAST plan) >>= verifyCore
     pure (plan, core)
 
@@ -128,14 +134,41 @@ compileSemanticToCorePrep semantic = do
         renamed = semanticRenamedAST semantic
         resolved = semanticResolvedAST semantic
         typed = semanticTypedAST semantic
-    core <- runDesugarer defaultDesugarer typed >>= verifyCore
+        templateDiscovery = discoverTemplateDemands typed
+    templatePlan <-
+        mapLeft
+            templateSpecializationDiagnostics
+            (planTemplateSpecializations defaultTemplateSpecializationLimits typed (discoveredTemplateDemands templateDiscovery))
+            >>= mapLeft templatePlanDiagnostics . verifyTemplateSpecializationPlan
+    ordinaryCore <- runDesugarer defaultDesugarer typed >>= verifyCore
+    specializationCore <- runDesugarer defaultDesugarer (specializationTypedAST templatePlan) >>= verifyCore
+    let core =
+            ordinaryCore
+                { coreModuleFunctions =
+                    coreModuleFunctions ordinaryCore ++ coreModuleFunctions specializationCore
+                }
+    verifiedCore <- verifyCore core
     -- Demand discovery runs before optimization so dead-code elimination
     -- cannot silently erase a type required by the checked source contract.
-    -- Declaration cloning will consume this stable plan in a later slice.
-    specializationPlan <- mapLeft monomorphizationDiagnostic (planCoreMonomorphization core)
-    optimized <- runCoreOptimizer defaultCoreOptimizer core >>= verifyCore
+    -- The declaration planner consumes this discovery immediately. The later
+    -- Core graph remains separate because it describes backend work rather
+    -- than source declaration selection.
+    specializationPlan <- mapLeft monomorphizationDiagnostic (planCoreMonomorphization verifiedCore)
+    optimized <- runCoreOptimizer defaultCoreOptimizer verifiedCore >>= verifyCore
     prepared <- prepareCore optimized >>= verifyCorePrep
-    pure (FrontendArtifacts parsed renamed resolved typed core specializationPlan optimized prepared)
+    pure
+        ( FrontendArtifacts
+            parsed
+            renamed
+            resolved
+            typed
+            templateDiscovery
+            templatePlan
+            verifiedCore
+            specializationPlan
+            optimized
+            prepared
+        )
 
 mapLeft :: (failure -> mapped) -> Either failure value -> Either mapped value
 mapLeft transform result = case result of
@@ -162,6 +195,21 @@ templateSpecializationDiagnostics = zipWith diagnostic [1 :: Int ..]
                 ("VXT2" ++ pad index)
                 Nothing
                 (renderTemplateSpecializationError failure)
+        pad value
+            | value < 10 = "00" ++ show value
+            | value < 100 = "0" ++ show value
+            | otherwise = show value
+
+templatePlanDiagnostics :: [TemplatePlanIssue] -> [Diagnostic]
+templatePlanDiagnostics = zipWith diagnostic [1 :: Int ..]
+    where
+        diagnostic index failure =
+            Diagnostic
+                TypeCheckerStage
+                Error
+                ("VXT3" ++ pad index)
+                Nothing
+                (renderTemplatePlanIssue failure)
         pad value
             | value < 10 = "00" ++ show value
             | value < 100 = "0" ++ show value

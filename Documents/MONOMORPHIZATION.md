@@ -8,14 +8,15 @@ type erasure, a universal boxed representation, or a runtime generic dictionary
 as the default execution model. Each required concrete template argument set
 produces a concrete declaration with concrete storage and callable signatures.
 
-This is the intended compiler contract. The current frontend transports ordered
-type and compile-time value arguments, discovers concrete specialization
-demands from verified Core, closes their nested dependency graph to a fixed
-point, and validates that graph before optimization. The native layer can also
-validate, substitute, identify, and intern concrete type specializations. The
-compiler does not yet clone template declarations or execute the complete
-instantiation engine. Until that engine lands, documents and diagnostics must
-not claim that all template programs are executable.
+This is the intended compiler contract. The current frontend parses and checks
+template declarations, binds concrete applications, clones requested closed
+declarations, freshens their semantic identities, and verifies the resulting
+specialization plan before Core lowering. It also discovers concrete layout
+demands from TypedAST and concrete backend demands from verified Core. The
+native layer can validate, substitute, identify, and intern concrete type
+specializations. Constraint ordering and resolved member-call reachability are
+not complete, so documents and diagnostics must not yet claim that every
+template program is executable.
 
 ## Current implementation boundary
 
@@ -30,6 +31,14 @@ The implemented slice includes:
 - independent type-parameter and value-parameter substitution;
 - deterministic structural identity rendering;
 - immutable Haskell worklist planning with atomic batch failure;
+- template declaration parsing, renaming, name resolution, and type checking;
+- type, value, template-template, pack, and default parameter representation;
+- application binding with arity and argument-category diagnostics;
+- typed declaration substitution and capture-avoiding semantic freshening;
+- layout-only, selected-member, and explicit-complete demand scopes;
+- TypedAST layout-demand discovery with stable source origins;
+- structural internal ASCII names for closed types and selected members;
+- specialization-plan invariant verification before Core lowering;
 - Core-wide demand discovery for signatures, bindings, expressions, closures,
   and captures;
 - fixed-point dependency planning with stable root-first demand identifiers;
@@ -42,19 +51,18 @@ The implemented slice includes:
 
 The slice deliberately does not include:
 
-- parsing template declarations into the current small declaration AST;
-- declaration-aware disambiguation of a bare identifier in `Example<T>`;
-- lookup of source constants used as fixed-array sizes;
-- template-template arguments, packs, defaults, or wildcard deduction;
-- constraint ordering and specialization selection;
-- reachability-aware declaration demand discovery or declaration/body cloning;
-- generated symbol mangling and incremental cache persistence.
+- constraint ordering between multiple viable declarations;
+- wildcard deduction and explicit instantiation declarations;
+- resolved member-call reachability in the normal pipeline;
+- a stable public native mangling ABI; or
+- incremental specialization cache persistence.
 
-A bare identifier in an ordinary angle-bracket argument therefore remains a
-type in the current parser. The semicolon in `[T; N]` is unambiguous, but an
-unresolved `N` is diagnosed by TypeChecker until constant and template-
-parameter declarations enter the semantic environment. Numeric, Boolean, and
-character arguments do not have that ambiguity.
+A bare identifier in an ordinary angle-bracket argument remains a type unless
+the active template parameter position establishes a value category. The
+semicolon in `[T; N]` is unambiguous. Template value parameters are resolved in
+their declaration environment; unsupported source-constant lookup remains a
+separate feature. Numeric, Boolean, and character arguments do not have that
+ambiguity.
 
 ## Source contract
 

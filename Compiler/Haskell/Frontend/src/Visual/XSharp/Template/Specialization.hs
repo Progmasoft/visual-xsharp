@@ -35,6 +35,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Template.Application
 import Visual.XSharp.Template.Freshen
 import Visual.XSharp.Template.Instantiation
+import Visual.XSharp.Template.Mangling
 
 {- | Layout-only requests do not instantiate method bodies. Member requests
 select every overload carrying one of the requested spellings. Complete is
@@ -77,6 +78,8 @@ data TemplateSpecialization = TemplateSpecialization
     , templateSpecializationDependencies :: [TemplateSpecializationId]
     , templateSpecializationDeclaration :: Declaration ResolvedName Type
     , templateSpecializationSymbolMap :: [(SymbolId, SymbolId)]
+    , templateSpecializationMangledType :: MangledTemplateType
+    , templateSpecializationMangledMembers :: [MangledTemplateMember]
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -107,6 +110,7 @@ data TemplateSpecializationError
     | TemplateSpecializationLimitExceeded Int String
     | TemplateOriginLimitExceeded Int String
     | TemplateMemberLimitExceeded QualifiedName Int Int
+    | TemplateMangleFailed String [TemplateMangleError]
     deriving (Eq, Ord, Read, Show)
 
 data PreparedDemand = PreparedDemand
@@ -257,8 +261,17 @@ materializeAll limits typed sources prepared = go firstFresh 1 [] ordered
         go next identifier output (demand : remaining) = do
             (selected, memberTotal) <- selectDeclarationMembers limits sources demand
             instantiated <- mapInstantiation demand (instantiateTemplateType (preparedBinding demand) selected)
-            let freshened = freshenDeclaration next instantiated
-                specialization =
+            -- The source annotation may retain a namespace-relative spelling.
+            -- The planner owns the canonical concrete application, so the
+            -- cloned declaration crosses into Core with that exact type.
+            let canonicalDeclaration = instantiated {declarationAnnotation = preparedType demand}
+                freshened = freshenDeclaration next canonicalDeclaration
+            mangledType <- mapMangle demand (singleMangle (mangleTemplateType defaultTemplateMangleLimits (preparedType demand)))
+            mangledMembers <-
+                mapMangle
+                    demand
+                    (mangleTemplateMembers defaultTemplateMangleLimits (preparedType demand) (freshenedDeclaration freshened))
+            let specialization =
                     TemplateSpecialization
                         { templateSpecializationId = TemplateSpecializationId identifier
                         , templateSpecializationIdentity = preparedIdentity demand
@@ -268,6 +281,8 @@ materializeAll limits typed sources prepared = go firstFresh 1 [] ordered
                         , templateSpecializationDependencies = []
                         , templateSpecializationDeclaration = freshenedDeclaration freshened
                         , templateSpecializationSymbolMap = freshenedSymbols freshened
+                        , templateSpecializationMangledType = mangledType
+                        , templateSpecializationMangledMembers = mangledMembers
                         }
             if memberTotal > maximumMembersPerSpecialization limits
                 then
@@ -322,6 +337,19 @@ mapInstantiation ::
     Either [TemplateSpecializationError] value
 mapInstantiation demand result = case result of
     Left failure -> Left [TemplateInstantiationFailed (preparedIdentity demand) failure]
+    Right value -> Right value
+
+singleMangle :: Either TemplateMangleError value -> Either [TemplateMangleError] value
+singleMangle result = case result of
+    Left failure -> Left [failure]
+    Right value -> Right value
+
+mapMangle ::
+    PreparedDemand ->
+    Either [TemplateMangleError] value ->
+    Either [TemplateSpecializationError] value
+mapMangle demand result = case result of
+    Left failures -> Left [TemplateMangleFailed (preparedIdentity demand) failures]
     Right value -> Right value
 
 declarationSources ::
@@ -517,6 +545,11 @@ renderTemplateSpecializationError issue = case issue of
             ++ show actual
             ++ " members, exceeding limit "
             ++ show limit
+    TemplateMangleFailed identity failures ->
+        "template specialization "
+            ++ identity
+            ++ " cannot be mangled: "
+            ++ intercalate "; " (map renderTemplateMangleError failures)
 
 renderPlainName :: QualifiedName -> String
 renderPlainName (QualifiedName parts) = intercalate "." (map identifierText parts)

@@ -23,7 +23,9 @@ semantic information through:
 6. application binding;
 7. typed declaration instantiation;
 8. explicit specialization batch planning;
-9. semantic alpha-renaming and closed Core lowering.
+9. concrete layout-demand discovery from checked declarations;
+10. semantic alpha-renaming and structural internal-name assignment;
+11. specialization-plan verification and closed Core lowering.
 
 The frontend does not emit an open template declaration as Core. A template is
 lowered only after a concrete application has selected a declaration and all
@@ -31,9 +33,12 @@ semantic type and value variables have been replaced. This rule prevents Core,
 CorePrep, Xpp, and Xmm from acquiring unresolved source-language variables.
 
 Constraint parsing and ordering, explicit instantiation declarations, template
-function declarations, template aliases, template extensions, deduction, and
-native symbol mangling remain separate work. Their absence must not be hidden
-by manufacturing a generic runtime function.
+function declarations, template aliases, template extensions, deduction,
+member-call reachability, and a stable public ABI remain separate work. Their
+absence must not be hidden by manufacturing a generic runtime function. The
+compiler now has a structural internal symbol spelling for closed template
+types and selected members, but that spelling is deliberately not a public ABI
+promise.
 
 ## Parsed representation
 
@@ -240,10 +245,52 @@ invalid Core containing unresolved type variables and would make every open
 member appear eagerly instantiated.
 
 After a closed declaration has been produced, ordinary member lowering is used.
-The compiler driver exposes this boundary as an explicit specialization batch:
-semantic resolution supplies demands, the planner materializes a closed typed
-view, and the existing Desugarer and Core verifier consume that view. The
-planner does not scan source text or infer calls on its own.
+The compiler driver exposes this boundary as an explicit specialization batch.
+For the normal pipeline, a TypedAST traversal supplies concrete layout demands,
+the planner materializes a closed typed view, the plan verifier checks the
+result, and the existing Desugarer and Core verifier consume that view. The
+planner never scans source text. It also does not infer member calls on its own;
+that later semantic traversal will add member-scoped demands through the same
+API.
+
+Ordinary declarations and generated specializations are desugared separately.
+Their verified Core functions are merged and verified again before the existing
+Core monomorphization-demand graph, optimizer, and CorePrep stages run. Open
+template declarations still emit no Core functions.
+
+## Automatic layout-demand discovery
+
+The normal compiler pipeline walks the checked `TypedAST`, not tokens or source
+spellings. A concrete named type creates a demand only when its resolved target
+matches a template descriptor in the current catalog. Exact qualified names
+are preferred. An unqualified use inside a namespace may resolve relative to
+that namespace; arbitrary suffix matching is not permitted.
+
+Discovery covers type-bearing positions in ordinary declarations:
+
+- function results and parameters;
+- local bindings and assignments;
+- return values and branch conditions;
+- call, unary, binary, and callable expression annotations;
+- callable parameters and captures;
+- nested type arguments and callable parameter/result types.
+
+The traversal deliberately skips the bodies of open template declarations.
+Their parameter-dependent annotations describe definitions, not concrete uses.
+Walking them as demands would either emit open types or eagerly instantiate
+every template declaration before a caller needs it.
+
+Every discovered use records a stable diagnostic origin containing the source
+file, source position, owning class, optional member, and semantic type site.
+Repeated uses remain repeated discovery evidence. Coalescing belongs to the
+planner, which combines equivalent applications while retaining distinct
+origins.
+
+Discovery currently emits layout-only demands. It never upgrades a type use to
+a method-body request. A future resolved-call traversal will request only the
+selected member spelling or overload identity; until then, template methods are
+available through the explicit specialization batch API used by compiler tests
+and later semantic stages.
 
 ## Specialization demands
 
@@ -298,6 +345,53 @@ allocated symbol from capturing an outer reference with the same spelling.
 Nested templates keep their independent parameter environment and are not
 blindly alpha-renamed as part of an outer specialization.
 
+## Structural internal names
+
+Each planned specialization carries an internal ASCII spelling for its closed
+type and every selected member. The encoding includes explicit tags, counts,
+and length frames for qualified-name components, ordered type/value arguments,
+callable parameters and result, member spelling, staticness, access, and the
+semantic signature. Positive and negative integers, Boolean values, Unicode
+characters, and type arguments occupy distinct structural domains.
+
+Unicode identifier scalars are encoded as fixed-width hexadecimal values, so
+the result contains only ASCII letters, digits, and underscores. Concatenated
+source spellings such as `AB.C` and `A.BC` cannot collide. Overloads with the
+same member spelling remain distinct because their semantic signatures are
+part of their member symbols.
+
+The encoder rejects open type variables, unresolved value parameters,
+`ErrorType`, malformed qualified names, invalid Unicode scalars, excessive
+nested depth, excessive argument or name counts, and excessive symbol length.
+A version marker makes future private encodings distinguishable.
+
+These names are compiler-internal coordination data. The format may change
+before the native ABI is stabilized and must not be persisted by third-party
+tools as a public link contract.
+
+## Specialization-plan verification
+
+Planning output crosses a trust boundary before Core lowering, even though the
+planner itself is pure. The verifier rejects malformed hand-built plans and
+future planner regressions before they become backend assumptions. It checks:
+
+- positive and unique specialization identifiers;
+- non-empty, unique canonical application identities;
+- closed specialization and declaration types without `ErrorType`;
+- exact agreement between the canonical type and cloned declaration;
+- non-empty, unique diagnostic origins;
+- existing, unique, non-self dependency edges;
+- positive one-to-one fresh-symbol maps with disjoint targets across plans;
+- coverage of every cloned definition by the fresh-symbol map;
+- exact agreement between requested scope and retained members;
+- valid and exactly recomputable type and member manglings;
+- globally unique emitted mangled symbols;
+- consistent statistics and complete dependency-first emission coverage.
+
+Normal compilation and the explicit batch API both run this verifier. Failures
+become TypeChecker-stage diagnostics rather than reaching Desugarer, Core, or
+the native backend.
+
 ## Dependency and emission order
 
 The selected closed declaration is walked for type-bearing positions in member
@@ -348,12 +442,13 @@ resolution, or Core lowering.
 
 ## Next integration slice
 
-The next template compiler slice should connect call/type resolution to the
+The next template compiler slice should connect resolved member calls to the
 explicit demand API. It should then:
 
 1. evaluate and order constraints;
 2. distinguish overload/member identities beyond source spelling;
-3. assign a collision-resistant native symbol spelling;
+3. stabilize the internal spelling into a versioned native ABI only after its
+   linkage requirements are complete;
 4. merge declaration dependencies with the existing Core demand graph;
 5. cache the closed result across incremental compilations.
 

@@ -21,7 +21,10 @@ import System.Exit (exitFailure)
 import System.FilePath ((</>))
 import TemplateApplicationTests (templateApplicationTests)
 import TemplateDeclarationTests (templateDeclarationTests)
+import TemplateDiscoveryTests (templateDiscoveryTests)
 import TemplateInstantiationTests (templateInstantiationTests)
+import TemplateManglingTests (templateManglingTests)
+import TemplatePlanVerifierTests (templatePlanVerifierTests)
 import TemplateSpecializationPlannerTests (templateSpecializationPlannerTests)
 import TemplateTests (templateTests)
 import TemplateVerifierTests (templateVerifierTests)
@@ -103,8 +106,11 @@ main = do
     mapM_ (uncurry check) sourceTextTests
     mapM_ (uncurry check) templateTests
     mapM_ (uncurry check) templateDeclarationTests
+    mapM_ (uncurry check) templateDiscoveryTests
     mapM_ (uncurry check) templateApplicationTests
     mapM_ (uncurry check) templateInstantiationTests
+    mapM_ (uncurry check) templateManglingTests
+    mapM_ (uncurry check) templatePlanVerifierTests
     mapM_ (uncurry check) templateSpecializationPlannerTests
     mapM_ (uncurry check) templateVerifierTests
     mapM_ (uncurry check) closureTests

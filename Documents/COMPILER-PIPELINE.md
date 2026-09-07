@@ -167,17 +167,24 @@ choose LLVM layouts, calling conventions, object formats, or target triples.
 Core retains stable symbols, typed functions, expressions, calls, branches, returns, literals, and closure metadata. The
 Core optimizer may simplify expressions while preserving types, evaluation order, source behavior, and symbol identity.
 
-After initial Core verification, the Haskell specialization-demand pass walks
-all type-bearing Core boundaries. It interns concrete parameterized types,
-retains semantic origin paths, follows nested type arguments to a fixed point,
-checks resource limits, validates dependency-graph invariants, and derives a
-stable child-before-parent emission order. The plan is available to later
-declaration cloning but is not serialized as part of `VXCR`.
+Before Desugarer, the Haskell frontend walks all type-bearing positions in
+ordinary TypedAST declarations and discovers concrete template layout demands.
+It binds and coalesces those applications, clones the closed declarations,
+freshens every declaration/member/parameter/local/capture identity, derives
+structural internal names, and verifies the complete plan. Ordinary and cloned
+declarations are lowered separately, merged, and verified again as Core.
 
-This connected pass is not the complete template engine. Constraint selection,
-template declaration parsing, lazy member reachability, capture-avoiding body
-cloning, generated symbols, and re-verification of produced declarations remain
-separate work. The backend never guesses those source semantics.
+After that initial Core verification, the Haskell specialization-demand pass
+walks all type-bearing Core boundaries. It interns concrete parameterized
+types, retains semantic origin paths, follows nested type arguments to a fixed
+point, checks resource limits, validates dependency-graph invariants, and
+derives a stable child-before-parent emission order. Neither plan is serialized
+as part of `VXCR`.
+
+This connected pass is not the complete template engine. Constraint ordering,
+lazy resolved-member reachability, explicit instantiation, a public native
+mangling ABI, and persistent incremental caching remain separate work. The
+backend never guesses those source semantics.
 
 The Core verifier is not optional. It checks artifacts produced by the frontend and artifacts loaded from disk. The Haskell
 and C++20 implementations share the versioned `VXCR` contract and equivalent structural expectations. Limits cover document

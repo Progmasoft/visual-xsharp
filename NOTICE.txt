@@ -14,8 +14,10 @@ The Gradle wrapper launcher files `ProjectSystem/gradlew` and
 `ProjectSystem/gradlew.bat` retain their original copyright notices and remain
 licensed under the Apache License, version 2.0.
 
-JUnit Jupiter and the JUnit Platform are used to test the Java XLIL binding.
-They are licensed under the Eclipse Public License, version 2.0.
+The Kotlin/JVM DSL test suites use `kotlin.test` and are currently executed by
+Gradle on the JUnit Platform. JUnit is not part of the Visual X# compiler or a
+shipped runtime dependency. JUnit Jupiter and the JUnit Platform are licensed
+under the Eclipse Public License, version 2.0.
 
 Catch2 3.15.0 is used by the native compiler test suite.
 Copyright Catch2 Authors.
