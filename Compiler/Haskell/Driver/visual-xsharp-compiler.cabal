@@ -32,7 +32,9 @@ library
         visual-xsharp-frontend:Visual.XSharp.SourceSet,
         visual-xsharp-frontend:Visual.XSharp.TemplateValue,
         visual-xsharp-frontend:Visual.XSharp.Template.Application,
+        visual-xsharp-frontend:Visual.XSharp.Template.Freshen,
         visual-xsharp-frontend:Visual.XSharp.Template.Instantiation,
+        visual-xsharp-frontend:Visual.XSharp.Template.Specialization,
         visual-xsharp-frontend:Visual.XSharp.Template.Verifier,
         visual-xsharp-frontend:Visual.XSharp.TypeChecker,
         visual-xsharp-core:Visual.XSharp.Core,
@@ -88,6 +90,7 @@ test-suite visual-xsharp-compiler-tests
         TemplateApplicationTests
         TemplateDeclarationTests
         TemplateInstantiationTests
+        TemplateSpecializationPlannerTests
         TemplateVerifierTests
         VoidTests
     hs-source-dirs: test

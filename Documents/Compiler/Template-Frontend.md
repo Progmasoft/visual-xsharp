@@ -21,7 +21,9 @@ semantic information through:
 4. name resolution;
 5. type checking;
 6. application binding;
-7. typed declaration instantiation.
+7. typed declaration instantiation;
+8. explicit specialization batch planning;
+9. semantic alpha-renaming and closed Core lowering.
 
 The frontend does not emit an open template declaration as Core. A template is
 lowered only after a concrete application has selected a declaration and all
@@ -237,10 +239,83 @@ intentional, not an empty implementation. Emitting its members would create
 invalid Core containing unresolved type variables and would make every open
 member appear eagerly instantiated.
 
-After a closed declaration has been produced, ordinary member lowering can be
-used. Selection, lazy member reachability, constraint ordering, stable native
-name mangling, and insertion into the specialization demand graph are the next
-integration responsibilities.
+After a closed declaration has been produced, ordinary member lowering is used.
+The compiler driver exposes this boundary as an explicit specialization batch:
+semantic resolution supplies demands, the planner materializes a closed typed
+view, and the existing Desugarer and Core verifier consume that view. The
+planner does not scan source text or infer calls on its own.
+
+## Specialization demands
+
+A demand contains a bound application, a diagnostic origin, and one of three
+scopes:
+
+- layout only;
+- one or more member names;
+- the complete declaration.
+
+Layout-only demand does not instantiate method bodies. A member demand selects
+every overload with the requested spelling, because overload identity is not a
+source name alone. Complete demand is explicit and is never inferred by the
+planner. These distinctions preserve the language's lazy-member rule: asking
+for `Box<int>` does not by itself make every method body valid or required.
+
+Repeated demands with the same canonical concrete type share one
+specialization. Their distinct diagnostic origins are retained, and their
+member scopes are combined. Complete demand dominates narrower scopes; member
+demand dominates layout-only demand. A default argument and the equivalent
+explicit argument therefore reach the same cache identity.
+
+The planner applies configurable limits to unique specializations, retained
+origins, and selected members. Crossing a limit fails the entire immutable
+batch instead of silently truncating work. Unknown declarations, ambiguous
+declarations, invalid argument categories, missing members, and open results
+remain distinct failures.
+
+## Semantic alpha-renaming
+
+Substitution closes types but does not make copied definitions unique. Two
+specializations cannot retain the source declaration's `SymbolId`, because
+Core uses semantic identities to distinguish functions, parameters, locals,
+captures, and references.
+
+Each planned specialization is therefore alpha-renamed after substitution.
+Allocation starts above the greatest symbol in the input `TypedAST` and follows
+canonical specialization order. Declaration, member, parameter, local, and
+capture definitions receive fresh positive symbols. Every corresponding type,
+value, assignment, call, initializer, and body reference is rewritten through
+the same map.
+
+Spelling and source spans remain unchanged. Diagnostics can still say `Read`
+at its original location while the compiler internally distinguishes
+`Box<int>.Read` from `Box<String>.Read`. Separate specializations receive
+disjoint symbol sets, and the plan exposes the old-to-new map for later native
+mangling and debug metadata.
+
+Initializer scope is preserved while freshening. A local or capture definition
+becomes visible after its initializer has been rewritten, preventing a newly
+allocated symbol from capturing an outer reference with the same spelling.
+Nested templates keep their independent parameter environment and are not
+blindly alpha-renamed as part of an outer specialization.
+
+## Dependency and emission order
+
+The selected closed declaration is walked for type-bearing positions in member
+signatures, local annotations, expressions, callables, and captures. When such
+a type is another specialization already present in the same batch, the plan
+records a dependency edge.
+
+Emission order is deterministic and dependency-first. Reference-recursive
+template types are legal, so a cycle closes the active depth-first edge rather
+than causing arbitrary recursion or rejection. Every specialization still
+appears exactly once. Infinite value layout remains a separate type-layout
+error and is not reclassified by the scheduler.
+
+Dependencies are not manufactured into new demands. If semantic resolution
+did not request a specialization, merely seeing a similarly spelled named type
+does not authorize the planner to select a declaration or choose constraints.
+This keeps declaration resolution, specialization scheduling, and Core
+lowering as separate auditable decisions.
 
 ## Diagnostic principles
 
@@ -273,20 +348,22 @@ resolution, or Core lowering.
 
 ## Next integration slice
 
-The next template compiler slice should connect application discovery to the
-catalog and perform declaration selection. It should then:
+The next template compiler slice should connect call/type resolution to the
+explicit demand API. It should then:
 
 1. evaluate and order constraints;
-2. produce a stable specialization key;
-3. instantiate only demanded members;
-4. assign a collision-resistant native symbol spelling;
-5. insert the closed functions into the existing demand graph;
-6. verify that no type or value parameter reaches Core;
-7. cache one result per canonical application key.
+2. distinguish overload/member identities beyond source spelling;
+3. assign a collision-resistant native symbol spelling;
+4. merge declaration dependencies with the existing Core demand graph;
+5. cache the closed result across incremental compilations.
 
-That work should reuse the binder and instantiation traversal rather than
-reconstructing argument matching in Core or the C++ backend.
+Stable canonical keys, lazy member scopes, batch coalescing, fresh semantic
+symbols, dependency-first scheduling, and verified Core lowering are already
+implemented. Later work should reuse them rather than reconstructing argument
+matching in Core or the C++ backend.
 
 The integration must also retain deterministic source-order diagnostics while
-allowing independent specializations to be prepared concurrently. Concurrency
-must never make catalog selection or emitted symbol identity nondeterministic.
+allowing independent specializations to be prepared concurrently. The current
+immutable plan establishes the deterministic result that a concurrent executor
+must preserve; concurrency must never change catalog selection, scope merging,
+fresh symbol allocation, or emitted identity.

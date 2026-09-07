@@ -22,6 +22,7 @@ import System.FilePath ((</>))
 import TemplateApplicationTests (templateApplicationTests)
 import TemplateDeclarationTests (templateDeclarationTests)
 import TemplateInstantiationTests (templateInstantiationTests)
+import TemplateSpecializationPlannerTests (templateSpecializationPlannerTests)
 import TemplateTests (templateTests)
 import TemplateVerifierTests (templateVerifierTests)
 import Visual.XSharp.AST
@@ -104,6 +105,7 @@ main = do
     mapM_ (uncurry check) templateDeclarationTests
     mapM_ (uncurry check) templateApplicationTests
     mapM_ (uncurry check) templateInstantiationTests
+    mapM_ (uncurry check) templateSpecializationPlannerTests
     mapM_ (uncurry check) templateVerifierTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests

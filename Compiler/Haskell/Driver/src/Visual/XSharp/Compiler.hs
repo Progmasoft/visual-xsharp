@@ -17,6 +17,7 @@ module Visual.XSharp.Compiler
     , compileToCorePrep
     , compileEntryToCorePrep
     , compileProjectToCorePrep
+    , compileTemplateSpecializations
     , projectEntryCore
     , validateEntryPoint
     ) where
@@ -33,6 +34,7 @@ import Visual.XSharp.Core.Verifier
 import Visual.XSharp.Desugarer
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.Frontend
+import Visual.XSharp.Template.Specialization
 
 {- | Artifacts for one semantic namespace after all of its physical source
 units have been merged. Keeping every stage visible makes stage ownership and
@@ -77,6 +79,21 @@ compileEntryToCorePrep entry input = do
     artifacts <- compileToCorePrep input
     validateEntryPoint entry (artifactTypedAST artifacts)
     pure artifacts
+
+{- | Materialize an explicit batch of resolved template demands and lower the
+resulting closed declaration view to verified Core. Demand discovery and
+constraint ordering stay outside this function: callers must pass demands
+produced by semantic resolution rather than asking the driver to infer syntax.
+-}
+compileTemplateSpecializations ::
+    TemplateSpecializationLimits ->
+    TypedAST ->
+    [TemplateSpecializationDemand] ->
+    Either [Diagnostic] (TemplateSpecializationPlan, CoreModule)
+compileTemplateSpecializations limits typed demands = do
+    plan <- mapLeft templateSpecializationDiagnostics (planTemplateSpecializations limits typed demands)
+    core <- runDesugarer defaultDesugarer (specializationTypedAST plan) >>= verifyCore
+    pure (plan, core)
 
 {- | Compile a complete discovered source set. Diagnostics from independent
 files and namespaces are accumulated in deterministic input order instead of
@@ -134,6 +151,21 @@ monomorphizationDiagnostic failure =
         Nothing
         (renderMonomorphizationError failure)
     ]
+
+templateSpecializationDiagnostics :: [TemplateSpecializationError] -> [Diagnostic]
+templateSpecializationDiagnostics = zipWith diagnostic [1 :: Int ..]
+    where
+        diagnostic index failure =
+            Diagnostic
+                TypeCheckerStage
+                Error
+                ("VXT2" ++ pad index)
+                Nothing
+                (renderTemplateSpecializationError failure)
+        pad value
+            | value < 10 = "00" ++ show value
+            | value < 100 = "0" ++ show value
+            | otherwise = show value
 
 data ParsedNamespace = ParsedNamespace
     { parsedNamespaceName :: Maybe QualifiedName
