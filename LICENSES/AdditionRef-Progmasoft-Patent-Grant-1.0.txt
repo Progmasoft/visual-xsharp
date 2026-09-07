@@ -10,11 +10,11 @@ Progmasoft "controls" a patent claim when Progmasoft has the right to grant the 
 
 "Specified Combination" means a particular combination or interface that Progmasoft has expressly identified, by name and version or by another unambiguous identifier, in public technical documentation as intended for use with the relevant Progmasoft Contribution. None of the following, standing alone, creates a Specified Combination: (a) a general statement of compatibility; (b) sample or illustrative code; (c) publication or availability of an API, ABI, protocol, file format, SDK, or software; or (d) making or distributing software.
 
-"Essential Claim" means a claim of a patent that Progmasoft owns or controls, now or in the future, that would necessarily be infringed by making, having made, using, offering to sell, selling, importing, or otherwise transferring a Progmasoft Contribution, either by itself or as part of a Specified Combination. Essential Claims do not include claims infringed only because of a downstream modification or a combination that is not a Specified Combination.
+"Essential Claim" means a claim of a patent that Progmasoft owns or controls at any time, whether on the date a recipient first receives Covered Software or afterward, that would necessarily be infringed by making, having made, using, offering to sell, selling, importing, or otherwise transferring a Progmasoft Contribution, either by itself or as part of a Specified Combination. Essential Claims do not include claims infringed only because of a downstream modification or a combination that is not a Specified Combination.
 
 2. Patent License
 
-Subject only to the defensive-termination provision in Section 4, Progmasoft grants each recipient of Covered Software a perpetual, worldwide, royalty-free, non-exclusive, irrevocable patent license under the Essential Claims to make, have made, use, offer to sell, sell, import, and otherwise transfer Covered Software and permitted combinations of Covered Software.
+Progmasoft grants each recipient of Covered Software a perpetual, worldwide, royalty-free, non-exclusive patent license under the Essential Claims to make, have made, use, offer to sell, sell, import, and otherwise transfer Covered Software, either by itself or as part of a Specified Combination. The license is irrevocable except for the automatic termination expressly provided in Section 4.
 
 This license includes the right to distribute Covered Software and to pass the benefit of this Patent Grant directly to downstream recipients. Every downstream recipient receives this Patent Grant directly from Progmasoft; no distributor is required to grant rights in patents it does not own or control.
 
@@ -26,7 +26,7 @@ Running Covered Software to compile, generate, transform, format, analyze, or ot
 
 4. Defensive Termination
 
-If a recipient initiates patent litigation alleging that Covered Software or a Progmasoft Contribution directly or contributorily infringes a patent, the patent licenses granted to that recipient under this Patent Grant terminate on the date the claim is filed.
+If a recipient initiates patent litigation alleging that Covered Software or a Progmasoft Contribution directly or contributorily infringes a patent, all patent licenses granted to that recipient under this Patent Grant automatically terminate, prospectively, on the date the recipient files that claim. No other act, omission, or circumstance terminates or permits revocation of those licenses.
 
 Good-faith notice of a possible patent issue, a request to discuss licensing, participation in a standards process, and a claim asserted solely as a compulsory counterclaim, cross-claim, or defense in response to patent litigation initiated against the recipient do not trigger termination.
 
