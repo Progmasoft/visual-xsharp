@@ -4,7 +4,10 @@ package(default_visibility = ["//visibility:private"])
 
 cc_binary(
     name = "xmm_verifier_tests",
-    srcs = ["VerifierTests.cpp"],
+    srcs = [
+        "OptimizerTests.cpp",
+        "VerifierTests.cpp",
+    ],
     deps = [
         "//Compiler/Codegen/Xmm:xmm",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",

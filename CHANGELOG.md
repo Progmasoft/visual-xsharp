@@ -5,6 +5,49 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## 0.3.6 - 2026-09-08
+
+### Compiler
+
+- Added a target-independent control-flow analysis that validates block identity,
+  entry and successor integrity while producing deterministic predecessor,
+  preorder, reverse-postorder, reachability, and per-block successor facts.
+- Made Xpp and Xmm optimization bypass empty jump trampolines, collapse branches
+  with identical destinations, prune unreachable blocks, and emit reachable blocks
+  in deterministic reverse-postorder without changing branch semantics.
+- Made Xmm virtual-register assignment independent of block presentation order:
+  parameters retain ABI order and local destinations follow stable `SymbolId` order.
+- Added permutation, diamond, loop, malformed-graph, deep-graph, idempotence,
+  trampoline, reachability, and lowering-determinism regression coverage.
+
+### Release
+
+- Advanced the Visual X# compiler, native CLI, Haskell frontend packages, Bazel
+  module, and default project model to 0.3.6. Tooling components retain their
+  independent version lines.
+
+## 0.3.5 - 2026-09-06
+
+### Compiler
+
+- Added first-class template specialization across the Haskell frontend, typed
+  Core, CorePrep, and the native C++20 pipeline, including type, value, and
+  template-template parameters.
+- Added deterministic specialization discovery, binding, substitution,
+  identity, mangling, member reachability, planning, verification, and
+  monomorphization contracts with bounded expansion diagnostics.
+- Advanced Core and CorePrep wire formats to version 4 for template values,
+  fixed arrays, specialization metadata, and stricter artifact validation.
+- Added matching Haskell and native regression suites for declarations,
+  defaults, packs, nested applications, specialization graphs, wire symmetry,
+  malformed inputs, and deterministic emission.
+
+### Release
+
+- Advanced compiler-owned package and project defaults to 0.3.5 while keeping
+  the Analyzer, Formatter, Linter, and project runtime on their independent
+  release lines.
+
 ## 0.3.4 - 2026-08-31
 
 ### Compiler

@@ -7,12 +7,15 @@
 #include <unordered_set>
 #include <utility>
 
+#include "Visual/XSharp/Analysis/ControlFlow.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 
 namespace visual_xsharp::xmm
 {
     namespace
     {
+        namespace ControlFlow = ::Visual::XSharp::Analysis;
+
         struct RegisterMap final
         {
             // Allocate deterministically on first encounter while preserving one register for
@@ -20,16 +23,42 @@ namespace visual_xsharp::xmm
             std::unordered_map<xpp::SymbolId, VirtualRegister> registers;
             VirtualRegister next{ 1U };
 
+            void
+            Reserve(xpp::SymbolId symbol)
+            {
+                if (!registers.contains(symbol))
+                    registers.emplace(symbol, next++);
+            }
+
             auto
             Get(xpp::SymbolId symbol) -> VirtualRegister
             {
-                if (const auto found = registers.find(symbol); found != registers.end())
-                    return found->second;
-                const auto allocated = next++;
-                registers.emplace(symbol, allocated);
-                return allocated;
+                Reserve(symbol);
+                return registers.at(symbol);
             }
         };
+
+        [[nodiscard]] auto
+        RegisterMapFor(const xpp::Function &function) -> RegisterMap
+        {
+            RegisterMap map;
+            // Parameter register order is ABI-visible. Local identities are
+            // then assigned in numeric symbol order so a wire decoder or CFG
+            // optimizer may reorder blocks without renumbering the function.
+            for (const auto &parameter : function.parameters)
+                map.Reserve(parameter.symbol.id);
+
+            std::vector<xpp::SymbolId> locals;
+            for (const auto &block : function.blocks)
+                for (const auto &instruction : block.instructions)
+                    if (instruction.effect != xpp::Instruction::Effect::Discard)
+                        locals.push_back(instruction.destination);
+            std::ranges::sort(locals);
+            locals.erase(std::unique(locals.begin(), locals.end()), locals.end());
+            for (const auto symbol : locals)
+                map.Reserve(symbol);
+            return map;
+        }
 
         auto
         LowerOpcode(xpp::Opcode opcode) -> Opcode
@@ -144,6 +173,107 @@ namespace visual_xsharp::xmm
             }
             return lowered;
         }
+
+        [[nodiscard]] auto
+        Successors(const Terminator &terminator) -> std::vector<ControlFlow::ControlFlowBlockId>
+        {
+            switch (terminator.kind)
+            {
+                case Terminator::Kind::Branch:
+                    return { terminator.true_target, terminator.false_target };
+                case Terminator::Kind::Jump:
+                    return { terminator.true_target };
+                case Terminator::Kind::Return:
+                case Terminator::Kind::Unreachable:
+                    return {};
+            }
+            return {};
+        }
+
+        [[nodiscard]] auto
+        Analyze(const Function &function) -> ControlFlow::ControlFlowResult
+        {
+            ControlFlow::ControlFlowGraph graph;
+            graph.entry = function.entry;
+            graph.blocks.reserve(function.blocks.size());
+            for (const auto &block : function.blocks)
+                graph.blocks.push_back({ block.id, Successors(block.terminator) });
+            return ControlFlow::AnalyzeControlFlow(graph);
+        }
+
+        [[nodiscard]] auto
+        BlockCatalog(Function &function) -> std::unordered_map<BlockId, Block *>
+        {
+            std::unordered_map<BlockId, Block *> blocks;
+            blocks.reserve(function.blocks.size());
+            for (auto &block : function.blocks)
+                blocks.emplace(block.id, &block);
+            return blocks;
+        }
+
+        [[nodiscard]] auto
+        ResolveTrampoline(
+            BlockId target,
+            const std::unordered_map<BlockId, Block *> &blocks) -> BlockId
+        {
+            std::unordered_set<BlockId> visited;
+            while (visited.insert(target).second)
+            {
+                const auto found = blocks.find(target);
+                if (found == blocks.end())
+                    break;
+                const auto &block = *found->second;
+                if (!block.instructions.empty() || block.terminator.kind != Terminator::Kind::Jump)
+                    break;
+                const auto next = block.terminator.true_target;
+                if (next == target)
+                    break;
+                target = next;
+            }
+            return target;
+        }
+
+        void
+        ThreadTrampolines(Function &function)
+        {
+            const auto blocks = BlockCatalog(function);
+            for (auto &block : function.blocks)
+            {
+                auto &terminator = block.terminator;
+                if (terminator.kind == Terminator::Kind::Jump)
+                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
+                else if (terminator.kind == Terminator::Kind::Branch)
+                {
+                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
+                    terminator.false_target = ResolveTrampoline(terminator.false_target, blocks);
+                    if (terminator.true_target == terminator.false_target)
+                    {
+                        terminator.kind = Terminator::Kind::Jump;
+                        terminator.false_target = 0U;
+                    }
+                }
+            }
+        }
+
+        void
+        RetainReachableReversePostorder(Function &function)
+        {
+            const auto flow = Analyze(function);
+            const std::unordered_set<BlockId> reachable(
+                flow.reversePostorder.begin(),
+                flow.reversePostorder.end());
+            std::erase_if(function.blocks, [&reachable](const Block &block) {
+                return !reachable.contains(block.id);
+            });
+
+            std::unordered_map<BlockId, std::size_t> order;
+            order.reserve(flow.reversePostorder.size());
+            for (std::size_t index = 0U; index < flow.reversePostorder.size(); ++index)
+                order.emplace(flow.reversePostorder[index], index);
+            std::ranges::sort(function.blocks, [&order](const Block &left, const Block &right) {
+                return order.at(left.id) < order.at(right.id);
+            });
+        }
     } // namespace
 
     auto
@@ -157,7 +287,7 @@ namespace visual_xsharp::xmm
             directFunctions.insert(function.symbol.id);
         for (const auto &function : module.functions)
         {
-            RegisterMap registerMap;
+            auto registerMap = RegisterMapFor(function);
             Function loweredFunction{ function.symbol, {}, {}, function.return_type, function.entry, {} };
             for (const auto &parameter : function.parameters)
             {
@@ -201,11 +331,15 @@ namespace visual_xsharp::xmm
         // This pass removes only storage no-ops. Propagation requires a control-flow and
         // data-flow proof and must never be approximated by a local rewrite.
         for (auto &function : module.functions)
+        {
             for (auto &block : function.blocks)
                 std::erase_if(block.instructions,
                               [](const Instruction &instruction) {
                                   return instruction.opcode == Opcode::Move && instruction.has_result && instruction.operands.size() == 1U && instruction.operands.front().kind == Value::Kind::Register && instruction.destination == instruction.operands.front().reg;
                               });
+            ThreadTrampolines(function);
+            RetainReachableReversePostorder(function);
+        }
         return module;
     }
 } // namespace visual_xsharp::xmm

@@ -3,15 +3,19 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
+#include "Visual/XSharp/Analysis/ControlFlow.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
 
 namespace visual_xsharp::xpp
 {
     namespace
     {
+        namespace ControlFlow = ::Visual::XSharp::Analysis;
+
         auto
         LowerOperand(const core::Atom &atom) -> Operand
         {
@@ -123,31 +127,108 @@ namespace visual_xsharp::xpp
             return lowered;
         }
 
-        auto
-        ReachableBlocks(const Function &function) -> std::unordered_set<BlockId>
+        [[nodiscard]] auto
+        Successors(const Terminator &terminator) -> std::vector<ControlFlow::ControlFlowBlockId>
         {
-            // Reachability is structural and deliberately avoids speculating about constant
-            // conditions. Xpp optimization must not become a hidden semantic evaluator.
-            std::unordered_set<BlockId> reachable;
-            std::vector<BlockId> pending{ function.entry };
-            while (!pending.empty())
+            switch (terminator.kind)
             {
-                const auto id = pending.back();
-                pending.pop_back();
-                if (!reachable.insert(id).second)
-                    continue;
-                const auto found = std::ranges::find(function.blocks, id, &Block::id);
-                if (found == function.blocks.end())
-                    continue;
-                if (found->terminator.kind == Terminator::Kind::Branch)
-                {
-                    pending.push_back(found->terminator.true_target);
-                    pending.push_back(found->terminator.false_target);
-                }
-                else if (found->terminator.kind == Terminator::Kind::Jump)
-                    pending.push_back(found->terminator.true_target);
+                case Terminator::Kind::Branch:
+                    return { terminator.true_target, terminator.false_target };
+                case Terminator::Kind::Jump:
+                    return { terminator.true_target };
+                case Terminator::Kind::Return:
+                case Terminator::Kind::Unreachable:
+                    return {};
             }
-            return reachable;
+            return {};
+        }
+
+        [[nodiscard]] auto
+        Analyze(const Function &function) -> ControlFlow::ControlFlowResult
+        {
+            ControlFlow::ControlFlowGraph graph;
+            graph.entry = function.entry;
+            graph.blocks.reserve(function.blocks.size());
+            for (const auto &block : function.blocks)
+                graph.blocks.push_back({ block.id, Successors(block.terminator) });
+            return ControlFlow::AnalyzeControlFlow(graph);
+        }
+
+        [[nodiscard]] auto
+        BlockCatalog(Function &function) -> std::unordered_map<BlockId, Block *>
+        {
+            std::unordered_map<BlockId, Block *> blocks;
+            blocks.reserve(function.blocks.size());
+            for (auto &block : function.blocks)
+                blocks.emplace(block.id, &block);
+            return blocks;
+        }
+
+        [[nodiscard]] auto
+        ResolveTrampoline(
+            BlockId target,
+            const std::unordered_map<BlockId, Block *> &blocks) -> BlockId
+        {
+            std::unordered_set<BlockId> visited;
+            while (visited.insert(target).second)
+            {
+                const auto found = blocks.find(target);
+                if (found == blocks.end())
+                    break;
+                const auto &block = *found->second;
+                if (!block.instructions.empty() || block.terminator.kind != Terminator::Kind::Jump)
+                    break;
+                const auto next = block.terminator.true_target;
+                if (next == target)
+                    break;
+                target = next;
+            }
+            return target;
+        }
+
+        void
+        ThreadTrampolines(Function &function)
+        {
+            const auto blocks = BlockCatalog(function);
+            for (auto &block : function.blocks)
+            {
+                auto &terminator = block.terminator;
+                if (terminator.kind == Terminator::Kind::Jump)
+                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
+                else if (terminator.kind == Terminator::Kind::Branch)
+                {
+                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
+                    terminator.false_target = ResolveTrampoline(terminator.false_target, blocks);
+                    if (terminator.true_target == terminator.false_target)
+                    {
+                        // Once both edges agree the condition has no control-flow
+                        // effect. Its producer remains in place; only the terminator
+                        // stops pretending that two executions are possible.
+                        terminator.kind = Terminator::Kind::Jump;
+                        terminator.false_target = 0U;
+                    }
+                }
+            }
+        }
+
+        void
+        RetainReachableReversePostorder(Function &function)
+        {
+            const auto flow = Analyze(function);
+            const std::unordered_set<BlockId> reachable(
+                flow.reversePostorder.begin(),
+                flow.reversePostorder.end());
+            std::erase_if(function.blocks, [&reachable](const Block &block) {
+                return !reachable.contains(block.id);
+            });
+
+            std::unordered_map<BlockId, std::size_t> order;
+            order.reserve(flow.reversePostorder.size());
+            for (std::size_t index = 0U; index < flow.reversePostorder.size(); ++index)
+                order.emplace(flow.reversePostorder[index], index);
+            std::ranges::sort(function.blocks, [&order](const Block &left, const Block &right) {
+                return order.at(left.id) < order.at(right.id);
+            });
         }
 
         auto
@@ -184,12 +265,10 @@ namespace visual_xsharp::xpp
     {
         for (auto &function : module.functions)
         {
-            const auto reachable = ReachableBlocks(function);
-            std::erase_if(function.blocks, [&reachable](const Block &block) {
-                return !reachable.contains(block.id);
-            });
             for (auto &block : function.blocks)
                 std::erase_if(block.instructions, IsSelfCopy);
+            ThreadTrampolines(function);
+            RetainReachableReversePostorder(function);
         }
         return module;
     }

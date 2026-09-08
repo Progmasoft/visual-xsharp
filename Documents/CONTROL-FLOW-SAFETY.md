@@ -313,6 +313,64 @@ Observable block facts are sorted by block identity. Storage identities within
 entry and exit facts are also sorted. Stable output keeps tests and diagnostics
 reproducible without leaking hash-table iteration order.
 
+## CFG canonicalization after CorePrep
+
+Xpp and Xmm share a target-independent control-flow analysis instead of each
+stage reconstructing reachability from container order. The adapter exposes
+only block identities and ordered successor identities, so it can be reused by
+symbolic Xpp and register-based Xmm without weakening either stage's verifier.
+
+The common result contains two deliberately different views of the graph:
+
+- semantic traversal follows the terminator's declared successor order; and
+- observable predecessor, successor, and block-fact collections are sorted by
+  identity for reproducible diagnostics and tests.
+
+This distinction matters for branches. Canonical block layout may place the
+false destination before the true destination, but the branch operands and
+their meaning remain unchanged.
+
+### Conservative trampoline threading
+
+An empty block whose only terminator is an unconditional jump is a trampoline.
+Xpp and Xmm may redirect an incoming edge through a chain of such blocks. A
+block containing even one instruction is not a trampoline: its work may have
+effects, define storage, or carry ownership operations that must execute.
+
+Threading uses explicit cycle detection. A self-loop or a multi-block jump
+cycle is retained rather than followed indefinitely. Missing targets are also
+left for the owning verifier to diagnose; canonicalization never invents a
+replacement destination.
+
+After redirection, a conditional branch whose true and false destinations are
+identical becomes an unconditional jump. The condition no longer selects
+observable control flow at Xpp/Xmm, and condition-producing instructions remain
+in place unless a separate effect-aware pass proves they are dead.
+
+### Reachable layout
+
+Once edges are canonical, unreachable blocks are removed and the remaining
+blocks are placed in reverse postorder from the explicit function entry. This
+does not define execution order; terminators still do that. It provides a
+stable presentation that keeps serialized artifacts and backend iteration
+independent of the order in which an earlier producer happened to append
+blocks.
+
+The pass is idempotent. Running it repeatedly neither renumbers identities nor
+changes an already canonical graph.
+
+### Deterministic Xmm registers
+
+Virtual-register identities must not depend on block presentation. Xmm reserves
+parameter registers first in declaration order because that order is part of
+the function ABI. It then reserves result-producing local symbols in ascending
+`SymbolId` order before lowering any instruction or terminator.
+
+Operand-only identities are still rejected by verification when they do not
+name a parameter or definition. Their encounter order cannot perturb valid
+local destinations. Consequently, decoding the same Xpp graph with a different
+block vector order produces the same parameter and local register mapping.
+
 ## Structural issues
 
 The common analysis can report the following model-level issues:

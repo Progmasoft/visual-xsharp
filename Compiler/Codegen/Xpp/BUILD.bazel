@@ -6,6 +6,7 @@ cc_library(
     name = "xpp",
     srcs = ["Lower.cpp", "Verifier.cpp", "Wire.cpp"],
     deps = [
+        "//Compiler/Analysis:control_flow",
         "//Compiler/Analysis:definite_initialization",
         "//Compiler/Artifact:wire_support",
         "//Compiler/Core:core",

@@ -4,8 +4,12 @@ package(default_visibility = ["//visibility:private"])
 
 cc_binary(
     name = "definite_initialization_tests",
-    srcs = ["DefiniteInitializationTests.cpp"],
+    srcs = [
+        "ControlFlowTests.cpp",
+        "DefiniteInitializationTests.cpp",
+    ],
     deps = [
+        "//Compiler/Analysis:control_flow",
         "//Compiler/Analysis:definite_initialization",
         "@catch2//:catch2_main",
     ],
