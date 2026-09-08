@@ -41,6 +41,7 @@ namespace
         XppOptimization,
         XmmOptimization,
         Global,
+        DryRun,
         Count,
     };
 
@@ -191,6 +192,7 @@ namespace
         { "-Xpp-Optimization-Passes", Option::XppOptimization, kCompilerCommands, ValueDomain::Boolean, "enable Xpp optimization passes" },
         { "-Xmm-Optimization-Passes", Option::XmmOptimization, kCompilerCommands, ValueDomain::Boolean, "enable Xmm optimization passes" },
         { "-Global", Option::Global, Bit(XS_CLI_COMMAND_INSTALL), ValueDomain::None, "install into the system package store" },
+        { "-Dry-Run", Option::DryRun, Bit(XS_CLI_COMMAND_FORMAT), ValueDomain::None, "report formatting differences without writing files" },
     };
 
     constexpr XsCompilerSettings kCompilerDefaults{
@@ -380,6 +382,7 @@ namespace
                 return BoolText(kCompilerDefaults.xmm_optimization_passes);
             case Option::File:
             case Option::Global:
+            case Option::DryRun:
             case Option::Count:
                 return {};
         }
@@ -598,6 +601,9 @@ namespace
                 return ApplyResult::Applied;
             case Option::Global:
                 options.globalInstall = true;
+                return ApplyResult::Applied;
+            case Option::DryRun:
+                options.formatterDryRun = true;
                 return ApplyResult::Applied;
             default:
                 return ApplyBoolean(spec.option, value, options);

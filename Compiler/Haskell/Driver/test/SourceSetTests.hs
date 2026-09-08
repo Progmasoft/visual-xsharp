@@ -29,6 +29,7 @@ sourceSetTests =
     , ("overlapping source roots do not duplicate compilation units", overlappingRoots)
     , ("uppercase source extensions are not treated as .vxs", caseSensitiveExtension)
     , ("malformed UTF-8 is rejected before lexing", invalidUtf8)
+    , ("tool source discovery does not impose compiler UTF-8", encodingNeutralDiscovery)
     , ("explicit file mode uses the strict source decoder", explicitFileDecoder)
     , ("explicit file mode requires the exact .vxs extension", explicitFileExtension)
     , ("a configured source root cannot escape the project", escapingRoot)
@@ -113,6 +114,16 @@ invalidUtf8 = withTemporaryTree $ \root -> do
     ByteString.writeFile path (ByteString.pack [0x63, 0x6c, 0x61, 0x73, 0x73, 0x20, 0xc3, 0x28])
     result <- loadSourceSet (SourceSetRequest root ["Sources"] [])
     pure (hasDiagnostic "VXS0020" result)
+
+encodingNeutralDiscovery :: IO Bool
+encodingNeutralDiscovery = withTemporaryTree $ \root -> do
+    let path = root </> "Sources" </> "Utf16.vxs"
+    createDirectoryIfMissing True (root </> "Sources")
+    ByteString.writeFile path (ByteString.pack [0xff, 0xfe, 0x63, 0x00])
+    result <- discoverSourceSet (SourceSetRequest root ["Sources"] [])
+    pure $ case result of
+        Right [discovered] -> discovered == path
+        _ -> False
 
 explicitFileDecoder :: IO Bool
 explicitFileDecoder = withTemporaryTree $ \root -> do

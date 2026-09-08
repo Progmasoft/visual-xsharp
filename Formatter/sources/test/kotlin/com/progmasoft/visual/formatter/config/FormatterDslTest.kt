@@ -5,6 +5,8 @@
 
 package com.progmasoft.visual.formatter.config
 
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -65,6 +67,34 @@ class FormatterDslTest {
     }
     assertFailsWith<FormatterConfigurationException> {
       formatterConfiguration { version = "development" }
+    }
+  }
+
+  @Test
+  fun evaluatesTheRealKotlinReceiver() {
+    val directory = Files.createTempDirectory("visual-formatter-script-").toFile()
+    try {
+      val script = File(directory, "Visual.Formatter.kts")
+      script.writeText(
+        """
+        val wide = 16
+        indentWidth = wide / 2
+        encoding {
+          input = Encoding.UTF_16
+          output = if (wide == 16) Encoding.UTF_32 else Encoding.UTF_8
+          emitByteOrderMark = true
+        }
+        """
+          .trimIndent()
+      )
+
+      val configuration = evaluateFormatterScript(script)
+      assertEquals(8, configuration.indentWidth)
+      assertEquals(Encoding.UTF_16, configuration.encoding.input)
+      assertEquals(Encoding.UTF_32, configuration.encoding.output)
+      assertTrue(configuration.encoding.emitByteOrderMark)
+    } finally {
+      directory.deleteRecursively()
     }
   }
 }

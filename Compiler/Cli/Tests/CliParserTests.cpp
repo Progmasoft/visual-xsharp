@@ -197,6 +197,14 @@ TEST_CASE("format and lint are project-wide tool commands", "[cli][parser][tools
     const ParsedInvocation format{ "vxs", "format" };
     REQUIRE(format.Result() == XS_CLI_PARSE_READY);
     REQUIRE(format.Options().command == XS_CLI_COMMAND_FORMAT);
+    REQUIRE_FALSE(format.Options().formatterDryRun);
+
+    const ParsedInvocation dryRun{ "vxs", "format", "-Dry-Run" };
+    REQUIRE(dryRun.Result() == XS_CLI_PARSE_READY);
+    REQUIRE(dryRun.Options().formatterDryRun);
+
+    const ParsedInvocation inPlace{ "vxs", "format", "-In-Place" };
+    REQUIRE(inPlace.Result() == XS_CLI_PARSE_ERROR);
     REQUIRE_FALSE(format.Options().filePath);
 
     const ParsedInvocation lint{ "vxs", "lint" };

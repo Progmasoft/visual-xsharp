@@ -344,7 +344,7 @@ namespace
     }
 
     [[nodiscard]] int
-    RunProjectTool(XsCliCommand command)
+    RunProjectTool(XsCliCommand command, bool formatterDryRun)
     {
         auto project = Visual::XSharp::Driver::ResolveProject(true);
         if (!project)
@@ -365,6 +365,25 @@ namespace
 #else
         const std::string executable = formatting ? "vfmt" : "vlint";
 #endif
+        if (formatting)
+        {
+            // Project formatting is one tool invocation. Besides avoiding repeated
+            // Kotlin startup, this gives Visual Formatter one authoritative DSL
+            // snapshot for the complete source set.
+            std::vector<std::string> arguments;
+            arguments.emplace_back(formatterDryRun ? "-Dry-Run" : "-In-Place");
+            arguments.reserve(sources->size() + 1);
+            for (const auto &source : *sources)
+                arguments.push_back(PathText(source));
+            const int status = RunInstalledTool(executable, arguments);
+            if (status == -1)
+            {
+                fmt::print(stderr, "vxs: {} is not installed or is not available on PATH; install Progmasoft.VisualFormatter\n", executable);
+                return 1;
+            }
+            return status == 0 ? 0 : 1;
+        }
+
         bool succeeded = true;
         for (const auto &source : *sources)
         {
@@ -373,13 +392,11 @@ namespace
             // has one project-wide owner; when the corresponding file is absent,
             // the installed tool applies its own defaults.
             std::vector<std::string> arguments;
-            if (formatting)
-                arguments.emplace_back("-In-Place");
             arguments.push_back(PathText(source));
             const int status = RunInstalledTool(executable, arguments);
             if (status == -1)
             {
-                fmt::print(stderr, "vxs: {} is not installed or is not available on PATH; install {}\n", executable, formatting ? "Progmasoft.VisualFormatter" : "Progmasoft.VisualLinter");
+                fmt::print(stderr, "vxs: {} is not installed or is not available on PATH; install Progmasoft.VisualLinter\n", executable);
                 return 1;
             }
             succeeded = status == 0 && succeeded;
@@ -663,7 +680,7 @@ Visual::XSharp::Cli::Run(int argc, char **argv) -> int
     if (options.command == XS_CLI_COMMAND_RESOLVE || options.command == XS_CLI_COMMAND_UPDATE)
         result = Visual::XSharp::Driver::RefreshProjectLock() ? 0 : 1;
     else if (options.command == XS_CLI_COMMAND_FORMAT || options.command == XS_CLI_COMMAND_LINT)
-        result = RunProjectTool(options.command);
+        result = RunProjectTool(options.command, options.formatterDryRun);
     else if (options.command == XS_CLI_COMMAND_INSTALL || options.command == XS_CLI_COMMAND_VIGET)
     {
         const char *commandName = options.command == XS_CLI_COMMAND_INSTALL ? "install" : "viget";

@@ -55,13 +55,16 @@ Registered commands fail explicitly. They never print success while skipping the
 and invoke the separately installed ecosystem tool for every discovered `.vxs` source:
 
 ```text
-vxs format  # requires Progmasoft.VisualFormatter
+vxs format           # formats in place; requires Progmasoft.VisualFormatter
+vxs format -Dry-Run  # checks every source without writing
 vxs lint    # requires Progmasoft.VisualLinter
 ```
 
-Visual Formatter reads `Visual.Formatter.kts` from the project root when present and otherwise uses its defaults. Visual
-Linter applies the equivalent rule for `Visual.Linter.kts`. Tool configuration remains owned by the tool rather than the
-compiler CLI.
+Visual Formatter evaluates `Visual.Formatter.kts` from the project root when present and otherwise uses its defaults.
+`vxs format` does not expose `-In-Place`: project formatting is in-place by definition, and `-Dry-Run` is its only format
+mode flag. The formatter, rather than the compiler source loader, decodes and re-encodes source bytes according to the
+configured `encoding.input`, `encoding.output`, and `emitByteOrderMark` values. Visual Linter applies the equivalent
+configuration-file ownership rule for `Visual.Linter.kts`.
 
 Package commands use typed positional forms:
 
@@ -90,6 +93,9 @@ vxs viget push|update
 -Xpp-Optimization-Passes true|false
 -Xmm-Optimization-Passes true|false
 ```
+
+Tool commands add only their own scoped controls: `format` accepts `-Dry-Run`, while project formatting without it writes
+in place. `-In-Place` belongs to standalone `vfmt` and is intentionally rejected by `vxs format`.
 
 `build` additionally parses `-Emit`. `build` and `check` parse `-Build` for an explicit input artifact:
 

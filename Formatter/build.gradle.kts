@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     kotlin("jvm") version "2.4.0"
     id("com.diffplug.spotless") version "8.9.0"
+    application
 }
 
 group = "com.progmasoft.visual.formatter"
@@ -16,7 +17,21 @@ version = "0.1.0"
 
 repositories { mavenCentral() }
 
-dependencies { testImplementation(kotlin("test")) }
+dependencies {
+    // Kotlin 2.4 publishes the scripting host with an intentionally lean POM.
+    // Keep the scripting API layers explicit so the evaluator has the compiler,
+    // host and script-definition contracts in both development and distributions.
+    implementation(kotlin("scripting-common"))
+    implementation(kotlin("scripting-jvm"))
+    implementation(kotlin("scripting-jvm-host"))
+    implementation(kotlin("compiler-embeddable"))
+    testImplementation(kotlin("test"))
+}
+
+application {
+    mainClass = "com.progmasoft.visual.formatter.config.MainKt"
+    applicationName = "vfmt-config"
+}
 
 kotlin {
     jvmToolchain(25)

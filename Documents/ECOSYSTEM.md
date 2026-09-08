@@ -18,9 +18,9 @@ compiler release number.
 Each product also contains a Kotlin Script DSL model. All three configuration hosts require JRE 25 and Kotlin Script Runner;
 the runtime is not embedded into the Haskell tool.
 
-The Kotlin projects currently provide typed scopes, defaults, validation, and immutable configuration snapshots. Script
-evaluator integration is a separate layer. A checked-in DSL type or test must not be described as proof that end-to-end
-script evaluation is connected.
+The Kotlin projects provide typed scopes, defaults, validation, and immutable configuration snapshots. Visual Formatter
+also has a real Kotlin scripting evaluator used by the project-wide CLI bridge; the other tool evaluators remain separate
+integration work. A checked-in DSL type alone must not be described as proof of end-to-end script evaluation.
 
 ## Shared project source policy
 
@@ -30,11 +30,13 @@ They do not independently search for files in Kotlin.
 
 ```text
 vxs format
+vxs format -Dry-Run
 vxs lint
 ```
 
-`format` requires `vfmt`; `lint` requires `vlint`. If the corresponding configuration file is absent from the project root,
-the installed tool uses its defaults. When present, configuration is selected for that tool only:
+`format` requires `vfmt`; a project containing `Visual.Formatter.kts` also requires the installed `vfmt-config` evaluator.
+`lint` requires `vlint`. If the corresponding configuration file is absent from the project root, the installed tool uses
+its defaults. When present, configuration is selected for that tool only:
 
 ```text
 Visual.Formatter.kts
@@ -98,7 +100,10 @@ standalone tool, not `vxs` compiler options.
 
 Formatter configuration includes version selection, column and indentation widths, tab behavior, brace style, parenthesis
 and punctuation spacing, line endings, final newline policy, sorting, input/output encoding, and byte-order-mark emission.
-The current configuration model defaults to UTF-8 input/output and no BOM.
+The current configuration model defaults to UTF-8 input/output and no BOM. During `vxs format`, source discovery examines
+paths without decoding source contents. The formatter then decodes each file with `encoding.input` and writes it with
+`encoding.output` and `emitByteOrderMark`; compiler builds continue to require strict UTF-8 independently. Project format
+is in-place by default, while `vxs format -Dry-Run` performs byte-accurate checks without writing.
 
 Formatting must be parser-gated and idempotent. The formatter may normalize physical source layout, but it must not invent
 language forms, change name identity, turn an invalid source into a different valid program, or apply C-family `switch/case`

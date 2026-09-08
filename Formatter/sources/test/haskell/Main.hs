@@ -5,6 +5,7 @@ module Main (main) where
 
 import System.Exit (exitFailure)
 import Visual.Formatter
+import Visual.Formatter.Encoding
 import Visual.XSharp.Diagnostic (diagnosticCode)
 import Visual.XSharp.Frontend
 
@@ -30,9 +31,28 @@ main = do
     check "formatter rejects a non-positive indentation width" rejectsIndentWidth
     check "formatter rejects a non-positive tab width" rejectsTabWidth
     check "block formatting reaches a fixed point" formattingIsIdempotent
+    checkIO "encoding conversion follows explicit input and output settings" encodingRoundTrip
+    checkIO "UTF-8 input rejects malformed byte sequences" rejectsMalformedUtf8
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure
+
+checkIO :: String -> IO Bool -> IO ()
+checkIO label action = action >>= check label
+
+encodingRoundTrip :: IO Bool
+encodingRoundTrip = do
+    let expected = "class Program {}\n"
+        encoded = encodeSourceText Utf16 True expected
+    decoded <- decodeSourceBytes Utf16 encoded
+    pure (decoded == Right expected)
+
+rejectsMalformedUtf8 :: IO Bool
+rejectsMalformedUtf8 = do
+    decoded <- decodeSourceBytes Utf8 (encodeSourceText Utf16 False "not UTF-8: \x1f642")
+    pure $ case decoded of
+        Left _ -> True
+        Right _ -> False
 
 formattedProgram :: String
 formattedProgram =

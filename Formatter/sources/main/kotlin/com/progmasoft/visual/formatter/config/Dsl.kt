@@ -104,14 +104,13 @@ class EncodingScope {
 }
 
 /**
- * Typed state exposed to a future `Visual.Formatter.kts` script template.
+ * Typed state exposed as the receiver of `Visual.Formatter.kts`.
  *
- * This class intentionally has no file discovery or script execution behavior. An evaluator can
- * later provide one instance as the script receiver and consume [build] only after the script
- * completes.
+ * Evaluation remains separate from the immutable model: one fresh receiver is created for every
+ * script, and [build] validates the complete snapshot only after Kotlin execution succeeds.
  */
 @FormatterDsl
-class FormatterScope {
+open class FormatterScope {
   private val tabsScope = TabsScope()
   private val spacingScope = SpacingScope()
   private val lineScope = LineScope()

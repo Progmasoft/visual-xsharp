@@ -173,15 +173,15 @@ compileProject output root entry roots excludes = do
 
 listProjectSources :: FilePath -> FilePath -> [FilePath] -> [FilePath] -> IO ()
 listProjectSources output root roots excludes = do
-    loaded <- loadSourceSet (SourceSetRequest root roots excludes)
-    case loaded of
+    discovered <- discoverSourceSet (SourceSetRequest root roots excludes)
+    case discovered of
         Left diagnostics -> failWithDiagnostics diagnostics
-        Right documents ->
+        Right paths ->
             -- NUL framing is private and lossless for supported platform paths;
             -- unlike newline records it also admits spaces without quoting.
             ByteString.writeFile
                 output
-                (Text.encodeUtf8 (Text.pack (concatMap ((++ "\0") . loadedSourcePath) documents)))
+                (Text.encodeUtf8 (Text.pack (concatMap (++ "\0") paths)))
 
 toCompilerInput :: LoadedSource -> CompilerInput
 toCompilerInput source = CompilerInput (loadedSourcePath source) (loadedSourceText source)

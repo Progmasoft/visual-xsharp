@@ -115,6 +115,7 @@ struct XsCliOptions
     XsBuildInput input;
     XsCompilerSettings compiler;
     bool globalInstall;
+    bool formatterDryRun;
     bool compilerVersionOverride;
     bool standardOverride;
     bool targetOverride;

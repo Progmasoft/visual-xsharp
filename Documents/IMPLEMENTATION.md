@@ -168,8 +168,9 @@ without a native layout still fails before producing a misleading artifact.
 ## Ecosystem status
 
 Analyzer, Formatter, and Linter have canonical top-level projects, separate Haskell/Kotlin ownership, and independent CI.
-Their typed Kotlin configuration models are implemented without claiming evaluator completion. `vxs format` and `vxs lint`
-dispatch installed `vfmt`/`vlint` across compiler-discovered project sources; they are not compiler-internal passes.
+Their typed Kotlin configuration models are implemented. Visual Formatter additionally evaluates the real Kotlin receiver
+and transfers its encoding contract to `vfmt`; the Analyzer and Linter evaluator bridges remain pending. `vxs format` and
+`vxs lint` dispatch installed tools across compiler-discovered project paths; they are not compiler-internal passes.
 
 Visual Formatter and Visual Linter use their own version lines. Visual Analyzer is an LSP service and editor integration, not
 a standalone user binary. See [Ecosystem tools](ECOSYSTEM.md) for the product boundary and current configuration surfaces.

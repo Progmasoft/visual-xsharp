@@ -116,9 +116,11 @@ resolution belong to the compiler. Exclusions accept project-relative glob patte
 test suite's `exclude`, and `sources.viget.exclude` have no implicit pattern: their plan value is `null` until an
 `exclude(...)` declaration is present.
 
-The Haskell source loader recursively discovers files whose extension is exactly `.vxs`. It decodes every selected file as
-UTF-8 before lexing, sorts project-relative paths deterministically, and de-duplicates files reached through overlapping
-roots. A configured root or filesystem link that escapes the project root is a compilation error. Exclusions are evaluated
+The Haskell source loader recursively discovers files whose extension is exactly `.vxs`, sorts project-relative paths
+deterministically, and de-duplicates files reached through overlapping roots. Compilation decodes every selected file as
+strict UTF-8 before lexing. Tool-only source enumeration does not decode file contents: Visual Formatter owns its configured
+input and output encodings instead. A configured root or filesystem link that escapes the project root is an error in both
+routes. Exclusions are evaluated
 against normalized project-relative paths: `*` and `?` stay within one path segment, while a complete `**` segment may span
 zero or more directories.
 

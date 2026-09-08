@@ -10,13 +10,15 @@ strings, and raw strings, so structural characters inside protected text never a
 
 ```text
 vfmt Program.vxs
-vfmt -In-Place Program.vxs
-vfmt -Dry-Run Program.vxs
+vfmt -In-Place Program.vxs Library.vxs
+vfmt -Dry-Run Program.vxs Library.vxs
 vfmt -Help
 ```
 
-Standard mode writes formatted source to standard output. `-In-Place` overwrites the file, while `-Dry-Run` produces no
-output and returns a failing exit status when formatting would change the file.
+Standard mode writes one formatted source to standard output. `-In-Place` overwrites every requested file, while
+`-Dry-Run` produces no output and returns a failing exit status when any requested source would change. Standard mode
+accepts one source because concatenating independent programs on standard output would be ambiguous; the other modes
+accept one or more sources and evaluate project configuration only once.
 
 The default engine uses four spaces per block level. Its public Haskell options also support tabs, an independent tab width,
 explicit LF or CRLF output, disabling reindentation, and preserving a missing final newline. Lines crossed by a multi-line
@@ -24,4 +26,7 @@ raw string or long comment retain their payload indentation and trailing whitesp
 ending changes when an explicit output ending is requested.
 
 The Kotlin module under `sources/main/kotlin` owns the typed `Visual.Formatter.kts` configuration surface, canonical
-defaults, validation, and immutable snapshots. Script discovery and evaluation are intentionally outside this module.
+defaults, validation, immutable snapshots, and real scripting evaluator. `vfmt` invokes the installed `vfmt-config` helper
+once, then applies the selected input encoding, output encoding, and BOM policy to every requested source. Encoding is not
+a formatter CLI option: both direct `vfmt` use and project-wide `vxs format` obey `Visual.Formatter.kts`. UTF-16 and UTF-32
+output uses deterministic little-endian payloads, with BOM emission controlled independently.

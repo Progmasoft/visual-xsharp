@@ -13,6 +13,7 @@ Haskell frontend responsibility.
 module Visual.XSharp.SourceSet
     ( SourceSetRequest (..)
     , LoadedSource (..)
+    , discoverSourceSet
     , loadSourceFile
     , loadSourceSet
     , matchesGlob
@@ -105,8 +106,30 @@ A failure in any configured root makes the whole source set invalid; silently
 compiling a partial project would make diagnostics dependent on permissions,
 junction state, or traversal order.
 -}
+discoverSourceSet :: SourceSetRequest -> IO (Either [Diagnostic] [FilePath])
+discoverSourceSet request = fmap (fmap (map discoveredCanonicalPath)) (discoverSourceFiles request)
+
 loadSourceSet :: SourceSetRequest -> IO (Either [Diagnostic] [LoadedSource])
 loadSourceSet request = do
+    discovered <- discoverSourceFiles request
+    case discovered of
+        Left problems -> pure (Left problems)
+        Right files -> do
+            decoded <- mapM decodeDiscovered files
+            let decodeProblems = concat [problems | Left problems <- decoded]
+                sources = [source | Right source <- decoded]
+            pure $ if null decodeProblems then Right sources else Left decodeProblems
+    where
+        decodeDiscovered file =
+            decodeSource (discoveredCanonicalPath file) (discoveredRelativePath file)
+
+{- | Discover source identities without opening their contents. Formatting and
+linting own their input encoding, so project-wide tool dispatch must not make
+the compiler's UTF-8 source decoder an accidental gate before the tool runs.
+Compilation still calls 'loadSourceSet' and therefore remains strict UTF-8.
+-}
+discoverSourceFiles :: SourceSetRequest -> IO (Either [Diagnostic] [DiscoveredFile])
+discoverSourceFiles request = do
     canonicalProject <- tryCanonical (sourceSetProjectRoot request)
     case canonicalProject of
         Left problem -> pure (Left [sourceProblem "VXS0004" ("cannot resolve project root: " ++ problem)])
@@ -116,7 +139,7 @@ loadSourceSet request = do
                 then pure (Left [sourceProblem "VXS0005" ("project root is not a directory: " ++ projectRoot)])
                 else discoverFromRoots projectRoot request
 
-discoverFromRoots :: FilePath -> SourceSetRequest -> IO (Either [Diagnostic] [LoadedSource])
+discoverFromRoots :: FilePath -> SourceSetRequest -> IO (Either [Diagnostic] [DiscoveredFile])
 discoverFromRoots projectRoot request
     | null (sourceSetRoots request) = pure (Left [sourceProblem "VXS0006" "project has no configured source roots"])
     | otherwise = do
@@ -124,21 +147,15 @@ discoverFromRoots projectRoot request
         let unique = uniqueFiles (walkFiles walked)
             ordered = sortOn (pathOrderingKey . discoveredRelativePath) unique
             discoveryProblems = reverse (walkProblems walked)
-        decoded <- mapM decodeDiscovered ordered
-        let decodeProblems = concat [problems | Left problems <- decoded]
-            sources = [source | Right source <- decoded]
-            allProblems = discoveryProblems ++ decodeProblems
         pure $
-            if not (null allProblems)
-                then Left allProblems
+            if not (null discoveryProblems)
+                then Left discoveryProblems
                 else
-                    if null sources
+                    if null ordered
                         then Left [sourceProblem "VXS0007" "configured source roots contain no non-excluded .vxs files"]
-                        else Right sources
+                        else Right ordered
     where
         patterns = map normalizePattern (sourceSetExcludes request)
-        decodeDiscovered file =
-            decodeSource (discoveredCanonicalPath file) (discoveredRelativePath file)
 
 walkConfiguredRoot :: FilePath -> [String] -> WalkState -> FilePath -> IO WalkState
 walkConfiguredRoot projectRoot patterns state configuredRoot = do
