@@ -87,6 +87,7 @@ test-suite visual-xsharp-compiler-tests
         MonomorphizationTests
         ParserContractTests
         ScalarWireTests
+        ShortCircuitTests
         SpecializationTests
         SourceSetTests
         SourceTextTests

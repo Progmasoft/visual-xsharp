@@ -72,6 +72,7 @@ type systemRunner struct {
 }
 
 var nativeTargets = []string{
+	"//Compiler/Analysis/Tests:definite_initialization_tests",
 	"//Compiler/Backend/LLVM/Tests:llvm_backend_tests",
 	"//Compiler/Cli/Tests:cli_parser_tests",
 	"//Compiler/Core/Tests:callable_contract_tests",
@@ -79,10 +80,13 @@ var nativeTargets = []string{
 	"//Compiler/Driver/Tests:artifact_wire_tests",
 	"//Compiler/Driver/Tests:closure_pipeline_tests",
 	"//Compiler/Driver/Tests:scalar_pipeline_tests",
+	"//Compiler/Codegen/Xmm/Tests:xmm_verifier_tests",
+	"//Compiler/Codegen/Xpp/Tests:xpp_verifier_tests",
 	"//Compiler/Runtime/AARC/Tests:aarc_runtime_tests",
 }
 
 var nativePrograms = []string{
+	"Compiler/Analysis/Tests/definite_initialization_tests",
 	"Compiler/Backend/LLVM/Tests/llvm_backend_tests",
 	"Compiler/Cli/Tests/cli_parser_tests",
 	"Compiler/Core/Tests/callable_contract_tests",
@@ -90,6 +94,8 @@ var nativePrograms = []string{
 	"Compiler/Driver/Tests/artifact_wire_tests",
 	"Compiler/Driver/Tests/closure_pipeline_tests",
 	"Compiler/Driver/Tests/scalar_pipeline_tests",
+	"Compiler/Codegen/Xmm/Tests/xmm_verifier_tests",
+	"Compiler/Codegen/Xpp/Tests/xpp_verifier_tests",
 	"Compiler/Runtime/AARC/Tests/aarc_runtime_tests",
 }
 

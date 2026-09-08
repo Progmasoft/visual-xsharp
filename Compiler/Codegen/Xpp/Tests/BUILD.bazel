@@ -1,0 +1,13 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_binary(
+    name = "xpp_verifier_tests",
+    srcs = ["VerifierTests.cpp"],
+    deps = [
+        "//Compiler/Codegen/Xpp:xpp",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
+        "@catch2//:catch2_main",
+    ],
+)

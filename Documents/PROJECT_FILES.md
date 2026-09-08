@@ -79,6 +79,10 @@ compiler {
 }
 ```
 
+`typeSafeFormat = true` is the default strict policy: compile-time-known format strings used by formatted Console APIs
+must match their argument types. `false` selects the looser C-compatible policy. The name describes strict type safety;
+it is not an opt-in to permissive formatting.
+
 ## Sources and tests
 
 ```kotlin

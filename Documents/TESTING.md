@@ -81,8 +81,24 @@ go run scripts/develop.go doctor
 go run scripts/develop.go test
 ```
 
-The command executes all eight Catch2 binaries directly on Windows 10/11 and macOS Sequoia/Tahoe. Bazel selects the host
+The command executes all 11 Catch2 binaries directly on Windows 10/11 and macOS Sequoia/Tahoe. Bazel selects the host
 configuration automatically; no public test instruction requires `--config`.
+
+Control-flow changes must exercise the stage that creates edges and every
+storage-oriented consumer of those edges. Three component-owned suites make
+that boundary explicit:
+
+- `Compiler/Analysis/Tests/definite_initialization_tests` checks the shared
+  reachability and predecessor-intersection fixed point;
+- `Compiler/Codegen/Xpp/Tests/xpp_verifier_tests` checks symbolic storage,
+  including direct-function versus closure-storage reads; and
+- `Compiler/Codegen/Xmm/Tests/xmm_verifier_tests` checks virtual-register
+  initialization and block-order independence.
+
+The integrated developer command builds and executes all three. Focused Bazel
+labels shorten iteration, but they do not replace the full native gate. See
+[Control-flow safety](CONTROL-FLOW-SAFETY.md) for the equations and required
+expression-lowering invariants.
 
 Run native memory diagnostics through the same entry point:
 
@@ -99,6 +115,9 @@ Use Bazel target boundaries to keep iteration focused:
 bazelisk build //Compiler/Core:core
 bazelisk build //Compiler/Codegen/Xpp:xpp
 bazelisk build //Compiler/Codegen/Xmm:xmm
+bazelisk build //Compiler/Analysis/Tests:definite_initialization_tests
+bazelisk build //Compiler/Codegen/Xpp/Tests:xpp_verifier_tests
+bazelisk build //Compiler/Codegen/Xmm/Tests:xmm_verifier_tests
 bazelisk build //Compiler/Backend/LLVM:llvm_backend
 bazelisk build //Compiler/Driver:core_pipeline
 bazelisk build //Compiler/Core/Tests:core_pipeline_tests
@@ -117,7 +136,10 @@ test identifies the contract that owns its maintenance:
 | Test package | Contract |
 | --- | --- |
 | `Compiler/Cli/Tests` | command grammar, option scope, and output behavior |
+| `Compiler/Analysis/Tests` | reusable CFG reachability and definite-initialization facts |
 | `Compiler/Core/Tests` | Core model, verification, artifacts, and golden wire |
+| `Compiler/Codegen/Xpp/Tests` | symbolic-storage verification at the Xpp boundary |
+| `Compiler/Codegen/Xmm/Tests` | virtual-register verification at the Xmm boundary |
 | `Compiler/Driver/Tests` | connected CorePrep, Xpp, and Xmm stage behavior |
 | `Compiler/Backend/LLVM/Tests` | LLVM IR and native artifact lowering |
 

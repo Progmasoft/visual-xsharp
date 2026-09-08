@@ -3,7 +3,7 @@
 
 module NumericTests (numericTests) where
 
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, isPrefixOf)
 import Visual.XSharp.AST
 import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.CharacterLiteral
@@ -454,12 +454,14 @@ numericBranchCorePrep = case prepareCore source of
 
 numericLogicalCorePrep :: Bool
 numericLogicalCorePrep = case prepareCore source of
-    Right prepared -> any normalizedLogical instructions
+    Right prepared ->
+        any hasBooleanSeed instructions
+            && any hasConditional blocks
+            && any hasBooleanAssignment instructions
+            && not (any eagerLogical instructions)
         where
-            instructions =
-                concatMap
-                    corePrepBlockInstructions
-                    (concatMap corePrepFunctionBlocks (corePrepModuleFunctions prepared))
+            blocks = concatMap corePrepFunctionBlocks (corePrepModuleFunctions prepared)
+            instructions = concatMap corePrepBlockInstructions blocks
     Left _ -> False
     where
         left = ResolvedName (SymbolId 2) (Identifier "left")
@@ -479,9 +481,21 @@ numericLogicalCorePrep = case prepareCore source of
                         )
                     ]
                 ]
-        normalizedLogical (CorePrepBind _ resultType _ (CorePrepPrimitive CoreLogicalAnd operands)) =
-            resultType == boolType && map corePrepAtomTypeForTest operands == [boolType, boolType]
-        normalizedLogical _ = False
+        hasBooleanSeed (CorePrepBind name resultType True (CorePrepCopy (CorePrepLiteral (CoreBoolean False) literalType))) =
+            "$shortcircuit" `isPrefixOf` identifierText (resolvedSpelling name)
+                && resultType == boolType
+                && literalType == boolType
+        hasBooleanSeed _ = False
+        hasConditional block = case corePrepBlockTerminator block of
+            CorePrepBranch condition _ _ -> corePrepAtomTypeForTest condition == boolType
+            _ -> False
+        hasBooleanAssignment (CorePrepAssign name value) =
+            "$shortcircuit" `isPrefixOf` identifierText (resolvedSpelling name)
+                && corePrepAtomTypeForTest value == boolType
+        hasBooleanAssignment _ = False
+        eagerLogical (CorePrepBind _ _ _ (CorePrepPrimitive primitive _)) = primitive `elem` [CoreLogicalAnd, CoreLogicalOr]
+        eagerLogical (CorePrepEvaluate (CorePrepPrimitive primitive _)) = primitive `elem` [CoreLogicalAnd, CoreLogicalOr]
+        eagerLogical _ = False
 
 corePrepAtomTypeForTest :: CorePrepAtom -> Type
 corePrepAtomTypeForTest atom = case atom of

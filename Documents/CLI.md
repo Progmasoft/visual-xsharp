@@ -101,6 +101,12 @@ vxs viget push|update
 Canonical compiler settings use one leading hyphen and the displayed capitalization. `-Help` is the canonical help
 control. Legacy GNU-style controls, including `--help` and `--version`, are rejected.
 
+`-Type-Safe-Format true` is the strict and default mode. Calls to formatted Console APIs must use a format grammar whose
+conversions agree with the corresponding argument types; a mismatch is a compile-time error. Setting the option to
+`false` requests the intentionally looser C-compatible format-checking policy. It does not disable parsing the format
+string or make malformed conversions valid. The distinction matters most for `Console.Printf`, `Console.Printfn`,
+`Console.Errorf`, `Console.Errorfn`, `Console.Format`, and formatted Console input.
+
 ## Parser model
 
 The parser converts raw process arguments into typed command, input, output, warning, Boolean, LLVM, and ViGet-action

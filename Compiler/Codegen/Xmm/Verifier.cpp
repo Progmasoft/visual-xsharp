@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
@@ -16,6 +17,7 @@ namespace Visual::XSharp::Xmm
 {
     namespace core = ::visual_xsharp::core;
     namespace xmm = ::visual_xsharp::xmm;
+    namespace dataflow = ::Visual::XSharp::Analysis;
 
     namespace
     {
@@ -351,12 +353,9 @@ namespace Visual::XSharp::Xmm
             {
                 if (instruction.destination == 0)
                     context.add(IssueKind::InvalidFunction, "VXL1025", "result-producing instruction has register zero");
-                else if (const auto [found, inserted] = registers.emplace(instruction.destination, instruction.result_type);
-                         !inserted && found->second != instruction.result_type)
-                    // Rewriting a virtual register is legal because Xmm registers are storage.
-                    // Changing its established type is not: one LLVM alloca cannot safely serve
-                    // two unrelated layouts on different control-flow paths.
-                    context.add(IssueKind::RegisterRedefinition, "VXL1026", "virtual register is written with a type that differs from its established storage type");
+                else if (const auto found = registers.find(instruction.destination);
+                         found == registers.end())
+                    context.add(IssueKind::InvalidFunction, "VXL1025", "result destination is absent from the register catalog");
             }
             else if (instruction.result_type.kind != core::Type::Kind::Unit
                      && instruction.opcode != xmm::Opcode::Call
@@ -383,6 +382,104 @@ namespace Visual::XSharp::Xmm
             }
             else if (terminator.kind == xmm::Terminator::Kind::Jump && !blocks.contains(terminator.true_target))
                 context.add(IssueKind::InvalidTarget, "VXL1031", "jump target does not name a function block");
+        }
+
+        [[nodiscard]] auto
+        Successors(const xmm::Terminator &terminator) -> std::vector<dataflow::BlockId>
+        {
+            switch (terminator.kind)
+            {
+                case xmm::Terminator::Kind::Branch:
+                    return { terminator.true_target, terminator.false_target };
+                case xmm::Terminator::Kind::Jump:
+                    return { terminator.true_target };
+                case xmm::Terminator::Kind::Return:
+                case xmm::Terminator::Kind::Unreachable:
+                    return {};
+            }
+            return {};
+        }
+
+        void
+        AppendRegisterRead(
+            const xmm::Value &value,
+            const std::unordered_map<xmm::VirtualRegister, core::Type> &registers,
+            std::vector<dataflow::StorageId> &reads)
+        {
+            if (value.kind == xmm::Value::Kind::Register && registers.contains(value.reg))
+                reads.push_back(value.reg);
+        }
+
+        [[nodiscard]] auto
+        DataflowFunction(
+            const xmm::Function &function,
+            const std::unordered_map<xmm::VirtualRegister, core::Type> &registers) -> dataflow::Function
+        {
+            dataflow::Function model;
+            model.entry = function.entry;
+            model.declarations.reserve(registers.size());
+            for (const auto &[reg, type] : registers)
+            {
+                static_cast<void>(type);
+                model.declarations.push_back(reg);
+            }
+            std::ranges::sort(model.declarations);
+            model.initiallyInitialized.reserve(function.parameter_registers.size());
+            for (const auto reg : function.parameter_registers)
+                if (registers.contains(reg))
+                    model.initiallyInitialized.push_back(reg);
+
+            model.blocks.reserve(function.blocks.size());
+            for (const auto &block : function.blocks)
+            {
+                dataflow::Block flowBlock;
+                flowBlock.id = block.id;
+                flowBlock.successors = Successors(block.terminator);
+                flowBlock.accesses.reserve(block.instructions.size() + 1U);
+                for (std::size_t index = 0; index < block.instructions.size(); ++index)
+                {
+                    const auto &instruction = block.instructions[index];
+                    dataflow::AccessPoint access;
+                    access.instruction = index;
+                    for (const auto &operand : instruction.operands)
+                        AppendRegisterRead(operand, registers, access.reads);
+                    if (instruction.has_result && registers.contains(instruction.destination))
+                        access.write = instruction.destination;
+                    flowBlock.accesses.push_back(std::move(access));
+                }
+
+                dataflow::AccessPoint terminatorAccess;
+                terminatorAccess.instruction = block.instructions.size();
+                terminatorAccess.terminator = true;
+                if (block.terminator.kind == xmm::Terminator::Kind::Return
+                    || block.terminator.kind == xmm::Terminator::Kind::Branch)
+                    AppendRegisterRead(block.terminator.value, registers, terminatorAccess.reads);
+                flowBlock.accesses.push_back(std::move(terminatorAccess));
+                model.blocks.push_back(std::move(flowBlock));
+            }
+            return model;
+        }
+
+        void
+        VerifyDefiniteInitialization(
+            Context &context,
+            const xmm::Function &function,
+            const std::unordered_map<xmm::VirtualRegister, core::Type> &registers)
+        {
+            const auto result = dataflow::Analyze(DataflowFunction(function, registers));
+            for (const auto &issue : result.issues)
+            {
+                if (issue.kind != dataflow::IssueKind::ReadBeforeInitialization)
+                    continue;
+                context.block = issue.block;
+                context.instruction = issue.instruction;
+                context.add(
+                    IssueKind::UninitializedRegister,
+                    "VXL1045",
+                    issue.terminator
+                        ? "terminator reads a virtual register that is not initialized on every incoming path"
+                        : "instruction reads a virtual register that is not initialized on every incoming path");
+            }
         }
     } // namespace
 
@@ -437,6 +534,24 @@ namespace Visual::XSharp::Xmm
                     context.add(IssueKind::UnsupportedType, "VXL1005", "parameter type is not lowerable to LLVM");
             }
 
+            // Establish storage types independently of block presentation order.
+            // Definite initialization is checked separately against CFG paths;
+            // this catalog exists only to validate register identity and type.
+            for (const auto &block : function.blocks)
+                for (const auto &instruction : block.instructions)
+                    if (instruction.has_result && instruction.destination != 0)
+                    {
+                        const auto [found, inserted] = registers.emplace(instruction.destination, instruction.result_type);
+                        if (!inserted && found->second != instruction.result_type)
+                        {
+                            context.block = block.id;
+                            context.add(
+                                IssueKind::RegisterRedefinition,
+                                "VXL1026",
+                                "virtual register is written with a type that differs from its established storage type");
+                        }
+                    }
+
             std::unordered_set<xmm::BlockId> blocks;
             for (const auto &block : function.blocks)
                 if (!blocks.insert(block.id).second)
@@ -458,6 +573,7 @@ namespace Visual::XSharp::Xmm
                 context.instruction = block.instructions.size();
                 VerifyTerminator(context, block.terminator, function, registers, functions, blocks);
             }
+            VerifyDefiniteInitialization(context, function, registers);
         }
         return context.issues;
     }

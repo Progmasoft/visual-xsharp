@@ -13,6 +13,7 @@ import MonomorphizationTests (monomorphizationTests)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
 import ScalarWireTests (scalarWireTests)
+import ShortCircuitTests (shortCircuitTests)
 import SourceSetTests (sourceSetTests)
 import SourceTextTests (sourceTextTests)
 import SpecializationTests (specializationTests)
@@ -123,6 +124,7 @@ main = do
     mapM_ (uncurry check) monomorphizationTests
     mapM_ (uncurry check) parserContractTests
     mapM_ (uncurry check) scalarWireTests
+    mapM_ (uncurry check) shortCircuitTests
     mapM_ (uncurry check) specializationTests
     mapM_ (uncurry check) voidTests
 

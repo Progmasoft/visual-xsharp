@@ -183,7 +183,7 @@ namespace
         { "-Wexperimental", Option::Wexperimental, kCompilerCommands, ValueDomain::Boolean, "enable experimental warnings" },
         { "-Wshadow", Option::Wshadow, kCompilerCommands, ValueDomain::Boolean, "enable shadowing warnings" },
         { "-Wundef", Option::Wundef, kCompilerCommands, ValueDomain::Boolean, "enable undefined-name warnings" },
-        { "-Type-Safe-Format", Option::TypeSafeFormat, kCompilerCommands, ValueDomain::Boolean, "enable type-safe format checks" },
+        { "-Type-Safe-Format", Option::TypeSafeFormat, kCompilerCommands, ValueDomain::Boolean, "require strict format-argument type matching; false enables C-like compatibility" },
         { "-Backend", Option::Backend, kCompilerCommands, ValueDomain::Backend, "select the compiler backend" },
         { "-Llvm-OptLevel", Option::LlvmOptLevel, kCompilerCommands, ValueDomain::LlvmOptLevel, "select LLVM optimization" },
         { "-Llvm-Compiler", Option::LlvmCompiler, kCompilerCommands, ValueDomain::LlvmCompiler, "select LLVM execution mode" },

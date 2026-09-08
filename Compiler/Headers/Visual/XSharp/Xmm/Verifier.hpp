@@ -30,7 +30,8 @@ namespace Visual::XSharp::Xmm
         InvalidCall,
         InvalidReturn,
         InvalidBranch,
-        InvalidLiteral
+        InvalidLiteral,
+        UninitializedRegister
     };
 
     struct VerificationIssue final

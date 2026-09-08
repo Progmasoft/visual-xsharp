@@ -61,6 +61,16 @@ data PrepState = PrepState
     , pendingFunctions :: [CoreFunction]
     }
 
+-- An OpenBlock is the current continuation while expressions are being
+-- atomized. Most expressions only append instructions, but short-circuit
+-- expressions close the current block, emit a conditional region, and return
+-- a fresh join block. Keeping that distinction explicit prevents a nested
+-- logical expression from being flattened back into eager instruction order.
+data OpenBlock = OpenBlock
+    { openBlockId :: Int
+    , openBlockInstructions :: [CorePrepInstruction]
+    }
+
 prepareCore :: CoreModule -> Either [Diagnostic] CorePrepModule
 prepareCore moduleValue =
     let seed = 1 + maximum (0 : concatMap symbolIds (coreModuleFunctions moduleValue))
@@ -84,7 +94,7 @@ prepareFunctionQueue state (function : remaining) =
 
 prepareFunction :: PrepState -> CoreFunction -> (CorePrepFunction, PrepState)
 prepareFunction state function =
-    let (blocks, after) = prepareStatements state 0 [] (coreFunctionBody function)
+    let (blocks, after) = prepareStatements state (OpenBlock 0 []) (coreFunctionBody function)
      in ( CorePrepFunction
             (coreFunctionName function)
             (coreFunctionParameters function)
@@ -125,58 +135,65 @@ expressionSymbolIds expression = case expression of
     where
         symbol = symbolIdValue . resolvedSymbol
 
-prepareStatements :: PrepState -> Int -> [CorePrepInstruction] -> [CoreStatement] -> ([CorePrepBlock], PrepState)
-prepareStatements state blockId instructions [] = ([CorePrepBlock blockId instructions CorePrepUnreachable], state)
-prepareStatements state blockId instructions (statement : remaining) = case statement of
+prepareStatements :: PrepState -> OpenBlock -> [CoreStatement] -> ([CorePrepBlock], PrepState)
+prepareStatements state open [] = ([closeBlock open CorePrepUnreachable], state)
+prepareStatements state open (statement : remaining) = case statement of
     CoreBind binding ->
-        let (prefix, operation, after) = atomizeOperation state (coreBindingValue binding)
+        let (closed, continued, operation, after) = atomizeOperation state open (coreBindingValue binding)
             instruction = CorePrepBind (coreBindingName binding) (coreBindingType binding) (coreBindingMutable binding) operation
-         in prepareStatements after blockId (instructions ++ prefix ++ [instruction]) remaining
+            (later, final) = prepareStatements after (appendInstruction continued instruction) remaining
+         in (closed ++ later, final)
     CoreAssign name value ->
-        let (prefix, atom, after) = atomize state value
-         in prepareStatements after blockId (instructions ++ prefix ++ [CorePrepAssign name atom]) remaining
+        let (closed, continued, atom, after) = atomize state open value
+            (later, final) = prepareStatements after (appendInstruction continued (CorePrepAssign name atom)) remaining
+         in (closed ++ later, final)
     CoreEvaluate value ->
-        let (prefix, operation, after) = atomizeOperation state value
-         in prepareStatements after blockId (instructions ++ prefix ++ [CorePrepEvaluate operation]) remaining
+        let (closed, continued, operation, after) = atomizeOperation state open value
+            (later, final) = prepareStatements after (appendInstruction continued (CorePrepEvaluate operation)) remaining
+         in (closed ++ later, final)
     CoreReturn value ->
-        let (prefix, atom, after) = atomize state value
-         in ([CorePrepBlock blockId (instructions ++ prefix) (CorePrepReturn atom)], after)
+        let (closed, continued, atom, after) = atomize state open value
+         in (closed ++ [closeBlock continued (CorePrepReturn atom)], after)
     CoreIf condition trueBranch falseBranch ->
-        let (conditionPrefix, conditionAtom, afterCondition) = atomize state condition
-            (booleanPrefix, booleanAtom, afterBoolean) = booleanizeAtom afterCondition conditionAtom
+        let (conditionBlocks, conditionOpen, conditionAtom, afterCondition) = atomize state open condition
+            (booleanOpen, booleanAtom, afterBoolean) = booleanizeAtom afterCondition conditionOpen conditionAtom
             trueId = nextBlock afterBoolean
             falseId = trueId + 1
             joinId = falseId + 1
             branchState = afterBoolean {nextBlock = joinId + 1}
             (trueBlocks, afterTrue) = prepareBranch branchState trueId joinId trueBranch
             (falseBlocks, afterFalse) = prepareBranch afterTrue falseId joinId falseBranch
-            header =
-                CorePrepBlock
-                    blockId
-                    (instructions ++ conditionPrefix ++ booleanPrefix)
-                    (CorePrepBranch booleanAtom trueId falseId)
-            (tailBlocks, final) = prepareStatements afterFalse joinId [] remaining
-         in (header : trueBlocks ++ falseBlocks ++ tailBlocks, final)
+            header = closeBlock booleanOpen (CorePrepBranch booleanAtom trueId falseId)
+            (tailBlocks, final) = prepareStatements afterFalse (OpenBlock joinId []) remaining
+         in (conditionBlocks ++ [header] ++ trueBlocks ++ falseBlocks ++ tailBlocks, final)
+
+appendInstruction :: OpenBlock -> CorePrepInstruction -> OpenBlock
+appendInstruction open instruction =
+    open {openBlockInstructions = openBlockInstructions open ++ [instruction]}
+
+closeBlock :: OpenBlock -> CorePrepTerminator -> CorePrepBlock
+closeBlock open terminator =
+    CorePrepBlock (openBlockId open) (openBlockInstructions open) terminator
 
 -- Numeric conditions are a source-language convenience. Core retains their
 -- numeric type for optimization, while CorePrep makes the zero comparison
 -- explicit so every native branch still consumes a canonical bool atom.
-booleanizeAtom :: PrepState -> CorePrepAtom -> ([CorePrepInstruction], CorePrepAtom, PrepState)
-booleanizeAtom state atom
-    | corePrepAtomType atom == boolType = ([], atom, state)
+booleanizeAtom :: PrepState -> OpenBlock -> CorePrepAtom -> (OpenBlock, CorePrepAtom, PrepState)
+booleanizeAtom state open atom
+    | corePrepAtomType atom == boolType = (open, atom, state)
     | otherwise =
         let identifier = nextTemporary state
             temporary = ResolvedName (SymbolId identifier) (Identifier ("$condition" ++ show identifier))
             zero = CorePrepLiteral (CoreInteger 0) (corePrepAtomType atom)
             instruction = CorePrepBind temporary boolType False (CorePrepPrimitive CoreNotEqual [atom, zero])
-         in ([instruction], CorePrepVariable temporary boolType, state {nextTemporary = identifier + 1})
+         in (appendInstruction open instruction, CorePrepVariable temporary boolType, state {nextTemporary = identifier + 1})
 
-booleanizeMany :: PrepState -> [CorePrepAtom] -> ([CorePrepInstruction], [CorePrepAtom], PrepState)
-booleanizeMany state [] = ([], [], state)
-booleanizeMany state (atom : remaining) =
-    let (prefix, boolean, after) = booleanizeAtom state atom
-        (laterPrefix, later, final) = booleanizeMany after remaining
-     in (prefix ++ laterPrefix, boolean : later, final)
+booleanizeMany :: PrepState -> OpenBlock -> [CorePrepAtom] -> (OpenBlock, [CorePrepAtom], PrepState)
+booleanizeMany state open [] = (open, [], state)
+booleanizeMany state open (atom : remaining) =
+    let (continued, boolean, after) = booleanizeAtom state open atom
+        (finalOpen, later, final) = booleanizeMany after continued remaining
+     in (finalOpen, boolean : later, final)
 
 corePrepAtomType :: CorePrepAtom -> Type
 corePrepAtomType atom = case atom of
@@ -185,48 +202,58 @@ corePrepAtomType atom = case atom of
 
 prepareBranch :: PrepState -> Int -> Int -> [CoreStatement] -> ([CorePrepBlock], PrepState)
 prepareBranch state blockId joinId statements =
-    let (blocks, after) = prepareStatements state blockId [] statements
+    let (blocks, after) = prepareStatements state (OpenBlock blockId []) statements
      in (map addJump blocks, after)
     where
         addJump block | corePrepBlockTerminator block == CorePrepUnreachable = block {corePrepBlockTerminator = CorePrepJump joinId}
         addJump block = block
 
-atomize :: PrepState -> CoreExpression -> ([CorePrepInstruction], CorePrepAtom, PrepState)
-atomize state expression = case expression of
-    CoreVariable name valueType -> ([], CorePrepVariable name valueType, state)
-    CoreLiteral literal valueType -> ([], CorePrepLiteral literal valueType, state)
+atomize :: PrepState -> OpenBlock -> CoreExpression -> ([CorePrepBlock], OpenBlock, CorePrepAtom, PrepState)
+atomize state open expression = case expression of
+    CoreVariable name valueType -> ([], open, CorePrepVariable name valueType, state)
+    CoreLiteral literal valueType -> ([], open, CorePrepLiteral literal valueType, state)
+    CorePrimitive primitive [left, right] _
+        | primitive == CoreLogicalAnd || primitive == CoreLogicalOr ->
+            atomizeShortCircuit state open primitive left right
     _ ->
-        let (prefix, operation, afterOperation) = atomizeOperation state expression
+        let (closed, continued, operation, afterOperation) = atomizeOperation state open expression
             temporary =
                 ResolvedName (SymbolId (nextTemporary afterOperation)) (Identifier ("$coreprep" ++ show (nextTemporary afterOperation)))
             valueType = expressionType expression
             instruction = CorePrepBind temporary valueType False operation
-         in ( prefix ++ [instruction]
+         in ( closed
+            , appendInstruction continued instruction
             , CorePrepVariable temporary valueType
             , afterOperation {nextTemporary = nextTemporary afterOperation + 1}
             )
 
-atomizeOperation :: PrepState -> CoreExpression -> ([CorePrepInstruction], CorePrepOperation, PrepState)
-atomizeOperation state expression = case expression of
-    CoreVariable name valueType -> ([], CorePrepCopy (CorePrepVariable name valueType), state)
-    CoreLiteral literal valueType -> ([], CorePrepCopy (CorePrepLiteral literal valueType), state)
+atomizeOperation ::
+    PrepState -> OpenBlock -> CoreExpression -> ([CorePrepBlock], OpenBlock, CorePrepOperation, PrepState)
+atomizeOperation state open expression = case expression of
+    CoreVariable name valueType -> ([], open, CorePrepCopy (CorePrepVariable name valueType), state)
+    CoreLiteral literal valueType -> ([], open, CorePrepCopy (CorePrepLiteral literal valueType), state)
+    CorePrimitive primitive [left, right] _
+        | primitive == CoreLogicalAnd || primitive == CoreLogicalOr ->
+            let (closed, continued, atom, after) = atomizeShortCircuit state open primitive left right
+             in (closed, continued, CorePrepCopy atom, after)
     CoreApply callee arguments _ ->
-        let (calleePrefix, calleeAtom, afterCallee) = atomize state callee
-            (argumentPrefix, argumentAtoms, afterArguments) = atomizeMany afterCallee arguments
-         in (calleePrefix ++ argumentPrefix, CorePrepCall calleeAtom argumentAtoms, afterArguments)
+        let (calleeBlocks, calleeOpen, calleeAtom, afterCallee) = atomize state open callee
+            (argumentBlocks, argumentOpen, argumentAtoms, afterArguments) = atomizeMany afterCallee calleeOpen arguments
+         in (calleeBlocks ++ argumentBlocks, argumentOpen, CorePrepCall calleeAtom argumentAtoms, afterArguments)
     CorePrimitive primitive arguments _ ->
-        let (prefix, atoms, after) = atomizeMany state arguments
+        let (closed, continued, atoms, after) = atomizeMany state open arguments
             logical = primitive `elem` [CoreLogicalAnd, CoreLogicalOr, CoreLogicalNot]
-            (booleanPrefix, preparedAtoms, final) =
-                if logical then booleanizeMany after atoms else ([], atoms, after)
-         in (prefix ++ booleanPrefix, CorePrepPrimitive primitive preparedAtoms, final)
+            (finalOpen, preparedAtoms, final) =
+                if logical then booleanizeMany after continued atoms else (continued, atoms, after)
+         in (closed, finalOpen, CorePrepPrimitive primitive preparedAtoms, final)
     CoreClosure captures parameters returnType body _ ->
         let closureId = nextTemporary state
             closureName =
                 ResolvedName (SymbolId closureId) (Identifier ("$closure" ++ show closureId))
-            (capturePrefix, preparedCaptures, afterCaptures) =
+            (captureBlocks, captureOpen, preparedCaptures, afterCaptures) =
                 atomizeCaptures
                     (state {nextTemporary = closureId + 1})
+                    open
                     captures
             hiddenParameters = [(coreCaptureName capture, coreCaptureType capture) | capture <- captures]
             lifted = CoreFunction closureName (hiddenParameters ++ parameters) returnType body
@@ -234,26 +261,72 @@ atomizeOperation state expression = case expression of
                 afterCaptures
                     { pendingFunctions = pendingFunctions afterCaptures ++ [lifted]
                     }
-         in (capturePrefix, CorePrepMakeClosure closureName preparedCaptures, finalState)
+         in (captureBlocks, captureOpen, CorePrepMakeClosure closureName preparedCaptures, finalState)
 
-atomizeMany :: PrepState -> [CoreExpression] -> ([CorePrepInstruction], [CorePrepAtom], PrepState)
-atomizeMany state [] = ([], [], state)
-atomizeMany state (value : remaining) =
-    let (prefix, atom, after) = atomize state value; (laterPrefix, atoms, final) = atomizeMany after remaining
-     in (prefix ++ laterPrefix, atom : atoms, final)
+-- Logical conjunction and disjunction are control flow, not ordinary eager
+-- primitive instructions. The result slot is initialized before branching and
+-- overwritten only on the path that evaluates the right operand. Consequently
+-- every join predecessor carries an initialized Bool without requiring a phi
+-- node in CorePrep's storage-oriented IR.
+atomizeShortCircuit ::
+    PrepState ->
+    OpenBlock ->
+    CorePrimitive ->
+    CoreExpression ->
+    CoreExpression ->
+    ([CorePrepBlock], OpenBlock, CorePrepAtom, PrepState)
+atomizeShortCircuit state open primitive left right =
+    let (leftBlocks, leftOpen, leftAtom, afterLeft) = atomize state open left
+        (conditionOpen, conditionAtom, afterCondition) = booleanizeAtom afterLeft leftOpen leftAtom
+        resultId = nextTemporary afterCondition
+        resultName = ResolvedName (SymbolId resultId) (Identifier ("$shortcircuit" ++ show resultId))
+        resultAtom = CorePrepVariable resultName boolType
+        defaultValue = CorePrepLiteral (CoreBoolean (primitive == CoreLogicalOr)) boolType
+        initializedOpen =
+            appendInstruction conditionOpen (CorePrepBind resultName boolType True (CorePrepCopy defaultValue))
+        rightId = nextBlock afterCondition
+        joinId = rightId + 1
+        afterReservation =
+            afterCondition
+                { nextTemporary = resultId + 1
+                , nextBlock = joinId + 1
+                }
+        branch =
+            if primitive == CoreLogicalAnd
+                then CorePrepBranch conditionAtom rightId joinId
+                else CorePrepBranch conditionAtom joinId rightId
+        header = closeBlock initializedOpen branch
+        (rightBlocks, rightOpen, rightAtom, afterRight) =
+            atomize afterReservation (OpenBlock rightId []) right
+        (booleanRightOpen, booleanRight, final) = booleanizeAtom afterRight rightOpen rightAtom
+        assignedRight = appendInstruction booleanRightOpen (CorePrepAssign resultName booleanRight)
+        rightExit = closeBlock assignedRight (CorePrepJump joinId)
+     in ( leftBlocks ++ [header] ++ rightBlocks ++ [rightExit]
+        , OpenBlock joinId []
+        , resultAtom
+        , final
+        )
+
+atomizeMany :: PrepState -> OpenBlock -> [CoreExpression] -> ([CorePrepBlock], OpenBlock, [CorePrepAtom], PrepState)
+atomizeMany state open [] = ([], open, [], state)
+atomizeMany state open (value : remaining) =
+    let (closed, continued, atom, after) = atomize state open value
+        (laterBlocks, finalOpen, atoms, final) = atomizeMany after continued remaining
+     in (closed ++ laterBlocks, finalOpen, atom : atoms, final)
 
 atomizeCaptures ::
     PrepState ->
+    OpenBlock ->
     [CoreCapture] ->
-    ([CorePrepInstruction], [CorePrepCapture], PrepState)
-atomizeCaptures state [] = ([], [], state)
-atomizeCaptures state (capture : remaining) =
-    let (prefix, atom, afterValue) = atomize state (coreCaptureValue capture)
+    ([CorePrepBlock], OpenBlock, [CorePrepCapture], PrepState)
+atomizeCaptures state open [] = ([], open, [], state)
+atomizeCaptures state open (capture : remaining) =
+    let (closed, continued, atom, afterValue) = atomize state open (coreCaptureValue capture)
         prepared =
             CorePrepCapture
                 (coreCaptureMode capture)
                 (coreCaptureName capture)
                 (coreCaptureType capture)
                 atom
-        (laterPrefix, laterCaptures, final) = atomizeCaptures afterValue remaining
-     in (prefix ++ laterPrefix, prepared : laterCaptures, final)
+        (laterBlocks, finalOpen, laterCaptures, final) = atomizeCaptures afterValue continued remaining
+     in (closed ++ laterBlocks, finalOpen, prepared : laterCaptures, final)

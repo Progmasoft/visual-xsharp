@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
@@ -17,6 +18,7 @@ namespace Visual::XSharp::Xpp
     {
         namespace Core = ::visual_xsharp::core;
         namespace IR = ::visual_xsharp::xpp;
+        namespace Dataflow = ::Visual::XSharp::Analysis;
 
         struct Context final
         {
@@ -265,6 +267,115 @@ namespace Visual::XSharp::Xpp
             else if (value.kind == IR::Terminator::Kind::Jump && !blocks.contains(value.true_target))
                 context.Add("VXP1023", "jump target does not name a function block");
         }
+
+        [[nodiscard]] auto
+        Successors(const IR::Terminator &terminator) -> std::vector<Dataflow::BlockId>
+        {
+            switch (terminator.kind)
+            {
+                case IR::Terminator::Kind::Branch:
+                    return { terminator.true_target, terminator.false_target };
+                case IR::Terminator::Kind::Jump:
+                    return { terminator.true_target };
+                case IR::Terminator::Kind::Return:
+                case IR::Terminator::Kind::Unreachable:
+                    return {};
+            }
+            return {};
+        }
+
+        void
+        AppendStorageRead(
+            const IR::Operand &operand,
+            const std::unordered_map<IR::SymbolId, Core::Type> &storage,
+            const std::unordered_map<IR::SymbolId, const IR::Function *> &functions,
+            std::vector<Dataflow::StorageId> &reads)
+        {
+            if (operand.kind != IR::Operand::Kind::Symbol)
+                return;
+            // A direct function symbol is callable identity, not local storage.
+            // Closure values have the same function type but are present in the
+            // storage catalog and therefore participate in initialization.
+            if (functions.contains(operand.symbol))
+                return;
+            if (storage.contains(operand.symbol))
+                reads.push_back(operand.symbol);
+        }
+
+        [[nodiscard]] auto
+        DataflowFunction(
+            const IR::Function &function,
+            const std::unordered_map<IR::SymbolId, Core::Type> &storage,
+            const std::unordered_map<IR::SymbolId, const IR::Function *> &functions) -> Dataflow::Function
+        {
+            Dataflow::Function model;
+            model.entry = function.entry;
+            model.declarations.reserve(storage.size());
+            for (const auto &[symbol, type] : storage)
+            {
+                static_cast<void>(type);
+                model.declarations.push_back(symbol);
+            }
+            std::ranges::sort(model.declarations);
+
+            model.initiallyInitialized.reserve(function.parameters.size());
+            for (const auto &parameter : function.parameters)
+                if (storage.contains(parameter.symbol.id))
+                    model.initiallyInitialized.push_back(parameter.symbol.id);
+
+            model.blocks.reserve(function.blocks.size());
+            for (const auto &block : function.blocks)
+            {
+                Dataflow::Block flowBlock;
+                flowBlock.id = block.id;
+                flowBlock.successors = Successors(block.terminator);
+                flowBlock.accesses.reserve(block.instructions.size() + 1U);
+                for (std::size_t index = 0; index < block.instructions.size(); ++index)
+                {
+                    const auto &instruction = block.instructions[index];
+                    Dataflow::AccessPoint access;
+                    access.instruction = index;
+                    for (const auto &operand : instruction.operands)
+                        AppendStorageRead(operand, storage, functions, access.reads);
+                    if (instruction.effect != IR::Instruction::Effect::Discard
+                        && storage.contains(instruction.destination))
+                        access.write = instruction.destination;
+                    flowBlock.accesses.push_back(std::move(access));
+                }
+
+                Dataflow::AccessPoint terminatorAccess;
+                terminatorAccess.instruction = block.instructions.size();
+                terminatorAccess.terminator = true;
+                if (block.terminator.kind == IR::Terminator::Kind::Return
+                    || block.terminator.kind == IR::Terminator::Kind::Branch)
+                    AppendStorageRead(block.terminator.value, storage, functions, terminatorAccess.reads);
+                flowBlock.accesses.push_back(std::move(terminatorAccess));
+                model.blocks.push_back(std::move(flowBlock));
+            }
+            return model;
+        }
+
+        void
+        VerifyDefiniteInitialization(
+            Context &context,
+            const IR::Function &function,
+            const std::unordered_map<IR::SymbolId, Core::Type> &storage,
+            const std::unordered_map<IR::SymbolId, const IR::Function *> &functions)
+        {
+            const auto result = Dataflow::Analyze(DataflowFunction(function, storage, functions));
+            for (const auto &issue : result.issues)
+            {
+                if (issue.kind != Dataflow::IssueKind::ReadBeforeInitialization)
+                    continue;
+                context.block = issue.block;
+                context.instruction = issue.instruction;
+                context.Add(
+                    "VXP1041",
+                    issue.terminator
+                        ? "terminator reads storage that is not initialized on every incoming path"
+                        : "instruction reads storage that is not initialized on every incoming path");
+            }
+        }
     } // namespace
 
     auto
@@ -326,6 +437,7 @@ namespace Visual::XSharp::Xpp
                 context.instruction = block.instructions.size();
                 VerifyTerminator(context, block.terminator, function, storage, functions, blocks);
             }
+            VerifyDefiniteInitialization(context, function, storage, functions);
         }
         return context.issues;
     }
