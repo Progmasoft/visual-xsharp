@@ -6,7 +6,8 @@ module SourceSetTests (sourceSetTests) where
 import Control.Exception (finally)
 import Data.ByteString qualified as ByteString
 import System.Directory
-    ( createDirectory
+    ( canonicalizePath
+    , createDirectory
     , createDirectoryIfMissing
     , getTemporaryDirectory
     , removeDirectoryRecursive
@@ -120,9 +121,10 @@ encodingNeutralDiscovery = withTemporaryTree $ \root -> do
     let path = root </> "Sources" </> "Utf16.vxs"
     createDirectoryIfMissing True (root </> "Sources")
     ByteString.writeFile path (ByteString.pack [0xff, 0xfe, 0x63, 0x00])
+    expected <- canonicalizePath path
     result <- discoverSourceSet (SourceSetRequest root ["Sources"] [])
     pure $ case result of
-        Right [discovered] -> discovered == path
+        Right [discovered] -> discovered == expected
         _ -> False
 
 explicitFileDecoder :: IO Bool
