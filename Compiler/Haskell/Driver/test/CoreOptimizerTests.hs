@@ -333,13 +333,27 @@ identicalPureBranches =
      in returnExpression (moduleWith [function]) == Just (integer 7)
 
 effectFunction :: CoreFunction
-effectFunction = CoreFunction calleeName [] unitType [CoreReturn unit]
+effectFunction =
+    CoreFunction
+        calleeName
+        []
+        unitType
+        [ CoreEvaluate (closureExpression [] [] unitType [CoreReturn unit])
+        , CoreReturn unit
+        ]
 
 effectCall :: CoreExpression
 effectCall = CoreApply (variable calleeName (FunctionType [] unitType)) [] unitType
 
 predicateFunction :: CoreFunction
-predicateFunction = CoreFunction predicateName [] boolType [CoreReturn (boolean True)]
+predicateFunction =
+    CoreFunction
+        predicateName
+        []
+        boolType
+        [ CoreEvaluate (closureExpression [] [] unitType [CoreReturn unit])
+        , CoreReturn (boolean True)
+        ]
 
 predicateCall :: CoreExpression
 predicateCall = CoreApply (variable predicateName (FunctionType [] boolType)) [] boolType
@@ -535,7 +549,7 @@ closureParameterShadowsCapture =
             _ -> False
 
 disabledOptions :: OptimizerOptions
-disabledOptions = OptimizerOptions 12 False False False
+disabledOptions = OptimizerOptions 12 False False False False
 
 disabledPipelineIsIdentity :: Bool
 disabledPipelineIsIdentity =
@@ -628,9 +642,9 @@ metricsCountEffects =
      in case optimized input of
             Just result ->
                 metricCalls (optimizationBefore result) == 1
-                    && metricClosures (optimizationBefore result) == 1
+                    && metricClosures (optimizationBefore result) == 2
                     && metricCalls (optimizationAfter result) == 1
-                    && metricClosures (optimizationAfter result) == 1
+                    && metricClosures (optimizationAfter result) == 2
             Nothing -> False
 
 reportsPreservePassOrder :: Bool

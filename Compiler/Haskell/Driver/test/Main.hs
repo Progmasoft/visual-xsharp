@@ -58,7 +58,7 @@ main = do
     check "call expression statements require semicolons" callRequiresSemicolon
     check "void functions cannot use a final result expression" voidFinalExpression
     check "nested blocks cannot use a final result expression" nestedFinalExpression
-    check "CorePrep atomizes calls after dead control flow is removed" preparedControlFlow
+    check "Core optimizer removes a provably pure dead call before CorePrep" preparedControlFlow
     check "CorePrep creates explicit control flow for a live branch" preparedBranchControlFlow
     check "project entry resolves namespace, class, and public static void Main" entryContract
     check "int Main is rejected for the selected project entry" wrongEntryReturn
@@ -209,7 +209,7 @@ preparedControlFlow = case compileEntryToCorePrep (QualifiedName [Identifier "Na
         let functions = corePrepModuleFunctions (artifactCorePrep artifacts)
             mainFunction = functions !! 1
             blocks = corePrepFunctionBlocks mainFunction
-         in not (null blocks) && any hasCall blocks && not (any isBranch blocks)
+         in not (null blocks) && not (any hasCall blocks) && not (any isBranch blocks)
     Left _ -> False
     where
         isBranch block = case corePrepBlockTerminator block of CorePrepBranch _ _ _ -> True; _ -> False

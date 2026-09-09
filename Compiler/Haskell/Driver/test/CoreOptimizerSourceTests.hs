@@ -20,7 +20,7 @@ coreOptimizerSourceTests =
     , ("source numeric zero selects the false branch", sourceNumericFalse)
     , ("source nonzero conditions select the true branch", sourceNumericTrue)
     , ("source dead scalar locals disappear from optimized Core", sourceDeadLocal)
-    , ("source calls survive discarded results", sourceDiscardedCall)
+    , ("source pure calls disappear with discarded results", sourceDiscardedCall)
     , ("source code after return disappears", sourceUnreachable)
     , ("source closure allocation survives a dead binding", sourceDeadClosure)
     , ("source closure constants fold inside the body", sourceClosureFold)
@@ -103,7 +103,7 @@ sourceDiscardedCall :: Bool
 sourceDiscardedCall = case compileToCorePrep (CompilerInput "optimizer-call.vxs" callSource) of
     Right artifacts -> case coreModuleFunctions (artifactOptimizedCore artifacts) of
         [_helper, caller] -> case coreFunctionBody caller of
-            [CoreEvaluate CoreApply {}, CoreReturn (CoreLiteral (CoreInteger 1) _)] -> True
+            [CoreReturn (CoreLiteral (CoreInteger 1) _)] -> True
             _ -> False
         _ -> False
     Left _ -> False

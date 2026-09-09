@@ -14,6 +14,8 @@ module Visual.XSharp.Core.Optimizer
     , OptimizationMetrics (..)
     , PassReport (..)
     , OptimizationResult (..)
+    , Effect (..)
+    , FunctionEffectReport (..)
     , defaultCoreOptimizer
     , defaultOptimizerOptions
     , runCoreOptimizer
@@ -21,6 +23,7 @@ module Visual.XSharp.Core.Optimizer
     ) where
 
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Optimizer.Analysis
 import Visual.XSharp.Core.Optimizer.Pipeline
 import Visual.XSharp.Core.Optimizer.Types
 import Visual.XSharp.Core.Verifier (verifyCore)

@@ -4,8 +4,10 @@
 module Visual.XSharp.Core.Optimizer.Pipeline (runOptimizationPipeline) where
 
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Optimizer.Analysis (emptyEffectEnvironment)
 import Visual.XSharp.Core.Optimizer.Constant
 import Visual.XSharp.Core.Optimizer.ControlFlow
+import Visual.XSharp.Core.Optimizer.EffectInference
 import Visual.XSharp.Core.Optimizer.Liveness
 import Visual.XSharp.Core.Optimizer.Types
 
@@ -20,8 +22,12 @@ runOptimizationPipeline options original =
             , optimizationIterations = iterations
             , optimizationConverged = converged
             , optimizationPassReports = reports
+            , optimizationEffectReports = finalEffectReports optimized
             }
     where
+        finalEffectReports value
+            | optimizerInterproceduralEffects options = snd (inferFunctionEffects value)
+            | otherwise = []
         iteratePipeline maximumIterations iteration current reports =
             let (next, currentReports) = runIteration options iteration current
                 accumulated = reports ++ currentReports
@@ -40,20 +46,25 @@ runIteration options iteration input =
                 ConstantPropagationPass
                 propagateConstants
                 input
+        controlEnvironment = inferEnvironment afterConstants
         (afterControlFlow, controlFlowReports) =
             runEnabled
                 (optimizerControlFlowSimplification options)
                 ControlFlowSimplificationPass
-                simplifyControlFlow
+                (simplifyControlFlowWith controlEnvironment)
                 afterConstants
+        deadCodeEnvironment = inferEnvironment afterControlFlow
         (afterDeadCode, deadCodeReports) =
             runEnabled
                 (optimizerDeadCodeElimination options)
                 DeadCodeEliminationPass
-                eliminateDeadCode
+                (eliminateDeadCodeWith deadCodeEnvironment)
                 afterControlFlow
      in (afterDeadCode, constantReports ++ controlFlowReports ++ deadCodeReports)
     where
+        inferEnvironment value
+            | optimizerInterproceduralEffects options = fst (inferFunctionEffects value)
+            | otherwise = emptyEffectEnvironment
         runEnabled enabled passName pass before
             | not enabled = (before, [])
             | otherwise =

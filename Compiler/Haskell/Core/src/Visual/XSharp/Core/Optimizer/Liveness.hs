@@ -1,7 +1,10 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
-module Visual.XSharp.Core.Optimizer.Liveness (eliminateDeadCode) where
+module Visual.XSharp.Core.Optimizer.Liveness
+    ( eliminateDeadCode
+    , eliminateDeadCodeWith
+    ) where
 
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -42,41 +45,48 @@ mergeLiveStates = foldl merge emptyLiveState
                 }
 
 eliminateDeadCode :: CoreModule -> CoreModule
-eliminateDeadCode moduleValue =
-    moduleValue {coreModuleFunctions = map eliminateFunction (coreModuleFunctions moduleValue)}
+eliminateDeadCode = eliminateDeadCodeWith emptyEffectEnvironment
 
-eliminateFunction :: CoreFunction -> CoreFunction
-eliminateFunction function =
-    function {coreFunctionBody = fst (eliminateStatements emptyLiveState (coreFunctionBody function))}
+eliminateDeadCodeWith :: EffectEnvironment -> CoreModule -> CoreModule
+eliminateDeadCodeWith environment moduleValue =
+    moduleValue {coreModuleFunctions = map (eliminateFunction environment) (coreModuleFunctions moduleValue)}
+
+eliminateFunction :: EffectEnvironment -> CoreFunction -> CoreFunction
+eliminateFunction environment function =
+    function
+        { coreFunctionBody =
+            fst (eliminateStatements environment emptyLiveState (coreFunctionBody function))
+        }
 
 -- Liveness runs backwards. The returned state describes storage and values
 -- required before the optimized statement list executes. Function symbols
 -- can occur in both sets; because they have no local CoreBind, they simply
 -- flow to the function boundary and are ignored by this local pass.
-eliminateStatements :: LiveState -> [CoreStatement] -> ([CoreStatement], LiveState)
-eliminateStatements liveAfter statements = foldr eliminateOne ([], liveAfter) statements
+eliminateStatements :: EffectEnvironment -> LiveState -> [CoreStatement] -> ([CoreStatement], LiveState)
+eliminateStatements environment liveAfter statements =
+    foldr (eliminateOne environment) ([], liveAfter) statements
 
-eliminateOne :: CoreStatement -> ([CoreStatement], LiveState) -> ([CoreStatement], LiveState)
-eliminateOne statement (remaining, liveAfter) = case statement of
+eliminateOne :: EffectEnvironment -> CoreStatement -> ([CoreStatement], LiveState) -> ([CoreStatement], LiveState)
+eliminateOne environment statement (remaining, liveAfter) = case statement of
     CoreReturn value ->
-        let optimized = optimizeExpression value
+        let optimized = optimizeExpression environment value
          in ([CoreReturn optimized], stateForSymbols (expressionSymbols optimized))
     CoreEvaluate value ->
-        let optimized = optimizeExpression value
-         in if discardableExpression optimized
+        let optimized = optimizeExpression environment value
+         in if discardableExpressionWith environment optimized
                 then (remaining, liveAfter)
                 else
                     ( CoreEvaluate optimized : remaining
                     , addRequiredSymbols (expressionSymbols optimized) liveAfter
                     )
-    CoreBind binding -> eliminateBinding binding remaining liveAfter
-    CoreAssign name value -> eliminateAssignment name value remaining liveAfter
-    CoreIf condition yes no -> eliminateBranch condition yes no remaining liveAfter
+    CoreBind binding -> eliminateBinding environment binding remaining liveAfter
+    CoreAssign name value -> eliminateAssignment environment name value remaining liveAfter
+    CoreIf condition yes no -> eliminateBranch environment condition yes no remaining liveAfter
 
-eliminateBinding :: CoreBinding -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
-eliminateBinding binding remaining liveAfter =
+eliminateBinding :: EffectEnvironment -> CoreBinding -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
+eliminateBinding environment binding remaining liveAfter =
     let symbol = resolvedSymbol (coreBindingName binding)
-        value = optimizeExpression (coreBindingValue binding)
+        value = optimizeExpression environment (coreBindingValue binding)
         valueIsNeeded = Set.member symbol (liveValues liveAfter)
         declarationIsNeeded = Set.member symbol (requiredDeclarations liveAfter)
         beforeDefinition =
@@ -89,17 +99,18 @@ eliminateBinding binding remaining liveAfter =
                 ( CoreBind binding {coreBindingValue = value} : remaining
                 , addRequiredSymbols (expressionSymbols value) beforeDefinition
                 )
-            else preserveDeadValue value remaining beforeDefinition
+            else preserveDeadValue environment value remaining beforeDefinition
 
 eliminateAssignment ::
+    EffectEnvironment ->
     ResolvedName ->
     CoreExpression ->
     [CoreStatement] ->
     LiveState ->
     ([CoreStatement], LiveState)
-eliminateAssignment name source remaining liveAfter =
+eliminateAssignment environment name source remaining liveAfter =
     let symbol = resolvedSymbol name
-        value = optimizeExpression source
+        value = optimizeExpression environment source
         beforeWrite = liveAfter {liveValues = Set.delete symbol (liveValues liveAfter)}
      in if Set.member symbol (liveValues liveAfter)
             then
@@ -113,26 +124,27 @@ eliminateAssignment name source remaining liveAfter =
                                 Set.insert symbol (requiredDeclarations withSource)
                             }
                  in (CoreAssign name value : remaining, withDeclaration)
-            else preserveDeadValue value remaining beforeWrite
+            else preserveDeadValue environment value remaining beforeWrite
 
 eliminateBranch ::
+    EffectEnvironment ->
     CoreExpression ->
     [CoreStatement] ->
     [CoreStatement] ->
     [CoreStatement] ->
     LiveState ->
     ([CoreStatement], LiveState)
-eliminateBranch condition yes no remaining liveAfter =
-    let optimizedCondition = optimizeExpression condition
-        (optimizedYes, liveYes) = eliminateStatements liveAfter yes
-        (optimizedNo, liveNo) = eliminateStatements liveAfter no
+eliminateBranch environment condition yes no remaining liveAfter =
+    let optimizedCondition = optimizeExpression environment condition
+        (optimizedYes, liveYes) = eliminateStatements environment liveAfter yes
+        (optimizedNo, liveNo) = eliminateStatements environment liveAfter no
         branchState = mergeLiveStates [liveYes, liveNo]
         liveBefore = addRequiredSymbols (expressionSymbols optimizedCondition) branchState
      in (CoreIf optimizedCondition optimizedYes optimizedNo : remaining, liveBefore)
 
-preserveDeadValue :: CoreExpression -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
-preserveDeadValue value remaining liveAfter
-    | discardableExpression value = (remaining, liveAfter)
+preserveDeadValue :: EffectEnvironment -> CoreExpression -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
+preserveDeadValue environment value remaining liveAfter
+    | discardableExpressionWith environment value = (remaining, liveAfter)
     | otherwise =
         ( CoreEvaluate value : remaining
         , addRequiredSymbols (expressionSymbols value) liveAfter
@@ -140,20 +152,23 @@ preserveDeadValue value remaining liveAfter
 
 -- Closure bodies are independent liveness regions. Capture initializers are
 -- evaluated outside the closure, while the body is analyzed from its own
--- return and effect roots. Parameter and capture declarations belong to the
--- closure environment and therefore need no CoreBind in the nested body.
-optimizeExpression :: CoreExpression -> CoreExpression
-optimizeExpression expression = case expression of
+-- return and effect roots. The module effect environment is still valid for
+-- direct calls made when that callable eventually executes.
+optimizeExpression :: EffectEnvironment -> CoreExpression -> CoreExpression
+optimizeExpression environment expression = case expression of
     CoreVariable {} -> expression
     CoreLiteral {} -> expression
     CoreApply callee arguments valueType ->
-        CoreApply (optimizeExpression callee) (map optimizeExpression arguments) valueType
+        CoreApply
+            (optimizeExpression environment callee)
+            (map (optimizeExpression environment) arguments)
+            valueType
     CorePrimitive primitive arguments valueType ->
-        CorePrimitive primitive (map optimizeExpression arguments) valueType
+        CorePrimitive primitive (map (optimizeExpression environment) arguments) valueType
     CoreClosure captures parameters returnType body valueType ->
         CoreClosure
-            [capture {coreCaptureValue = optimizeExpression (coreCaptureValue capture)} | capture <- captures]
+            [capture {coreCaptureValue = optimizeExpression environment (coreCaptureValue capture)} | capture <- captures]
             parameters
             returnType
-            (fst (eliminateStatements emptyLiveState body))
+            (fst (eliminateStatements environment emptyLiveState body))
             valueType

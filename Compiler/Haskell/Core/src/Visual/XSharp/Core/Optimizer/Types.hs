@@ -14,17 +14,19 @@ module Visual.XSharp.Core.Optimizer.Types
     ) where
 
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Optimizer.Analysis (FunctionEffectReport)
 
 data OptimizerOptions = OptimizerOptions
     { optimizerMaximumIterations :: Int
     , optimizerConstantPropagation :: Bool
     , optimizerControlFlowSimplification :: Bool
     , optimizerDeadCodeElimination :: Bool
+    , optimizerInterproceduralEffects :: Bool
     }
     deriving (Eq, Ord, Read, Show)
 
 defaultOptimizerOptions :: OptimizerOptions
-defaultOptimizerOptions = OptimizerOptions 12 True True True
+defaultOptimizerOptions = OptimizerOptions 12 True True True True
 
 -- Pass names are data rather than display strings so compiler drivers can
 -- render reports without parsing human-oriented output. The order of these
@@ -54,6 +56,7 @@ data OptimizationResult = OptimizationResult
     , optimizationIterations :: Int
     , optimizationConverged :: Bool
     , optimizationPassReports :: [PassReport]
+    , optimizationEffectReports :: [FunctionEffectReport]
     }
     deriving (Eq, Ord, Read, Show)
 

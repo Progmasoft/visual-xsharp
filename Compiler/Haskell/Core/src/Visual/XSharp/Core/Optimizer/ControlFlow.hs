@@ -1,50 +1,57 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
-module Visual.XSharp.Core.Optimizer.ControlFlow (simplifyControlFlow) where
+module Visual.XSharp.Core.Optimizer.ControlFlow
+    ( simplifyControlFlow
+    , simplifyControlFlowWith
+    ) where
 
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Analysis
 
 simplifyControlFlow :: CoreModule -> CoreModule
-simplifyControlFlow moduleValue =
-    moduleValue {coreModuleFunctions = map simplifyFunction (coreModuleFunctions moduleValue)}
+simplifyControlFlow = simplifyControlFlowWith emptyEffectEnvironment
 
-simplifyFunction :: CoreFunction -> CoreFunction
-simplifyFunction function = function {coreFunctionBody = simplifyStatements (coreFunctionBody function)}
+simplifyControlFlowWith :: EffectEnvironment -> CoreModule -> CoreModule
+simplifyControlFlowWith environment moduleValue =
+    moduleValue {coreModuleFunctions = map (simplifyFunction environment) (coreModuleFunctions moduleValue)}
 
-simplifyStatements :: [CoreStatement] -> [CoreStatement]
-simplifyStatements [] = []
-simplifyStatements (statement : remaining) =
-    let current = simplifyStatement statement
+simplifyFunction :: EffectEnvironment -> CoreFunction -> CoreFunction
+simplifyFunction environment function =
+    function {coreFunctionBody = simplifyStatements environment (coreFunctionBody function)}
+
+simplifyStatements :: EffectEnvironment -> [CoreStatement] -> [CoreStatement]
+simplifyStatements _ [] = []
+simplifyStatements environment (statement : remaining) =
+    let current = simplifyStatement environment statement
      in if statementsAlwaysReturn current
             then current
-            else current ++ simplifyStatements remaining
+            else current ++ simplifyStatements environment remaining
 
-simplifyStatement :: CoreStatement -> [CoreStatement]
-simplifyStatement statement = case statement of
+simplifyStatement :: EffectEnvironment -> CoreStatement -> [CoreStatement]
+simplifyStatement environment statement = case statement of
     CoreBind binding ->
-        [CoreBind binding {coreBindingValue = simplifyNestedExpression (coreBindingValue binding)}]
-    CoreAssign name value -> [CoreAssign name (simplifyNestedExpression value)]
-    CoreReturn value -> [CoreReturn (simplifyNestedExpression value)]
-    CoreEvaluate value -> [CoreEvaluate (simplifyNestedExpression value)]
+        [CoreBind binding {coreBindingValue = simplifyNestedExpression environment (coreBindingValue binding)}]
+    CoreAssign name value -> [CoreAssign name (simplifyNestedExpression environment value)]
+    CoreReturn value -> [CoreReturn (simplifyNestedExpression environment value)]
+    CoreEvaluate value -> [CoreEvaluate (simplifyNestedExpression environment value)]
     CoreIf condition yes no ->
-        let simplifiedCondition = simplifyNestedExpression condition
-            simplifiedYes = simplifyStatements yes
-            simplifiedNo = simplifyStatements no
+        let simplifiedCondition = simplifyNestedExpression environment condition
+            simplifiedYes = simplifyStatements environment yes
+            simplifiedNo = simplifyStatements environment no
          in case conditionTruth simplifiedCondition of
                 Just True -> simplifiedYes
                 Just False -> simplifiedNo
                 Nothing
                     | simplifiedYes == simplifiedNo ->
-                        preserveCondition simplifiedCondition simplifiedYes
+                        preserveCondition environment simplifiedCondition simplifiedYes
                     | null simplifiedYes && null simplifiedNo ->
-                        preserveCondition simplifiedCondition []
+                        preserveCondition environment simplifiedCondition []
                     | otherwise -> [CoreIf simplifiedCondition simplifiedYes simplifiedNo]
 
-preserveCondition :: CoreExpression -> [CoreStatement] -> [CoreStatement]
-preserveCondition condition statements
-    | discardableExpression condition = statements
+preserveCondition :: EffectEnvironment -> CoreExpression -> [CoreStatement] -> [CoreStatement]
+preserveCondition environment condition statements
+    | discardableExpressionWith environment condition = statements
     | otherwise = CoreEvaluate condition : statements
 
 conditionTruth :: CoreExpression -> Maybe Bool
@@ -53,21 +60,23 @@ conditionTruth expression = case expression of
     CoreLiteral (CoreInteger value) _ -> Just (value /= 0)
     _ -> Nothing
 
-simplifyNestedExpression :: CoreExpression -> CoreExpression
-simplifyNestedExpression expression = case expression of
+simplifyNestedExpression :: EffectEnvironment -> CoreExpression -> CoreExpression
+simplifyNestedExpression environment expression = case expression of
     CoreVariable {} -> expression
     CoreLiteral {} -> expression
     CoreApply callee arguments valueType ->
         CoreApply
-            (simplifyNestedExpression callee)
-            (map simplifyNestedExpression arguments)
+            (simplifyNestedExpression environment callee)
+            (map (simplifyNestedExpression environment) arguments)
             valueType
     CorePrimitive primitive arguments valueType ->
-        CorePrimitive primitive (map simplifyNestedExpression arguments) valueType
+        CorePrimitive primitive (map (simplifyNestedExpression environment) arguments) valueType
     CoreClosure captures parameters returnType body valueType ->
         CoreClosure
-            [capture {coreCaptureValue = simplifyNestedExpression (coreCaptureValue capture)} | capture <- captures]
+            [ capture {coreCaptureValue = simplifyNestedExpression environment (coreCaptureValue capture)}
+            | capture <- captures
+            ]
             parameters
             returnType
-            (simplifyStatements body)
+            (simplifyStatements environment body)
             valueType

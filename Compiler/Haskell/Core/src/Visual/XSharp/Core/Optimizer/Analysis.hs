@@ -3,38 +3,117 @@
 
 module Visual.XSharp.Core.Optimizer.Analysis
     ( Effect (..)
+    , EffectEnvironment
+    , FunctionEffectReport (..)
+    , emptyEffectEnvironment
+    , effectEnvironment
+    , lookupFunctionEffect
+    , combineEffect
     , expressionEffect
+    , expressionEffectWith
     , expressionSymbols
     , statementSymbols
     , statementsAlwaysReturn
     , discardableExpression
+    , discardableExpressionWith
     ) where
 
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Visual.XSharp.AST (SymbolId, resolvedSymbol)
+import Visual.XSharp.AST (ResolvedName, SymbolId, resolvedSymbol)
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Scalar (isCoreFloatingType, isCoreIntegerType)
 
--- Calls and closure construction remain observable even when their result is
--- dead. This is conservative around allocation, AARC transitions, future
--- destructors, and user-defined call effects.
-data Effect = PureEffect | AllocationEffect | CallEffect | WriteEffect
+-- Effect ordering is deliberately conservative. The optimizer currently needs
+-- one decisive property: only PureEffect may disappear when its value is dead.
+-- The remaining constructors retain the strongest reason in diagnostics and
+-- reports without pretending that allocation, failure and divergence are
+-- interchangeable language effects.
+data Effect
+    = PureEffect
+    | FailureEffect
+    | AllocationEffect
+    | CallEffect
+    | DivergenceEffect
     deriving (Eq, Ord, Read, Show)
+
+-- The environment is immutable for one optimizer pass. Recomputing it after a
+-- structural rewrite is cheap relative to parsing and avoids stale call facts
+-- when control-flow simplification removes a call site.
+newtype EffectEnvironment = EffectEnvironment (Map SymbolId Effect)
+    deriving (Eq, Ord, Read, Show)
+
+data FunctionEffectReport = FunctionEffectReport
+    { effectFunctionName :: ResolvedName
+    , effectClassification :: Effect
+    , effectDirectCallees :: [SymbolId]
+    , effectHasUnknownCall :: Bool
+    , effectIsRecursive :: Bool
+    }
+    deriving (Eq, Ord, Read, Show)
+
+emptyEffectEnvironment :: EffectEnvironment
+emptyEffectEnvironment = EffectEnvironment Map.empty
+
+effectEnvironment :: [(SymbolId, Effect)] -> EffectEnvironment
+effectEnvironment = EffectEnvironment . Map.fromList
+
+lookupFunctionEffect :: EffectEnvironment -> SymbolId -> Maybe Effect
+lookupFunctionEffect (EffectEnvironment values) symbol = Map.lookup symbol values
 
 combineEffect :: Effect -> Effect -> Effect
 combineEffect = max
 
 expressionEffect :: CoreExpression -> Effect
-expressionEffect expression = case expression of
+expressionEffect = expressionEffectWith emptyEffectEnvironment
+
+expressionEffectWith :: EffectEnvironment -> CoreExpression -> Effect
+expressionEffectWith environment expression = case expression of
     CoreVariable _ _ -> PureEffect
     CoreLiteral _ _ -> PureEffect
-    CorePrimitive _ arguments _ -> foldl combineEffect PureEffect (map expressionEffect arguments)
-    CoreApply callee arguments _ -> foldl combineEffect CallEffect (map expressionEffect (callee : arguments))
+    CorePrimitive primitive arguments _ ->
+        foldl combineEffect (primitiveEffect primitive arguments) (map (expressionEffectWith environment) arguments)
+    CoreApply callee arguments _ ->
+        let nested = foldl combineEffect PureEffect (map (expressionEffectWith environment) (callee : arguments))
+            invoked = case callee of
+                CoreVariable name _ ->
+                    maybe CallEffect id (lookupFunctionEffect environment (resolvedSymbol name))
+                _ -> CallEffect
+         in combineEffect invoked nested
     CoreClosure captures _ _ _ _ ->
-        foldl combineEffect AllocationEffect (map (expressionEffect . coreCaptureValue) captures)
+        foldl
+            combineEffect
+            AllocationEffect
+            (map (expressionEffectWith environment . coreCaptureValue) captures)
+
+-- Integer division can fail even though it has no externally visible write.
+-- Treating a variable divisor as pure would let dead-code elimination erase a
+-- required divide-by-zero failure. Floating division follows its IEEE target
+-- semantics and does not use this failure classification.
+primitiveEffect :: CorePrimitive -> [CoreExpression] -> Effect
+primitiveEffect primitive arguments
+    | primitive `elem` [CoreDivide, CoreFloorDivide, CoreRemainder]
+    , firstTypeIsInteger arguments
+    , not (knownNonzeroDivisor arguments) =
+        FailureEffect
+    | otherwise = PureEffect
+
+firstTypeIsInteger :: [CoreExpression] -> Bool
+firstTypeIsInteger (first : _) = isCoreIntegerType (expressionType first)
+firstTypeIsInteger [] = False
+
+knownNonzeroDivisor :: [CoreExpression] -> Bool
+knownNonzeroDivisor [_, CoreLiteral (CoreInteger value) _] = value /= 0
+knownNonzeroDivisor [_, CoreLiteral (CoreFloating _) valueType] = isCoreFloatingType valueType
+knownNonzeroDivisor _ = False
 
 discardableExpression :: CoreExpression -> Bool
-discardableExpression expression = expressionEffect expression == PureEffect
+discardableExpression = discardableExpressionWith emptyEffectEnvironment
+
+discardableExpressionWith :: EffectEnvironment -> CoreExpression -> Bool
+discardableExpressionWith environment expression = expressionEffectWith environment expression == PureEffect
 
 expressionSymbols :: CoreExpression -> Set SymbolId
 expressionSymbols expression = case expression of
