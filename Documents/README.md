@@ -22,7 +22,7 @@ following vocabulary:
 | --- | --- |
 | Understand the whole repository | [Architecture](ARCHITECTURE.md) and [repository layout](MONOREPO.md) |
 | Follow one source file through the compiler | [Compiler pipeline](COMPILER-PIPELINE.md) |
-| Understand the typed Core contract | [Core IR](CORE-IR.md) and [Core optimization](CORE-OPTIMIZER.md) |
+| Understand the typed Core contract | [Core IR](CORE-IR.md), [Core optimization](CORE-OPTIMIZER.md), and [safe-expression inlining](CORE-INLINING.md) |
 | Understand short-circuit CFG and initialized storage | [Control-flow safety](CONTROL-FLOW-SAFETY.md) |
 | Understand object ownership and lifetime | [AARC ABI](AARC-ABI.md) |
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
@@ -51,6 +51,7 @@ following vocabulary:
   emission, and linking in execution order.
 - [Core IR](CORE-IR.md) defines the typed tree, symbol, verifier, closure, and wire contracts.
 - [Core optimization](CORE-OPTIMIZER.md) documents fixed-point passes, effects, liveness, metrics, and reporting.
+- [Core safe-expression inlining](CORE-INLINING.md) defines candidate proofs, substitution safety, budgets, and typed reports.
 - [AARC ABI](AARC-ABI.md) defines value/reference classification, object headers, ownership operations, and closure teardown.
 - [Implementation status](IMPLEMENTATION.md) distinguishes connected, partial, registered, planned, and legacy surfaces.
 - [LLVM backend](LLVM-BACKEND.md) defines the Xmm-to-LLVM contract, supported values, verification, and artifact ownership.

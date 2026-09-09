@@ -15,6 +15,7 @@ module Visual.XSharp.Core.Optimizer.Types
 
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Analysis (FunctionEffectReport)
+import Visual.XSharp.Core.Optimizer.Inline (InlineReport)
 
 data OptimizerOptions = OptimizerOptions
     { optimizerMaximumIterations :: Int
@@ -22,17 +23,20 @@ data OptimizerOptions = OptimizerOptions
     , optimizerControlFlowSimplification :: Bool
     , optimizerDeadCodeElimination :: Bool
     , optimizerInterproceduralEffects :: Bool
+    , optimizerInlining :: Bool
+    , optimizerMaximumInlineExpressionNodes :: Int
     }
     deriving (Eq, Ord, Read, Show)
 
 defaultOptimizerOptions :: OptimizerOptions
-defaultOptimizerOptions = OptimizerOptions 12 True True True True
+defaultOptimizerOptions = OptimizerOptions 12 True True True True True 24
 
 -- Pass names are data rather than display strings so compiler drivers can
 -- render reports without parsing human-oriented output. The order of these
 -- constructors does not define execution order; Pipeline owns that policy.
 data OptimizationPass
     = ConstantPropagationPass
+    | InliningPass
     | ControlFlowSimplificationPass
     | DeadCodeEliminationPass
     deriving (Eq, Ord, Read, Show)
@@ -57,6 +61,7 @@ data OptimizationResult = OptimizationResult
     , optimizationConverged :: Bool
     , optimizationPassReports :: [PassReport]
     , optimizationEffectReports :: [FunctionEffectReport]
+    , optimizationInlineReports :: [InlineReport]
     }
     deriving (Eq, Ord, Read, Show)
 

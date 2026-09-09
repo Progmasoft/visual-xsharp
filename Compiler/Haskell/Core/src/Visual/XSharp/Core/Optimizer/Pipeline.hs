@@ -8,13 +8,14 @@ import Visual.XSharp.Core.Optimizer.Analysis (emptyEffectEnvironment)
 import Visual.XSharp.Core.Optimizer.Constant
 import Visual.XSharp.Core.Optimizer.ControlFlow
 import Visual.XSharp.Core.Optimizer.EffectInference
+import Visual.XSharp.Core.Optimizer.Inline
 import Visual.XSharp.Core.Optimizer.Liveness
 import Visual.XSharp.Core.Optimizer.Types
 
 runOptimizationPipeline :: OptimizerOptions -> CoreModule -> OptimizationResult
 runOptimizationPipeline options original =
     let maximumIterations = max 1 (optimizerMaximumIterations options)
-        (optimized, iterations, converged, reports) = iteratePipeline maximumIterations 1 original []
+        (optimized, iterations, converged, reports, inlineReports) = iteratePipeline maximumIterations 1 original [] []
      in OptimizationResult
             { optimizedCore = optimized
             , optimizationBefore = measureModule original
@@ -23,29 +24,37 @@ runOptimizationPipeline options original =
             , optimizationConverged = converged
             , optimizationPassReports = reports
             , optimizationEffectReports = finalEffectReports optimized
+            , optimizationInlineReports = inlineReports
             }
     where
         finalEffectReports value
             | optimizerInterproceduralEffects options = snd (inferFunctionEffects value)
             | otherwise = []
-        iteratePipeline maximumIterations iteration current reports =
-            let (next, currentReports) = runIteration options iteration current
+        iteratePipeline maximumIterations iteration current reports inlineReports =
+            let (next, currentReports, currentInlineReports) = runIteration options iteration current
                 accumulated = reports ++ currentReports
+                accumulatedInline = inlineReports ++ currentInlineReports
              in if next == current
-                    then (next, iteration, True, accumulated)
+                    then (next, iteration, True, accumulated, accumulatedInline)
                     else
                         if iteration >= maximumIterations
-                            then (next, iteration, False, accumulated)
-                            else iteratePipeline maximumIterations (iteration + 1) next accumulated
+                            then (next, iteration, False, accumulated, accumulatedInline)
+                            else iteratePipeline maximumIterations (iteration + 1) next accumulated accumulatedInline
 
-runIteration :: OptimizerOptions -> Int -> CoreModule -> (CoreModule, [PassReport])
+runIteration :: OptimizerOptions -> Int -> CoreModule -> (CoreModule, [PassReport], [InlineReport])
 runIteration options iteration input =
-    let (afterConstants, constantReports) =
+    let (_, effectReports) = inferFunctionEffects input
+        (afterInlining, inliningReports, inlineReports) =
+            runInlining
+                (optimizerInlining options && optimizerInterproceduralEffects options)
+                effectReports
+                input
+        (afterConstants, constantReports) =
             runEnabled
                 (optimizerConstantPropagation options)
                 ConstantPropagationPass
                 propagateConstants
-                input
+                afterInlining
         controlEnvironment = inferEnvironment afterConstants
         (afterControlFlow, controlFlowReports) =
             runEnabled
@@ -60,8 +69,16 @@ runIteration options iteration input =
                 DeadCodeEliminationPass
                 (eliminateDeadCodeWith deadCodeEnvironment)
                 afterControlFlow
-     in (afterDeadCode, constantReports ++ controlFlowReports ++ deadCodeReports)
+     in (afterDeadCode, inliningReports ++ constantReports ++ controlFlowReports ++ deadCodeReports, inlineReports)
     where
+        runInlining enabled effects before
+            | not enabled = (before, [], [])
+            | otherwise =
+                let (after, inlineReport) = inlineFunctions (optimizerMaximumInlineExpressionNodes options) effects before
+                 in ( after
+                    , [PassReport iteration InliningPass (measureModule before) (measureModule after) (before /= after)]
+                    , [inlineReport]
+                    )
         inferEnvironment value
             | optimizerInterproceduralEffects options = fst (inferFunctionEffects value)
             | otherwise = emptyEffectEnvironment

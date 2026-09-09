@@ -33,7 +33,7 @@ Desugarer
 Core verifier ---- rejects malformed symbols, types, calls, and returns
    |
    v
-Core optimizer ---- constant propagation, branch cleanup, liveness
+Core optimizer ---- effect inference, bounded inlining, constants, branches, liveness
    |
    v
 Core verifier ---- rejects an invalid optimizer result
@@ -59,7 +59,9 @@ The result contains:
 - structural metrics after optimization;
 - the number of fixed-point iterations;
 - whether the pipeline converged within the configured limit; and
-- a typed report for every enabled pass invocation.
+- a typed report for every enabled pass invocation;
+- the final interprocedural effect report for every function; and
+- one typed inlining report for every enabled fixed-point iteration.
 
 The existing `CoreOptimizer` facade remains small. Its function returns only
 the optimized module, which keeps ordinary compiler orchestration independent
@@ -69,13 +71,21 @@ of reporting details.
 
 One iteration runs enabled passes in this order:
 
-1. constant propagation and expression folding;
-2. control-flow simplification; and
-3. effect-aware dead-code elimination.
+1. interprocedural effect inference;
+2. bounded safe-expression inlining;
+3. constant propagation and expression folding;
+4. effect inference after structural rewriting;
+5. control-flow simplification;
+6. effect inference after branch rewriting; and
+7. effect-aware dead-code elimination.
 
-The order is deliberate. Constant propagation can make a condition known.
-Control-flow simplification can then remove a branch. Liveness can finally
-remove bindings that became unused after branch selection.
+The order is deliberate. Effect inference establishes which direct calls are
+safe candidates. Inlining can expose literals and primitive expressions.
+Constant propagation can then fold those expressions and make a condition
+known. Control-flow simplification can remove the branch. Liveness can finally
+remove bindings that became unused after branch selection. Effects are
+recomputed at the structural boundaries so no later pass relies on stale call
+edges.
 
 The complete sequence repeats until an iteration makes no structural change.
 The default maximum is twelve iterations. A finite bound protects compiler
@@ -213,19 +223,46 @@ The optimizer uses a conservative ordered effect model:
 
 | Effect | Current producers | Discardable when unused |
 | --- | --- | --- |
-| pure | literals, variables, pure primitives | yes |
-| allocation | closure construction | no |
-| call | direct or indirect Core application | no |
-| write | reserved for explicitly effectful expressions | no |
+| pure | literals, variables, pure primitives, proven direct calls | yes |
+| failure | integer divide/remainder with an unproved divisor | no |
+| allocation | closure construction and transitive allocating calls | no |
+| call | indirect or unresolved Core application | no |
+| divergence | recursive strongly connected call-graph component | no |
 
-Primitive expressions inherit the strongest effect of their operands. Calls
-are effectful even if every operand is pure. Closure construction is effectful
-because it can allocate, establish AARC ownership edges, and later participate
-in destruction or cycle handling.
+Primitive expressions inherit the strongest effect of their operands. A
+module-local direct call uses the solved effect of its callee. Indirect and
+unresolved calls remain unknown. Closure construction is allocation because it
+can establish AARC ownership edges and later participate in destruction or
+cycle handling. Recursive strongly connected components remain divergent until
+the compiler has a separate termination proof.
 
-This model intentionally lacks speculative purity inference. A future effect
-system can prove more calls discardable, but the baseline optimizer must remain
-correct before that metadata exists.
+The model is deliberately non-speculative. It proves enough purity for safe
+dead-result removal and bounded inlining without turning optimizer guesses into
+language semantics. See [Core effect analysis](CORE-EFFECT-ANALYSIS.md) for the
+complete retention contract.
+
+## Bounded safe-expression inlining
+
+Inlining uses the solved effect reports rather than maintaining a second
+purity model. A candidate must be pure, non-recursive, and contain exactly one
+`CoreReturn`. Its return expression must fit the configured node budget.
+
+Arguments are substituted only when each argument is a variable or literal.
+Such values may safely be used zero, one, or several times: removing a read,
+or repeating a read of immutable Core identity, cannot allocate, fail, invoke
+unknown code, or change ownership. Primitive trees, calls, and closures remain
+at the call boundary even if another analysis currently considers them pure.
+That restriction prevents accidental evaluation loss or duplication.
+
+Rewriting walks expressions bottom-up. A nested pure call may therefore become
+a literal before its enclosing call is considered. The enclosing call can then
+become eligible in the same pass without weakening the argument rule. Longer
+call chains converge through the optimizer's existing fixed-point loop.
+
+Inlining never deletes function declarations. Reachability and link-unit
+pruning are separate decisions because exported visibility is not represented
+by the current Core function model. Function order, name identity, and module
+identity remain unchanged.
 
 ## Backward liveness
 
@@ -322,11 +359,15 @@ options produce equal reports.
 `OptimizerOptions` currently controls:
 
 - maximum fixed-point iterations;
+- interprocedural effect inference;
+- bounded safe-expression inlining;
+- the maximum expanded inline expression node count;
 - constant propagation;
 - control-flow simplification; and
 - dead-code elimination.
 
-All three passes are enabled by default. Options exist for compiler testing,
+All passes are enabled by default, and the default inline expression budget is
+twenty-four nodes. Options exist for compiler testing,
 diagnostics, and controlled development. They are not currently public Visual
 X# project DSL keys or CLI flags.
 
@@ -392,9 +433,9 @@ or desugarer coverage.
 The current optimizer does not perform:
 
 - floating arithmetic folding;
-- interprocedural call evaluation;
-- call purity inference;
-- function inlining;
+- arbitrary compile-time call evaluation;
+- statement-body or effectful function inlining;
+- inlining of primitive, call, or closure arguments;
 - common-subexpression elimination;
 - loop optimization;
 - escape analysis;

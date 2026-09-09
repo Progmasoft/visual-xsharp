@@ -549,7 +549,7 @@ closureParameterShadowsCapture =
             _ -> False
 
 disabledOptions :: OptimizerOptions
-disabledOptions = OptimizerOptions 12 False False False False
+disabledOptions = OptimizerOptions 12 False False False False False 24
 
 disabledPipelineIsIdentity :: Bool
 disabledPipelineIsIdentity =
@@ -651,8 +651,9 @@ reportsPreservePassOrder :: Bool
 reportsPreservePassOrder =
     case optimized pipelineFixture of
         Just result ->
-            take 3 (map passReportPass (optimizationPassReports result))
-                == [ ConstantPropagationPass
+            take 4 (map passReportPass (optimizationPassReports result))
+                == [ InliningPass
+                   , ConstantPropagationPass
                    , ControlFlowSimplificationPass
                    , DeadCodeEliminationPass
                    ]
@@ -686,7 +687,7 @@ reportsCoverIterations =
              in not (null iterations)
                     && minimum iterations == 1
                     && maximum iterations == optimizationIterations result
-                    && length iterations == optimizationIterations result * 3
+                    && length iterations == optimizationIterations result * 4
         Nothing -> False
 
 reportsOmitDisabledPasses :: Bool
@@ -695,6 +696,7 @@ reportsOmitDisabledPasses =
             defaultOptimizerOptions
                 { optimizerConstantPropagation = False
                 , optimizerDeadCodeElimination = False
+                , optimizerInlining = False
                 }
      in case optimizedWith options pipelineFixture of
             Just result ->

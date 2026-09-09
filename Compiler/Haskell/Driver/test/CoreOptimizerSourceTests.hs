@@ -25,6 +25,13 @@ coreOptimizerSourceTests =
     , ("source closure allocation survives a dead binding", sourceDeadClosure)
     , ("source closure constants fold inside the body", sourceClosureFold)
     , ("source optimizer output remains accepted by CorePrep", sourceReachesCorePrep)
+    , ("source nullary calls inline into returns", sourceInlineNullary)
+    , ("source parameters substitute and fold", sourceInlineParameter)
+    , ("source multi-parameter calls preserve position", sourceInlineMultiple)
+    , ("source pure call chains converge", sourceInlineChain)
+    , ("source predicates inline before branch selection", sourceInlinePredicate)
+    , ("source repeated parameters inline for literals", sourceInlineRepeated)
+    , ("source unused literal arguments may disappear", sourceInlineUnused)
     ]
 
 compiled :: String -> Maybe FrontendArtifacts
@@ -141,4 +148,72 @@ sourceReachesCorePrep = case compiled "final int left = 20; final int right = 22
     Just artifacts ->
         singleReturn artifacts == Just (integer 42)
             && not (null (corePrepModuleFunctions (artifactCorePrep artifacts)))
+    Nothing -> False
+
+compiledProgram :: [String] -> Maybe FrontendArtifacts
+compiledProgram members = case compileToCorePrep (CompilerInput "optimizer-inline.vxs" text) of
+    Left _ -> Nothing
+    Right artifacts -> Just artifacts
+    where
+        text =
+            unlines
+                ( [ "namespace OptimizerSource;"
+                  , "class Program {"
+                  ]
+                    ++ map ("  " ++) members
+                    ++ ["}"]
+                )
+
+lastReturn :: FrontendArtifacts -> Maybe CoreExpression
+lastReturn artifacts = case reverse (coreModuleFunctions (artifactOptimizedCore artifacts)) of
+    function : _ -> case coreFunctionBody function of
+        [CoreReturn value] -> Just value
+        _ -> Nothing
+    [] -> Nothing
+
+sourceInlineNullary :: Bool
+sourceInlineNullary = case compiledProgram ["int Answer() { return 42; }", "int Value() { return Answer(); }"] of
+    Just artifacts -> lastReturn artifacts == Just (integer 42)
+    Nothing -> False
+
+sourceInlineParameter :: Bool
+sourceInlineParameter = case compiledProgram ["int AddOne(_ int value) { return value + 1; }", "int Value() { return AddOne(41); }"] of
+    Just artifacts -> lastReturn artifacts == Just (integer 42)
+    Nothing -> False
+
+sourceInlineMultiple :: Bool
+sourceInlineMultiple = case compiledProgram
+    ["int Difference(_ int left, _ int right) { return left - right; }", "int Value() { return Difference(50, 8); }"] of
+    Just artifacts -> lastReturn artifacts == Just (integer 42)
+    Nothing -> False
+
+sourceInlineChain :: Bool
+sourceInlineChain = case compiledProgram members of
+    Just artifacts -> lastReturn artifacts == Just (integer 42)
+    Nothing -> False
+    where
+        members =
+            [ "int Answer() { return 42; }"
+            , "int Forward() { return Answer(); }"
+            , "int Value() { return Forward(); }"
+            ]
+
+sourceInlinePredicate :: Bool
+sourceInlinePredicate = case compiledProgram members of
+    Just artifacts -> lastReturn artifacts == Just (integer 42)
+    Nothing -> False
+    where
+        members =
+            [ "bool Enabled() { return true; }"
+            , "int Value() { if (Enabled()) { return 42; } else { return 0; } }"
+            ]
+
+sourceInlineRepeated :: Bool
+sourceInlineRepeated = case compiledProgram ["int Twice(_ int value) { return value + value; }", "int Value() { return Twice(21); }"] of
+    Just artifacts -> lastReturn artifacts == Just (integer 42)
+    Nothing -> False
+
+sourceInlineUnused :: Bool
+sourceInlineUnused = case compiledProgram ["int Answer(_ int ignored) { return 42; }", "int Value() { return Answer(99); }"] of
+    Just artifacts -> lastReturn artifacts == Just (integer 42)
     Nothing -> False

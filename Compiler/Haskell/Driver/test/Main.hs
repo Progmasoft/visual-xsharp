@@ -4,6 +4,7 @@ module Main (main) where
 
 import ClosureTests (closureTests)
 import Control.Exception (finally)
+import CoreInliningTests (coreInliningTests)
 import CoreOptimizerSourceTests (coreOptimizerSourceTests)
 import CoreOptimizerTests (coreOptimizerTests)
 import CoreVerifierTests (coreVerifierTests)
@@ -118,6 +119,7 @@ main = do
     mapM_ (uncurry check) templateVerifierTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests
+    mapM_ (uncurry check) coreInliningTests
     mapM_ (uncurry check) coreOptimizerSourceTests
     mapM_ (uncurry check) coreVerifierTests
     mapM_ (uncurry check) numericTests

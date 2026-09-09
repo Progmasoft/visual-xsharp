@@ -41,11 +41,12 @@ The current language slice covers namespace and class declarations, member metho
 assignments, calls, returns, conditionals, core operator precedence, entry-point validation, and basic CorePrep control flow.
 It does not yet implement the complete language catalog in `Spec/`.
 
-Core optimization is connected, verifier-guarded, and fixed-point driven. It currently performs immutable literal
-propagation, exact range-checked integer/boolean folding, conservative algebraic identities, known/identical branch
-simplification, unreachable-code removal, and effect-aware liveness across functions and closure bodies. Calls and closure
-allocation are retained when their values are dead. Typed per-pass reports expose before/after metrics and convergence;
-floating folding, purity inference, inlining, and interprocedural optimization remain unimplemented.
+Core optimization is connected, verifier-guarded, and fixed-point driven. It performs immutable literal propagation,
+exact range-checked integer/boolean folding, conservative algebraic identities, known/identical branch simplification,
+unreachable-code removal, interprocedural effect inference, bounded safe-expression inlining, and effect-aware liveness
+across functions and closure bodies. Unknown, recursive, allocating, and possibly failing calls remain explicit. Typed
+per-pass, effect, and inlining reports expose before/after metrics and convergence. Floating-point arithmetic folding,
+general statement-body inlining, and speculative optimization remain unimplemented.
 
 Project compilation now enters the Haskell frontend as source roots plus project-relative exclusion patterns. The frontend
 owns recursive `.vxs` discovery, strict UTF-8 decoding, canonical root containment, overlapping-root de-duplication, and

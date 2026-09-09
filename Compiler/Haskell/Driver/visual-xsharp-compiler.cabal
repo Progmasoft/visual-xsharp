@@ -80,6 +80,7 @@ test-suite visual-xsharp-compiler-tests
     main-is: Main.hs
     other-modules:
         ClosureTests
+        CoreInliningTests
         CoreOptimizerTests
         CoreOptimizerSourceTests
         CoreVerifierTests

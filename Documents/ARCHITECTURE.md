@@ -69,7 +69,8 @@ and terminators. A verifier rejects malformed symbols, blocks, branch targets, a
 Core optimization is a verified fixed-point pipeline rather than a single expression rewrite. Immutable literal propagation,
 range-safe integer folding, effect-preserving branch cleanup, and declaration-aware backward liveness run before CorePrep.
 Each enabled pass emits deterministic typed metrics, and the final tree is verified again. The detailed contracts are in
-[Core IR](CORE-IR.md) and [Core optimization](CORE-OPTIMIZER.md).
+[Core IR](CORE-IR.md), [Core optimization](CORE-OPTIMIZER.md), and
+[Core safe-expression inlining](CORE-INLINING.md).
 
 Specialization-demand planning runs on verified Core before that optimization
 pipeline. It is Haskell-owned because template identity, source semantics, and
