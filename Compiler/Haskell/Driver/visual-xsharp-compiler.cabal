@@ -40,6 +40,7 @@ library
         visual-xsharp-frontend:Visual.XSharp.Template.Specialization,
         visual-xsharp-frontend:Visual.XSharp.Template.Specialization.Verifier,
         visual-xsharp-frontend:Visual.XSharp.Template.Verifier,
+        visual-xsharp-frontend:Visual.XSharp.TypeClassification,
         visual-xsharp-frontend:Visual.XSharp.TypeChecker,
         visual-xsharp-core:Visual.XSharp.Core,
         visual-xsharp-core:Visual.XSharp.Core.Artifact,
@@ -102,6 +103,7 @@ test-suite visual-xsharp-compiler-tests
         TemplatePlanVerifierTests
         TemplateSpecializationPlannerTests
         TemplateVerifierTests
+        TypeClassificationTests
         VoidTests
     hs-source-dirs: test
     build-depends:

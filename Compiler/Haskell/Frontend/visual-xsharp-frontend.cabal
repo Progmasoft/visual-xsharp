@@ -29,6 +29,7 @@ library
         Visual.XSharp.Template.Specialization
         Visual.XSharp.Template.Specialization.Verifier
         Visual.XSharp.Template.Verifier
+        Visual.XSharp.TypeClassification
         Visual.XSharp.TypeChecker
     hs-source-dirs: src
     build-depends:

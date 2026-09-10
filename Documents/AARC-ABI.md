@@ -33,13 +33,17 @@ specialization identity but do not affect storage classification. An unresolved
 type parameter, missing declaration, or malformed type argument keeps a would-be
 CoW result `Unresolved` rather than guessing an ABI.
 
-The native `NominalTypeCatalog` supplies the required declaration metadata by
-case-sensitive qualified name. It rejects empty and duplicate names and never
-overwrites an earlier declaration family. The catalog overload of `ClassifyType`
-therefore handles shapes such as `A<B<C>>` without deriving ownership from source
-spelling. Serializing the complete frontend declaration catalog into Core remains
-a separate connection step; consumers without it must retain their conservative
-unresolved/reference boundary.
+Argument order cannot change that answer. Classification inspects the complete
+argument list before propagating an unresolved sibling, so both `A<T, String>`
+and `A<String, T>` are known AARC references. `Unresolved` wins only when no
+reference appears anywhere in the constructed type tree.
+
+The Haskell frontend and native Core each have an explicit nominal catalog keyed
+by case-sensitive qualified name. Both reject empty and duplicate names and never
+overwrite an earlier declaration family. Their classifiers therefore handle
+shapes such as `A<B<C>>` without deriving ownership from source spelling.
+Serializing the resolved frontend catalog into Core remains a separate connection
+step; consumers without it must retain their conservative unresolved boundary.
 
 ## Object header and destruction
 

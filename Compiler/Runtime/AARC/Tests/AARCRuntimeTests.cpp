@@ -102,12 +102,20 @@ TEST_CASE("constructed type classification preserves unresolved and non-type arg
         { U"ReferenceCell" },
         { Core::Type::type_variable({ 92U, U"U" }) });
     const auto malformedBuffer = Core::Type::named_template({ U"Buffer" }, { Core::TemplateArgument{} });
+    const auto unresolvedThenReference = Core::Type::named(
+        { U"Buffer" },
+        { Core::Type::type_variable({ 93U, U"V" }), Core::Type::string() });
+    const auto referenceThenUnresolved = Core::Type::named(
+        { U"Buffer" },
+        { Core::Type::string(), Core::Type::type_variable({ 94U, U"W" }) });
 
     CHECK(Core::ClassifyType(concreteBuffer, catalog) == Core::StorageClass::CopyOnWriteValue);
     CHECK(Core::ClassifyType(openBuffer, catalog) == Core::StorageClass::Unresolved);
     CHECK(Core::ClassifyType(missingDeclaration, catalog) == Core::StorageClass::Unresolved);
     CHECK(Core::ClassifyType(referenceWithOpenArgument, catalog) == Core::StorageClass::AarcReference);
     CHECK(Core::ClassifyType(malformedBuffer, catalog) == Core::StorageClass::Unresolved);
+    CHECK(Core::ClassifyType(unresolvedThenReference, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(referenceThenUnresolved, catalog) == Core::StorageClass::AarcReference);
 }
 
 TEST_CASE("nominal type catalog rejects ambiguous declarations and compares qualified names case-sensitively")

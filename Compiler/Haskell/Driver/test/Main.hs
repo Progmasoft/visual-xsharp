@@ -31,6 +31,7 @@ import TemplatePlanVerifierTests (templatePlanVerifierTests)
 import TemplateSpecializationPlannerTests (templateSpecializationPlannerTests)
 import TemplateTests (templateTests)
 import TemplateVerifierTests (templateVerifierTests)
+import TypeClassificationTests (typeClassificationTests)
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
@@ -117,6 +118,7 @@ main = do
     mapM_ (uncurry check) templatePlanVerifierTests
     mapM_ (uncurry check) templateSpecializationPlannerTests
     mapM_ (uncurry check) templateVerifierTests
+    mapM_ (uncurry check) typeClassificationTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests
     mapM_ (uncurry check) coreInliningTests

@@ -70,6 +70,7 @@ namespace visual_xsharp::core
             if (outer != StorageClass::CopyOnWriteValue)
                 return outer;
 
+            bool hasUnresolvedArgument = false;
             for (const auto &argument : type.templateArguments)
             {
                 // Compile-time value arguments affect specialization identity,
@@ -77,15 +78,22 @@ namespace visual_xsharp::core
                 if (argument.kind == TemplateArgument::Kind::Value)
                     continue;
                 if (!argument.type)
-                    return StorageClass::Unresolved;
+                {
+                    hasUnresolvedArgument = true;
+                    continue;
+                }
 
                 const auto nested = classify(*argument.type);
                 if (nested == StorageClass::AarcReference)
                     return StorageClass::AarcReference;
                 if (nested == StorageClass::Unresolved)
-                    return StorageClass::Unresolved;
+                    hasUnresolvedArgument = true;
             }
-            return StorageClass::CopyOnWriteValue;
+
+            // An unresolved argument cannot hide a known reference argument.
+            // Deferring the unresolved result until every type argument has
+            // been inspected makes classification independent of source order.
+            return hasUnresolvedArgument ? StorageClass::Unresolved : StorageClass::CopyOnWriteValue;
         }
     } // namespace
 

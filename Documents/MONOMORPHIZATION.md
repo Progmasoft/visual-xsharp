@@ -326,8 +326,11 @@ CoW outer declaration does not hide a reference specialization nested inside it:
 `ValueCell<ReferenceCell<int>>` and `ValueCell<ValueCell<String>>` are both AARC
 references, while `ValueCell<ValueCell<int>>` remains CoW. Non-type template
 arguments do not change this result. The native classifier implements this rule
-through an explicit nominal declaration catalog; the catalog still has to cross
-the frontend/Core process boundary before ownership lowering can consume it.
+through an explicit nominal declaration catalog, and the Haskell frontend now has
+the matching typed classifier. Both scan all siblings so an unresolved parameter
+cannot hide a known reference merely by appearing first. The resolved catalog
+still has to cross the frontend/Core process boundary before ownership lowering
+can consume it.
 
 Callable templates receive concrete public signatures before closure conversion
 is finalized. Lifted capture prefixes and invoke thunks then use those concrete
