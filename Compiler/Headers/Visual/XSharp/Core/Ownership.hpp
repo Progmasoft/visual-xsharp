@@ -4,6 +4,9 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
+#include <string>
+#include <vector>
 
 #include "Visual/XSharp/Core/CorePrep.hpp"
 
@@ -34,14 +37,50 @@ namespace visual_xsharp::core
         Interface
     };
 
+    struct NominalTypeDeclaration final
+    {
+        std::vector<std::u32string> name;
+        NominalKind kind{ NominalKind::Class };
+
+        [[nodiscard]] auto
+        operator==(const NominalTypeDeclaration &) const -> bool = default;
+    };
+
+    // A type's spelling alone never decides ownership. The catalog is the
+    // explicit semantic bridge from a resolved qualified name to its source
+    // declaration family. A sorted flat representation provides allocation-
+    // free logarithmic lookup, deterministic traversal, and no process-
+    // dependent hash function for Unicode names.
+    class NominalTypeCatalog final
+    {
+    public:
+        [[nodiscard]] auto
+        Register(std::vector<std::u32string> name, NominalKind kind) -> bool;
+        [[nodiscard]] auto
+        Lookup(std::span<const std::u32string> name) const noexcept -> std::optional<NominalKind>;
+        [[nodiscard]] auto
+        Size() const noexcept -> std::size_t;
+        [[nodiscard]] auto
+        Empty() const noexcept -> bool;
+
+    private:
+        std::vector<NominalTypeDeclaration> declarations_;
+    };
+
     [[nodiscard]] auto
     ClassifyNominal(NominalKind kind) noexcept -> StorageClass;
     [[nodiscard]] auto
     ClassifyType(const Type &type, std::optional<NominalKind> nominal = std::nullopt) noexcept
         -> StorageClass;
     [[nodiscard]] auto
+    ClassifyType(const Type &type, const NominalTypeCatalog &catalog) noexcept -> StorageClass;
+    [[nodiscard]] auto
     UsesAarc(const Type &type, std::optional<NominalKind> nominal = std::nullopt) noexcept -> bool;
     [[nodiscard]] auto
     UsesCopyOnWrite(const Type &type, std::optional<NominalKind> nominal = std::nullopt) noexcept
         -> bool;
+    [[nodiscard]] auto
+    UsesAarc(const Type &type, const NominalTypeCatalog &catalog) noexcept -> bool;
+    [[nodiscard]] auto
+    UsesCopyOnWrite(const Type &type, const NominalTypeCatalog &catalog) noexcept -> bool;
 } // namespace visual_xsharp::core

@@ -24,6 +24,23 @@ and `NominalKind` in `Visual/XSharp/Core/Ownership.hpp` form the canonical nativ
 table. A named type without declaration metadata stays `Unresolved`; spelling is
 never used to guess its ABI.
 
+Constructed nominal types are classified recursively after template substitution.
+A reference declaration remains an AARC reference regardless of its arguments. A
+CoW declaration remains a value only when every type argument, at every nesting
+depth, is a value; one `String`, callable, or reference nominal argument makes the
+complete constructed type an AARC reference. Compile-time value arguments affect
+specialization identity but do not affect storage classification. An unresolved
+type parameter, missing declaration, or malformed type argument keeps a would-be
+CoW result `Unresolved` rather than guessing an ABI.
+
+The native `NominalTypeCatalog` supplies the required declaration metadata by
+case-sensitive qualified name. It rejects empty and duplicate names and never
+overwrites an earlier declaration family. The catalog overload of `ClassifyType`
+therefore handles shapes such as `A<B<C>>` without deriving ownership from source
+spelling. Serializing the complete frontend declaration catalog into Core remains
+a separate connection step; consumers without it must retain their conservative
+unresolved/reference boundary.
+
 ## Object header and destruction
 
 Every dynamic AARC payload has an `ObjectHeader`. A back-pointer immediately

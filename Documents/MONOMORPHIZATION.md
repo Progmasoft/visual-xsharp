@@ -321,6 +321,14 @@ concrete nominal type. A field of template parameter `T` may become a trivial
 scalar, CoW value, or AARC reference in different specializations. The concrete
 result determines layout, destructor work, and Xpp ownership operations.
 
+Classification is recursive over the entire substituted type-argument tree. A
+CoW outer declaration does not hide a reference specialization nested inside it:
+`ValueCell<ReferenceCell<int>>` and `ValueCell<ValueCell<String>>` are both AARC
+references, while `ValueCell<ValueCell<int>>` remains CoW. Non-type template
+arguments do not change this result. The native classifier implements this rule
+through an explicit nominal declaration catalog; the catalog still has to cross
+the frontend/Core process boundary before ownership lowering can consume it.
+
 Callable templates receive concrete public signatures before closure conversion
 is finalized. Lifted capture prefixes and invoke thunks then use those concrete
 types; no runtime generic argument is appended to the callable ABI by default.

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+#include <array>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -54,6 +55,77 @@ TEST_CASE("type storage classes follow the language declaration families")
     CHECK(Core::ClassifyNominal(Core::NominalKind::Object) == Core::StorageClass::AarcReference);
     CHECK(Core::ClassifyNominal(Core::NominalKind::Interface) == Core::StorageClass::AarcReference);
     CHECK(Core::ClassifyType(Core::Type::named({ U"Unknown" })) == Core::StorageClass::Unresolved);
+}
+
+TEST_CASE("constructed value types inherit reference classification from every nested type argument")
+{
+    Core::NominalTypeCatalog catalog;
+    REQUIRE(catalog.Register({ U"ValueCell" }, Core::NominalKind::Data));
+    REQUIRE(catalog.Register({ U"ReferenceCell" }, Core::NominalKind::Class));
+
+    const auto scalar = Core::Type::named({ U"ValueCell" }, { Core::Type::int64() });
+    const auto allValues = Core::Type::named({ U"ValueCell" }, { scalar });
+    const auto directReference = Core::Type::named({ U"ValueCell" }, { Core::Type::string() });
+    const auto nestedReference = Core::Type::named({ U"ValueCell" }, { directReference });
+    const auto deepReference = Core::Type::named(
+        { U"ValueCell" },
+        { Core::Type::named({ U"ValueCell" }, { nestedReference }) });
+    const auto nominalReference = Core::Type::named({ U"ReferenceCell" }, { Core::Type::int64() });
+    const auto containedReference = Core::Type::named({ U"ValueCell" }, { nominalReference });
+
+    CHECK(Core::ClassifyType(scalar, catalog) == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyType(allValues, catalog) == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyType(directReference, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(nestedReference, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(deepReference, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(nominalReference, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(containedReference, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::UsesCopyOnWrite(allValues, catalog));
+    CHECK(Core::UsesAarc(containedReference, catalog));
+}
+
+TEST_CASE("constructed type classification preserves unresolved and non-type argument boundaries")
+{
+    Core::NominalTypeCatalog catalog;
+    REQUIRE(catalog.Register({ U"Buffer" }, Core::NominalKind::Data));
+    REQUIRE(catalog.Register({ U"ReferenceCell" }, Core::NominalKind::Class));
+
+    const auto valueArgument = Core::TemplateArgument::value_argument(Core::TemplateValue::boolean_value(true));
+    const auto concreteBuffer = Core::Type::named_template(
+        { U"Buffer" },
+        { Core::TemplateArgument::type_argument(Core::Type::int64()), valueArgument });
+    const auto openBuffer = Core::Type::named(
+        { U"Buffer" },
+        { Core::Type::type_variable({ 91U, U"T" }) });
+    const auto missingDeclaration = Core::Type::named({ U"Missing" }, { Core::Type::int64() });
+    const auto referenceWithOpenArgument = Core::Type::named(
+        { U"ReferenceCell" },
+        { Core::Type::type_variable({ 92U, U"U" }) });
+    const auto malformedBuffer = Core::Type::named_template({ U"Buffer" }, { Core::TemplateArgument{} });
+
+    CHECK(Core::ClassifyType(concreteBuffer, catalog) == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyType(openBuffer, catalog) == Core::StorageClass::Unresolved);
+    CHECK(Core::ClassifyType(missingDeclaration, catalog) == Core::StorageClass::Unresolved);
+    CHECK(Core::ClassifyType(referenceWithOpenArgument, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(malformedBuffer, catalog) == Core::StorageClass::Unresolved);
+}
+
+TEST_CASE("nominal type catalog rejects ambiguous declarations and compares qualified names case-sensitively")
+{
+    Core::NominalTypeCatalog catalog;
+    CHECK(catalog.Empty());
+    CHECK_FALSE(catalog.Register({}, Core::NominalKind::Data));
+    CHECK_FALSE(catalog.Register({ U"Example", U"" }, Core::NominalKind::Data));
+    REQUIRE(catalog.Register({ U"Example", U"Value" }, Core::NominalKind::Data));
+    CHECK_FALSE(catalog.Register({ U"Example", U"Value" }, Core::NominalKind::Class));
+    REQUIRE(catalog.Register({ U"Example", U"value" }, Core::NominalKind::Class));
+
+    CHECK(catalog.Size() == 2U);
+    CHECK(catalog.Lookup(std::array{ std::u32string(U"Example"), std::u32string(U"Value") })
+          == Core::NominalKind::Data);
+    CHECK(catalog.Lookup(std::array{ std::u32string(U"Example"), std::u32string(U"value") })
+          == Core::NominalKind::Class);
+    CHECK_FALSE(catalog.Lookup(std::array{ std::u32string(U"example"), std::u32string(U"Value") }).has_value());
 }
 
 TEST_CASE("strong references destroy the payload exactly once")

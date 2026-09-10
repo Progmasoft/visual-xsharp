@@ -91,6 +91,7 @@ The repository contains:
 - C++20 Xmm-to-LLVM lowering for the implemented scalar, call, branch, jump, and return operations;
 - LLVM O0/O1/O2/O3 pass-pipeline selection followed by module verification;
 - Unicode-scalar `String` constants materialized as AARC objects;
+- a case-sensitive native nominal declaration catalog and recursive constructed-type ownership classification;
 - AARC object headers, strong/weak/unowned runtime calls, and closure payload destructors; and
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
@@ -115,6 +116,7 @@ unit, and source ownership for project-wide per-file artifacts.
 | target object and assembly output | connected for supported values | target machine |
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
 | closure object ABI | connected | Xpp/Xmm, LLVM, and AARC runtime boundary |
+| recursive constructed-type classification | native model complete, pipeline connection pending | Core nominal declaration catalog |
 | Xpp/Xmm disk codecs | connected | bounded v3 `VXPP`/`VXMM` readers and writers |
 | project-wide per-source native outputs | registered contract, not connected | source ownership through Core |
 
