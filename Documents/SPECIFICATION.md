@@ -5,14 +5,14 @@
 
 ## Purpose
 
-`Spec/` contains 24 topic-oriented `.vxs` example suites. They explain current language design intent using independent,
+`Spec/` contains 25 topic-oriented `.vxs` example suites. They explain current language design intent using independent,
 numbered fragments.
 
 The catalog is grouped by ownership rather than kept as one flat directory:
 
 - `Spec/Language/` contains declarations, attributes, operators, strings, optionals, exceptions, iteration, and unsafe
   behavior;
-- `Spec/StandardLibrary/` contains Core, collections, I/O, text, concurrency, temporal, and query surfaces;
+- `Spec/StandardLibrary/` contains Core, collections, I/O, text, numerics, concurrency, temporal, and query surfaces;
 - `Spec/Libraries/Databases/` contains database-provider APIs; and
 - `Spec/Interop/` contains FFI and inline-assembly boundaries.
 
@@ -33,6 +33,7 @@ The complete linked catalog is maintained in [`Spec/README.md`](../Spec/README.m
 | core and collections | `StandardLibrary/Core/*.vxs` |
 | console, file, and command I/O | `StandardLibrary/IO/*.vxs` |
 | text formats | `StandardLibrary/Text/*.vxs` |
+| numeric algorithms | `StandardLibrary/Numerics/Math.vxs` |
 | concurrency | `StandardLibrary/Concurrency/*.vxs` |
 | date and time | `StandardLibrary/Temporal/*.vxs` |
 | BLINQ | `StandardLibrary/Query/BLINQ.vxs` |

@@ -33,6 +33,7 @@ See [the specification guide](../Documents/SPECIFICATION.md) for the topic map a
 - I/O: [console](StandardLibrary/IO/ConsoleIO.vxs), [files](StandardLibrary/IO/FileIO.vxs), and
   [commands](StandardLibrary/IO/Command.vxs)
 - Text: [JSON](StandardLibrary/Text/Text.Json.vxs) and [XML](StandardLibrary/Text/Text.Xml.vxs)
+- Numerics: [System.Math](StandardLibrary/Numerics/Math.vxs)
 - Runtime services: [threading](StandardLibrary/Concurrency/Threading.vxs), [date](StandardLibrary/Temporal/Date.vxs), and
   [time](StandardLibrary/Temporal/Time.vxs)
 - Query: [BLINQ](StandardLibrary/Query/BLINQ.vxs)

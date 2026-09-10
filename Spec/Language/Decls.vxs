@@ -2744,3 +2744,82 @@ class User {
         }
     }
 }
+
+-- ============================================================================
+-- Example 290: 46. Constructed Template Type Classification
+-- Demonstrates: A constructed template type is a value type only when its declaration and every
+--   type argument are value types after substitution. Classification examines the complete type
+--   argument tree rather than only the outer declaration.
+
+template<typename T>
+data ValueCell {
+    T Value;
+}
+
+ValueCell<int> scalarCell;                 // value type
+ValueCell<ValueCell<int>> nestedCell;      // value type
+
+-- ============================================================================
+-- Example 291: 46. Constructed Template Type Classification
+-- Demonstrates: A reference-type argument makes a value-declared template specialization a
+--   reference type. The reference classification propagates through every enclosing constructed
+--   template type.
+
+template<typename T>
+data ValueCell {
+    T Value;
+}
+
+ValueCell<String> directReference = null;                  // reference type
+ValueCell<ValueCell<String>> nestedReference = null;       // reference type
+ValueCell<ValueCell<ValueCell<String>>> deepReference = null; // reference type
+
+-- ============================================================================
+-- Example 292: 46. Constructed Template Type Classification
+-- Demonstrates: A reference declaration remains a reference type regardless of its arguments. A
+--   reference specialization also makes every value-declared specialization containing it a
+--   reference type.
+
+template<typename T>
+class ReferenceCell {
+    T Value;
+}
+
+template<typename T>
+data ValueCell {
+    T Value;
+}
+
+ReferenceCell<int> outerReference = null;               // reference type
+ValueCell<ReferenceCell<int>> containedReference = null; // reference type
+
+-- ============================================================================
+-- Example 293: 46. Constructed Template Type Classification
+-- Demonstrates: A completely value-classified specialization remains non-nullable even when it is
+--   nested. The invalid initializer distinguishes this rule from reference propagation.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+template<typename T>
+data ValueCell {
+    T Value;
+}
+
+ValueCell<ValueCell<int>> value = null; // INVALID: the complete constructed type is a value type
+
+-- ============================================================================
+-- Example 294: 46. Constructed Template Type Classification
+-- Demonstrates: Only type arguments participate in recursive value/reference classification.
+--   Compile-time value arguments do not introduce a reference edge. An unresolved type parameter
+--   remains classification-dependent until substitution; aliases are classified after expansion.
+
+template<typename T, int Size>
+data Buffer {
+    T Value;
+}
+
+template<typename T>
+typealias NestedCell = ValueCell<ValueCell<T>>;
+
+Buffer<int, 32> values;         // value type; 32 is not a type argument
+NestedCell<int> nestedValues;   // value type after alias expansion
+NestedCell<String> nestedNames; // reference type after alias expansion
