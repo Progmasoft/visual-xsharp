@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+#include <algorithm>
 #include <array>
 #include <fmt/format.h>
 #include <optional>
@@ -621,10 +622,30 @@ namespace
     }
 
     [[nodiscard]] bool
+    IsPackageSegment(std::string_view value)
+    {
+        if (value.empty())
+            return false;
+        const auto isAsciiLetter = [](char character) {
+            return (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
+        };
+        if (!isAsciiLetter(value.front()))
+            return false;
+        return std::all_of(value.begin() + 1, value.end(), [isAsciiLetter](char character) {
+            return isAsciiLetter(character) || (character >= '0' && character <= '9') || character == '_';
+        });
+    }
+
+    [[nodiscard]] bool
     IsPackageCoordinate(std::string_view value)
     {
+        // This is the same two-identifier contract enforced by the Kotlin project
+        // model. Merely finding one dot accepted slashes, query strings, whitespace,
+        // additional path segments, and non-ASCII bytes into the future ViGet path.
         const auto separator = value.find('.');
-        return separator != std::string_view::npos && separator != 0U && separator + 1U < value.size() && value.find(".."sv) == std::string_view::npos;
+        if (separator == std::string_view::npos || value.find('.', separator + 1U) != std::string_view::npos)
+            return false;
+        return IsPackageSegment(value.substr(0U, separator)) && IsPackageSegment(value.substr(separator + 1U));
     }
 
     [[nodiscard]] bool

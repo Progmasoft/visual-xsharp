@@ -73,6 +73,10 @@ vxs install [-Global] Publisher.Name
 vxs viget push|update
 ```
 
+Hosted coordinates contain exactly two case-sensitive ASCII identifier segments. Each segment starts with an ASCII letter
+and continues only with ASCII letters, digits, or `_`; paths, query strings, whitespace, Unicode spellings, and additional
+dot-separated segments are rejected before registry dispatch.
+
 ## Canonical options
 
 ```text

@@ -280,6 +280,11 @@ TEST_CASE("install and ViGet have distinct typed positional contracts", "[cli][p
     REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher" }.Result() == XS_CLI_PARSE_ERROR);
     REQUIRE(ParsedInvocation{ "vxs", "install", ".Name" }.Result() == XS_CLI_PARSE_ERROR);
     REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher..Name" }.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Name.More" }.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Na/me" }.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Name?version=latest" }.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Na me" }.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Nam\xC3\xA9" }.Result() == XS_CLI_PARSE_ERROR);
     REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Name", "extra" }.Result() == XS_CLI_PARSE_ERROR);
 }
 
