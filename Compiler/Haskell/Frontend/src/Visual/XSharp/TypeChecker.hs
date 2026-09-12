@@ -504,22 +504,16 @@ checkCapturesWith context environment = map checkCapture
                     UnownedCapture -> [problem spanValue "VXT0015" "unowned capture requires an AARC reference value"]
              in (Capture spanValue mode name valueType typedInitializer, problems ++ ownershipProblems)
 
--- String and callable values are AARC references. Named user and library
--- types are conservatively treated as references until declaration metadata
--- lets the ownership pass distinguish AARC declarations from CoW values.
+-- String and callable values are AARC references. Every canonical scalar is a
+-- value, not merely the handful historically accepted by closure tests. Named
+-- user and library types remain conservative until resolved declaration
+-- metadata connects the ownership catalog to this check.
 isReferenceType :: Type -> Bool
 isReferenceType valueType = case valueType of
     FunctionType _ _ -> True
-    NamedType name _ -> name `notElem` primitiveNames
+    _ | typeToScalarType valueType /= Nothing -> False
+    NamedType _ _ -> valueType /= unitType && valueType /= voidType
     _ -> False
-    where
-        primitiveNames =
-            [ QualifiedName [Identifier "bool"]
-            , QualifiedName [Identifier "int"]
-            , QualifiedName [Identifier "long"]
-            , QualifiedName [Identifier "unit"]
-            , QualifiedName [Identifier "void"]
-            ]
 
 typeCallableParameterWith :: TemplateContext -> Parameter ResolvedName () -> Parameter ResolvedName Type
 typeCallableParameterWith context parameter =

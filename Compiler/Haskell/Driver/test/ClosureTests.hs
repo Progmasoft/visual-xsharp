@@ -11,6 +11,7 @@ module ClosureTests (closureTests) where
 
 import Data.List (find, isInfixOf)
 import Visual.XSharp.AST
+import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
@@ -46,6 +47,7 @@ closureTests =
     , ("callable invocation checks argument count", callableArity)
     , ("callable invocation checks argument types", callableArgumentType)
     , ("weak primitive capture is rejected", weakPrimitiveCapture)
+    , ("weak capture rejects every canonical scalar family", weakScalarCaptures)
     , ("unowned primitive capture is rejected", unownedPrimitiveCapture)
     , ("weak String capture is accepted", weakStringCapture)
     , ("weak callable capture is accepted", weakCallableCapture)
@@ -166,6 +168,21 @@ callableArgumentType = hasDiagnostic "VXT0009" (compileSource "auto f = \\(int v
 
 weakPrimitiveCapture :: Bool
 weakPrimitiveCapture = hasDiagnostic "VXT0014" (compileSource "int value = 1; auto f = [weak value] \\ -> value;")
+
+weakScalarCaptures :: Bool
+weakScalarCaptures = all rejectsWeak scalarTypes
+    where
+        rejectsWeak scalar = hasDiagnostic "VXT0014" (compileSource (scalarSource scalar))
+        scalarSource scalar =
+            scalarTypeName scalar
+                ++ " value = "
+                ++ scalarInitializer scalar
+                ++ "; auto f = [weak value] \\ -> value;"
+        scalarInitializer CharacterScalar = "'A'"
+        scalarInitializer BooleanScalar = "true"
+        scalarInitializer scalar
+            | scalarTypeFamily scalar == FloatingFamily = "1.0"
+            | otherwise = "1"
 
 unownedPrimitiveCapture :: Bool
 unownedPrimitiveCapture = hasDiagnostic "VXT0015" (compileSource "int value = 1; auto f = [unowned value] \\ -> value;")
