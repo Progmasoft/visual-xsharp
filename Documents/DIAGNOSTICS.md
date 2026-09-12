@@ -6,6 +6,60 @@
 Diagnostics are a compiler interface. They must identify the stage that owns a failure, preserve source context when one
 exists, and prevent invalid or stale artifacts from appearing successful.
 
+## Structured tooling channel
+
+Tools must consume the [VXDG structured diagnostic protocol](DIAGNOSTIC-PROTOCOL.md), not parse stderr. The versioned
+side channel carries stage, severity, stable code, source range, named message arguments, related locations, and fix
+descriptions. It remains private to trusted local compiler integrations and is not a user-selectable emit format.
+
+The Haskell frontend converts its one-based source positions to the protocol's zero-based scalar coordinates. The C++
+implementation validates and accumulates native-stage diagnostics using the same record model. Xide owns an independent
+bounded Kotlin decoder, so compatibility is tested across all three implementation languages instead of being assumed.
+
+### Accumulation semantics
+
+Native compiler stages use `Visual::XSharp::Diagnostic::Collection` when more than one component contributes records.
+The collection:
+
+- validates a record before accepting it;
+- preserves the first-emission order;
+- coalesces only byte-identical records;
+- counts errors and warnings without treating information or hints as failures;
+- applies a configured record limit;
+- merges a document transactionally;
+- supports snapshot, transfer, clear, and reuse without retaining stale identities.
+
+Transactional merge matters when one stage returns a batch. If any new record is invalid or would exceed capacity, none
+of that batch becomes observable. An exact duplicate is successful but does not consume capacity or increment severity
+counts. Messages with different arguments, locations, related context, or fixes remain distinct even when their codes
+match.
+
+### Side-channel lifecycle
+
+The frontend writes a complete empty VXDG document after a successful check. On failure it writes the structured records
+before printing the human-readable diagnostics and exiting. This makes the protocol independent of terminal wording and
+ensures that an old failure file cannot survive as the apparent result of a new success.
+
+If `VXS_DIAGNOSTICS_FILE` is absent, no protocol file is written. The variable is an implementation boundary passed by
+the native driver or a trusted editor client; it is intentionally absent from public CLI help. A configured empty path,
+an invalid diagnostic model, an encoding failure, or an I/O failure makes the frontend fail rather than silently leaving
+the requesting tool without a trustworthy result.
+
+Consumers use a fresh temporary path per process and remove it on every outcome. They must treat a missing file after a
+normal process exit, malformed protocol bytes, unsupported versions, and oversized documents as integration failures.
+Human stderr may be displayed as supplemental detail, but it must never be reparsed into synthetic diagnostic records.
+
+### Document-version ownership
+
+VXDG version 1 describes the disk snapshot compiled by `vxs`; it does not carry an editor document version. Xide records
+the active version when it starts a check and publishes the resulting diagnostics only if that version remains current.
+Edits made while the compiler runs therefore invalidate the result. Fixes require the same version guard before their
+text edits can be applied.
+
+Protocol columns count Unicode scalar values, whereas Kotlin strings use UTF-16 code units. An editor must map through
+its line model and must not add a scalar column directly to a JVM string offset. This distinction is required for correct
+highlighting after supplementary characters.
+
 ## Output channels
 
 `vxs` writes ordinary requested output to standard output and diagnostics to standard error. Help and version are parser

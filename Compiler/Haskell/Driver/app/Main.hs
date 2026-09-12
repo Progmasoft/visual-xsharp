@@ -7,7 +7,7 @@ import Data.ByteString qualified as ByteString
 import Data.Char (isAlpha, isAlphaNum)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
-import System.Environment (getArgs)
+import System.Environment (getArgs, lookupEnv)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 import Visual.XSharp.AST
@@ -15,6 +15,7 @@ import Visual.XSharp.Compiler
 import Visual.XSharp.Core (CoreModule)
 import Visual.XSharp.Core.Artifact
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.Diagnostic.SideChannel
 import Visual.XSharp.SourceSet
 
 data FrontendCommand
@@ -40,7 +41,7 @@ main = do
     arguments <- getArgs
     case parseCommand arguments of
         Left problem -> failWith problem
-        Right command -> compileCommand command
+        Right command -> compileCommand command >> writeDiagnosticSideChannel []
 
 -- This executable is a deliberately narrow process boundary, not a second
 -- public CLI. C++ owns user-facing command semantics. Named private options are
@@ -197,8 +198,25 @@ writeArtifact output core = do
 
 failWithDiagnostics :: [Diagnostic] -> IO a
 failWithDiagnostics diagnostics = do
+    writeDiagnosticSideChannel diagnostics
     mapM_ printDiagnostic diagnostics
     exitFailure
+
+-- The native driver owns all public output. This private, opt-in side channel
+-- gives IDE clients stable structure without scraping localized terminal text.
+-- A successful compilation writes an empty document so a client can never
+-- mistake diagnostics left by an earlier process for the current result.
+writeDiagnosticSideChannel :: [Diagnostic] -> IO ()
+writeDiagnosticSideChannel diagnostics = do
+    configuredPath <- lookupEnv "VXS_DIAGNOSTICS_FILE"
+    case configuredPath of
+        Nothing -> pure ()
+        Just "" -> failWith "VXS_DIAGNOSTICS_FILE must not be empty"
+        Just path -> do
+            result <- writeDiagnosticFile path diagnostics
+            case result of
+                Left issue -> failWith ("could not write structured diagnostics: " ++ show issue)
+                Right () -> pure ()
 
 printDiagnostic :: Diagnostic -> IO ()
 printDiagnostic diagnostic =

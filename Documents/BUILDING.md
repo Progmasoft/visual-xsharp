@@ -97,7 +97,7 @@ go run scripts/develop.go build
 go run scripts/develop.go test
 ```
 
-`build` compiles `vxs` and all 11 component-owned native suites. `test` performs the same build and then executes each
+`build` compiles `vxs` and all 12 component-owned native suites. `test` performs the same build and then executes each
 native program directly. This
 avoids introducing Git Bash/MSYS solely for Bazel's POSIX-oriented `cc_test` launcher on Windows while retaining the same
 suite set on macOS.

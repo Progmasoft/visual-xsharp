@@ -14,6 +14,7 @@ library
         Visual.XSharp.AST
         Visual.XSharp.CharacterLiteral
         Visual.XSharp.Diagnostic
+        Visual.XSharp.Diagnostic.Protocol
         Visual.XSharp.FloatingLiteral
         Visual.XSharp.Lexer
         Visual.XSharp.NumericLiteral
@@ -24,5 +25,6 @@ library
         Visual.XSharp.Parser.Token
     hs-source-dirs: src
     build-depends:
-        base >=4.20 && <4.23
+        base >=4.20 && <4.23,
+        bytestring >=0.12 && <0.14
     default-language: GHC2021

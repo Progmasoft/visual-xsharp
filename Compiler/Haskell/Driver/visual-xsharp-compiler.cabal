@@ -12,11 +12,13 @@ build-type: Simple
 library
     exposed-modules:
         Visual.XSharp.Compiler
+        Visual.XSharp.Diagnostic.SideChannel
         Visual.XSharp.Pipeline.Stage
     reexported-modules:
         visual-xsharp-syntax:Visual.XSharp.AST,
         visual-xsharp-syntax:Visual.XSharp.CharacterLiteral,
         visual-xsharp-syntax:Visual.XSharp.Diagnostic,
+        visual-xsharp-syntax:Visual.XSharp.Diagnostic.Protocol,
         visual-xsharp-syntax:Visual.XSharp.FloatingLiteral,
         visual-xsharp-syntax:Visual.XSharp.Lexer,
         visual-xsharp-syntax:Visual.XSharp.NumericLiteral,
@@ -61,6 +63,7 @@ library
     hs-source-dirs: src
     build-depends:
         base >=4.20 && <4.23,
+        bytestring >=0.12 && <0.14,
         visual-xsharp-core,
         visual-xsharp-frontend,
         visual-xsharp-syntax
@@ -85,6 +88,8 @@ test-suite visual-xsharp-compiler-tests
         CoreOptimizerTests
         CoreOptimizerSourceTests
         CoreVerifierTests
+        DiagnosticProtocolTests
+        DiagnosticSideChannelTests
         NumericTests
         MonomorphizationTests
         ParserContractTests
