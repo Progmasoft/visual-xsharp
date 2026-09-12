@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "com.progmasoft.visual.xsharp"
-version = "0.3.2"
+version = "0.3.6"
 
 repositories {
   mavenCentral()

@@ -47,8 +47,10 @@ LLVM IR -> LLVM verifier -> optimization -> target machine
         `--> LLD -> .vxse
 ```
 
-The command remains one `vxs` executable. The private Haskell frontend is a process boundary, not a second public compiler
-driver. Native middle-end and backend libraries are linked into `vxs`; CorePrep is never exposed as a command or file type.
+The user-facing command remains `vxs`. A current distribution contains two physical executables and processes: `vxs` plus
+the adjacent private Haskell `vxs-frontend` companion. The companion is an implementation boundary, not a second public
+compiler driver. Native middle-end and backend libraries are linked into `vxs`; CorePrep is never exposed as a command or
+file type.
 
 ## 1. Input selection
 

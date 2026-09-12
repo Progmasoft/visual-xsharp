@@ -43,8 +43,9 @@ Compiler/
 └── ProjectSystem/Bridge/  native-to-Kotlin project boundary
 ```
 
-The directory names are architectural seams even though `vxs` is one executable. Splitting them does not create separately
-installed frontend/backend tools.
+The directory names are architectural seams even though `vxs` is the only public compiler command. The current distribution
+also stages the private Haskell `vxs-frontend` process beside it; splitting native components does not create additional
+publicly installed frontend/backend tools.
 
 ### Allowed dependency direction
 

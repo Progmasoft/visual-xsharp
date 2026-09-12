@@ -32,6 +32,33 @@ Windows additionally needs Windows SDK headers/import libraries and MSVC CRT/STL
 headers and libraries only; ClangCL, LLD, and Bazelisk remain independent tools. macOS needs the Xcode Command Line Tools,
 which provide `xcrun` and the selected Apple SDK.
 
+## Host bootstrap
+
+Inspect a machine without changing it:
+
+```powershell
+go run scripts/prebuild.go check
+```
+
+Install missing prerequisites on a supported host:
+
+```powershell
+go run scripts/prebuild.go install
+```
+
+On Windows the bootstrap uses exact winget package identifiers for Git, Go, Bazelisk, LLVM, and Eclipse Temurin JDK 25. GHCup has no
+official winget package, so the script uses Haskell.org's documented non-interactive HTTPS PowerShell bootstrap and then
+asks GHCup to select recommended GHC and Cabal releases. If Windows SDK or CRT/C++ link libraries are absent, it installs
+the Build Tools workload solely for those headers and libraries; Bazel continues to select standalone ClangCL and LLD.
+
+On macOS the bootstrap requires Homebrew, installs the corresponding formulas and Temurin JDK 25 cask, requests Xcode
+Command Line Tools when missing, and delegates Haskell versions to GHCup. Homebrew's LLVM formula is keg-only; follow
+Homebrew's printed shell guidance, open a new terminal, and use `LLVM_ROOT` for LLVM discovery rather than writing an
+absolute path into the repository. Installation never edits tracked build configuration.
+
+After either package manager finishes, start a new terminal and run both `prebuild.go check` and `develop.go doctor`.
+Package-manager PATH changes cannot be injected back into the parent terminal that launched the bootstrap.
+
 ## LLVM discovery
 
 Do not write a machine-specific LLVM path into the repository. Use one of these mechanisms:
@@ -70,9 +97,20 @@ go run scripts/develop.go build
 go run scripts/develop.go test
 ```
 
-The command builds `vxs` and all eight component-owned native suites, then executes each native program directly. This
+`build` compiles `vxs` and all 11 component-owned native suites. `test` performs the same build and then executes each
+native program directly. This
 avoids introducing Git Bash/MSYS solely for Bazel's POSIX-oriented `cc_test` launcher on Windows while retaining the same
 suite set on macOS.
+
+Before creating release artifacts, validate the exact cross-build-system version:
+
+```powershell
+go run scripts/develop.go version 0.3.6
+```
+
+The check compares `MODULE.bazel`, the changelog heading, the Haskell package, and the Kotlin project runtime using exact
+release lines. If a Bazel-built `vxs` is available, its `version` output must agree as well. This Go command replaces the
+retired root `release.java`; repository automation does not require a Java script runtime.
 
 Useful component targets for incremental work are:
 
@@ -131,6 +169,48 @@ The production/install layout places the frontend relative to `vxs`. The native 
 directory or accept an arbitrary frontend command from `PATH`. When running directly from a build tree, keep the artifacts in
 the layout expected by the driver or use the repository's tested build targets rather than copying one binary alone.
 
+## Local compiler bundle
+
+Build and validate an install-shaped compiler directory with one command:
+
+```powershell
+go run scripts/develop.go bundle
+```
+
+The command performs both build-system steps deliberately: Bazel produces the C++20 `vxs` driver and Cabal produces the
+private Haskell `vxs-frontend` companion. It then stages a fresh directory with this shape:
+
+```text
+dist/
+`-- visual-xsharp-<version>-<platform>-<arch>/
+    |-- vxs[.exe]
+    |-- vxs-frontend[.exe]
+    |-- LICENSE.txt
+    |-- PATENTS
+    |-- LICENSES/
+    |   |-- AdditionRef-Progmasoft-Exception-1.1.txt
+    |   `-- AdditionRef-Progmasoft-Patent-Grant-1.1.txt
+    `-- SHA256SUMS
+```
+
+The brackets above describe the host suffix; they are not literal filename characters. The directory name records the
+compiler version, host platform, and architecture so separately built bundles do not silently overwrite one another.
+`dist/` is ignored generated output and is not committed.
+
+The bundle contains two physical programs but exposes one compiler command. Users invoke `vxs`; `vxs-frontend` is the
+private lexer-through-Core process that the driver resolves beside itself. Do not move only `vxs`, place an unrelated
+`vxs-frontend` on `PATH`, or advertise the companion as a second public compiler.
+
+Staging is not considered successful merely because both build systems returned zero. The bundle command invokes the
+staged `vxs`, checks its reported version, compiles a real `.vxs` fixture to a `.vxse`, and executes that native program.
+It fails if the frontend cannot be discovered, compilation does not produce the expected executable, or the program exits
+incorrectly. Finally it writes `SHA256SUMS` for the staged compiler and legal payloads. Consumers can use that manifest to
+detect an incomplete or modified local bundle; it is an integrity record, not a code-signing substitute.
+
+The legal payload is intentionally explicit. `LICENSE.txt` contains MPL-2.0, `PATENTS` identifies the applicable patent
+terms, and the two versioned `1.1` files contain the current Progmasoft linking exception and patent grant. Historical
+`1.0` texts in the repository are not staged as the current distribution terms.
+
 ## Build configuration
 
 The native graph is configured by tracked Bazel files and a small environment discovery surface:
@@ -184,8 +264,9 @@ try { cabal clean } finally { Pop-Location }
 For the native-only cleanup, `go run scripts/develop.go clean` performs an expunging Bazel clean.
 
 Do not commit `bazel-*`, Cabal `dist-newstyle`, Gradle `.gradle`/`build`, IDE caches, local service state, or compiler-emitted
-artifacts used only for smoke tests. Before removing a large tree manually, resolve the exact absolute target and verify that
-it is a generated directory inside this checkout.
+artifacts used only for smoke tests. Local compiler bundles below `dist/` are equally reproducible and disposable. Before
+removing a large tree manually, resolve the exact absolute target and verify that it is a generated directory inside this
+checkout.
 
 ## Troubleshooting
 
@@ -211,6 +292,9 @@ depend on a temporary directory.
 
 Build the Haskell workspace and confirm the frontend is placed in the layout expected by `vxs`. Installing a same-named
 command globally is not a supported fix because it could mismatch the Core wire contract.
+
+For an install-shaped local layout, prefer `go run scripts/develop.go bundle`; it stages the matching Bazel and Cabal
+outputs together and exercises frontend discovery before reporting success.
 
 ### `xs_lil.dll` or another retired library is requested
 

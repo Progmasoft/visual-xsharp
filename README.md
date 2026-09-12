@@ -55,6 +55,17 @@ Apple SDK supplied by the Xcode Command Line Tools. Visual Studio and Xcode IDEs
 Repository configuration does not contain a machine-specific LLVM installation path. Set `LLVM_ROOT` or put
 `llvm-config` on `PATH`.
 
+On a new supported machine, the Go bootstrap can report or install the host toolchain:
+
+```powershell
+go run scripts/prebuild.go check
+go run scripts/prebuild.go install
+```
+
+Windows installation uses exact winget package identities, including Temurin JDK 25, plus the official GHCup bootstrap. macOS uses Homebrew and the
+Xcode Command Line Tools installer. The Windows SDK/CRT workload supplies link resources only; Visual X# still selects
+ClangCL and LLD. Open a new terminal after installation, then run `go run scripts/develop.go doctor`.
+
 ## Build
 
 Initialize the recursive submodules first:
@@ -68,13 +79,22 @@ the normal workflow:
 
 ```powershell
 go run scripts/develop.go doctor
+go run scripts/develop.go version 0.3.6
 go run scripts/develop.go build
 go run scripts/develop.go test
+go run scripts/develop.go bundle
 ```
 
 The same commands run from Terminal on macOS. Direct `bazelisk build //Compiler/...` remains supported and selects the host
 configuration automatically; ordinary builds never need `--config`. The Bazel graph discovers LLVM from `LLVM_ROOT` or
 `llvm-config` and does not store a machine-specific installation path.
+
+`bundle` is the reproducible local path from a checkout to a usable compiler layout. It builds the C++20 `vxs` driver with
+Bazel, builds its private Haskell `vxs-frontend` companion with Cabal, stages both programs under
+`dist/visual-xsharp-<version>-<platform>-<arch>/`, and verifies that the staged pair can compile and run a real `.vxs`
+program as a `.vxse`. The ignored `dist/` tree also contains `LICENSE.txt`, `PATENTS`, the current Progmasoft exception and
+patent-grant texts, and `SHA256SUMS`. See [Building](Documents/BUILDING.md#local-compiler-bundle) for the layout and
+verification contract.
 
 ## Command-line status
 
@@ -82,8 +102,12 @@ The compiler executable is `vxs`. Its C++20 command parser uses one typed schema
 rejection, defaults, and value conversion; it has no third-party CLI dependency. For `.vxs`, `check` runs the Haskell
 frontend and the complete in-memory Core/CorePrep/Xpp/Xmm/LLVM validation route. `build` produces a native `.vxse` by
 default; `-Emit core|object|assembly|llvmll|llvmbc` selects another supported artifact. `run` builds and executes the
-native binary. Public bounded Xpp/Xmm v2 readers and writers support verified forward pipeline resumption.
+native binary. Public bounded Xpp/Xmm v3 readers and writers support verified forward pipeline resumption.
 CorePrep wire bytes are never accepted under the public `.core` extension.
+
+`vxs-frontend` is an implementation companion, not a second user-facing compiler command. Current packaged layouts contain
+two physical executables because the Haskell frontend is still a private process boundary. `vxs` locates that companion
+relative to itself and remains the command users invoke.
 
 The reliable single-file validation form is:
 

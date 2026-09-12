@@ -314,6 +314,26 @@ vxs run -File .\Sources\Main.vxs
 Assertions should include file extension, nonempty artifact, replacement of an older artifact, no output from `check`, no
 temporary object after binary linking, and propagation of the executed process status from `run`.
 
+### Install-layout smoke test
+
+The source-level matrix above can exercise programs directly from developer build trees. The distribution boundary has an
+additional failure mode: the public driver and its matching private frontend may not have been staged together. Exercise
+that boundary with:
+
+```powershell
+go run scripts/develop.go bundle
+```
+
+This is more than an archive or copy test. A passing run proves that the staged `vxs` reports the checkout's compiler
+version, finds the adjacent private `vxs-frontend`, compiles a real `.vxs` source into a `.vxse`, and executes the result
+successfully. It also proves that the bundle contains `LICENSE.txt`, `PATENTS`, the current `1.1` exception and patent-grant
+texts, and a `SHA256SUMS` manifest covering the other staged files.
+
+The output under `dist/visual-xsharp-<version>-<platform>-<arch>/` is ignored and reproducible. Do not treat an old bundle as
+test input, copy a frontend from another checkout into it, or commit the generated directory. A release or packaging change
+should start from a freshly staged bundle so version, wire contract, native driver, and legal materials are evaluated as one
+unit.
+
 ## Documentation verification
 
 For documentation-only changes:

@@ -287,6 +287,20 @@ Parse diagnostics retain context. Unknown commands/options name the rejected spe
 option and its accepted domain; duplicate, missing-value, wrong-command-scope, positional, and invalid process-vector
 errors are reported independently.
 
+## Bundled executable layout
+
+The public command is `vxs`. A current local distribution also contains a second physical executable named
+`vxs-frontend`, which is the private Haskell lexer-through-Core process. It has no independent public CLI contract and is
+not a substitute for `vxs`.
+
+Keep both executables in the layout produced by `go run scripts/develop.go bundle`. The driver resolves the companion
+relative to its own location rather than searching the current project or accepting an arbitrary same-named program from
+`PATH`. This pairing prevents a frontend with a different Core wire contract from being selected accidentally.
+
+The bundle command validates this installed-path behavior by invoking the staged driver, compiling a real `.vxs` input to
+a `.vxse`, and running that output. `SHA256SUMS` and the staged legal files describe the complete local payload; they do not
+add another user-facing command.
+
 ## Filesystem and overwrite behavior
 
 Paths are interpreted by the owning command. Project discovery begins at the current/requested location and walks upward for
