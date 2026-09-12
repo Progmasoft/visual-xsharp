@@ -619,8 +619,13 @@ func checkReleaseMetadata(repository string, currentHost host, requested string,
 	})
 	checks = append(checks,
 		checkFileLineOnce(filepath.Join(repository, "CHANGELOG.md"), "## "+requested+" - ", true, "CHANGELOG heading"),
+		checkFileLineOnce(filepath.Join(repository, "Compiler", "Haskell", "Syntax", "visual-xsharp-syntax.cabal"), "version: "+requested, false, "Haskell syntax version"),
+		checkFileLineOnce(filepath.Join(repository, "Compiler", "Haskell", "Frontend", "visual-xsharp-frontend.cabal"), "version: "+requested, false, "Haskell frontend version"),
+		checkFileLineOnce(filepath.Join(repository, "Compiler", "Haskell", "Core", "visual-xsharp-core.cabal"), "version: "+requested, false, "Haskell Core version"),
 		checkFileLineOnce(filepath.Join(repository, "Compiler", "Haskell", "Driver", "visual-xsharp-compiler.cabal"), "version: "+requested, false, "Haskell compiler version"),
+		checkFileLineOnce(filepath.Join(repository, "Compiler", "Cli", "Arguments", "Options.cpp"), "#    define XS_PROJECT_VERSION \""+requested+"\"", false, "native CLI fallback version"),
 		checkFileLineOnce(filepath.Join(repository, "ProjectSystem", "build.gradle.kts"), "version = \""+requested+"\"", false, "Kotlin project runtime version"),
+		checkFileLineOnce(filepath.Join(repository, "ProjectSystem", "Visual.XSharp.kts"), "version = \""+requested+"\"", false, "default compiler model version"),
 	)
 
 	compiler := filepath.Join(repository, "bazel-bin", "Compiler", "Cli", "vxs"+currentHost.executable)

@@ -31,7 +31,10 @@ namespace Visual::XSharp::Xmm
         InvalidReturn,
         InvalidBranch,
         InvalidLiteral,
-        UninitializedRegister
+        UninitializedRegister,
+        OwnershipUseAfterRelease,
+        OwnershipKindMismatch,
+        OwnershipPathMismatch
     };
 
     struct VerificationIssue final

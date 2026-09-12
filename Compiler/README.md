@@ -16,3 +16,4 @@ project anymore.
 
 See the [compiler pipeline](../Documents/COMPILER-PIPELINE.md), [architecture](../Documents/ARCHITECTURE.md), and
 [building guide](../Documents/BUILDING.md) for component ownership and supported workflows.
+The native AARC verifier is described in [ownership-flow verification](../Documents/OWNERSHIP-FLOW.md).

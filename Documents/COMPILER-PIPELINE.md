@@ -230,6 +230,10 @@ Xpp optimization is a separate phase. The currently connected passes include con
 elimination. Every optimized module passes the Xpp-owned verifier; an optimization is not allowed to rely on the later Xmm
 or LLVM verifier to catch its mistakes.
 
+The verifier also adapts explicit AARC operations to the shared ownership-flow analysis. It distinguishes strong object
+references from weak and unowned control handles, rejects release-after-release and use-after-release, and preserves every
+possible state at a control-flow join. See [Ownership-flow verification](OWNERSHIP-FLOW.md).
+
 The public `.xpp` artifact uses the bounded versioned `VXPP` reader/writer. Ordinary compilation still keeps Xpp in RAM
 unless the user explicitly selects Xpp input or output.
 
@@ -242,6 +246,10 @@ its result or side effect.
 Xmm optimization currently includes safe virtual-register move simplification. The Xmm-owned verifier checks register
 declarations, parameter mappings, operand and result types, function targets, call arity and types, block targets, and
 terminators.
+
+Definite initialization and ownership are separate checks. A register may be defined yet unsafe because its token has been
+consumed or carries the wrong AARC representation. Xmm repeats ownership-flow verification after lowering so native callers
+and artifact readers cannot bypass the Xpp boundary.
 
 The backend compatibility `Verify` entry delegates to this verifier, but Xmm remains the owner. Like Xpp, `.xmm` is a
 reserved public artifact whose reader and writer are not yet connected.

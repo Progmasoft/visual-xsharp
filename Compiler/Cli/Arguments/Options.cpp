@@ -12,7 +12,7 @@
 #include "Compiler/Cli/Arguments/Options.hpp"
 
 #ifndef XS_PROJECT_VERSION
-#    define XS_PROJECT_VERSION "0.3.6"
+#    define XS_PROJECT_VERSION "0.3.7"
 #endif
 
 namespace

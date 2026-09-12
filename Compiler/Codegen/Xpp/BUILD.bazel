@@ -4,10 +4,16 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "xpp",
-    srcs = ["Lower.cpp", "Verifier.cpp", "Wire.cpp"],
+    srcs = [
+        "Lower.cpp",
+        "OwnershipVerifier.cpp",
+        "Verifier.cpp",
+        "Wire.cpp",
+    ],
     deps = [
         "//Compiler/Analysis:control_flow",
         "//Compiler/Analysis:definite_initialization",
+        "//Compiler/Analysis:ownership_flow",
         "//Compiler/Artifact:wire_support",
         "//Compiler/Core:core",
         "//Compiler/Core/Callable:callable",

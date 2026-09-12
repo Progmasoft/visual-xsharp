@@ -13,3 +13,9 @@ cc_library(
     hdrs = ["DefiniteInitialization.hpp"],
     strip_include_prefix = "/Compiler/Headers",
 )
+
+cc_library(
+    name = "ownership_flow_api",
+    hdrs = ["OwnershipFlow.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+)

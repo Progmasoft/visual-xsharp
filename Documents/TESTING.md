@@ -89,16 +89,16 @@ storage-oriented consumer of those edges. Three component-owned suites make
 that boundary explicit:
 
 - `Compiler/Analysis/Tests/definite_initialization_tests` checks the shared
-  reachability and predecessor-intersection fixed point;
+  reachability, initialization, and ownership fixed points;
 - `Compiler/Codegen/Xpp/Tests/xpp_verifier_tests` checks symbolic storage,
-  including direct-function versus closure-storage reads; and
+  including direct-function versus closure-storage reads and explicit AARC handle lifetime; and
 - `Compiler/Codegen/Xmm/Tests/xmm_verifier_tests` checks virtual-register
-  initialization and block-order independence.
+  initialization, strong/weak/unowned representation, and block-order independence.
 
 The integrated developer command builds and executes all three. Focused Bazel
 labels shorten iteration, but they do not replace the full native gate. See
-[Control-flow safety](CONTROL-FLOW-SAFETY.md) for the equations and required
-expression-lowering invariants.
+[Control-flow safety](CONTROL-FLOW-SAFETY.md) for initialization equations and
+[ownership-flow verification](OWNERSHIP-FLOW.md) for AARC lifetime equations.
 
 Run native memory diagnostics through the same entry point:
 

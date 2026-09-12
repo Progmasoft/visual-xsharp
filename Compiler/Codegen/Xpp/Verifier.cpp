@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <algorithm>
+#include <iterator>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -10,6 +11,7 @@
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Xpp/OwnershipVerifier.hpp"
 #include "Visual/XSharp/Xpp/Verifier.hpp"
 
 namespace Visual::XSharp::Xpp
@@ -439,6 +441,11 @@ namespace Visual::XSharp::Xpp
             }
             VerifyDefiniteInitialization(context, function, storage, functions);
         }
+        auto ownershipIssues = VerifyOwnership(module);
+        context.issues.insert(
+            context.issues.end(),
+            std::make_move_iterator(ownershipIssues.begin()),
+            std::make_move_iterator(ownershipIssues.end()));
         return context.issues;
     }
 } // namespace Visual::XSharp::Xpp

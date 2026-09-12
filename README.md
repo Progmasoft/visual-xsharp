@@ -79,7 +79,7 @@ the normal workflow:
 
 ```powershell
 go run scripts/develop.go doctor
-go run scripts/develop.go version 0.3.6
+go run scripts/develop.go version 0.3.7
 go run scripts/develop.go build
 go run scripts/develop.go test
 go run scripts/develop.go bundle

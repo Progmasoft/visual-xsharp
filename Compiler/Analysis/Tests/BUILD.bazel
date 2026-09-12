@@ -7,10 +7,12 @@ cc_binary(
     srcs = [
         "ControlFlowTests.cpp",
         "DefiniteInitializationTests.cpp",
+        "OwnershipFlowTests.cpp",
     ],
     deps = [
         "//Compiler/Analysis:control_flow",
         "//Compiler/Analysis:definite_initialization",
+        "//Compiler/Analysis:ownership_flow",
         "@catch2//:catch2_main",
     ],
 )

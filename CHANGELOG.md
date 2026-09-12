@@ -5,6 +5,28 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## 0.3.7 - 2026-09-12
+
+### Compiler
+
+- Added a shared control-flow ownership analysis for explicit strong, weak, and
+  unowned AARC handles. The analysis preserves all states at joins, converges
+  across loops, ignores unreachable code, and remains independent of block
+  presentation order.
+- Connected ownership verification to both Xpp and Xmm. The compiler now rejects
+  use after release, double release, wrong handle representations, and values
+  whose ownership state differs across incoming control-flow paths before LLVM
+  can lower an unsafe load or runtime call.
+- Added stable Xpp and Xmm ownership diagnostics with function, block, and
+  instruction locations, plus focused coverage for conversions, releases,
+  returns, diamonds, loops, entry backedges, direct calls, scalar values, and
+  malformed analysis graphs.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the native CLI, Bazel module, Kotlin
+  project runtime, default compiler model, and release validation to 0.3.7.
+
 ## 0.3.6 - 2026-09-08
 
 ### Compiler

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,6 +12,7 @@
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
+#include "Visual/XSharp/Xmm/OwnershipVerifier.hpp"
 #include "Visual/XSharp/Xmm/Verifier.hpp"
 
 namespace Visual::XSharp::Xmm
@@ -574,6 +576,11 @@ namespace Visual::XSharp::Xmm
                 VerifyTerminator(context, block.terminator, function, registers, functions, blocks);
             }
             VerifyDefiniteInitialization(context, function, registers);
+            auto ownershipIssues = VerifyOwnership(function);
+            context.issues.insert(
+                context.issues.end(),
+                std::make_move_iterator(ownershipIssues.begin()),
+                std::make_move_iterator(ownershipIssues.end()));
         }
         return context.issues;
     }

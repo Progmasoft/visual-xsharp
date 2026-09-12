@@ -13,3 +13,9 @@ cc_library(
     srcs = ["DefiniteInitialization.cpp"],
     deps = ["//Compiler/Headers/Visual/XSharp/Analysis:definite_initialization_api"],
 )
+
+cc_library(
+    name = "ownership_flow",
+    srcs = ["OwnershipFlow.cpp"],
+    deps = ["//Compiler/Headers/Visual/XSharp/Analysis:ownership_flow_api"],
+)

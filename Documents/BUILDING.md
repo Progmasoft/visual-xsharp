@@ -105,7 +105,7 @@ suite set on macOS.
 Before creating release artifacts, validate the exact cross-build-system version:
 
 ```powershell
-go run scripts/develop.go version 0.3.6
+go run scripts/develop.go version 0.3.7
 ```
 
 The check compares `MODULE.bazel`, the changelog heading, the Haskell package, and the Kotlin project runtime using exact
