@@ -27,6 +27,7 @@ const usage = `Visual X# native developer command
 Usage:
   go run scripts/develop.go doctor
   go run scripts/develop.go build [-- <Bazel options>]
+  go run scripts/develop.go benchmark [-- <Bazel options>]
   go run scripts/develop.go bundle [-- <Bazel options>]
   go run scripts/develop.go version <major.minor.patch>
   go run scripts/develop.go test [-- <Bazel options>]
@@ -36,6 +37,7 @@ Usage:
 Commands:
   doctor    Explain whether this host has the required native toolchain.
   build     Build the compiler and every native contract suite.
+  benchmark Build and run the native and Haskell compiler benchmarks.
   bundle    Build, stage, checksum, and smoke-test a host distribution.
   version   Validate release metadata and an available vxs binary.
   test      Build and execute every native contract suite.
@@ -113,6 +115,20 @@ var nativePrograms = []string{
 	"Compiler/Codegen/Xmm/Tests/xmm_verifier_tests",
 	"Compiler/Codegen/Xpp/Tests/xpp_verifier_tests",
 	"Compiler/Runtime/AARC/Tests/aarc_runtime_tests",
+}
+
+var nativeBenchmarkTargets = []string{
+	"//Compiler/Codegen/Xmm/Benches:xmm_benches",
+	"//Compiler/Codegen/Xpp/Benches:xpp_benches",
+	"//Compiler/Core/Benches:core_benches",
+	"//Compiler/Core/CorePrep/Benches:coreprep_benches",
+}
+
+var nativeBenchmarkPrograms = []string{
+	"Compiler/Codegen/Xmm/Benches/xmm_benches",
+	"Compiler/Codegen/Xpp/Benches/xpp_benches",
+	"Compiler/Core/Benches/core_benches",
+	"Compiler/Core/CorePrep/Benches/coreprep_benches",
 }
 
 // bundleFiles is deliberately explicit. A release must not accidentally absorb
@@ -204,6 +220,14 @@ func run(arguments []string, runner commandRunner) error {
 			return err
 		}
 		return buildTargets(repository, runner, "", bazelArguments)
+	case "benchmark":
+		if len(commandArguments) != 0 {
+			return errors.New("benchmark accepts Bazel options only after --")
+		}
+		if err := requireBuildTools(currentHost, runner); err != nil {
+			return err
+		}
+		return runBenchmarks(repository, currentHost, runner, bazelArguments)
 	case "bundle":
 		if len(commandArguments) != 0 {
 			return errors.New("bundle accepts Bazel options only after --")
@@ -512,6 +536,47 @@ func buildTargets(repository string, runner commandRunner, config string, extra 
 	fmt.Printf("Building compiler and %d native suites...\n", len(nativeTargets))
 	if err := runner.Run(repository, nil, bazel, arguments...); err != nil {
 		return fmt.Errorf("Bazel build failed: %w", err)
+	}
+	return nil
+}
+
+func runBenchmarks(repository string, currentHost host, runner commandRunner, bazelArguments []string) error {
+	bazel, err := findBazel(runner)
+	if err != nil {
+		return err
+	}
+	// Fastbuild is excellent for iteration but distorts microbenchmarks with
+	// debug libraries and disabled optimization. The benchmark command owns an
+	// optimized profile so every recorded result has the same basic contract.
+	arguments := append([]string{"build", "-c", "opt"}, nativeBenchmarkTargets...)
+	arguments = append(arguments, bazelArguments...)
+	fmt.Printf("Building %d native benchmark programs...\n", len(nativeBenchmarkTargets))
+	if err := runner.Run(repository, nil, bazel, arguments...); err != nil {
+		return fmt.Errorf("native benchmark build failed: %w", err)
+	}
+	for index, program := range nativeBenchmarkPrograms {
+		path := filepath.Join(repository, "bazel-bin", filepath.FromSlash(program)) + currentHost.executable
+		fmt.Printf("\n[%d/%d] %s\n", index+1, len(nativeBenchmarkPrograms), filepath.Base(program))
+		if err := runner.Run(repository, nil, path); err != nil {
+			return fmt.Errorf("native benchmark %s failed: %w", filepath.Base(program), err)
+		}
+	}
+
+	cabal, err := runner.LookPath("cabal")
+	if err != nil {
+		return errors.New("required tool \"cabal\" was not found; install GHCup's Cabal tool to run Haskell benchmarks")
+	}
+	fmt.Println("\nRunning Criterion Core and CorePrep benchmarks...")
+	compilerDirectory := filepath.Join(repository, "Compiler")
+	if err := runner.Run(
+		compilerDirectory,
+		nil,
+		cabal,
+		"bench",
+		"visual-xsharp-core:core-benches",
+		"--enable-benchmarks",
+	); err != nil {
+		return fmt.Errorf("Haskell benchmark run failed: %w", err)
 	}
 	return nil
 }

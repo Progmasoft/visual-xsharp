@@ -82,6 +82,7 @@ go run scripts/develop.go doctor
 go run scripts/develop.go version 0.3.7
 go run scripts/develop.go build
 go run scripts/develop.go test
+go run scripts/develop.go benchmark
 go run scripts/develop.go bundle
 ```
 
@@ -95,6 +96,10 @@ Bazel, builds its private Haskell `vxs-frontend` companion with Cabal, stages bo
 program as a `.vxse`. The ignored `dist/` tree also contains `LICENSE.txt`, `PATENTS`, the current Progmasoft exception and
 patent-grant texts, and `SHA256SUMS`. See [Building](Documents/BUILDING.md#local-compiler-bundle) for the layout and
 verification contract.
+
+`benchmark` builds optimized Google Benchmark binaries for the C++20 Core, CorePrep, Xpp, and Xmm layers, then runs the
+matching Criterion suite over the Haskell Core representations and wire codecs. Benchmark sources live beside the component
+they measure; methodology and recorded baselines live under [Benchmarks](Benchmarks/README.md).
 
 ## Command-line status
 

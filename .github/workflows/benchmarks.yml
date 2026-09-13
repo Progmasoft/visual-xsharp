@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+name: Benchmarks
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Build and smoke benchmark surfaces
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Configure Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: benchmark-windows-clangcl
+          repository-cache: true
+
+      - name: Build native benchmark programs
+        shell: pwsh
+        run: >-
+          bazel build
+          //Compiler/Codegen/Xpp/Benches:xpp_benches
+          //Compiler/Codegen/Xmm/Benches:xmm_benches
+          //Compiler/Core/Benches:core_benches
+          //Compiler/Core/CorePrep/Benches:coreprep_benches
+
+      - name: Smoke native benchmark registration
+        shell: pwsh
+        run: |
+          .\bazel-bin\Compiler\Core\Benches\core_benches.exe --benchmark_filter="CoreVerify/8" --benchmark_min_time=0.001s
+          .\bazel-bin\Compiler\Core\CorePrep\Benches\coreprep_benches.exe --benchmark_filter="Verify/4" --benchmark_min_time=0.001s
+          .\bazel-bin\Compiler\Codegen\Xpp\Benches\xpp_benches.exe --benchmark_filter="Verify/4" --benchmark_min_time=0.001s
+          .\bazel-bin\Compiler\Codegen\Xmm\Benches\xmm_benches.exe --benchmark_filter="Lower/4" --benchmark_min_time=0.001s
+
+      - name: Build Haskell Criterion benchmarks
+        shell: pwsh
+        working-directory: Compiler
+        run: cabal build visual-xsharp-core:bench:core-benches --enable-benchmarks
+
+      - name: Smoke Haskell Criterion benchmarks
+        shell: pwsh
+        working-directory: Compiler
+        run: cabal bench visual-xsharp-core:core-benches --enable-benchmarks --benchmark-options="-n 1 --match pattern Core/Verify/8"
+
+      - name: Check patch hygiene
+        shell: pwsh
+        run: git diff --check

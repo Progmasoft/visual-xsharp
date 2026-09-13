@@ -47,3 +47,16 @@ library
         filepath >=1.5 && <1.6,
         visual-xsharp-syntax
     default-language: GHC2021
+
+benchmark core-benches
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+    hs-source-dirs: Benches
+    build-depends:
+        base >=4.20 && <4.23,
+        criterion >=1.6.4 && <1.7,
+        deepseq >=1.5 && <1.6,
+        visual-xsharp-core,
+        visual-xsharp-syntax
+    default-language: GHC2021
+    ghc-options: -threaded -rtsopts

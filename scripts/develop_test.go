@@ -34,6 +34,26 @@ func TestSplitArgumentsRejectsPrivateConfigurationEscape(t *testing.T) {
 	}
 }
 
+func TestBenchmarkProgramsMirrorComponentOwnedTargets(t *testing.T) {
+	if len(nativeBenchmarkTargets) != len(nativeBenchmarkPrograms) {
+		t.Fatalf("benchmark target count %d does not match program count %d", len(nativeBenchmarkTargets), len(nativeBenchmarkPrograms))
+	}
+	wantComponents := []string{"Codegen/Xmm", "Codegen/Xpp", "Core/Benches", "Core/CorePrep"}
+	for _, component := range wantComponents {
+		foundTarget := false
+		foundProgram := false
+		for _, target := range nativeBenchmarkTargets {
+			foundTarget = foundTarget || strings.Contains(target, component)
+		}
+		for _, program := range nativeBenchmarkPrograms {
+			foundProgram = foundProgram || strings.Contains(program, component)
+		}
+		if !foundTarget || !foundProgram {
+			t.Fatalf("component %q is not represented by both benchmark surfaces", component)
+		}
+	}
+}
+
 func TestSelectAddressSanitizerUsesHostSpecificProfile(t *testing.T) {
 	windows, err := selectSanitizer(host{kind: hostWindows}, "asan")
 	if err != nil {

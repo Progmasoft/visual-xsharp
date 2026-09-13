@@ -29,6 +29,7 @@ following vocabulary:
 | Build a development checkout | [Building](BUILDING.md) |
 | Run the correct verification layers | [Testing](TESTING.md) |
 | Place tests and fixtures | [Test ownership](TEST-OWNERSHIP.md) |
+| Measure compiler throughput | [Benchmarking](BENCHMARKING.md) and [recorded baselines](../Benchmarks/README.md) |
 | Use `vxs` | [CLI](CLI.md) |
 | Write `Visual.XSharp.kts` | [Project files](PROJECT_FILES.md) |
 | Understand diagnostics and exit behavior | [Diagnostics](DIAGNOSTICS.md) |
@@ -78,6 +79,7 @@ following vocabulary:
 - [Building](BUILDING.md) contains prerequisites, environment discovery, component builds, and troubleshooting.
 - [Testing](TESTING.md) maps changes to local gates and GitHub workflows.
 - [Test ownership](TEST-OWNERSHIP.md) assigns suites, fixtures, and Bazel targets to their compiler components.
+- [Benchmarking](BENCHMARKING.md) defines measurement ownership, fixture timing, interpretation, and CI policy.
 - [Repository layout](MONOREPO.md) explains ownership boundaries and allowed dependency direction.
 - [Contributing](CONTRIBUTING.md) records code style, file naming, decomposition, generated-file hygiene, and update flow.
 
