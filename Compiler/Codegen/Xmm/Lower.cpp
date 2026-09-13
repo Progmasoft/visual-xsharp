@@ -7,15 +7,13 @@
 #include <unordered_set>
 #include <utility>
 
-#include "Visual/XSharp/Analysis/ControlFlow.hpp"
+#include "Visual/XSharp/Xmm/ControlFlow.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 
 namespace visual_xsharp::xmm
 {
     namespace
     {
-        namespace ControlFlow = ::Visual::XSharp::Analysis;
-
         struct RegisterMap final
         {
             // Allocate deterministically on first encounter while preserving one register for
@@ -175,33 +173,6 @@ namespace visual_xsharp::xmm
         }
 
         [[nodiscard]] auto
-        Successors(const Terminator &terminator) -> std::vector<ControlFlow::ControlFlowBlockId>
-        {
-            switch (terminator.kind)
-            {
-                case Terminator::Kind::Branch:
-                    return { terminator.true_target, terminator.false_target };
-                case Terminator::Kind::Jump:
-                    return { terminator.true_target };
-                case Terminator::Kind::Return:
-                case Terminator::Kind::Unreachable:
-                    return {};
-            }
-            return {};
-        }
-
-        [[nodiscard]] auto
-        Analyze(const Function &function) -> ControlFlow::ControlFlowResult
-        {
-            ControlFlow::ControlFlowGraph graph;
-            graph.entry = function.entry;
-            graph.blocks.reserve(function.blocks.size());
-            for (const auto &block : function.blocks)
-                graph.blocks.push_back({ block.id, Successors(block.terminator) });
-            return ControlFlow::AnalyzeControlFlow(graph);
-        }
-
-        [[nodiscard]] auto
         BlockCatalog(Function &function) -> std::unordered_map<BlockId, Block *>
         {
             std::unordered_map<BlockId, Block *> blocks;
@@ -258,7 +229,8 @@ namespace visual_xsharp::xmm
         void
         RetainReachableReversePostorder(Function &function)
         {
-            const auto flow = Analyze(function);
+            const auto structure = AnalyzeControlStructure(function);
+            const auto &flow = structure.controlFlow;
             const std::unordered_set<BlockId> reachable(
                 flow.reversePostorder.begin(),
                 flow.reversePostorder.end());

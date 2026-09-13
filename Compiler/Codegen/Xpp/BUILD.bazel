@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "xpp",
     srcs = [
+        "ControlFlow.cpp",
         "Lower.cpp",
         "OwnershipVerifier.cpp",
         "Verifier.cpp",
@@ -12,6 +13,7 @@ cc_library(
     ],
     deps = [
         "//Compiler/Analysis:control_flow",
+        "//Compiler/Analysis:dominance",
         "//Compiler/Analysis:definite_initialization",
         "//Compiler/Analysis:ownership_flow",
         "//Compiler/Artifact:wire_support",
@@ -20,5 +22,6 @@ cc_library(
         "//Compiler/Core/Ownership:ownership",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
         "//Compiler/Headers/Visual/XSharp/Xpp:xpp",
+        "//Compiler/Headers/Visual/XSharp/Xpp:control_flow_api",
     ],
 )

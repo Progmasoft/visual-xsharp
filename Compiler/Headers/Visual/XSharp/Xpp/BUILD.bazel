@@ -16,3 +16,13 @@ cc_library(
         "//Compiler/Headers/Visual/XSharp/Core:coreprep_model",
     ],
 )
+
+cc_library(
+    name = "control_flow_api",
+    hdrs = ["ControlFlow.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [
+        ":xpp",
+        "//Compiler/Headers/Visual/XSharp/Analysis:dominance_api",
+    ],
+)

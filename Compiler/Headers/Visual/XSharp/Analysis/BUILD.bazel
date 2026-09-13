@@ -9,6 +9,20 @@ cc_library(
 )
 
 cc_library(
+    name = "dominance_api",
+    hdrs = ["Dominance.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [":control_flow"],
+)
+
+cc_library(
+    name = "control_dependence_api",
+    hdrs = ["ControlDependence.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [":dominance_api"],
+)
+
+cc_library(
     name = "definite_initialization_api",
     hdrs = ["DefiniteInitialization.hpp"],
     strip_include_prefix = "/Compiler/Headers",

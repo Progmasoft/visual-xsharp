@@ -9,6 +9,24 @@ cc_library(
 )
 
 cc_library(
+    name = "dominance",
+    srcs = ["Dominance.cpp"],
+    deps = [
+        ":control_flow",
+        "//Compiler/Headers/Visual/XSharp/Analysis:dominance_api",
+    ],
+)
+
+cc_library(
+    name = "control_dependence",
+    srcs = ["ControlDependence.cpp"],
+    deps = [
+        ":dominance",
+        "//Compiler/Headers/Visual/XSharp/Analysis:control_dependence_api",
+    ],
+)
+
+cc_library(
     name = "definite_initialization",
     srcs = ["DefiniteInitialization.cpp"],
     deps = ["//Compiler/Headers/Visual/XSharp/Analysis:definite_initialization_api"],

@@ -16,3 +16,13 @@ cc_library(
         "//Compiler/Headers/Visual/XSharp/Xpp:xpp",
     ],
 )
+
+cc_library(
+    name = "control_flow_api",
+    hdrs = ["ControlFlow.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [
+        ":xmm",
+        "//Compiler/Headers/Visual/XSharp/Analysis:dominance_api",
+    ],
+)
