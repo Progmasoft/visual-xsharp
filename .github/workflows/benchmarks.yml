@@ -49,6 +49,10 @@ jobs:
           .\bazel-bin\Compiler\Codegen\Xpp\Benches\xpp_benches.exe --benchmark_filter="Verify/4" --benchmark_min_time=0.001s
           .\bazel-bin\Compiler\Codegen\Xmm\Benches\xmm_benches.exe --benchmark_filter="Lower/4" --benchmark_min_time=0.001s
 
+      - name: Update Haskell package index
+        shell: pwsh
+        run: cabal update
+
       - name: Build Haskell Criterion benchmarks
         shell: pwsh
         working-directory: Compiler
