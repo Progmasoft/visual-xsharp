@@ -1,13 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
-#include <algorithm>
 #include <cstdlib>
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 
-#include "Visual/XSharp/Xpp/ControlFlow.hpp"
 #include "Visual/XSharp/Xpp/IR.hpp"
 
 namespace visual_xsharp::xpp
@@ -125,89 +121,6 @@ namespace visual_xsharp::xpp
             return lowered;
         }
 
-        [[nodiscard]] auto
-        BlockCatalog(Function &function) -> std::unordered_map<BlockId, Block *>
-        {
-            std::unordered_map<BlockId, Block *> blocks;
-            blocks.reserve(function.blocks.size());
-            for (auto &block : function.blocks)
-                blocks.emplace(block.id, &block);
-            return blocks;
-        }
-
-        [[nodiscard]] auto
-        ResolveTrampoline(
-            BlockId target,
-            const std::unordered_map<BlockId, Block *> &blocks) -> BlockId
-        {
-            std::unordered_set<BlockId> visited;
-            while (visited.insert(target).second)
-            {
-                const auto found = blocks.find(target);
-                if (found == blocks.end())
-                    break;
-                const auto &block = *found->second;
-                if (!block.instructions.empty() || block.terminator.kind != Terminator::Kind::Jump)
-                    break;
-                const auto next = block.terminator.true_target;
-                if (next == target)
-                    break;
-                target = next;
-            }
-            return target;
-        }
-
-        void
-        ThreadTrampolines(Function &function)
-        {
-            const auto blocks = BlockCatalog(function);
-            for (auto &block : function.blocks)
-            {
-                auto &terminator = block.terminator;
-                if (terminator.kind == Terminator::Kind::Jump)
-                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
-                else if (terminator.kind == Terminator::Kind::Branch)
-                {
-                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
-                    terminator.false_target = ResolveTrampoline(terminator.false_target, blocks);
-                    if (terminator.true_target == terminator.false_target)
-                    {
-                        // Once both edges agree the condition has no control-flow
-                        // effect. Its producer remains in place; only the terminator
-                        // stops pretending that two executions are possible.
-                        terminator.kind = Terminator::Kind::Jump;
-                        terminator.false_target = 0U;
-                    }
-                }
-            }
-        }
-
-        void
-        RetainReachableReversePostorder(Function &function)
-        {
-            const auto structure = AnalyzeControlStructure(function);
-            const auto &flow = structure.controlFlow;
-            const std::unordered_set<BlockId> reachable(
-                flow.reversePostorder.begin(),
-                flow.reversePostorder.end());
-            std::erase_if(function.blocks, [&reachable](const Block &block) {
-                return !reachable.contains(block.id);
-            });
-
-            std::unordered_map<BlockId, std::size_t> order;
-            order.reserve(flow.reversePostorder.size());
-            for (std::size_t index = 0U; index < flow.reversePostorder.size(); ++index)
-                order.emplace(flow.reversePostorder[index], index);
-            std::ranges::sort(function.blocks, [&order](const Block &left, const Block &right) {
-                return order.at(left.id) < order.at(right.id);
-            });
-        }
-
-        auto
-        IsSelfCopy(const Instruction &instruction) -> bool
-        {
-            return instruction.opcode == Opcode::Copy && instruction.effect != Instruction::Effect::Discard && instruction.operands.size() == 1U && instruction.operands.front().kind == Operand::Kind::Symbol && instruction.operands.front().symbol == instruction.destination;
-        }
     } // namespace
 
     auto
@@ -232,16 +145,4 @@ namespace visual_xsharp::xpp
         return lowered;
     }
 
-    auto
-    optimize(Module module) -> Module
-    {
-        for (auto &function : module.functions)
-        {
-            for (auto &block : function.blocks)
-                std::erase_if(block.instructions, IsSelfCopy);
-            ThreadTrampolines(function);
-            RetainReachableReversePostorder(function);
-        }
-        return module;
-    }
 } // namespace visual_xsharp::xpp

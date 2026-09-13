@@ -7,6 +7,7 @@ cc_library(
     srcs = [
         "ControlFlow.cpp",
         "Lower.cpp",
+        "Optimize.cpp",
         "OwnershipVerifier.cpp",
         "Verifier.cpp",
         "Wire.cpp",
@@ -15,6 +16,7 @@ cc_library(
         "//Compiler/Analysis:control_flow",
         "//Compiler/Analysis:dominance",
         "//Compiler/Analysis:definite_initialization",
+        "//Compiler/Analysis:liveness",
         "//Compiler/Analysis:ownership_flow",
         "//Compiler/Artifact:wire_support",
         "//Compiler/Codegen/Xpp:xpp",

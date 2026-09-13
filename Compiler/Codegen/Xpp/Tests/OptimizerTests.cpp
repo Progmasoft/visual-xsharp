@@ -50,6 +50,28 @@ namespace
     }
 
     [[nodiscard]] auto
+    Store(const IR::SymbolId destination, const IR::Operand &source) -> IR::Instruction
+    {
+        auto instruction = Copy(destination, source);
+        instruction.effect = IR::Instruction::Effect::Store;
+        return instruction;
+    }
+
+    [[nodiscard]] auto
+    Discard(const IR::Operand &source) -> IR::Instruction
+    {
+        return {
+            IR::Instruction::Effect::Discard,
+            IR::Opcode::Copy,
+            0U,
+            source.type,
+            { source },
+            0U,
+            {},
+        };
+    }
+
+    [[nodiscard]] auto
     Jump(const IR::BlockId target) -> IR::Terminator
     {
         IR::Terminator terminator;
@@ -93,6 +115,15 @@ namespace
         function.entry = 0U;
         function.blocks = std::move(blocks);
         return { { U"Optimizer", U"Xpp" }, { std::move(function) } };
+    }
+
+    [[nodiscard]] auto
+    ModuleWithIntegerParameter(std::vector<IR::Block> blocks) -> IR::Module
+    {
+        auto module = Module(std::move(blocks));
+        module.functions.front().parameters.push_back(
+            Core::Parameter{ { 10U, U"value" }, Core::Type::int64() });
+        return module;
     }
 
     [[nodiscard]] auto
@@ -164,27 +195,69 @@ TEST_CASE("Xpp optimization resolves a chain of empty trampolines")
     CHECK(FindBlock(optimized, 0U).terminator.true_target == 3U);
 }
 
-TEST_CASE("Xpp optimization retains a jump block that performs work")
+TEST_CASE("Xpp optimization retains a jump block with an observable store")
 {
     const auto optimized = IR::optimize(Module({
         Block(0U, {}, Jump(1U)),
-        Block(1U, { Copy(10U, Integer(4)) }, Jump(2U)),
+        Block(1U, { Copy(10U, Integer(0)), Store(10U, Integer(4)) }, Jump(2U)),
         Block(2U, {}, Return()),
     }));
 
     CHECK(BlockOrder(optimized) == std::vector<IR::BlockId>{ 0U, 1U, 2U });
-    REQUIRE(FindBlock(optimized, 1U).instructions.size() == 1U);
+    REQUIRE(FindBlock(optimized, 1U).instructions.size() == 2U);
+    CHECK(Xpp::Verify(optimized).empty());
 }
 
 TEST_CASE("Xpp optimization removes only true self copies")
 {
-    const auto optimized = IR::optimize(Module({
-        Block(0U, { Copy(10U, Symbol(10U)), Copy(11U, Symbol(10U)) }, Return()),
+    const auto optimized = IR::optimize(ModuleWithIntegerParameter({
+        Block(0U, { Copy(12U, Integer(0)), Store(10U, Symbol(10U)), Copy(11U, Symbol(10U)), Store(12U, Symbol(11U)) }, Return()),
     }));
 
     const auto &instructions = FindBlock(optimized, 0U).instructions;
-    REQUIRE(instructions.size() == 1U);
-    CHECK(instructions.front().destination == 11U);
+    REQUIRE(instructions.size() == 3U);
+    CHECK(instructions.front().destination == 12U);
+    CHECK(instructions[1].destination == 11U);
+    CHECK(instructions.back().effect == IR::Instruction::Effect::Store);
+    CHECK(Xpp::Verify(optimized).empty());
+}
+
+TEST_CASE("Xpp optimization removes a transitive dead copy chain")
+{
+    const auto optimized = IR::optimize(Module({ Block(
+        0U,
+        { Copy(10U, Integer(1)), Copy(11U, Symbol(10U)), Copy(12U, Symbol(11U)) },
+        Return()) }));
+
+    CHECK(FindBlock(optimized, 0U).instructions.empty());
+    CHECK(Xpp::Verify(optimized).empty());
+}
+
+TEST_CASE("Xpp optimization retains the complete chain feeding an observable store")
+{
+    const auto optimized = IR::optimize(Module({ Block(
+        0U,
+        { Copy(12U, Integer(0)), Copy(10U, Integer(1)), Copy(11U, Symbol(10U)), Store(12U, Symbol(11U)) },
+        Return()) }));
+
+    const auto &instructions = FindBlock(optimized, 0U).instructions;
+    REQUIRE(instructions.size() == 4U);
+    CHECK(instructions[0].destination == 12U);
+    CHECK(instructions[1].destination == 10U);
+    CHECK(instructions[2].destination == 11U);
+    CHECK(instructions[3].effect == IR::Instruction::Effect::Store);
+    CHECK(Xpp::Verify(optimized).empty());
+}
+
+TEST_CASE("Xpp optimization retains explicit discard evaluation")
+{
+    const auto optimized = IR::optimize(Module({ Block(
+        0U,
+        { Copy(10U, Integer(1)), Discard(Symbol(10U)) },
+        Return()) }));
+
+    REQUIRE(FindBlock(optimized, 0U).instructions.size() == 2U);
+    CHECK(Xpp::Verify(optimized).empty());
 }
 
 TEST_CASE("Xpp optimization is insensitive to source block presentation")

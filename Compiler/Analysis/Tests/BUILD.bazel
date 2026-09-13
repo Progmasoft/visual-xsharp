@@ -9,6 +9,7 @@ cc_binary(
         "ControlDependenceTests.cpp",
         "DominanceTests.cpp",
         "DefiniteInitializationTests.cpp",
+        "LivenessTests.cpp",
         "OwnershipFlowTests.cpp",
     ],
     deps = [
@@ -16,6 +17,7 @@ cc_binary(
         "//Compiler/Analysis:control_dependence",
         "//Compiler/Analysis:dominance",
         "//Compiler/Analysis:definite_initialization",
+        "//Compiler/Analysis:liveness",
         "//Compiler/Analysis:ownership_flow",
         "@catch2//:catch2_main",
     ],

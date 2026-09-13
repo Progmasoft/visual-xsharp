@@ -49,6 +49,15 @@ namespace
     }
 
     [[nodiscard]] auto
+    Add(
+        const IR::VirtualRegister destination,
+        const IR::Value &left,
+        const IR::Value &right) -> IR::Instruction
+    {
+        return { IR::Opcode::Add, destination, Core::Type::int64(), { left, right }, true, 0U, {} };
+    }
+
+    [[nodiscard]] auto
     Jump(const IR::BlockId target) -> IR::Terminator
     {
         IR::Terminator terminator;
@@ -92,6 +101,15 @@ namespace
         function.entry = 0U;
         function.blocks = std::move(blocks);
         return { { U"Optimizer", U"Xmm" }, { std::move(function) } };
+    }
+
+    [[nodiscard]] auto
+    ModuleWithIntegerParameter(std::vector<IR::Block> blocks) -> IR::Module
+    {
+        auto module = Module(std::move(blocks));
+        module.functions.front().parameter_registers.push_back(10U);
+        module.functions.front().parameter_types.push_back(Core::Type::int64());
+        return module;
     }
 
     [[nodiscard]] auto
@@ -196,11 +214,11 @@ TEST_CASE("Xmm optimization bypasses and removes empty trampolines")
     CHECK(BlockOrder(optimized) == std::vector<IR::BlockId>{ 0U, 4U, 3U });
 }
 
-TEST_CASE("Xmm optimization does not bypass a block with instructions")
+TEST_CASE("Xmm optimization conservatively retains arithmetic with a dead result")
 {
     const auto optimized = IR::optimize(Module({
         Block(0U, {}, Jump(1U)),
-        Block(1U, { Define(10U, 7) }, Jump(2U)),
+        Block(1U, { Add(10U, Integer(7), Integer(8)) }, Jump(2U)),
         Block(2U, {}, Return()),
     }));
 
@@ -210,10 +228,52 @@ TEST_CASE("Xmm optimization does not bypass a block with instructions")
 
 TEST_CASE("Xmm optimization removes a register self move")
 {
-    const auto optimized = IR::optimize(Module({ Block(0U, { Move(10U, 10U), Move(11U, 10U) }, Return()) }));
+    const auto optimized = IR::optimize(ModuleWithIntegerParameter({ Block(
+        0U,
+        { Move(10U, 10U), Move(11U, 10U), Add(12U, Register(11U), Integer(1)) },
+        Return()) }));
     const auto &instructions = FindBlock(optimized, 0U).instructions;
-    REQUIRE(instructions.size() == 1U);
+    REQUIRE(instructions.size() == 2U);
     CHECK(instructions.front().destination == 11U);
+    CHECK(Xmm::Verify(optimized).empty());
+}
+
+TEST_CASE("Xmm optimization removes a transitive dead materialization chain")
+{
+    const auto optimized = IR::optimize(Module({ Block(
+        0U,
+        { Define(10U, 1), Move(11U, 10U), Move(12U, 11U) },
+        Return()) }));
+
+    CHECK(FindBlock(optimized, 0U).instructions.empty());
+    CHECK(Xmm::Verify(optimized).empty());
+}
+
+TEST_CASE("Xmm optimization retains producers consumed by conservative arithmetic")
+{
+    const auto optimized = IR::optimize(Module({ Block(
+        0U,
+        { Define(10U, 1), Move(11U, 10U), Add(12U, Register(11U), Integer(1)) },
+        Return()) }));
+
+    const auto &instructions = FindBlock(optimized, 0U).instructions;
+    REQUIRE(instructions.size() == 3U);
+    CHECK(instructions[0].destination == 10U);
+    CHECK(instructions[1].destination == 11U);
+    CHECK(instructions[2].opcode == IR::Opcode::Add);
+    CHECK(Xmm::Verify(optimized).empty());
+}
+
+TEST_CASE("Xmm dead materialization removal crosses block boundaries")
+{
+    const auto optimized = IR::optimize(Module({
+        Block(0U, { Define(10U, 1) }, Jump(1U)),
+        Block(1U, { Move(11U, 10U) }, Return()),
+    }));
+
+    CHECK(FindBlock(optimized, 0U).instructions.empty());
+    CHECK(FindBlock(optimized, 1U).instructions.empty());
+    CHECK(Xmm::Verify(optimized).empty());
 }
 
 TEST_CASE("Xmm optimization canonicalizes shuffled block presentation")

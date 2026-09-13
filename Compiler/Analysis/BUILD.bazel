@@ -37,3 +37,12 @@ cc_library(
     srcs = ["OwnershipFlow.cpp"],
     deps = ["//Compiler/Headers/Visual/XSharp/Analysis:ownership_flow_api"],
 )
+
+cc_library(
+    name = "liveness",
+    srcs = ["Liveness.cpp"],
+    deps = [
+        ":control_flow",
+        "//Compiler/Headers/Visual/XSharp/Analysis:liveness_api",
+    ],
+)

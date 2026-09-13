@@ -44,3 +44,8 @@ per-size observations rather than publishing only the fastest case.
 Continuous integration compiles both harnesses and performs short smoke runs. It deliberately does not fail a change on
 elapsed-time thresholds: shared runners vary too much for a stable regression gate. A future dedicated runner may add
 statistical comparisons once it can provide fixed CPU frequency, warm-up policy, and historical storage.
+
+## Recorded results
+
+- `2026-09-13-Windows-x86_64.md` is the first complete Core-through-Xmm baseline.
+- `2026-09-13-Native-Liveness.md` records the Xpp/Xmm optimizer follow-up after native liveness integration.

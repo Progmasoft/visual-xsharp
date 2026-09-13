@@ -24,6 +24,7 @@ following vocabulary:
 | Follow one source file through the compiler | [Compiler pipeline](COMPILER-PIPELINE.md) |
 | Understand the typed Core contract | [Core IR](CORE-IR.md), [Core optimization](CORE-OPTIMIZER.md), and [safe-expression inlining](CORE-INLINING.md) |
 | Understand short-circuit CFG and initialized storage | [Control-flow safety](CONTROL-FLOW-SAFETY.md) |
+| Understand native liveness and dead-code elimination | [Native liveness](LIVENESS-AND-DEAD-CODE.md) |
 | Understand object ownership and lifetime | [AARC ABI](AARC-ABI.md) |
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
@@ -65,6 +66,8 @@ following vocabulary:
 - [Artifact wire](ARTIFACT-WIRE.md) defines the bounded internal Core and CorePrep transport contracts.
 - [Control-flow safety](CONTROL-FLOW-SAFETY.md) defines short-circuit lowering and the shared Xpp/Xmm
   definite-initialization contract.
+- [Native liveness](LIVENESS-AND-DEAD-CODE.md) defines backward dataflow, conservative Xpp/Xmm removal policies,
+  and memoized trampoline cleanup.
 
 ## User and project set
 

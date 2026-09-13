@@ -190,7 +190,12 @@ namespace
     [[nodiscard]] auto
     OwnershipXppModule() -> Xpp::Module
     {
-        auto module = XppModule(ScalarModule());
+        // Attach ownership uses before optimization. The scalar fixture's text
+        // definition is otherwise genuinely dead and the Xpp liveness pass is
+        // correct to remove it before this test can consume symbol 13.
+        const auto source = ScalarModule();
+        REQUIRE(Core::verify(source).empty());
+        auto module = Xpp::lower(source);
         auto &instructions = module.functions.front().blocks.front().instructions;
         const auto text = Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 13U, {} };
         const auto appendProducing = [&instructions](Xpp::Opcode opcode, Core::SymbolId destination, Xpp::Operand operand) {
@@ -219,6 +224,7 @@ namespace
         appendRelease(Xpp::Opcode::ReleaseStrong, 18U);
         appendRelease(Xpp::Opcode::ReleaseWeak, 17U);
         appendRelease(Xpp::Opcode::ReleaseUnowned, 19U);
+        module = Xpp::optimize(std::move(module));
         REQUIRE(::Visual::XSharp::Xpp::Verify(module).empty());
         return module;
     }

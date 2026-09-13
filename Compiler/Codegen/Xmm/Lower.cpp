@@ -7,7 +7,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include "Visual/XSharp/Xmm/ControlFlow.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 
 namespace visual_xsharp::xmm
@@ -172,80 +171,6 @@ namespace visual_xsharp::xmm
             return lowered;
         }
 
-        [[nodiscard]] auto
-        BlockCatalog(Function &function) -> std::unordered_map<BlockId, Block *>
-        {
-            std::unordered_map<BlockId, Block *> blocks;
-            blocks.reserve(function.blocks.size());
-            for (auto &block : function.blocks)
-                blocks.emplace(block.id, &block);
-            return blocks;
-        }
-
-        [[nodiscard]] auto
-        ResolveTrampoline(
-            BlockId target,
-            const std::unordered_map<BlockId, Block *> &blocks) -> BlockId
-        {
-            std::unordered_set<BlockId> visited;
-            while (visited.insert(target).second)
-            {
-                const auto found = blocks.find(target);
-                if (found == blocks.end())
-                    break;
-                const auto &block = *found->second;
-                if (!block.instructions.empty() || block.terminator.kind != Terminator::Kind::Jump)
-                    break;
-                const auto next = block.terminator.true_target;
-                if (next == target)
-                    break;
-                target = next;
-            }
-            return target;
-        }
-
-        void
-        ThreadTrampolines(Function &function)
-        {
-            const auto blocks = BlockCatalog(function);
-            for (auto &block : function.blocks)
-            {
-                auto &terminator = block.terminator;
-                if (terminator.kind == Terminator::Kind::Jump)
-                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
-                else if (terminator.kind == Terminator::Kind::Branch)
-                {
-                    terminator.true_target = ResolveTrampoline(terminator.true_target, blocks);
-                    terminator.false_target = ResolveTrampoline(terminator.false_target, blocks);
-                    if (terminator.true_target == terminator.false_target)
-                    {
-                        terminator.kind = Terminator::Kind::Jump;
-                        terminator.false_target = 0U;
-                    }
-                }
-            }
-        }
-
-        void
-        RetainReachableReversePostorder(Function &function)
-        {
-            const auto structure = AnalyzeControlStructure(function);
-            const auto &flow = structure.controlFlow;
-            const std::unordered_set<BlockId> reachable(
-                flow.reversePostorder.begin(),
-                flow.reversePostorder.end());
-            std::erase_if(function.blocks, [&reachable](const Block &block) {
-                return !reachable.contains(block.id);
-            });
-
-            std::unordered_map<BlockId, std::size_t> order;
-            order.reserve(flow.reversePostorder.size());
-            for (std::size_t index = 0U; index < flow.reversePostorder.size(); ++index)
-                order.emplace(flow.reversePostorder[index], index);
-            std::ranges::sort(function.blocks, [&order](const Block &left, const Block &right) {
-                return order.at(left.id) < order.at(right.id);
-            });
-        }
     } // namespace
 
     auto
@@ -297,21 +222,4 @@ namespace visual_xsharp::xmm
         return lowered;
     }
 
-    auto
-    optimize(Module module) -> Module
-    {
-        // This pass removes only storage no-ops. Propagation requires a control-flow and
-        // data-flow proof and must never be approximated by a local rewrite.
-        for (auto &function : module.functions)
-        {
-            for (auto &block : function.blocks)
-                std::erase_if(block.instructions,
-                              [](const Instruction &instruction) {
-                                  return instruction.opcode == Opcode::Move && instruction.has_result && instruction.operands.size() == 1U && instruction.operands.front().kind == Value::Kind::Register && instruction.destination == instruction.operands.front().reg;
-                              });
-            ThreadTrampolines(function);
-            RetainReachableReversePostorder(function);
-        }
-        return module;
-    }
 } // namespace visual_xsharp::xmm

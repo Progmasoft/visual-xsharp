@@ -226,8 +226,9 @@ symbol identities, branch targets, terminators, operand types, callable targets,
 Xpp is a target-independent C++20 IR. Lowering from verified CorePrep preserves function identity, signatures, storage
 declarations, typed operands, calls, branches, jumps, returns, and closure creation metadata.
 
-Xpp optimization is a separate phase. The currently connected passes include control-flow cleanup and safe self-copy
-elimination. Every optimized module passes the Xpp-owned verifier; an optimization is not allowed to rely on the later Xmm
+Xpp optimization is a separate phase. The connected passes include control-flow cleanup, safe self-copy elimination, and
+backward-liveness removal of unused `Define Copy` chains. Store, discard, call, allocation, arithmetic, and ownership
+instructions remain observable. Every optimized module passes the Xpp-owned verifier; an optimization is not allowed to rely on the later Xmm
 or LLVM verifier to catch its mistakes.
 
 The verifier also adapts explicit AARC operations to the shared ownership-flow analysis. It distinguishes strong object
@@ -243,7 +244,9 @@ Xmm lowers storage and values into a typed virtual-register model while remainin
 symbols remain distinct from data registers. Calls retain complete signatures, and each instruction declares the type of
 its result or side effect.
 
-Xmm optimization currently includes safe virtual-register move simplification. The Xmm-owned verifier checks register
+Xmm optimization includes safe virtual-register move simplification and liveness-based removal of unused `LoadImmediate`
+and result-producing `Move` chains. Calls, arithmetic, closure construction, resultless evaluation, and ownership actions
+are retained. The Xmm-owned verifier checks register
 declarations, parameter mappings, operand and result types, function targets, call arity and types, block targets, and
 terminators.
 
