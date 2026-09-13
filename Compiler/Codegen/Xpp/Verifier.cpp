@@ -364,7 +364,9 @@ namespace Visual::XSharp::Xpp
             const std::unordered_map<IR::SymbolId, Core::Type> &storage,
             const std::unordered_map<IR::SymbolId, const IR::Function *> &functions)
         {
-            const auto result = Dataflow::Analyze(DataflowFunction(function, storage, functions));
+            const auto result = Dataflow::Analyze(
+                DataflowFunction(function, storage, functions),
+                { .materializeFacts = false });
             for (const auto &issue : result.issues)
             {
                 if (issue.kind != Dataflow::IssueKind::ReadBeforeInitialization)

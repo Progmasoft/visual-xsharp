@@ -83,6 +83,7 @@ The repository contains:
 - structural and semantic native CorePrep verifiers;
 - CorePrep-to-Xpp lowering;
 - Xpp control-flow, self-copy, and liveness-based dead `Define Copy` optimization;
+- shared directional worklist scheduling, dense definite-initialization facts, and packed AARC ownership states;
 - an Xpp-owned verifier for module/function identity, storage declarations, typed operands, and CFG targets;
 - Xpp-to-Xmm lowering; and
 - Xmm virtual-register move and dead materialization optimization;

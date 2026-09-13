@@ -242,7 +242,9 @@ namespace Visual::XSharp::Xpp
         std::vector<VerificationIssue> issues;
         for (const auto &function : module.functions)
         {
-            const auto result = Flow::Analyze(Adapt(function, functions));
+            const auto result = Flow::Analyze(
+                Adapt(function, functions),
+                { .materializeFacts = false });
             for (const auto &issue : result.issues)
                 if (auto translated = Translate(issue, function.symbol.id))
                     issues.push_back(std::move(*translated));

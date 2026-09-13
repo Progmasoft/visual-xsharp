@@ -468,7 +468,9 @@ namespace Visual::XSharp::Xmm
             const xmm::Function &function,
             const std::unordered_map<xmm::VirtualRegister, core::Type> &registers)
         {
-            const auto result = dataflow::Analyze(DataflowFunction(function, registers));
+            const auto result = dataflow::Analyze(
+                DataflowFunction(function, registers),
+                { .materializeFacts = false });
             for (const auto &issue : result.issues)
             {
                 if (issue.kind != dataflow::IssueKind::ReadBeforeInitialization)

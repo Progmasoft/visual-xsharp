@@ -25,6 +25,7 @@ following vocabulary:
 | Understand the typed Core contract | [Core IR](CORE-IR.md), [Core optimization](CORE-OPTIMIZER.md), and [safe-expression inlining](CORE-INLINING.md) |
 | Understand short-circuit CFG and initialized storage | [Control-flow safety](CONTROL-FLOW-SAFETY.md) |
 | Understand native liveness and dead-code elimination | [Native liveness](LIVENESS-AND-DEAD-CODE.md) |
+| Understand native fixed-point scheduling and lattices | [Native dataflow](NATIVE-DATAFLOW.md) |
 | Understand object ownership and lifetime | [AARC ABI](AARC-ABI.md) |
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
@@ -68,6 +69,8 @@ following vocabulary:
   definite-initialization contract.
 - [Native liveness](LIVENESS-AND-DEAD-CODE.md) defines backward dataflow, conservative Xpp/Xmm removal policies,
   and memoized trampoline cleanup.
+- [Native dataflow](NATIVE-DATAFLOW.md) defines the directional worklist, dense initialization and packed ownership
+  lattices, validation-only results, and structural complexity guards.
 
 ## User and project set
 

@@ -3,6 +3,12 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+    name = "dense_bit_set",
+    srcs = ["DenseBitSet.cpp"],
+    deps = ["//Compiler/Headers/Visual/XSharp/Analysis:dense_bit_set"],
+)
+
+cc_library(
     name = "control_flow",
     srcs = ["ControlFlow.cpp"],
     deps = ["//Compiler/Headers/Visual/XSharp/Analysis:control_flow"],
@@ -29,13 +35,23 @@ cc_library(
 cc_library(
     name = "definite_initialization",
     srcs = ["DefiniteInitialization.cpp"],
-    deps = ["//Compiler/Headers/Visual/XSharp/Analysis:definite_initialization_api"],
+    deps = [
+        ":control_flow",
+        ":dense_bit_set",
+        ":worklist",
+        "//Compiler/Headers/Visual/XSharp/Analysis:definite_initialization_api",
+    ],
 )
 
 cc_library(
     name = "ownership_flow",
     srcs = ["OwnershipFlow.cpp"],
-    deps = ["//Compiler/Headers/Visual/XSharp/Analysis:ownership_flow_api"],
+    deps = [
+        ":control_flow",
+        ":dense_bit_set",
+        ":worklist",
+        "//Compiler/Headers/Visual/XSharp/Analysis:ownership_flow_api",
+    ],
 )
 
 cc_library(
@@ -43,6 +59,16 @@ cc_library(
     srcs = ["Liveness.cpp"],
     deps = [
         ":control_flow",
+        ":worklist",
         "//Compiler/Headers/Visual/XSharp/Analysis:liveness_api",
+    ],
+)
+
+cc_library(
+    name = "worklist",
+    srcs = ["Worklist.cpp"],
+    deps = [
+        ":control_flow",
+        "//Compiler/Headers/Visual/XSharp/Analysis:worklist_api",
     ],
 )

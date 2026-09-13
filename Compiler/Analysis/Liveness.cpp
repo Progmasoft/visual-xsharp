@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "Visual/XSharp/Analysis/Liveness.hpp"
+#include "Visual/XSharp/Analysis/Worklist.hpp"
 
 namespace Visual::XSharp::Analysis::Liveness
 {
@@ -80,12 +81,12 @@ namespace Visual::XSharp::Analysis::Liveness
             return live;
         }
 
-        void
+        [[nodiscard]] auto
         ComputeFixedPoint(
             const ControlFlowResult &flow,
             const BlockMap &blocks,
             FactMap &incoming,
-            FactMap &outgoing)
+            FactMap &outgoing) -> WorklistStatistics
         {
             FlowFactMap flowFacts;
             flowFacts.reserve(flow.facts.size());
@@ -97,25 +98,19 @@ namespace Visual::XSharp::Analysis::Liveness
                 outgoing.emplace(block, StorageSet{});
             }
 
-            bool changed = true;
-            while (changed)
+            DataflowWorklist worklist(flow, WorklistDirection::Backward);
+            while (const auto block = worklist.Next())
             {
-                changed = false;
-                // Reverse postorder reversed visits successors before their
-                // predecessors and reaches the fixed point quickly for the
-                // common acyclic case. Loops remain an ordinary monotone union.
-                for (auto block = flow.reversePostorder.rbegin(); block != flow.reversePostorder.rend(); ++block)
-                {
-                    auto nextOutgoing = ExitFacts(*flowFacts.at(*block), incoming);
-                    auto nextIncoming = Transfer(*blocks.at(*block), nextOutgoing);
-                    if (incoming.at(*block) != nextIncoming || outgoing.at(*block) != nextOutgoing)
-                    {
-                        incoming.at(*block) = std::move(nextIncoming);
-                        outgoing.at(*block) = std::move(nextOutgoing);
-                        changed = true;
-                    }
-                }
+                auto nextOutgoing = ExitFacts(*flowFacts.at(*block), incoming);
+                auto nextIncoming = Transfer(*blocks.at(*block), nextOutgoing);
+                if (incoming.at(*block) == nextIncoming && outgoing.at(*block) == nextOutgoing)
+                    continue;
+
+                incoming.at(*block) = std::move(nextIncoming);
+                outgoing.at(*block) = std::move(nextOutgoing);
+                worklist.NotifyChanged(*block);
             }
+            return worklist.Statistics();
         }
 
         [[nodiscard]] auto
@@ -190,7 +185,7 @@ namespace Visual::XSharp::Analysis::Liveness
         const auto blocks = Catalog(function);
         FactMap incoming;
         FactMap outgoing;
-        ComputeFixedPoint(flow, blocks, incoming, outgoing);
+        result.statistics = ComputeFixedPoint(flow, blocks, incoming, outgoing);
         result.facts = BuildFacts(function, flow, incoming, outgoing);
         return result;
     }

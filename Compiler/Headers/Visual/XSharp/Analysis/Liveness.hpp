@@ -7,7 +7,7 @@
 #include <optional>
 #include <vector>
 
-#include "Visual/XSharp/Analysis/ControlFlow.hpp"
+#include "Visual/XSharp/Analysis/Worklist.hpp"
 
 namespace Visual::XSharp::Analysis::Liveness
 {
@@ -74,6 +74,7 @@ namespace Visual::XSharp::Analysis::Liveness
     {
         std::vector<ControlFlowIssue> issues;
         std::vector<BlockFacts> facts;
+        WorklistStatistics statistics;
 
         [[nodiscard]] auto
         valid() const -> bool

@@ -176,3 +176,47 @@ TEST_CASE("malformed control flow remains diagnostic and finite")
     CHECK(missingEntry.issues[0].kind == Visual::XSharp::Analysis::ControlFlowIssueKind::MissingEntry);
     CHECK(missingEntry.issues[1].kind == Visual::XSharp::Analysis::ControlFlowIssueKind::MissingTarget);
 }
+
+TEST_CASE("backward liveness evaluates an acyclic chain once per block")
+{
+    constexpr Live::BlockId kBlockCount = 1024U;
+    Live::Function function;
+    function.entry = 0U;
+    function.blocks.reserve(kBlockCount);
+    for (Live::BlockId id = 0U; id < kBlockCount; ++id)
+    {
+        Live::Block block;
+        block.id = id;
+        if (id + 1U < kBlockCount)
+            block.successors.push_back(id + 1U);
+        block.accesses.push_back(Write(
+            0U,
+            static_cast<Live::StorageId>(id) + 1U,
+            id + 1U < kBlockCount
+                ? std::initializer_list<Live::StorageId>{ static_cast<Live::StorageId>(id) + 2U }
+                : std::initializer_list<Live::StorageId>{}));
+        function.blocks.push_back(std::move(block));
+    }
+
+    const auto result = Live::Analyze(function);
+    CHECK(result.valid());
+    CHECK(result.statistics.blockEvaluations == kBlockCount);
+    CHECK(result.statistics.scheduledBlocks == kBlockCount);
+}
+
+TEST_CASE("backward liveness worklist converges through a loop")
+{
+    const auto result = Live::Analyze({
+        0U,
+        {
+            Block(0U, { 1U }, { Write(0U, 1U), Terminator({}) }),
+            Block(1U, { 2U, 3U }, { Read(0U, { 1U }), Write(1U, 2U), Terminator({}) }),
+            Block(2U, { 1U }, { Read(0U, { 2U }), Write(1U, 3U), Terminator({}) }),
+            Block(3U, {}, { Read(0U, { 2U }), Terminator({}) }),
+        },
+    });
+    CHECK(result.valid());
+    CHECK(result.statistics.blockEvaluations >= 4U);
+    CHECK(result.statistics.blockEvaluations <= 16U);
+    CHECK(result.statistics.changeNotifications <= 12U);
+}

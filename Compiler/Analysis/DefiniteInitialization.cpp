@@ -2,259 +2,297 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <algorithm>
-#include <deque>
-#include <iterator>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
+#include "Visual/XSharp/Analysis/ControlFlow.hpp"
 #include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
+#include "Visual/XSharp/Analysis/DenseBitSet.hpp"
+#include "Visual/XSharp/Analysis/Worklist.hpp"
 
 namespace Visual::XSharp::Analysis
 {
     namespace
     {
-        using StorageSet = std::unordered_set<StorageId>;
         using BlockMap = std::unordered_map<BlockId, const Block *>;
-        using PredecessorMap = std::unordered_map<BlockId, std::vector<BlockId>>;
-        using FactMap = std::unordered_map<BlockId, StorageSet>;
+        using FlowFactMap = std::unordered_map<BlockId, const ControlFlowBlockFacts *>;
+        using FactMap = std::unordered_map<BlockId, DenseBitSet>;
+
+        struct StorageCatalog final
+        {
+            std::vector<StorageId> storage;
+            std::unordered_map<StorageId, std::size_t> indices;
+
+            [[nodiscard]] auto
+            Find(const StorageId value) const -> std::optional<std::size_t>
+            {
+                const auto found = indices.find(value);
+                return found == indices.end()
+                           ? std::nullopt
+                           : std::optional<std::size_t>{ found->second };
+            }
+        };
+
+        struct FixedPoint final
+        {
+            FactMap incoming;
+            FactMap outgoing;
+            WorklistStatistics statistics;
+        };
 
         [[nodiscard]] auto
-        Sorted(const StorageSet &values) -> std::vector<StorageId>
+        BuildStorageCatalog(
+            const Function &function,
+            std::vector<Issue> &issues) -> StorageCatalog
         {
-            std::vector<StorageId> output(values.begin(), values.end());
-            std::ranges::sort(output);
-            return output;
-        }
-
-        [[nodiscard]] auto
-        Intersect(const StorageSet &left, const StorageSet &right) -> StorageSet
-        {
-            const auto *smaller = &left;
-            const auto *larger = &right;
-            if (smaller->size() > larger->size())
-                std::swap(smaller, larger);
-
-            StorageSet result;
-            result.reserve(smaller->size());
-            for (const auto storage : *smaller)
-                if (larger->contains(storage))
-                    result.insert(storage);
-            return result;
-        }
-
-        [[nodiscard]] auto
-        DeclaredStorage(const Function &function, std::vector<Issue> &issues) -> StorageSet
-        {
-            StorageSet declarations;
-            declarations.reserve(function.declarations.size());
+            StorageCatalog catalog;
+            catalog.storage.reserve(function.declarations.size());
+            std::unordered_set<StorageId> unique;
+            unique.reserve(function.declarations.size());
             for (const auto storage : function.declarations)
-                if (!declarations.insert(storage).second)
-                    issues.push_back({ IssueKind::DuplicateDeclaration, function.entry, 0U, false, storage, 0U });
-            return declarations;
+            {
+                if (!unique.insert(storage).second)
+                {
+                    issues.push_back(
+                        { IssueKind::DuplicateDeclaration,
+                          function.entry,
+                          0U,
+                          false,
+                          storage,
+                          0U });
+                    continue;
+                }
+                catalog.storage.push_back(storage);
+            }
+
+            // A sorted catalog makes dense bit positions deterministic. Facts can
+            // then be materialized without a second per-block sort.
+            std::ranges::sort(catalog.storage);
+            catalog.indices.reserve(catalog.storage.size());
+            for (std::size_t index = 0U; index < catalog.storage.size(); ++index)
+                catalog.indices.emplace(catalog.storage[index], index);
+            return catalog;
         }
 
         [[nodiscard]] auto
-        CatalogBlocks(const Function &function, std::vector<Issue> &issues) -> BlockMap
+        CatalogBlocks(const Function &function) -> BlockMap
         {
             BlockMap blocks;
             blocks.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
-                if (!blocks.emplace(block.id, &block).second)
-                    issues.push_back({ IssueKind::DuplicateBlock, block.id, 0U, false, 0U, 0U });
-            if (!blocks.contains(function.entry))
-                issues.push_back({ IssueKind::MissingEntry, function.entry, 0U, false, 0U, 0U });
+                blocks.try_emplace(block.id, &block);
             return blocks;
         }
 
         [[nodiscard]] auto
-        BuildPredecessors(
-            const Function &function,
-            const BlockMap &blocks,
-            std::vector<Issue> &issues) -> PredecessorMap
+        ControlFlowFor(const Function &function) -> ControlFlowGraph
         {
-            PredecessorMap predecessors;
-            predecessors.reserve(blocks.size());
-            for (const auto &[id, block] : blocks)
-            {
-                static_cast<void>(block);
-                predecessors.emplace(id, std::vector<BlockId>{});
-            }
-
-            // Iterate source blocks in their supplied order for stable issue
-            // locations. The fixed point itself is keyed by identity and is
-            // therefore independent of this presentation order.
+            ControlFlowGraph graph;
+            graph.entry = function.entry;
+            graph.blocks.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
+                graph.blocks.push_back({ block.id, block.successors });
+            return graph;
+        }
+
+        void
+        AppendControlFlowIssues(
+            const Function &function,
+            const ControlFlowResult &controlFlow,
+            std::vector<Issue> &issues)
+        {
+            const auto blocks = CatalogBlocks(function);
+            for (const auto &issue : controlFlow.issues)
             {
-                std::unordered_set<BlockId> uniqueTargets;
-                for (const auto target : block.successors)
+                auto instruction = std::size_t{};
+                auto terminator = false;
+                if (issue.kind == ControlFlowIssueKind::MissingTarget)
                 {
-                    if (!blocks.contains(target))
-                    {
-                        issues.push_back({ IssueKind::MissingTarget, block.id, block.accesses.size(), true, 0U, target });
-                        continue;
-                    }
-                    if (uniqueTargets.insert(target).second)
-                        predecessors[target].push_back(block.id);
+                    if (const auto found = blocks.find(issue.block); found != blocks.end())
+                        instruction = found->second->accesses.size();
+                    terminator = true;
                 }
+
+                auto kind = IssueKind::MissingEntry;
+                switch (issue.kind)
+                {
+                    case ControlFlowIssueKind::DuplicateBlock:
+                        kind = IssueKind::DuplicateBlock;
+                        break;
+                    case ControlFlowIssueKind::MissingEntry:
+                        kind = IssueKind::MissingEntry;
+                        break;
+                    case ControlFlowIssueKind::MissingTarget:
+                        kind = IssueKind::MissingTarget;
+                        break;
+                }
+                issues.push_back(
+                    { kind,
+                      issue.block,
+                      instruction,
+                      terminator,
+                      0U,
+                      issue.target });
             }
-            return predecessors;
         }
 
         [[nodiscard]] auto
-        ReachableBlocks(const Function &function, const BlockMap &blocks) -> std::unordered_set<BlockId>
+        FlowFacts(const ControlFlowResult &controlFlow) -> FlowFactMap
         {
-            std::unordered_set<BlockId> reachable;
-            if (!blocks.contains(function.entry))
-                return reachable;
-
-            std::deque<BlockId> pending{ function.entry };
-            while (!pending.empty())
-            {
-                const auto current = pending.front();
-                pending.pop_front();
-                if (!reachable.insert(current).second)
-                    continue;
-                for (const auto successor : blocks.at(current)->successors)
-                    if (blocks.contains(successor) && !reachable.contains(successor))
-                        pending.push_back(successor);
-            }
-            return reachable;
+            FlowFactMap facts;
+            facts.reserve(controlFlow.facts.size());
+            for (const auto &block : controlFlow.facts)
+                facts.emplace(block.block, &block);
+            return facts;
         }
 
         [[nodiscard]] auto
         InitialStorage(
             const Function &function,
-            const StorageSet &declarations,
-            std::vector<Issue> &issues) -> StorageSet
+            const StorageCatalog &catalog,
+            std::vector<Issue> &issues) -> DenseBitSet
         {
-            StorageSet initialized;
-            initialized.reserve(function.initiallyInitialized.size());
+            DenseBitSet initialized(catalog.storage.size());
             for (const auto storage : function.initiallyInitialized)
             {
-                if (!declarations.contains(storage))
+                const auto index = catalog.Find(storage);
+                if (!index)
                 {
-                    issues.push_back({ IssueKind::UnknownInitialStorage, function.entry, 0U, false, storage, 0U });
+                    issues.push_back(
+                        { IssueKind::UnknownInitialStorage,
+                          function.entry,
+                          0U,
+                          false,
+                          storage,
+                          0U });
                     continue;
                 }
-                initialized.insert(storage);
+                initialized.Set(*index);
             }
             return initialized;
         }
 
         [[nodiscard]] auto
-        TransferWrites(const Block &block, StorageSet initialized, const StorageSet &declarations) -> StorageSet
+        TransferWrites(
+            const Block &block,
+            const StorageCatalog &catalog,
+            DenseBitSet initialized) -> DenseBitSet
         {
             for (const auto &access : block.accesses)
-                if (access.write && declarations.contains(*access.write))
-                    initialized.insert(*access.write);
+                if (access.write)
+                    if (const auto index = catalog.Find(*access.write))
+                        initialized.Set(*index);
             return initialized;
         }
 
         [[nodiscard]] auto
         IncomingFacts(
-            BlockId block,
+            const BlockId block,
             const Function &function,
-            const PredecessorMap &predecessors,
-            const std::unordered_set<BlockId> &reachable,
-            const StorageSet &initial,
-            const FactMap &outgoing) -> StorageSet
+            const FlowFactMap &flowFacts,
+            const StorageCatalog &catalog,
+            const DenseBitSet &initial,
+            const FactMap &outgoing) -> DenseBitSet
         {
-            // Entry represents the externally callable edge. A backedge cannot
-            // make a parameter or local initialized on the function's first
-            // invocation, so its incoming facts remain exactly the seed set.
+            // The entry represents the external call edge. Backedges never add
+            // initialization to the first invocation.
             if (block == function.entry)
                 return initial;
 
-            const auto found = predecessors.find(block);
-            if (found == predecessors.end())
-                return {};
+            const auto fact = flowFacts.find(block);
+            if (fact == flowFacts.end() || fact->second->predecessors.empty())
+                return DenseBitSet(catalog.storage.size());
 
             bool first = true;
-            StorageSet incoming;
-            for (const auto predecessor : found->second)
+            DenseBitSet incoming(catalog.storage.size());
+            for (const auto predecessor : fact->second->predecessors)
             {
-                if (!reachable.contains(predecessor))
+                const auto predecessorFacts = outgoing.find(predecessor);
+                if (predecessorFacts == outgoing.end())
                     continue;
-                if (const auto facts = outgoing.find(predecessor); facts != outgoing.end())
+                if (first)
                 {
-                    if (first)
-                    {
-                        incoming = facts->second;
-                        first = false;
-                    }
-                    else
-                        incoming = Intersect(incoming, facts->second);
+                    incoming = predecessorFacts->second;
+                    first = false;
                 }
+                else
+                    incoming.IntersectWith(predecessorFacts->second);
             }
-            return first ? StorageSet{} : incoming;
+            return incoming;
         }
 
-        void
+        [[nodiscard]] auto
         ComputeFixedPoint(
             const Function &function,
             const BlockMap &blocks,
-            const PredecessorMap &predecessors,
-            const std::unordered_set<BlockId> &reachable,
-            const StorageSet &declarations,
-            const StorageSet &initial,
-            FactMap &incoming,
-            FactMap &outgoing)
+            const ControlFlowResult &controlFlow,
+            const StorageCatalog &catalog,
+            const DenseBitSet &initial) -> FixedPoint
         {
-            // Must analysis starts non-entry blocks at top. Repeated
-            // predecessor intersection can only remove facts; local writes add
-            // the same facts each iteration, so convergence is finite.
-            for (const auto block : reachable)
+            FixedPoint result;
+            result.incoming.reserve(controlFlow.preorder.size());
+            result.outgoing.reserve(controlFlow.preorder.size());
+
+            // Must-analysis top is every declared storage bit. One machine word
+            // carries 64 declarations, so joins no longer hash and copy each
+            // SymbolId/register individually at every block.
+            const DenseBitSet top(catalog.storage.size(), true);
+            for (const auto block : controlFlow.preorder)
             {
-                incoming[block] = block == function.entry ? initial : declarations;
-                outgoing[block] = TransferWrites(*blocks.at(block), incoming[block], declarations);
+                auto incoming = block == function.entry ? initial : top;
+                result.outgoing.emplace(
+                    block,
+                    TransferWrites(*blocks.at(block), catalog, incoming));
+                result.incoming.emplace(block, std::move(incoming));
             }
 
-            bool changed = true;
-            while (changed)
+            const auto flowFacts = FlowFacts(controlFlow);
+            DataflowWorklist worklist(controlFlow, WorklistDirection::Forward);
+            while (const auto block = worklist.Next())
             {
-                changed = false;
-                for (const auto &[blockId, blockPointer] : blocks)
-                {
-                    if (!reachable.contains(blockId))
-                        continue;
-                    const auto &block = *blockPointer;
-                    auto nextIncoming = IncomingFacts(
-                        blockId,
-                        function,
-                        predecessors,
-                        reachable,
-                        initial,
-                        outgoing);
-                    auto nextOutgoing = TransferWrites(block, nextIncoming, declarations);
-                    if (incoming[blockId] != nextIncoming || outgoing[blockId] != nextOutgoing)
-                    {
-                        incoming[blockId] = std::move(nextIncoming);
-                        outgoing[blockId] = std::move(nextOutgoing);
-                        changed = true;
-                    }
-                }
+                auto nextIncoming = IncomingFacts(
+                    *block,
+                    function,
+                    flowFacts,
+                    catalog,
+                    initial,
+                    result.outgoing);
+                auto nextOutgoing = TransferWrites(
+                    *blocks.at(*block),
+                    catalog,
+                    nextIncoming);
+                if (result.incoming.at(*block) == nextIncoming
+                    && result.outgoing.at(*block) == nextOutgoing)
+                    continue;
+
+                result.incoming[*block] = std::move(nextIncoming);
+                result.outgoing[*block] = std::move(nextOutgoing);
+                worklist.NotifyChanged(*block);
             }
+            result.statistics = worklist.Statistics();
+            return result;
         }
 
         void
         ValidateAccesses(
-            const Function &function,
-            const std::unordered_set<BlockId> &reachable,
-            const StorageSet &declarations,
+            const BlockMap &blocks,
+            const ControlFlowResult &controlFlow,
+            const StorageCatalog &catalog,
             const FactMap &incoming,
             std::vector<Issue> &issues)
         {
-            for (const auto &block : function.blocks)
+            for (const auto blockId : controlFlow.preorder)
             {
-                if (!reachable.contains(block.id))
-                    continue;
-                auto initialized = incoming.at(block.id);
+                const auto &block = *blocks.at(blockId);
+                auto initialized = incoming.at(blockId);
                 for (const auto &access : block.accesses)
                 {
                     for (const auto storage : access.reads)
                     {
-                        if (!declarations.contains(storage))
+                        const auto index = catalog.Find(storage);
+                        if (!index)
                             issues.push_back(
                                 { IssueKind::UnknownReadStorage,
                                   block.id,
@@ -262,7 +300,7 @@ namespace Visual::XSharp::Analysis
                                   access.terminator,
                                   storage,
                                   0U });
-                        else if (!initialized.contains(storage))
+                        else if (!initialized.Test(*index))
                             issues.push_back(
                                 { IssueKind::ReadBeforeInitialization,
                                   block.id,
@@ -271,62 +309,89 @@ namespace Visual::XSharp::Analysis
                                   storage,
                                   0U });
                     }
-                    if (access.write)
-                    {
-                        if (!declarations.contains(*access.write))
-                            issues.push_back(
-                                { IssueKind::UnknownWriteStorage,
-                                  block.id,
-                                  access.instruction,
-                                  access.terminator,
-                                  *access.write,
-                                  0U });
-                        else
-                            initialized.insert(*access.write);
-                    }
+
+                    if (!access.write)
+                        continue;
+                    const auto index = catalog.Find(*access.write);
+                    if (!index)
+                        issues.push_back(
+                            { IssueKind::UnknownWriteStorage,
+                              block.id,
+                              access.instruction,
+                              access.terminator,
+                              *access.write,
+                              0U });
+                    else
+                        initialized.Set(*index);
                 }
             }
         }
 
         [[nodiscard]] auto
+        VisibleStorage(
+            const StorageCatalog &catalog,
+            const DenseBitSet &bits) -> std::vector<StorageId>
+        {
+            const auto indices = bits.SetIndices();
+            std::vector<StorageId> storage;
+            storage.reserve(indices.size());
+            for (const auto index : indices)
+                storage.push_back(catalog.storage[index]);
+            return storage;
+        }
+
+        [[nodiscard]] auto
         BuildFacts(
-            const BlockMap &blocks,
-            const std::unordered_set<BlockId> &reachable,
+            const ControlFlowResult &controlFlow,
+            const StorageCatalog &catalog,
             const FactMap &incoming,
             const FactMap &outgoing) -> std::vector<BlockFacts>
         {
             std::vector<BlockFacts> facts;
-            facts.reserve(blocks.size());
-            for (const auto &[blockId, block] : blocks)
+            facts.reserve(controlFlow.facts.size());
+            for (const auto &flow : controlFlow.facts)
             {
-                static_cast<void>(block);
-                const auto isReachable = reachable.contains(blockId);
                 facts.push_back(
-                    { blockId,
-                      isReachable,
-                      isReachable ? Sorted(incoming.at(blockId)) : std::vector<StorageId>{},
-                      isReachable ? Sorted(outgoing.at(blockId)) : std::vector<StorageId>{} });
+                    { flow.block,
+                      flow.reachable,
+                      flow.reachable ? VisibleStorage(catalog, incoming.at(flow.block))
+                                     : std::vector<StorageId>{},
+                      flow.reachable ? VisibleStorage(catalog, outgoing.at(flow.block))
+                                     : std::vector<StorageId>{} });
             }
-            std::ranges::sort(facts, {}, &BlockFacts::block);
             return facts;
         }
     } // namespace
 
     auto
-    Analyze(const Function &function) -> Result
+    Analyze(const Function &function, const AnalysisOptions options) -> Result
     {
         Result result;
-        const auto declarations = DeclaredStorage(function, result.issues);
-        const auto blocks = CatalogBlocks(function, result.issues);
-        const auto predecessors = BuildPredecessors(function, blocks, result.issues);
-        const auto reachable = ReachableBlocks(function, blocks);
-        const auto initial = InitialStorage(function, declarations, result.issues);
+        const auto catalog = BuildStorageCatalog(function, result.issues);
+        const auto blocks = CatalogBlocks(function);
+        const auto controlFlow = AnalyzeControlFlow(ControlFlowFor(function));
+        AppendControlFlowIssues(function, controlFlow, result.issues);
+        const auto initial = InitialStorage(function, catalog, result.issues);
+        const auto fixedPoint = ComputeFixedPoint(
+            function,
+            blocks,
+            controlFlow,
+            catalog,
+            initial);
 
-        FactMap incoming;
-        FactMap outgoing;
-        ComputeFixedPoint(function, blocks, predecessors, reachable, declarations, initial, incoming, outgoing);
-        ValidateAccesses(function, reachable, declarations, incoming, result.issues);
-        result.facts = BuildFacts(blocks, reachable, incoming, outgoing);
+        ValidateAccesses(
+            blocks,
+            controlFlow,
+            catalog,
+            fixedPoint.incoming,
+            result.issues);
+        if (options.materializeFacts)
+            result.facts = BuildFacts(
+                controlFlow,
+                catalog,
+                fixedPoint.incoming,
+                fixedPoint.outgoing);
+        result.statistics = fixedPoint.statistics;
         return result;
     }
 } // namespace Visual::XSharp::Analysis

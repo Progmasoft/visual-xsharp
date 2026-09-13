@@ -235,7 +235,9 @@ namespace Visual::XSharp::Xmm
     VerifyOwnership(const IR::Function &function) -> std::vector<VerificationIssue>
     {
         std::vector<VerificationIssue> issues;
-        const auto result = Flow::Analyze(Adapt(function));
+        const auto result = Flow::Analyze(
+            Adapt(function),
+            { .materializeFacts = false });
         issues.reserve(result.issues.size());
         for (const auto &issue : result.issues)
             if (auto translated = Translate(issue, function.symbol.id))

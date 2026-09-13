@@ -853,3 +853,127 @@ TEST_CASE("a late branch cannot hide an uninitialized path")
     CHECK(HasIssue(result, Analysis::IssueKind::ReadBeforeInitialization));
     CHECK(FactsFor(result, 31U).initializedOnEntry.empty());
 }
+
+TEST_CASE("definite initialization can suppress materialized block facts")
+{
+    const auto function = Function(
+        { 1U, 2U },
+        { 1U },
+        {
+            Block(0U, { 1U }, { Read(1U), Write(2U) }),
+            Block(1U, {}, { Read(2U) }),
+        });
+    const auto full = Analysis::Analyze(function);
+    const auto validationOnly = Analysis::Analyze(function, { .materializeFacts = false });
+
+    CHECK(full.issues == validationOnly.issues);
+    CHECK(full.statistics == validationOnly.statistics);
+    CHECK(full.facts.size() == 2U);
+    CHECK(validationOnly.facts.empty());
+}
+
+TEST_CASE("validation-only analysis retains semantic and graph diagnostics")
+{
+    const auto uninitialized = Analysis::Analyze(
+        Function({ 9U }, {}, { Block(0U, {}, { Read(9U, 4U) }) }),
+        { .materializeFacts = false });
+    REQUIRE(uninitialized.facts.empty());
+    const auto reads = IssuesOf(uninitialized, Analysis::IssueKind::ReadBeforeInitialization);
+    REQUIRE(reads.size() == 1U);
+    CHECK(reads.front().storage == 9U);
+    CHECK(reads.front().instruction == 4U);
+
+    const auto malformed = Analysis::Analyze(
+        Function({}, {}, { Block(0U, { 77U }) }),
+        { .materializeFacts = false });
+    CHECK(malformed.facts.empty());
+    CHECK(HasIssue(malformed, Analysis::IssueKind::MissingTarget));
+}
+
+TEST_CASE("an acyclic initialization chain has a linear evaluation bound")
+{
+    constexpr Analysis::BlockId kBlockCount = 1024U;
+    Analysis::Function function;
+    function.entry = 0U;
+    function.declarations.reserve(kBlockCount);
+    function.blocks.reserve(kBlockCount);
+    for (Analysis::BlockId id = 0U; id < kBlockCount; ++id)
+    {
+        function.declarations.push_back(static_cast<Analysis::StorageId>(id) + 1U);
+        Analysis::Block block;
+        block.id = id;
+        block.accesses.push_back(Write(static_cast<Analysis::StorageId>(id) + 1U));
+        if (id > 0U)
+            block.accesses.push_back(Read(id));
+        if (id + 1U < kBlockCount)
+            block.successors.push_back(id + 1U);
+        function.blocks.push_back(std::move(block));
+    }
+
+    const auto result = Analysis::Analyze(function, { .materializeFacts = false });
+    CHECK(result.valid());
+    CHECK(result.statistics.blockEvaluations == kBlockCount);
+    CHECK(result.statistics.scheduledBlocks == kBlockCount);
+    CHECK(result.statistics.peakPendingBlocks == kBlockCount);
+}
+
+TEST_CASE("an uninitialized acyclic chain still has a linear evaluation bound")
+{
+    constexpr Analysis::BlockId kBlockCount = 512U;
+    Analysis::Function function;
+    function.entry = 0U;
+    function.declarations = { 1U };
+    function.blocks.reserve(kBlockCount);
+    for (Analysis::BlockId id = 0U; id < kBlockCount; ++id)
+    {
+        Analysis::Block block;
+        block.id = id;
+        if (id + 1U < kBlockCount)
+            block.successors.push_back(id + 1U);
+        function.blocks.push_back(std::move(block));
+    }
+    function.blocks.back().accesses.push_back(Read(1U));
+
+    const auto result = Analysis::Analyze(function, { .materializeFacts = false });
+    CHECK(HasIssue(result, Analysis::IssueKind::ReadBeforeInitialization));
+    CHECK(result.statistics.blockEvaluations == kBlockCount);
+    CHECK(result.statistics.changeNotifications == kBlockCount - 1U);
+}
+
+TEST_CASE("dense initialization preserves sparse 64-bit storage identities")
+{
+    constexpr Analysis::StorageId kLow = 1U;
+    constexpr Analysis::StorageId kMiddle = 0x1'0000'0001ULL;
+    constexpr Analysis::StorageId kHigh = 0xFFFF'FFFF'FFFF'FFF0ULL;
+    const auto result = Analysis::Analyze(Function(
+        { kHigh, kLow, kMiddle },
+        { kHigh },
+        { Block(0U, {}, { Write(kLow), Write(kMiddle), ReadMany({ kLow, kMiddle, kHigh }) }) }));
+
+    CHECK(result.valid());
+    CHECK(FactsFor(result, 0U).initializedOnEntry == std::vector<Analysis::StorageId>{ kHigh });
+    CHECK(
+        FactsFor(result, 0U).initializedOnExit
+        == std::vector<Analysis::StorageId>{ kLow, kMiddle, kHigh });
+}
+
+TEST_CASE("dense initialization handles a universe crossing many words")
+{
+    Analysis::Function function;
+    function.entry = 0U;
+    constexpr std::size_t kStorageCount = 4097U;
+    function.declarations.reserve(kStorageCount);
+    function.blocks = { Block(0U) };
+    for (std::size_t index = 0U; index < kStorageCount; ++index)
+    {
+        const auto storage = static_cast<Analysis::StorageId>(index) * 13U + 5U;
+        function.declarations.push_back(storage);
+        if (index % 3U == 0U)
+            function.initiallyInitialized.push_back(storage);
+    }
+
+    const auto result = Analysis::Analyze(function);
+    CHECK(result.valid());
+    CHECK(FactsFor(result, 0U).initializedOnEntry.size() == 1366U);
+    CHECK(FactsFor(result, 0U).initializedOnExit.size() == 1366U);
+}

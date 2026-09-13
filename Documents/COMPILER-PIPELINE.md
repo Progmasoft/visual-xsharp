@@ -250,6 +250,11 @@ are retained. The Xmm-owned verifier checks register
 declarations, parameter mappings, operand and result types, function targets, call arity and types, block targets, and
 terminators.
 
+The Xpp and Xmm verifiers share the directional scheduler and compact lattices described in
+[Native dataflow](NATIVE-DATAFLOW.md). Forward definite-initialization and ownership analyses notify successors only when
+their output changes; backward liveness notifies predecessors. Production validation keeps exact issues and fixed points
+without expanding unused per-block fact vectors.
+
 Definite initialization and ownership are separate checks. A register may be defined yet unsafe because its token has been
 consumed or carries the wrong AARC representation. Xmm repeats ownership-flow verification after lowering so native callers
 and artifact readers cannot bypass the Xpp boundary.

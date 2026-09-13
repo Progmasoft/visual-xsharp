@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "Visual/XSharp/Analysis/Worklist.hpp"
+
 namespace Visual::XSharp::Analysis::OwnershipFlow
 {
     using BlockId = std::uint32_t;
@@ -147,9 +149,24 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
     {
         std::vector<BlockFacts> facts;
         std::vector<Issue> issues;
+        WorklistStatistics statistics;
 
         [[nodiscard]] auto
-        operator==(const Result &) const -> bool = default;
+        operator==(const Result &other) const -> bool
+        {
+            // Scheduler statistics describe evaluation cost, not semantic facts.
+            // Presentation-order invariance tests compare only observable analysis
+            // meaning so a different but valid queue path cannot change equality.
+            return facts == other.facts && issues == other.issues;
+        }
+    };
+
+    struct AnalysisOptions final
+    {
+        // Full block facts are useful for diagnostics tooling and tests but can
+        // dominate verification time for large functions. Stage verifiers ask
+        // only for issues and scheduler statistics.
+        bool materializeFacts{ true };
     };
 
     [[nodiscard]] auto
@@ -165,5 +182,5 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
     // initialization, ownership joins use union: every state that can arrive is
     // relevant because one consumed predecessor is enough to make a later use unsafe.
     [[nodiscard]] auto
-    Analyze(const Function &function) -> Result;
+    Analyze(const Function &function, AnalysisOptions options = {}) -> Result;
 } // namespace Visual::XSharp::Analysis::OwnershipFlow

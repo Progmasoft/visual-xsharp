@@ -461,3 +461,150 @@ TEST_CASE("ownership flow state helpers distinguish every handle class")
         static_cast<Flow::StateMask>(Flow::kStrong | Flow::kConsumed),
         Flow::HandleKind::Strong));
 }
+
+TEST_CASE("ownership validation can suppress materialized block facts")
+{
+    const auto function = Function(
+        {
+            Block(0U, { 1U }, { Define(4U, Flow::HandleKind::Strong) }),
+            Block(1U, {}, { Observe(4U, Flow::HandleKind::Strong) }),
+        });
+    const auto full = Flow::Analyze(function);
+    const auto validationOnly = Flow::Analyze(function, { .materializeFacts = false });
+
+    CHECK(full.issues == validationOnly.issues);
+    CHECK(full.statistics == validationOnly.statistics);
+    CHECK(full.facts.size() == 2U);
+    CHECK(validationOnly.facts.empty());
+}
+
+TEST_CASE("ownership validation-only mode retains semantic and graph diagnostics")
+{
+    const auto mismatch = Flow::Analyze(
+        Function(
+            {
+                Block(0U, { 1U, 2U }, {}),
+                Block(1U, { 3U }, { Define(8U, Flow::HandleKind::Strong) }),
+                Block(2U, { 3U }, {}),
+                Block(3U, {}, { Observe(8U, Flow::HandleKind::Strong) }),
+            }),
+        { .materializeFacts = false });
+    CHECK(mismatch.facts.empty());
+    CHECK(IssuesOf(mismatch, Flow::IssueKind::PathStateMismatch).size() == 1U);
+
+    const auto malformed = Flow::Analyze(
+        Function({ Block(0U, { 77U }, {}) }),
+        { .materializeFacts = false });
+    CHECK(malformed.facts.empty());
+    CHECK(IssuesOf(malformed, Flow::IssueKind::InvalidTarget).size() == 1U);
+}
+
+TEST_CASE("an acyclic ownership chain has a linear evaluation bound")
+{
+    constexpr Flow::BlockId kBlockCount = 1024U;
+    Flow::Function function;
+    function.entry = 0U;
+    function.blocks.reserve(kBlockCount);
+    for (Flow::BlockId id = 0U; id < kBlockCount; ++id)
+    {
+        Flow::Block block;
+        block.id = id;
+        block.actions.push_back(Define(
+            static_cast<Flow::HandleId>(id) + 1U,
+            Flow::HandleKind::Strong));
+        if (id > 0U)
+            block.actions.push_back(Observe(id, Flow::HandleKind::Strong, 1U));
+        if (id + 1U < kBlockCount)
+            block.successors.push_back(id + 1U);
+        function.blocks.push_back(std::move(block));
+    }
+
+    const auto result = Flow::Analyze(function, { .materializeFacts = false });
+    CHECK(result.issues.empty());
+    CHECK(result.statistics.blockEvaluations == kBlockCount);
+    CHECK(result.statistics.scheduledBlocks == kBlockCount);
+}
+
+TEST_CASE("packed ownership preserves sparse 64-bit handle identities")
+{
+    constexpr Flow::HandleId kStrong = 0x1'0000'0001ULL;
+    constexpr Flow::HandleId kWeak = 0x7FFF'FFFF'FFFF'FFF0ULL;
+    constexpr Flow::HandleId kUnowned = 0xFFFF'FFFF'FFFF'FFF0ULL;
+    const auto result = Flow::Analyze(Function(
+        {
+            Block(
+                0U,
+                {},
+                {
+                    Define(kStrong, Flow::HandleKind::Strong),
+                    Define(kWeak, Flow::HandleKind::Weak),
+                    Define(kUnowned, Flow::HandleKind::Unowned),
+                    Observe(kStrong, Flow::HandleKind::Strong),
+                    Observe(kWeak, Flow::HandleKind::Weak),
+                    Observe(kUnowned, Flow::HandleKind::Unowned),
+                }),
+        }));
+
+    CHECK(result.issues.empty());
+    CHECK(Flow::IsExactly(StateOf(FactsFor(result, 0U).outgoing, kStrong), Flow::HandleKind::Strong));
+    CHECK(Flow::IsExactly(StateOf(FactsFor(result, 0U).outgoing, kWeak), Flow::HandleKind::Weak));
+    CHECK(Flow::IsExactly(StateOf(FactsFor(result, 0U).outgoing, kUnowned), Flow::HandleKind::Unowned));
+}
+
+TEST_CASE("packed ownership carries all five states across word boundaries")
+{
+    constexpr std::size_t kHandleCount = 193U;
+    Flow::Function function;
+    function.entry = 0U;
+    Flow::Block entry{ 0U, { 1U, 2U }, {} };
+    Flow::Block left{ 1U, { 3U }, {} };
+    Flow::Block right{ 2U, { 3U }, {} };
+    Flow::Block join{ 3U, {}, {} };
+
+    for (std::size_t index = 0U; index < kHandleCount; ++index)
+    {
+        const auto handle = static_cast<Flow::HandleId>(index) + 1U;
+        const auto kind = index % 3U == 0U
+                              ? Flow::HandleKind::Strong
+                          : index % 3U == 1U
+                              ? Flow::HandleKind::Weak
+                              : Flow::HandleKind::Unowned;
+        entry.actions.push_back(Define(handle, kind));
+        left.actions.push_back(Consume(handle, kind));
+        right.actions.push_back(Observe(handle, kind));
+        join.actions.push_back(Observe(handle, kind));
+    }
+    function.blocks = { std::move(entry), std::move(left), std::move(right), std::move(join) };
+
+    const auto result = Flow::Analyze(function);
+    const auto mismatches = IssuesOf(result, Flow::IssueKind::PathStateMismatch);
+    CHECK(mismatches.size() == kHandleCount);
+    for (const auto &issue : mismatches)
+    {
+        CHECK(Flow::Contains(issue.actual, Flow::kConsumed));
+        CHECK((
+            Flow::Contains(issue.actual, Flow::kStrong)
+            || Flow::Contains(issue.actual, Flow::kWeak)
+            || Flow::Contains(issue.actual, Flow::kUnowned)));
+    }
+}
+
+TEST_CASE("packed ownership facts remain sorted by handle identity")
+{
+    const auto result = Flow::Analyze(Function(
+        {
+            Block(
+                0U,
+                {},
+                {
+                    Define(900U, Flow::HandleKind::Strong),
+                    Define(3U, Flow::HandleKind::Weak),
+                    Define(70U, Flow::HandleKind::Unowned),
+                }),
+        }));
+    const auto &facts = FactsFor(result, 0U).outgoing;
+    REQUIRE(facts.size() == 3U);
+    CHECK(facts[0].handle == 3U);
+    CHECK(facts[1].handle == 70U);
+    CHECK(facts[2].handle == 900U);
+}

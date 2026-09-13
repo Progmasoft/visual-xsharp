@@ -49,3 +49,4 @@ statistical comparisons once it can provide fixed CPU frequency, warm-up policy,
 
 - `2026-09-13-Windows-x86_64.md` is the first complete Core-through-Xmm baseline.
 - `2026-09-13-Native-Liveness.md` records the Xpp/Xmm optimizer follow-up after native liveness integration.
+- `2026-09-14-Native-Dataflow.md` records the verifier/encoder follow-up after worklist scheduling and packed lattices.

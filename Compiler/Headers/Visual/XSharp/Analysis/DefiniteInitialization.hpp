@@ -7,6 +7,8 @@
 #include <optional>
 #include <vector>
 
+#include "Visual/XSharp/Analysis/Worklist.hpp"
+
 namespace Visual::XSharp::Analysis
 {
     using StorageId = std::uint64_t;
@@ -82,6 +84,7 @@ namespace Visual::XSharp::Analysis
     {
         std::vector<Issue> issues;
         std::vector<BlockFacts> facts;
+        WorklistStatistics statistics;
 
         [[nodiscard]] auto
         valid() const -> bool
@@ -90,9 +93,17 @@ namespace Visual::XSharp::Analysis
         }
     };
 
+    struct AnalysisOptions final
+    {
+        // Verifiers normally need diagnostics but not a complete copy of every
+        // block boundary set. Clients such as tests and optimization passes can
+        // retain the default materialized fact view.
+        bool materializeFacts{ true };
+    };
+
     // Analyze computes a forward must-initialization fixed point. A storage is
     // initialized on block entry only when every reachable predecessor has
     // initialized it. Block vector order is never used as an execution order.
     [[nodiscard]] auto
-    Analyze(const Function &function) -> Result;
+    Analyze(const Function &function, AnalysisOptions options = {}) -> Result;
 } // namespace Visual::XSharp::Analysis

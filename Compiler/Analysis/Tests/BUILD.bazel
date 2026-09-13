@@ -6,19 +6,23 @@ cc_binary(
     name = "definite_initialization_tests",
     srcs = [
         "ControlFlowTests.cpp",
+        "DenseBitSetTests.cpp",
         "ControlDependenceTests.cpp",
         "DominanceTests.cpp",
         "DefiniteInitializationTests.cpp",
         "LivenessTests.cpp",
         "OwnershipFlowTests.cpp",
+        "WorklistTests.cpp",
     ],
     deps = [
         "//Compiler/Analysis:control_flow",
+        "//Compiler/Analysis:dense_bit_set",
         "//Compiler/Analysis:control_dependence",
         "//Compiler/Analysis:dominance",
         "//Compiler/Analysis:definite_initialization",
         "//Compiler/Analysis:liveness",
         "//Compiler/Analysis:ownership_flow",
+        "//Compiler/Analysis:worklist",
         "@catch2//:catch2_main",
     ],
 )
