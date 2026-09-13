@@ -142,7 +142,9 @@ namespace Visual::XSharp::Analysis
     DenseBitSet::SetIndices() const -> std::vector<std::size_t>
     {
         std::vector<std::size_t> indices;
-        indices.reserve(Count());
+        // Do not pre-count: dataflow clients commonly enumerate an empty or
+        // very small fact over a large universe. A reserve-sized popcount pass
+        // would scan every word before this loop scans them again.
         for (std::size_t wordIndex = 0U; wordIndex < words_.size(); ++wordIndex)
         {
             auto word = words_[wordIndex];

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <initializer_list>
+#include <limits>
 #include <ranges>
 #include <utility>
 #include <vector>
@@ -219,4 +220,86 @@ TEST_CASE("backward liveness worklist converges through a loop")
     CHECK(result.statistics.blockEvaluations >= 4U);
     CHECK(result.statistics.blockEvaluations <= 16U);
     CHECK(result.statistics.changeNotifications <= 12U);
+}
+
+TEST_CASE("liveness catalogs sparse maximum-width storage identities")
+{
+    constexpr auto kLow = Live::StorageId{ 3U };
+    constexpr auto kHigh = std::numeric_limits<Live::StorageId>::max();
+    const auto result = Live::Analyze({
+        0U,
+        { Block(
+            0U,
+            {},
+            { Write(0U, kLow),
+              Write(1U, kHigh, { kLow }),
+              Effect(2U, { kHigh, kHigh }),
+              Terminator({}) }) },
+    });
+
+    REQUIRE(result.valid());
+    const auto &facts = Facts(result, 0U);
+    CHECK(Retained(facts) == std::vector<bool>{ true, true, true, true });
+    CHECK(facts.accesses[0].liveAfter == std::vector<Live::StorageId>{ kLow });
+    CHECK(facts.accesses[1].liveAfter == std::vector<Live::StorageId>{ kHigh });
+    // Repeated reads are one liveness fact, not duplicate public entries.
+    CHECK(facts.accesses[2].liveBefore == std::vector<Live::StorageId>{ kHigh });
+}
+
+TEST_CASE("dense liveness crosses several machine-word boundaries")
+{
+    constexpr std::size_t kStorageCount = 130U;
+    std::vector<Live::Access> accesses;
+    accesses.reserve(kStorageCount + 2U);
+    for (std::size_t index = 0U; index < kStorageCount; ++index)
+        accesses.push_back(Write(index, static_cast<Live::StorageId>(index + 1U)));
+    accesses.push_back(Effect(kStorageCount, { 1U, 64U, 65U, 128U, 129U, 130U }));
+    accesses.push_back(Terminator({}));
+
+    const auto result = Live::Analyze({
+        0U,
+        { Block(0U, {}, std::move(accesses)) },
+    });
+
+    REQUIRE(result.valid());
+    const auto &facts = Facts(result, 0U);
+    std::size_t retainedWrites{};
+    for (std::size_t index = 0U; index < kStorageCount; ++index)
+        retainedWrites += facts.accesses[index].retained ? 1U : 0U;
+    CHECK(retainedWrites == 6U);
+    CHECK(facts.accesses[kStorageCount].liveBefore
+          == std::vector<Live::StorageId>{ 1U, 64U, 65U, 128U, 129U, 130U });
+}
+
+TEST_CASE("retention-only mode preserves optimizer decisions without expanding live sets")
+{
+    const Live::Function function{
+        0U,
+        { Block(0U, { 1U }, { Write(0U, 7U), Write(1U, 8U), Terminator({}) }),
+          Block(1U, {}, { Effect(0U, { 8U }), Terminator({}) }) },
+    };
+
+    const auto complete = Live::Analyze(function);
+    const auto retentionOnly = Live::Analyze(
+        function,
+        { .materializeLiveSets = false });
+
+    REQUIRE(complete.valid());
+    REQUIRE(retentionOnly.valid());
+    REQUIRE(complete.facts.size() == retentionOnly.facts.size());
+    for (std::size_t blockIndex = 0U; blockIndex < complete.facts.size(); ++blockIndex)
+    {
+        const auto &completeBlock = complete.facts[blockIndex];
+        const auto &retentionBlock = retentionOnly.facts[blockIndex];
+        CHECK(completeBlock.block == retentionBlock.block);
+        CHECK(completeBlock.reachable == retentionBlock.reachable);
+        CHECK(Retained(completeBlock) == Retained(retentionBlock));
+        CHECK(retentionBlock.liveOnEntry.empty());
+        CHECK(retentionBlock.liveOnExit.empty());
+        for (const auto &access : retentionBlock.accesses)
+        {
+            CHECK(access.liveBefore.empty());
+            CHECK(access.liveAfter.empty());
+        }
+    }
 }

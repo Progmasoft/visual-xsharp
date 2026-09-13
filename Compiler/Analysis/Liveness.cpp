@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "Visual/XSharp/Analysis/DenseBitSet.hpp"
 #include "Visual/XSharp/Analysis/Liveness.hpp"
 #include "Visual/XSharp/Analysis/Worklist.hpp"
 
@@ -13,16 +14,57 @@ namespace Visual::XSharp::Analysis::Liveness
 {
     namespace
     {
-        using StorageSet = std::unordered_set<StorageId>;
         using BlockMap = std::unordered_map<BlockId, const Block *>;
-        using FactMap = std::unordered_map<BlockId, StorageSet>;
+        using FactMap = std::unordered_map<BlockId, DenseBitSet>;
         using FlowFactMap = std::unordered_map<BlockId, const ControlFlowBlockFacts *>;
 
-        [[nodiscard]] auto
-        Sorted(const StorageSet &values) -> std::vector<StorageId>
+        struct StorageCatalog final
         {
-            std::vector<StorageId> result(values.begin(), values.end());
-            std::ranges::sort(result);
+            std::vector<StorageId> storage;
+            std::unordered_map<StorageId, std::size_t> indices;
+
+            [[nodiscard]] auto
+            Find(const StorageId value) const -> std::size_t
+            {
+                return indices.at(value);
+            }
+        };
+
+        [[nodiscard]] auto
+        BuildStorageCatalog(const Function &function) -> StorageCatalog
+        {
+            StorageCatalog catalog;
+            for (const auto &block : function.blocks)
+            {
+                for (const auto &access : block.accesses)
+                {
+                    catalog.storage.insert(
+                        catalog.storage.end(),
+                        access.reads.begin(),
+                        access.reads.end());
+                    if (access.write)
+                        catalog.storage.push_back(*access.write);
+                }
+            }
+
+            // Stage identities are sparse 64-bit values, not array indices.
+            // Sorting once gives stable dense positions without constraining the
+            // SymbolId or virtual-register allocator used by either consumer.
+            std::ranges::sort(catalog.storage);
+            const auto unique = std::ranges::unique(catalog.storage);
+            catalog.storage.erase(unique.begin(), unique.end());
+            catalog.indices.reserve(catalog.storage.size());
+            for (std::size_t index = 0U; index < catalog.storage.size(); ++index)
+                catalog.indices.emplace(catalog.storage[index], index);
+            return catalog;
+        }
+
+        [[nodiscard]] auto
+        Visible(const StorageCatalog &catalog, const DenseBitSet &values) -> std::vector<StorageId>
+        {
+            std::vector<StorageId> result;
+            for (const auto index : values.SetIndices())
+                result.push_back(catalog.storage[index]);
             return result;
         }
 
@@ -38,46 +80,66 @@ namespace Visual::XSharp::Analysis::Liveness
         }
 
         [[nodiscard]] auto
-        Catalog(const Function &function) -> BlockMap
+        CatalogBlocks(const Function &function) -> BlockMap
         {
             BlockMap blocks;
             blocks.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
-                blocks.emplace(block.id, &block);
+                blocks.try_emplace(block.id, &block);
             return blocks;
         }
 
         [[nodiscard]] auto
-        Apply(const Access &access, StorageSet live) -> StorageSet
+        CatalogFlowFacts(const ControlFlowResult &flow) -> FlowFactMap
         {
-            // A removable dead definition is semantically absent. In
-            // particular, its operands do not keep earlier definitions alive.
-            if (access.write && access.removable && !live.contains(*access.write))
-                return live;
+            FlowFactMap facts;
+            facts.reserve(flow.facts.size());
+            for (const auto &block : flow.facts)
+                facts.emplace(block.block, &block);
+            return facts;
+        }
 
+        [[nodiscard]] auto
+        Apply(
+            const Access &access,
+            const StorageCatalog &catalog,
+            DenseBitSet live) -> DenseBitSet
+        {
             if (access.write)
-                live.erase(*access.write);
-            live.insert(access.reads.begin(), access.reads.end());
+            {
+                const auto destination = catalog.Find(*access.write);
+                // A removable dead definition is semantically absent. Its
+                // operands therefore cannot retain an otherwise dead producer.
+                if (access.removable && !live.Test(destination))
+                    return live;
+                live.Reset(destination);
+            }
+            for (const auto read : access.reads)
+                live.Set(catalog.Find(read));
             return live;
         }
 
         [[nodiscard]] auto
-        Transfer(const Block &block, StorageSet live) -> StorageSet
+        Transfer(
+            const Block &block,
+            const StorageCatalog &catalog,
+            DenseBitSet live) -> DenseBitSet
         {
             for (auto access = block.accesses.rbegin(); access != block.accesses.rend(); ++access)
-                live = Apply(*access, std::move(live));
+                live = Apply(*access, catalog, std::move(live));
             return live;
         }
 
         [[nodiscard]] auto
         ExitFacts(
             const ControlFlowBlockFacts &block,
-            const FactMap &incoming) -> StorageSet
+            const FactMap &incoming,
+            const std::size_t storageCount) -> DenseBitSet
         {
-            StorageSet live;
+            DenseBitSet live(storageCount);
             for (const auto successor : block.successors)
                 if (const auto found = incoming.find(successor); found != incoming.end())
-                    live.insert(found->second.begin(), found->second.end());
+                    live.UnionWith(found->second);
             return live;
         }
 
@@ -85,25 +147,32 @@ namespace Visual::XSharp::Analysis::Liveness
         ComputeFixedPoint(
             const ControlFlowResult &flow,
             const BlockMap &blocks,
+            const StorageCatalog &catalog,
             FactMap &incoming,
             FactMap &outgoing) -> WorklistStatistics
         {
-            FlowFactMap flowFacts;
-            flowFacts.reserve(flow.facts.size());
-            for (const auto &facts : flow.facts)
-                flowFacts.emplace(facts.block, &facts);
-            for (const auto block : flow.reversePostorder)
+            const auto flowFacts = CatalogFlowFacts(flow);
+            incoming.reserve(flow.preorder.size());
+            outgoing.reserve(flow.preorder.size());
+            for (const auto block : flow.preorder)
             {
-                incoming.emplace(block, StorageSet{});
-                outgoing.emplace(block, StorageSet{});
+                incoming.emplace(block, DenseBitSet(catalog.storage.size()));
+                outgoing.emplace(block, DenseBitSet(catalog.storage.size()));
             }
 
             DataflowWorklist worklist(flow, WorklistDirection::Backward);
             while (const auto block = worklist.Next())
             {
-                auto nextOutgoing = ExitFacts(*flowFacts.at(*block), incoming);
-                auto nextIncoming = Transfer(*blocks.at(*block), nextOutgoing);
-                if (incoming.at(*block) == nextIncoming && outgoing.at(*block) == nextOutgoing)
+                auto nextOutgoing = ExitFacts(
+                    *flowFacts.at(*block),
+                    incoming,
+                    catalog.storage.size());
+                auto nextIncoming = Transfer(
+                    *blocks.at(*block),
+                    catalog,
+                    nextOutgoing);
+                if (incoming.at(*block) == nextIncoming
+                    && outgoing.at(*block) == nextOutgoing)
                     continue;
 
                 incoming.at(*block) = std::move(nextIncoming);
@@ -114,22 +183,32 @@ namespace Visual::XSharp::Analysis::Liveness
         }
 
         [[nodiscard]] auto
-        BuildAccessFacts(const Block &block, StorageSet live) -> std::vector<AccessFacts>
+        BuildAccessFacts(
+            const Block &block,
+            const StorageCatalog &catalog,
+            DenseBitSet live,
+            const bool materializeLiveSets) -> std::vector<AccessFacts>
         {
             std::vector<AccessFacts> reversed;
             reversed.reserve(block.accesses.size());
             for (auto access = block.accesses.rbegin(); access != block.accesses.rend(); ++access)
             {
-                const auto liveAfter = Sorted(live);
-                const auto retained = !access->write || !access->removable || live.contains(*access->write);
+                auto liveAfter = materializeLiveSets
+                                     ? Visible(catalog, live)
+                                     : std::vector<StorageId>{};
+                const auto retained = !access->write
+                                      || !access->removable
+                                      || live.Test(catalog.Find(*access->write));
                 if (retained)
-                    live = Apply(*access, std::move(live));
+                    live = Apply(*access, catalog, std::move(live));
                 reversed.push_back({
                     access->instruction,
                     access->terminator,
                     retained,
-                    Sorted(live),
-                    liveAfter,
+                    materializeLiveSets
+                        ? Visible(catalog, live)
+                        : std::vector<StorageId>{},
+                    std::move(liveAfter),
                 });
             }
             return { reversed.rbegin(), reversed.rend() };
@@ -139,8 +218,10 @@ namespace Visual::XSharp::Analysis::Liveness
         BuildFacts(
             const Function &function,
             const ControlFlowResult &flow,
+            const StorageCatalog &catalog,
             const FactMap &incoming,
-            const FactMap &outgoing) -> std::vector<BlockFacts>
+            const FactMap &outgoing,
+            const bool materializeLiveSets) -> std::vector<BlockFacts>
         {
             const std::unordered_set<BlockId> reachable(flow.preorder.begin(), flow.preorder.end());
             std::vector<BlockFacts> facts;
@@ -148,9 +229,9 @@ namespace Visual::XSharp::Analysis::Liveness
             std::unordered_set<BlockId> emitted;
             for (const auto &block : function.blocks)
             {
-                // Duplicate blocks are already rejected by ControlFlow. Keep
-                // one conservative fact record so malformed input does not
-                // acquire contradictory elimination decisions.
+                // ControlFlow reports duplicate identities. Exposing one fact
+                // record keeps malformed input deterministic and prevents an
+                // optimizer from applying contradictory removal decisions.
                 if (!emitted.insert(block.id).second)
                     continue;
                 const auto isReachable = reachable.contains(block.id);
@@ -166,9 +247,17 @@ namespace Visual::XSharp::Analysis::Liveness
                 facts.push_back({
                     block.id,
                     true,
-                    Sorted(incoming.at(block.id)),
-                    Sorted(outgoing.at(block.id)),
-                    BuildAccessFacts(block, outgoing.at(block.id)),
+                    materializeLiveSets
+                        ? Visible(catalog, incoming.at(block.id))
+                        : std::vector<StorageId>{},
+                    materializeLiveSets
+                        ? Visible(catalog, outgoing.at(block.id))
+                        : std::vector<StorageId>{},
+                    BuildAccessFacts(
+                        block,
+                        catalog,
+                        outgoing.at(block.id),
+                        materializeLiveSets),
                 });
             }
             std::ranges::sort(facts, {}, &BlockFacts::block);
@@ -177,16 +266,28 @@ namespace Visual::XSharp::Analysis::Liveness
     } // namespace
 
     auto
-    Analyze(const Function &function) -> Result
+    Analyze(const Function &function, const AnalysisOptions options) -> Result
     {
         const auto flow = AnalyzeControlFlow(ControlFlowFor(function));
         Result result;
         result.issues = flow.issues;
-        const auto blocks = Catalog(function);
+        const auto blocks = CatalogBlocks(function);
+        const auto catalog = BuildStorageCatalog(function);
         FactMap incoming;
         FactMap outgoing;
-        result.statistics = ComputeFixedPoint(flow, blocks, incoming, outgoing);
-        result.facts = BuildFacts(function, flow, incoming, outgoing);
+        result.statistics = ComputeFixedPoint(
+            flow,
+            blocks,
+            catalog,
+            incoming,
+            outgoing);
+        result.facts = BuildFacts(
+            function,
+            flow,
+            catalog,
+            incoming,
+            outgoing,
+            options.materializeLiveSets);
         return result;
     }
 } // namespace Visual::XSharp::Analysis::Liveness

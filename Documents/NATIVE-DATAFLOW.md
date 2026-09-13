@@ -97,6 +97,13 @@ can determine that a result is unused, but only the owning stage can decide
 whether removing the instruction preserves traps, calls, allocation, explicit
 discard, and AARC effects.
 
+Sparse Xpp symbols and Xmm virtual registers are catalogued once and represented
+as dense positions during the fixed point. Analysis clients still receive
+sorted stage identities. Optimizers explicitly request retention-only results:
+they consume reachability and the retained bit for each instruction, but do not
+pay to expand unused live-on-entry, live-on-exit, live-before, and live-after
+vectors.
+
 ## Materialized and validation-only results
 
 Analysis APIs materialize sorted per-block facts by default. This is appropriate

@@ -83,10 +83,18 @@ namespace Visual::XSharp::Analysis::Liveness
         }
     };
 
+    struct AnalysisOptions final
+    {
+        // Optimizers need reachability and retention decisions but do not
+        // consume expanded live-before/live-after vectors. Diagnostic and
+        // analysis clients retain the complete fact view by default.
+        bool materializeLiveSets{ true };
+    };
+
     // Analyze computes the least backward liveness fixed point. A removable
     // write whose destination is not live is excluded together with its reads;
     // this makes a whole dead producer chain disappear in one analysis instead
     // of requiring an instruction-count number of optimizer iterations.
     [[nodiscard]] auto
-    Analyze(const Function &function) -> Result;
+    Analyze(const Function &function, AnalysisOptions options = {}) -> Result;
 } // namespace Visual::XSharp::Analysis::Liveness

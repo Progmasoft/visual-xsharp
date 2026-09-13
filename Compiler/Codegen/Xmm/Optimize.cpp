@@ -117,7 +117,9 @@ namespace visual_xsharp::xmm
         [[nodiscard]] auto
         RemoveDeadMaterializations(Function &function) -> bool
         {
-            const auto result = Live::Analyze(LivenessFunction(function));
+            const auto result = Live::Analyze(
+                LivenessFunction(function),
+                { .materializeLiveSets = false });
             if (!result.valid())
                 return false;
 

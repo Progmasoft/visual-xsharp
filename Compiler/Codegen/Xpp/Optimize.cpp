@@ -138,7 +138,9 @@ namespace visual_xsharp::xpp
             Function &function,
             const std::unordered_set<SymbolId> &functions) -> bool
         {
-            const auto result = Live::Analyze(LivenessFunction(function, functions));
+            const auto result = Live::Analyze(
+                LivenessFunction(function, functions),
+                { .materializeLiveSets = false });
             if (!result.valid())
                 return false;
 
