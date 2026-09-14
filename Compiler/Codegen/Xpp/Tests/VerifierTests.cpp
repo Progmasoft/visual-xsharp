@@ -293,6 +293,32 @@ TEST_CASE("Xpp closure storage is a local read even though its type is callable"
     CHECK(InitializationIssues(module).size() == 1U);
 }
 
+TEST_CASE("Xpp safely rejects malformed weak closure capture metadata")
+{
+    const auto callable = Core::Type::function({}, Core::Type::unit());
+    IR::Instruction closure;
+    closure.effect = IR::Instruction::Effect::Define;
+    closure.opcode = IR::Opcode::MakeClosure;
+    closure.destination = 10U;
+    closure.result_type = callable;
+    closure.operands = { Integer(42) };
+    closure.closure_function = 2U;
+    closure.capture_modes = { Core::CaptureMode::Weak, Core::CaptureMode::Strong };
+
+    auto module = Module({ Block(0U, { closure }, ReturnUnit()) });
+    IR::Function target;
+    target.symbol = { 2U, U"Lifted" };
+    target.parameters = { { { 20U, U"captured" }, Core::Type::int64() } };
+    target.return_type = Core::Type::unit();
+    target.entry = 0U;
+    target.blocks = { Block(0U, {}, ReturnUnit()) };
+    module.functions.push_back(std::move(target));
+
+    const auto issues = Xpp::Verify(module);
+    CHECK(HasCode(issues, "VXP1030"));
+    CHECK(HasCode(issues, "VXP1033"));
+}
+
 TEST_CASE("Xpp initialization diagnostic code is stable")
 {
     const auto module = Module({ Block(0U, { Evaluate(10U), Define(10U) }, ReturnUnit()) });

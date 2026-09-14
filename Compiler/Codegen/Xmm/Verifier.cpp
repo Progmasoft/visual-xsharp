@@ -263,6 +263,16 @@ namespace Visual::XSharp::Xmm
                     context.add(IssueKind::ResultType, "VXL1033", "closure operation result must be callable");
                 if (instruction.capture_modes.size() != instruction.operands.size())
                     context.add(IssueKind::OperandCount, "VXL1034", "closure capture modes and operands differ in length");
+                const auto pairedCaptures = std::min(
+                    instruction.capture_modes.size(),
+                    instruction.operands.size());
+                for (std::size_t index = 0U; index < pairedCaptures; ++index)
+                    if (instruction.capture_modes[index] != core::CaptureMode::Strong
+                        && !IsAarcType(instruction.operands[index].type))
+                        context.add(
+                            IssueKind::OperandType,
+                            "VXL1046",
+                            "weak and unowned closure captures require an AARC reference type");
                 if (target != functions.end())
                 {
                     const auto &types = target->second->parameter_types;

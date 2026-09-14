@@ -205,7 +205,13 @@ namespace Visual::XSharp::Xpp
                             break;
                     }
                 }
-                for (std::size_t index = 0; index < value.capture_modes.size(); ++index)
+                // Shape is diagnosed above, but malformed artifacts must not
+                // turn verification into an out-of-bounds read. Validate the
+                // paired prefix and leave the cardinality error authoritative.
+                const auto pairedCaptures = std::min(
+                    value.capture_modes.size(),
+                    value.operands.size());
+                for (std::size_t index = 0; index < pairedCaptures; ++index)
                     if (value.capture_modes[index] != Core::CaptureMode::Strong
                         && !IsAarcType(value.operands[index].type))
                         context.Add("VXP1033", "weak and unowned captures require an AARC reference type");

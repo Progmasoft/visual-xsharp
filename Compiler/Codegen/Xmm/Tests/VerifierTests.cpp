@@ -144,6 +144,37 @@ TEST_CASE("Xmm accepts a register defined before it is read")
     CHECK(InitializationIssues(module).empty());
 }
 
+TEST_CASE("Xmm rejects weak value captures and bounds malformed capture metadata")
+{
+    const auto callable = Core::Type::function({}, Core::Type::unit());
+    IR::Instruction closure;
+    closure.opcode = IR::Opcode::MakeClosure;
+    closure.destination = 10U;
+    closure.result_type = callable;
+    closure.operands = { Integer(42) };
+    closure.has_result = true;
+    closure.closure_function = 2U;
+    closure.capture_modes = { Core::CaptureMode::Weak, Core::CaptureMode::Strong };
+
+    auto module = Module({ Block(0U, { closure }, ReturnUnit()) });
+    IR::Function target;
+    target.symbol = { 2U, U"Lifted" };
+    target.parameter_registers = { 20U };
+    target.parameter_types = { Core::Type::int64() };
+    target.return_type = Core::Type::unit();
+    target.entry = 0U;
+    target.blocks = { Block(0U, {}, ReturnUnit()) };
+    module.functions.push_back(std::move(target));
+
+    const auto issues = Xmm::Verify(module);
+    CHECK(std::ranges::any_of(issues, [](const auto &issue) {
+        return issue.code == "VXL1034";
+    }));
+    CHECK(std::ranges::any_of(issues, [](const auto &issue) {
+        return issue.code == "VXL1046";
+    }));
+}
+
 TEST_CASE("Xmm rejects a read that precedes its definition")
 {
     const auto module = Module({ Block(0U, { DefineFrom(11U, 10U), Define(10U) }, ReturnUnit()) });
