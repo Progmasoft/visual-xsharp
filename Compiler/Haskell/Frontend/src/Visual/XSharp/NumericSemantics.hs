@@ -33,10 +33,12 @@ data NumericRuleError
     | UntargetedIntegerOutsideInt Integer
     | FloatingLiteralRequiresFloatingTarget Type
     | UnaryRequiresNumeric UnaryOperator Type
+    | UnaryRequiresInteger UnaryOperator Type
     | NegationRequiresSignedNumeric Type
     | LogicalRequiresBooleanContext UnaryOperator Type
     | BinaryRequiresMatchingTypes BinaryOperator Type Type
     | BinaryRequiresNumericType BinaryOperator Type
+    | BinaryRequiresIntegerType BinaryOperator Type
     | BinaryRequiresBooleanContext BinaryOperator Type Type
     deriving (Eq, Ord, Read, Show)
 
@@ -75,6 +77,9 @@ unaryNumericRule operator operandType = case operator of
     LogicalNot
         | acceptsBooleanContext operandType -> success boolType
         | otherwise -> failure boolType (LogicalRequiresBooleanContext operator operandType)
+    BitwiseNot
+        | isIntegerType operandType -> success operandType
+        | otherwise -> failure operandType (UnaryRequiresInteger operator operandType)
     UnaryPlus
         | isNumericType operandType -> success operandType
         | otherwise -> failure operandType (UnaryRequiresNumeric operator operandType)
@@ -94,6 +99,8 @@ binaryNumericRule operator leftType rightType
             else failure boolType (BinaryRequiresMatchingTypes operator leftType rightType)
     | leftType /= rightType =
         failure (resultFor operator leftType) (BinaryRequiresMatchingTypes operator leftType rightType)
+    | operator `elem` [ShiftLeft, ShiftRight, BitwiseAnd, BitwiseXor, BitwiseOr] && not (isIntegerType leftType) =
+        failure leftType (BinaryRequiresIntegerType operator leftType)
     | not (isNumericType leftType) =
         failure (resultFor operator leftType) (BinaryRequiresNumericType operator leftType)
     | otherwise = success (resultFor operator leftType)
@@ -122,6 +129,8 @@ renderNumericRuleError issue = case issue of
         "floating-point literal cannot use non-floating target " ++ show target
     UnaryRequiresNumeric operator operand ->
         show operator ++ " requires a numeric operand, found " ++ show operand
+    UnaryRequiresInteger operator operand ->
+        show operator ++ " requires an integer operand, found " ++ show operand
     NegationRequiresSignedNumeric operand ->
         "unary negation requires a signed integer or floating-point operand, found " ++ show operand
     LogicalRequiresBooleanContext operator operand ->
@@ -130,5 +139,7 @@ renderNumericRuleError issue = case issue of
         show operator ++ " requires matching operand types, found " ++ show left ++ " and " ++ show right
     BinaryRequiresNumericType operator operand ->
         show operator ++ " requires numeric operands, found " ++ show operand
+    BinaryRequiresIntegerType operator operand ->
+        show operator ++ " requires integer operands, found " ++ show operand
     BinaryRequiresBooleanContext operator left right ->
         show operator ++ " requires bool or numeric operands, found " ++ show left ++ " and " ++ show right

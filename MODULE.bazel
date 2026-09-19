@@ -7,6 +7,20 @@ bazel_dep(name = "rules_cc", version = "0.2.22")
 bazel_dep(name = "fmt", version = "12.1.0")
 bazel_dep(name = "catch2", version = "3.11.0")
 bazel_dep(name = "google_benchmark", version = "1.9.5")
+bazel_dep(name = "indicators", version = "2.3.0")
+bazel_dep(name = "tabulate", version = "1.5.0")
+
+# Neither header-only CLI library is currently published in the Bazel Central
+# Registry. Their upstream repositories are pinned as submodules beneath a
+# small module wrapper, so normal builds remain local and reproducible.
+local_path_override(
+    module_name = "indicators",
+    path = "third_party/indicators",
+)
+local_path_override(
+    module_name = "tabulate",
+    path = "third_party/tabulate",
+)
 
 # Catch2 is deliberately vendored: tests must remain reproducible even when the
 # registry is unavailable. This override does not make third_party part of the

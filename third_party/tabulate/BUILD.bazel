@@ -1,0 +1,31 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "tabulate",
+    hdrs = [
+        "upstream/include/tabulate/asciidoc_exporter.hpp",
+        "upstream/include/tabulate/cell.hpp",
+        "upstream/include/tabulate/color.hpp",
+        "upstream/include/tabulate/column.hpp",
+        "upstream/include/tabulate/column_format.hpp",
+        "upstream/include/tabulate/exporter.hpp",
+        "upstream/include/tabulate/font_align.hpp",
+        "upstream/include/tabulate/font_style.hpp",
+        "upstream/include/tabulate/format.hpp",
+        "upstream/include/tabulate/latex_exporter.hpp",
+        "upstream/include/tabulate/markdown_exporter.hpp",
+        "upstream/include/tabulate/optional_lite.hpp",
+        "upstream/include/tabulate/printer.hpp",
+        "upstream/include/tabulate/row.hpp",
+        "upstream/include/tabulate/string_view_lite.hpp",
+        "upstream/include/tabulate/table.hpp",
+        "upstream/include/tabulate/table_internal.hpp",
+        "upstream/include/tabulate/tabulate.hpp",
+        "upstream/include/tabulate/termcolor.hpp",
+        "upstream/include/tabulate/utf8.hpp",
+        "upstream/include/tabulate/variant_lite.hpp",
+    ],
+    includes = ["upstream/include"],
+)

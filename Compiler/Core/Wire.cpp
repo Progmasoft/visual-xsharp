@@ -330,7 +330,7 @@ namespace Visual::XSharp::Core::Wire
                     }
                     case 3:
                     {
-                        if (primitiveTag > static_cast<std::uint8_t>(Primitive::LogicalNot))
+                        if (primitiveTag > static_cast<std::uint8_t>(Primitive::BitwiseNot))
                             Fail(ErrorKind::InvalidTag, "primitive tag", "unknown Core primitive tag");
                         auto arguments = Vector<Expression>(limits_.maximumOperands, "primitive operand count", [this, depth] {
                             return ReadExpression(depth + 1U);

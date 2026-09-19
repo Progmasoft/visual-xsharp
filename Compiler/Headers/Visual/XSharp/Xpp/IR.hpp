@@ -45,7 +45,14 @@ namespace visual_xsharp::xpp
         ReleaseWeak,
         MakeUnowned,
         LoadUnowned,
-        ReleaseUnowned
+        ReleaseUnowned,
+        Power,
+        ShiftLeft,
+        ShiftRight,
+        BitwiseAnd,
+        BitwiseXor,
+        BitwiseOr,
+        BitwiseNot
     };
     struct Operand final
     {

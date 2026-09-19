@@ -349,7 +349,7 @@ namespace visual_xsharp::core::wire
             operation_tag() -> Operation
             {
                 const auto tag = byte("operation tag");
-                if (tag > static_cast<std::uint8_t>(Operation::MakeClosure))
+                if (tag > static_cast<std::uint8_t>(Operation::BitwiseNot))
                 {
                     fail(ErrorKind::InvalidTag, "operation tag", "unknown CorePrep operation tag");
                     return Operation::Copy;

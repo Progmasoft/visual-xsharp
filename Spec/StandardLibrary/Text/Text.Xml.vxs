@@ -450,7 +450,7 @@ XmlElement root = document.RootElement();
 
 document.Close();
 
-root.Text(); // INVALID runtime state
+root.Text(); -- INVALID runtime state
 
 -- ============================================================================
 -- Example 53: 45. Combined Nonstandard Example

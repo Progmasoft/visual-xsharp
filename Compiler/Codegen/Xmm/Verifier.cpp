@@ -141,6 +141,7 @@ namespace Visual::XSharp::Xmm
                 case xmm::Opcode::Move:
                 case xmm::Opcode::Negate:
                 case xmm::Opcode::NotBool:
+                case xmm::Opcode::BitwiseNot:
                 case xmm::Opcode::RetainStrong:
                 case xmm::Opcode::ReleaseStrong:
                 case xmm::Opcode::MakeWeak:
@@ -164,6 +165,12 @@ namespace Visual::XSharp::Xmm
                 case xmm::Opcode::CompareNotEqual:
                 case xmm::Opcode::AndBool:
                 case xmm::Opcode::OrBool:
+                case xmm::Opcode::Power:
+                case xmm::Opcode::ShiftLeft:
+                case xmm::Opcode::ShiftRight:
+                case xmm::Opcode::BitwiseAnd:
+                case xmm::Opcode::BitwiseXor:
+                case xmm::Opcode::BitwiseOr:
                     return 2;
                 case xmm::Opcode::Call:
                 case xmm::Opcode::MakeClosure:
@@ -351,6 +358,16 @@ namespace Visual::XSharp::Xmm
                 {
                     if (instruction.result_type.kind != core::Type::Kind::Bool || (instruction.operands.size() == 2 && instruction.operands[0].type != instruction.operands[1].type))
                         context.add(IssueKind::OperandType, "VXL1023", "comparison requires equal operand types and Bool result");
+                }
+                else if (instruction.opcode == xmm::Opcode::ShiftLeft || instruction.opcode == xmm::Opcode::ShiftRight
+                         || instruction.opcode == xmm::Opcode::BitwiseAnd || instruction.opcode == xmm::Opcode::BitwiseXor
+                         || instruction.opcode == xmm::Opcode::BitwiseOr || instruction.opcode == xmm::Opcode::BitwiseNot)
+                {
+                    if (!core::is_integer(instruction.result_type)
+                        || std::ranges::any_of(instruction.operands, [&instruction](const xmm::Value &value) {
+                               return value.type != instruction.result_type;
+                           }))
+                        context.add(IssueKind::OperandType, "VXL1047", "bitwise instruction operands and result must use one integer type");
                 }
                 else if (instruction.opcode != xmm::Opcode::Call)
                 {

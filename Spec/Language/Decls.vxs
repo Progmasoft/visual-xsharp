@@ -25,11 +25,11 @@ void print() {}
 -- Example 3: 1.2 Default Access
 -- Demonstrates: There is no declaration context whose default access is private.
 
-class User {              // internal
-    String name;          // internal
-    User(String name);    // internal
-    void Print() {}       // internal
-    class Helper {}       // internal
+class User {              -- internal
+    String name;          -- internal
+    User(String name);    -- internal
+    void Print() {}       -- internal
+    class Helper {}       -- internal
 }
 
 -- ============================================================================
@@ -45,8 +45,8 @@ fileprivate class FileType {}
 -- Demonstrates: protected is not a top-level access level.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-protected class InvalidType {} // INVALID
-private class InvalidType {}   // INVALID
+protected class InvalidType {} -- INVALID
+private class InvalidType {}   -- INVALID
 
 -- ============================================================================
 -- Example 6: 1.3 Access Modifiers
@@ -60,7 +60,7 @@ class Outer {
     }
 
     void Read(Inner inner) {
-        inner.value; // INVALID
+        inner.value; -- INVALID
     }
 }
 
@@ -109,14 +109,14 @@ class Address {
 -- Demonstrates: Forward declarations do not exist.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-class Address; // INVALID
+class Address; -- INVALID
 
 -- ============================================================================
 -- Example 11: 1.5 No Partial Declarations
 -- Demonstrates: partial does not exist.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-partial class User {} // INVALID
+partial class User {} -- INVALID
 
 -- ============================================================================
 -- Example 12: 1.5 No Partial Declarations
@@ -124,7 +124,7 @@ partial class User {} // INVALID
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 class User {}
-class User {} // INVALID: duplicate declaration
+class User {} -- INVALID: duplicate declaration
 
 -- ============================================================================
 -- Example 13: 3. data
@@ -186,7 +186,7 @@ data class Session(public String id, private String token);
 -- Demonstrates: Explicit final is invalid.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-data class User(final String name); // INVALID
+data class User(final String name); -- INVALID
 
 -- ============================================================================
 -- Example 21: 4.3 Inheritance Control
@@ -260,7 +260,7 @@ class User final {
 -- Demonstrates: final follows the type name.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-final class User {} // INVALID
+final class User {} -- INVALID
 
 -- ============================================================================
 -- Example 30: 5.3 sealed permits
@@ -277,15 +277,15 @@ class Shape sealed permits Circle, Rectangle : Base {
 class Shape sealed permits Circle {
 }
 
-class Circle : Shape {}    // VALID
-class Rectangle : Shape {} // INVALID
+class Circle : Shape {}    -- VALID
+class Rectangle : Shape {} -- INVALID
 
 -- ============================================================================
 -- Example 32: 5.3 sealed permits
 -- Demonstrates: Duplicate entries are invalid.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-class Shape sealed permits Circle, Circle {} // INVALID
+class Shape sealed permits Circle, Circle {} -- INVALID
 
 -- ============================================================================
 -- Example 33: 6. type
@@ -326,7 +326,7 @@ type User {
 
 User user = {
     name = "Leitwolf"
-}; // INVALID: age missing
+}; -- INVALID: age missing
 
 -- ============================================================================
 -- Example 37: 7. Classic enum
@@ -352,10 +352,10 @@ enum Status = byte {
 -- Demonstrates: The default underlying type is int.
 
 enum Direction {
-    NORTH, // 0
-    EAST,  // 1
-    SOUTH, // 2
-    WEST,  // 3
+    NORTH, -- 0
+    EAST,  -- 1
+    SOUTH, -- 2
+    WEST,  -- 3
 }
 
 -- ============================================================================
@@ -364,9 +364,9 @@ enum Direction {
 
 enum Value = int {
     FIRST = 5,
-    SECOND,   // 6
+    SECOND,   -- 6
     THIRD = 10,
-    FOURTH,   // 11
+    FOURTH,   -- 11
 }
 
 -- ============================================================================
@@ -383,7 +383,7 @@ enum Status {
 -- Example 42: 7.3 Duplicate Numeric Values
 -- Demonstrates: Different enum members may have the same numeric value.
 
-Status.NONE == Status.UNKNOWN // true
+Status.NONE == Status.UNKNOWN -- true
 
 -- ============================================================================
 -- Example 43: 7.3 Duplicate Numeric Values
@@ -393,7 +393,7 @@ Status.NONE == Status.UNKNOWN // true
 
 match (status) {
     .NONE -> { ... },
-    .UNKNOWN -> { ... }, // INVALID: same runtime value as .NONE
+    .UNKNOWN -> { ... }, -- INVALID: same runtime value as .NONE
     .READY -> { ... },
 }
 
@@ -429,7 +429,7 @@ enum class Status() : Base {
 --   from the enum class itself.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-class Child : Status { // INVALID
+class Child : Status { -- INVALID
 }
 
 -- ============================================================================
@@ -459,7 +459,7 @@ enum class Status() {
 enum class Status() {
     case Ready,
 
-    public void Ready() { // INVALID
+    public void Ready() { -- INVALID
     }
 }
 
@@ -469,7 +469,7 @@ enum class Status() {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 enum class Status() {
-    private case Ready, // INVALID
+    private case Ready, -- INVALID
 }
 
 -- ============================================================================
@@ -502,15 +502,15 @@ Status second = .Ready;
 -- Demonstrates: Target-typed .Case syntax requires a known target type.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-auto status = .Ready; // INVALID
+auto status = .Ready; -- INVALID
 
 -- ============================================================================
 -- Example 55: 8.4 Access to Cases
 -- Demonstrates: Cases cannot be created with new.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-new Status();       // INVALID
-new Status.Ready(); // INVALID
+new Status();       -- INVALID
+new Status.Ready(); -- INVALID
 
 -- ============================================================================
 -- Example 56: 8.4 Access to Cases
@@ -519,7 +519,7 @@ new Status.Ready(); // INVALID
 Status first = Status.Ready;
 Status second = Status.Ready;
 
-first == second // true
+first == second -- true
 
 -- ============================================================================
 -- Example 57: 9. object
@@ -543,7 +543,7 @@ object Application : Base {
 -- Demonstrates: No declaration may derive from an object.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-class Child : Application { // INVALID
+class Child : Application { -- INVALID
 }
 
 -- ============================================================================
@@ -552,7 +552,7 @@ class Child : Application { // INVALID
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 object Application {
-    object Logger { // INVALID
+    object Logger { -- INVALID
     }
 }
 
@@ -594,7 +594,7 @@ class Outer {
 
     class Nested {
         public int Read() {
-            value // INVALID
+            value -- INVALID
         }
     }
 }
@@ -629,7 +629,7 @@ Outer.Nested value;
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 Outer outer = new Outer();
-outer.Nested value; // INVALID
+outer.Nested value; -- INVALID
 
 -- ============================================================================
 -- Example 66: 10.1 static class
@@ -730,7 +730,7 @@ requires(T value) {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 template<typename T>
-concept Recursive = Recursive<T>; // INVALID
+concept Recursive = Recursive<T>; -- INVALID
 
 -- ============================================================================
 -- Example 78: 13. typealias
@@ -776,7 +776,7 @@ typealias NumericList = System.Array<T>;
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 typealias First = Second;
-typealias Second = First; // INVALID
+typealias Second = First; -- INVALID
 
 -- ============================================================================
 -- Example 84: 13.2 Alias Restrictions
@@ -786,7 +786,7 @@ typealias Second = First; // INVALID
 typealias UserId = long;
 
 void Print(_ long value) {}
-void Print(_ UserId value) {} // INVALID: same type surface
+void Print(_ UserId value) {} -- INVALID: same type surface
 
 -- ============================================================================
 -- Example 85: 14. Extensions
@@ -840,7 +840,7 @@ extension UserExtensions : User {
     }
 }
 
-user.Name(); // calls User.Name
+user.Name(); -- calls User.Name
 
 -- ============================================================================
 -- Example 89: 14.4 Real Members Win
@@ -858,7 +858,7 @@ extension UserExtensions : User {
     }
 }
 
-user.Print(); // INVALID
+user.Print(); -- INVALID
 
 -- ============================================================================
 -- Example 90: 14.4 Real Members Win
@@ -979,14 +979,14 @@ auto value = Create();
 -- Demonstrates: auto requires an initializer.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-auto value; // INVALID
+auto value; -- INVALID
 
 -- ============================================================================
 -- Example 107: 16.2 Local Bindings
 -- Demonstrates: auto requires an initializer.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-auto value = null; // INVALID: no inferable target type
+auto value = null; -- INVALID: no inferable target type
 
 -- ============================================================================
 -- Example 108: 16.3 final
@@ -994,7 +994,7 @@ auto value = null; // INVALID: no inferable target type
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 final int count = 10;
-count = 20; // INVALID
+count = 20; -- INVALID
 
 -- ============================================================================
 -- Example 109: 16.3 final
@@ -1002,8 +1002,8 @@ count = 20; // INVALID
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 final User user = new User(name: "Ada");
-user.name = "Grace"; // VALID if the member is mutable
-user = new User(name: "Other"); // INVALID
+user.name = "Grace"; -- VALID if the member is mutable
+user = new User(name: "Other"); -- INVALID
 
 -- ============================================================================
 -- Example 110: 16.3 final
@@ -1030,8 +1030,8 @@ User moved = Move(user);
 User first = LoadUser();
 User second = Move(first);
 
-Use(first); // INVALID
-first = LoadUser(); // valid again
+Use(first); -- INVALID
+first = LoadUser(); -- valid again
 
 -- ============================================================================
 -- Example 113: 17. Built-in Copy(...) and Move(...)
@@ -1039,7 +1039,7 @@ first = LoadUser(); // valid again
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 final User first = LoadUser();
-User second = Move(first); // INVALID
+User second = Move(first); -- INVALID
 
 -- ============================================================================
 -- Example 114: 18.1 General Modifier Order
@@ -1091,7 +1091,7 @@ Move(x: 10, y: 20);
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 class User {
-    public void Print(); // INVALID
+    public void Print(); -- INVALID
 }
 
 -- ============================================================================
@@ -1150,7 +1150,7 @@ class User {
 -- Demonstrates: An explicit constructor cannot use the shorthand.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-public explicit User(String name); // INVALID
+public explicit User(String name); -- INVALID
 
 -- ============================================================================
 -- Example 126: 19.3 self(...) Delegation
@@ -1201,7 +1201,7 @@ class User {
     public User(String name) {
     }
 
-    private User(String name) { // INVALID: same constructor surface
+    private User(String name) { -- INVALID: same constructor surface
     }
 }
 
@@ -1218,7 +1218,7 @@ class User {
     }
 }
 
-new User(name: "Ada"); // INVALID: ambiguous
+new User(name: "Ada"); -- INVALID: ambiguous
 
 -- ============================================================================
 -- Example 131: 19.7 Constructor Access
@@ -1233,8 +1233,8 @@ class User {
     }
 }
 
-new User(name: "Ada"); // VALID
-new User(id: 10);       // INVALID
+new User(name: "Ada"); -- VALID
+new User(id: 10);       -- INVALID
 
 -- ============================================================================
 -- Example 132: 19.7 Constructor Access
@@ -1264,7 +1264,7 @@ class Example {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 class Example {
-    int first = second; // INVALID
+    int first = second; -- INVALID
     int second = 10;
 }
 
@@ -1324,7 +1324,7 @@ auto Factorial(_ int value) {
 
 auto Loop() {
     Loop()
-} // INVALID: no independent result type
+} -- INVALID: no independent result type
 
 -- ============================================================================
 -- Example 141: 23. Properties
@@ -1439,7 +1439,7 @@ class Child : Base {
 -- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
 
 class Child : Base {
-    public String self[long index] override { // INVALID
+    public String self[long index] override { -- INVALID
         get {
             ...
         }
@@ -1479,15 +1479,15 @@ public op int self[int index] {
 -- Demonstrates: constructor destructor field setter
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-op User(String name); // INVALID
-op int value;         // INVALID
+op User(String name); -- INVALID
+op int value;         -- INVALID
 
 -- ============================================================================
 -- Example 155: 25.1 Where op Is Valid
 -- Demonstrates: op void is invalid.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-op void Run() { // INVALID
+op void Run() { -- INVALID
 }
 
 -- ============================================================================
@@ -1506,7 +1506,7 @@ op int Calculate(_ int value) {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 op String Rename(User user) {
-    user.name = "Ada"; // INVALID
+    user.name = "Ada"; -- INVALID
     user.name
 }
 
@@ -1516,7 +1516,7 @@ op String Rename(User user) {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 op int Read() {
-    self.count++; // INVALID
+    self.count++; -- INVALID
     self.count
 }
 
@@ -1559,7 +1559,7 @@ op User Clone(User user) {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 op User Take(User user) {
-    Move(user) // INVALID
+    Move(user) -- INVALID
 }
 
 -- ============================================================================
@@ -1571,7 +1571,7 @@ class Counter {
     static int value;
 
     public static op int Current() {
-        value // INVALID
+        value -- INVALID
     }
 }
 
@@ -1608,7 +1608,7 @@ op int Value() {
     1
 }
 
-int Value() { // INVALID: same call surface
+int Value() { -- INVALID: same call surface
     2
 }
 
@@ -1642,7 +1642,7 @@ op int Divide(_ int left, _ int right) {
 -- Expected result: accepted when the referenced declarations are available.
 
 op int Read() {
-    throw new RuntimeException(); // VALID: unchecked exception is discarded
+    throw new RuntimeException(); -- VALID: unchecked exception is discarded
 }
 
 -- ============================================================================
@@ -1656,9 +1656,9 @@ Save();
 -- Demonstrates: A pure value expression with no statement effect cannot appear alone.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-42;           // INVALID
-name;         // INVALID
-left + right; // INVALID
+42;           -- INVALID
+name;         -- INVALID
+left + right; -- INVALID
 
 -- ============================================================================
 -- Example 173: 26. Expression Statements and Discard
@@ -1697,7 +1697,7 @@ _ = ReadFile();
 -- Demonstrates: = is a special statement form, not an ordinary assignment target.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-int value = (_ = Save()); // INVALID
+int value = (_ = Save()); -- INVALID
 
 -- ============================================================================
 -- Example 178: Explicit = Expr();
@@ -1774,7 +1774,7 @@ class User {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 public void Run(String value) {
-    int value = 10; // INVALID
+    int value = 10; -- INVALID
 }
 
 -- ============================================================================
@@ -1798,7 +1798,7 @@ public void Run(String value) {
 class User {
     String Value;
 
-    String Value() { // INVALID
+    String Value() { -- INVALID
         ...
     }
 }
@@ -1812,7 +1812,7 @@ class User {
     static void Run(int value) {
     }
 
-    void Run(int value) { // INVALID
+    void Run(int value) { -- INVALID
     }
 }
 
@@ -1821,8 +1821,8 @@ class User {
 -- Demonstrates: Static members are called through the type surface, not through an instance.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-Counter.Current(); // VALID
-counter.Current(); // INVALID when Current is static
+Counter.Current(); -- VALID
+counter.Current(); -- INVALID when Current is static
 
 -- ============================================================================
 -- Example 190: 31. if and guard Bindings
@@ -1837,7 +1837,7 @@ if (auto user = FindUser()) {
 -- Demonstrates: The binding is scoped to the if / else construct.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-Use(user); // INVALID after the if
+Use(user); -- INVALID after the if
 
 -- ============================================================================
 -- Example 192: 31. if and guard Bindings
@@ -1952,7 +1952,7 @@ Failure failure -> { ... }
 
 match (shape) {
     Shape shape -> { ... },
-    Circle circle -> { ... }, // INVALID: unreachable
+    Circle circle -> { ... }, -- INVALID: unreachable
 }
 
 -- ============================================================================
@@ -1961,7 +1961,7 @@ match (shape) {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 match (left), (right) {
-    (Success value), (Success value) -> { // INVALID
+    (Success value), (Success value) -> { -- INVALID
     },
 }
 
@@ -1971,7 +1971,7 @@ match (left), (right) {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 -- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
 
-User(name, age) -> { ... } // INVALID
+User(name, age) -> { ... } -- INVALID
 
 -- ============================================================================
 -- Example 206: 32.4 No Destructuring Pattern
@@ -2053,14 +2053,14 @@ Log(messages: "First", "Second");
 -- Demonstrates: The label is written once for the vararg sequence.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-Log(messages: "First", messages: "Second"); // INVALID
+Log(messages: "First", messages: "Second"); -- INVALID
 
 -- ============================================================================
 -- Example 217: 35. Varargs
 -- Demonstrates: A vararg cannot have a default value.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-void Print(String... values = []); // INVALID
+void Print(String... values = []); -- INVALID
 
 -- ============================================================================
 -- Example 218: 35. Varargs
@@ -2080,9 +2080,9 @@ void Print(_ String value) {
 void Print(_ String... values) {
 }
 
-Print("Hello");   // fixed-arity overload
-Print("A", "B"); // vararg overload
-Print();          // vararg overload
+Print("Hello");   -- fixed-arity overload
+Print("A", "B"); -- vararg overload
+Print();          -- vararg overload
 
 -- ============================================================================
 -- Example 220: 36. Templates
@@ -2208,8 +2208,8 @@ class Box {
 --   arguments if that member is never instantiated.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-Box<int> box; // may be valid if Print is not instantiated
-box.Print();  // INVALID if int has no matching Print
+Box<int> box; -- may be valid if Print is not instantiated
+box.Print();  -- INVALID if int has no matching Print
 
 -- ============================================================================
 -- Example 235: 36.9 Explicit Instantiation
@@ -2231,7 +2231,7 @@ template int Max<int>(_ int left, _ int right);
 template<typename T>
 data Node {
     T value;
-    Node<T> next; // INVALID: recursive value layout
+    Node<T> next; -- INVALID: recursive value layout
 }
 
 -- ============================================================================
@@ -2256,14 +2256,14 @@ void PrintAll(_ T... values) {
 -- Example 240: 37. Runtime Vararg vs Template Pack
 -- Demonstrates: All runtime arguments share one deduced T.
 
-PrintAll(1, 2, 3); // T = int
+PrintAll(1, 2, 3); -- T = int
 
 -- ============================================================================
 -- Example 241: 37. Runtime Vararg vs Template Pack
 -- Demonstrates: All runtime arguments share one deduced T.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-PrintAll(1, "Two"); // INVALID when no one exact T satisfies the call
+PrintAll(1, "Two"); -- INVALID when no one exact T satisfies the call
 
 -- ============================================================================
 -- Example 242: 37. Runtime Vararg vs Template Pack
@@ -2292,7 +2292,7 @@ public static Vector Operator<+>(
 -- Demonstrates: A direct compound-assignment operator declaration is invalid.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-Operator<+=> // INVALID
+Operator<+=> -- INVALID
 
 -- ============================================================================
 -- Example 245: 38.4 Precedence and Associativity
@@ -2399,7 +2399,7 @@ using selected alias First {
 };
 
 using selected alias Second {
-    OtherResult = Value, // INVALID: duplicate local alias name
+    OtherResult = Value, -- INVALID: duplicate local alias name
 };
 
 -- ============================================================================
@@ -2408,7 +2408,7 @@ using selected alias Second {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 class User {
-    using System.Utils; // INVALID
+    using System.Utils; -- INVALID
 }
 
 -- ============================================================================
@@ -2422,9 +2422,9 @@ class User {
 -- Example 258: 41.1 #define
 -- Demonstrates: A runtime declaration may use its compile-time value:
 
-#define AGE 26 // compile-time
+#define AGE 26 -- compile-time
 
-int value = AGE; // runtime binding initialized from the compile-time value
+int value = AGE; -- runtime binding initialized from the compile-time value
 
 -- ============================================================================
 -- Example 259: 41.1 #define
@@ -2439,7 +2439,7 @@ int value = AGE; // runtime binding initialized from the compile-time value
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 int value = 10;
-#define LIMIT value // INVALID
+#define LIMIT value -- INVALID
 
 -- ============================================================================
 -- Example 261: 41.2 #setdef
@@ -2467,7 +2467,7 @@ int first = AGE;
 int second = AGE;
 
 #undef AGE
-int third = AGE; // INVALID when no ordinary declaration resolves AGE
+int third = AGE; -- INVALID when no ordinary declaration resolves AGE
 
 -- ============================================================================
 -- Example 264: 41.5 Non-Textual Behavior
@@ -2515,14 +2515,14 @@ int USER_AGE = 10;
 -- Demonstrates: os(...) and family(...) are compiler-directive predicates. They are not normal runtime
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-bool value = os(Windows); // INVALID
+bool value = os(Windows); -- INVALID
 
 -- ============================================================================
 -- Example 268: 42.1 Platform Predicates
 -- Demonstrates: os(...) and family(...) are compiler-directive predicates. They are not normal runtime
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-if (family(Unix)) { // INVALID
+if (family(Unix)) { -- INVALID
 }
 
 -- ============================================================================
@@ -2530,7 +2530,7 @@ if (family(Unix)) { // INVALID
 -- Demonstrates: os(ReactOS) does not exist.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-#if os(ReactOS) // INVALID
+#if os(ReactOS) -- INVALID
 #endif
 
 -- ============================================================================
@@ -2625,7 +2625,7 @@ int value =
 #else
     20
 #endif
-; // INVALID
+; -- INVALID
 
 -- ============================================================================
 -- Example 279: 42.7 Nesting
@@ -2634,7 +2634,7 @@ int value =
 
 #if os(Windows)
 #else
-#elseif os(Linux) // INVALID
+#elseif os(Linux) -- INVALID
 #endif
 
 -- ============================================================================
@@ -2659,7 +2659,7 @@ int value =
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 String name = GetName();
-#message name // INVALID
+#message name -- INVALID
 
 -- ============================================================================
 -- Example 283: 44. Regions
@@ -2718,7 +2718,7 @@ class Server {
 
 #region Networking
 ...
-#endregion networking // INVALID
+#endregion networking -- INVALID
 
 -- ============================================================================
 -- Example 288: 45.3 Function Bodies
@@ -2727,7 +2727,7 @@ class Server {
 
 class User {
     public void Run() {
-        int Calculate(_ int value) { // INVALID
+        int Calculate(_ int value) { -- INVALID
             value * 2
         }
     }
@@ -2740,7 +2740,7 @@ class User {
 
 class User {
     public void Run() {
-        class Helper { // INVALID
+        class Helper { -- INVALID
         }
     }
 }
@@ -2756,8 +2756,8 @@ data ValueCell {
     T Value;
 }
 
-ValueCell<int> scalarCell;                 // value type
-ValueCell<ValueCell<int>> nestedCell;      // value type
+ValueCell<int> scalarCell;                 -- value type
+ValueCell<ValueCell<int>> nestedCell;      -- value type
 
 -- ============================================================================
 -- Example 291: 46. Constructed Template Type Classification
@@ -2770,9 +2770,9 @@ data ValueCell {
     T Value;
 }
 
-ValueCell<String> directReference = null;                  // reference type
-ValueCell<ValueCell<String>> nestedReference = null;       // reference type
-ValueCell<ValueCell<ValueCell<String>>> deepReference = null; // reference type
+ValueCell<String> directReference = null;                  -- reference type
+ValueCell<ValueCell<String>> nestedReference = null;       -- reference type
+ValueCell<ValueCell<ValueCell<String>>> deepReference = null; -- reference type
 
 -- ============================================================================
 -- Example 292: 46. Constructed Template Type Classification
@@ -2790,8 +2790,8 @@ data ValueCell {
     T Value;
 }
 
-ReferenceCell<int> outerReference = null;               // reference type
-ValueCell<ReferenceCell<int>> containedReference = null; // reference type
+ReferenceCell<int> outerReference = null;               -- reference type
+ValueCell<ReferenceCell<int>> containedReference = null; -- reference type
 
 -- ============================================================================
 -- Example 293: 46. Constructed Template Type Classification
@@ -2804,7 +2804,7 @@ data ValueCell {
     T Value;
 }
 
-ValueCell<ValueCell<int>> value = null; // INVALID: the complete constructed type is a value type
+ValueCell<ValueCell<int>> value = null; -- INVALID: the complete constructed type is a value type
 
 -- ============================================================================
 -- Example 294: 46. Constructed Template Type Classification
@@ -2820,6 +2820,6 @@ data Buffer {
 template<typename T>
 typealias NestedCell = ValueCell<ValueCell<T>>;
 
-Buffer<int, 32> values;         // value type; 32 is not a type argument
-NestedCell<int> nestedValues;   // value type after alias expansion
-NestedCell<String> nestedNames; // reference type after alias expansion
+Buffer<int, 32> values;         -- value type; 32 is not a type argument
+NestedCell<int> nestedValues;   -- value type after alias expansion
+NestedCell<String> nestedNames; -- reference type after alias expansion

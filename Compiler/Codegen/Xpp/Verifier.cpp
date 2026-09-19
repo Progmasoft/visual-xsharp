@@ -52,6 +52,7 @@ namespace Visual::XSharp::Xpp
                 case IR::Opcode::Copy:
                 case IR::Opcode::Negate:
                 case IR::Opcode::LogicalNot:
+                case IR::Opcode::BitwiseNot:
                 case IR::Opcode::RetainStrong:
                 case IR::Opcode::ReleaseStrong:
                 case IR::Opcode::MakeWeak:

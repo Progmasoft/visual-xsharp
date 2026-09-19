@@ -9,11 +9,13 @@ module Visual.XSharp.ConstantEvaluation
     ) where
 
 import Visual.XSharp.AST
+import Data.Bits (complement, shiftL, shiftR, (.&.), (.|.), xor)
 
 data ConstantIntegerError
     = ConstantDivisionByZero
     | ConstantFloorDivisionByZero
     | ConstantRemainderByZero
+    | ConstantNegativeExponent
     deriving (Eq, Ord, Read, Show)
 
 -- Non-constant expressions return Nothing. A definite arithmetic failure is
@@ -32,6 +34,7 @@ evaluateConstantInteger expression = case expression of
             (UnaryPlus, Just number) -> Just number
             (UnaryNegate, Just number) -> Just (-number)
             (LogicalNot, Just number) -> Just (if number == 0 then 1 else 0)
+            (BitwiseNot, Just number) -> Just (complement number)
             _ -> Nothing
     BinaryExpression _ operator left right _ -> do
         leftValue <- evaluateConstantInteger left
@@ -51,10 +54,18 @@ evaluateBinary operator (Just left) (Just right) = case operator of
         | otherwise -> value (left `quot` right)
     FloorDivide
         | right == 0 -> Left ConstantFloorDivisionByZero
-        | otherwise -> value (left `div` right)
+        | otherwise -> value (roundedIntegerDivision left right)
     Remainder
         | right == 0 -> Left ConstantRemainderByZero
         | otherwise -> value (left `rem` right)
+    Power
+        | right < 0 -> Left ConstantNegativeExponent
+        | otherwise -> value (left ^ right)
+    ShiftLeft -> value (shiftL left (fromInteger right))
+    ShiftRight -> value (shiftR left (fromInteger right))
+    BitwiseAnd -> value (left .&. right)
+    BitwiseXor -> value (xor left right)
+    BitwiseOr -> value (left .|. right)
     LessThan -> boolean (left < right)
     LessEqual -> boolean (left <= right)
     GreaterThan -> boolean (left > right)
@@ -67,8 +78,19 @@ evaluateBinary operator (Just left) (Just right) = case operator of
         value = pure . Just
         boolean result = value (if result then 1 else 0)
 
+-- `//` is nearest-integer division with exact halves moving away from zero.
+-- quotRem gives a truncating quotient; comparing twice the remainder magnitude
+-- avoids floating conversion and therefore remains exact for arbitrary-width
+-- compile-time integers.
+roundedIntegerDivision :: Integer -> Integer -> Integer
+roundedIntegerDivision dividend divisor =
+    let (quotient, remainder) = dividend `quotRem` divisor
+        adjustment = signum dividend * signum divisor
+     in if 2 * abs remainder >= abs divisor then quotient + adjustment else quotient
+
 renderConstantIntegerError :: ConstantIntegerError -> String
 renderConstantIntegerError issue = case issue of
     ConstantDivisionByZero -> "constant division by zero"
     ConstantFloorDivisionByZero -> "constant floor division by zero"
     ConstantRemainderByZero -> "constant remainder by zero"
+    ConstantNegativeExponent -> "constant integer exponent cannot be negative"

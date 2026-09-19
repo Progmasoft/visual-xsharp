@@ -247,8 +247,12 @@ namespace Visual::XSharp::Core
             {
                 for (const auto &operand : expression.operands)
                     VerifyExpression(operand, environment);
-                const auto unary = expression.primitive == Primitive::Negate || expression.primitive == Primitive::LogicalNot;
+                const auto unary = expression.primitive == Primitive::Negate || expression.primitive == Primitive::LogicalNot
+                                   || expression.primitive == Primitive::BitwiseNot;
                 const auto logical = expression.primitive == Primitive::LogicalAnd || expression.primitive == Primitive::LogicalOr || expression.primitive == Primitive::LogicalNot;
+                const auto integerOnly = expression.primitive == Primitive::ShiftLeft || expression.primitive == Primitive::ShiftRight
+                                         || expression.primitive == Primitive::BitwiseAnd || expression.primitive == Primitive::BitwiseXor
+                                         || expression.primitive == Primitive::BitwiseOr || expression.primitive == Primitive::BitwiseNot;
                 const auto comparison = expression.primitive >= Primitive::LessThan && expression.primitive <= Primitive::NotEqual;
                 if (expression.operands.size() != (unary ? 1U : 2U))
                     Add("VXC1026", "Core primitive has the wrong operand count");
@@ -265,6 +269,8 @@ namespace Visual::XSharp::Core
                         if (!accepts_boolean_context(operand.type))
                             Add("VXC1027", "Core logical primitive requires bool or numeric operands");
                 }
+                else if (integerOnly && !is_integer(operandType))
+                    Add("VXC1027", "Core bitwise primitive requires integer operands");
                 else if (!is_numeric(operandType) && expression.primitive != Primitive::Equal && expression.primitive != Primitive::NotEqual)
                     Add("VXC1027", "Core arithmetic or ordering primitive requires numeric operands");
 

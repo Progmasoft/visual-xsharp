@@ -1007,7 +1007,7 @@ PostgreSqlReader second =
 -- Example 79: 47. Pipeline errors
 -- Demonstrates: If PostgreSQL aborts pipeline state:
 
-pipeline.IsAborted(); // true
+pipeline.IsAborted(); -- true
 
 -- ============================================================================
 -- Example 80: 48. Pipeline exclusivity
@@ -1020,7 +1020,7 @@ PostgreSqlPipeline pipeline =
 
 pipeline.Send(command);
 
-otherCommand.ExecuteReader(); // INVALID while pipeline is active
+otherCommand.ExecuteReader(); -- INVALID while pipeline is active
 
 -- ============================================================================
 -- Example 81: 50. Current-command cancellation

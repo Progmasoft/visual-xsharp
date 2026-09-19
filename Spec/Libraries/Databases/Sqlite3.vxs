@@ -94,7 +94,7 @@ connection.Close();
 -- Expected result: accepted when the referenced declarations are available.
 
 connection.Close();
-connection.Close(); // VALID
+connection.Close(); -- VALID
 
 -- ============================================================================
 -- Example 13: 3.1 Active child resources
@@ -109,7 +109,7 @@ SqliteCommand command =
             "SELECT id FROM users"
         );
 
-connection.Close(); // INVALID: command is still active
+connection.Close(); -- INVALID: command is still active
 
 -- ============================================================================
 -- Example 14: 3.1 Active child resources
@@ -284,7 +284,7 @@ SqliteCommand command =
 
 command.ClearBindings();
 
-command.ExecuteNonQuery(); // INVALID
+command.ExecuteNonQuery(); -- INVALID
 
 -- ============================================================================
 -- Example 35: 7.5 Parameter metadata
@@ -335,7 +335,7 @@ data User {
 
 User user = ...;
 
-command.Bind(":user", user); // INVALID
+command.Bind(":user", user); -- INVALID
 
 -- ============================================================================
 -- Example 41: 9. Zero-filled BLOB binding
@@ -409,7 +409,7 @@ defer reader.Close();
 SqliteDataReader reader =
         command.ExecuteReader();
 
-command.ExecuteReader(); // INVALID
+command.ExecuteReader(); -- INVALID
 
 -- ============================================================================
 -- Example 48: 11. Prepared command reuse
@@ -450,7 +450,7 @@ bool closed = command.IsClosed();
 -- Expected result: accepted when the referenced declarations are available.
 
 command.Close();
-command.Close(); // VALID
+command.Close(); -- VALID
 
 -- ============================================================================
 -- Example 52: 12. Closing commands
@@ -460,7 +460,7 @@ command.Close(); // VALID
 SqliteDataReader reader =
         command.ExecuteReader();
 
-command.Close(); // INVALID
+command.Close(); -- INVALID
 
 -- ============================================================================
 -- Example 53: 13. Reading rows
@@ -600,7 +600,7 @@ reader.Close();
 -- Expected result: accepted when the referenced declarations are available.
 
 reader.Close();
-reader.Close(); // VALID
+reader.Close(); -- VALID
 
 -- ============================================================================
 -- Example 70: 20. Transactions
@@ -652,7 +652,7 @@ SqliteTransaction transaction =
         connection.BeginTransaction();
 
 defer {
-    if (!transaction.IsCompleted()) {
+    if (not transaction.IsCompleted()) {
         transaction.Rollback();
     }
 }
@@ -666,7 +666,7 @@ SqliteTransaction outer =
         connection.BeginTransaction();
 
 SqliteTransaction inner =
-        connection.BeginTransaction(); // INVALID
+        connection.BeginTransaction(); -- INVALID
 
 -- ============================================================================
 -- Example 77: 21. Savepoints
@@ -1073,7 +1073,7 @@ SqliteTransaction transaction =
         connection.BeginTransaction();
 
 defer {
-    if (!transaction.IsCompleted()) {
+    if (not transaction.IsCompleted()) {
         transaction.Rollback();
     }
 }
@@ -1105,7 +1105,7 @@ try {
 }
 catch (SqliteException e) {
     if (e.Code() == SqliteResult.INTERRUPT) {
-        // interrupted
+        -- interrupted
     }
 }
 
@@ -1292,7 +1292,7 @@ SqliteTransaction transaction =
         );
 
 defer {
-    if (!transaction.IsCompleted()) {
+    if (not transaction.IsCompleted()) {
         transaction.Rollback();
     }
 }
@@ -1394,7 +1394,7 @@ SqliteTransaction transaction =
         connection.BeginTransaction();
 
 defer {
-    if (!transaction.IsCompleted()) {
+    if (not transaction.IsCompleted()) {
         transaction.Rollback();
     }
 }

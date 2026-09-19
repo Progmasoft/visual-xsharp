@@ -268,6 +268,7 @@ longestSymbol source =
     firstMatch
         [ "..."
         , "=="
+        , "!="
         , "\\="
         , "<="
         , ">="
@@ -291,6 +292,9 @@ longestSymbol source =
         , "*"
         , "/"
         , "%"
+        , "&"
+        , "|"
+        , "^"
         , "<"
         , ">"
         , "!"

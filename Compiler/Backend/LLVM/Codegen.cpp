@@ -429,28 +429,109 @@ namespace Visual::XSharp::Backend::LLVM
             }
 
             [[nodiscard]] auto
-            LowerFloorDiv(llvm::IRBuilder<> &builder, llvm::Value *left, llvm::Value *right) -> llvm::Value *
+            LowerSignedRoundedDiv(llvm::IRBuilder<> &builder, llvm::Value *left, llvm::Value *right) -> llvm::Value *
             {
-                // LLVM sdiv truncates toward zero. Visual X# floor division rounds toward
-                // negative infinity, so a non-exact quotient with unlike operand signs must be
-                // reduced by one. XOR lets us test sign disagreement without branching.
-                auto *quotient = builder.CreateSDiv(left, right, "floor.quotient");
-                auto *remainder = builder.CreateSRem(left, right, "floor.remainder");
+                // `//` rounds to the nearest integer and sends an exact half away
+                // from zero. Keep every comparison in the original integer width:
+                // unsigned two's-complement magnitude represents abs(MIN) without
+                // introducing an overflowing signed absolute-value call.
+                auto *quotient = builder.CreateSDiv(left, right, "rounded.quotient");
+                auto *remainder = builder.CreateSRem(left, right, "rounded.remainder");
                 auto *zero = llvm::Constant::getNullValue(left->getType());
-                auto *hasRemainder = builder.CreateICmpNE(remainder, zero, "floor.has.remainder");
-                auto *signBits = builder.CreateXor(left, right, "floor.sign.bits");
-                auto *signsDiffer = builder.CreateICmpSLT(signBits, zero, "floor.signs.differ");
-                auto *adjust = builder.CreateAnd(hasRemainder, signsDiffer, "floor.adjust");
-                auto *adjustment = builder.CreateZExt(adjust, left->getType(), "floor.adjustment");
-                return builder.CreateSub(quotient, adjustment, "floor.result");
+                auto *one = llvm::ConstantInt::get(left->getType(), 1U);
+                auto magnitude = [&](llvm::Value *value, const char *name) {
+                    auto *negative = builder.CreateICmpSLT(value, zero);
+                    return builder.CreateSelect(negative, builder.CreateNeg(value), value, name);
+                };
+                auto *remainderMagnitude = magnitude(remainder, "rounded.remainder.magnitude");
+                auto *divisorMagnitude = magnitude(right, "rounded.divisor.magnitude");
+                auto *half = builder.CreateLShr(divisorMagnitude, one, "rounded.half");
+                auto *odd = builder.CreateAnd(divisorMagnitude, one, "rounded.divisor.odd");
+                auto *threshold = builder.CreateAdd(half, odd, "rounded.threshold");
+                auto *adjust = builder.CreateICmpUGE(remainderMagnitude, threshold, "rounded.adjust");
+                auto *signBits = builder.CreateXor(left, right, "rounded.sign.bits");
+                auto *sameSign = builder.CreateICmpSGE(signBits, zero, "rounded.same.sign");
+                auto *direction = builder.CreateSelect(
+                    sameSign,
+                    one,
+                    llvm::ConstantInt::getSigned(llvm::cast<llvm::IntegerType>(left->getType()), -1));
+                auto *adjusted = builder.CreateAdd(quotient, direction, "rounded.adjusted");
+                return builder.CreateSelect(adjust, adjusted, quotient, "rounded.result");
             }
 
             [[nodiscard]] auto
-            LowerFloatingFloorDiv(llvm::IRBuilder<> &builder, llvm::Value *left, llvm::Value *right) -> llvm::Value *
+            LowerUnsignedRoundedDiv(llvm::IRBuilder<> &builder, llvm::Value *left, llvm::Value *right) -> llvm::Value *
             {
-                auto *quotient = builder.CreateFDiv(left, right, "floor.quotient");
-                auto *floorIntrinsic = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::floor, { left->getType() });
-                return builder.CreateCall(floorIntrinsic, { quotient }, "floor.result");
+                auto *one = llvm::ConstantInt::get(left->getType(), 1U);
+                auto *quotient = builder.CreateUDiv(left, right, "rounded.quotient");
+                auto *remainder = builder.CreateURem(left, right, "rounded.remainder");
+                auto *half = builder.CreateLShr(right, one, "rounded.half");
+                auto *odd = builder.CreateAnd(right, one, "rounded.divisor.odd");
+                auto *threshold = builder.CreateAdd(half, odd, "rounded.threshold");
+                auto *adjust = builder.CreateICmpUGE(remainder, threshold, "rounded.adjust");
+                auto *adjusted = builder.CreateAdd(quotient, one, "rounded.adjusted");
+                return builder.CreateSelect(adjust, adjusted, quotient, "rounded.result");
+            }
+
+            [[nodiscard]] auto
+            LowerFloatingRoundedDiv(llvm::IRBuilder<> &builder, llvm::Value *left, llvm::Value *right) -> llvm::Value *
+            {
+                auto *quotient = builder.CreateFDiv(left, right, "rounded.quotient");
+                auto *roundIntrinsic = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::round, { left->getType() });
+                return builder.CreateCall(roundIntrinsic, { quotient }, "rounded.result");
+            }
+
+            [[nodiscard]] auto
+            IntegerPowerFunction(llvm::IntegerType *type) -> llvm::Function *
+            {
+                const auto name = "__vxs_pow_i" + std::to_string(type->getBitWidth());
+                if (auto *existing = module.getFunction(name))
+                    return existing;
+
+                auto *functionType = llvm::FunctionType::get(type, { type, type }, false);
+                auto *function = llvm::Function::Create(
+                    functionType,
+                    llvm::GlobalValue::InternalLinkage,
+                    name,
+                    module);
+                auto argument = function->arg_begin();
+                auto *baseArgument = &*argument++;
+                auto *exponentArgument = &*argument;
+                baseArgument->setName("base");
+                exponentArgument->setName("exponent");
+
+                auto *entry = llvm::BasicBlock::Create(context, "entry", function);
+                auto *loop = llvm::BasicBlock::Create(context, "loop", function);
+                auto *body = llvm::BasicBlock::Create(context, "body", function);
+                auto *exit = llvm::BasicBlock::Create(context, "exit", function);
+                llvm::IRBuilder<> powerBuilder(entry);
+                powerBuilder.CreateBr(loop);
+
+                powerBuilder.SetInsertPoint(loop);
+                auto *result = powerBuilder.CreatePHI(type, 2U, "result");
+                auto *base = powerBuilder.CreatePHI(type, 2U, "factor");
+                auto *exponent = powerBuilder.CreatePHI(type, 2U, "remaining");
+                auto *zero = llvm::ConstantInt::get(type, 0U);
+                auto *one = llvm::ConstantInt::get(type, 1U);
+                result->addIncoming(one, entry);
+                base->addIncoming(baseArgument, entry);
+                exponent->addIncoming(exponentArgument, entry);
+                powerBuilder.CreateCondBr(powerBuilder.CreateICmpNE(exponent, zero), body, exit);
+
+                powerBuilder.SetInsertPoint(body);
+                auto *odd = powerBuilder.CreateICmpNE(powerBuilder.CreateAnd(exponent, one), zero, "odd");
+                auto *multiplied = powerBuilder.CreateMul(result, base, "multiplied");
+                auto *nextResult = powerBuilder.CreateSelect(odd, multiplied, result, "next.result");
+                auto *nextBase = powerBuilder.CreateMul(base, base, "next.factor");
+                auto *nextExponent = powerBuilder.CreateLShr(exponent, one, "next.remaining");
+                powerBuilder.CreateBr(loop);
+                result->addIncoming(nextResult, body);
+                base->addIncoming(nextBase, body);
+                exponent->addIncoming(nextExponent, body);
+
+                powerBuilder.SetInsertPoint(exit);
+                powerBuilder.CreateRet(result);
+                return function;
             }
 
             [[nodiscard]] auto
@@ -882,14 +963,48 @@ namespace Visual::XSharp::Backend::LLVM
                                                    : builder.CreateSDiv(operands[0], operands[1], "div");
                         break;
                     case xmm::Opcode::FloorDivide:
-                        result = floating          ? LowerFloatingFloorDiv(builder, operands[0], operands[1])
-                                 : unsignedInteger ? builder.CreateUDiv(operands[0], operands[1], "floor.result")
-                                                   : LowerFloorDiv(builder, operands[0], operands[1]);
+                        result = floating          ? LowerFloatingRoundedDiv(builder, operands[0], operands[1])
+                                 : unsignedInteger ? LowerUnsignedRoundedDiv(builder, operands[0], operands[1])
+                                                   : LowerSignedRoundedDiv(builder, operands[0], operands[1]);
                         break;
                     case xmm::Opcode::Remainder:
                         result = floating          ? builder.CreateFRem(operands[0], operands[1], "rem")
                                  : unsignedInteger ? builder.CreateURem(operands[0], operands[1], "rem")
                                                    : builder.CreateSRem(operands[0], operands[1], "rem");
+                        break;
+                    case xmm::Opcode::Power:
+                        if (floating)
+                        {
+                            auto *intrinsic = llvm::Intrinsic::getOrInsertDeclaration(
+                                &module,
+                                llvm::Intrinsic::pow,
+                                { operands[0]->getType() });
+                            result = builder.CreateCall(intrinsic, { operands[0], operands[1] }, "power");
+                        }
+                        else
+                            result = builder.CreateCall(
+                                IntegerPowerFunction(llvm::cast<llvm::IntegerType>(operands[0]->getType())),
+                                { operands[0], operands[1] },
+                                "power");
+                        break;
+                    case xmm::Opcode::ShiftLeft:
+                        result = builder.CreateShl(operands[0], operands[1], "shift.left");
+                        break;
+                    case xmm::Opcode::ShiftRight:
+                        result = unsignedInteger ? builder.CreateLShr(operands[0], operands[1], "shift.right")
+                                                 : builder.CreateAShr(operands[0], operands[1], "shift.right");
+                        break;
+                    case xmm::Opcode::BitwiseAnd:
+                        result = builder.CreateAnd(operands[0], operands[1], "bitwise.and");
+                        break;
+                    case xmm::Opcode::BitwiseXor:
+                        result = builder.CreateXor(operands[0], operands[1], "bitwise.xor");
+                        break;
+                    case xmm::Opcode::BitwiseOr:
+                        result = builder.CreateOr(operands[0], operands[1], "bitwise.or");
+                        break;
+                    case xmm::Opcode::BitwiseNot:
+                        result = builder.CreateNot(operands[0], "bitwise.not");
                         break;
                     case xmm::Opcode::CompareLess:
                         result = floating          ? builder.CreateFCmpOLT(operands[0], operands[1], "less")

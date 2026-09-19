@@ -240,14 +240,14 @@ TEST_CASE("verified Xmm lowers to valid in-memory LLVM IR and bitcode")
     REQUIRE(HasValidBitcodeMagic(result.artifact->bitcode));
 }
 
-TEST_CASE("LLVM lowering preserves signed floor division semantics in IR")
+TEST_CASE("LLVM lowering preserves signed rounded division semantics in IR")
 {
     const auto result = LowerModule(ArithmeticModule(), Llvm::OptimizationLevel::Debug);
     REQUIRE(result);
     REQUIRE(result.artifact->llvm_ir.find("sdiv i64") != std::string::npos);
     REQUIRE(result.artifact->llvm_ir.find("srem i64") != std::string::npos);
-    REQUIRE(result.artifact->llvm_ir.find("floor.adjust") != std::string::npos);
-    REQUIRE(result.artifact->llvm_ir.find("floor.result") != std::string::npos);
+    REQUIRE(result.artifact->llvm_ir.find("rounded.adjust") != std::string::npos);
+    REQUIRE(result.artifact->llvm_ir.find("rounded.result") != std::string::npos);
 }
 
 TEST_CASE("Visual X# String literals use Unicode scalar storage instead of UTF-8 bytes")
@@ -349,26 +349,27 @@ TEST_CASE("LLVM ordered comparison chooses signed unsigned and floating predicat
     CHECK(floatingResult.artifact->llvm_ir.find("fcmp olt float") != std::string::npos);
 }
 
-TEST_CASE("LLVM floor division distinguishes signed unsigned and floating semantics")
+TEST_CASE("LLVM rounded division distinguishes signed unsigned and floating semantics")
 {
     const auto signedResult = LowerModule(
         BinaryScalarOperation(Type::int32(), Operation::FloorDivide),
         Llvm::OptimizationLevel::Debug);
     REQUIRE(signedResult);
-    CHECK(signedResult.artifact->llvm_ir.find("floor.adjust") != std::string::npos);
+    CHECK(signedResult.artifact->llvm_ir.find("rounded.same.sign") != std::string::npos);
 
     const auto unsignedResult = LowerModule(
         BinaryScalarOperation(Type::uint32(), Operation::FloorDivide),
         Llvm::OptimizationLevel::Debug);
     REQUIRE(unsignedResult);
     CHECK(unsignedResult.artifact->llvm_ir.find("udiv i32") != std::string::npos);
-    CHECK(unsignedResult.artifact->llvm_ir.find("floor.adjust") == std::string::npos);
+    CHECK(unsignedResult.artifact->llvm_ir.find("rounded.same.sign") == std::string::npos);
+    CHECK(unsignedResult.artifact->llvm_ir.find("rounded.threshold") != std::string::npos);
 
     const auto floatingResult = LowerModule(
         BinaryScalarOperation(Type::float32(), Operation::FloorDivide),
         Llvm::OptimizationLevel::Debug);
     REQUIRE(floatingResult);
-    CHECK(floatingResult.artifact->llvm_ir.find("llvm.floor.f32") != std::string::npos);
+    CHECK(floatingResult.artifact->llvm_ir.find("llvm.round.f32") != std::string::npos);
 }
 
 TEST_CASE("Xmm lowering retains function identities signatures and result types")

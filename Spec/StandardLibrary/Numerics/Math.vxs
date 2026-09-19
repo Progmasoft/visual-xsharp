@@ -49,10 +49,10 @@ public object Math {
 --   conversion that ordinary Visual X# expressions do not have.
 
 long small = -12;
-long sameWidth = Math.Abs(small); // long
+long sameWidth = Math.Abs(small); -- long
 
 float angle = 1.0;
-float sine = Math.Sin(angle); // float
+float sine = Math.Sin(angle); -- float
 
 -- INVALID: there is no mixed-width Pow overload.
 float invalid = Math.Pow(2.0, lfloatValue);
@@ -131,8 +131,8 @@ public object Math {
 -- Demonstrates: Clamp requires minimum <= maximum and raises ArithmeticException otherwise. Floating
 --   Min, Max, and Clamp propagate NaN. Min(-0.0, +0.0) is -0.0; Max(-0.0, +0.0) is +0.0.
 
-float bounded = Math.Clamp(12.5, 0.0, 10.0); // 10.0
-float unknown = Math.Min(Math.Sqrt(-1.0), 1.0); // NaN
+float bounded = Math.Clamp(12.5, 0.0, 10.0); -- 10.0
+float unknown = Math.Min(Math.Sqrt(-1.0), 1.0); -- NaN
 
 -- ============================================================================
 -- Example 7: 5. Sign and Magnitude
@@ -162,7 +162,7 @@ public object Math {
     public ulongint Magnitude(_ longint value);
 }
 
-uint magnitude = Math.Magnitude(intMinimum); // representable even for the minimum int
+uint magnitude = Math.Magnitude(intMinimum); -- representable even for the minimum int
 
 -- ============================================================================
 -- Example 8: 6. Integer Number Theory
@@ -195,8 +195,8 @@ public object Math {
     public ulongint LeastCommonMultiple(_ ulongint left, _ ulongint right);
 }
 
-int divisor = Math.GreatestCommonDivisor(84, 30); // 6
-int multiple = Math.LeastCommonMultiple(21, 6);   // 42
+int divisor = Math.GreatestCommonDivisor(84, 30); -- 6
+int multiple = Math.LeastCommonMultiple(21, 6);   -- 42
 
 -- ============================================================================
 -- Example 9: 7. Rounding Modes
@@ -253,8 +253,8 @@ public object Math {
     public double Round(_ double value, digits: int, mode: MidpointRounding);
 }
 
-float bankers = Math.Round(2.5); // 2.0
-float outward = Math.Round(2.5, mode: .AwayFromZero); // 3.0
+float bankers = Math.Round(2.5); -- 2.0
+float outward = Math.Round(2.5, mode: .AwayFromZero); -- 3.0
 
 -- ============================================================================
 -- Example 11: 8. Roots, Powers, and Exponentials
@@ -332,8 +332,8 @@ float stableSmallExp = Math.Expm1(0.0000001);
 --   type; they do not turn a total floating operation into an exception. For example, Sqrt(-1.0)
 --   and Log(-1.0) are NaN, Log(0.0) is negative infinity, and Exp overflow is positive infinity.
 
-float notReal = Math.Sqrt(-1.0); // NaN
-float pole = Math.Log(0.0);      // negative infinity
+float notReal = Math.Sqrt(-1.0); -- NaN
+float pole = Math.Log(0.0);      -- negative infinity
 
 -- ============================================================================
 -- Example 13: 9. Trigonometry
@@ -455,8 +455,8 @@ public object Math {
     public double FusedMultiplyAdd(_ double left, _ double right, _ double addend);
 }
 
-float signedZero = Math.CopySign(0.0, -1.0); // -0.0
-float exactStep = Math.FusedMultiplyAdd(left, right, addend); // one final rounding
+float signedZero = Math.CopySign(0.0, -1.0); -- -0.0
+float exactStep = Math.FusedMultiplyAdd(left, right, addend); -- one final rounding
 
 -- ============================================================================
 -- Example 16: 12. Floating-Point Classification
@@ -496,7 +496,7 @@ public object Math {
     public bool SignBit(_ double value);
 }
 
-bool negativeZero = Math.SignBit(Math.CopySign(0.0, -1.0)); // true
+bool negativeZero = Math.SignBit(Math.CopySign(0.0, -1.0)); -- true
 
 -- ============================================================================
 -- Example 17: 13. Magnitude Ordering
@@ -515,7 +515,7 @@ public object Math {
     public double MaxMagnitude(_ double left, _ double right);
 }
 
-float nearer = Math.MinMagnitude(-2.0, 3.0); // -2.0
+float nearer = Math.MinMagnitude(-2.0, 3.0); -- -2.0
 
 -- ============================================================================
 -- Example 18: 14. Accurate Angle Multiples
@@ -540,7 +540,7 @@ public object Math {
     public double TanPi(_ double value);
 }
 
-float exactSine = Math.SinPi(0.5); // 1.0
+float exactSine = Math.SinPi(0.5); -- 1.0
 
 -- ============================================================================
 -- Example 19: 15. Interpolation
@@ -555,8 +555,8 @@ public object Math {
     public double Lerp(_ double start, _ double end, amount: double);
 }
 
-float midpoint = Math.Lerp(10.0, 20.0, amount: 0.5); // 15.0
-float beyond = Math.Lerp(10.0, 20.0, amount: 1.5);   // 25.0
+float midpoint = Math.Lerp(10.0, 20.0, amount: 0.5); -- 15.0
+float beyond = Math.Lerp(10.0, 20.0, amount: 1.5);   -- 25.0
 
 -- ============================================================================
 -- Example 20: 16. Precision and Reproducibility
@@ -576,7 +576,7 @@ float reproducible = Math.FusedMultiplyAdd(0.1, 10.0, -1.0);
 --   programs test it with IsNaN rather than comparing payload bits. CopySign and SignBit are the
 --   explicit surfaces for sign-sensitive zero behavior.
 
-bool invalidRoot = Math.IsNaN(Math.Sqrt(-1.0)); // true
+bool invalidRoot = Math.IsNaN(Math.Sqrt(-1.0)); -- true
 
 -- ============================================================================
 -- Example 22: 18. Deliberate Exclusions
@@ -585,9 +585,9 @@ bool invalidRoot = Math.IsNaN(Math.Sqrt(-1.0)); // true
 --   namespaces. Math does not duplicate ordinary operators, collection Min/Max, or numeric parsing.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-Math.Random();              // INVALID: no hidden process-global random generator
-Math.Parse("3.14");         // INVALID: parsing belongs to numeric types
-Math.Sum(values);           // INVALID: aggregation belongs to BLINQ/collections
+Math.Random();              -- INVALID: no hidden process-global random generator
+Math.Parse("3.14");         -- INVALID: parsing belongs to numeric types
+Math.Sum(values);           -- INVALID: aggregation belongs to BLINQ/collections
 
 -- ============================================================================
 -- Example 23: 19. No Construction or Inheritance
@@ -595,7 +595,7 @@ Math.Sum(values);           // INVALID: aggregation belongs to BLINQ/collections
 --   inherited, or stored as a value-type utility instance, and exposes no mutable process state.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-new Math(); // INVALID
+new Math(); -- INVALID
 
-class CustomMath : Math { // INVALID
+class CustomMath : Math { -- INVALID
 }

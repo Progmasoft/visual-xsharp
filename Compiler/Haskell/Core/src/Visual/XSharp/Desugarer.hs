@@ -189,6 +189,7 @@ lowerTemplateArgument argument = case argument of
 lowerUnary :: UnaryOperator -> CorePrimitive
 lowerUnary UnaryNegate = CoreNegate
 lowerUnary LogicalNot = CoreLogicalNot
+lowerUnary BitwiseNot = CoreBitwiseNot
 lowerUnary UnaryPlus = CoreAdd
 lowerBinary :: BinaryOperator -> CorePrimitive
 lowerBinary operator = case operator of
@@ -198,6 +199,12 @@ lowerBinary operator = case operator of
     Divide -> CoreDivide
     FloorDivide -> CoreFloorDivide
     Remainder -> CoreRemainder
+    Power -> CorePower
+    ShiftLeft -> CoreShiftLeft
+    ShiftRight -> CoreShiftRight
+    BitwiseAnd -> CoreBitwiseAnd
+    BitwiseXor -> CoreBitwiseXor
+    BitwiseOr -> CoreBitwiseOr
     LessThan -> CoreLessThan
     LessEqual -> CoreLessEqual
     GreaterThan -> CoreGreaterThan

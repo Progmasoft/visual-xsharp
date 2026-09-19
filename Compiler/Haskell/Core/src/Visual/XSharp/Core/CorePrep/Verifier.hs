@@ -97,7 +97,7 @@ verifyPrimitive primitive atoms resultType
     | any ((== ErrorType) . atomType) atoms = [problem "VXC0008" "CorePrep primitive contains an unresolved type"]
     | otherwise = operandProblems ++ resultProblems
     where
-        expectedArity = if primitive `elem` [Core.CoreNegate, Core.CoreLogicalNot] then 1 else 2
+        expectedArity = if primitive `elem` [Core.CoreNegate, Core.CoreLogicalNot, Core.CoreBitwiseNot] then 1 else 2
         comparisonOrLogical =
             if primitive
                 `elem` [ Core.CoreLessThan
@@ -116,12 +116,23 @@ verifyPrimitive primitive atoms resultType
         firstType = case operandTypes of valueType : _ -> valueType; [] -> ErrorType
         operandsAgree = all (== firstType) operandTypes
         logical = primitive `elem` [Core.CoreLogicalAnd, Core.CoreLogicalOr, Core.CoreLogicalNot]
+        integerOnly =
+            primitive
+                `elem` [ Core.CoreShiftLeft
+                       , Core.CoreShiftRight
+                       , Core.CoreBitwiseAnd
+                       , Core.CoreBitwiseXor
+                       , Core.CoreBitwiseOr
+                       , Core.CoreBitwiseNot
+                       ]
         numeric = all isNumericType operandTypes
+        integer = all isIntegerType operandTypes
         booleanContext = all (\valueType -> valueType == boolType || isNumericType valueType) operandTypes
         negatable = isSignedIntegerType firstType || isFloatingType firstType
         operandProblems
             | not operandsAgree = [problem "VXC0019" "CorePrep primitive operand types do not agree"]
             | logical && not booleanContext = [problem "VXC0020" "CorePrep logical primitive requires bool or numeric operands"]
+            | integerOnly && not integer = [problem "VXC0022" "CorePrep bitwise primitive requires integer operands"]
             | primitive == Core.CoreNegate && not negatable =
                 [problem "VXC0021" "CorePrep negation requires a signed integer or floating operand"]
             | not logical && not numeric && primitive `notElem` [Core.CoreEqual, Core.CoreNotEqual] =

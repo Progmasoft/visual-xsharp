@@ -79,7 +79,7 @@ auto add = \(int x, int y) -> x + y;
 -- Demonstrates: No syntax of the following form exists merely to spell a lambda return type:
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-\ -> T { // INVALID
+\ -> T { -- INVALID
 }
 
 -- ============================================================================
@@ -127,7 +127,7 @@ async Task<void> Work() {
 -- Demonstrates: It is not a top-level declaration or top-level executable construct.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-await task; // INVALID at top level
+await task; -- INVALID at top level
 
 -- ============================================================================
 -- Example 17: 8.1 Awaiting Task<T>
@@ -189,7 +189,7 @@ async Task<void> Work() {
 
 await {
     Work();
-} // INVALID at top level
+} -- INVALID at top level
 
 -- ============================================================================
 -- Example 24: 10. Scheduler-backed concurrency with Task.Run(...)
@@ -231,7 +231,7 @@ async Task<void> Work() throws IOException {
         throw new IOException();
     });
 
-    await task; // IOException propagates here
+    await task; -- IOException propagates here
 }
 
 -- ============================================================================
@@ -293,7 +293,7 @@ void Start() {
         Console.Println(message);
     });
 
-    Console.Println(message); // VALID
+    Console.Println(message); -- VALID
 }
 
 -- ============================================================================
@@ -308,7 +308,7 @@ void Start() {
         Console.Println(message);
     });
 
-    Console.Println(message); // INVALID: message was moved
+    Console.Println(message); -- INVALID: message was moved
 }
 
 -- ============================================================================

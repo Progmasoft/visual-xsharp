@@ -6,5 +6,8 @@ cc_library(
     name = "arguments",
     srcs = ["Options.cpp"],
     hdrs = ["Options.hpp"],
-    deps = ["@fmt//:fmt"],
+    deps = [
+        "@fmt//:fmt",
+        "@tabulate//:tabulate",
+    ],
 )

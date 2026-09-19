@@ -201,6 +201,13 @@ namespace visual_xsharp::core
                 case Operation::FloorDivide:
                 case Operation::Remainder:
                 case Operation::Negate:
+                case Operation::Power:
+                case Operation::ShiftLeft:
+                case Operation::ShiftRight:
+                case Operation::BitwiseAnd:
+                case Operation::BitwiseXor:
+                case Operation::BitwiseOr:
+                case Operation::BitwiseNot:
                     return operands.empty() ? std::nullopt : std::optional<Type>(operands.front().type);
                 case Operation::MakeClosure:
                     return std::nullopt;
@@ -296,6 +303,19 @@ namespace visual_xsharp::core
                 case Operation::LogicalNot:
                     if (arity != 1U || !accepts_boolean_context(instruction.operands.front().type))
                         issues.push_back(issue("VXC1029", "logical not requires one bool or numeric operand", function, block));
+                    break;
+                case Operation::BitwiseNot:
+                    if (arity != 1U || !is_integer(instruction.operands.front().type))
+                        issues.push_back(issue("VXC1052", "bitwise not requires one integer operand", function, block));
+                    break;
+                case Operation::ShiftLeft:
+                case Operation::ShiftRight:
+                case Operation::BitwiseAnd:
+                case Operation::BitwiseXor:
+                case Operation::BitwiseOr:
+                    if (arity != 2U || !is_integer(instruction.operands.front().type)
+                        || instruction.operands.front().type != instruction.operands.back().type)
+                        issues.push_back(issue("VXC1053", "bitwise operation requires two equal integer operands", function, block));
                     break;
                 case Operation::LogicalAnd:
                 case Operation::LogicalOr:

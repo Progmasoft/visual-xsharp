@@ -197,17 +197,20 @@ primitiveProblems primitive arguments resultType =
         ++ operandProblems
         ++ typeMismatch "VXC1028" "Core primitive result has the wrong type" expectedResult resultType
     where
-        unary = primitive `elem` [CoreNegate, CoreLogicalNot]
+        unary = primitive `elem` [CoreNegate, CoreLogicalNot, CoreBitwiseNot]
         logical = primitive `elem` [CoreLogicalAnd, CoreLogicalOr, CoreLogicalNot]
+        integerOnly = primitive `elem` [CoreShiftLeft, CoreShiftRight, CoreBitwiseAnd, CoreBitwiseXor, CoreBitwiseOr, CoreBitwiseNot]
         comparison = primitive `elem` [CoreLessThan, CoreLessEqual, CoreGreaterThan, CoreGreaterEqual, CoreEqual, CoreNotEqual]
         arity = if unary then 1 else 2
         argumentTypes = map expressionType arguments
         firstType = case argumentTypes of first : _ -> first; [] -> ErrorType
         operandsAgree = all (== firstType) argumentTypes
         operandsNumeric = all isCoreNumericType argumentTypes
+        operandsInteger = all isCoreIntegerType argumentTypes
         operandsBoolean = all (\valueType -> valueType == boolType || isCoreNumericType valueType) argumentTypes
         operandProblems
             | logical && not operandsBoolean = [problem "VXC1027" "Core logical primitive requires bool or numeric operands"]
+            | integerOnly && not operandsInteger = [problem "VXC1027" "Core bitwise primitive requires integer operands"]
             | primitive `elem` [CoreEqual, CoreNotEqual] && firstType == boolType && operandsAgree = []
             | not logical && not operandsNumeric = [problem "VXC1027" "Core numeric primitive requires numeric operands"]
             | not logical && not operandsAgree = [problem "VXC1027" "Core numeric primitive operands must have the same type"]

@@ -728,7 +728,7 @@ using MyLibrary;
 -- Example 83: 43. using a C module
 -- Demonstrates: Visual X# source:
 
-// Foo.vxs
+-- Foo.vxs
 using MyLibrary;
 
 -- ============================================================================

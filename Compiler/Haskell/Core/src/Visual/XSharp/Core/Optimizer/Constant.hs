@@ -6,6 +6,7 @@ module Visual.XSharp.Core.Optimizer.Constant
     , simplifyExpression
     ) where
 
+import Data.Bits (complement, shiftL, shiftR, (.&.), (.|.), xor)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
@@ -101,9 +102,16 @@ evaluatePrimitive primitive arguments valueType =
         (CoreSubtract, Just [a, b]) -> integer (a - b)
         (CoreMultiply, Just [a, b]) -> integer (a * b)
         (CoreDivide, Just [a, b]) | b /= 0 -> integer (a `quot` b)
-        (CoreFloorDivide, Just [a, b]) | b /= 0 -> integer (a `div` b)
+        (CoreFloorDivide, Just [a, b]) | b /= 0 -> integer (roundedIntegerDivision a b)
         (CoreRemainder, Just [a, b]) | b /= 0 -> integer (a `rem` b)
         (CoreNegate, Just [value]) -> integer (-value)
+        (CorePower, Just [base, exponentValue]) | exponentValue >= 0 -> integer (base ^ exponentValue)
+        (CoreShiftLeft, Just [value, amount]) | amount >= 0 -> integer (shiftL value (fromInteger amount))
+        (CoreShiftRight, Just [value, amount]) | amount >= 0 -> integer (shiftR value (fromInteger amount))
+        (CoreBitwiseAnd, Just [a, b]) -> integer (a .&. b)
+        (CoreBitwiseXor, Just [a, b]) -> integer (xor a b)
+        (CoreBitwiseOr, Just [a, b]) -> integer (a .|. b)
+        (CoreBitwiseNot, Just [value]) -> integer (complement value)
         (CoreLessThan, Just [a, b]) -> Just (boolean (a < b))
         (CoreLessEqual, Just [a, b]) -> Just (boolean (a <= b))
         (CoreGreaterThan, Just [a, b]) -> Just (boolean (a > b))
@@ -116,6 +124,12 @@ evaluatePrimitive primitive arguments valueType =
             | integerFitsCoreType valueType result = Just (CoreLiteral (CoreInteger result) valueType)
             | otherwise = Nothing
         boolean result = CoreLiteral (CoreBoolean result) boolType
+
+roundedIntegerDivision :: Integer -> Integer -> Integer
+roundedIntegerDivision dividend divisor =
+    let (quotient, remainder) = dividend `quotRem` divisor
+        adjustment = signum dividend * signum divisor
+     in if 2 * abs remainder >= abs divisor then quotient + adjustment else quotient
 
 evaluateBoolean :: CorePrimitive -> [CoreExpression] -> Maybe CoreExpression
 evaluateBoolean primitive arguments = case (primitive, mapM truthValue arguments) of

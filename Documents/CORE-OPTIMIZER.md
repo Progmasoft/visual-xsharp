@@ -141,12 +141,12 @@ The integer operations currently folded are:
 | subtract | exact subtraction followed by range validation |
 | multiply | exact multiplication followed by range validation |
 | divide | truncation toward zero when the divisor is nonzero |
-| floor divide | rounding toward negative infinity when nonzero |
+| rounded divide | nearest integer, with exact halves away from zero |
 | remainder | remainder paired with truncating division |
 | negate | exact unary negation followed by range validation |
 | comparisons | a boolean literal result |
 
-Division, floor division, and remainder by zero remain explicit. Removing them
+Division, rounded division, and remainder by zero remain explicit. Removing them
 would erase the later stage's required failure behavior.
 
 ## Floating constants
@@ -407,7 +407,7 @@ Focused tests cover:
 - every scalar family and representative range boundary;
 - ASCII-only floating spelling validation;
 - arithmetic, comparison, and logical constant folding;
-- truncating division versus floor division;
+- truncating division versus nearest-integer rounded division;
 - zero divisors and overflow preservation;
 - immutable propagation and mutable invalidation;
 - algebraic identities and numeric boolean conversion;

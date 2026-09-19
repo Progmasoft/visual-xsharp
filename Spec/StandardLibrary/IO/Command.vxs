@@ -304,7 +304,7 @@ bool exited =
 -- Example 29: 18. Wait(forExit:)
 -- Demonstrates: Example:
 
-if (!handle.Wait(
+if (not handle.Wait(
         forExit: Duration.Of(seconds: 5)
     )) {
     handle.Terminate();
@@ -385,8 +385,8 @@ bool failure =
 -- Example 40: 22. Process state predicates
 -- Demonstrates: While the process is still running:
 
-handle.Is(successful:); // false
-handle.Is(failure:);    // false
+handle.Is(successful:); -- false
+handle.Is(failure:);    -- false
 
 -- ============================================================================
 -- Example 41: 25.1 IllegalArgumentException
@@ -473,12 +473,12 @@ CommandHandle command =
         )
         .Start();
 
-if (!command.Wait(
+if (not command.Wait(
         forExit: Duration.Of(seconds: 5)
     )) {
     command.Terminate();
 
-    if (!command.Wait(
+    if (not command.Wait(
             forExit: Duration.Of(seconds: 2)
         )) {
         command.Kill();

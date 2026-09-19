@@ -90,6 +90,20 @@ namespace Visual::XSharp::Core::CorePrep
                     return Prepared::Operation::Negate;
                 case Primitive::LogicalNot:
                     return Prepared::Operation::LogicalNot;
+                case Primitive::Power:
+                    return Prepared::Operation::Power;
+                case Primitive::ShiftLeft:
+                    return Prepared::Operation::ShiftLeft;
+                case Primitive::ShiftRight:
+                    return Prepared::Operation::ShiftRight;
+                case Primitive::BitwiseAnd:
+                    return Prepared::Operation::BitwiseAnd;
+                case Primitive::BitwiseXor:
+                    return Prepared::Operation::BitwiseXor;
+                case Primitive::BitwiseOr:
+                    return Prepared::Operation::BitwiseOr;
+                case Primitive::BitwiseNot:
+                    return Prepared::Operation::BitwiseNot;
             }
             // Reaching this point means the Core enum and adapter diverged.
             // C++20 has no std::unreachable; abort explicitly instead of

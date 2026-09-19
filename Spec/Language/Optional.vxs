@@ -29,9 +29,9 @@ Optional<String> FindUser() {
 
 Optional<String> value = null;
 
-value.HasValue();          // false
-value.ValueOr("Unknown");  // "Unknown"
-value.Value();             // System.InvalidOperationException
+value.HasValue();          -- false
+value.ValueOr("Unknown");  -- "Unknown"
+value.Value();             -- System.InvalidOperationException
 
 -- ============================================================================
 -- Example 4: Value Present
@@ -40,9 +40,9 @@ value.Value();             // System.InvalidOperationException
 
 Optional<String> value = new Optional("Wolf");
 
-value.HasValue();          // true
-value.Value();             // "Wolf"
-value.ValueOr("Unknown");  // "Wolf"
+value.HasValue();          -- true
+value.Value();             -- "Wolf"
+value.ValueOr("Unknown");  -- "Wolf"
 
 -- ============================================================================
 -- Example 5: Value Present with a Null Reference Payload
@@ -51,9 +51,9 @@ value.ValueOr("Unknown");  // "Wolf"
 
 Optional<String> value = new Optional(null);
 
-value.HasValue();          // true
-value.Value();             // null
-value.ValueOr("Unknown");  // null
+value.HasValue();          -- true
+value.Value();             -- null
+value.ValueOr("Unknown");  -- null
 
 -- ============================================================================
 -- Example 6: VALID
@@ -88,4 +88,4 @@ String result = value.ValueOr("Unknown");
 -- Demonstrates: Calling Value() on an empty Optional does not produce a normal value:
 
 Optional<String> value = null;
-String result = value.Value(); // System.InvalidOperationException
+String result = value.Value(); -- System.InvalidOperationException

@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 // Raw argv spellings are consumed by the C++20 parser and become this typed
 // driver model. Strings remain only for values that are intrinsically textual.
@@ -109,6 +110,7 @@ struct XsCliOptions
     std::optional<std::filesystem::path> filePath;
     std::optional<std::string> packageCoordinate;
     std::optional<std::string> target;
+    std::vector<std::string> programArguments;
     std::string compilerVersion;
     std::string standard;
     XsBuildOutput output;

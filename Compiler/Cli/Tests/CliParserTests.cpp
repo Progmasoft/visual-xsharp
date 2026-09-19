@@ -184,6 +184,30 @@ TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")
     REQUIRE(options.llvmOptOverride);
 }
 
+TEST_CASE("double dash forwards exact program arguments only for run", "[cli][parser]")
+{
+    const ParsedInvocation run{
+        "vxs",
+        "run",
+        "-File",
+        "Program.vxs",
+        "--",
+        "--server-option",
+        "value with spaces",
+        "-1",
+    };
+    REQUIRE(run.Result() == XS_CLI_PARSE_READY);
+    REQUIRE(run.Options().programArguments == std::vector<std::string>{ "--server-option", "value with spaces", "-1" });
+
+    const ParsedInvocation emptyTail{ "vxs", "run", "--" };
+    REQUIRE(emptyTail.Result() == XS_CLI_PARSE_READY);
+    REQUIRE(emptyTail.Options().programArguments.empty());
+
+    const ParsedInvocation build{ "vxs", "build", "--", "unexpected" };
+    REQUIRE(build.Result() == XS_CLI_PARSE_ERROR);
+    REQUIRE(build.Diagnostic() == "-- is only valid for run program arguments");
+}
+
 TEST_CASE("command and option spellings are case-sensitive", "[cli][parser]")
 {
     REQUIRE(ParsedInvocation{ "vxs", "Build" }.Result() == XS_CLI_PARSE_ERROR);

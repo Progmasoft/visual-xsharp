@@ -33,6 +33,13 @@ data CorePrimitive
     | CoreLogicalOr
     | CoreNegate
     | CoreLogicalNot
+    | CorePower
+    | CoreShiftLeft
+    | CoreShiftRight
+    | CoreBitwiseAnd
+    | CoreBitwiseXor
+    | CoreBitwiseOr
+    | CoreBitwiseNot
     deriving (Eq, Ord, Read, Show)
 data CoreExpression
     = CoreVariable ResolvedName Type

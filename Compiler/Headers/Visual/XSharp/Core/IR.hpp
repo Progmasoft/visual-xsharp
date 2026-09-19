@@ -35,7 +35,14 @@ namespace Visual::XSharp::Core
         LogicalAnd,
         LogicalOr,
         Negate,
-        LogicalNot
+        LogicalNot,
+        Power,
+        ShiftLeft,
+        ShiftRight,
+        BitwiseAnd,
+        BitwiseXor,
+        BitwiseOr,
+        BitwiseNot
     };
 
     using CaptureMode = ::visual_xsharp::core::CaptureMode;

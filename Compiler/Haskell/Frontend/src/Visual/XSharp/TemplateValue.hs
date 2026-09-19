@@ -16,12 +16,14 @@ module Visual.XSharp.TemplateValue
     ) where
 
 import Visual.XSharp.AST
+import Data.Bits (complement, shiftL, shiftR, (.&.), (.|.), xor)
 
 data TemplateValueError
     = TemplateValueIsNotConstant QualifiedName
     | TemplateValueDivisionByZero
     | TemplateValueFloorDivisionByZero
     | TemplateValueRemainderByZero
+    | TemplateValueNegativeExponent Integer
     | TemplateValueRequiresInteger TemplateValue
     | TemplateValueNegativeArraySize Integer
     deriving (Eq, Ord, Read, Show)
@@ -64,6 +66,7 @@ evaluateUnary operator value = case operator of
     UnaryPlus -> ExactInteger <$> requireInteger value
     UnaryNegate -> ExactInteger . negate <$> requireInteger value
     LogicalNot -> ExactBoolean . not <$> requireBooleanContext value
+    BitwiseNot -> ExactInteger . complement <$> requireInteger value
 
 evaluateBinary :: BinaryOperator -> ExactValue -> ExactValue -> Either TemplateValueError ExactValue
 evaluateBinary operator left right = case operator of
@@ -79,12 +82,22 @@ evaluateBinary operator left right = case operator of
         divisor <- requireInteger right
         if divisor == 0
             then Left TemplateValueFloorDivisionByZero
-            else ExactInteger . (`div` divisor) <$> requireInteger left
+            else ExactInteger . (`roundedIntegerDivision` divisor) <$> requireInteger left
     Remainder -> do
         divisor <- requireInteger right
         if divisor == 0
             then Left TemplateValueRemainderByZero
             else ExactInteger . (`rem` divisor) <$> requireInteger left
+    Power -> do
+        exponentValue <- requireInteger right
+        if exponentValue < 0
+            then Left (TemplateValueNegativeExponent exponentValue)
+            else ExactInteger . (^ exponentValue) <$> requireInteger left
+    ShiftLeft -> integerBinary (\lhs rhs -> shiftL lhs (fromInteger rhs))
+    ShiftRight -> integerBinary (\lhs rhs -> shiftR lhs (fromInteger rhs))
+    BitwiseAnd -> integerBinary (.&.)
+    BitwiseXor -> integerBinary xor
+    BitwiseOr -> integerBinary (.|.)
     LessThan -> comparison (<)
     LessEqual -> comparison (<=)
     GreaterThan -> comparison (>)
@@ -106,6 +119,12 @@ evaluateBinary operator left right = case operator of
             lhs <- requireBooleanContext left
             rhs <- requireBooleanContext right
             Right (ExactBoolean (operation lhs rhs))
+
+roundedIntegerDivision :: Integer -> Integer -> Integer
+roundedIntegerDivision dividend divisor =
+    let (quotient, remainder) = dividend `quotRem` divisor
+        adjustment = signum dividend * signum divisor
+     in if 2 * abs remainder >= abs divisor then quotient + adjustment else quotient
 
 requireInteger :: ExactValue -> Either TemplateValueError Integer
 requireInteger value = case value of
@@ -141,6 +160,7 @@ renderTemplateValueError issue = case issue of
     TemplateValueDivisionByZero -> "template value performs division by zero"
     TemplateValueFloorDivisionByZero -> "template value performs floor division by zero"
     TemplateValueRemainderByZero -> "template value performs remainder by zero"
+    TemplateValueNegativeExponent value -> "template value uses a negative integer exponent: " ++ show value
     TemplateValueRequiresInteger _ -> "fixed System.Array size must evaluate to an integer"
     TemplateValueNegativeArraySize value -> "fixed System.Array size cannot be negative: " ++ show value
 

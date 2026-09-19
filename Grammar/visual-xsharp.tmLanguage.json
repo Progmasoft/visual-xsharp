@@ -298,7 +298,7 @@
         },
         {
           "name": "keyword.operator.word.visual-xsharp",
-          "match": "\\b(?:and|or|not|is|as|copy|move)\\b"
+          "match": "\\b(?:and|or|not|is|copy|move)\\b"
         },
         {
           "name": "keyword.other.accessor.visual-xsharp",
@@ -346,7 +346,7 @@
         },
         {
           "name": "keyword.operator.logical.visual-xsharp",
-          "match": "&&|\\|\\||!|\\?\\?"
+          "match": "&&|\\|\\||\\?\\?"
         },
         {
           "name": "keyword.operator.conditional.visual-xsharp",
@@ -354,7 +354,7 @@
         },
         {
           "name": "keyword.operator.bitwise.visual-xsharp",
-          "match": "<<|>>|[&|^~]"
+          "match": "<<|>>|[&|^!]"
         },
         {
           "name": "keyword.operator.increment.visual-xsharp",

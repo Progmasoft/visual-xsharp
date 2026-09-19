@@ -281,15 +281,23 @@ conditional-expression = coalescing-expression,
                          [ "?", [ expression ], ":", conditional-expression ] ;
 coalescing-expression = logical-or-expression, [ "??", coalescing-expression ] ;
 logical-or-expression = logical-and-expression,
-                        { ( "||" | "or" ), logical-and-expression } ;
+                        { "||", logical-and-expression } ;
 logical-and-expression = equality-expression,
-                         { ( "&&" | "and" ), equality-expression } ;
+                         { "&&", equality-expression } ;
 equality-expression = relational-expression,
                       [ ( "==" | "!=" | "\\=" ), relational-expression ] ;
 relational-expression = stepped-range-expression,
-                        [ relational-operator, stepped-range-expression ] ;
-relational-operator = "<" | "<=" | ">" | ">=" | "in"
-                    | "not", "in" | "is" | "as" | "as?" | "as!" ;
+                        [ relational-operator, stepped-range-expression
+                        | "is", pattern ] ;
+relational-operator = "<" | "<=" | ">" | ">=" ;
+pattern = or-pattern ;
+or-pattern = and-pattern, { "or", and-pattern } ;
+and-pattern = primary-pattern, { "and", primary-pattern } ;
+primary-pattern = "not", primary-pattern
+                | ( "<" | "<=" | ">" | ">=" | "==" | "!=" | "\\=" ), stepped-range-expression
+                | type
+                | literal
+                | "(", pattern, ")" ;
 stepped-range-expression = range-expression, [ "by", range-expression ] ;
 range-expression = bitwise-or-expression,
                    [ ( ".." | "..<" | "..." ), bitwise-or-expression ] ;

@@ -170,7 +170,7 @@ byte valid = 100 + 27;
 byte overflow = 100 + 28; // compile-time error
 ```
 
-Division, floor division, and remainder by a constant zero are diagnosed by
+Division, rounded division, and remainder by a constant zero are diagnosed by
 the type-checking pipeline. Nonconstant arithmetic remains available for
 later Core optimization and native lowering.
 

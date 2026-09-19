@@ -439,7 +439,7 @@ public class MariaDbCommand {
 -- Demonstrates: Sql is immutable.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-command.Sql = "SELECT 2"; // INVALID
+command.Sql = "SELECT 2"; -- INVALID
 
 -- ============================================================================
 -- Example 27: 17. Parameter markers
@@ -527,7 +527,7 @@ MariaDbCommand command =
 command.Bind(0, 10);
 
 command.ExecuteNonQuery();
-// unchecked MariaDbException
+-- unchecked MariaDbException
 
 -- ============================================================================
 -- Example 35: 21. ExecuteNonQuery
@@ -984,7 +984,7 @@ public enum MariaDbTransactionState {
 -- Example 69: 54. Transaction ownership
 -- Demonstrates: Commands do not receive a separate mutable property such as:
 
-command.Transaction = transaction; // not part of API
+command.Transaction = transaction; -- not part of API
 
 -- ============================================================================
 -- Example 70: 55. Nested BeginTransaction
@@ -995,7 +995,7 @@ MariaDbTransaction first =
 
 MariaDbTransaction second =
     connection.BeginTransaction();
-// unchecked MariaDbException
+-- unchecked MariaDbException
 
 -- ============================================================================
 -- Example 71: 56. Transaction completion
@@ -1003,7 +1003,7 @@ MariaDbTransaction second =
 
 transaction.Commit();
 transaction.Commit();
-// unchecked MariaDbException
+-- unchecked MariaDbException
 
 -- ============================================================================
 -- Example 72: 57. Snapshot transaction
@@ -1045,7 +1045,7 @@ public class MariaDbSavepoint {
 
 savepoint.Rollback();
 savepoint.Rollback();
-// unchecked MariaDbException
+-- unchecked MariaDbException
 
 -- ============================================================================
 -- Example 76: 59. MariaDbException
@@ -1190,7 +1190,7 @@ MariaDbConnection connection =
 lease.Release();
 
 connection.Ping();
-// unchecked MariaDbException
+-- unchecked MariaDbException
 
 -- ============================================================================
 -- Example 89: 78. Purpose
@@ -1486,7 +1486,7 @@ public class MySqlParameter {
 -- Example 98: 88. Query attributes boundary
 -- Demonstrates: Therefore there is no misleading overload such as:
 
-command.Bind("traceparent", value); // not a SQL named parameter
+command.Bind("traceparent", value); -- not a SQL named parameter
 
 -- ============================================================================
 -- Example 99: 89. MySqlReader

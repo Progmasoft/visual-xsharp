@@ -71,7 +71,7 @@ LocalTime leap =
         hour: 23,
         minute: 59,
         second: 60
-    ); // INVALID
+    ); -- INVALID
 
 -- ============================================================================
 -- Example 5: 2. LocalTime
@@ -206,7 +206,7 @@ new UtcOffset(
 new UtcOffset(
     hours: 5,
     minutes: -30
-); // INVALID
+); -- INVALID
 
 -- ============================================================================
 -- Example 15: 5. Instant
@@ -324,7 +324,7 @@ TimeZone utc =
 
 TimeZone.Of(
     "Mars/Olympus"
-); // TimeException(.INVALID_TIME_ZONE)
+); -- TimeException(.INVALID_TIME_ZONE)
 
 -- ============================================================================
 -- Example 22: 6. TimeZone
@@ -344,8 +344,8 @@ UtcOffset summer =
 -- Example 23: 6. TimeZone
 -- Demonstrates: The following properties do not exist:
 
-timeZone.Offset; // not defined
-timeZone.IsDst;  // not defined
+timeZone.Offset; -- not defined
+timeZone.IsDst;  -- not defined
 
 -- ============================================================================
 -- Example 24: 6. TimeZone
@@ -402,8 +402,8 @@ Instant instant =
 Clock clock =
     Clock.Fixed(instant);
 
-clock.Now() == instant; // true
-clock.Now() == instant; // true
+clock.Now() == instant; -- true
+clock.Now() == instant; -- true
 
 -- ============================================================================
 -- Example 28: 8. ZonedTime
@@ -486,7 +486,7 @@ ZonedTime newYork =
 
 istanbul.Instant
     ==
-newYork.Instant; // true
+newYork.Instant; -- true
 
 -- ============================================================================
 -- Example 32: 9. TimeFormat
@@ -537,19 +537,19 @@ String text =
 -- Demonstrates: Examples:
 
 istanbul.Format("HH:mm");
-// 13:42
+-- 13:42
 
 istanbul.Format("hh:mm a");
-// 01:42 PM
+-- 01:42 PM
 
 istanbul.Format("HH:mm:ss Z");
-// 13:42:18 +03:00
+-- 13:42:18 +03:00
 
 istanbul.Format("HH:mm L");
-// 13:42 İstanbul
+-- 13:42 İstanbul
 
 istanbul.Format("HH:mm:ss Z [z]");
-// 13:42:18 +03:00 [Europe/Istanbul]
+-- 13:42:18 +03:00 [Europe/Istanbul]
 
 -- ============================================================================
 -- Example 36: 11. TimeError
@@ -576,16 +576,16 @@ public class TimeException : RuntimeException {
 -- Demonstrates: Examples:
 
 LocalTime.Parse("25:10");
-// TimeException(.INVALID_TIME)
+-- TimeException(.INVALID_TIME)
 
 UtcOffset.Parse("+30:00");
-// TimeException(.INVALID_OFFSET)
+-- TimeException(.INVALID_OFFSET)
 
 TimeZone.Of("Mars/Olympus");
-// TimeException(.INVALID_TIME_ZONE)
+-- TimeException(.INVALID_TIME_ZONE)
 
 zonedTime.Format("HH:mm:???");
-// TimeException(.INVALID_PATTERN)
+-- TimeException(.INVALID_PATTERN)
 
 -- ============================================================================
 -- Example 39: 13. Stopwatch
@@ -625,9 +625,9 @@ Duration elapsed =
 -- Example 41: 13. Stopwatch
 -- Demonstrates: These APIs do not exist:
 
-watch.Now();      // not defined
-watch.Instant();  // not defined
-watch.TimeZone;   // not defined
+watch.Now();      -- not defined
+watch.Instant();  -- not defined
+watch.TimeZone;   -- not defined
 
 -- ============================================================================
 -- Example 42: 15. Current time in a location
@@ -713,7 +713,7 @@ ZonedTime newYork =
 
 istanbul.Instant
     ==
-newYork.Instant; // true
+newYork.Instant; -- true
 
 -- ============================================================================
 -- Example 47: 18. Fixed clock testing

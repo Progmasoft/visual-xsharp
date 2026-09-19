@@ -1,0 +1,28 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Keep the upstream repository pristine. The wrapper owns only Bazel metadata;
+# all library headers remain inside the pinned git submodule.
+cc_library(
+    name = "indicators",
+    hdrs = [
+        "upstream/include/indicators/block_progress_bar.hpp",
+        "upstream/include/indicators/color.hpp",
+        "upstream/include/indicators/cursor_control.hpp",
+        "upstream/include/indicators/cursor_movement.hpp",
+        "upstream/include/indicators/details/stream_helper.hpp",
+        "upstream/include/indicators/display_width.hpp",
+        "upstream/include/indicators/dynamic_progress.hpp",
+        "upstream/include/indicators/font_style.hpp",
+        "upstream/include/indicators/indeterminate_progress_bar.hpp",
+        "upstream/include/indicators/multi_progress.hpp",
+        "upstream/include/indicators/progress_bar.hpp",
+        "upstream/include/indicators/progress_spinner.hpp",
+        "upstream/include/indicators/progress_type.hpp",
+        "upstream/include/indicators/setting.hpp",
+        "upstream/include/indicators/termcolor.hpp",
+        "upstream/include/indicators/terminal_size.hpp",
+    ],
+    includes = ["upstream/include"],
+)

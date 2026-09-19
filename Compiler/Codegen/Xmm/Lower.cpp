@@ -98,6 +98,20 @@ namespace visual_xsharp::xmm
                     return Opcode::Negate;
                 case xpp::Opcode::LogicalNot:
                     return Opcode::NotBool;
+                case xpp::Opcode::Power:
+                    return Opcode::Power;
+                case xpp::Opcode::ShiftLeft:
+                    return Opcode::ShiftLeft;
+                case xpp::Opcode::ShiftRight:
+                    return Opcode::ShiftRight;
+                case xpp::Opcode::BitwiseAnd:
+                    return Opcode::BitwiseAnd;
+                case xpp::Opcode::BitwiseXor:
+                    return Opcode::BitwiseXor;
+                case xpp::Opcode::BitwiseOr:
+                    return Opcode::BitwiseOr;
+                case xpp::Opcode::BitwiseNot:
+                    return Opcode::BitwiseNot;
                 case xpp::Opcode::MakeClosure:
                     return Opcode::MakeClosure;
                 case xpp::Opcode::RetainStrong:

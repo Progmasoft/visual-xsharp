@@ -18,6 +18,7 @@
 
 #include "Compiler/Cli/Arguments/Options.hpp"
 #include "Compiler/Cli/Commands/Commands.hpp"
+#include "Compiler/Cli/Presentation/Activity.hpp"
 #include "Compiler/Driver/CorePipeline.hpp"
 #include "Compiler/Linker/NativeLinker.hpp"
 #include "Compiler/ProjectSystem/Bridge/ProjectDriver.hpp"
@@ -415,7 +416,7 @@ namespace
     }
 
     [[nodiscard]] int
-    ExecuteNative(const std::filesystem::path &executable)
+    ExecuteNative(const std::filesystem::path &executable, std::span<const std::string> arguments)
     {
         // Check the exact artifact produced by this invocation. This prevents `run`
         // from starting an older executable after a failed build.
@@ -425,7 +426,7 @@ namespace
             fmt::print(stderr, "vxs: native executable '{}' was not produced\n", PathText(executable));
             return 1;
         }
-        const int status = RunInstalledTool(PathText(executable), {});
+        const int status = RunInstalledTool(PathText(executable), arguments);
         if (status == -1)
         {
             fmt::print(stderr, "vxs: could not start native executable '{}': {}\n", PathText(executable), std::error_code(errno, std::generic_category()).message());
@@ -459,7 +460,7 @@ namespace
             return 1;
         }
         fmt::print(stderr, "vxs: linked native executable '{}'\n", PathText(executable));
-        return execute ? ExecuteNative(executable) : 0;
+        return execute ? ExecuteNative(executable, {}) : 0;
     }
 
     [[nodiscard]] bool
@@ -509,7 +510,7 @@ namespace
         const bool built = xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
         if (!built)
             return false;
-        return options.command != XS_CLI_COMMAND_RUN || ExecuteNative(OutputPath(source, ".vxse")) == 0;
+        return options.command != XS_CLI_COMMAND_RUN || ExecuteNative(OutputPath(source, ".vxse"), options.programArguments) == 0;
     }
 
     [[nodiscard]] int
@@ -538,7 +539,7 @@ namespace
             const auto output = options.command == XS_CLI_COMMAND_RUN ? XS_BUILD_OUTPUT_BINARY : effective.output;
             if (!xs_driver_process_core_artifact(fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr))
                 return 1;
-            return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse")) : 0;
+            return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse"), options.programArguments) : 0;
         }
         if (options.input == XS_BUILD_INPUT_XPP || options.input == XS_BUILD_INPUT_XMM)
         {
@@ -561,7 +562,7 @@ namespace
                                    : xs_driver_process_xmm_artifact_as(fileText.c_str(), fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
             if (!built)
                 return 1;
-            return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse")) : 0;
+            return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse"), options.programArguments) : 0;
         }
         if (options.input != XS_BUILD_INPUT_VXS)
         {
@@ -652,7 +653,7 @@ namespace
             return CopyCore(core.Path(), artifactBase) ? 0 : 1;
         if (!xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr))
             return 1;
-        return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(artifactBase, ".vxse")) : 0;
+        return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(artifactBase, ".vxse"), options.programArguments) : 0;
     }
 } // namespace
 
@@ -676,6 +677,11 @@ Visual::XSharp::Cli::Run(int argc, char **argv) -> int
         return 2;
     }
     const auto &options = parsed.options;
+    std::optional<Activity> activity;
+    if (options.command == XS_CLI_COMMAND_BUILD)
+        activity.emplace("building compiler pipeline");
+    else if (options.command == XS_CLI_COMMAND_CHECK)
+        activity.emplace("checking compiler pipeline");
     int result{};
     if (options.command == XS_CLI_COMMAND_RESOLVE || options.command == XS_CLI_COMMAND_UPDATE)
         result = Visual::XSharp::Driver::RefreshProjectLock() ? 0 : 1;
@@ -689,5 +695,12 @@ Visual::XSharp::Cli::Run(int argc, char **argv) -> int
     }
     else
         result = options.filePath ? RunFile(options) : RunProject(options);
+    if (activity)
+    {
+        if (result == 0)
+            activity->Complete(options.command == XS_CLI_COMMAND_BUILD ? "build completed" : "check completed");
+        else
+            activity->Fail(options.command == XS_CLI_COMMAND_BUILD ? "build failed" : "check failed");
+    }
     return result;
 }

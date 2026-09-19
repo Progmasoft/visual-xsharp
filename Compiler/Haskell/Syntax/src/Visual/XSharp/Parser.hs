@@ -485,14 +485,38 @@ parseLogicalOr
     , parseLogicalAnd
     , parseEquality
     , parseComparison
+    , parseBitwiseOr
+    , parseBitwiseXor
+    , parseBitwiseAnd
+    , parseShift
     , parseAdditive
     , parseMultiplicative ::
         P (Expression Identifier ())
 parseLogicalOr = chainLeft parseLogicalAnd [("||", LogicalOr)]
 parseLogicalAnd = chainLeft parseEquality [("&&", LogicalAnd)]
-parseEquality = nonAssociative "equality" parseComparison [("==", Equal), ("\\=", NotEqual)]
+parseEquality = nonAssociative "equality" parseComparison [("==", Equal), ("!=", NotEqual), ("\\=", NotEqual)]
 parseComparison =
-    nonAssociative "relational" parseAdditive [("<", LessThan), ("<=", LessEqual), (">", GreaterThan), (">=", GreaterEqual)]
+    nonAssociative "relational" parseBitwiseOr [("<", LessThan), ("<=", LessEqual), (">", GreaterThan), (">=", GreaterEqual)]
+parseBitwiseOr = chainLeft parseBitwiseXor [("|", BitwiseOr)]
+parseBitwiseXor = chainLeft parseBitwiseAnd [("^", BitwiseXor)]
+parseBitwiseAnd = chainLeft parseShift [("&", BitwiseAnd)]
+-- Shift spellings deliberately remain two lexer tokens. Treating `>>` as one
+-- context-free token would consume the adjacent closing delimiters in nested
+-- generic types such as `A<B<C>>`. The parser has enough context to combine
+-- the pair here without weakening the generic grammar.
+parseShift = parseAdditive >>= continue
+    where
+        continue left = do
+            tokens <- peekTokens 2
+            case fmap tokenText tokens of
+                ["<", "<"] -> combine ShiftLeft left
+                [">", ">"] -> combine ShiftRight left
+                _ -> pure left
+        combine operator left = do
+            _ <- takeToken
+            _ <- takeToken
+            right <- parseAdditive
+            continue (BinaryExpression (mergeSpan (expressionSpan left) (expressionSpan right)) operator left right ())
 parseAdditive = chainLeft parseMultiplicative [("+", Add), ("-", Subtract)]
 parseMultiplicative = chainLeft parseUnary [("*", Multiply), ("/", Divide), ("//", FloorDivide), ("%", Remainder)]
 
@@ -512,12 +536,25 @@ parseUnary :: P (Expression Identifier ())
 parseUnary = do
     next <- peekToken
     case next
-        >>= operatorToken [("+", UnaryPlus), ("-", UnaryNegate), ("not", LogicalNot)] of
+        >>= operatorToken [("+", UnaryPlus), ("-", UnaryNegate), ("not", LogicalNot), ("!", BitwiseNot)] of
         Just operator -> do
             start <- takeToken
             value <- parseUnary
             pure (UnaryExpression (mergeSpan (tokenSpan start) (expressionSpan value)) operator value ())
-        Nothing -> parsePostfix
+        Nothing -> parsePower
+
+-- Power binds more strongly than prefix operators and recurses through the
+-- prefix layer on its right, making `2 ** 3 ** 2` right-associative while
+-- preserving the specified `-2 ** 2 == -(2 ** 2)` grouping.
+parsePower :: P (Expression Identifier ())
+parsePower = do
+    left <- parsePostfix
+    present <- optionalSymbol "**"
+    if present
+        then do
+            right <- parseUnary
+            pure (BinaryExpression (mergeSpan (expressionSpan left) (expressionSpan right)) Power left right ())
+        else pure left
 
 -- Equality and relational groups are non-associative. A parenthesized operand
 -- starts a fresh level; a second operator at this level is a syntax error.

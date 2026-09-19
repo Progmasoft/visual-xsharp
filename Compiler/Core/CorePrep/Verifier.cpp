@@ -38,6 +38,7 @@ namespace visual_xsharp::core
                     return 0;
                 case Operation::Negate:
                 case Operation::LogicalNot:
+                case Operation::BitwiseNot:
                     return 1;
                 default:
                     return 2;

@@ -185,7 +185,7 @@ bool absent = Files.NotExists(path);
 -- Example 23: 5.2 NotExists
 -- Demonstrates: It is not equivalent to:
 
-!Files.Exists(path)
+not Files.Exists(path)
 
 -- ============================================================================
 -- Example 24: 5.3 Files.Is(...)
@@ -538,7 +538,7 @@ BufferedReader reader =
 
 reader.Close();
 
-// file remains independently managed
+-- file remains independently managed
 
 -- ============================================================================
 -- Example 65: 21. DataInputStream
@@ -627,7 +627,7 @@ DataInputStream data =
 
 data.Close();
 
-// file remains independently managed
+-- file remains independently managed
 
 -- ============================================================================
 -- Example 74: 25.2 FileNotFoundException

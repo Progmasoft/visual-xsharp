@@ -180,12 +180,13 @@ Instruction selection depends on the scalar family:
 | remainder | `srem` | `urem` | `frem` |
 | less/greater | signed `icmp` | unsigned `icmp` | ordered `fcmp` |
 | equality | `icmp` | `icmp` | ordered `fcmp` |
-| floor division | quotient correction | unsigned division | `floor(fdiv)` |
+| rounded division | nearest quotient, halves away from zero | nearest quotient, halves upward | `round(fdiv)` |
 
 Floor division for signed integers corrects truncation when a nonzero
 remainder and opposite operand signs require rounding toward negative
-infinity. Unsigned division needs no correction. Floating floor division calls
-the LLVM floor intrinsic on the quotient.
+zero. Signed and unsigned integer lowering compares the exact remainder against
+half the divisor without converting through floating point. Floating rounded
+division calls the LLVM round intrinsic on the quotient.
 
 ## Failure ownership
 

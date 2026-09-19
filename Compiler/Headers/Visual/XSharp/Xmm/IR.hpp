@@ -42,6 +42,13 @@ namespace visual_xsharp::xmm
         MakeUnowned,
         LoadUnowned,
         ReleaseUnowned,
+        Power,
+        ShiftLeft,
+        ShiftRight,
+        BitwiseAnd,
+        BitwiseXor,
+        BitwiseOr,
+        BitwiseNot,
 
         // Source-compatible names for pre-v3 native clients. They intentionally alias the
         // typed operations; width and signedness now come from Instruction::result_type.

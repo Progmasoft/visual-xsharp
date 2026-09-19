@@ -232,7 +232,7 @@ data Literal
     | UnitLiteral
     deriving (Eq, Ord, Read, Show)
 
-data UnaryOperator = UnaryPlus | UnaryNegate | LogicalNot
+data UnaryOperator = UnaryPlus | UnaryNegate | LogicalNot | BitwiseNot
     deriving (Eq, Ord, Read, Show)
 
 data BinaryOperator
@@ -242,6 +242,12 @@ data BinaryOperator
     | Divide
     | FloorDivide
     | Remainder
+    | Power
+    | ShiftLeft
+    | ShiftRight
+    | BitwiseAnd
+    | BitwiseXor
+    | BitwiseOr
     | LessThan
     | LessEqual
     | GreaterThan

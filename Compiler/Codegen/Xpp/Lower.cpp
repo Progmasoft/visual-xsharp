@@ -59,6 +59,20 @@ namespace visual_xsharp::xpp
                     return Opcode::Negate;
                 case core::Operation::LogicalNot:
                     return Opcode::LogicalNot;
+                case core::Operation::Power:
+                    return Opcode::Power;
+                case core::Operation::ShiftLeft:
+                    return Opcode::ShiftLeft;
+                case core::Operation::ShiftRight:
+                    return Opcode::ShiftRight;
+                case core::Operation::BitwiseAnd:
+                    return Opcode::BitwiseAnd;
+                case core::Operation::BitwiseXor:
+                    return Opcode::BitwiseXor;
+                case core::Operation::BitwiseOr:
+                    return Opcode::BitwiseOr;
+                case core::Operation::BitwiseNot:
+                    return Opcode::BitwiseNot;
                 case core::Operation::MakeClosure:
                     return Opcode::MakeClosure;
             }

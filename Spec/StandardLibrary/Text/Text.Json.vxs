@@ -112,7 +112,7 @@ ObjectMapper mapper = JsonMapper.Builder()
 
 JsonMapper.Builder()
         .JsonNonstandardBracesDisabled(true)
-        .Build(); // INVALID
+        .Build(); -- INVALID
 
 -- ============================================================================
 -- Example 15: 8.2 JsonNonstandardBracesDisabled
@@ -389,7 +389,7 @@ JsonElement root = document.RootElement();
 
 document.Close();
 
-root.GetProperty("name"); // INVALID runtime state
+root.GetProperty("name"); -- INVALID runtime state
 
 -- ============================================================================
 -- Example 48: 23. Combined Nonstandard Example

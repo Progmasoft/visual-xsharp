@@ -209,6 +209,11 @@ targetBoundaryTests =
            , rejectedWith "constant division by zero is diagnosed" "int value = 1 / 0;" "VXT0019"
            , rejectedWith "constant floor division by zero is diagnosed" "int value = 1 // 0;" "VXT0019"
            , rejectedWith "constant remainder by zero is diagnosed" "int value = 1 % 0;" "VXT0019"
+           , compiles "integer power is accepted" "int value = 2 ** 8;"
+           , compiles "integer shift is accepted" "int value = 1 << 8;"
+           , compiles "integer bitwise expression is accepted" "int value = !0 & 255 | 4 ^ 1;"
+           , rejectedWith "bitwise not rejects floating point" "float value = !1.0;" "VXT0011"
+           , rejectedWith "bitwise binary rejects floating point" "float value = 1.0 & 2.0;" "VXT0012"
            ]
 
 numericContextTests :: [(String, Bool)]
@@ -256,6 +261,14 @@ semanticRuleTests =
     , ruleSucceeds "integer equality returns bool" boolType (binaryNumericRule Equal intType intType)
     , ruleSucceeds "boolean logical and returns bool" boolType (binaryNumericRule LogicalAnd boolType boolType)
     , ruleSucceeds "numeric logical or returns bool" boolType (binaryNumericRule LogicalOr intType intType)
+    , ruleSucceeds "integer power preserves int" intType (binaryNumericRule Power intType intType)
+    , ruleSucceeds "integer shift-left preserves int" intType (binaryNumericRule ShiftLeft intType intType)
+    , ruleSucceeds "integer shift-right preserves int" intType (binaryNumericRule ShiftRight intType intType)
+    , ruleSucceeds "integer bitwise and preserves int" intType (binaryNumericRule BitwiseAnd intType intType)
+    , ruleSucceeds "integer bitwise xor preserves int" intType (binaryNumericRule BitwiseXor intType intType)
+    , ruleSucceeds "integer bitwise or preserves int" intType (binaryNumericRule BitwiseOr intType intType)
+    , ruleFails "floating shift fails" (binaryNumericRule ShiftLeft (namedType "float") (namedType "float"))
+    , ruleFails "floating bitwise operation fails" (binaryNumericRule BitwiseAnd (namedType "float") (namedType "float"))
     , ruleFails "mixed signed widths fail" (binaryNumericRule Add (namedType "long") intType)
     , ruleFails "mixed signedness fails" (binaryNumericRule Add intType (namedType "uint"))
     , ruleFails "string arithmetic fails" (binaryNumericRule Add stringType stringType)
@@ -266,6 +279,8 @@ semanticRuleTests =
     , ruleFails "unary negate rejects unsigned integer" (unaryNumericRule UnaryNegate (namedType "uint"))
     , ruleSucceeds "logical not accepts integer context" boolType (unaryNumericRule LogicalNot intType)
     , ruleFails "logical not rejects string" (unaryNumericRule LogicalNot stringType)
+    , ruleSucceeds "bitwise not preserves integer" intType (unaryNumericRule BitwiseNot intType)
+    , ruleFails "bitwise not rejects floating point" (unaryNumericRule BitwiseNot (namedType "float"))
     , ruleSucceeds "untargeted small integer selects int" intType (integerLiteralRule NoNumericContext 42)
     , ruleFails "untargeted oversized integer fails" (integerLiteralRule NoNumericContext 9223372036854775808)
     , ruleSucceeds "boolean integer context selects bool" boolType (integerLiteralRule BooleanNumericContext 99)

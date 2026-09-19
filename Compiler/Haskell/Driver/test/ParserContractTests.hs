@@ -18,6 +18,7 @@ parserContractTests :: [(String, Bool)]
 parserContractTests =
     diagnosticTests
         ++ comparisonTests
+        ++ operatorPrecedenceTests
         ++ literalTests
         ++ spanTests
         ++ tokenStreamTests
@@ -126,6 +127,31 @@ comparisonTests =
                 2
                 column
             )
+
+-- The operator ladder is a language contract.  These cases intentionally mix
+-- adjacent precedence groups so a parser change cannot silently flatten the
+-- tree while still accepting each token in isolation.
+operatorPrecedenceTests :: [(String, Bool)]
+operatorPrecedenceTests =
+    [ parses "power is right associative" "return 2 ** 3 ** 2;"
+    , parses "power binds before unary negation" "return -2 ** 2;"
+    , parses "bitwise not is an integer prefix operator" "return !mask;"
+    , parses "multiplication binds before addition" "return 1 + 2 * 3;"
+    , parses "addition binds before shift" "return 1 + 2 << 3;"
+    , parses "shift binds before bitwise and" "return 8 >> 1 & 3;"
+    , parses "bitwise and binds before xor" "return 7 & 3 ^ 1;"
+    , parses "bitwise xor binds before or" "return 7 ^ 3 | 1;"
+    , parses "bitwise or binds before comparison" "return flags | mask == expected;"
+    , ("pattern combinators are rejected outside is", not (accepted (sourceWith "return ready and valid or fallback;")))
+    , parses "exclamation inequality alias is accepted" "return left != right;"
+    , ("removed membership operator is rejected", not (accepted (sourceWith "return item in values;")))
+    , ("removed not-in operator is rejected", not (accepted (sourceWith "return item not in values;")))
+    , ("removed cast operator is rejected", not (accepted (sourceWith "return value as Target;")))
+    , ("removed nullable cast operator is rejected", not (accepted (sourceWith "return value as? Target;")))
+    , ("removed forced cast operator is rejected", not (accepted (sourceWith "return value as! Target;")))
+    ]
+    where
+        parses label body = (label, accepted (sourceWith body))
 
 -- A string payload that happens to spell punctuation must remain a literal.
 -- In particular a closing-brace payload must not terminate a block early.
@@ -528,6 +554,8 @@ booleanOperandTests =
         , ("not (1 < 2)", False)
         , ("not 0", True)
         , ("not 7", False)
+        , ("1 != 2", True)
+        , ("2 != 2", False)
         , ("1 + 2 == 3", True)
         , ("1 + 2 == 4", False)
         , ("true == false", False)

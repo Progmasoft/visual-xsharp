@@ -334,6 +334,13 @@ tagPrimitive tag = case tag of
     15 -> Just CoreLogicalOr
     16 -> Just CoreNegate
     17 -> Just CoreLogicalNot
+    19 -> Just CorePower
+    20 -> Just CoreShiftLeft
+    21 -> Just CoreShiftRight
+    22 -> Just CoreBitwiseAnd
+    23 -> Just CoreBitwiseXor
+    24 -> Just CoreBitwiseOr
+    25 -> Just CoreBitwiseNot
     _ -> Nothing
 
 invalidTag :: String -> Word8 -> Decoder a

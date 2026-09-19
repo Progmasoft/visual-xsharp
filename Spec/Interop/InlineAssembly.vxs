@@ -378,7 +378,7 @@ goto done;
 :help {
 }
 
-:help { // INVALID
+:help { -- INVALID
 }
 
 -- ============================================================================
@@ -398,7 +398,7 @@ goto done;
     int value = 10;
 }
 
-Use(value); // INVALID
+Use(value); -- INVALID
 
 -- ============================================================================
 -- Example 39: 26. asm goto
@@ -666,7 +666,7 @@ Continue();
 
 auto result = asm (
     "nop"
-); // INVALID
+); -- INVALID
 
 -- ============================================================================
 -- Example 60: 38. INVALID examples
@@ -677,7 +677,7 @@ String code = GetAssembly();
 
 asm (
     code
-); // INVALID
+); -- INVALID
 
 -- ============================================================================
 -- Example 61: 38. INVALID examples
@@ -688,7 +688,7 @@ asm (
 asm (
     "..."
     : "=r"(a + b)
-); // INVALID
+); -- INVALID
 
 -- ============================================================================
 -- Example 62: 38. INVALID examples
@@ -699,7 +699,7 @@ asm (
 asm (
     "..."
     : "+r"(a + b)
-); // INVALID
+); -- INVALID
 
 -- ============================================================================
 -- Example 63: 38. INVALID examples
@@ -710,7 +710,7 @@ asm (
     "mov %1, %0"
     : "=r"(result)
     : "r"(value)
-); // INVALID model
+); -- INVALID model
 
 -- ============================================================================
 -- Example 64: 38. INVALID examples
@@ -721,7 +721,7 @@ asm (
     "mov %[input], %[output]"
     : [output] "=r"(result)
     : [input] "r"(value)
-); // INVALID model
+); -- INVALID model
 
 -- ============================================================================
 -- Example 65: 38. INVALID examples
@@ -731,7 +731,7 @@ asm (
 op int Read(_ int value) {
     asm (
         "nop"
-    ); // INVALID
+    ); -- INVALID
 
     value
 }
@@ -747,7 +747,7 @@ asm (
     :
     :
     : "rax"
-); // INVALID on targets without rax
+); -- INVALID on targets without rax
 
 -- ============================================================================
 -- Example 67: 39. Summary

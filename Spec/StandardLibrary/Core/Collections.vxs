@@ -21,7 +21,7 @@ values[1] = 20;
 -- Demonstrates: Only existing elements may be accessed/replaced:
 -- Expected result: accepted when the referenced declarations are available.
 
-values[0] = 100; // VALID
+values[0] = 100; -- VALID
 
 -- ============================================================================
 -- Example 3: 3. System.Array<T> and [T]
@@ -53,7 +53,7 @@ values[0] = 100; // VALID
 
 [int; 3] values = ...;
 
-values[0] = 100; // VALID
+values[0] = 100; -- VALID
 
 -- ============================================================================
 -- Example 6: 5. Array family distinction

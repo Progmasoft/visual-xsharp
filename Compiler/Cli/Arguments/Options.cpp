@@ -5,8 +5,10 @@
 #include <array>
 #include <fmt/format.h>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <tabulate/table.hpp>
 #include <utility>
 
 #include "Compiler/Cli/Arguments/Options.hpp"
@@ -459,26 +461,30 @@ namespace
         if (command == nullptr)
         {
             fmt::print("Visual X# compiler, project, and ViGet command-line interface.\n\n"
-                       "Usage: vxs <command> [options]\n\n"
-                       "Commands:\n");
+                       "Usage: vxs <command> [options]\n\n");
+            tabulate::Table commands;
+            commands.add_row({ "Command", "Description" });
             for (const auto &spec : kCommands)
-                fmt::print("  {:<9} {}\n", spec.name, spec.description);
+                commands.add_row({ std::string(spec.name), std::string(spec.description) });
+            commands[0].format().font_style({ tabulate::FontStyle::bold });
+            commands.column(0).format().font_align(tabulate::FontAlign::left);
+            commands.column(1).format().font_align(tabulate::FontAlign::left);
+            std::ostringstream rendered;
+            rendered << commands;
+            fmt::print("{}\n\n", rendered.str());
             fmt::print("\nRun 'vxs <command> -Help' for command-specific options.\n");
             return;
         }
 
         const auto positional = PositionalText(command->positional);
-        fmt::print("Usage: vxs {} [options]{}\n", command->name, positional);
-        bool headingPrinted = false;
+        const auto programArguments = command->command == XS_CLI_COMMAND_RUN ? " [-- program-arguments...]" : "";
+        fmt::print("Usage: vxs {} [options]{}{}\n", command->name, positional, programArguments);
+        tabulate::Table options;
+        options.add_row({ "Option", "Description", "Default" });
         for (const auto &spec : kOptions)
         {
             if ((spec.commands & Bit(command->command)) == 0U)
                 continue;
-            if (!headingPrinted)
-            {
-                fmt::print("\nOptions:\n");
-                headingPrinted = true;
-            }
             std::string signature(spec.spelling);
             const auto domain = DomainText(spec.domain);
             if (!domain.empty())
@@ -487,12 +493,16 @@ namespace
                 signature.append(domain);
             }
             const auto defaultValue = DefaultText(spec.option);
-            fmt::print("  {:<52} {}", signature, spec.description);
-            if (!defaultValue.empty())
-                fmt::print(" [default: {}]", defaultValue);
-            fmt::print("\n");
+            options.add_row({ std::move(signature), std::string(spec.description), std::string(defaultValue) });
         }
-        fmt::print("  -Help                                                show this command help\n");
+        options.add_row({ "-Help", "show this command help", "" });
+        options[0].format().font_style({ tabulate::FontStyle::bold });
+        options.column(0).format().font_align(tabulate::FontAlign::left);
+        options.column(1).format().font_align(tabulate::FontAlign::left);
+        options.column(2).format().font_align(tabulate::FontAlign::left);
+        std::ostringstream rendered;
+        rendered << options;
+        fmt::print("\n{}\n", rendered.str());
     }
 
     [[nodiscard]] ApplyResult
@@ -793,6 +803,18 @@ ParseCommandLine(int argc, char **argv)
         if (argv[index] == nullptr)
             return Failure(std::move(options), "process argument vector contains null");
         const std::string_view argument(argv[index]);
+        if (argument == "--")
+        {
+            if (command->command != XS_CLI_COMMAND_RUN)
+                return Failure(std::move(options), "-- is only valid for run program arguments");
+            for (++index; index < argc; ++index)
+            {
+                if (argv[index] == nullptr)
+                    return Failure(std::move(options), "process argument vector contains null");
+                options.programArguments.emplace_back(argv[index]);
+            }
+            break;
+        }
         if (argument == kHelpOption)
         {
             return { XS_CLI_PARSE_HELP, std::move(options), command->command, {} };

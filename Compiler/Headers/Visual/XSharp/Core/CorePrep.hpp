@@ -381,7 +381,14 @@ namespace visual_xsharp::core
         LogicalOr,
         Negate,
         LogicalNot,
-        MakeClosure
+        MakeClosure,
+        Power,
+        ShiftLeft,
+        ShiftRight,
+        BitwiseAnd,
+        BitwiseXor,
+        BitwiseOr,
+        BitwiseNot
     };
 
     struct Instruction final

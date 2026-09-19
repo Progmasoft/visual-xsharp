@@ -30,7 +30,7 @@ for (int number : CountTo(5)) {
 -- Demonstrates: Visual X# does not expose a System.Utils.Iterator<T> type.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-System.Utils.Iterator<int> iterator; // INVALID
+System.Utils.Iterator<int> iterator; -- INVALID
 
 -- ============================================================================
 -- Example 4: 2. System.Utils.Enumerable<T>
@@ -87,7 +87,7 @@ static System.Utils.Enumerable<int> Values() {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 static auto Values() {
-    yield 1; // INVALID
+    yield 1; -- INVALID
 }
 
 -- ============================================================================
@@ -97,7 +97,7 @@ static auto Values() {
 
 class Example {
     public Example() {
-        yield 1; // INVALID
+        yield 1; -- INVALID
     }
 }
 
@@ -109,7 +109,7 @@ class Example {
 class Example {
     public int Value {
         get {
-            yield 1; // INVALID
+            yield 1; -- INVALID
         }
     }
 }
@@ -120,7 +120,7 @@ class Example {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 static op System.Utils.Enumerable<int> Values() {
-    yield 1; // INVALID
+    yield 1; -- INVALID
 }
 
 -- ============================================================================
@@ -208,7 +208,7 @@ static System.Utils.Enumerable<int> Values() {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 static System.Utils.Enumerable<int> Values() {
-    yield 1.5; // INVALID
+    yield 1.5; -- INVALID
 }
 
 -- ============================================================================
@@ -236,7 +236,7 @@ static System.Utils.Enumerable<Point> Points() {
 
 static System.Utils.Enumerable<int> Values() {
     yield 1;
-    yield null; // VALID
+    yield null; -- VALID
     yield 2;
 }
 
@@ -285,7 +285,7 @@ static System.Utils.Enumerable<int> Values() {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 static System.Utils.Enumerable<int> Values() {
-    return 10; // INVALID
+    return 10; -- INVALID
 }
 
 -- ============================================================================
@@ -296,7 +296,7 @@ static System.Utils.Enumerable<int> Values() {
 static System.Utils.Enumerable<int> Values() {
     yield 1;
     return;
-    yield 2; // INVALID: unreachable
+    yield 2; -- INVALID: unreachable
 }
 
 -- ============================================================================
@@ -346,7 +346,7 @@ for (final auto number : CountTo(5)) {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 for (final auto number : CountTo(5)) {
-    number = 10; // INVALID
+    number = 10; -- INVALID
 }
 
 -- ============================================================================
@@ -355,7 +355,7 @@ for (final auto number : CountTo(5)) {
 -- Expected result: accepted when the referenced declarations are available.
 
 for (auto number : CountTo(5)) {
-    number = 10; // VALID
+    number = 10; -- VALID
 }
 
 -- ============================================================================
@@ -367,7 +367,7 @@ for (auto value : Values()) {
     Use(value);
 }
 
-Use(value); // INVALID
+Use(value); -- INVALID
 
 -- ============================================================================
 -- Example 37: 12. Source Evaluation
@@ -485,7 +485,7 @@ int result = for (auto value : Counter()) {
 -- Demonstrates: continue cannot carry a value.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-continue 5; // INVALID
+continue 5; -- INVALID
 
 -- ============================================================================
 -- Example 48: 15. Value-Carrying break
@@ -496,7 +496,7 @@ int result = for (auto value : values) {
     if (value > 10) {
         break value;
     }
-}; // INVALID if source exhaustion can complete the loop without a value
+}; -- INVALID if source exhaustion can complete the loop without a value
 
 -- ============================================================================
 -- Example 49: 16. yield Inside Loops
@@ -607,8 +607,8 @@ static System.Utils.Enumerable<int> Values() {
 -- Demonstrates: Visual X# does not define yield from or yield.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-yield from source; // INVALID
-yield* source;     // INVALID
+yield from source; -- INVALID
+yield* source;     -- INVALID
 
 -- ============================================================================
 -- Example 58: 21. Composing Enumerables
@@ -684,7 +684,7 @@ for (auto value : values) {
 
 static op System.Utils.Enumerable<int> Values() {
     yield 1;
-} // INVALID
+} -- INVALID
 
 -- ============================================================================
 -- Example 64: 26. VALID Summary
@@ -782,7 +782,7 @@ static System.Utils.Enumerable<int> Forever() {
 --   where otherwise relevant.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-System.Utils.Iterator<int> iterator; // INVALID: no public Iterator type
+System.Utils.Iterator<int> iterator; -- INVALID: no public Iterator type
 
 -- ============================================================================
 -- Example 73: 27. INVALID Summary
@@ -791,7 +791,7 @@ System.Utils.Iterator<int> iterator; // INVALID: no public Iterator type
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 static auto Values() {
-    yield 1; // INVALID: generator return type must be explicit
+    yield 1; -- INVALID: generator return type must be explicit
 }
 
 -- ============================================================================
@@ -801,7 +801,7 @@ static auto Values() {
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 static System.Utils.Enumerable<int> Values() {
-    return 10; // INVALID: generator cannot return a value directly
+    return 10; -- INVALID: generator cannot return a value directly
 }
 
 -- ============================================================================
@@ -812,7 +812,7 @@ static System.Utils.Enumerable<int> Values() {
 
 static op System.Utils.Enumerable<int> Values() {
     yield 1;
-} // INVALID: generator cannot be op
+} -- INVALID: generator cannot be op
 
 -- ============================================================================
 -- Example 76: 27. INVALID Summary
@@ -820,7 +820,7 @@ static op System.Utils.Enumerable<int> Values() {
 --   where otherwise relevant.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-yield from source; // INVALID
+yield from source; -- INVALID
 
 -- ============================================================================
 -- Example 77: 27. INVALID Summary
@@ -828,7 +828,7 @@ yield from source; // INVALID
 --   where otherwise relevant.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-yield* source; // INVALID
+yield* source; -- INVALID
 
 -- ============================================================================
 -- Example 78: 27. INVALID Summary
@@ -836,4 +836,4 @@ yield* source; // INVALID
 --   where otherwise relevant.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
-continue 5; // INVALID
+continue 5; -- INVALID

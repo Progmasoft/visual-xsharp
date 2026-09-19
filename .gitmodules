@@ -4,3 +4,9 @@
 [submodule "third_party/catch2"]
 	path = third_party/catch2
 	url = https://github.com/catchorg/Catch2.git
+[submodule "third_party/indicators/upstream"]
+	path = third_party/indicators/upstream
+	url = https://github.com/p-ranav/indicators.git
+[submodule "third_party/tabulate/upstream"]
+	path = third_party/tabulate/upstream
+	url = https://github.com/p-ranav/tabulate.git

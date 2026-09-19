@@ -652,6 +652,13 @@ decodePrimitive tag = case drop (fromIntegral tag) primitives of
             , CoreLogicalOr
             , CoreNegate
             , CoreLogicalNot
+            , CorePower
+            , CoreShiftLeft
+            , CoreShiftRight
+            , CoreBitwiseAnd
+            , CoreBitwiseXor
+            , CoreBitwiseOr
+            , CoreBitwiseNot
             ]
 
 primitiveTag :: CorePrimitive -> Word8
@@ -674,6 +681,13 @@ primitiveTag primitive = fromIntegral (index primitive primitives)
             , CoreLogicalOr
             , CoreNegate
             , CoreLogicalNot
+            , CorePower
+            , CoreShiftLeft
+            , CoreShiftRight
+            , CoreBitwiseAnd
+            , CoreBitwiseXor
+            , CoreBitwiseOr
+            , CoreBitwiseNot
             ]
         index :: CorePrimitive -> [CorePrimitive] -> Int
         index value (candidate : remaining) = if value == candidate then 0 else 1 + index value remaining

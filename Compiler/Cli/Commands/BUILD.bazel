@@ -8,6 +8,7 @@ cc_library(
     hdrs = ["Commands.hpp"],
     deps = [
         "//Compiler/Cli/Arguments:arguments",
+        "//Compiler/Cli/Presentation:presentation",
         "//Compiler/Driver:core_pipeline",
         "//Compiler/Linker:native_linker",
         "//Compiler/ProjectSystem/Bridge:project_driver",
