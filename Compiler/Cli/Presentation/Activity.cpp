@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <indicators/progress_spinner.hpp>
@@ -51,8 +52,8 @@ namespace Visual::XSharp::Cli
                   indicators::option::ShowElapsedTime{ true },
                   indicators::option::SpinnerStates{ std::vector<std::string>{ "|", "/", "-", "\\" } },
                   indicators::option::Stream{ std::cerr })
-            , worker_([this](std::stop_token stop) {
-                while (!stop.stop_requested())
+            , worker_([this] {
+                while (!stopRequested_.load(std::memory_order_relaxed))
                 {
                     spinner_.tick();
                     std::this_thread::sleep_for(std::chrono::milliseconds(90));
@@ -77,7 +78,7 @@ namespace Visual::XSharp::Cli
         {
             if (finished_)
                 return;
-            worker_.request_stop();
+            stopRequested_.store(true, std::memory_order_relaxed);
             worker_.join();
             spinner_.set_option(indicators::option::PostfixText{ std::string(description) });
             spinner_.set_option(indicators::option::ForegroundColor{ color });
@@ -87,7 +88,8 @@ namespace Visual::XSharp::Cli
 
     private:
         indicators::ProgressSpinner spinner_;
-        std::jthread worker_;
+        std::atomic_bool stopRequested_{};
+        std::thread worker_;
         bool finished_{};
     };
 
