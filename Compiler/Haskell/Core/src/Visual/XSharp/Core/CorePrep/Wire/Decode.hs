@@ -140,14 +140,21 @@ decodeAtom = do
         _ -> invalidTag "atom tag" tag
 
 decodeLiteral :: Type -> Decoder CoreLiteral
-decodeLiteral valueType
-    | valueType == unitType = pure CoreUnit
-    | valueType == boolType = CoreBoolean <$> decodeBool "boolean literal"
-    | valueType == stringType = CoreString <$> decodeText "string literal"
-    | typeName valueType == "char" = CoreInteger <$> decodeInteger
-    | typeName valueType `elem` integerTypeNames = CoreInteger <$> decodeInteger
-    | typeName valueType `elem` floatingTypeNames = CoreFloating <$> decodeAscii "floating literal"
-    | otherwise = failAt UnsupportedType "literal" "literal uses an unsupported type"
+decodeLiteral valueType = do
+    tag <- readWord8 "literal tag"
+    case tag of
+        0 | valueType == unitType -> pure CoreUnit
+        1 | valueType == boolType -> CoreBoolean <$> decodeBool "boolean literal"
+        2 | typeName valueType == "char" || typeName valueType `elem` integerTypeNames -> CoreInteger <$> decodeInteger
+        3 | valueType == stringType -> CoreString <$> decodeText "string literal"
+        4 | typeName valueType `elem` floatingTypeNames -> CoreFloating <$> decodeAscii "floating literal"
+        5 | referenceLike valueType -> pure CoreNull
+        _ -> failAt UnsupportedType "literal" "literal tag does not match its declared type"
+    where
+        referenceLike value = case value of
+            FunctionType _ _ -> True
+            NamedType _ _ -> typeName value `notElem` integerTypeNames ++ floatingTypeNames ++ ["char", "bool", "unit"]
+            _ -> False
 
 decodeTerminator :: Decoder CorePrepTerminator
 decodeTerminator = do
@@ -341,6 +348,7 @@ tagPrimitive tag = case tag of
     23 -> Just CoreBitwiseXor
     24 -> Just CoreBitwiseOr
     25 -> Just CoreBitwiseNot
+    26 -> Just CoreTypeIs
     _ -> Nothing
 
 invalidTag :: String -> Word8 -> Decoder a

@@ -90,6 +90,10 @@ discoverExpression location expression =
                     [ discoverExpression (appendPath location (PrimitiveOperandPath index)) operand
                     | (index, operand) <- zip [0 ..] operands
                     ]
+            CoreLet _ bindingType value body _ ->
+                discoverTypeAt (appendPath location BindingTypePath) bindingType
+                    ++ discoverExpression (appendPath location BindingValuePath) value
+                    ++ discoverExpression (appendPath location EvaluatedValuePath) body
             CoreClosure captures parameters returnType body _ ->
                 concat
                     [ discoverCapture (appendPath location (ClosureCapturePath index)) capture

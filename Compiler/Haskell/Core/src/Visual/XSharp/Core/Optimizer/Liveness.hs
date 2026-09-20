@@ -165,6 +165,13 @@ optimizeExpression environment expression = case expression of
             valueType
     CorePrimitive primitive arguments valueType ->
         CorePrimitive primitive (map (optimizeExpression environment) arguments) valueType
+    CoreLet name bindingType value body valueType ->
+        CoreLet
+            name
+            bindingType
+            (optimizeExpression environment value)
+            (optimizeExpression environment body)
+            valueType
     CoreClosure captures parameters returnType body valueType ->
         CoreClosure
             [capture {coreCaptureValue = optimizeExpression environment (coreCaptureValue capture)} | capture <- captures]

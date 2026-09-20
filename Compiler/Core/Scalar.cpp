@@ -314,7 +314,10 @@ namespace visual_xsharp::core
     validate_literal(const Literal &literal, const Type &type) -> std::optional<std::string>
     {
         if (std::holds_alternative<std::monostate>(literal))
-            return type.kind == Type::Kind::Unit ? std::nullopt : std::optional<std::string>{ "unit payload requires unit type" };
+            return type.kind == Type::Kind::Unit || type.kind == Type::Kind::Named
+                           || type.kind == Type::Kind::String || type.kind == Type::Kind::Function
+                       ? std::nullopt
+                       : std::optional<std::string>{ "empty payload requires unit or an AARC reference type" };
         if (std::holds_alternative<bool>(literal))
             return type.kind == Type::Kind::Bool ? std::nullopt : std::optional<std::string>{ "boolean payload requires bool type" };
         if (const auto *legacy = std::get_if<std::int64_t>(&literal))

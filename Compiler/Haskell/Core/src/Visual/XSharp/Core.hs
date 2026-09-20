@@ -14,7 +14,7 @@ module Visual.XSharp.Core
 
 import Visual.XSharp.AST (CaptureMode, QualifiedName, ResolvedName, Type)
 
-data CoreLiteral = CoreInteger Integer | CoreFloating String | CoreString String | CoreBoolean Bool | CoreUnit
+data CoreLiteral = CoreInteger Integer | CoreFloating String | CoreString String | CoreBoolean Bool | CoreUnit | CoreNull
     deriving (Eq, Ord, Read, Show)
 data CorePrimitive
     = CoreAdd
@@ -40,12 +40,17 @@ data CorePrimitive
     | CoreBitwiseXor
     | CoreBitwiseOr
     | CoreBitwiseNot
+    | CoreTypeIs
     deriving (Eq, Ord, Read, Show)
 data CoreExpression
     = CoreVariable ResolvedName Type
     | CoreLiteral CoreLiteral Type
     | CoreApply CoreExpression [CoreExpression] Type
     | CorePrimitive CorePrimitive [CoreExpression] Type
+    | -- CoreLet is expression-local sequencing. Pattern lowering uses it to
+      -- evaluate a potentially effectful subject exactly once before testing
+      -- several alternatives.
+      CoreLet ResolvedName Type CoreExpression CoreExpression Type
     | CoreClosure
         [CoreCapture]
         [(ResolvedName, Type)]
@@ -90,4 +95,5 @@ expressionType expression = case expression of
     CoreLiteral _ value -> value
     CoreApply _ _ value -> value
     CorePrimitive _ _ value -> value
+    CoreLet _ _ _ _ value -> value
     CoreClosure _ _ _ _ value -> value

@@ -267,23 +267,18 @@ namespace visual_xsharp::core::wire
             [[nodiscard]] auto
             literal(const Type &value_type) -> Literal
             {
-                switch (value_type.kind)
+                const auto literalTag = byte("literal tag");
+                switch (literalTag)
                 {
-                    case Type::Kind::Unit:
+                    case 0U:
+                        if (value_type.kind != Type::Kind::Unit)
+                            fail(ErrorKind::UnsupportedType, "unit literal", "unit tag requires unit type");
                         return std::monostate{};
-                    case Type::Kind::Bool:
+                    case 1U:
+                        if (value_type.kind != Type::Kind::Bool)
+                            fail(ErrorKind::UnsupportedType, "boolean literal", "boolean tag requires bool type");
                         return boolean("boolean literal");
-                    case Type::Kind::Character:
-                    case Type::Kind::Int8:
-                    case Type::Kind::Int16:
-                    case Type::Kind::Int32:
-                    case Type::Kind::Int64:
-                    case Type::Kind::Int128:
-                    case Type::Kind::UInt8:
-                    case Type::Kind::UInt16:
-                    case Type::Kind::UInt32:
-                    case Type::Kind::UInt64:
-                    case Type::Kind::UInt128:
+                    case 2U:
                     {
                         IntegerLiteral value;
                         value.negative = boolean("integer sign");
@@ -298,10 +293,7 @@ namespace visual_xsharp::core::wire
                             fail(ErrorKind::InvalidInteger, "character literal", "character payload exceeds unsigned 32-bit range");
                         return value;
                     }
-                    case Type::Kind::Float16:
-                    case Type::Kind::Float32:
-                    case Type::Kind::Float64:
-                    case Type::Kind::Float128:
+                    case 4U:
                     {
                         const auto size = count(limits_.maximum_numeric_bytes, "floating literal length");
                         std::string spelling;
@@ -318,14 +310,17 @@ namespace visual_xsharp::core::wire
                             fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling is not canonical");
                         return FloatingLiteral{ std::move(spelling) };
                     }
-                    case Type::Kind::String:
+                    case 3U:
+                        if (value_type.kind != Type::Kind::String)
+                            fail(ErrorKind::UnsupportedType, "string literal", "string tag requires String type");
                         return text("string literal");
-                    case Type::Kind::Function:
-                    case Type::Kind::Named:
-                    case Type::Kind::TypeVariable:
-                        fail(ErrorKind::UnsupportedType, "literal", "non-primitive literal type is invalid");
+                    case 5U:
+                        if (value_type.kind != Type::Kind::Function && value_type.kind != Type::Kind::Named
+                            && value_type.kind != Type::Kind::String)
+                            fail(ErrorKind::UnsupportedType, "null literal", "null tag requires an AARC reference type");
                         return std::monostate{};
                 }
+                fail(ErrorKind::InvalidTag, "literal tag", "unknown CorePrep literal tag");
                 return std::monostate{};
             }
 
@@ -349,7 +344,7 @@ namespace visual_xsharp::core::wire
             operation_tag() -> Operation
             {
                 const auto tag = byte("operation tag");
-                if (tag > static_cast<std::uint8_t>(Operation::BitwiseNot))
+                if (tag > static_cast<std::uint8_t>(Operation::TypeIs))
                 {
                     fail(ErrorKind::InvalidTag, "operation tag", "unknown CorePrep operation tag");
                     return Operation::Copy;

@@ -227,7 +227,8 @@ decodeEscape (escape : remaining) = case escape of
 
 keywords :: [String]
 keywords =
-    [ "auto"
+    [ "and"
+    , "auto"
     , "bool"
     , "byte"
     , "char"
@@ -238,10 +239,13 @@ keywords =
     , "if"
     , "int"
     , "internal"
+    , "is"
     , "long"
     , "longint"
     , "namespace"
+    , "null"
     , "not"
+    , "or"
     , "private"
     , "protected"
     , "public"
@@ -268,7 +272,6 @@ longestSymbol source =
     firstMatch
         [ "..."
         , "=="
-        , "!="
         , "\\="
         , "<="
         , ">="

@@ -138,6 +138,13 @@ verifyExpression environment expression =
                     ++ callProblems callee arguments valueType
             CorePrimitive primitive arguments valueType ->
                 concatMap (verifyExpression environment) arguments ++ primitiveProblems primitive arguments valueType
+            CoreLet name bindingType value body valueType ->
+                invalidSymbol "VXC1040" "Core let symbol must be positive" name
+                    ++ unresolvedType "VXC1041" "Core let binding has an unresolved type" bindingType
+                    ++ verifyExpression environment value
+                    ++ typeMismatch "VXC1042" "Core let value has the wrong type" bindingType (expressionType value)
+                    ++ verifyExpression (Map.insert (resolvedSymbol name) (bindingType, False) environment) body
+                    ++ typeMismatch "VXC1043" "Core let result type disagrees with its body" valueType (expressionType body)
             CoreClosure captures parameters returnType body valueType ->
                 verifyClosure environment captures parameters returnType body valueType
 
@@ -209,13 +216,22 @@ primitiveProblems primitive arguments resultType =
         operandsInteger = all isCoreIntegerType argumentTypes
         operandsBoolean = all (\valueType -> valueType == boolType || isCoreNumericType valueType) argumentTypes
         operandProblems
+            | primitive == CoreTypeIs = case argumentTypes of
+                [subjectType, identityType]
+                    | isReferenceLike subjectType && identityType == namedType "ulong" -> []
+                    | otherwise -> [problem "VXC1044" "Core type test requires a reference subject and ulong identity"]
+                _ -> []
             | logical && not operandsBoolean = [problem "VXC1027" "Core logical primitive requires bool or numeric operands"]
             | integerOnly && not operandsInteger = [problem "VXC1027" "Core bitwise primitive requires integer operands"]
             | primitive `elem` [CoreEqual, CoreNotEqual] && firstType == boolType && operandsAgree = []
             | not logical && not operandsNumeric = [problem "VXC1027" "Core numeric primitive requires numeric operands"]
             | not logical && not operandsAgree = [problem "VXC1027" "Core numeric primitive operands must have the same type"]
             | otherwise = []
-        expectedResult = if logical || comparison then boolType else firstType
+        expectedResult = if logical || comparison || primitive == CoreTypeIs then boolType else firstType
+        isReferenceLike valueType = case valueType of
+            FunctionType _ _ -> True
+            NamedType _ _ -> not (isCoreNumericType valueType) && valueType /= unitType
+            _ -> False
 
 literalProblems :: CoreLiteral -> Type -> [Diagnostic]
 literalProblems literal valueType =
@@ -227,6 +243,11 @@ literalProblems literal valueType =
             CoreString _ -> valueType == stringType
             CoreBoolean _ -> valueType == boolType
             CoreUnit -> valueType == unitType
+            CoreNull -> isReferenceLike valueType
+        isReferenceLike value = case value of
+            FunctionType _ _ -> True
+            NamedType _ _ -> not (isCoreNumericType value) && value /= unitType
+            _ -> False
 
 statementsAlwaysReturn :: [CoreStatement] -> Bool
 statementsAlwaysReturn [] = False

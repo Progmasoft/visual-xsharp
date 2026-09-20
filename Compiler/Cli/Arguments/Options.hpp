@@ -11,113 +11,133 @@
 
 // Raw argv spellings are consumed by the C++20 parser and become this typed
 // driver model. Strings remain only for values that are intrinsically textual.
-enum XsCliCommand : std::uint8_t
+enum class CliCommand : std::uint8_t
 {
-    XS_CLI_COMMAND_NONE,
-    XS_CLI_COMMAND_BUILD,
-    XS_CLI_COMMAND_CHECK,
-    XS_CLI_COMMAND_FORMAT,
-    XS_CLI_COMMAND_INSTALL,
-    XS_CLI_COMMAND_LINT,
-    XS_CLI_COMMAND_RESOLVE,
-    XS_CLI_COMMAND_RUN,
-    XS_CLI_COMMAND_TEST,
-    XS_CLI_COMMAND_UPDATE,
-    XS_CLI_COMMAND_VERSION,
-    XS_CLI_COMMAND_VIGET,
+    kNone,
+    kBuild,
+    kCheck,
+    kFormat,
+    kInstall,
+    kLint,
+    kResolve,
+    kRun,
+    kTest,
+    kUpdate,
+    kVersion,
+    kViGet,
+    kViPkg,
 };
 
-enum XsViGetAction : std::uint8_t
+enum class ViPkgAction : std::uint8_t
 {
-    XS_VIGET_ACTION_NONE,
-    XS_VIGET_ACTION_PUSH,
-    XS_VIGET_ACTION_UPDATE,
+    kNone,
+    kCreate,
 };
 
-enum XsWarningLevel : std::uint8_t
+enum class ViPkgType : std::uint8_t
 {
-    XS_WARNING_ALL,
-    XS_WARNING_MEDIUM,
-    XS_WARNING_LOW,
-    XS_WARNING_NONE,
+    kExecutable,
+    kVisualXSharpLibrary,
+    kStaticLibrary,
+    kDynamicLibrary,
 };
 
-enum XsBuildOutput : std::uint8_t
+enum class ViGetAction : std::uint8_t
 {
-    XS_BUILD_OUTPUT_BINARY,
-    XS_BUILD_OUTPUT_NONE = XS_BUILD_OUTPUT_BINARY,
-    XS_BUILD_OUTPUT_OBJECT,
-    XS_BUILD_OUTPUT_CORE,
-    XS_BUILD_OUTPUT_XPP,
-    XS_BUILD_OUTPUT_XMM,
-    XS_BUILD_OUTPUT_ASSEMBLY,
-    XS_BUILD_OUTPUT_LLVM_LL,
-    XS_BUILD_OUTPUT_LLVM_BC,
+    kNone,
+    kPush,
+    kUpdate,
 };
 
-enum XsBuildInput : std::uint8_t
+enum class WarningLevel : std::uint8_t
 {
-    XS_BUILD_INPUT_VXS,
-    XS_BUILD_INPUT_OBJECT,
-    XS_BUILD_INPUT_CORE,
-    XS_BUILD_INPUT_XPP,
-    XS_BUILD_INPUT_XMM,
-    XS_BUILD_INPUT_LLVM_LL,
-    XS_BUILD_INPUT_LLVM_BC,
+    kAll,
+    kMedium,
+    kLow,
+    kNone,
 };
 
-enum XsLlvmOptLevel : std::uint8_t
+enum class BuildOutput : std::uint8_t
 {
-    XS_LLVM_OPT_0,
-    XS_LLVM_OPT_1,
-    XS_LLVM_OPT_2,
-    XS_LLVM_OPT_3,
-    XS_LLVM_OPT_G,
+    kBinary,
+    kObject,
+    kCore,
+    kXpp,
+    kXmm,
+    kAssembly,
+    kLlvmIr,
+    kLlvmBitcode,
 };
 
-enum XsLlvmCompiler : std::uint8_t
+enum class BuildInput : std::uint8_t
 {
-    XS_LLVM_COMPILER_AOT,
-    XS_LLVM_COMPILER_ORC,
+    kVisualXSharp,
+    kObject,
+    kCore,
+    kXpp,
+    kXmm,
+    kLlvmIr,
+    kLlvmBitcode,
 };
 
-enum XsLlvmLto : std::uint8_t
+enum class LlvmOptLevel : std::uint8_t
 {
-    XS_LLVM_LTO_NONE,
-    XS_LLVM_LTO_FAT,
-    XS_LLVM_LTO_THIN,
+    kO0,
+    kO1,
+    kO2,
+    kO3,
+    kOg,
 };
 
-struct XsCompilerSettings
+enum class LlvmCompiler : std::uint8_t
 {
-    XsWarningLevel warning_level;
-    bool warnings_as_errors;
-    bool experimental_warnings;
-    bool shadow_warnings;
-    bool undefined_warnings;
-    bool type_safe_format;
-    bool xpp_optimization_passes;
-    bool xmm_optimization_passes;
-    XsLlvmOptLevel llvm_opt_level;
-    XsLlvmCompiler llvm_compiler;
-    XsLlvmLto llvm_lto;
+    kAot,
+    kOrc,
 };
 
-struct XsCliOptions
+enum class LlvmLto : std::uint8_t
 {
-    XsCliCommand command;
-    XsViGetAction vigetAction;
+    kNone,
+    kFat,
+    kThin,
+};
+
+struct CompilerSettings
+{
+    WarningLevel warningLevel;
+    bool warningsAsErrors;
+    bool experimentalWarnings;
+    bool shadowWarnings;
+    bool undefinedWarnings;
+    bool typeSafeFormat;
+    bool xppOptimizationPasses;
+    bool xmmOptimizationPasses;
+    LlvmOptLevel llvmOptLevel;
+    LlvmCompiler llvmCompiler;
+    LlvmLto llvmLto;
+};
+
+struct CliOptions
+{
+    CliCommand command;
+    ViGetAction vigetAction;
+    ViPkgAction viPkgAction;
+    ViPkgType viPkgType;
     std::optional<std::filesystem::path> filePath;
     std::optional<std::string> packageCoordinate;
     std::optional<std::string> target;
     std::vector<std::string> programArguments;
+    std::vector<std::string> selectedViPkgs;
+    std::vector<std::string> selectedExecutables;
+    std::vector<std::string> selectedLibraries;
     std::string compilerVersion;
     std::string standard;
-    XsBuildOutput output;
-    XsBuildInput input;
-    XsCompilerSettings compiler;
+    BuildOutput output;
+    BuildInput input;
+    CompilerSettings compiler;
     bool globalInstall;
     bool formatterDryRun;
+    bool emitHeader;
     bool compilerVersionOverride;
     bool standardOverride;
     bool targetOverride;
@@ -137,48 +157,45 @@ struct XsCliOptions
 
 // Fully resolved values for one compiler invocation. A project evaluation can
 // provide the base layer; only CLI fields that were actually present replace it.
-struct XsEffectiveCompilerOptions
+struct EffectiveCompilerOptions
 {
     std::string compilerVersion;
     std::string standard;
     std::optional<std::string> target;
-    XsBuildOutput output;
-    XsCompilerSettings compiler;
+    BuildOutput output;
+    CompilerSettings compiler;
 };
 
-enum XsCliParseResult : std::uint8_t
+enum class CliParseResult : std::uint8_t
 {
-    XS_CLI_PARSE_ERROR,
-    XS_CLI_PARSE_READY,
-    XS_CLI_PARSE_HELP,
-    XS_CLI_PARSE_VERSION,
+    kError,
+    kReady,
+    kHelp,
+    kVersion,
 };
 
-struct XsCliParseOutcome
+struct CliParseOutcome
 {
-    XsCliParseResult result;
-    XsCliOptions options;
-    std::optional<XsCliCommand> helpCommand;
+    CliParseResult result;
+    CliOptions options;
+    std::optional<CliCommand> helpCommand;
     std::string diagnostic;
 };
 
-extern "C"
-{
-    [[nodiscard]] XsCompilerSettings
-    xs_cli_default_compiler_settings() noexcept;
-    void
-    xs_cli_apply_compiler_overrides(const XsCliOptions *options, XsCompilerSettings *settings) noexcept;
-    [[nodiscard]] const char *
-    xs_cli_warning_level_name(XsWarningLevel level) noexcept;
-    [[nodiscard]] const char *
-    xs_cli_output_extension(XsBuildOutput output) noexcept;
-}
-
-[[nodiscard]] XsCliParseOutcome
-ParseCommandLine(int argc, char **argv);
-[[nodiscard]] XsEffectiveCompilerOptions
-ResolveCompilerOptions(const XsCliOptions &options, const XsEffectiveCompilerOptions *projectDefaults = nullptr);
+[[nodiscard]] CompilerSettings
+DefaultCompilerSettings() noexcept;
 void
-PrintCliHelp(std::optional<XsCliCommand> command);
+ApplyCompilerOverrides(const CliOptions &options, CompilerSettings &settings) noexcept;
+[[nodiscard]] const char *
+WarningLevelName(WarningLevel level) noexcept;
+[[nodiscard]] const char *
+OutputExtension(BuildOutput output) noexcept;
+
+[[nodiscard]] CliParseOutcome
+ParseCommandLine(int argc, char **argv);
+[[nodiscard]] EffectiveCompilerOptions
+ResolveCompilerOptions(const CliOptions &options, const EffectiveCompilerOptions *projectDefaults = nullptr);
+void
+PrintCliHelp(std::optional<CliCommand> command);
 void
 PrintCliVersion();

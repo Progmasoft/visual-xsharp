@@ -99,6 +99,10 @@ resolveExpression expression = case expression of
     BinaryExpression spanValue operator left right _ ->
         let (resolvedLeft, leftProblems) = resolveExpression left; (resolvedRight, rightProblems) = resolveExpression right
          in (BinaryExpression spanValue operator resolvedLeft resolvedRight (), leftProblems ++ rightProblems)
+    IsPatternExpression spanValue subject patternValue _ ->
+        let (resolvedSubject, subjectProblems) = resolveExpression subject
+            (resolvedPattern, patternProblems) = resolvePattern patternValue
+         in (IsPatternExpression spanValue resolvedSubject resolvedPattern (), subjectProblems ++ patternProblems)
     CallableExpression spanValue explicit captures parameters body _ ->
         let resolvedCaptures = map resolveCapture captures
             resolvedParameters = map resolveParameter parameters
@@ -112,6 +116,24 @@ resolveExpression expression = case expression of
                 ()
             , concatMap snd resolvedCaptures ++ concatMap snd resolvedParameters ++ bodyProblems
             )
+
+resolvePattern :: Pattern RenamedName () -> (Pattern ResolvedName (), [Diagnostic])
+resolvePattern patternValue = case patternValue of
+    WildcardPattern spanValue _ -> (WildcardPattern spanValue (), [])
+    NullPattern spanValue _ -> (NullPattern spanValue (), [])
+    LiteralPattern spanValue literal _ -> (LiteralPattern spanValue literal (), [])
+    TypePattern spanValue syntax _ -> (TypePattern spanValue syntax (), [])
+    RelationalPattern spanValue operator literal _ -> (RelationalPattern spanValue operator literal (), [])
+    NotPattern spanValue nested _ ->
+        let (resolved, problems) = resolvePattern nested
+         in (NotPattern spanValue resolved (), problems)
+    AndPattern spanValue left right _ -> resolvePair AndPattern spanValue left right
+    OrPattern spanValue left right _ -> resolvePair OrPattern spanValue left right
+    where
+        resolvePair constructor spanValue left right =
+            let (resolvedLeft, leftProblems) = resolvePattern left
+                (resolvedRight, rightProblems) = resolvePattern right
+             in (constructor spanValue resolvedLeft resolvedRight (), leftProblems ++ rightProblems)
 
 resolveCapture :: Capture RenamedName () -> (Capture ResolvedName (), [Diagnostic])
 resolveCapture (Capture spanValue mode name _ initializer) =

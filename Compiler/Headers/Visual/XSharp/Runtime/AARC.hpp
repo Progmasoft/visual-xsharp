@@ -5,10 +5,20 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 namespace Visual::XSharp::Runtime::Aarc
 {
-    inline constexpr std::uint32_t kAbiVersion = 1U;
+    inline constexpr std::uint32_t kAbiVersion = 2U;
+
+    [[nodiscard]] consteval auto
+    TypeIdentity(std::string_view canonicalName) noexcept -> std::uint64_t
+    {
+        std::uint64_t value = 14695981039346656037ULL;
+        for (const auto byte : canonicalName)
+            value = (value ^ static_cast<unsigned char>(byte)) * 1099511628211ULL;
+        return value;
+    }
 
     enum class ObjectState : std::uint32_t
     {
@@ -24,6 +34,7 @@ namespace Visual::XSharp::Runtime::Aarc
         // Metadata is immutable and must outlive every object allocated with it.
         std::uint32_t abiVersion{ kAbiVersion };
         std::uint32_t flags{};
+        std::uint64_t typeIdentity{};
         std::size_t instanceSize{};
         std::size_t instanceAlignment{ alignof(std::max_align_t) };
         Destructor destructor{};
@@ -78,6 +89,8 @@ namespace Visual::XSharp::Runtime::Aarc
     LoadUnowned(Unowned value) noexcept -> void *;
     void
     ReleaseUnowned(Unowned value) noexcept;
+    [[nodiscard]] auto
+    IsExactType(const void *object, std::uint64_t typeIdentity) noexcept -> bool;
 } // namespace Visual::XSharp::Runtime::Aarc
 
 // Xmm lowering targets a stable C ABI. The C++ API above remains convenient for
@@ -104,4 +117,6 @@ extern "C"
     vxs_aarc_release_unowned(void *header) noexcept;
     [[nodiscard]] auto
     vxs_aarc_string_literal(const std::uint32_t *scalars, std::size_t count) noexcept -> void *;
+    [[nodiscard]] auto
+    vxs_aarc_is_exact_type(const void *object, std::uint64_t typeIdentity) noexcept -> bool;
 }

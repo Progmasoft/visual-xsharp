@@ -15,24 +15,27 @@ project {
   name = "Example"
   version = "0.1.0"
   stability = Stability.DEV
+  description = "An example application"
+  authors("ExamplePublisher")
 }
 
 sources {
-  main {
+  executable {
+    name = "Example"
     srcDir = "Sources"
     entry = "Example.Main"
   }
 }
 ```
 
-`sources.main` and `sources.main.entry` are required. The entry is a namespace-qualified class, not a function name. The final
+Every executable requires `sources.executable.entry`. The entry is a namespace-qualified class, not a function name. The final
 segment is the class name and is not restricted to `Main` or `Program`: `Namespace.Program`, `Namespace.Namespace.Program`,
 and `Company.Tool.Bootstrap` are valid. A trailing namespace such as `Namespace.` is invalid. The selected class must declare
 a parameterless `public static void Main()` method. Entry resolution uses namespace and type identity; it never derives a
 file path from the entry. File names and directory layout do not have to match namespace segments.
 
-The `project` block has a publication-sensitive completeness rule. When `sources.viget.publish` is `true`, `name`, `version`,
-and `stability` are all required. When publishing is disabled, the block may be absent, complete, or contain any useful
+The `project` block has a publication-sensitive completeness rule. When `sources.viget.push` is `true`, `name`, `version`,
+`stability`, `description`, and at least one author are required. When pushing is disabled, the block may be absent, complete, or contain any useful
 subset; private and internal builds are not forced to invent release metadata.
 
 ```kotlin
@@ -41,11 +44,11 @@ project {
 }
 
 sources {
-  main {
+  executable {
     entry = "Company.Internal.Tool"
   }
   viget {
-    publish = false
+    push = false
   }
 }
 ```
@@ -58,12 +61,11 @@ compiler {
   standard = "latest"
   backend = Backend.LLVM
   buildMode = BuildMode.DEBUG
-  emit = Emit.BINARY
   warnings = Warnings.MEDIUM
-  warningsAsErrors = false
-  experimentalWarnings = false
-  shadowWarnings = false
-  undefinedWarnings = true
+  werror = false
+  wexperimental = false
+  wshadow = false
+  wundef = true
 
   unsafe {
     typeSafeFormat = true
@@ -87,10 +89,18 @@ it is not an opt-in to permissive formatting.
 
 ```kotlin
 sources {
-  main {
+  executable {
+    name = "Example"
     srcDir = "Sources"
     entry = "Example.Main"
     exclude("Generated/**")
+  }
+
+  library {
+    name = "ExampleLibrary"
+    viPkgType(ViPkgType.VXSLIB, ViPkgType.STATICLIB)
+    srcDir = "LibrarySources"
+    namespace = "Example.Library"
   }
 
   test("unit") {
@@ -104,7 +114,7 @@ sources {
   }
 
   viget {
-    publish = false
+    push = false
     exclude("build/**")
   }
 }
@@ -112,7 +122,8 @@ sources {
 
 Source roots must stay inside the project root. The Kotlin runtime validates the configured roots and forwards them with
 their exclusion policy; it does not walk the roots or create a `.vxs` file list. Source discovery and namespace-based entry
-resolution belong to the compiler. Exclusions accept project-relative glob patterns. `sources.main.exclude`, each named
+resolution belong to the compiler. Exclusions accept project-relative glob patterns. Each executable or library target's
+`exclude`, each named
 test suite's `exclude`, and `sources.viget.exclude` have no implicit pattern: their plan value is `null` until an
 `exclude(...)` declaration is present.
 
@@ -239,7 +250,7 @@ The DSL also supports:
 
 - `outdirs` for Debug and Release output directories;
 - `targets` for target triples;
-- `authors` for publication metadata;
+- `project.authors(...)` and `project.defaultFeatures(...)` for publication metadata;
 - `pml` for PML enablement; and
 - `workspaces` for named project paths.
 
@@ -250,11 +261,11 @@ state.
 `eprint(value)` and `eprintln(value)` mirror Kotlin's standard output helpers but write to standard error. Both accept
 nullable values; `eprintln` appends the platform line separator.
 
-Author declarations take exactly two values named `user` and `mail`; the function is not variadic:
+Author declarations are case-sensitive Progmasoft Account names and belong to the project block:
 
 ```kotlin
-authors {
-  author("Leitwolf", "leitwolf@example.me")
+project {
+  authors("Leitwolf", "Helmut")
 }
 ```
 
@@ -281,8 +292,8 @@ from a sandbox that changes Kotlin semantics.
 ## Output directories and artifact names
 
 Debug and Release output directories are independent DSL values. The defaults are `build/debug` and `build/release`.
-Resolved command-line `-Emit` has higher precedence than the project value, but the chosen output directory continues to
-come from the evaluated project mode.
+The command-line `-Emit` option selects the artifact kind; artifact choice is deliberately not stored in the project DSL.
+The chosen output directory continues to come from the evaluated project mode.
 
 Binary emission creates one `<project-or-entry>.vxse`. Source-owned emissions use flattened source stems inside the selected
 output directory: `Sources/MyApp/Main.vxs` becomes `build/debug/Main.o` for a debug object build. The original source

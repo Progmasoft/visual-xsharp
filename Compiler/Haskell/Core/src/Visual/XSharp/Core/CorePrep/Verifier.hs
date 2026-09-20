@@ -109,6 +109,7 @@ verifyPrimitive primitive atoms resultType
                        , Core.CoreLogicalAnd
                        , Core.CoreLogicalOr
                        , Core.CoreLogicalNot
+                       , Core.CoreTypeIs
                        ]
                 then True
                 else False
@@ -130,6 +131,11 @@ verifyPrimitive primitive atoms resultType
         booleanContext = all (\valueType -> valueType == boolType || isNumericType valueType) operandTypes
         negatable = isSignedIntegerType firstType || isFloatingType firstType
         operandProblems
+            | primitive == Core.CoreTypeIs = case operandTypes of
+                [subjectType, identityType]
+                    | referenceLike subjectType && typeSpelling identityType == "ulong" -> []
+                    | otherwise -> [problem "VXC0024" "CorePrep type test requires a reference subject and ulong identity"]
+                _ -> []
             | not operandsAgree = [problem "VXC0019" "CorePrep primitive operand types do not agree"]
             | logical && not booleanContext = [problem "VXC0020" "CorePrep logical primitive requires bool or numeric operands"]
             | integerOnly && not integer = [problem "VXC0022" "CorePrep bitwise primitive requires integer operands"]
@@ -140,6 +146,10 @@ verifyPrimitive primitive atoms resultType
             | otherwise = []
         expectedResult = if comparisonOrLogical then boolType else firstType
         resultProblems = if resultType == expectedResult then [] else [problem "VXC0009" "CorePrep primitive result type is inconsistent"]
+        referenceLike valueType = case valueType of
+            FunctionType _ _ -> True
+            NamedType _ _ -> not (isNumericType valueType) && valueType /= unitType
+            _ -> False
 
 verifyTerminator :: [Int] -> CorePrepTerminator -> [Diagnostic]
 verifyTerminator blockIds terminator = case terminator of
@@ -169,6 +179,11 @@ verifyLiteral literal valueType =
             Core.CoreString _ -> valueType == stringType
             Core.CoreBoolean _ -> valueType == boolType
             Core.CoreUnit -> valueType == unitType
+            Core.CoreNull -> referenceLike valueType
+        referenceLike value = case value of
+            FunctionType _ _ -> True
+            NamedType _ _ -> not (isNumericType value) && value /= unitType
+            _ -> False
 
 typeSpelling :: Type -> String
 typeSpelling (NamedType (QualifiedName [Identifier name]) []) = name

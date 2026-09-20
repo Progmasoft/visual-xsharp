@@ -71,6 +71,13 @@ simplifyNestedExpression environment expression = case expression of
             valueType
     CorePrimitive primitive arguments valueType ->
         CorePrimitive primitive (map (simplifyNestedExpression environment) arguments) valueType
+    CoreLet name bindingType value body valueType ->
+        CoreLet
+            name
+            bindingType
+            (simplifyNestedExpression environment value)
+            (simplifyNestedExpression environment body)
+            valueType
     CoreClosure captures parameters returnType body valueType ->
         CoreClosure
             [ capture {coreCaptureValue = simplifyNestedExpression environment (coreCaptureValue capture)}

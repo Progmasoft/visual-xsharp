@@ -5,6 +5,39 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## 0.3.8 - 2026-09-20
+
+### Compiler
+
+- Added first-class `is` patterns with wildcard, null, literal, exact nominal
+  type, relational, negated, conjunctive, and disjunctive forms across parsing,
+  resolution, type checking, Core, CorePrep, Xpp, Xmm, and LLVM lowering.
+- Added explicit Core `let`, null, and type-identity operations so pattern
+  subjects are evaluated once and short-circuit behavior remains visible to
+  verifiers and optimizers.
+- Advanced the Core and CorePrep wire contracts to version 5 and synchronized
+  their Haskell and C++ readers, writers, fixtures, and verifier coverage.
+- Replaced C-style CLI enums and function names with scoped C++20 APIs using
+  the repository's `kPascalCase` enum-member convention and camel-case fields.
+- Added typed ViPkg creation, VXCI package-shape options, multi-name executable,
+  library, and ViPkg target selection, and exact `--` forwarding for `vxs run`.
+
+### Project system
+
+- Removed project-level `emit`; emitted artifacts are selected by the `vxs`
+  invocation rather than persisted as project identity.
+- Replaced `sources.main` with repeatable executable and library targets,
+  including library namespace and ViPkg shape declarations, nullable exclusion
+  policies, named test suites, and a version 6 native source registry.
+- Replaced `sources.viget.publish` with `sources.viget.push`, moved authors and
+  default features into the project block, and aligned warning option names with
+  the compiler CLI.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the Bazel module, native CLI,
+  Kotlin project evaluator, and default project model to 0.3.8.
+
 ## 0.3.7 - 2026-09-12
 
 ### Compiler

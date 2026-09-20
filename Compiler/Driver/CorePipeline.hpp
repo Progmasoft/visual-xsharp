@@ -5,13 +5,13 @@
 
 #include "Compiler/Cli/Arguments/Options.hpp"
 
-// This is an internal C++20 boundary despite the stable symbol spellings. The
-// typed command prevents the Core pipeline from reparsing CLI strings.
+// This internal C++20 boundary receives typed options; the artifact pipeline
+// never reparses CLI spellings or exposes the retired C driver naming.
 [[nodiscard]] bool
-xs_driver_process_core_artifact(const char *path, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);
+ProcessCoreArtifact(const char *path, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);
 [[nodiscard]] bool
-xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);
+ProcessCoreArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);
 [[nodiscard]] bool
-xs_driver_process_xpp_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);
+ProcessXppArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);
 [[nodiscard]] bool
-xs_driver_process_xmm_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple);
+ProcessXmmArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);

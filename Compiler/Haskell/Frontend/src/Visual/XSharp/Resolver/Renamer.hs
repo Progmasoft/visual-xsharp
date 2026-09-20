@@ -186,6 +186,13 @@ renameExpression environment next expression = case expression of
         let (renamedLeft, afterLeft, leftProblems) = renameExpression environment next left
             (renamedRight, afterRight, rightProblems) = renameExpression environment afterLeft right
          in (BinaryExpression spanValue operator renamedLeft renamedRight (), afterRight, leftProblems ++ rightProblems)
+    IsPatternExpression spanValue subject patternValue _ ->
+        let (renamedSubject, afterSubject, subjectProblems) = renameExpression environment next subject
+            (renamedPattern, afterPattern, patternProblems) = renamePattern environment afterSubject patternValue
+         in ( IsPatternExpression spanValue renamedSubject renamedPattern ()
+            , afterPattern
+            , subjectProblems ++ patternProblems
+            )
     CallableExpression spanValue explicit sourceCaptures sourceParameters sourceBody _ ->
         let (captures, captureEnvironment, afterCaptures, captureProblems) =
                 renameCaptures environment next sourceCaptures
@@ -201,6 +208,25 @@ renameExpression environment next expression = case expression of
             , afterBody
             , captureProblems ++ parameterProblems ++ bodyProblems
             )
+
+renamePattern :: Environment -> Int -> Pattern Identifier () -> (Pattern RenamedName (), Int, [Diagnostic])
+renamePattern environment next patternValue = case patternValue of
+    WildcardPattern spanValue _ -> (WildcardPattern spanValue (), next, [])
+    NullPattern spanValue _ -> (NullPattern spanValue (), next, [])
+    LiteralPattern spanValue literal _ -> (LiteralPattern spanValue literal (), next, [])
+    TypePattern spanValue syntax _ -> (TypePattern spanValue syntax (), next, [])
+    RelationalPattern spanValue operator literal _ ->
+        (RelationalPattern spanValue operator literal (), next, [])
+    NotPattern spanValue nested _ ->
+        let (renamed, after, problems) = renamePattern environment next nested
+         in (NotPattern spanValue renamed (), after, problems)
+    AndPattern spanValue left right _ -> renamePair AndPattern spanValue left right
+    OrPattern spanValue left right _ -> renamePair OrPattern spanValue left right
+    where
+        renamePair constructor spanValue left right =
+            let (renamedLeft, afterLeft, leftProblems) = renamePattern environment next left
+                (renamedRight, afterRight, rightProblems) = renamePattern environment afterLeft right
+             in (constructor spanValue renamedLeft renamedRight (), afterRight, leftProblems ++ rightProblems)
 
 -- Capture initializers are renamed in the surrounding scope and in source
 -- order.  Each captured binding receives a fresh identity, which is how the

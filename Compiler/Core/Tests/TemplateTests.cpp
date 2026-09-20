@@ -349,7 +349,7 @@ TEST_CASE("rendered identity length-prefixes qualified components")
     CHECK(second.find("1:") != std::string::npos);
 }
 
-TEST_CASE("Core v4 preserves ordered template arguments")
+TEST_CASE("Core v5 preserves ordered template arguments")
 {
     const auto type = Applied(U"Mix",
                               { TypeArgument(Model::Type::string()),
@@ -363,10 +363,10 @@ TEST_CASE("Core v4 preserves ordered template arguments")
     const auto decoded = Core::Wire::Decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == module);
-    CHECK(Core::Wire::kCurrentVersion == 4U);
+    CHECK(Core::Wire::kCurrentVersion == 5U);
 }
 
-TEST_CASE("CorePrep v4 preserves ordered template arguments")
+TEST_CASE("CorePrep v5 preserves ordered template arguments")
 {
     const auto type = Applied(U"Mix",
                               { TypeArgument(Model::Type::string()),
@@ -380,7 +380,7 @@ TEST_CASE("CorePrep v4 preserves ordered template arguments")
     const auto decoded = CorePrepWire::decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == module);
-    CHECK(CorePrepWire::current_version == 4U);
+    CHECK(CorePrepWire::current_version == 5U);
 }
 
 TEST_CASE("specialization table interns identical types once")

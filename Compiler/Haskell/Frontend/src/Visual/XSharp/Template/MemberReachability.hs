@@ -315,6 +315,7 @@ expressionCalls owner expression = case expression of
             ++ concatMap (expressionCalls owner) arguments
     UnaryExpression _ _ value _ -> expressionCalls owner value
     BinaryExpression _ _ left right _ -> expressionCalls owner left ++ expressionCalls owner right
+    IsPatternExpression _ subject _ _ -> expressionCalls owner subject
     CallableExpression _ _ captures _ body _ ->
         concatMap (maybe [] (expressionCalls owner) . captureInitializer) captures
             ++ callableBodyCalls owner body

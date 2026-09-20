@@ -103,7 +103,7 @@ namespace
     }
 
     [[nodiscard]] auto
-    ReadGoldenHex(std::string_view filename = "wire-v4.hex") -> std::vector<std::uint8_t>
+    ReadGoldenHex(std::string_view filename = "wire-v5.hex") -> std::vector<std::uint8_t>
     {
         const auto path = std::filesystem::path(__FILE__).parent_path() / "Fixtures" / "Core" / std::filesystem::path(filename);
         std::ifstream stream(path);
@@ -131,7 +131,7 @@ namespace
     }
 } // namespace
 
-TEST_CASE("native VXCR v1 codec matches the Haskell golden contract")
+TEST_CASE("native VXCR v5 codec matches the Haskell golden contract")
 {
     const auto expected = ReadGoldenHex();
     const auto encoded = Core::Wire::Encode(GoldenModule());
@@ -181,7 +181,7 @@ TEST_CASE("VXCR reader rejects malformed boundaries and configured limits")
     }
 }
 
-TEST_CASE("VXCR v4 carries Haskell Core closure fields into native Core")
+TEST_CASE("VXCR v5 carries Haskell Core closure fields into native Core")
 {
     const auto source = ClosureModule();
     REQUIRE(Core::Verify(source).empty());
@@ -205,7 +205,7 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     // This golden file is emitted from closure-boundary.vxs by vxs-frontend,
     // rather than re-encoded by the C++ model. It therefore locks the actual
     // cross-language expression tag and field order that production uses.
-    const auto bytes = ReadGoldenHex("wire-v4-closure.hex");
+    const auto bytes = ReadGoldenHex("wire-v5-closure.hex");
     const auto decoded = Core::Wire::Decode(bytes);
     REQUIRE(decoded);
     REQUIRE(Core::Verify(*decoded.module).empty());
@@ -496,14 +496,14 @@ TEST_CASE("Core artifact driver validates and emits LLVM and native artifacts")
         stream.write(reinterpret_cast<const char *>(encoded.bytes.data()),
                      static_cast<std::streamsize>(encoded.bytes.size()));
     }
-    const auto settings = xs_cli_default_compiler_settings();
-    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_CHECK, XS_BUILD_OUTPUT_NONE, &settings, nullptr));
-    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_LLVM_LL, &settings, nullptr));
+    const auto settings = DefaultCompilerSettings();
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kCheck, BuildOutput::kBinary, &settings, nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kLlvmIr, &settings, nullptr));
     REQUIRE(std::filesystem::file_size(llvmPath) > 0U);
 #ifdef _WIN32
-    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_OBJECT, &settings, nullptr));
-    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_ASSEMBLY, &settings, nullptr));
-    REQUIRE(xs_driver_process_core_artifact(corePath.string().c_str(), XS_CLI_COMMAND_BUILD, XS_BUILD_OUTPUT_BINARY, &settings, nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kObject, &settings, nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kAssembly, &settings, nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kBinary, &settings, nullptr));
     REQUIRE(std::filesystem::file_size(objectPath) > 0U);
     REQUIRE(std::filesystem::file_size(assemblyPath) > 0U);
     REQUIRE(std::filesystem::file_size(executablePath) > 0U);

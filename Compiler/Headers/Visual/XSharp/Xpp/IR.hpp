@@ -52,7 +52,8 @@ namespace visual_xsharp::xpp
         BitwiseAnd,
         BitwiseXor,
         BitwiseOr,
-        BitwiseNot
+        BitwiseNot,
+        TypeIs
     };
     struct Operand final
     {

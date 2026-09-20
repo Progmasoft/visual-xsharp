@@ -7,19 +7,21 @@ project {
   name = "Example"
   version = "0.3.2"
   stability = Stability.BETA
+  description = "A Visual X# project"
+  authors("Leitwolf", "Helmut")
+  defaultFeatures("TOML")
 }
 
 compiler {
-  version = "0.3.7"
+  version = "0.3.8"
   standard = "26"
   backend = Backend.LLVM
   buildMode = BuildMode.RELEASE
-  emit = Emit.BINARY
-  warningsAsErrors = true
+  werror = true
   warnings = Warnings.ALL
-  experimentalWarnings = false
-  shadowWarnings = true
-  undefinedWarnings = true
+  wexperimental = false
+  wshadow = true
+  wundef = true
 
   unsafe {
     xppOptimizationPasses = true
@@ -48,11 +50,6 @@ targets {
   )
 }
 
-authors {
-  author("Leitwolf", "leitwolf@example.me")
-  author("Helmut", "helmut@example.me")
-}
-
 pml {
   enabled = true
 }
@@ -67,11 +64,12 @@ dependencies {
 
 sources {
   viget {
-    publish = false
+    push = false
     exclude("build/**")
   }
 
-  main {
+  executable {
+    name = "Example"
     srcDir = "Sources"
     entry = "Example.Main"
     exclude("Tests/**")

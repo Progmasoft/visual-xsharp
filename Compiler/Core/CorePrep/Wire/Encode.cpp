@@ -301,10 +301,14 @@ namespace visual_xsharp::core::wire
                     case Type::Kind::Unit:
                         if (!std::holds_alternative<std::monostate>(value.literal))
                             fail(ErrorKind::UnsupportedType, "unit literal", "literal payload does not match unit type");
+                        byte(0U);
                         return;
                     case Type::Kind::Bool:
                         if (const auto *boolean = std::get_if<bool>(&value.literal))
+                        {
+                            byte(1U);
                             byte(*boolean ? 1U : 0U);
+                        }
                         else
                             fail(ErrorKind::UnsupportedType, "bool literal", "literal payload does not match bool type");
                         return;
@@ -319,6 +323,7 @@ namespace visual_xsharp::core::wire
                     case Type::Kind::UInt32:
                     case Type::Kind::UInt64:
                     case Type::Kind::UInt128:
+                        byte(2U);
                         if (const auto *integer = std::get_if<IntegerLiteral>(&value.literal))
                             write_integer(*integer);
                         else if (const auto *integer64 = std::get_if<std::int64_t>(&value.literal))
@@ -332,6 +337,7 @@ namespace visual_xsharp::core::wire
                     case Type::Kind::Float32:
                     case Type::Kind::Float64:
                     case Type::Kind::Float128:
+                        byte(4U);
                         if (const auto *floating = std::get_if<FloatingLiteral>(&value.literal))
                         {
                             if (const auto issue = validate_literal(*floating, value.type))
@@ -348,12 +354,22 @@ namespace visual_xsharp::core::wire
                         return;
                     case Type::Kind::String:
                         if (const auto *string = std::get_if<std::u32string>(&value.literal))
+                        {
+                            byte(3U);
                             text(*string, "string literal");
+                        }
+                        else if (std::holds_alternative<std::monostate>(value.literal))
+                            byte(5U);
                         else
                             fail(ErrorKind::UnsupportedType, "string literal", "literal payload does not match string type");
                         return;
                     case Type::Kind::Function:
                     case Type::Kind::Named:
+                        if (std::holds_alternative<std::monostate>(value.literal))
+                            byte(5U);
+                        else
+                            fail(ErrorKind::UnsupportedType, "literal", "reference literal must be null");
+                        return;
                     case Type::Kind::TypeVariable:
                         fail(ErrorKind::UnsupportedType, "literal", "non-primitive literal types cannot cross CorePrep wire");
                         return;

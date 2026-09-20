@@ -134,7 +134,7 @@ callable-declaration = type, callable-name, "(", [ parameter-list ], ")",
 callable-name = identifier | operator-name ;
 operator-name = "Operator", "<", operator-token, [ "prefix" | "postfix" ], ">" ;
 operator-token = "+" | "-" | "*" | "/" | "//" | "%" | "**"
-               | "++" | "--" | "==" | "!=" | "<" | "<=" | ">" | ">="
+               | "++" | "--" | "==" | "\\=" | "<" | "<=" | ">" | ">="
                | "&" | "|" | "^" | "~" | "<<" | ">>"
                | "from" | "to" | custom-operator ;
 custom-operator = custom-operator-character, custom-operator-character,
@@ -230,8 +230,8 @@ match-statement = "match", match-targets, "{", { match-arm }, "}" ;
 match-expression = "match", match-targets, "{", { match-arm }, "}" ;
 match-targets = "(", expression, ")", { ",", "(", expression, ")" } ;
 match-arm = match-patterns, [ "if", expression ], "->", ( block | expression ), [ "," ] ;
-match-patterns = pattern, { ",", pattern } ;
-pattern = [ "(" ], ( literal | "null" | "_" | ".", identifier
+match-patterns = match-pattern, { ",", match-pattern } ;
+match-pattern = [ "(" ], ( literal | "null" | "_" | ".", identifier
         | type, ( identifier | "_" ) ), [ ")" ] ;
 
 while-statement = "while", "(", condition, ")", block ;
@@ -285,19 +285,21 @@ logical-or-expression = logical-and-expression,
 logical-and-expression = equality-expression,
                          { "&&", equality-expression } ;
 equality-expression = relational-expression,
-                      [ ( "==" | "!=" | "\\=" ), relational-expression ] ;
+                      [ ( "==" | "\\=" ), relational-expression ] ;
 relational-expression = stepped-range-expression,
                         [ relational-operator, stepped-range-expression
-                        | "is", pattern ] ;
+                        | "is", is-pattern ] ;
 relational-operator = "<" | "<=" | ">" | ">=" ;
-pattern = or-pattern ;
+is-pattern = or-pattern ;
 or-pattern = and-pattern, { "or", and-pattern } ;
 and-pattern = primary-pattern, { "and", primary-pattern } ;
 primary-pattern = "not", primary-pattern
-                | ( "<" | "<=" | ">" | ">=" | "==" | "!=" | "\\=" ), stepped-range-expression
+                | ( "<" | "<=" | ">" | ">=" | "==" | "\\=" ), literal
+                | "null"
+                | "_"
                 | type
                 | literal
-                | "(", pattern, ")" ;
+                | "(", is-pattern, ")" ;
 stepped-range-expression = range-expression, [ "by", range-expression ] ;
 range-expression = bitwise-or-expression,
                    [ ( ".." | "..<" | "..." ), bitwise-or-expression ] ;

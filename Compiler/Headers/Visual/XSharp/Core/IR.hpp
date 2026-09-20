@@ -42,7 +42,8 @@ namespace Visual::XSharp::Core
         BitwiseAnd,
         BitwiseXor,
         BitwiseOr,
-        BitwiseNot
+        BitwiseNot,
+        TypeIs
     };
 
     using CaptureMode = ::visual_xsharp::core::CaptureMode;
@@ -74,7 +75,8 @@ namespace Visual::XSharp::Core
             Literal,
             Apply,
             Primitive,
-            Closure
+            Closure,
+            Let
         };
 
         Kind kind{ Kind::Literal };
@@ -83,6 +85,10 @@ namespace Visual::XSharp::Core
         Literal literal{};
         Core::Primitive primitive{ Core::Primitive::Add };
         std::shared_ptr<Expression> callee;
+        std::shared_ptr<Expression> letValue;
+        std::shared_ptr<Expression> letBody;
+        SymbolName letSymbol{};
+        Type letType{ Type::unit() };
         std::vector<Expression> operands;
         std::vector<Capture> captures;
         std::vector<std::pair<SymbolName, Type>> closureParameters;
@@ -105,6 +111,8 @@ namespace Visual::XSharp::Core
             Type returnType,
             std::vector<Statement> body,
             Type valueType) -> Expression;
+        [[nodiscard]] static auto
+        Let(SymbolName name, Type bindingType, Expression value, Expression body, Type resultType) -> Expression;
         [[nodiscard]] auto
         operator==(const Expression &other) const -> bool;
     };

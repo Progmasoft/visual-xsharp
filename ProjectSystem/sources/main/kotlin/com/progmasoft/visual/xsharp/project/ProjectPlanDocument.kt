@@ -8,7 +8,7 @@ package com.progmasoft.visual.xsharp.project
 import kotlinx.serialization.Serializable
 
 private const val PROJECT_PLAN_FORMAT = "visual-xsharp-project-plan"
-private const val PROJECT_PLAN_VERSION = 4
+private const val PROJECT_PLAN_VERSION = 5
 
 /**
  * Stable wire representation of [ProjectPlan]. Keeping the transport schema separate from the
@@ -22,7 +22,8 @@ internal data class ProjectPlanDocument(
   val compiler: CompilerDocument,
   val outdirs: OutputDirectoriesDocument,
   val targets: List<String>,
-  val authors: List<AuthorDocument>,
+  val authors: List<String>,
+  val defaultFeatures: List<String>,
   val pml: PmlDocument,
   val dependencies: List<DependencyDocument>,
   val plugins: List<PluginDocument>,
@@ -40,7 +41,8 @@ internal data class ProjectPlanDocument(
             debug = plan.debugOutputDirectory,
           ),
         targets = plan.targets,
-        authors = plan.authors.map(AuthorDocument::from),
+        authors = plan.authors,
+        defaultFeatures = plan.defaultFeatures,
         pml = PmlDocument(enabled = plan.pmlEnabled),
         dependencies = dependenciesFrom(plan),
         plugins = plan.plugins.map(PluginDocument::from),
@@ -74,10 +76,16 @@ internal data class ProjectIdentityDocument(
   val name: String?,
   val version: String?,
   val stability: String?,
+  val description: String?,
 ) {
   companion object {
     fun from(identity: ProjectIdentity) =
-      ProjectIdentityDocument(identity.name, identity.version, identity.stability)
+      ProjectIdentityDocument(
+        identity.name,
+        identity.version,
+        identity.stability,
+        identity.description,
+      )
   }
 }
 
@@ -87,12 +95,11 @@ internal data class CompilerDocument(
   val standard: String,
   val backend: String,
   val buildMode: String,
-  val emit: String,
   val warnings: String,
-  val warningsAsErrors: Boolean,
-  val experimentalWarnings: Boolean,
-  val shadowWarnings: Boolean,
-  val undefinedWarnings: Boolean,
+  val werror: Boolean,
+  val wexperimental: Boolean,
+  val wshadow: Boolean,
+  val wundef: Boolean,
   val unsafe: UnsafeCompilerDocument,
   val llvm: LlvmDocument,
 ) {
@@ -103,12 +110,11 @@ internal data class CompilerDocument(
         standard = settings.standard,
         backend = settings.backend.name.lowercase(),
         buildMode = settings.buildMode.name.lowercase(),
-        emit = settings.emit.name.lowercase(),
         warnings = settings.warningLevel.name.lowercase(),
-        warningsAsErrors = settings.warningsAsErrors,
-        experimentalWarnings = settings.experimentalWarnings,
-        shadowWarnings = settings.shadowWarnings,
-        undefinedWarnings = settings.undefinedWarnings,
+        werror = settings.warningsAsErrors,
+        wexperimental = settings.experimentalWarnings,
+        wshadow = settings.shadowWarnings,
+        wundef = settings.undefinedWarnings,
         unsafe =
           UnsafeCompilerDocument(
             xppOptimizationPasses = settings.xppOptimizationPasses,
@@ -145,13 +151,6 @@ internal data class LlvmDocument(
 )
 
 @Serializable internal data class OutputDirectoriesDocument(val release: String, val debug: String)
-
-@Serializable
-internal data class AuthorDocument(val user: String, val mail: String) {
-  companion object {
-    fun from(author: Author) = AuthorDocument(author.user, author.mail)
-  }
-}
 
 @Serializable internal data class PmlDocument(val enabled: Boolean)
 
@@ -229,34 +228,57 @@ internal data class WorkspaceDocument(val name: String, val path: String) {
 
 @Serializable
 internal data class SourcesDocument(
-  val viget: PublishedSourcesDocument,
-  val main: MainSourcesDocument,
+  val viget: ViGetSourcesDocument,
+  val executables: List<ExecutableSourcesDocument>,
+  val libraries: List<LibrarySourcesDocument>,
   val tests: List<TestSuiteDocument>,
 ) {
   companion object {
     fun from(plan: ProjectPlan) =
       SourcesDocument(
-        viget = PublishedSourcesDocument(plan.publishSources, plan.publishExcludes),
-        main =
-          MainSourcesDocument(
-            srcDir = plan.sourceIncludes.singleOrNull() ?: "Sources",
-            entry = plan.entry,
-            exclude = plan.sourceExcludes,
-          ),
+        viget = ViGetSourcesDocument(plan.pushSources, plan.pushExcludes),
+        executables = plan.executables.map(ExecutableSourcesDocument::from),
+        libraries = plan.libraries.map(LibrarySourcesDocument::from),
         tests = plan.testSuites.map(TestSuiteDocument::from),
       )
   }
 }
 
 @Serializable
-internal data class PublishedSourcesDocument(val publish: Boolean, val exclude: List<String>?)
+internal data class ViGetSourcesDocument(val push: Boolean, val exclude: List<String>?)
 
 @Serializable
-internal data class MainSourcesDocument(
+internal data class ExecutableSourcesDocument(
+  val name: String,
   val srcDir: String,
   val entry: String,
   val exclude: List<String>?,
-)
+) {
+  companion object {
+    fun from(target: ExecutableSourceTarget) =
+      ExecutableSourcesDocument(target.name, target.srcDir, target.entry, target.exclude)
+  }
+}
+
+@Serializable
+internal data class LibrarySourcesDocument(
+  val name: String,
+  val viPkgTypes: List<String>,
+  val srcDir: String,
+  val namespace: String?,
+  val exclude: List<String>?,
+) {
+  companion object {
+    fun from(target: LibrarySourceTarget) =
+      LibrarySourcesDocument(
+        target.name,
+        target.viPkgTypes.map { it.name.lowercase() },
+        target.srcDir,
+        target.namespace,
+        target.exclude,
+      )
+  }
+}
 
 @Serializable
 internal data class TestSuiteDocument(

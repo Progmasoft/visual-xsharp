@@ -20,18 +20,30 @@ namespace Visual::XSharp::Driver
         std::vector<std::string> excludes;
     };
 
+    struct ResolvedSourceTarget final
+    {
+        std::string name;
+        std::optional<std::string> entry;
+        std::optional<std::string> namespaceName;
+        std::filesystem::path root;
+        std::vector<std::string> excludes;
+        std::vector<ViPkgType> viPkgTypes;
+    };
+
     struct ResolvedProject final
     {
         std::vector<std::filesystem::path> sourceRoots;
         std::vector<std::string> sourceExcludes;
         std::vector<ResolvedTestSuite> testSuites;
+        std::vector<ResolvedSourceTarget> executables;
+        std::vector<ResolvedSourceTarget> libraries;
         std::vector<std::string> targets;
         std::string entry;
         std::string compilerVersion;
         std::string standard;
         std::filesystem::path outputDirectory;
-        XsBuildOutput output{};
-        XsCompilerSettings settings{};
+        BuildOutput output{};
+        CompilerSettings settings{};
     };
 
     [[nodiscard]] std::optional<ResolvedProject>

@@ -96,7 +96,10 @@ evaluationTests =
     , ("multiplication evaluates exactly", binaryValue Multiply 6 7 == Right (IntegerTemplateValue 42))
     , ("division truncates toward zero", binaryValue Divide (-7) 2 == Right (IntegerTemplateValue (-3)))
     , ("rounded division moves positive halves away from zero", binaryValue FloorDivide 7 2 == Right (IntegerTemplateValue 4))
-    , ("rounded division moves negative halves away from zero", binaryValue FloorDivide (-7) 2 == Right (IntegerTemplateValue (-4)))
+    ,
+        ( "rounded division moves negative halves away from zero"
+        , binaryValue FloorDivide (-7) 2 == Right (IntegerTemplateValue (-4))
+        )
     , ("rounded division chooses the nearest integer", binaryValue FloorDivide 7 3 == Right (IntegerTemplateValue 2))
     , ("remainder follows dividend", binaryValue Remainder (-7) 2 == Right (IntegerTemplateValue (-1)))
     , ("power evaluates exactly", binaryValue Power 3 4 == Right (IntegerTemplateValue 81))
@@ -270,20 +273,20 @@ identityTests =
 
 wireTests :: [(String, Bool)]
 wireTests =
-    [ ("Core v4 round-trips fixed array type", coreTypeRoundTrip (fixed intType 4096))
-    , ("Core v4 round-trips Boolean template value", coreTypeRoundTrip (applied "Flag" [boolean True]))
-    , ("Core v4 round-trips character template value", coreTypeRoundTrip (applied "Code" [character 0x10ffff]))
-    , ("Core v4 round-trips template value parameter", coreTypeRoundTrip valueParameter)
+    [ ("Core v5 round-trips fixed array type", coreTypeRoundTrip (fixed intType 4096))
+    , ("Core v5 round-trips Boolean template value", coreTypeRoundTrip (applied "Flag" [boolean True]))
+    , ("Core v5 round-trips character template value", coreTypeRoundTrip (applied "Code" [character 0x10ffff]))
+    , ("Core v5 round-trips template value parameter", coreTypeRoundTrip valueParameter)
     ,
-        ( "Core v4 round-trips mixed arguments"
+        ( "Core v5 round-trips mixed arguments"
         , coreTypeRoundTrip (applied "Mix" [value (-3), typeArg stringType, boolean False])
         )
-    , ("CorePrep v4 round-trips fixed array type", corePrepTypeRoundTrip (fixed intType 4096))
-    , ("CorePrep v4 round-trips Boolean template value", corePrepTypeRoundTrip (applied "Flag" [boolean True]))
-    , ("CorePrep v4 round-trips character template value", corePrepTypeRoundTrip (applied "Code" [character 0x10ffff]))
-    , ("CorePrep v4 round-trips template value parameter", corePrepTypeRoundTrip valueParameter)
+    , ("CorePrep v5 round-trips fixed array type", corePrepTypeRoundTrip (fixed intType 4096))
+    , ("CorePrep v5 round-trips Boolean template value", corePrepTypeRoundTrip (applied "Flag" [boolean True]))
+    , ("CorePrep v5 round-trips character template value", corePrepTypeRoundTrip (applied "Code" [character 0x10ffff]))
+    , ("CorePrep v5 round-trips template value parameter", corePrepTypeRoundTrip valueParameter)
     ,
-        ( "CorePrep v4 round-trips mixed arguments"
+        ( "CorePrep v5 round-trips mixed arguments"
         , corePrepTypeRoundTrip (applied "Mix" [value (-3), typeArg stringType, boolean False])
         )
     ]

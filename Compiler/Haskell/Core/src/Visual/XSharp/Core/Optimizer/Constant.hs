@@ -6,7 +6,7 @@ module Visual.XSharp.Core.Optimizer.Constant
     , simplifyExpression
     ) where
 
-import Data.Bits (complement, shiftL, shiftR, (.&.), (.|.), xor)
+import Data.Bits (complement, shiftL, shiftR, xor, (.&.), (.|.))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
@@ -74,6 +74,13 @@ simplifyExpression environment expression = case expression of
             valueType
     CorePrimitive primitive arguments valueType ->
         foldPrimitive primitive (map (simplifyExpression environment) arguments) valueType
+    CoreLet name bindingType value body valueType ->
+        let simplifiedValue = simplifyExpression environment value
+            bodyEnvironment =
+                if isPropagatable simplifiedValue
+                    then Map.insert (resolvedSymbol name) simplifiedValue environment
+                    else Map.delete (resolvedSymbol name) environment
+         in CoreLet name bindingType simplifiedValue (simplifyExpression bodyEnvironment body) valueType
     CoreClosure captures parameters returnType body valueType ->
         let simplifiedCaptures = map simplifyCapture captures
             captureConstants =

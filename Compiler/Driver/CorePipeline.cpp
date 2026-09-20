@@ -73,18 +73,18 @@ namespace
     }
 
     [[nodiscard]] auto
-    Optimization(const XsCompilerSettings &settings) -> Llvm::OptimizationLevel
+    Optimization(const CompilerSettings &settings) -> Llvm::OptimizationLevel
     {
-        switch (settings.llvm_opt_level)
+        switch (settings.llvmOptLevel)
         {
-            case XS_LLVM_OPT_0:
-            case XS_LLVM_OPT_G:
+            case LlvmOptLevel::kO0:
+            case LlvmOptLevel::kOg:
                 return Llvm::OptimizationLevel::Debug;
-            case XS_LLVM_OPT_1:
+            case LlvmOptLevel::kO1:
                 return Llvm::OptimizationLevel::Less;
-            case XS_LLVM_OPT_2:
+            case LlvmOptLevel::kO2:
                 return Llvm::OptimizationLevel::Default;
-            case XS_LLVM_OPT_3:
+            case LlvmOptLevel::kO3:
                 return Llvm::OptimizationLevel::Aggressive;
         }
         return Llvm::OptimizationLevel::Default;
@@ -143,24 +143,24 @@ namespace
     }
 
     [[nodiscard]] auto
-    WriteArtifact(const char *inputPath, XsBuildOutput output, const Llvm::Artifact &artifact) -> bool
+    WriteArtifact(const char *inputPath, BuildOutput output, const Llvm::Artifact &artifact) -> bool
     {
-        if (output == XS_BUILD_OUTPUT_LLVM_LL)
+        if (output == BuildOutput::kLlvmIr)
         {
             const auto path = ArtifactPath(inputPath, ".ll");
             return ReportWrite(path, Llvm::WriteLlvmIr(path, artifact.llvm_ir));
         }
-        if (output == XS_BUILD_OUTPUT_LLVM_BC)
+        if (output == BuildOutput::kLlvmBitcode)
         {
             const auto path = ArtifactPath(inputPath, ".bc");
             return ReportWrite(path, Llvm::WriteBitcode(path, artifact.bitcode));
         }
-        if (output == XS_BUILD_OUTPUT_OBJECT)
+        if (output == BuildOutput::kObject)
         {
             const auto path = ArtifactPath(inputPath, ".o");
             return ReportWrite(path, Llvm::WriteObject(path, artifact.object));
         }
-        if (output == XS_BUILD_OUTPUT_ASSEMBLY)
+        if (output == BuildOutput::kAssembly)
         {
             const auto path = ArtifactPath(inputPath, ".asm");
             return ReportWrite(path, Llvm::WriteAssembly(path, artifact.assembly));
@@ -188,9 +188,9 @@ namespace
     }
 
     [[nodiscard]] auto
-    WriteIntermediate(const char *artifactBasePath, XsBuildOutput output, const visual_xsharp::PipelineResult &result) -> bool
+    WriteIntermediate(const char *artifactBasePath, BuildOutput output, const visual_xsharp::PipelineResult &result) -> bool
     {
-        if (output == XS_BUILD_OUTPUT_XPP && result.xpp)
+        if (output == BuildOutput::kXpp && result.xpp)
         {
             auto encoded = Visual::XSharp::Xpp::Wire::Encode(*result.xpp);
             if (!encoded)
@@ -200,7 +200,7 @@ namespace
             }
             return WriteBytes(ArtifactPath(artifactBasePath, ".xpp"), encoded.bytes, "Xpp");
         }
-        if (output == XS_BUILD_OUTPUT_XMM && result.xmm)
+        if (output == BuildOutput::kXmm && result.xmm)
         {
             auto encoded = Visual::XSharp::Xmm::Wire::Encode(*result.xmm);
             if (!encoded)
@@ -247,7 +247,7 @@ namespace
     };
 
     [[nodiscard]] auto
-    ProcessArtifact(InputStage inputStage, const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple) -> bool
+    ProcessArtifact(InputStage inputStage, const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple) -> bool
     {
         if (path == nullptr || artifactBasePath == nullptr || settings == nullptr)
             return false;
@@ -267,21 +267,21 @@ namespace
         }
 
         visual_xsharp::PipelineOptions options;
-        options.optimize_xpp = settings->xpp_optimization_passes;
-        options.optimize_xmm = settings->xmm_optimization_passes;
+        options.optimize_xpp = settings->xppOptimizationPasses;
+        options.optimize_xmm = settings->xmmOptimizationPasses;
         options.llvm.optimization = Optimization(*settings);
         options.llvm.target_triple = targetTriple == nullptr ? "" : targetTriple;
-        if (output == XS_BUILD_OUTPUT_XPP)
+        if (output == BuildOutput::kXpp)
             options.stop_after = visual_xsharp::PipelineStop::Xpp;
-        else if (output == XS_BUILD_OUTPUT_XMM)
+        else if (output == BuildOutput::kXmm)
             options.stop_after = visual_xsharp::PipelineStop::Xmm;
-        if (command != XS_CLI_COMMAND_CHECK)
+        if (command != CliCommand::kCheck)
         {
-            if (output == XS_BUILD_OUTPUT_BINARY || output == XS_BUILD_OUTPUT_OBJECT)
+            if (output == BuildOutput::kBinary || output == BuildOutput::kObject)
                 options.llvm.machineCode = Llvm::MachineCodeEmission::Object;
-            else if (output == XS_BUILD_OUTPUT_ASSEMBLY)
+            else if (output == BuildOutput::kAssembly)
                 options.llvm.machineCode = Llvm::MachineCodeEmission::Assembly;
-            options.llvm.executableEntry = output == XS_BUILD_OUTPUT_BINARY;
+            options.llvm.executableEntry = output == BuildOutput::kBinary;
         }
 
         auto result = inputStage == InputStage::Core  ? Visual::XSharp::Pipeline::ConsumeCore(*bytes, options)
@@ -292,17 +292,17 @@ namespace
             PrintFailure(result);
             return false;
         }
-        if (command == XS_CLI_COMMAND_CHECK)
+        if (command == CliCommand::kCheck)
         {
             fmt::print(stderr, "vxs: compiler artifact '{}' is valid through its requested pipeline boundary\n", path);
             return true;
         }
-        if (output == XS_BUILD_OUTPUT_XPP || output == XS_BUILD_OUTPUT_XMM)
+        if (output == BuildOutput::kXpp || output == BuildOutput::kXmm)
             return WriteIntermediate(artifactBasePath, output, result);
-        if (output == XS_BUILD_OUTPUT_BINARY)
+        if (output == BuildOutput::kBinary)
             return WriteExecutable(artifactBasePath, *result.llvm);
-        if (output == XS_BUILD_OUTPUT_OBJECT || output == XS_BUILD_OUTPUT_ASSEMBLY
-            || output == XS_BUILD_OUTPUT_LLVM_LL || output == XS_BUILD_OUTPUT_LLVM_BC)
+        if (output == BuildOutput::kObject || output == BuildOutput::kAssembly
+            || output == BuildOutput::kLlvmIr || output == BuildOutput::kLlvmBitcode)
             return WriteArtifact(artifactBasePath, output, *result.llvm);
         fmt::print(stderr, "vxs: requested artifact conversion is not supported from this input stage\n");
         return false;
@@ -310,25 +310,25 @@ namespace
 } // namespace
 
 bool
-xs_driver_process_core_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
+ProcessCoreArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
 {
     return ProcessArtifact(InputStage::Core, path, artifactBasePath, command, output, settings, targetTriple);
 }
 
 bool
-xs_driver_process_core_artifact(const char *path, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
+ProcessCoreArtifact(const char *path, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
 {
-    return xs_driver_process_core_artifact_as(path, path, command, output, settings, targetTriple);
+    return ProcessCoreArtifactAs(path, path, command, output, settings, targetTriple);
 }
 
 bool
-xs_driver_process_xpp_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
+ProcessXppArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
 {
     return ProcessArtifact(InputStage::Xpp, path, artifactBasePath, command, output, settings, targetTriple);
 }
 
 bool
-xs_driver_process_xmm_artifact_as(const char *path, const char *artifactBasePath, XsCliCommand command, XsBuildOutput output, const XsCompilerSettings *settings, const char *targetTriple)
+ProcessXmmArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
 {
     return ProcessArtifact(InputStage::Xmm, path, artifactBasePath, command, output, settings, targetTriple);
 }

@@ -171,6 +171,7 @@ namespace Visual::XSharp::Xmm
                 case xmm::Opcode::BitwiseAnd:
                 case xmm::Opcode::BitwiseXor:
                 case xmm::Opcode::BitwiseOr:
+                case xmm::Opcode::TypeIs:
                     return 2;
                 case xmm::Opcode::Call:
                 case xmm::Opcode::MakeClosure:
@@ -358,6 +359,15 @@ namespace Visual::XSharp::Xmm
                 {
                     if (instruction.result_type.kind != core::Type::Kind::Bool || (instruction.operands.size() == 2 && instruction.operands[0].type != instruction.operands[1].type))
                         context.add(IssueKind::OperandType, "VXL1023", "comparison requires equal operand types and Bool result");
+                }
+                else if (instruction.opcode == xmm::Opcode::TypeIs)
+                {
+                    if (instruction.result_type.kind != core::Type::Kind::Bool || instruction.operands.size() != 2U
+                        || (instruction.operands[0].type.kind != core::Type::Kind::Named
+                            && instruction.operands[0].type.kind != core::Type::Kind::String
+                            && instruction.operands[0].type.kind != core::Type::Kind::Function)
+                        || instruction.operands[1].type != core::Type::uint64())
+                        context.add(IssueKind::OperandType, "VXL1048", "type test requires a reference subject, ulong identity and Bool result");
                 }
                 else if (instruction.opcode == xmm::Opcode::ShiftLeft || instruction.opcode == xmm::Opcode::ShiftRight
                          || instruction.opcode == xmm::Opcode::BitwiseAnd || instruction.opcode == xmm::Opcode::BitwiseXor

@@ -127,6 +127,7 @@ expressionSymbolIds expression = case expression of
     CoreLiteral _ _ -> []
     CoreApply callee arguments _ -> expressionSymbolIds callee ++ concatMap expressionSymbolIds arguments
     CorePrimitive _ arguments _ -> concatMap expressionSymbolIds arguments
+    CoreLet name _ value body _ -> symbol name : expressionSymbolIds value ++ expressionSymbolIds body
     CoreClosure captures parameters _ body _ ->
         map (symbol . coreCaptureName) captures
             ++ concatMap (expressionSymbolIds . coreCaptureValue) captures
@@ -212,6 +213,11 @@ atomize :: PrepState -> OpenBlock -> CoreExpression -> ([CorePrepBlock], OpenBlo
 atomize state open expression = case expression of
     CoreVariable name valueType -> ([], open, CorePrepVariable name valueType, state)
     CoreLiteral literal valueType -> ([], open, CorePrepLiteral literal valueType, state)
+    CoreLet name valueType value body _ ->
+        let (valueBlocks, valueOpen, valueOperation, afterValue) = atomizeOperation state open value
+            boundOpen = appendInstruction valueOpen (CorePrepBind name valueType False valueOperation)
+            (bodyBlocks, bodyOpen, bodyAtom, afterBody) = atomize afterValue boundOpen body
+         in (valueBlocks ++ bodyBlocks, bodyOpen, bodyAtom, afterBody)
     CorePrimitive primitive [left, right] _
         | primitive == CoreLogicalAnd || primitive == CoreLogicalOr ->
             atomizeShortCircuit state open primitive left right
@@ -246,6 +252,11 @@ atomizeOperation state open expression = case expression of
             (finalOpen, preparedAtoms, final) =
                 if logical then booleanizeMany after continued atoms else (continued, atoms, after)
          in (closed, finalOpen, CorePrepPrimitive primitive preparedAtoms, final)
+    CoreLet name valueType value body _ ->
+        let (valueBlocks, valueOpen, valueOperation, afterValue) = atomizeOperation state open value
+            boundOpen = appendInstruction valueOpen (CorePrepBind name valueType False valueOperation)
+            (bodyBlocks, bodyOpen, bodyAtom, afterBody) = atomize afterValue boundOpen body
+         in (valueBlocks ++ bodyBlocks, bodyOpen, CorePrepCopy bodyAtom, afterBody)
     CoreClosure captures parameters returnType body _ ->
         let closureId = nextTemporary state
             closureName =

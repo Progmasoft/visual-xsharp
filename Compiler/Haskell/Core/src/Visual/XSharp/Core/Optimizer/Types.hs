@@ -123,6 +123,7 @@ measureExpression expression =
             CoreApply callee arguments _ ->
                 (foldl addMetrics (measureExpression callee) (map measureExpression arguments)) {metricCalls = 1}
             CorePrimitive _ arguments _ -> foldl addMetrics emptyMetrics (map measureExpression arguments)
+            CoreLet _ _ value body _ -> addMetrics (measureExpression value) (measureExpression body)
             CoreClosure captures _ _ body _ ->
                 ( addMetrics
                     (foldl addMetrics emptyMetrics (map (measureExpression . coreCaptureValue) captures))

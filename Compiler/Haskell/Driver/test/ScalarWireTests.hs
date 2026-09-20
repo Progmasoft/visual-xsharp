@@ -24,8 +24,8 @@ scalarWireTests =
 
 versionTests :: [(String, Bool)]
 versionTests =
-    [ ("Core wire current version is 4", currentCoreWireVersion == CoreWireVersion 4)
-    , ("CorePrep wire current version is 4", currentWireVersion == WireVersion 4)
+    [ ("Core wire current version is 5", currentCoreWireVersion == CoreWireVersion 5)
+    , ("CorePrep wire current version is 5", currentWireVersion == WireVersion 5)
     , ("Core numeric payload default is bounded", maximumCoreNumericBytes defaultCoreWireLimits == 4096)
     , ("CorePrep numeric payload default is bounded", maximumNumericBytes defaultWireLimits == 4096)
     ]
@@ -239,9 +239,9 @@ invalidCorePrepLiteral valueType literal = hasDiagnostic "VXC0023" (verifyCorePr
 malformedWireTests :: [(String, Bool)]
 malformedWireTests =
     [ ("Core wire rejects v2 input", rejectsCoreVersion 2)
-    , ("Core wire rejects future input", rejectsCoreVersion 5)
+    , ("Core wire rejects future input", rejectsCoreVersion 6)
     , ("CorePrep wire rejects v2 input", rejectsCorePrepVersion 2)
-    , ("CorePrep wire rejects future input", rejectsCorePrepVersion 5)
+    , ("CorePrep wire rejects future input", rejectsCorePrepVersion 6)
     , ("Core wire enforces numeric byte limit", coreNumericLimit)
     , ("CorePrep wire enforces numeric byte limit", corePrepNumericLimit)
     ]

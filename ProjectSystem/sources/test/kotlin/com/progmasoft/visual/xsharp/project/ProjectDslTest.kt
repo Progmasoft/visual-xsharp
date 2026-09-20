@@ -37,13 +37,13 @@ class ProjectDslTest {
   @Test
   fun acceptsAnyNamespaceQualifiedEntryClassName() {
     sources {
-      main { entry = "Demo.Main" }
+      executable { entry = "Demo.Main" }
     }
     val plan = ProjectRuntime.build()
 
     assertNull(plan.identity)
-    assertEquals(listOf("Sources"), plan.sourceIncludes)
-    assertEquals("Demo.Main", plan.entry)
+    assertEquals(listOf("Sources"), plan.executables.map { it.srcDir })
+    assertEquals("Demo.Main", plan.executables.single().entry)
     assertEquals(BuildMode.DEBUG, plan.compiler.buildMode)
     assertEquals(LlvmOptLevel.O0, effectiveOptLevel(plan.compiler))
     assertTrue(plan.compiler.xppOptimizationPasses)
@@ -52,15 +52,40 @@ class ProjectDslTest {
     listOf("Namespace.Program", "Namespace.Namespace.Program", "Company.Tool.Bootstrap").forEach {
       entry ->
       ProjectRuntime.reset()
-      sources { main { this.entry = entry } }
-      assertEquals(entry, ProjectRuntime.build().entry)
+      sources { executable { this.entry = entry } }
+      assertEquals(entry, ProjectRuntime.build().executables.single().entry)
     }
+  }
+
+  @Test
+  fun modelsExecutableEntryAndLibraryNamespaceSeparately() {
+    project { name = "Artifacts" }
+    sources {
+      executable {
+        name = "Tool"
+        entry = "Artifacts.Program"
+      }
+      library {
+        name = "Runtime"
+        namespace = "Artifacts.Runtime"
+        viPkgType(ViPkgType.VXSLIB, ViPkgType.STATICLIB)
+      }
+    }
+
+    val plan = ProjectRuntime.build()
+    assertEquals("Artifacts.Program", plan.executables.single().entry)
+    assertEquals("Artifacts.Runtime", plan.libraries.single().namespace)
+    assertEquals(
+      listOf(ViPkgType.VXSLIB, ViPkgType.STATICLIB),
+      plan.libraries.single().viPkgTypes,
+    )
+    assertFalse(PlanWriter.write(plan).contains("\"emit\""))
   }
 
   @Test
   fun permitsAnyProjectFieldSubsetWhenPublishingIsDisabled() {
     project { name = "PrivateCompiler" }
-    sources { main { entry = "PrivateCompiler.Main" } }
+    sources { executable { entry = "PrivateCompiler.Main" } }
 
     val plan = ProjectRuntime.build()
     assertEquals(ProjectIdentity("PrivateCompiler", null, null), plan.identity)
@@ -76,7 +101,7 @@ class ProjectDslTest {
       version = "0.3.1"
       stability = Stability.DEV
     }
-    sources { main { entry = "Internal.Tool" } }
+    sources { executable { entry = "Internal.Tool" } }
     assertEquals(ProjectIdentity(null, "DEV", "0.3.1"), ProjectRuntime.build().identity)
   }
 
@@ -86,13 +111,15 @@ class ProjectDslTest {
       ProjectRuntime.reset()
       project(block)
       sources {
-        viget { publish = true }
-        main { entry = "Published.Main" }
+        viget { push = true }
+        executable { entry = "Published.Main" }
       }
       return assertFailsWith { ProjectRuntime.build() }
     }
 
-    assertTrue(rejectionFor {}.message.orEmpty().contains("name, version, stability"))
+    assertTrue(
+      rejectionFor {}.message.orEmpty().contains("name, version, stability, description, authors")
+    )
     assertTrue(rejectionFor { name = "Published" }.message.orEmpty().contains("version, stability"))
     assertTrue(
       rejectionFor {
@@ -109,12 +136,14 @@ class ProjectDslTest {
   fun rejectsMissingOrUnqualifiedEntry() {
     assertFailsWith<ProjectConfigurationException> { ProjectRuntime.build() }
 
-    sources { main { entry = "Main" } }
-    assertFailsWith<ProjectConfigurationException> { ProjectRuntime.build() }
+    assertFailsWith<ProjectConfigurationException> {
+      sources { executable { entry = "Main" } }
+    }
 
     ProjectRuntime.reset()
-    sources { main { entry = "Namespace." } }
-    assertFailsWith<ProjectConfigurationException> { ProjectRuntime.build() }
+    assertFailsWith<ProjectConfigurationException> {
+      sources { executable { entry = "Namespace." } }
+    }
   }
 
   @Test
@@ -130,18 +159,20 @@ class ProjectDslTest {
       name = "Compiler"
       version = "0.3.0"
       stability = Stability.NIGHTLY
+      description = "Compiler project"
+      authors("Leitwolf")
+      defaultFeatures("TOML")
     }
     compiler {
       version = "0.3.0"
       standard = "26"
       backend = Backend.LLVM
       buildMode = BuildMode.RELEASE
-      emit = Emit.XMM
-      warningsAsErrors = true
+      werror = true
       warnings = Warnings.ALL
-      experimentalWarnings = true
-      shadowWarnings = true
-      undefinedWarnings = false
+      wexperimental = true
+      wshadow = true
+      wundef = false
       unsafe {
         xppOptimizationPasses = false
         xmmOptimizationPasses = false
@@ -158,15 +189,14 @@ class ProjectDslTest {
       debug = "out/debug"
     }
     targets { target("x86_64-pc-windows-msvc", "aarch64-apple-darwin") }
-    authors { author("Leitwolf", "leitwolf@example.me") }
     pml { enabled = false }
     workspaces { workspace("core") { path = "./Core" } }
     sources {
       viget {
-        publish = true
+        push = true
         exclude("build/**")
       }
-      main {
+      executable {
         srcDir = "Source"
         exclude("Generated/**")
         entry = "Compiler.Main"
@@ -180,16 +210,20 @@ class ProjectDslTest {
     }
 
     val plan = ProjectRuntime.build()
-    assertEquals(ProjectIdentity("Compiler", "NIGHTLY", "0.3.0"), plan.identity)
-    assertEquals(Emit.XMM, plan.compiler.emit)
+    assertEquals(
+      ProjectIdentity("Compiler", "NIGHTLY", "0.3.0", "Compiler project"),
+      plan.identity,
+    )
+    assertEquals(listOf("Leitwolf"), plan.authors)
+    assertEquals(listOf("TOML"), plan.defaultFeatures)
     assertEquals(LlvmCompiler.ORC, plan.compiler.llvmCompiler)
     assertEquals(LlvmLto.THIN, plan.compiler.llvmLto)
     assertEquals(listOf("x86_64-pc-windows-msvc", "aarch64-apple-darwin"), plan.targets)
     assertEquals(listOf(Workspace("core", "./Core")), plan.workspaces)
     assertFalse(plan.pmlEnabled)
-    assertTrue(plan.publishSources)
-    assertEquals(listOf("build/**"), plan.publishExcludes)
-    assertEquals(listOf("Generated/**"), plan.sourceExcludes)
+    assertTrue(plan.pushSources)
+    assertEquals(listOf("build/**"), plan.pushExcludes)
+    assertEquals(listOf("Generated/**"), plan.executables.single().exclude)
     assertEquals(
       listOf(
         TestSuite("unit", "Tests/Unit", "tests", listOf("Fixtures/**")),
@@ -201,12 +235,12 @@ class ProjectDslTest {
 
   @Test
   fun derivesLlvmOptimizationFromBuildMode() {
-    sources { main { entry = "Debug.Main" } }
+    sources { executable { entry = "Debug.Main" } }
     assertEquals(LlvmOptLevel.O0, effectiveOptLevel(ProjectRuntime.build().compiler))
 
     ProjectRuntime.reset()
     compiler { buildMode = BuildMode.RELEASE }
-    sources { main { entry = "Release.Main" } }
+    sources { executable { entry = "Release.Main" } }
     assertEquals(LlvmOptLevel.O3, effectiveOptLevel(ProjectRuntime.build().compiler))
   }
 
@@ -217,10 +251,10 @@ class ProjectDslTest {
       version = "1.0.0"
       stability = Stability.STABLE
     }
-    sources { main { entry = "Plan.Main" } }
+    sources { executable { entry = "Plan.Main" } }
     val text = PlanWriter.write(ProjectRuntime.build())
 
-    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":4"))
+    assertTrue(text.startsWith("{\"format\":\"visual-xsharp-project-plan\",\"version\":5"))
     assertTrue(text.contains("\"entry\":\"Plan.Main\""))
     assertTrue(text.contains("\"xmmOptimizationPasses\":true"))
     assertFalse(text.contains("module"))
@@ -230,7 +264,7 @@ class ProjectDslTest {
 
   @Test
   fun planWriterUsesTypedJsonEncodingAndDeterministicPluginMaps() {
-    sources { main { entry = "Codec.Main" } }
+    sources { executable { entry = "Codec.Main" } }
     val plugin =
       PluginPlanEntry(
         publisher = "Progmasoft",
@@ -242,7 +276,13 @@ class ProjectDslTest {
         contributions = linkedMapOf("zeta" to "last", "alpha" to "first"),
       )
     val plan =
-      ProjectRuntime.build().copy(entry = "Quoted.\"Main\"\nClass", plugins = listOf(plugin))
+      ProjectRuntime.build().let { original ->
+        original.copy(
+          executables =
+            listOf(original.executables.single().copy(entry = "Quoted.\"Main\"\nClass")),
+          plugins = listOf(plugin),
+        )
+      }
     val text = PlanWriter.write(plan)
     val document = Json.parseToJsonElement(text).jsonObject
 
@@ -251,7 +291,9 @@ class ProjectDslTest {
       document
         .getValue("sources")
         .jsonObject
-        .getValue("main")
+        .getValue("executables")
+        .jsonArray
+        .single()
         .jsonObject
         .getValue("entry")
         .jsonPrimitive
@@ -272,23 +314,32 @@ class ProjectDslTest {
 
   @Test
   fun excludeDefaultsRemainNullAcrossEverySourceSection() {
-    sources { main { entry = "Defaults.Main" } }
+    sources { executable { entry = "Defaults.Main" } }
     val plan = ProjectRuntime.build()
 
-    assertNull(plan.publishExcludes)
-    assertNull(plan.sourceExcludes)
+    assertNull(plan.pushExcludes)
+    assertNull(plan.executables.single().exclude)
     assertTrue(plan.testSuites.isEmpty())
     val sourceDocument =
       Json.parseToJsonElement(PlanWriter.write(plan)).jsonObject.getValue("sources").jsonObject
     assertEquals("null", sourceDocument.getValue("viget").jsonObject.getValue("exclude").toString())
-    assertEquals("null", sourceDocument.getValue("main").jsonObject.getValue("exclude").toString())
+    assertEquals(
+      "null",
+      sourceDocument
+        .getValue("executables")
+        .jsonArray
+        .single()
+        .jsonObject
+        .getValue("exclude")
+        .toString(),
+    )
     assertEquals(emptyList(), sourceDocument.getValue("tests").jsonArray)
   }
 
   @Test
   fun testSuitesKeepIndependentIdentityFrameworkRootsAndNullableExcludes() {
     sources {
-      main { entry = "Suites.Main" }
+      executable { entry = "Suites.Main" }
       test("unit") {
         framework = "tests"
         exclude("Fixtures/**", "Generated/**")
@@ -309,7 +360,7 @@ class ProjectDslTest {
   fun rejectsDuplicateOrInvalidTestSuiteNames() {
     assertFailsWith<ProjectConfigurationException> {
       sources {
-        main { entry = "Suites.Main" }
+        executable { entry = "Suites.Main" }
         test("unit") {}
         test("unit") {}
       }
@@ -318,7 +369,7 @@ class ProjectDslTest {
     ProjectRuntime.reset()
     assertFailsWith<ProjectConfigurationException> {
       sources {
-        main { entry = "Suites.Main" }
+        executable { entry = "Suites.Main" }
         test("unit tests") {}
       }
     }
@@ -356,7 +407,7 @@ class ProjectDslTest {
         "not source",
       )
       sources {
-        main { entry = "Demo.Main" }
+        executable { entry = "Demo.Main" }
         test("unit") {
           testDir = "Tests/Unit"
           framework = "tests"
@@ -371,26 +422,28 @@ class ProjectDslTest {
 
       ProjectOutput.emit(ProjectRuntime.build())
       val records = readRecords(output)
-      assertEquals("visual-xsharp-sources-v5", records[0])
-      assertEquals("Demo.Main", records[1])
-      assertEquals("build/debug", records[18])
-      assertEquals("1", records[19])
-      assertEquals("1", records[20])
-      assertEquals("0", records[21])
-      assertEquals("2", records[22])
-      assertEquals("x86_64-pc-windows-msvc", records[23])
+      assertEquals("visual-xsharp-sources-v6", records[0])
+      assertEquals("build/debug", records[16])
+      assertEquals("1", records[17])
+      assertEquals("1", records[18])
+      assertEquals("0", records[19])
+      assertEquals("2", records[20])
+      assertEquals("x86_64-pc-windows-msvc", records[21])
+      assertEquals("Main", records[22])
+      assertEquals("Demo.Main", records[23])
       assertTrue(records[24].endsWith("Sources"))
-      assertEquals("unit", records[25])
-      assertEquals("tests", records[26])
-      assertTrue(records[27].endsWith("Tests\\Unit") || records[27].endsWith("Tests/Unit"))
-      assertEquals("1", records[28])
-      assertEquals("Fixtures/**", records[29])
-      assertEquals("integration", records[30])
-      assertEquals("", records[31])
+      assertEquals("0", records[25])
+      assertEquals("unit", records[26])
+      assertEquals("tests", records[27])
+      assertTrue(records[28].endsWith("Tests\\Unit") || records[28].endsWith("Tests/Unit"))
+      assertEquals("1", records[29])
+      assertEquals("Fixtures/**", records[30])
+      assertEquals("integration", records[31])
+      assertEquals("", records[32])
       assertTrue(
-        records[32].endsWith("Tests\\Integration") || records[32].endsWith("Tests/Integration")
+        records[33].endsWith("Tests\\Integration") || records[33].endsWith("Tests/Integration")
       )
-      assertEquals("0", records[33])
+      assertEquals("0", records[34])
       assertFalse(records.any { it.endsWith(".vxs") })
     } finally {
       root.toFile().deleteRecursively()

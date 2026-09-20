@@ -24,7 +24,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 4
+currentCoreWireVersion = CoreWireVersion 5
 
 data CoreWireLimits = CoreWireLimits
     { maximumCoreWireBytes :: Int
@@ -214,6 +214,13 @@ encodeExpression limits depth expression
                     (encodeStatement limits)
                     body
             pure ([4] ++ encodedType ++ encodedCaptures ++ encodedParameters ++ encodedReturn ++ encodedBody)
+        CoreLet name bindingType value body valueType -> do
+            encodedType <- encodeType limits 0 valueType
+            encodedName <- encodeResolvedName limits "let symbol" name
+            encodedBindingType <- encodeType limits 0 bindingType
+            encodedValue <- encodeExpression limits (depth + 1) value
+            encodedBody <- encodeExpression limits (depth + 1) body
+            pure ([5] ++ encodedType ++ encodedName ++ encodedBindingType ++ encodedValue ++ encodedBody)
 
 encodeCoreCapture :: CoreWireLimits -> Int -> CoreCapture -> Encoder
 encodeCoreCapture limits depth capture = do
@@ -235,6 +242,7 @@ encodeLiteral limits literal = case literal of
     CoreInteger value -> (4 :) <$> encodeInteger limits value
     CoreFloating spelling -> (5 :) <$> encodeAscii limits "floating literal" spelling
     CoreString value -> (3 :) <$> encodeText limits "string literal" value
+    CoreNull -> pure [6]
 
 encodeType :: CoreWireLimits -> Int -> Type -> Encoder
 encodeType limits depth valueType
@@ -467,6 +475,13 @@ decodeExpression depth = do
             returnType <- decodeType 0
             body <- decodeVector "closure statement count" maximumCoreStatements decodeStatement
             pure (CoreClosure captures parameters returnType body valueType)
+        5 -> do
+            valueType <- decodeType 0
+            name <- decodeResolvedName "let symbol"
+            bindingType <- decodeType 0
+            value <- decodeExpression (depth + 1)
+            body <- decodeExpression (depth + 1)
+            pure (CoreLet name bindingType value body valueType)
         _ -> invalidTag "expression tag" tag
 
 decodeCoreCapture :: Int -> Decoder CoreCapture
@@ -494,6 +509,7 @@ decodeLiteral = do
         3 -> CoreString <$> decodeText "string literal"
         4 -> CoreInteger <$> decodeInteger
         5 -> CoreFloating <$> decodeAscii "floating literal"
+        6 -> pure CoreNull
         _ -> invalidTag "literal tag" tag
 
 decodeType :: Int -> Decoder Type
@@ -659,6 +675,7 @@ decodePrimitive tag = case drop (fromIntegral tag) primitives of
             , CoreBitwiseXor
             , CoreBitwiseOr
             , CoreBitwiseNot
+            , CoreTypeIs
             ]
 
 primitiveTag :: CorePrimitive -> Word8
@@ -688,6 +705,7 @@ primitiveTag primitive = fromIntegral (index primitive primitives)
             , CoreBitwiseXor
             , CoreBitwiseOr
             , CoreBitwiseNot
+            , CoreTypeIs
             ]
         index :: CorePrimitive -> [CorePrimitive] -> Int
         index value (candidate : remaining) = if value == candidate then 0 else 1 + index value remaining

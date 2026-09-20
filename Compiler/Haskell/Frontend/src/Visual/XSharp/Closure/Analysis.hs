@@ -132,6 +132,7 @@ walkExpression parent state expression = case expression of
     UnaryExpression _ _ value _ -> walkExpression parent state value
     BinaryExpression _ _ left right _ ->
         walkExpression parent (walkExpression parent state left) right
+    IsPatternExpression _ subject _ _ -> walkExpression parent state subject
     callable@CallableExpression {} -> walkCallable parent state callable
 
 walkCallable :: Maybe ClosureId -> WalkState -> Expression ResolvedName Type -> WalkState
@@ -226,6 +227,7 @@ expressionFacts expression = case expression of
         foldl appendFacts (expressionFacts callee) (map expressionFacts arguments)
     UnaryExpression _ _ value _ -> expressionFacts value
     BinaryExpression _ _ left right _ -> expressionFacts left `appendFacts` expressionFacts right
+    IsPatternExpression _ subject _ _ -> expressionFacts subject
     CallableExpression {} -> emptyFacts
 
 captureUse :: BodyFacts -> Bool -> Int -> Capture ResolvedName Type -> CaptureUse
@@ -302,6 +304,7 @@ expressionContainsCall expression = case expression of
     CallExpression {} -> True
     UnaryExpression _ _ value _ -> expressionContainsCall value
     BinaryExpression _ _ left right _ -> expressionContainsCall left || expressionContainsCall right
+    IsPatternExpression _ subject _ _ -> expressionContainsCall subject
     CallableExpression {} -> False
     _ -> False
 

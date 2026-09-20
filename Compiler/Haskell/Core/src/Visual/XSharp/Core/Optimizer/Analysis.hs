@@ -75,6 +75,8 @@ expressionEffectWith environment expression = case expression of
     CoreLiteral _ _ -> PureEffect
     CorePrimitive primitive arguments _ ->
         foldl combineEffect (primitiveEffect primitive arguments) (map (expressionEffectWith environment) arguments)
+    CoreLet _ _ value body _ ->
+        combineEffect (expressionEffectWith environment value) (expressionEffectWith environment body)
     CoreApply callee arguments _ ->
         let nested = foldl combineEffect PureEffect (map (expressionEffectWith environment) (callee : arguments))
             invoked = case callee of
@@ -121,6 +123,8 @@ expressionSymbols expression = case expression of
     CoreLiteral _ _ -> Set.empty
     CoreApply callee arguments _ -> Set.unions (map expressionSymbols (callee : arguments))
     CorePrimitive _ arguments _ -> Set.unions (map expressionSymbols arguments)
+    CoreLet name _ value body _ ->
+        Set.union (expressionSymbols value) (Set.delete (resolvedSymbol name) (expressionSymbols body))
     CoreClosure captures _ _ _ _ -> Set.unions (map (expressionSymbols . coreCaptureValue) captures)
 
 statementSymbols :: CoreStatement -> Set SymbolId

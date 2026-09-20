@@ -298,6 +298,8 @@ namespace Visual::XSharp::Core::Wire
                             Fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling is not canonical");
                         return ::visual_xsharp::core::FloatingLiteral{ std::move(spelling) };
                     }
+                    case 6:
+                        return std::monostate{};
                     default:
                         Fail(ErrorKind::InvalidTag, "literal tag", "unknown Core literal tag");
                         return std::monostate{};
@@ -330,7 +332,7 @@ namespace Visual::XSharp::Core::Wire
                     }
                     case 3:
                     {
-                        if (primitiveTag > static_cast<std::uint8_t>(Primitive::BitwiseNot))
+                        if (primitiveTag > static_cast<std::uint8_t>(Primitive::TypeIs))
                             Fail(ErrorKind::InvalidTag, "primitive tag", "unknown Core primitive tag");
                         auto arguments = Vector<Expression>(limits_.maximumOperands, "primitive operand count", [this, depth] {
                             return ReadExpression(depth + 1U);
@@ -357,6 +359,19 @@ namespace Visual::XSharp::Core::Wire
                             std::move(captures),
                             std::move(parameters),
                             std::move(returnType),
+                            std::move(body),
+                            std::move(valueType));
+                    }
+                    case 5:
+                    {
+                        auto symbol = Symbol("let symbol");
+                        auto bindingType = ReadType();
+                        auto value = ReadExpression(depth + 1U);
+                        auto body = ReadExpression(depth + 1U);
+                        return Expression::Let(
+                            std::move(symbol),
+                            std::move(bindingType),
+                            std::move(value),
                             std::move(body),
                             std::move(valueType));
                     }
@@ -676,10 +691,10 @@ namespace Visual::XSharp::Core::Wire
                 });
             }
             void
-            WriteLiteral(const Literal &literal)
+            WriteLiteral(const Literal &literal, const Type &valueType)
             {
                 if (std::holds_alternative<std::monostate>(literal))
-                    Byte(0);
+                    Byte(valueType.kind == Type::Kind::Unit ? 0U : 6U);
                 else if (const auto *boolean = std::get_if<bool>(&literal))
                 {
                     Byte(1);
@@ -730,7 +745,7 @@ namespace Visual::XSharp::Core::Wire
                     });
                 }
                 else
-                    Fail(ErrorKind::UnsupportedType, "literal", "literal cannot cross the Core v4 boundary");
+                    Fail(ErrorKind::UnsupportedType, "literal", "literal cannot cross the Core v5 boundary");
             }
             void
             WriteExpression(const Expression &expression, std::size_t depth = 0U)
@@ -750,7 +765,7 @@ namespace Visual::XSharp::Core::Wire
                         Symbol(expression.symbol, "variable symbol");
                         return;
                     case Expression::Kind::Literal:
-                        WriteLiteral(expression.literal);
+                        WriteLiteral(expression.literal, expression.type);
                         return;
                     case Expression::Kind::Apply:
                         if (!expression.callee)
@@ -800,6 +815,17 @@ namespace Visual::XSharp::Core::Wire
                         Vector(*expression.closureBody, limits_.maximumStatements, "closure statement count", [this](const Statement &statement) {
                             WriteStatement(statement);
                         });
+                        return;
+                    case Expression::Kind::Let:
+                        Symbol(expression.letSymbol, "let symbol");
+                        WriteType(expression.letType);
+                        if (!expression.letValue || !expression.letBody)
+                        {
+                            Fail(ErrorKind::InvalidCount, "let expression", "Core let must contain a value and body");
+                            return;
+                        }
+                        WriteExpression(*expression.letValue, depth + 1U);
+                        WriteExpression(*expression.letBody, depth + 1U);
                         return;
                 }
             }

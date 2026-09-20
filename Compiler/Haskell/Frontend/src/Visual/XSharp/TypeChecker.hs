@@ -358,10 +358,12 @@ typedExpressionType expression = case expression of
     CallExpression _ _ _ valueType -> valueType
     UnaryExpression _ _ _ valueType -> valueType
     BinaryExpression _ _ _ _ valueType -> valueType
+    IsPatternExpression _ _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
 effectCapable :: Expression name annotation -> Bool
 effectCapable CallExpression {} = True
+effectCapable (IsPatternExpression _ subject _ _) = effectCapable subject
 effectCapable CallableExpression {} = False
 effectCapable _ = False
 
@@ -453,6 +455,13 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , resultType
             , leftProblems ++ rightProblems ++ mismatch
             )
+    IsPatternExpression spanValue subject patternValue _ ->
+        let (typedSubject, subjectType, subjectProblems) = checkExpressionWith context environment subject
+            (typedPattern, patternProblems) = checkPatternWith context subjectType patternValue
+         in ( IsPatternExpression spanValue typedSubject typedPattern boolType
+            , boolType
+            , subjectProblems ++ patternProblems
+            )
     CallableExpression spanValue explicit captures parameters body _ ->
         let checkedCaptures = checkCapturesWith context environment captures
             captureEnvironment =
@@ -479,6 +488,61 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , callableType
             , captureProblems ++ parameterProblems ++ bodyProblems
             )
+
+-- A pattern is checked against the already typed subject. This keeps literal
+-- inference deterministic and makes the later decision-tree lowering free of
+-- source-level conversion guesses.
+checkPatternWith :: TemplateContext -> Type -> Pattern ResolvedName () -> (Pattern ResolvedName Type, [Diagnostic])
+checkPatternWith context subjectType patternValue = case patternValue of
+    WildcardPattern spanValue _ -> (WildcardPattern spanValue subjectType, [])
+    NullPattern spanValue _ ->
+        let problems =
+                if isReferenceType subjectType
+                    then []
+                    else [problem spanValue "VXT0020" "null pattern requires an AARC reference subject"]
+         in (NullPattern spanValue subjectType, problems)
+    LiteralPattern spanValue literal _ ->
+        let (literalType, literalProblems) = literalTypeInContext spanValue (Just subjectType) literal
+            rule = binaryNumericRule Equal subjectType literalType
+            problems = literalProblems ++ ruleProblems spanValue "VXT0021" rule
+         in (LiteralPattern spanValue literal literalType, problems)
+    TypePattern spanValue syntax _ ->
+        let targetType = syntaxTypeIn context syntax
+            syntaxProblems = typeSyntaxProblemsIn context syntax
+            possible =
+                targetType /= ErrorType
+                    && subjectType /= ErrorType
+                    && (compatible subjectType targetType || isReferenceType subjectType && isReferenceType targetType)
+            relationProblems =
+                if possible
+                    then []
+                    else [problem spanValue "VXT0022" "type pattern can never match the subject type"]
+         in (TypePattern spanValue syntax targetType, syntaxProblems ++ relationProblems)
+    RelationalPattern spanValue operator literal _ ->
+        let (literalType, literalProblems) = literalTypeInContext spanValue (Just subjectType) literal
+            binary = relationalPatternBinary operator
+            rule = binaryNumericRule binary subjectType literalType
+            problems = literalProblems ++ ruleProblems spanValue "VXT0023" rule
+         in (RelationalPattern spanValue operator literal literalType, problems)
+    NotPattern spanValue nested _ ->
+        let (typed, problems) = checkPatternWith context subjectType nested
+         in (NotPattern spanValue typed boolType, problems)
+    AndPattern spanValue left right _ -> checkPatternPair AndPattern spanValue left right
+    OrPattern spanValue left right _ -> checkPatternPair OrPattern spanValue left right
+    where
+        checkPatternPair constructor spanValue left right =
+            let (typedLeft, leftProblems) = checkPatternWith context subjectType left
+                (typedRight, rightProblems) = checkPatternWith context subjectType right
+             in (constructor spanValue typedLeft typedRight boolType, leftProblems ++ rightProblems)
+
+relationalPatternBinary :: RelationalPatternOperator -> BinaryOperator
+relationalPatternBinary operator = case operator of
+    PatternLessThan -> LessThan
+    PatternLessEqual -> LessEqual
+    PatternGreaterThan -> GreaterThan
+    PatternGreaterEqual -> GreaterEqual
+    PatternEqual -> Equal
+    PatternNotEqual -> NotEqual
 
 type CheckedCapture = (Capture ResolvedName Type, [Diagnostic])
 

@@ -10,26 +10,100 @@ class ProjectScope internal constructor() {
   var name: String? = null
   var version: String? = null
   var stability: Stability? = null
+  var description: String? = null
+  private val authors = mutableListOf<String>()
+  private val defaultFeatures = mutableListOf<String>()
+
+  fun authors(vararg values: String) {
+    authors += values
+  }
+
+  fun defaultFeatures(vararg values: String) {
+    defaultFeatures += values
+  }
 
   internal fun apply() {
-    if (name == null && version == null && stability == null) return
+    if (
+      name == null &&
+        version == null &&
+        stability == null &&
+        description == null &&
+        authors.isEmpty() &&
+        defaultFeatures.isEmpty()
+    )
+      return
 
     // Publication is configured later in many project files, so completeness
     // cannot be decided while this block is evaluated. Preserve every supplied
     // value and enforce the publication contract once the whole model is built.
-    ProjectRuntime.configureIdentity(name, stability?.name, version)
+    ProjectRuntime.configureIdentity(
+      name,
+      stability?.name,
+      version,
+      description,
+      authors,
+      defaultFeatures,
+    )
   }
 }
 
 @XsProjectDsl
-class MainSourcesScope internal constructor() {
+class ExecutableSourcesScope internal constructor() {
+  var name: String? = null
   var srcDir: String = "Sources"
   var entry: String? = null
   internal var excludes: MutableList<String>? = null
 
   fun exclude(vararg patterns: String) {
     val configured = excludes ?: mutableListOf<String>().also { excludes = it }
-    patterns.forEach { configured += requireText(it, "main source exclude") }
+    patterns.forEach { configured += requireText(it, "executable source exclude") }
+  }
+
+  internal fun build(defaultName: String?): ExecutableSourceTarget {
+    val targetName = requireModuleSegment(name ?: defaultName ?: "Main", "executable name")
+    val targetEntry =
+      entry ?: throw ProjectConfigurationException("sources.executable.entry is required")
+    requireQualifiedTypeName(targetEntry, "sources.executable.entry")
+    return ExecutableSourceTarget(
+      targetName,
+      requireSourceDirectory(srcDir, "sources.executable.srcDir"),
+      excludes?.map { requireText(it, "executable source exclude") }?.distinct(),
+      targetEntry,
+    )
+  }
+}
+
+@XsProjectDsl
+class LibrarySourcesScope internal constructor() {
+  var name: String? = null
+  var srcDir: String = "Sources"
+  var namespace: String? = null
+  internal var excludes: MutableList<String>? = null
+  private val packageTypes = mutableListOf(ViPkgType.VXSLIB)
+
+  fun viPkgType(vararg values: ViPkgType) {
+    if (values.isEmpty()) {
+      throw ProjectConfigurationException("sources.library.viPkgType requires at least one type")
+    }
+    packageTypes.clear()
+    packageTypes += values.distinct()
+  }
+
+  fun exclude(vararg patterns: String) {
+    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
+    patterns.forEach { configured += requireText(it, "library source exclude") }
+  }
+
+  internal fun build(defaultName: String?): LibrarySourceTarget {
+    val targetName = requireModuleSegment(name ?: defaultName ?: "Library", "library name")
+    val targetNamespace = namespace?.let { requireNamespaceName(it, "sources.library.namespace") }
+    return LibrarySourceTarget(
+      targetName,
+      packageTypes.toList(),
+      requireSourceDirectory(srcDir, "sources.library.srcDir"),
+      excludes?.map { requireText(it, "library source exclude") }?.distinct(),
+      targetNamespace,
+    )
   }
 }
 
@@ -47,7 +121,7 @@ class TestSourcesScope internal constructor(private val suiteName: String) {
 
 @XsProjectDsl
 class ViGetSourcesScope internal constructor() {
-  var publish: Boolean = false
+  var push: Boolean = false
   internal var excludes: MutableList<String>? = null
 
   fun exclude(vararg patterns: String) {
@@ -58,14 +132,17 @@ class ViGetSourcesScope internal constructor() {
 
 @XsProjectDsl
 class ProjectSourcesScope internal constructor() {
-  private var main: MainSourcesScope? = null
+  private val executables = mutableListOf<ExecutableSourcesScope>()
+  private val libraries = mutableListOf<LibrarySourcesScope>()
   private val tests = linkedMapOf<String, TestSourcesScope>()
   private var viget: ViGetSourcesScope? = null
 
-  fun main(block: MainSourcesScope.() -> Unit) {
-    if (main != null)
-      throw ProjectConfigurationException("sources.main may be configured only once")
-    main = MainSourcesScope().apply(block)
+  fun executable(block: ExecutableSourcesScope.() -> Unit) {
+    executables += ExecutableSourcesScope().apply(block)
+  }
+
+  fun library(block: LibrarySourcesScope.() -> Unit) {
+    libraries += LibrarySourcesScope().apply(block)
   }
 
   fun test(
@@ -86,14 +163,17 @@ class ProjectSourcesScope internal constructor() {
   }
 
   internal fun apply() {
-    val mainSources = main ?: throw ProjectConfigurationException("sources.main is required")
-    val entry =
-      mainSources.entry ?: throw ProjectConfigurationException("sources.main.entry is required")
-    ProjectRuntime.configureEntry(entry)
-    ProjectRuntime.configureMainSources {
-      include(requireText(mainSources.srcDir, "sources.main.srcDir"))
-      mainSources.excludes?.let { exclude(*it.toTypedArray()) }
+    val projectName = ProjectRuntime.projectName
+    val executableTargets = executables.map { it.build(projectName) }
+    val libraryTargets = libraries.map { it.build(projectName) }
+    if (executableTargets.isEmpty() && libraryTargets.isEmpty()) {
+      throw ProjectConfigurationException(
+        "sources requires at least one executable or library target"
+      )
     }
+    requireUniqueTargetNames(executableTargets.map(ExecutableSourceTarget::name), "executable")
+    requireUniqueTargetNames(libraryTargets.map(LibrarySourceTarget::name), "library")
+    ProjectRuntime.configureSourceTargets(executableTargets, libraryTargets)
     ProjectRuntime.configureTestSuites(
       tests.map { (name, suite) ->
         TestSuite(
@@ -106,7 +186,7 @@ class ProjectSourcesScope internal constructor() {
       }
     )
     viget?.let { publishing ->
-      ProjectRuntime.configurePublishing(publishing.publish, publishing.excludes)
+      ProjectRuntime.configurePublishing(publishing.push, publishing.excludes)
     }
   }
 }
@@ -137,19 +217,6 @@ class TargetsScope internal constructor() {
 
   internal fun apply() {
     ProjectRuntime.configureTargets(values)
-  }
-}
-
-@XsProjectDsl
-class AuthorsScope internal constructor() {
-  private val values = mutableListOf<Author>()
-
-  fun author(user: String, mail: String) {
-    values += Author(requireText(user, "author user"), requireText(mail, "author mail"))
-  }
-
-  internal fun apply() {
-    if (values.isNotEmpty()) ProjectRuntime.configureAuthors(values)
   }
 }
 
@@ -255,8 +322,6 @@ fun outdirs(block: OutputDirectoriesScope.() -> Unit) =
 
 fun targets(block: TargetsScope.() -> Unit) = TargetsScope().apply(block).apply()
 
-fun authors(block: AuthorsScope.() -> Unit) = AuthorsScope().apply(block).apply()
-
 fun pml(block: PmlScope.() -> Unit) = PmlScope().apply(block).apply()
 
 fun workspaces(block: WorkspacesScope.() -> Unit) = WorkspacesScope().apply(block).apply()
@@ -267,3 +332,39 @@ fun DependenciesScope.dependency(
 ) = DependencyDeclarationScope(publisher).apply(block).applyTo(this)
 
 fun emitProject() = ProjectOutput.emit(ProjectRuntime.build())
+
+private fun requireSourceDirectory(value: String, field: String): String {
+  val directory = requireText(value, field).replace('\\', '/')
+  if (directory.startsWith('/') || directory.split('/').any { it == ".." }) {
+    throw ProjectConfigurationException("$field must stay inside the project root: $value")
+  }
+  if (directory.any { it in "*?" }) {
+    throw ProjectConfigurationException("$field must name a directory, not a glob: $value")
+  }
+  return directory
+}
+
+private fun requireQualifiedTypeName(value: String, field: String): String {
+  val entry = requireText(value, field)
+  if (!entry.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+"))) {
+    throw ProjectConfigurationException("$field must be a qualified type name: $entry")
+  }
+  return entry
+}
+
+private fun requireNamespaceName(value: String, field: String): String {
+  val namespace = requireText(value, field)
+  if (!namespace.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"))) {
+    throw ProjectConfigurationException("$field must be a namespace name: $namespace")
+  }
+  return namespace
+}
+
+private fun requireUniqueTargetNames(names: List<String>, kind: String) {
+  val duplicates = names.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.sorted()
+  if (duplicates.isNotEmpty()) {
+    throw ProjectConfigurationException(
+      "$kind target names must be case-sensitively unique: ${duplicates.joinToString()}"
+    )
+  }
+}

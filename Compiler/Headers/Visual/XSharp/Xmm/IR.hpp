@@ -49,6 +49,7 @@ namespace visual_xsharp::xmm
         BitwiseXor,
         BitwiseOr,
         BitwiseNot,
+        TypeIs,
 
         // Source-compatible names for pre-v3 native clients. They intentionally alias the
         // typed operations; width and signedness now come from Instruction::result_type.

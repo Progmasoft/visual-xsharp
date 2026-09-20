@@ -10,7 +10,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 object ProjectOutput {
-  private const val REGISTRY_VERSION = "visual-xsharp-sources-v5"
+  private const val REGISTRY_VERSION = "visual-xsharp-sources-v6"
 
   fun emit(plan: ProjectPlan) {
     val root = projectRoot()
@@ -34,8 +34,19 @@ object ProjectOutput {
   }
 
   private data class ResolvedRoots(
-    val sources: List<Path>,
+    val executables: List<ResolvedExecutableTarget>,
+    val libraries: List<ResolvedLibraryTarget>,
     val tests: List<ResolvedTestSuite>,
+  )
+
+  private data class ResolvedExecutableTarget(
+    val declaration: ExecutableSourceTarget,
+    val root: Path,
+  )
+
+  private data class ResolvedLibraryTarget(
+    val declaration: LibrarySourceTarget,
+    val root: Path,
   )
 
   private data class ResolvedTestSuite(
@@ -48,37 +59,43 @@ object ProjectOutput {
     plan: ProjectPlan,
   ): ResolvedRoots {
     return ResolvedRoots(
-      validateRoots(root, plan.sourceIncludes, "sources.main.srcDir"),
+      plan.executables.map { target ->
+        ResolvedExecutableTarget(
+          target,
+          validateRoot(root, target.srcDir, "sources.executable('${target.name}').srcDir"),
+        )
+      },
+      plan.libraries.map { target ->
+        ResolvedLibraryTarget(
+          target,
+          validateRoot(root, target.srcDir, "sources.library('${target.name}').srcDir"),
+        )
+      },
       plan.testSuites.map { suite ->
         ResolvedTestSuite(
           suite,
-          validateRoots(root, listOf(suite.testDir), "sources.test('${suite.name}').testDir")
-            .single(),
+          validateRoot(root, suite.testDir, "sources.test('${suite.name}').testDir"),
         )
       },
     )
   }
 
-  private fun validateRoots(
+  private fun validateRoot(
     root: Path,
-    configuredRoots: List<String>,
+    configuredRoot: String,
     setting: String,
-  ): List<Path> =
-    configuredRoots
-      .map { configured ->
-        val normalized = configured.replace('\\', '/')
-        val relative = Path.of(normalized)
-        if (relative.isAbsolute || normalized.split('/').any { it == ".." }) {
-          throw ProjectConfigurationException("$setting escapes the project root: $configured")
-        }
-        val directory = root.resolve(relative).normalize()
-        if (!directory.startsWith(root) || !Files.isDirectory(directory)) {
-          throw ProjectConfigurationException("$setting directory does not exist: $directory")
-        }
-        directory
-      }
-      .distinct()
-      .sortedBy(Path::toString)
+  ): Path {
+    val normalized = configuredRoot.replace('\\', '/')
+    val relative = Path.of(normalized)
+    if (relative.isAbsolute || normalized.split('/').any { it == ".." }) {
+      throw ProjectConfigurationException("$setting escapes the project root: $configuredRoot")
+    }
+    val directory = root.resolve(relative).normalize()
+    if (!directory.startsWith(root) || !Files.isDirectory(directory)) {
+      throw ProjectConfigurationException("$setting directory does not exist: $directory")
+    }
+    return directory
+  }
 
   private fun writeRegistry(
     plan: ProjectPlan,
@@ -96,12 +113,10 @@ object ProjectOutput {
       // neither file names nor directory layout define the entry type.
       listOf(
           REGISTRY_VERSION,
-          plan.entry,
           compiler.version,
           compiler.standard,
           compiler.backend.name.lowercase(),
           compiler.buildMode.name.lowercase(),
-          compiler.emit.name.lowercase(),
           compiler.warningLevel.name.lowercase(),
           compiler.warningsAsErrors.toString(),
           compiler.experimentalWarnings.toString(),
@@ -119,14 +134,28 @@ object ProjectOutput {
             plan.releaseOutputDirectory
           },
           plan.targets.size.toString(),
-          project.sources.size.toString(),
-          plan.sourceExcludes.orEmpty().size.toString(),
+          project.executables.size.toString(),
+          project.libraries.size.toString(),
           project.tests.size.toString(),
         )
         .forEach { writeRecord(output, it) }
       plan.targets.forEach { writeRecord(output, it) }
-      project.sources.forEach { writeRecord(output, it.toString()) }
-      plan.sourceExcludes.orEmpty().forEach { writeRecord(output, it) }
+      project.executables.forEach { target ->
+        writeRecord(output, target.declaration.name)
+        writeRecord(output, target.declaration.entry)
+        writeRecord(output, target.root.toString())
+        writeRecord(output, target.declaration.exclude.orEmpty().size.toString())
+        target.declaration.exclude.orEmpty().forEach { writeRecord(output, it) }
+      }
+      project.libraries.forEach { target ->
+        writeRecord(output, target.declaration.name)
+        writeRecord(output, target.declaration.namespace.orEmpty())
+        writeRecord(output, target.root.toString())
+        writeRecord(output, target.declaration.viPkgTypes.size.toString())
+        target.declaration.viPkgTypes.forEach { writeRecord(output, it.name.lowercase()) }
+        writeRecord(output, target.declaration.exclude.orEmpty().size.toString())
+        target.declaration.exclude.orEmpty().forEach { writeRecord(output, it) }
+      }
       project.tests.forEach { suite ->
         writeRecord(output, suite.declaration.name)
         writeRecord(output, suite.declaration.framework.orEmpty())

@@ -209,6 +209,25 @@ namespace Visual::XSharp::Core
                     case Expression::Kind::Closure:
                         VerifyClosure(expression, environment);
                         return;
+                    case Expression::Kind::Let:
+                    {
+                        CheckSymbol(expression.letSymbol, "VXC1045", "Core let symbol must be positive");
+                        CheckType(expression.letType, "VXC1046", "Core let binding has an unresolved type");
+                        if (!expression.letValue || !expression.letBody)
+                        {
+                            Add("VXC1047", "Core let value or body is missing");
+                            return;
+                        }
+                        VerifyExpression(*expression.letValue, environment);
+                        CheckSameType(expression.letType, expression.letValue->type, "VXC1048", "Core let value has the wrong type");
+                        auto bodyEnvironment = environment;
+                        bodyEnvironment.insert_or_assign(
+                            expression.letSymbol.id,
+                            Definition{ expression.letType, false, expression.letSymbol.spelling });
+                        VerifyExpression(*expression.letBody, bodyEnvironment);
+                        CheckSameType(expression.type, expression.letBody->type, "VXC1049", "Core let result disagrees with its body");
+                        return;
+                    }
                 }
             }
             void
@@ -259,11 +278,25 @@ namespace Visual::XSharp::Core
                 if (expression.operands.empty())
                     return;
                 const auto &operandType = expression.operands.front().type;
-                if (!logical)
+                const auto typeTest = expression.primitive == Primitive::TypeIs;
+                if (!logical && !typeTest)
                     for (const auto &operand : expression.operands)
                         CheckSameType(operandType, operand.type, "VXC1027", "Core primitive operands must have matching types");
 
-                if (logical)
+                if (typeTest)
+                {
+                    if (expression.operands.size() == 2U)
+                    {
+                        const auto &subjectType = expression.operands[0].type;
+                        const auto &identityType = expression.operands[1].type;
+                        const auto referenceSubject = subjectType.kind == Type::Kind::Named
+                                                      || subjectType.kind == Type::Kind::String
+                                                      || subjectType.kind == Type::Kind::Function;
+                        if (!referenceSubject || identityType != Type::uint64())
+                            Add("VXC1050", "Core type test requires a reference subject and ulong identity");
+                    }
+                }
+                else if (logical)
                 {
                     for (const auto &operand : expression.operands)
                         if (!accepts_boolean_context(operand.type))
@@ -277,7 +310,7 @@ namespace Visual::XSharp::Core
                 if (expression.primitive == Primitive::Negate && !is_signed_integer(operandType) && !is_floating(operandType))
                     Add("VXC1027", "Core negation requires a signed integer or floating operand");
 
-                const auto expectedResult = logical || comparison ? Type::boolean() : operandType;
+                const auto expectedResult = logical || comparison || typeTest ? Type::boolean() : operandType;
                 CheckSameType(expectedResult, expression.type, "VXC1028", "Core primitive result has the wrong type");
             }
             void

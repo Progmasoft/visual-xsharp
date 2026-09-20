@@ -137,13 +137,14 @@ encodeAtom limits atom = case atom of
 
 encodeLiteral :: WireLimits -> Type -> CoreLiteral -> Encoder
 encodeLiteral limits valueType literal = case (primitiveTypeTag valueType, literal) of
-    (Just 0, CoreUnit) -> pure []
-    (Just 1, CoreBoolean value) -> pure (encodeBool value)
+    (Just 0, CoreUnit) -> pure [0]
+    (Just 1, CoreBoolean value) -> pure (1 : encodeBool value)
     (Just tag, CoreInteger value)
-        | integerWireTag tag || tag == 8 -> encodeInteger limits value
+        | integerWireTag tag || tag == 8 -> (2 :) <$> encodeInteger limits value
     (Just tag, CoreFloating spelling)
-        | floatingWireTag tag -> encodeAscii limits "floating literal" spelling
-    (Just 4, CoreString value) -> encodeText limits "string literal" value
+        | floatingWireTag tag -> (4 :) <$> encodeAscii limits "floating literal" spelling
+    (Just 4, CoreString value) -> (3 :) <$> encodeText limits "string literal" value
+    (_, CoreNull) -> pure [5]
     _ -> Left (wireError UnsupportedType 0 "literal" "literal payload does not match its declared type")
 
 encodeTerminator :: WireLimits -> CorePrepTerminator -> Encoder
@@ -280,6 +281,7 @@ primitiveTag primitive = case primitive of
     CoreBitwiseXor -> 23
     CoreBitwiseOr -> 24
     CoreBitwiseNot -> 25
+    CoreTypeIs -> 26
 
 encodeVector :: WireLimits -> String -> Int -> (a -> Encoder) -> [a] -> Encoder
 encodeVector limits context maximumCount encode values = do

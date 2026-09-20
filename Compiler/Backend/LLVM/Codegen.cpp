@@ -401,9 +401,14 @@ namespace Visual::XSharp::Backend::LLVM
                             return llvm::ConstantFP::get(types.Lower(value.type), floating->spelling);
                         return nullptr;
                     case core::Type::Kind::String:
+                        if (std::holds_alternative<std::monostate>(value.immediate))
+                            return llvm::ConstantPointerNull::get(llvm::PointerType::get(context, 0));
                         return StringLiteral(builder, std::get<std::u32string>(value.immediate));
                     case core::Type::Kind::Function:
                     case core::Type::Kind::Named:
+                        if (std::holds_alternative<std::monostate>(value.immediate))
+                            return llvm::ConstantPointerNull::get(llvm::PointerType::get(context, 0));
+                        return nullptr;
                     case core::Type::Kind::TypeVariable:
                         return nullptr;
                 }
@@ -841,9 +846,10 @@ namespace Visual::XSharp::Backend::LLVM
                 auto *sizeType = llvm::Triple(module.getTargetTriple()).isArch64Bit()
                                      ? llvm::Type::getInt64Ty(context)
                                      : llvm::Type::getInt32Ty(context);
-                std::array<llvm::Type *, 6U> metadataFields{
+                std::array<llvm::Type *, 7U> metadataFields{
                     llvm::Type::getInt32Ty(context),
                     llvm::Type::getInt32Ty(context),
+                    llvm::Type::getInt64Ty(context),
                     sizeType,
                     sizeType,
                     pointer,
@@ -860,9 +866,10 @@ namespace Visual::XSharp::Backend::LLVM
                         payloadSize,
                         sizeType);
                 }
-                std::array<llvm::Constant *, 6U> metadataValues{
-                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1U),
+                std::array<llvm::Constant *, 7U> metadataValues{
+                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 2U),
                     llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0U),
+                    llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0U),
                     payloadSize,
                     llvm::ConstantInt::get(sizeType, 16U),
                     destructor,
@@ -1005,6 +1012,15 @@ namespace Visual::XSharp::Backend::LLVM
                         break;
                     case xmm::Opcode::BitwiseNot:
                         result = builder.CreateNot(operands[0], "bitwise.not");
+                        break;
+                    case xmm::Opcode::TypeIs:
+                        result = builder.CreateCall(
+                            RuntimeFunction(
+                                "vxs_aarc_is_exact_type",
+                                llvm::Type::getInt1Ty(context),
+                                { llvm::PointerType::get(context, 0), llvm::Type::getInt64Ty(context) }),
+                            { operands[0], operands[1] },
+                            "type.is");
                         break;
                     case xmm::Opcode::CompareLess:
                         result = floating          ? builder.CreateFCmpOLT(operands[0], operands[1], "less")

@@ -32,8 +32,8 @@ namespace Visual::XSharp::Driver
 {
     namespace
     {
-        constexpr std::string_view kRegistryVersion = "visual-xsharp-sources-v5";
-        constexpr std::size_t kHeaderRecordCount = 23;
+        constexpr std::string_view kRegistryVersion = "visual-xsharp-sources-v6";
+        constexpr std::size_t kHeaderRecordCount = 21;
 
 #ifndef XS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT
 #    define XS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT "libexec/xs/project/lib/*"
@@ -311,45 +311,29 @@ namespace Visual::XSharp::Driver
             std::size_t position_{};
         };
 
-        [[nodiscard]] std::optional<XsBuildOutput>
-        ParseOutput(std::string_view text)
-        {
-            constexpr std::string_view names[]{ "binary", "object", "core", "xpp", "xmm", "assembly", "llvm_ll", "llvm_bc" };
-            for (std::size_t index = 0; index < std::size(names); ++index)
-                if (text == names[index])
-                    return static_cast<XsBuildOutput>(index);
-            return std::nullopt;
-        }
-
         [[nodiscard]] bool
         ParseCompilerHeader(RecordReader &reader, ResolvedProject &project)
         {
-            const auto entry = reader.Next();
             const auto compilerVersion = reader.Next();
             const auto standard = reader.Next();
             const auto backend = reader.Next();
             const auto buildMode = reader.Next();
-            const auto output = reader.Next();
             const auto warning = reader.Next();
-            if (!entry || entry->empty() || !compilerVersion || !standard || backend != "llvm" || (buildMode != "debug" && buildMode != "release") || !output || !warning)
+            if (!compilerVersion || !standard || backend != "llvm" || (buildMode != "debug" && buildMode != "release") || !warning)
                 return false;
 
-            project.entry = *entry;
             project.compilerVersion = *compilerVersion;
             project.standard = *standard;
-            project.settings = xs_cli_default_compiler_settings();
-            const auto parsedOutput = ParseOutput(*output);
-            if (!parsedOutput)
-                return false;
-            project.output = *parsedOutput;
+            project.settings = DefaultCompilerSettings();
+            project.output = BuildOutput::kBinary;
 
             bool warningFound = false;
-            for (int value = static_cast<int>(XS_WARNING_ALL); value <= static_cast<int>(XS_WARNING_NONE); ++value)
+            for (int value = static_cast<int>(WarningLevel::kAll); value <= static_cast<int>(WarningLevel::kNone); ++value)
             {
-                const auto level = static_cast<XsWarningLevel>(value);
-                if (*warning == xs_cli_warning_level_name(level))
+                const auto level = static_cast<WarningLevel>(value);
+                if (*warning == WarningLevelName(level))
                 {
-                    project.settings.warning_level = level;
+                    project.settings.warningLevel = level;
                     warningFound = true;
                     break;
                 }
@@ -366,40 +350,40 @@ namespace Visual::XSharp::Driver
             const auto lto = reader.Next();
             if (!warningFound || !warningsAsErrors || !experimental || !shadow || !undefined || !typeSafeFormat || !xpp || !xmm || !optLevel || !llvmCompiler || !lto)
                 return false;
-            project.settings.warnings_as_errors = *warningsAsErrors;
-            project.settings.experimental_warnings = *experimental;
-            project.settings.shadow_warnings = *shadow;
-            project.settings.undefined_warnings = *undefined;
-            project.settings.type_safe_format = *typeSafeFormat;
-            project.settings.xpp_optimization_passes = *xpp;
-            project.settings.xmm_optimization_passes = *xmm;
+            project.settings.warningsAsErrors = *warningsAsErrors;
+            project.settings.experimentalWarnings = *experimental;
+            project.settings.shadowWarnings = *shadow;
+            project.settings.undefinedWarnings = *undefined;
+            project.settings.typeSafeFormat = *typeSafeFormat;
+            project.settings.xppOptimizationPasses = *xpp;
+            project.settings.xmmOptimizationPasses = *xmm;
 
             if (*optLevel == "0")
-                project.settings.llvm_opt_level = XS_LLVM_OPT_0;
+                project.settings.llvmOptLevel = LlvmOptLevel::kO0;
             else if (*optLevel == "1")
-                project.settings.llvm_opt_level = XS_LLVM_OPT_1;
+                project.settings.llvmOptLevel = LlvmOptLevel::kO1;
             else if (*optLevel == "2")
-                project.settings.llvm_opt_level = XS_LLVM_OPT_2;
+                project.settings.llvmOptLevel = LlvmOptLevel::kO2;
             else if (*optLevel == "3")
-                project.settings.llvm_opt_level = XS_LLVM_OPT_3;
+                project.settings.llvmOptLevel = LlvmOptLevel::kO3;
             else if (*optLevel == "g")
-                project.settings.llvm_opt_level = XS_LLVM_OPT_G;
+                project.settings.llvmOptLevel = LlvmOptLevel::kOg;
             else
                 return false;
 
             if (*llvmCompiler == "aot")
-                project.settings.llvm_compiler = XS_LLVM_COMPILER_AOT;
+                project.settings.llvmCompiler = LlvmCompiler::kAot;
             else if (*llvmCompiler == "orc")
-                project.settings.llvm_compiler = XS_LLVM_COMPILER_ORC;
+                project.settings.llvmCompiler = LlvmCompiler::kOrc;
             else
                 return false;
 
             if (*lto == "none")
-                project.settings.llvm_lto = XS_LLVM_LTO_NONE;
+                project.settings.llvmLto = LlvmLto::kNone;
             else if (*lto == "fat")
-                project.settings.llvm_lto = XS_LLVM_LTO_FAT;
+                project.settings.llvmLto = LlvmLto::kFat;
             else if (*lto == "thin")
-                project.settings.llvm_lto = XS_LLVM_LTO_THIN;
+                project.settings.llvmLto = LlvmLto::kThin;
             else
                 return false;
             return true;
@@ -417,10 +401,11 @@ namespace Visual::XSharp::Driver
                 return std::nullopt;
             const auto outputDirectory = reader.Next();
             const auto targetCount = reader.Size();
-            const auto sourceCount = reader.Size();
-            const auto sourceExcludeCount = reader.Size();
+            const auto executableCount = reader.Size();
+            const auto libraryCount = reader.Size();
             const auto suiteCount = reader.Size();
-            if (!outputDirectory || outputDirectory->empty() || !targetCount || !sourceCount || !sourceExcludeCount || !suiteCount || (requireSources && *sourceCount == 0))
+            if (!outputDirectory || outputDirectory->empty() || !targetCount || !executableCount || !libraryCount || !suiteCount
+                || (requireSources && *executableCount == 0 && *libraryCount == 0))
                 return std::nullopt;
             project.outputDirectory = *outputDirectory;
 
@@ -433,19 +418,63 @@ namespace Visual::XSharp::Driver
                 project.targets.emplace_back(*value);
             }
 
-            for (std::size_t index = 0; index < *sourceCount; ++index)
+            for (std::size_t index = 0; index < *executableCount; ++index)
             {
-                const auto value = reader.Next();
-                if (!value || value->empty())
+                const auto name = reader.Next();
+                const auto entry = reader.Next();
+                const auto root = reader.Next();
+                const auto excludeCount = reader.Size();
+                if (!name || name->empty() || !entry || entry->empty() || !root || root->empty() || !excludeCount)
                     return std::nullopt;
-                project.sourceRoots.emplace_back(*value);
+                ResolvedSourceTarget target;
+                target.name = *name;
+                target.entry = std::string(*entry);
+                target.root = *root;
+                for (std::size_t exclude = 0; exclude < *excludeCount; ++exclude)
+                {
+                    const auto value = reader.Next();
+                    if (!value)
+                        return std::nullopt;
+                    target.excludes.emplace_back(*value);
+                }
+                project.executables.push_back(std::move(target));
             }
-            for (std::size_t index = 0; index < *sourceExcludeCount; ++index)
+            for (std::size_t index = 0; index < *libraryCount; ++index)
             {
-                const auto value = reader.Next();
-                if (!value)
+                const auto name = reader.Next();
+                const auto namespaceName = reader.Next();
+                const auto root = reader.Next();
+                const auto typeCount = reader.Size();
+                if (!name || name->empty() || !namespaceName || !root || root->empty() || !typeCount || *typeCount == 0)
                     return std::nullopt;
-                project.sourceExcludes.emplace_back(*value);
+                ResolvedSourceTarget target;
+                target.name = *name;
+                if (!namespaceName->empty())
+                    target.namespaceName = std::string(*namespaceName);
+                target.root = *root;
+                for (std::size_t type = 0; type < *typeCount; ++type)
+                {
+                    const auto value = reader.Next();
+                    if (value == "vxslib")
+                        target.viPkgTypes.push_back(ViPkgType::kVisualXSharpLibrary);
+                    else if (value == "staticlib")
+                        target.viPkgTypes.push_back(ViPkgType::kStaticLibrary);
+                    else if (value == "cdylib")
+                        target.viPkgTypes.push_back(ViPkgType::kDynamicLibrary);
+                    else
+                        return std::nullopt;
+                }
+                const auto excludeCount = reader.Size();
+                if (!excludeCount)
+                    return std::nullopt;
+                for (std::size_t exclude = 0; exclude < *excludeCount; ++exclude)
+                {
+                    const auto value = reader.Next();
+                    if (!value)
+                        return std::nullopt;
+                    target.excludes.emplace_back(*value);
+                }
+                project.libraries.push_back(std::move(target));
             }
             for (std::size_t index = 0; index < *suiteCount; ++index)
             {
@@ -469,6 +498,20 @@ namespace Visual::XSharp::Driver
                 }
                 project.testSuites.push_back(std::move(suite));
             }
+            // Tool commands work over all roots. Build/run select a concrete target
+            // and replace this flattened view before invoking the frontend.
+            for (const auto &target : project.executables)
+            {
+                project.sourceRoots.push_back(target.root);
+                project.sourceExcludes.insert(project.sourceExcludes.end(), target.excludes.begin(), target.excludes.end());
+            }
+            for (const auto &target : project.libraries)
+            {
+                project.sourceRoots.push_back(target.root);
+                project.sourceExcludes.insert(project.sourceExcludes.end(), target.excludes.begin(), target.excludes.end());
+            }
+            if (!project.executables.empty())
+                project.entry = *project.executables.front().entry;
             return reader.Complete() ? std::optional(std::move(project)) : std::nullopt;
         }
     } // namespace

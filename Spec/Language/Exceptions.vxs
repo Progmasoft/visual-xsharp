@@ -64,7 +64,7 @@ String name =
 -- Demonstrates: Because its result is never, it may appear wherever the surrounding expression can
 --   accept a non-returning branch.
 
-return user != null
+return user \= null
     ? user.Name
     : throw new NullPointerException();
 

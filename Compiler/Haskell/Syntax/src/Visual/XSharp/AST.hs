@@ -17,6 +17,8 @@ module Visual.XSharp.AST
     , Block (..)
     , Statement (..)
     , Expression (..)
+    , Pattern (..)
+    , RelationalPatternOperator (..)
     , CallableBody (..)
     , Capture (..)
     , CaptureMode (..)
@@ -214,6 +216,7 @@ data Expression name annotation
     | CallExpression SourceSpan (Expression name annotation) [Expression name annotation] annotation
     | UnaryExpression SourceSpan UnaryOperator (Expression name annotation) annotation
     | BinaryExpression SourceSpan BinaryOperator (Expression name annotation) (Expression name annotation) annotation
+    | IsPatternExpression SourceSpan (Expression name annotation) (Pattern name annotation) annotation
     | CallableExpression
         SourceSpan
         Bool
@@ -221,6 +224,29 @@ data Expression name annotation
         [Parameter name annotation]
         (CallableBody name annotation)
         annotation
+    deriving (Eq, Ord, Read, Show)
+
+-- Patterns are a separate syntax category. In particular, `and` and `or`
+-- compose tests below `is`; they are never alternate spellings for the eager
+-- or short-circuit Boolean operators in Expression.
+data Pattern name annotation
+    = WildcardPattern SourceSpan annotation
+    | NullPattern SourceSpan annotation
+    | LiteralPattern SourceSpan Literal annotation
+    | TypePattern SourceSpan TypeSyntax annotation
+    | RelationalPattern SourceSpan RelationalPatternOperator Literal annotation
+    | NotPattern SourceSpan (Pattern name annotation) annotation
+    | AndPattern SourceSpan (Pattern name annotation) (Pattern name annotation) annotation
+    | OrPattern SourceSpan (Pattern name annotation) (Pattern name annotation) annotation
+    deriving (Eq, Ord, Read, Show)
+
+data RelationalPatternOperator
+    = PatternLessThan
+    | PatternLessEqual
+    | PatternGreaterThan
+    | PatternGreaterEqual
+    | PatternEqual
+    | PatternNotEqual
     deriving (Eq, Ord, Read, Show)
 
 data Literal

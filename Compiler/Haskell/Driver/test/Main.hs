@@ -98,13 +98,13 @@ main = do
     check "Core wire rejects trailing bytes" coreWireRejectsTrailingInput
     check "Core wire rejects unresolved types" coreWireRejectsUnresolvedType
     check "Core wire preserves Unicode scalar values" coreWirePreservesUnicode
-    check "Core wire v4 golden bytes remain stable" coreWireGoldenDocument
+    check "Core wire v5 golden bytes remain stable" coreWireGoldenDocument
     check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
     check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
     check "CorePrep wire codec rejects unsupported types" wireRejectsUnsupportedType
     check "CorePrep wire codec preserves Unicode scalar values" wirePreservesUnicode
-    check "CorePrep wire v4 golden bytes remain stable" wireGoldenDocument
+    check "CorePrep wire v5 golden bytes remain stable" wireGoldenDocument
     checkIO "real Core artifact round-trips through .core I/O" coreArtifactRoundTrip
     checkIO "Core artifact rejects an invalid Core module" coreArtifactRejectsInvalidModule
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
@@ -498,7 +498,7 @@ coreWireGoldenDocument =
             , 0x58
             , 0x43
             , 0x52
-            , 0x04
+            , 0x05
             , 0x00
             , 0x00
             , 0x00
@@ -636,7 +636,7 @@ goldenBytes =
     , 0x58
     , 0x43
     , 0x50
-    , 0x04
+    , 0x05
     , 0x00
     , 0x00
     , 0x00
@@ -720,6 +720,7 @@ goldenBytes =
     , 0x00
     , 0x01
     , 0x00
+    , 0x00
     ]
 
 wireGoldenDocument :: Bool
@@ -732,7 +733,7 @@ coreArtifactRoundTrip = case compile sample of
     Left _ -> pure False
     Right artifacts -> do
         temporary <- getTemporaryDirectory
-        let path = temporary </> "visual-xsharp-core-wire-v4.core"
+        let path = temporary </> "visual-xsharp-core-wire-v5.core"
             cleanup = doesFileExist path >>= \exists -> if exists then removeFile path else pure ()
             value = artifactOptimizedCore artifacts
         ( do

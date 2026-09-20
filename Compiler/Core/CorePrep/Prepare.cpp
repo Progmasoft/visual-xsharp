@@ -104,6 +104,8 @@ namespace Visual::XSharp::Core::CorePrep
                     return Prepared::Operation::BitwiseOr;
                 case Primitive::BitwiseNot:
                     return Prepared::Operation::BitwiseNot;
+                case Primitive::TypeIs:
+                    return Prepared::Operation::TypeIs;
             }
             // Reaching this point means the Core enum and adapter diverged.
             // C++20 has no std::unreachable; abort explicitly instead of
@@ -247,6 +249,14 @@ namespace Visual::XSharp::Core::CorePrep
             if (expression.closureBody)
                 for (const auto &statement : *expression.closureBody)
                     highest = std::max(highest, HighestStatementSymbol(statement));
+            if (expression.kind == Expression::Kind::Let)
+            {
+                highest = std::max(highest, expression.letSymbol.id);
+                if (expression.letValue)
+                    highest = std::max(highest, HighestExpressionSymbol(*expression.letValue));
+                if (expression.letBody)
+                    highest = std::max(highest, HighestExpressionSymbol(*expression.letBody));
+            }
             return highest;
         }
 
@@ -292,6 +302,11 @@ namespace Visual::XSharp::Core::CorePrep
         [[nodiscard]] auto
         AtomizeOperation(State state, const Expression &expression) -> OperationResult
         {
+            if (expression.kind == Expression::Kind::Let)
+            {
+                auto atomized = Atomize(std::move(state), expression);
+                return { std::move(atomized.prefix), Prepared::Operation::Copy, { std::move(atomized.atom) }, {}, {}, std::move(atomized.state) };
+            }
             if (expression.kind == Expression::Kind::Variable)
                 return { {}, Prepared::Operation::Copy, { Prepared::Atom::variable(expression.symbol, expression.type) }, {}, {}, state };
             if (expression.kind == Expression::Kind::Literal)
@@ -363,6 +378,27 @@ namespace Visual::XSharp::Core::CorePrep
                 return { {}, Prepared::Atom::variable(expression.symbol, expression.type), state };
             if (expression.kind == Expression::Kind::Literal)
                 return { {}, LowerLiteral(expression), state };
+            if (expression.kind == Expression::Kind::Let)
+            {
+                if (!expression.letValue || !expression.letBody)
+                    std::abort();
+                auto value = Atomize(std::move(state), *expression.letValue);
+                value.prefix.push_back(Prepared::Instruction{
+                    Prepared::Instruction::Kind::Bind,
+                    expression.letSymbol,
+                    expression.letType,
+                    false,
+                    Prepared::Operation::Copy,
+                    { std::move(value.atom) },
+                    {},
+                    {} });
+                auto body = Atomize(std::move(value.state), *expression.letBody);
+                value.prefix.insert(
+                    value.prefix.end(),
+                    std::make_move_iterator(body.prefix.begin()),
+                    std::make_move_iterator(body.prefix.end()));
+                return { std::move(value.prefix), std::move(body.atom), std::move(body.state) };
+            }
 
             auto operation = AtomizeOperation(state, expression);
             const auto id = operation.state.nextTemporary++;

@@ -30,6 +30,7 @@ namespace Visual::XSharp::Runtime::Aarc
         const TypeMetadata kStringMetadata{
             kAbiVersion,
             0U,
+            TypeIdentity("String"),
             sizeof(StringObject),
             alignof(StringObject),
             DestroyString,
@@ -206,6 +207,14 @@ namespace Visual::XSharp::Runtime::Aarc
     {
         ReleaseControl(value.header);
     }
+
+    auto
+    IsExactType(const void *object, const std::uint64_t typeIdentity) noexcept -> bool
+    {
+        const auto *header = Header(object);
+        return header != nullptr && header->state.load(std::memory_order_acquire) == ObjectState::Alive
+               && header->metadata != nullptr && header->metadata->typeIdentity == typeIdentity;
+    }
 } // namespace Visual::XSharp::Runtime::Aarc
 
 extern "C"
@@ -287,5 +296,11 @@ extern "C"
             object->scalars[index] = static_cast<char32_t>(scalars[index]);
         object->scalars[count] = U'\0';
         return object;
+    }
+
+    auto
+    vxs_aarc_is_exact_type(const void *object, const std::uint64_t typeIdentity) noexcept -> bool
+    {
+        return Visual::XSharp::Runtime::Aarc::IsExactType(object, typeIdentity);
     }
 }

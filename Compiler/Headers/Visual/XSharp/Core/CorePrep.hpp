@@ -388,7 +388,8 @@ namespace visual_xsharp::core
         BitwiseAnd,
         BitwiseXor,
         BitwiseOr,
-        BitwiseNot
+        BitwiseNot,
+        TypeIs
     };
 
     struct Instruction final

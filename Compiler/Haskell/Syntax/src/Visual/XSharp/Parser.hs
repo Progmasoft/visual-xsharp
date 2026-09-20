@@ -366,6 +366,7 @@ requireTemplateValue expression = case expression of
     BinaryExpression spanValue operator left right _ ->
         TemplateBinarySyntax spanValue operator <$> requireTemplateValue left <*> requireTemplateValue right
     CallExpression spanValue _ _ _ -> unsupported spanValue
+    IsPatternExpression spanValue _ _ _ -> unsupported spanValue
     CallableExpression spanValue _ _ _ _ _ -> unsupported spanValue
     where
         unsupported spanValue =
@@ -494,9 +495,20 @@ parseLogicalOr
         P (Expression Identifier ())
 parseLogicalOr = chainLeft parseLogicalAnd [("||", LogicalOr)]
 parseLogicalAnd = chainLeft parseEquality [("&&", LogicalAnd)]
-parseEquality = nonAssociative "equality" parseComparison [("==", Equal), ("!=", NotEqual), ("\\=", NotEqual)]
-parseComparison =
-    nonAssociative "relational" parseBitwiseOr [("<", LessThan), ("<=", LessEqual), (">", GreaterThan), (">=", GreaterEqual)]
+parseEquality = nonAssociative "equality" parseComparison [("==", Equal), ("\\=", NotEqual)]
+parseComparison = do
+    left <-
+        nonAssociative
+            "relational"
+            parseBitwiseOr
+            [("<", LessThan), ("<=", LessEqual), (">", GreaterThan), (">=", GreaterEqual)]
+    introducesPattern <- peekText "is"
+    if not introducesPattern
+        then pure left
+        else do
+            _ <- keyword "is"
+            patternValue <- parsePattern
+            pure (IsPatternExpression (mergeSpan (expressionSpan left) (patternSpan patternValue)) left patternValue ())
 parseBitwiseOr = chainLeft parseBitwiseXor [("|", BitwiseOr)]
 parseBitwiseXor = chainLeft parseBitwiseAnd [("^", BitwiseXor)]
 parseBitwiseAnd = chainLeft parseShift [("&", BitwiseAnd)]
@@ -620,6 +632,96 @@ parsePrimary = do
         Just token -> failAt (tokenSpan token) "VXP0004" ("expected expression, found " ++ show (tokenText token))
         Nothing -> failCurrent "VXP0005" "expected expression at end of input"
 
+-- Pattern combinators intentionally live in their own parser. Letting them
+-- fall through the ordinary expression precedence table would make `and` and
+-- `or` accidental aliases for && and || and would evaluate the subject more
+-- than once during lowering.
+parsePattern :: P (Pattern Identifier ())
+parsePattern = parseOrPattern
+
+parseOrPattern :: P (Pattern Identifier ())
+parseOrPattern = parseAndPattern >>= continue
+    where
+        continue left = do
+            present <- peekText "or"
+            if not present
+                then pure left
+                else do
+                    _ <- keyword "or"
+                    right <- parseAndPattern
+                    continue (OrPattern (mergeSpan (patternSpan left) (patternSpan right)) left right ())
+
+parseAndPattern :: P (Pattern Identifier ())
+parseAndPattern = parsePrimaryPattern >>= continue
+    where
+        continue left = do
+            present <- peekText "and"
+            if not present
+                then pure left
+                else do
+                    _ <- keyword "and"
+                    right <- parsePrimaryPattern
+                    continue (AndPattern (mergeSpan (patternSpan left) (patternSpan right)) left right ())
+
+parsePrimaryPattern :: P (Pattern Identifier ())
+parsePrimaryPattern = do
+    next <- peekToken
+    case next of
+        Just token | tokenText token == "not" -> do
+            start <- keyword "not"
+            nested <- parsePrimaryPattern
+            pure (NotPattern (mergeSpan (tokenSpan start) (patternSpan nested)) nested ())
+        Just token | tokenText token `elem` ["<", "<=", ">", ">=", "==", "\\="] -> do
+            operatorTokenValue <- takeToken
+            (literal, literalSpan) <- parsePatternLiteral
+            let operator = case tokenText operatorTokenValue of
+                    "<" -> PatternLessThan
+                    "<=" -> PatternLessEqual
+                    ">" -> PatternGreaterThan
+                    ">=" -> PatternGreaterEqual
+                    "==" -> PatternEqual
+                    _ -> PatternNotEqual
+            pure (RelationalPattern (mergeSpan (tokenSpan operatorTokenValue) literalSpan) operator literal ())
+        Just token | tokenText token == "_" -> do
+            _ <- takeToken
+            pure (WildcardPattern (tokenSpan token) ())
+        Just token | tokenText token == "null" -> do
+            _ <- keyword "null"
+            pure (NullPattern (tokenSpan token) ())
+        Just token | tokenText token == "(" -> do
+            _ <- symbol "("
+            nested <- parsePattern
+            _ <- symbol ")"
+            pure nested
+        Just token
+            | tokenKind token `elem` [IntegerToken, FloatingToken, CharacterToken, StringToken]
+                || tokenText token `elem` ["true", "false"] -> do
+                (literal, spanValue) <- parsePatternLiteral
+                pure (LiteralPattern spanValue literal ())
+        Just _ -> do
+            (typeSyntax, spanValue) <- withSpan parseTypeSyntax
+            pure (TypePattern spanValue typeSyntax ())
+        Nothing -> failCurrent "VXP0021" "expected pattern after is"
+
+parsePatternLiteral :: P (Literal, SourceSpan)
+parsePatternLiteral = do
+    token <- takeToken
+    let spanValue = tokenSpan token
+    case tokenKind token of
+        IntegerToken -> case parseIntegerSpelling (tokenText token) of
+            Right parsed -> pure (IntegerLiteral (parsedIntegerValue parsed), spanValue)
+            Left issue -> failAt spanValue "VXP0010" (renderIntegerLiteralError issue)
+        FloatingToken -> case validateFloatingSpelling (tokenText token) of
+            Right normalized -> pure (FloatingLiteral normalized, spanValue)
+            Left issue -> failAt spanValue "VXP0012" (renderFloatingLiteralError issue)
+        CharacterToken -> case parseCharacterLiteral (tokenText token) of
+            Right value -> pure (CharacterLiteral value, spanValue)
+            Left issue -> failAt spanValue "VXP0011" (renderCharacterLiteralError issue)
+        StringToken -> pure (StringLiteral (tokenText token), spanValue)
+        KeywordToken | tokenText token == "true" -> pure (BooleanLiteral True, spanValue)
+        KeywordToken | tokenText token == "false" -> pure (BooleanLiteral False, spanValue)
+        _ -> failAt spanValue "VXP0022" "relational and constant patterns require a literal"
+
 -- A capture list belongs to the callable which follows it.  Keeping this at
 -- primary-expression precedence allows immediately invoking a literal while
 -- preventing binary operators from becoming part of capture initializers.
@@ -706,7 +808,19 @@ expressionSpan expression = case expression of
     CallExpression value _ _ _ -> value
     UnaryExpression value _ _ _ -> value
     BinaryExpression value _ _ _ _ -> value
+    IsPatternExpression value _ _ _ -> value
     CallableExpression value _ _ _ _ _ -> value
+
+patternSpan :: Pattern name annotation -> SourceSpan
+patternSpan patternValue = case patternValue of
+    WildcardPattern value _ -> value
+    NullPattern value _ -> value
+    LiteralPattern value _ _ -> value
+    TypePattern value _ _ -> value
+    RelationalPattern value _ _ _ -> value
+    NotPattern value _ _ -> value
+    AndPattern value _ _ _ -> value
+    OrPattern value _ _ _ -> value
 
 separated :: String -> P a -> P [a]
 separated separator parser = do

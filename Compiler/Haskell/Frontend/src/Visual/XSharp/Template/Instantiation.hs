@@ -146,6 +146,11 @@ instantiateExpression binding expression = case expression of
         closedRight <- instantiateExpression binding right
         closedAnnotation <- instantiateType binding annotation
         pure (BinaryExpression spanValue operator closedLeft closedRight closedAnnotation)
+    IsPatternExpression spanValue subject patternValue annotation -> do
+        closedSubject <- instantiateExpression binding subject
+        closedPattern <- instantiatePattern binding patternValue
+        closedAnnotation <- instantiateType binding annotation
+        pure (IsPatternExpression spanValue closedSubject closedPattern closedAnnotation)
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse (instantiateCapture binding) captures
         closedParameters <- traverse (instantiateParameter binding) parameters
@@ -160,6 +165,35 @@ instantiateExpression binding expression = case expression of
                 closedBody
                 closedAnnotation
             )
+
+instantiatePattern ::
+    TemplateBinding ->
+    Pattern ResolvedName Type ->
+    Either TemplateInstantiationError (Pattern ResolvedName Type)
+instantiatePattern binding patternValue = case patternValue of
+    WildcardPattern spanValue annotation ->
+        WildcardPattern spanValue <$> instantiateType binding annotation
+    NullPattern spanValue annotation -> NullPattern spanValue <$> instantiateType binding annotation
+    LiteralPattern spanValue literal annotation ->
+        LiteralPattern spanValue literal <$> instantiateType binding annotation
+    TypePattern spanValue syntax annotation ->
+        TypePattern spanValue syntax <$> instantiateType binding annotation
+    RelationalPattern spanValue operator literal annotation ->
+        RelationalPattern spanValue operator literal <$> instantiateType binding annotation
+    NotPattern spanValue nested annotation ->
+        NotPattern spanValue
+            <$> instantiatePattern binding nested
+            <*> instantiateType binding annotation
+    AndPattern spanValue left right annotation ->
+        AndPattern spanValue
+            <$> instantiatePattern binding left
+            <*> instantiatePattern binding right
+            <*> instantiateType binding annotation
+    OrPattern spanValue left right annotation ->
+        OrPattern spanValue
+            <$> instantiatePattern binding left
+            <*> instantiatePattern binding right
+            <*> instantiateType binding annotation
 
 instantiateCapture ::
     TemplateBinding ->

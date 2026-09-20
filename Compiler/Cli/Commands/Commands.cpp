@@ -345,7 +345,7 @@ namespace
     }
 
     [[nodiscard]] int
-    RunProjectTool(XsCliCommand command, bool formatterDryRun)
+    RunProjectTool(CliCommand command, bool formatterDryRun)
     {
         auto project = Visual::XSharp::Driver::ResolveProject(true);
         if (!project)
@@ -360,7 +360,7 @@ namespace
             return 1;
         }
 
-        const bool formatting = command == XS_CLI_COMMAND_FORMAT;
+        const bool formatting = command == CliCommand::kFormat;
 #ifdef _WIN32
         const std::string executable = formatting ? "vfmt.exe" : "vlint.exe";
 #else
@@ -479,7 +479,7 @@ namespace
     }
 
     [[nodiscard]] bool
-    ProcessSource(const std::filesystem::path &source, const XsCliOptions &options, const XsEffectiveCompilerOptions &effective)
+    ProcessSource(const std::filesystem::path &source, const CliOptions &options, const EffectiveCompilerOptions &effective)
     {
         if (source.extension() != ".vxs")
         {
@@ -497,38 +497,38 @@ namespace
         const auto sourceText = PathText(source);
         // Every source command crosses the same verified Core consumer. `check` and
         // artifact emission therefore cannot drift into separate validation paths.
-        if (options.command == XS_CLI_COMMAND_CHECK)
-            return xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command, effective.output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
-        if (options.command != XS_CLI_COMMAND_BUILD && options.command != XS_CLI_COMMAND_RUN)
+        if (options.command == CliCommand::kCheck)
+            return ProcessCoreArtifactAs(core.Path().string().c_str(), sourceText.c_str(), options.command, effective.output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
+        if (options.command != CliCommand::kBuild && options.command != CliCommand::kRun)
         {
             fmt::print(stderr, "vxs: this source command is not connected to the compiler pipeline\n");
             return false;
         }
-        const auto output = options.command == XS_CLI_COMMAND_RUN ? XS_BUILD_OUTPUT_BINARY : effective.output;
-        if (output == XS_BUILD_OUTPUT_CORE)
+        const auto output = options.command == CliCommand::kRun ? BuildOutput::kBinary : effective.output;
+        if (output == BuildOutput::kCore)
             return CopyCore(core.Path(), source);
-        const bool built = xs_driver_process_core_artifact_as(core.Path().string().c_str(), sourceText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
+        const bool built = ProcessCoreArtifactAs(core.Path().string().c_str(), sourceText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
         if (!built)
             return false;
-        return options.command != XS_CLI_COMMAND_RUN || ExecuteNative(OutputPath(source, ".vxse"), options.programArguments) == 0;
+        return options.command != CliCommand::kRun || ExecuteNative(OutputPath(source, ".vxse"), options.programArguments) == 0;
     }
 
     [[nodiscard]] int
-    RunFile(const XsCliOptions &options)
+    RunFile(const CliOptions &options)
     {
         const auto effective = ResolveCompilerOptions(options);
-        if (options.input == XS_BUILD_INPUT_OBJECT)
+        if (options.input == BuildInput::kObject)
         {
             // Checking machine code would bypass all language and IR verifiers;
             // object input therefore belongs only to explicit build operations.
-            if (options.command != XS_CLI_COMMAND_BUILD)
+            if (options.command != CliCommand::kBuild)
             {
                 fmt::print(stderr, "vxs: check does not accept native object input\n");
                 return 2;
             }
             return options.filePath ? LinkObjectInput(*options.filePath, false) : 2;
         }
-        if (options.input == XS_BUILD_INPUT_CORE)
+        if (options.input == BuildInput::kCore)
         {
             if (!options.filePath || options.filePath->extension() != ".core")
             {
@@ -536,35 +536,35 @@ namespace
                 return 2;
             }
             const auto fileText = PathText(*options.filePath);
-            const auto output = options.command == XS_CLI_COMMAND_RUN ? XS_BUILD_OUTPUT_BINARY : effective.output;
-            if (!xs_driver_process_core_artifact(fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr))
+            const auto output = options.command == CliCommand::kRun ? BuildOutput::kBinary : effective.output;
+            if (!ProcessCoreArtifact(fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr))
                 return 1;
-            return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse"), options.programArguments) : 0;
+            return options.command == CliCommand::kRun ? ExecuteNative(OutputPath(*options.filePath, ".vxse"), options.programArguments) : 0;
         }
-        if (options.input == XS_BUILD_INPUT_XPP || options.input == XS_BUILD_INPUT_XMM)
+        if (options.input == BuildInput::kXpp || options.input == BuildInput::kXmm)
         {
-            const bool isXpp = options.input == XS_BUILD_INPUT_XPP;
+            const bool isXpp = options.input == BuildInput::kXpp;
             const std::string_view expectedExtension = isXpp ? ".xpp" : ".xmm";
             if (!options.filePath || options.filePath->extension() != expectedExtension)
             {
                 fmt::print(stderr, "vxs: -Build {} requires a {} -File\n", isXpp ? "xpp" : "xmm", expectedExtension);
                 return 2;
             }
-            const auto output = options.command == XS_CLI_COMMAND_RUN ? XS_BUILD_OUTPUT_BINARY : effective.output;
-            if (output == XS_BUILD_OUTPUT_CORE || (!isXpp && output == XS_BUILD_OUTPUT_XPP))
+            const auto output = options.command == CliCommand::kRun ? BuildOutput::kBinary : effective.output;
+            if (output == BuildOutput::kCore || (!isXpp && output == BuildOutput::kXpp))
             {
                 fmt::print(stderr, "vxs: compiler artifacts cannot be raised back to an earlier pipeline stage\n");
                 return 2;
             }
             const auto fileText = PathText(*options.filePath);
             const bool built = isXpp
-                                   ? xs_driver_process_xpp_artifact_as(fileText.c_str(), fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr)
-                                   : xs_driver_process_xmm_artifact_as(fileText.c_str(), fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
+                                   ? ProcessXppArtifactAs(fileText.c_str(), fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr)
+                                   : ProcessXmmArtifactAs(fileText.c_str(), fileText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
             if (!built)
                 return 1;
-            return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(*options.filePath, ".vxse"), options.programArguments) : 0;
+            return options.command == CliCommand::kRun ? ExecuteNative(OutputPath(*options.filePath, ".vxse"), options.programArguments) : 0;
         }
-        if (options.input != XS_BUILD_INPUT_VXS)
+        if (options.input != BuildInput::kVisualXSharp)
         {
             fmt::print(stderr, "vxs: only vxs, core, xpp, and xmm inputs belong to the renewed pipeline\n");
             return 2;
@@ -573,9 +573,56 @@ namespace
     }
 
     [[nodiscard]] int
-    RunProject(const XsCliOptions &options)
+    RunExecutableTarget(const CliOptions &options,
+                        Visual::XSharp::Driver::ResolvedProject project,
+                        const Visual::XSharp::Driver::ResolvedSourceTarget &target,
+                        const EffectiveCompilerOptions &effective)
     {
-        const bool testing = options.command == XS_CLI_COMMAND_TEST;
+        project.entry = *target.entry;
+        project.sourceRoots = { target.root };
+        project.sourceExcludes = target.excludes;
+
+        TemporaryCore core;
+        if (!core)
+        {
+            fmt::print(stderr, "vxs: could not allocate a temporary Core artifact\n");
+            return 1;
+        }
+        if (RunProjectFrontend(core.Path(), project) != 0)
+            return 1;
+
+        std::error_code pathError;
+        const auto workingDirectory = std::filesystem::current_path(pathError);
+        if (pathError)
+        {
+            fmt::print(stderr, "vxs: could not resolve the project artifact directory: {}\n", pathError.message());
+            return 1;
+        }
+        const auto artifactBase = workingDirectory / project.outputDirectory / target.name;
+        const auto corePathText = core.Path().string();
+        const auto artifactBaseText = artifactBase.string();
+        if (options.command == CliCommand::kCheck)
+            return ProcessCoreArtifactAs(corePathText.c_str(), artifactBaseText.c_str(), options.command, effective.output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr)
+                       ? 0
+                       : 1;
+        std::filesystem::create_directories(artifactBase.parent_path(), pathError);
+        if (pathError)
+        {
+            fmt::print(stderr, "vxs: could not create project artifact directory '{}': {}\n", PathText(artifactBase.parent_path()), pathError.message());
+            return 1;
+        }
+        const auto output = options.command == CliCommand::kRun ? BuildOutput::kBinary : effective.output;
+        if (output == BuildOutput::kCore)
+            return CopyCore(core.Path(), artifactBase) ? 0 : 1;
+        if (!ProcessCoreArtifactAs(corePathText.c_str(), artifactBaseText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr))
+            return 1;
+        return options.command == CliCommand::kRun ? ExecuteNative(OutputPath(artifactBase, ".vxse"), options.programArguments) : 0;
+    }
+
+    [[nodiscard]] int
+    RunProject(const CliOptions &options)
+    {
+        const bool testing = options.command == CliCommand::kTest;
         auto project = Visual::XSharp::Driver::ResolveProject(!testing);
         if (!project)
             return 1;
@@ -585,8 +632,20 @@ namespace
                        "vxs: named test-suite execution requires the test framework runner, which is not linked yet\n");
             return 1;
         }
+        if (!options.selectedViPkgs.empty())
+        {
+            fmt::print(stderr,
+                       "vxs: -ViPkg selection requires the ViPkg assembly stage, which is not linked yet\n");
+            return 1;
+        }
+        if (!options.selectedLibraries.empty())
+        {
+            fmt::print(stderr,
+                       "vxs: library target selection requires the library frontend route, which is not linked yet\n");
+            return 1;
+        }
 
-        const XsEffectiveCompilerOptions projectDefaults{
+        const EffectiveCompilerOptions projectDefaults{
             .compilerVersion = project->compilerVersion,
             .standard = project->standard,
             .target = std::nullopt,
@@ -599,7 +658,7 @@ namespace
             fmt::print(stderr, "vxs: target '{}' is not declared by Visual.XSharp.kts\n", *effective.target);
             return 2;
         }
-        if (options.command == XS_CLI_COMMAND_BUILD && (effective.output == XS_BUILD_OUTPUT_OBJECT || effective.output == XS_BUILD_OUTPUT_ASSEMBLY))
+        if (options.command == CliCommand::kBuild && (effective.output == BuildOutput::kObject || effective.output == BuildOutput::kAssembly))
         {
             // A project Core module intentionally combines declarations across files. Until
             // Core carries source ownership, emitting one object and pretending it belongs
@@ -610,50 +669,42 @@ namespace
             return 1;
         }
 
-        TemporaryCore core;
-        if (!core)
-        {
-            fmt::print(stderr, "vxs: could not allocate a temporary Core artifact\n");
-            return 1;
-        }
-        if (RunProjectFrontend(core.Path(), *project) != 0)
-            return 1;
-
-        const auto separator = project->entry.find_last_of('.');
-        const std::string className = separator == std::string::npos ? project->entry : project->entry.substr(separator + 1);
-        std::error_code pathError;
-        const auto workingDirectory = std::filesystem::current_path(pathError);
-        if (pathError)
-        {
-            fmt::print(stderr, "vxs: could not resolve the project artifact directory: {}\n", pathError.message());
-            return 1;
-        }
-        const auto artifactBase = workingDirectory / project->outputDirectory / className;
-        const auto corePathText = core.Path().string();
-        const auto artifactBaseText = artifactBase.string();
-        if (options.command == XS_CLI_COMMAND_CHECK)
-            return xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), options.command, effective.output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr)
-                       ? 0
-                       : 1;
-        if (options.command != XS_CLI_COMMAND_BUILD && options.command != XS_CLI_COMMAND_RUN)
+        if (options.command != CliCommand::kBuild && options.command != CliCommand::kRun
+            && options.command != CliCommand::kCheck)
         {
             fmt::print(stderr, "vxs: this project command is not connected to the compiler pipeline\n");
             return 1;
         }
-        std::filesystem::create_directories(artifactBase.parent_path(), pathError);
-        if (pathError)
+        std::vector<const Visual::XSharp::Driver::ResolvedSourceTarget *> selected;
+        if (options.selectedExecutables.empty())
         {
-            fmt::print(stderr, "vxs: could not create project artifact directory '{}': {}\n", PathText(artifactBase.parent_path()), pathError.message());
+            for (const auto &target : project->executables)
+                selected.push_back(&target);
+        }
+        else
+        {
+            for (const auto &name : options.selectedExecutables)
+            {
+                const auto found = std::find_if(project->executables.begin(), project->executables.end(), [&](const auto &target) {
+                    return target.name == name;
+                });
+                if (found == project->executables.end())
+                {
+                    fmt::print(stderr, "vxs: executable target '{}' is not declared by Visual.XSharp.kts\n", name);
+                    return 2;
+                }
+                selected.push_back(&*found);
+            }
+        }
+        if (selected.empty())
+        {
+            fmt::print(stderr, "vxs: project does not declare an executable target\n");
             return 1;
         }
-        // `run` always requests a fresh runnable artifact, regardless of a project's
-        // ordinary emit preference, and then executes precisely that output path.
-        const auto output = options.command == XS_CLI_COMMAND_RUN ? XS_BUILD_OUTPUT_BINARY : effective.output;
-        if (output == XS_BUILD_OUTPUT_CORE)
-            return CopyCore(core.Path(), artifactBase) ? 0 : 1;
-        if (!xs_driver_process_core_artifact_as(corePathText.c_str(), artifactBaseText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr))
-            return 1;
-        return options.command == XS_CLI_COMMAND_RUN ? ExecuteNative(OutputPath(artifactBase, ".vxse"), options.programArguments) : 0;
+        for (const auto *target : selected)
+            if (RunExecutableTarget(options, *project, *target, effective) != 0)
+                return 1;
+        return 0;
     }
 } // namespace
 
@@ -661,35 +712,39 @@ auto
 Visual::XSharp::Cli::Run(int argc, char **argv) -> int
 {
     auto parsed = ParseCommandLine(argc, argv);
-    if (parsed.result == XS_CLI_PARSE_HELP)
+    if (parsed.result == CliParseResult::kHelp)
     {
         PrintCliHelp(parsed.helpCommand);
         return 0;
     }
-    if (parsed.result == XS_CLI_PARSE_VERSION)
+    if (parsed.result == CliParseResult::kVersion)
     {
         PrintCliVersion();
         return 0;
     }
-    if (parsed.result == XS_CLI_PARSE_ERROR)
+    if (parsed.result == CliParseResult::kError)
     {
         fmt::print(stderr, "vxs: {}\n", parsed.diagnostic);
         return 2;
     }
     const auto &options = parsed.options;
     std::optional<Activity> activity;
-    if (options.command == XS_CLI_COMMAND_BUILD)
+    if (options.command == CliCommand::kBuild)
         activity.emplace("building compiler pipeline");
-    else if (options.command == XS_CLI_COMMAND_CHECK)
+    else if (options.command == CliCommand::kCheck)
         activity.emplace("checking compiler pipeline");
     int result{};
-    if (options.command == XS_CLI_COMMAND_RESOLVE || options.command == XS_CLI_COMMAND_UPDATE)
+    if (options.command == CliCommand::kResolve || options.command == CliCommand::kUpdate)
         result = Visual::XSharp::Driver::RefreshProjectLock() ? 0 : 1;
-    else if (options.command == XS_CLI_COMMAND_FORMAT || options.command == XS_CLI_COMMAND_LINT)
+    else if (options.command == CliCommand::kFormat || options.command == CliCommand::kLint)
         result = RunProjectTool(options.command, options.formatterDryRun);
-    else if (options.command == XS_CLI_COMMAND_INSTALL || options.command == XS_CLI_COMMAND_VIGET)
+    else if (options.command == CliCommand::kInstall || options.command == CliCommand::kViGet
+             || options.command == CliCommand::kViPkg)
     {
-        const char *commandName = options.command == XS_CLI_COMMAND_INSTALL ? "install" : "viget";
+        const char *commandName = options.command == CliCommand::kInstall
+                                      ? "install"
+                                  : options.command == CliCommand::kViGet ? "viget"
+                                                                          : "vipkg";
         fmt::print(stderr, "vxs: {} requires the ViGet client, which is not linked into this build yet\n", commandName);
         result = 1;
     }
@@ -698,9 +753,9 @@ Visual::XSharp::Cli::Run(int argc, char **argv) -> int
     if (activity)
     {
         if (result == 0)
-            activity->Complete(options.command == XS_CLI_COMMAND_BUILD ? "build completed" : "check completed");
+            activity->Complete(options.command == CliCommand::kBuild ? "build completed" : "check completed");
         else
-            activity->Fail(options.command == XS_CLI_COMMAND_BUILD ? "build failed" : "check failed");
+            activity->Fail(options.command == CliCommand::kBuild ? "build failed" : "check failed");
     }
     return result;
 }

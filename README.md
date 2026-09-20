@@ -79,7 +79,7 @@ the normal workflow:
 
 ```powershell
 go run scripts/develop.go doctor
-go run scripts/develop.go version 0.3.7
+go run scripts/develop.go version 0.3.8
 go run scripts/develop.go build
 go run scripts/develop.go test
 go run scripts/develop.go benchmark
@@ -141,7 +141,7 @@ See [CLI](Documents/CLI.md) for the exact accepted surface and implementation st
 
 ## Project files
 
-A Visual X# project uses one `Visual.XSharp.kts` file. `sources.main.entry` names a namespace-qualified class; its final
+A Visual X# project uses one `Visual.XSharp.kts` file. `sources.executable.entry` names a namespace-qualified class; its final
 segment is a class name and need not be `Main` or `Program`. The selected class must provide a parameterless
 `public static void Main()` method; a top-level runtime function is not an entry point.
 The entry is resolved from namespace and type identity. It does not name a source file, and source file names or directory
@@ -157,7 +157,8 @@ project {
 }
 
 sources {
-  main {
+  executable {
+    name = "Example"
     srcDir = "Sources"
     entry = "Example.Main"
   }

@@ -62,8 +62,8 @@ closureTests =
     , ("Core verifier accepts a well-formed closure", coreVerifierAcceptsClosure)
     , ("Core verifier rejects mismatched closure type", coreVerifierRejectsTypeMismatch)
     , ("Core verifier rejects capture initializer mismatch", coreVerifierRejectsCaptureMismatch)
-    , ("Core wire v4 round-trips closure values", coreWireClosureRoundTrip)
-    , ("CorePrep wire v4 round-trips closure creation", corePrepWireClosureRoundTrip)
+    , ("Core wire v5 round-trips closure values", coreWireClosureRoundTrip)
+    , ("CorePrep wire v5 round-trips closure creation", corePrepWireClosureRoundTrip)
     , ("CorePrep verifier accepts converted closure", corePrepVerifierAcceptsClosure)
     , ("CorePrep verifier rejects primitive weak capture", corePrepVerifierRejectsWeakPrimitive)
     ]
@@ -329,6 +329,7 @@ firstCallableInTree tree = firstJust (map declarationCallable (syntaxDeclaration
 declarationCallable :: Declaration name annotation -> Maybe (Expression name annotation)
 declarationCallable declaration = case declaration of
     TypeDeclaration {typeMembers = members} -> firstJust (map declarationCallable members)
+    TemplateTypeDeclaration {typeMembers = members} -> firstJust (map declarationCallable members)
     FunctionDeclaration {declarationBody = body} -> blockCallable body
 
 blockCallable :: Block name annotation -> Maybe (Expression name annotation)
@@ -390,6 +391,7 @@ symbols expression = case expression of
     CallExpression _ callee arguments _ -> symbols callee ++ concatMap symbols arguments
     UnaryExpression _ _ value _ -> symbols value
     BinaryExpression _ _ left right _ -> symbols left ++ symbols right
+    IsPatternExpression _ value _ _ -> symbols value
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters

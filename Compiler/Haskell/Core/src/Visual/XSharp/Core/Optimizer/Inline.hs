@@ -118,6 +118,10 @@ rewriteExpression maximumNodes candidates state expression = case expression of
     CorePrimitive primitive arguments valueType ->
         let (rewritten, next) = mapAccumulating (rewriteExpression maximumNodes candidates) state arguments
          in (CorePrimitive primitive rewritten valueType, next)
+    CoreLet name bindingType value body valueType ->
+        let (rewrittenValue, afterValue) = rewriteExpression maximumNodes candidates state value
+            (rewrittenBody, afterBody) = rewriteExpression maximumNodes candidates afterValue body
+         in (CoreLet name bindingType rewrittenValue rewrittenBody valueType, afterBody)
     CoreClosure captures parameters returnType body valueType ->
         let (rewrittenCaptures, afterCaptures) = mapAccumulating rewriteCapture state captures
             (rewrittenBody, finalState) = rewriteStatements maximumNodes candidates afterCaptures body
@@ -180,6 +184,13 @@ substituteExpression substitutions expression = case expression of
             valueType
     CorePrimitive primitive arguments valueType ->
         CorePrimitive primitive (map (substituteExpression substitutions) arguments) valueType
+    CoreLet name bindingType value body valueType ->
+        CoreLet
+            name
+            bindingType
+            (substituteExpression substitutions value)
+            (substituteExpression (Map.delete (resolvedSymbol name) substitutions) body)
+            valueType
     CoreClosure captures parameters returnType body valueType ->
         let shadowed = foldr (Map.delete . resolvedSymbol . fst) substitutions parameters
          in CoreClosure
@@ -208,6 +219,7 @@ expressionNodeCount expression = case expression of
     CoreLiteral {} -> 1
     CoreApply callee arguments _ -> 1 + sum (map expressionNodeCount (callee : arguments))
     CorePrimitive _ arguments _ -> 1 + sum (map expressionNodeCount arguments)
+    CoreLet _ _ value body _ -> 1 + expressionNodeCount value + expressionNodeCount body
     CoreClosure captures _ _ body _ ->
         1
             + sum (map (expressionNodeCount . coreCaptureValue) captures)

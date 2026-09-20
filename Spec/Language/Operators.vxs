@@ -410,10 +410,22 @@ for (int value : 1 ... 10 by 2) {
 -- Example 57: 22. Type Test is
 -- Demonstrates: is belongs to the relational precedence group and introduces a C#-style pattern.
 --   The words and/or combine patterns and are not aliases for &&/|| outside an is pattern.
+--   Pattern evaluation tests its subject exactly once. Combinators short-circuit from left to right.
+--   A nominal type pattern is exact; it does not perform a conversion or a user-defined cast.
 
 value is Target
 value is > 0 and < 10
 value is null or Target
+value is not null
+value is _
+
+-- `not` negates the following pattern. `and` binds more tightly than `or`.
+value is not null and Target
+value is null or > 0 and < 10
+
+-- These words do not become general-purpose Boolean expression operators.
+left and right -- INVALID
+left or right -- INVALID
 
 -- ============================================================================
 -- Example 58: 24.1 Member Access .

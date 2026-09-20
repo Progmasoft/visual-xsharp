@@ -139,7 +139,8 @@ For every scalar compiler setting, the driver resolves values in this order, fro
 
 The evaluator deliberately materializes both user-written values and Kotlin DSL defaults. The native driver therefore
 uses the evaluated project as one authoritative layer and never lets an omitted CLI option overwrite it. This applies to
-`emit`, warning policy, optimization settings, compiler/standard selection, and other transported compiler settings.
+warning policy, optimization settings, compiler/standard selection, and other transported compiler settings. Artifact
+selection is CLI-owned: the project DSL does not persist an `emit` value.
 
 `-Target` accepts a case-sensitive LLVM target triple such as `x86_64-pc-windows-msvc`. In project mode, an explicitly
 selected target must occur in the DSL's `targets { target(...) }` catalog when that catalog is non-empty. Without an
@@ -239,7 +240,7 @@ vxs build -Build core -Emit llvmll -File module.core
 vxs build -Build core -Emit llvmbc -File module.core
 ```
 
-The native C++20 route reads the Haskell `VXCR` v4 contract with byte, collection, text, type-depth, and expression-depth
+The native C++20 route reads the Haskell `VXCR` v5 contract with byte, collection, text, type-depth, and expression-depth
 limits. It verifies Core semantics before adapting nested expressions and source control flow to CorePrep, then runs the
 existing verified CorePrep → Xpp → Xmm → LLVM pipeline entirely in memory. `check` writes nothing. The two `build` examples
 write a sibling `.ll` or `.bc` file. A Core build can also write a sibling `.o` or `.asm`, or link a `.vxse`; binary is the

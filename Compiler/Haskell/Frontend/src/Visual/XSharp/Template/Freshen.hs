@@ -181,12 +181,33 @@ freshExpression expression = case expression of
             <$> freshExpression left
             <*> freshExpression right
             <*> freshType annotation
+    IsPatternExpression spanValue subject patternValue annotation ->
+        IsPatternExpression spanValue
+            <$> freshExpression subject
+            <*> freshPattern patternValue
+            <*> freshType annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse freshCaptureDefinition captures
         closedParameters <- traverse freshParameterDefinition parameters
         closedBody <- freshCallableBody body
         closedAnnotation <- freshType annotation
         pure (CallableExpression spanValue explicit closedCaptures closedParameters closedBody closedAnnotation)
+
+freshPattern :: Pattern ResolvedName Type -> Fresh (Pattern ResolvedName Type)
+freshPattern patternValue = case patternValue of
+    WildcardPattern spanValue annotation -> WildcardPattern spanValue <$> freshType annotation
+    NullPattern spanValue annotation -> NullPattern spanValue <$> freshType annotation
+    LiteralPattern spanValue literal annotation ->
+        LiteralPattern spanValue literal <$> freshType annotation
+    TypePattern spanValue syntax annotation -> TypePattern spanValue syntax <$> freshType annotation
+    RelationalPattern spanValue operator literal annotation ->
+        RelationalPattern spanValue operator literal <$> freshType annotation
+    NotPattern spanValue nested annotation ->
+        NotPattern spanValue <$> freshPattern nested <*> freshType annotation
+    AndPattern spanValue left right annotation ->
+        AndPattern spanValue <$> freshPattern left <*> freshPattern right <*> freshType annotation
+    OrPattern spanValue left right annotation ->
+        OrPattern spanValue <$> freshPattern left <*> freshPattern right <*> freshType annotation
 
 freshCaptureDefinition :: Capture ResolvedName Type -> Fresh (Capture ResolvedName Type)
 freshCaptureDefinition capture = do
@@ -262,11 +283,26 @@ expressionSymbols expression = case expression of
     UnaryExpression _ _ value annotation -> expressionSymbols value ++ typeSymbols annotation
     BinaryExpression _ _ left right annotation ->
         expressionSymbols left ++ expressionSymbols right ++ typeSymbols annotation
+    IsPatternExpression _ subject patternValue annotation ->
+        expressionSymbols subject ++ patternSymbols patternValue ++ typeSymbols annotation
     CallableExpression _ _ captures parameters body annotation ->
         concatMap captureSymbols captures
             ++ concatMap parameterSymbols parameters
             ++ callableBodySymbols body
             ++ typeSymbols annotation
+
+patternSymbols :: Pattern ResolvedName Type -> [Int]
+patternSymbols patternValue = case patternValue of
+    WildcardPattern _ annotation -> typeSymbols annotation
+    NullPattern _ annotation -> typeSymbols annotation
+    LiteralPattern _ _ annotation -> typeSymbols annotation
+    TypePattern _ _ annotation -> typeSymbols annotation
+    RelationalPattern _ _ _ annotation -> typeSymbols annotation
+    NotPattern _ nested annotation -> patternSymbols nested ++ typeSymbols annotation
+    AndPattern _ left right annotation ->
+        patternSymbols left ++ patternSymbols right ++ typeSymbols annotation
+    OrPattern _ left right annotation ->
+        patternSymbols left ++ patternSymbols right ++ typeSymbols annotation
 
 captureSymbols :: Capture ResolvedName Type -> [Int]
 captureSymbols capture =

@@ -92,7 +92,7 @@ class LockfileDumpTest {
     val root = Files.createTempDirectory("visual-xsharp-vxdc-command-")
     try {
       val project = root.resolve("Visual.XSharp.kts")
-      Files.writeString(project, "sources { main { entry = \"Example.Main\" } }")
+      Files.writeString(project, "sources { executable { entry = \"Example.Main\" } }")
       val command =
         parseVxdcCommand(
           arrayOf("-Projectfile", project.toString(), "-Output", "Example.lock-report")

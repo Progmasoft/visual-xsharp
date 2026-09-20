@@ -143,7 +143,7 @@ operatorPrecedenceTests =
     , parses "bitwise xor binds before or" "return 7 ^ 3 | 1;"
     , parses "bitwise or binds before comparison" "return flags | mask == expected;"
     , ("pattern combinators are rejected outside is", not (accepted (sourceWith "return ready and valid or fallback;")))
-    , parses "exclamation inequality alias is accepted" "return left != right;"
+    , ("exclamation inequality alias is rejected", not (accepted (sourceWith "return left != right;")))
     , ("removed membership operator is rejected", not (accepted (sourceWith "return item in values;")))
     , ("removed not-in operator is rejected", not (accepted (sourceWith "return item not in values;")))
     , ("removed cast operator is rejected", not (accepted (sourceWith "return value as Target;")))
@@ -554,8 +554,8 @@ booleanOperandTests =
         , ("not (1 < 2)", False)
         , ("not 0", True)
         , ("not 7", False)
-        , ("1 != 2", True)
-        , ("2 != 2", False)
+        , ("1 \\= 2", True)
+        , ("2 \\= 2", False)
         , ("1 + 2 == 3", True)
         , ("1 + 2 == 4", False)
         , ("true == false", False)

@@ -5,28 +5,7 @@
 
 package com.progmasoft.visual.xsharp.project
 
-import java.util.Locale
-
 @DslMarker annotation class XsProjectDsl
-
-@XsProjectDsl
-class SourcesScope internal constructor() {
-  internal val includes = mutableListOf<String>()
-  internal var excludes: MutableList<String>? = null
-
-  fun include(pattern: String) {
-    val root = requireText(pattern, "source include")
-    if (root.any { character -> character in "*?" }) {
-      throw ProjectConfigurationException("source include must name a directory, not a glob: $root")
-    }
-    includes += root
-  }
-
-  fun exclude(vararg patterns: String) {
-    val configured = excludes ?: mutableListOf<String>().also { excludes = it }
-    patterns.forEach { pattern -> configured += requireText(pattern, "source exclude") }
-  }
-}
 
 @XsProjectDsl
 class CompilerScope internal constructor(private val settings: CompilerSettings) {
@@ -58,13 +37,7 @@ class CompilerScope internal constructor(private val settings: CompilerSettings)
       settings.buildMode = value
     }
 
-  var emit: Emit
-    get() = settings.emit
-    set(value) {
-      settings.emit = value
-    }
-
-  var warningsAsErrors: Boolean
+  var werror: Boolean
     get() = settings.warningsAsErrors
     set(value) {
       settings.warningsAsErrors = value
@@ -76,19 +49,19 @@ class CompilerScope internal constructor(private val settings: CompilerSettings)
       settings.warningLevel = WarningLevel.valueOf(value.name)
     }
 
-  var experimentalWarnings: Boolean
+  var wexperimental: Boolean
     get() = settings.experimentalWarnings
     set(value) {
       settings.experimentalWarnings = value
     }
 
-  var shadowWarnings: Boolean
+  var wshadow: Boolean
     get() = settings.shadowWarnings
     set(value) {
       settings.shadowWarnings = value
     }
 
-  var undefinedWarnings: Boolean
+  var wundef: Boolean
     get() = settings.undefinedWarnings
     set(value) {
       settings.undefinedWarnings = value
@@ -100,19 +73,6 @@ class CompilerScope internal constructor(private val settings: CompilerSettings)
 
   fun llvm(block: LlvmCompilerScope.() -> Unit) {
     LlvmCompilerScope(settings).apply(block)
-  }
-
-  internal fun warnings(level: String) {
-    settings.warningLevel =
-      try {
-        WarningLevel.valueOf(level.uppercase(Locale.ROOT))
-      } catch (_: IllegalArgumentException) {
-        throw ProjectConfigurationException("unknown warning level '$level'")
-      }
-  }
-
-  internal fun werror(enabled: Boolean) {
-    settings.warningsAsErrors = enabled
   }
 }
 
@@ -162,28 +122,34 @@ class LlvmCompilerScope internal constructor(private val settings: CompilerSetti
 
 class ProjectContext internal constructor(val host: Host = detectHost()) {
   private var identity: ProjectIdentity? = null
-  private val authors = mutableListOf<Author>()
+  private val authors = mutableListOf<String>()
+  private val defaultFeatures = mutableListOf<String>()
   private val dependencies = mutableListOf<PackageDependency>()
   private val optionalDependencies = mutableListOf<OptionalPackageDependency>()
   private val dependencyFeatures = mutableListOf<PackageFeatureSelection>()
   private val localDependencies = mutableListOf<LocalPackageDependency>()
-  private var entry: String? = null
   private var releaseOutputDirectory = "build/release"
   private var debugOutputDirectory = "build/debug"
   private val targets = mutableListOf<String>()
   private val workspaces = mutableListOf<Workspace>()
   private var pmlEnabled = true
-  private var publishSources = false
-  private var publishExcludes: List<String>? = null
-  private val sourceIncludes = mutableListOf<String>()
-  private var sourceExcludes: List<String>? = null
+  private var pushSources = false
+  private var pushExcludes: List<String>? = null
+  private val executables = mutableListOf<ExecutableSourceTarget>()
+  private val libraries = mutableListOf<LibrarySourceTarget>()
   private val testSuites = mutableListOf<TestSuite>()
   private val compilerSettings = CompilerSettings()
+
+  val projectName: String?
+    get() = identity?.name
 
   internal fun configureIdentity(
     name: String?,
     stability: String?,
     version: String?,
+    description: String?,
+    configuredAuthors: List<String>,
+    configuredDefaultFeatures: List<String>,
   ) {
     if (identity != null) throw ProjectConfigurationException("project may be configured only once")
     identity =
@@ -191,11 +157,10 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
         name?.let { requireText(it, "project name") },
         stability?.let { requireText(it, "project stability") },
         version?.let { requireText(it, "project version") },
+        description?.let { requireText(it, "project description") },
       )
-  }
-
-  internal fun configureEntry(value: String) {
-    entry = requireText(value, "sources.main.entry")
+    authors += configuredAuthors.map { requireModuleSegment(it, "project author") }.distinct()
+    defaultFeatures += configuredDefaultFeatures.map(::requireFeatureName).distinct()
   }
 
   internal fun configureOutputDirectories(
@@ -221,15 +186,21 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   }
 
   internal fun configurePublishing(
-    publish: Boolean,
+    push: Boolean,
     excludes: List<String>?,
   ) {
-    publishSources = publish
-    publishExcludes = excludes?.distinct()
+    pushSources = push
+    pushExcludes = excludes?.distinct()
   }
 
-  internal fun configureAuthors(entries: List<Author>) {
-    authors += entries
+  internal fun configureSourceTargets(
+    executableTargets: List<ExecutableSourceTarget>,
+    libraryTargets: List<LibrarySourceTarget>,
+  ) {
+    executables.clear()
+    executables += executableTargets
+    libraries.clear()
+    libraries += libraryTargets
   }
 
   fun dependencies(block: DependenciesScope.() -> Unit) {
@@ -251,12 +222,6 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
     localDependencies += validated.local
   }
 
-  internal fun configureMainSources(block: SourcesScope.() -> Unit) {
-    val scope = SourcesScope().apply(block)
-    sourceIncludes += scope.includes
-    scope.excludes?.let { sourceExcludes = it.distinct() }
-  }
-
   internal fun configureTestSuites(suites: List<TestSuite>) {
     val duplicates = suites.groupingBy(TestSuite::name).eachCount().filterValues { it > 1 }.keys
     if (duplicates.isNotEmpty()) {
@@ -273,23 +238,23 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
   }
 
   fun build(): ProjectPlan {
-    val configuredEntry =
-      entry ?: throw ProjectConfigurationException("sources.main.entry is required")
-    if (!configuredEntry.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+"))) {
+    if (executables.isEmpty() && libraries.isEmpty()) {
       throw ProjectConfigurationException(
-        "sources.main.entry must be a qualified type name: $configuredEntry"
+        "sources requires at least one executable or library target"
       )
     }
     val project = identity
-    if (publishSources) {
+    if (pushSources) {
       val missingFields = buildList {
         if (project?.name == null) add("name")
         if (project?.version == null) add("version")
         if (project?.stability == null) add("stability")
+        if (project?.description == null) add("description")
+        if (authors.isEmpty()) add("authors")
       }
       if (missingFields.isNotEmpty()) {
         throw ProjectConfigurationException(
-          "sources.viget.publish requires every project field; missing: ${missingFields.joinToString()}"
+          "sources.viget.push requires every project field; missing: ${missingFields.joinToString()}"
         )
       }
     }
@@ -300,25 +265,24 @@ class ProjectContext internal constructor(val host: Host = detectHost()) {
         dependencyFeatures,
         localDependencies,
       )
-    val effectiveSourceIncludes = sourceIncludes.ifEmpty { listOf("Sources") }
     val plan =
       ProjectPlan(
         project,
         authors.toList(),
+        defaultFeatures.toList(),
         dependencyManifest.required,
         dependencyManifest.optional,
         dependencyManifest.features,
         dependencyManifest.local,
-        configuredEntry,
         releaseOutputDirectory,
         debugOutputDirectory,
         targets.toList(),
         workspaces.toList(),
         pmlEnabled,
-        publishSources,
-        publishExcludes,
-        effectiveSourceIncludes.distinct(),
-        sourceExcludes,
+        pushSources,
+        pushExcludes,
+        executables.toList(),
+        libraries.toList(),
         testSuites.toList(),
         compilerSettings,
         emptyList(),
@@ -358,9 +322,10 @@ internal object ProjectRuntime {
     name: String?,
     stability: String?,
     version: String?,
-  ) = context.configureIdentity(name, stability, version)
-
-  fun configureEntry(value: String) = context.configureEntry(value)
+    description: String?,
+    authors: List<String>,
+    defaultFeatures: List<String>,
+  ) = context.configureIdentity(name, stability, version, description, authors, defaultFeatures)
 
   fun configureOutputDirectories(
     release: String,
@@ -374,21 +339,25 @@ internal object ProjectRuntime {
   fun configurePml(enabled: Boolean) = context.configurePml(enabled)
 
   fun configurePublishing(
-    publish: Boolean,
+    push: Boolean,
     excludes: List<String>?,
-  ) = context.configurePublishing(publish, excludes)
+  ) = context.configurePublishing(push, excludes)
 
-  fun configureAuthors(entries: List<Author>) = context.configureAuthors(entries)
+  fun configureSourceTargets(
+    executables: List<ExecutableSourceTarget>,
+    libraries: List<LibrarySourceTarget>,
+  ) = context.configureSourceTargets(executables, libraries)
 
   fun dependencies(block: DependenciesScope.() -> Unit) = context.dependencies(block)
-
-  fun configureMainSources(block: SourcesScope.() -> Unit) = context.configureMainSources(block)
 
   fun configureTestSuites(suites: List<TestSuite>) = context.configureTestSuites(suites)
 
   fun compiler(block: CompilerScope.() -> Unit) = context.compiler(block)
 
   fun build() = context.build()
+
+  val projectName
+    get() = context.projectName
 
   val host
     get() = context.host

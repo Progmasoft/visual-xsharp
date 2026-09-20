@@ -80,17 +80,6 @@ enum class BuildMode {
   RELEASE,
 }
 
-enum class Emit {
-  BINARY,
-  OBJECT,
-  CORE,
-  XPP,
-  XMM,
-  ASSEMBLY,
-  LLVM_LL,
-  LLVM_BC,
-}
-
 enum class Warnings {
   ALL,
   MEDIUM,
@@ -127,11 +116,28 @@ data class ProjectIdentity(
   val name: String?,
   val stability: String?,
   val version: String?,
+  val description: String? = null,
 ) : Serializable
 
-data class Author(
-  val user: String,
-  val mail: String,
+enum class ViPkgType {
+  VXSLIB,
+  STATICLIB,
+  CDYLIB,
+}
+
+data class ExecutableSourceTarget(
+  val name: String,
+  val srcDir: String,
+  val exclude: List<String>?,
+  val entry: String,
+) : Serializable
+
+data class LibrarySourceTarget(
+  val name: String,
+  val viPkgTypes: List<ViPkgType>,
+  val srcDir: String,
+  val exclude: List<String>?,
+  val namespace: String?,
 ) : Serializable
 
 data class Workspace(
@@ -153,7 +159,6 @@ data class CompilerSettings(
   var standard: String = "latest",
   var backend: Backend = Backend.LLVM,
   var buildMode: BuildMode = BuildMode.DEBUG,
-  var emit: Emit = Emit.BINARY,
   var experimentalWarnings: Boolean = false,
   var shadowWarnings: Boolean = false,
   var undefinedWarnings: Boolean = true,
@@ -196,21 +201,21 @@ data class DependencyManifest(
 
 data class ProjectPlan(
   val identity: ProjectIdentity?,
-  val authors: List<Author>,
+  val authors: List<String>,
+  val defaultFeatures: List<String>,
   val requiredDependencies: List<PackageDependency>,
   val optionalDependencies: List<OptionalPackageDependency>,
   val dependencyFeatures: List<PackageFeatureSelection>,
   val localDependencies: List<LocalPackageDependency>,
-  val entry: String,
   val releaseOutputDirectory: String,
   val debugOutputDirectory: String,
   val targets: List<String>,
   val workspaces: List<Workspace>,
   val pmlEnabled: Boolean,
-  val publishSources: Boolean,
-  val publishExcludes: List<String>?,
-  val sourceIncludes: List<String>,
-  val sourceExcludes: List<String>?,
+  val pushSources: Boolean,
+  val pushExcludes: List<String>?,
+  val executables: List<ExecutableSourceTarget>,
+  val libraries: List<LibrarySourceTarget>,
   val testSuites: List<TestSuite>,
   val compiler: CompilerSettings,
   val plugins: List<PluginPlanEntry>,

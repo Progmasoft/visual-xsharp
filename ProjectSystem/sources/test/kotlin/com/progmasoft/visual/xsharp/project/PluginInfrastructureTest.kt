@@ -190,7 +190,7 @@ class PluginInfrastructureTest {
       ProjectRuntime.reset()
       PluginRuntime.activate(listOf(first), listOf(firstPlugin), root)
       PluginRuntime.declare(PluginRequest("Progmasoft", "First", "1.0.0"))
-      sources { main { entry = "Demo.Main" } }
+      sources { executable { entry = "Demo.Main" } }
       val plan = ProjectRuntime.build()
       assertEquals(listOf("native"), plan.plugins.single().extensions)
       assertEquals("true", plan.plugins.single().contributions["enabled"])

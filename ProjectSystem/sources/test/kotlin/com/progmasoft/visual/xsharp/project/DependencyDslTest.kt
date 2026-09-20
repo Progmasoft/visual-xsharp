@@ -29,7 +29,7 @@ class DependencyDslTest {
         stability = Stability.STABLE
       }
     }
-    sources { main { entry = "Demo.Main" } }
+    sources { executable { entry = "Demo.Main" } }
 
     val dependency = ProjectRuntime.build().requiredDependencies.single()
     assertEquals(PackageDependency("Publisher", "Name", "1.2.3", Stability.STABLE), dependency)
@@ -46,7 +46,7 @@ class DependencyDslTest {
           this.stability = stability
         }
       }
-      sources { main { entry = "Demo.Main" } }
+      sources { executable { entry = "Demo.Main" } }
       assertEquals(
         stability,
         ProjectRuntime.build().requiredDependencies.single().stability,
@@ -64,7 +64,7 @@ class DependencyDslTest {
         feature("TOML") { enabled = false }
       }
     }
-    sources { main { entry = "Demo.Main" } }
+    sources { executable { entry = "Demo.Main" } }
     val plan = ProjectRuntime.build()
 
     assertTrue(plan.requiredDependencies.isEmpty())
@@ -85,7 +85,7 @@ class DependencyDslTest {
         feature("TOML") { enabled = true }
       }
     }
-    sources { main { entry = "Demo.Main" } }
+    sources { executable { entry = "Demo.Main" } }
     val plan = ProjectRuntime.build()
 
     assertEquals(
@@ -144,7 +144,7 @@ class DependencyDslTest {
   @Test
   fun recordsLocalViPkgWithoutTreatingItAsAViGetCoordinate() {
     dependencies { dependency("local") { path = "packages/dependency.vipkg" } }
-    sources { main { entry = "Demo.Program" } }
+    sources { executable { entry = "Demo.Program" } }
     val plan = ProjectRuntime.build()
 
     assertTrue(plan.requiredDependencies.isEmpty())
@@ -197,7 +197,7 @@ class DependencyDslTest {
           version = "1.0.0"
         }
       }
-      sources { main { entry = "Demo.Main" } }
+      sources { executable { entry = "Demo.Main" } }
       val plan = ProjectRuntime.build()
       ProjectLockFile.write(
         root,
@@ -239,7 +239,7 @@ class DependencyDslTest {
         stability = Stability.BETA
       }
     }
-    sources { main { entry = "Demo.Main" } }
+    sources { executable { entry = "Demo.Main" } }
     val text = PlanWriter.write(ProjectRuntime.build())
 
     assertTrue(text.contains("\"publisher\":\"Publisher\""))

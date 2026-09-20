@@ -292,6 +292,7 @@ expressionDefinitionSymbols expression = case expression of
         expressionDefinitionSymbols callee ++ concatMap expressionDefinitionSymbols arguments
     UnaryExpression _ _ value _ -> expressionDefinitionSymbols value
     BinaryExpression _ _ left right _ -> expressionDefinitionSymbols left ++ expressionDefinitionSymbols right
+    IsPatternExpression _ subject _ _ -> expressionDefinitionSymbols subject
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters
@@ -337,11 +338,24 @@ expressionTypes expression = case expression of
         annotation : expressionTypes callee ++ concatMap expressionTypes arguments
     UnaryExpression _ _ value annotation -> annotation : expressionTypes value
     BinaryExpression _ _ left right annotation -> annotation : expressionTypes left ++ expressionTypes right
+    IsPatternExpression _ subject patternValue annotation ->
+        annotation : expressionTypes subject ++ patternTypes patternValue
     CallableExpression _ _ captures parameters body annotation ->
         annotation
             : map captureAnnotation captures
             ++ map parameterAnnotation parameters
             ++ callableBodyTypes body
+
+patternTypes :: Pattern ResolvedName Type -> [Type]
+patternTypes patternValue = case patternValue of
+    WildcardPattern _ annotation -> [annotation]
+    NullPattern _ annotation -> [annotation]
+    LiteralPattern _ _ annotation -> [annotation]
+    TypePattern _ _ annotation -> [annotation]
+    RelationalPattern _ _ _ annotation -> [annotation]
+    NotPattern _ nested annotation -> annotation : patternTypes nested
+    AndPattern _ left right annotation -> annotation : patternTypes left ++ patternTypes right
+    OrPattern _ left right annotation -> annotation : patternTypes left ++ patternTypes right
 
 callableBodyTypes :: CallableBody ResolvedName Type -> [Type]
 callableBodyTypes body = case body of

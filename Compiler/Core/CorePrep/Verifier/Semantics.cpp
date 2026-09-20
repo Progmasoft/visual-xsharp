@@ -193,6 +193,7 @@ namespace visual_xsharp::core
                 case Operation::LogicalAnd:
                 case Operation::LogicalOr:
                 case Operation::LogicalNot:
+                case Operation::TypeIs:
                     return Type::boolean();
                 case Operation::Add:
                 case Operation::Subtract:
@@ -269,6 +270,14 @@ namespace visual_xsharp::core
                 case Operation::Copy:
                     if (arity != 1U)
                         issues.push_back(issue("VXC1023", "copy requires exactly one operand", function, block));
+                    break;
+                case Operation::TypeIs:
+                    if (arity != 2U
+                        || (instruction.operands.front().type.kind != Type::Kind::Named
+                            && instruction.operands.front().type.kind != Type::Kind::String
+                            && instruction.operands.front().type.kind != Type::Kind::Function)
+                        || instruction.operands.back().type != Type::uint64())
+                        issues.push_back(issue("VXC1054", "type test requires a reference subject and ulong identity", function, block));
                     break;
                 case Operation::Call:
                     if (arity == 0U)

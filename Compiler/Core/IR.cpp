@@ -74,16 +74,35 @@ namespace Visual::XSharp::Core
     }
 
     auto
+    Expression::Let(SymbolName name, Type bindingType, Expression value, Expression body, Type resultType) -> Expression
+    {
+        Expression expression;
+        expression.kind = Kind::Let;
+        expression.type = std::move(resultType);
+        expression.letSymbol = std::move(name);
+        expression.letType = std::move(bindingType);
+        expression.letValue = std::make_shared<Expression>(std::move(value));
+        expression.letBody = std::make_shared<Expression>(std::move(body));
+        return expression;
+    }
+
+    auto
     Expression::operator==(const Expression &other) const -> bool
     {
         const auto equalCallee = (!callee && !other.callee) || (callee && other.callee && *callee == *other.callee);
         const auto equalBody = (!closureBody && !other.closureBody)
                                || (closureBody && other.closureBody && *closureBody == *other.closureBody);
+        const auto equalLetValue = (!letValue && !other.letValue)
+                                   || (letValue && other.letValue && *letValue == *other.letValue);
+        const auto equalLetBody = (!letBody && !other.letBody)
+                                  || (letBody && other.letBody && *letBody == *other.letBody);
         return kind == other.kind && type == other.type && symbol == other.symbol
                && literal == other.literal && primitive == other.primitive
                && equalCallee && operands == other.operands && captures == other.captures
                && closureParameters == other.closureParameters
-               && closureReturnType == other.closureReturnType && equalBody;
+               && closureReturnType == other.closureReturnType && equalBody
+               && letSymbol == other.letSymbol && letType == other.letType
+               && equalLetValue && equalLetBody;
     }
 
     auto

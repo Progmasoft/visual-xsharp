@@ -263,8 +263,27 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
                 UnaryExpression spanValue operator (rewriteExpression value) (rewriteType annotation)
             BinaryExpression spanValue operator left right annotation ->
                 BinaryExpression spanValue operator (rewriteExpression left) (rewriteExpression right) (rewriteType annotation)
+            IsPatternExpression spanValue value patternValue annotation ->
+                IsPatternExpression
+                    spanValue
+                    (rewriteExpression value)
+                    (rewritePattern patternValue)
+                    (rewriteType annotation)
             CallableExpression spanValue isStatic captures parameters body annotation ->
                 CallableExpression spanValue isStatic captures parameters body (rewriteType annotation)
+        rewritePattern patternValue = case patternValue of
+            WildcardPattern spanValue annotation -> WildcardPattern spanValue (rewriteType annotation)
+            NullPattern spanValue annotation -> NullPattern spanValue (rewriteType annotation)
+            LiteralPattern spanValue literal annotation -> LiteralPattern spanValue literal (rewriteType annotation)
+            TypePattern spanValue syntax annotation -> TypePattern spanValue syntax (rewriteType annotation)
+            RelationalPattern spanValue operator literal annotation ->
+                RelationalPattern spanValue operator literal (rewriteType annotation)
+            NotPattern spanValue nested annotation ->
+                NotPattern spanValue (rewritePattern nested) (rewriteType annotation)
+            AndPattern spanValue left right annotation ->
+                AndPattern spanValue (rewritePattern left) (rewritePattern right) (rewriteType annotation)
+            OrPattern spanValue left right annotation ->
+                OrPattern spanValue (rewritePattern left) (rewritePattern right) (rewriteType annotation)
         rewriteType valueType = case valueType of
             NamedType (QualifiedName [Identifier "Box"]) arguments -> NamedType (qualified [replacement]) arguments
             NamedType name arguments -> NamedType name (map rewriteArgument arguments)

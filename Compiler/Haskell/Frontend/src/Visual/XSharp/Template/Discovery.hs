@@ -220,6 +220,10 @@ discoverExpression catalog namespace origin expression state = case expression o
         let afterType = discoverType catalog namespace origin annotation state
             afterLeft = discoverExpression catalog namespace origin left afterType
          in discoverExpression catalog namespace origin right afterLeft
+    IsPatternExpression _ subject patternValue annotation ->
+        let afterType = discoverType catalog namespace origin annotation state
+            afterSubject = discoverExpression catalog namespace origin subject afterType
+         in discoverPattern catalog namespace origin patternValue afterSubject
     CallableExpression spanValue _ captures parameters body annotation ->
         let callableOrigin =
                 origin
@@ -245,6 +249,30 @@ discoverExpression catalog namespace origin expression state = case expression o
                     afterCaptures
                     (zip [0 ..] parameters)
          in discoverCallableBody catalog namespace callableOrigin body afterParameters
+
+discoverPattern ::
+    TemplateCatalog ->
+    Maybe QualifiedName ->
+    TemplateDiscoveryOrigin ->
+    Pattern ResolvedName Type ->
+    DiscoveryState ->
+    DiscoveryState
+discoverPattern catalog namespace origin patternValue state = case patternValue of
+    WildcardPattern _ annotation -> discoverAnnotation annotation state
+    NullPattern _ annotation -> discoverAnnotation annotation state
+    LiteralPattern _ _ annotation -> discoverAnnotation annotation state
+    TypePattern _ _ annotation -> discoverAnnotation annotation state
+    RelationalPattern _ _ _ annotation -> discoverAnnotation annotation state
+    NotPattern _ nested annotation ->
+        discoverPattern catalog namespace origin nested (discoverAnnotation annotation state)
+    AndPattern _ left right annotation -> discoverPair annotation left right
+    OrPattern _ left right annotation -> discoverPair annotation left right
+    where
+        discoverAnnotation = discoverType catalog namespace origin
+        discoverPair annotation left right =
+            let afterType = discoverAnnotation annotation state
+                afterLeft = discoverPattern catalog namespace origin left afterType
+             in discoverPattern catalog namespace origin right afterLeft
 
 discoverCapture ::
     TemplateCatalog ->

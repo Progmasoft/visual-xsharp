@@ -138,6 +138,8 @@ expressionFacts knownSymbols pureKnown expression =
             CoreVariable _ _ -> emptyDirectFacts
             CoreLiteral _ _ -> emptyDirectFacts
             CorePrimitive _ arguments _ -> foldFacts (map (expressionFacts knownSymbols pureKnown) arguments)
+            CoreLet _ _ value body _ ->
+                combineFacts (expressionFacts knownSymbols pureKnown value) (expressionFacts knownSymbols pureKnown body)
             CoreApply callee arguments _ ->
                 let children = foldFacts (map (expressionFacts knownSymbols pureKnown) (callee : arguments))
                  in case directCallee callee of

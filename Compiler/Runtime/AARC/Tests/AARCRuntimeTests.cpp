@@ -34,6 +34,7 @@ namespace
     const Aarc::TypeMetadata kMetadata{
         Aarc::kAbiVersion,
         0U,
+        Aarc::TypeIdentity("Tests.Payload"),
         sizeof(Payload),
         alignof(Payload),
         DestroyPayload,
