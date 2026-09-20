@@ -282,7 +282,9 @@ vxdc -Projectfile .\Visual.XSharp.kts -Output .\Project.sqlite3.dump
 ## Exit behavior
 
 Command parsing errors return a nonzero status. Compilation diagnostics are printed to standard error. `run` propagates
-build failures and, after a successful link, returns the native process exit status.
+build failures and, after a successful link, returns the native process exit status unchanged. This applies equally to an
+explicit `.vxs` source, a resumed Core/Xpp/Xmm artifact, and a project executable target; a program result such as `37` is
+not collapsed into the compiler's generic failure status `1`.
 
 Parse diagnostics retain context. Unknown commands/options name the rejected spelling; invalid typed values name the
 option and its accepted domain; duplicate, missing-value, wrong-command-scope, positional, and invalid process-vector

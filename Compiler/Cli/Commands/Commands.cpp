@@ -18,6 +18,7 @@
 
 #include "Compiler/Cli/Arguments/Options.hpp"
 #include "Compiler/Cli/Commands/Commands.hpp"
+#include "Compiler/Cli/Commands/ExecutionStatus.hpp"
 #include "Compiler/Cli/Presentation/Activity.hpp"
 #include "Compiler/Driver/CorePipeline.hpp"
 #include "Compiler/Linker/NativeLinker.hpp"
@@ -478,39 +479,45 @@ namespace
         return true;
     }
 
-    [[nodiscard]] bool
+    [[nodiscard]] int
     ProcessSource(const std::filesystem::path &source, const CliOptions &options, const EffectiveCompilerOptions &effective)
     {
         if (source.extension() != ".vxs")
         {
             fmt::print(stderr, "vxs: Haskell frontend input must be a .vxs file\n");
-            return false;
+            return 1;
         }
         TemporaryCore core;
         if (!core)
         {
             fmt::print(stderr, "vxs: could not allocate a temporary Core artifact\n");
-            return false;
+            return 1;
         }
         if (RunFileFrontend(core.Path(), source) != 0)
-            return false;
+            return 1;
         const auto sourceText = PathText(source);
         // Every source command crosses the same verified Core consumer. `check` and
         // artifact emission therefore cannot drift into separate validation paths.
         if (options.command == CliCommand::kCheck)
-            return ProcessCoreArtifactAs(core.Path().string().c_str(), sourceText.c_str(), options.command, effective.output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
+            return Visual::XSharp::Cli::ExecutionStatus::Resolve({
+                ProcessCoreArtifactAs(core.Path().string().c_str(), sourceText.c_str(), options.command, effective.output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr),
+                std::nullopt,
+            });
         if (options.command != CliCommand::kBuild && options.command != CliCommand::kRun)
         {
             fmt::print(stderr, "vxs: this source command is not connected to the compiler pipeline\n");
-            return false;
+            return 1;
         }
         const auto output = options.command == CliCommand::kRun ? BuildOutput::kBinary : effective.output;
         if (output == BuildOutput::kCore)
-            return CopyCore(core.Path(), source);
+            return Visual::XSharp::Cli::ExecutionStatus::Resolve({ CopyCore(core.Path(), source), std::nullopt });
         const bool built = ProcessCoreArtifactAs(core.Path().string().c_str(), sourceText.c_str(), options.command, output, &effective.compiler, effective.target ? effective.target->c_str() : nullptr);
         if (!built)
-            return false;
-        return options.command != CliCommand::kRun || ExecuteNative(OutputPath(source, ".vxse"), options.programArguments) == 0;
+            return Visual::XSharp::Cli::ExecutionStatus::Resolve({ false, std::nullopt });
+        const auto nativeStatus = options.command == CliCommand::kRun
+                                      ? std::optional<int>{ ExecuteNative(OutputPath(source, ".vxse"), options.programArguments) }
+                                      : std::nullopt;
+        return Visual::XSharp::Cli::ExecutionStatus::Resolve({ true, nativeStatus });
     }
 
     [[nodiscard]] int
@@ -569,7 +576,7 @@ namespace
             fmt::print(stderr, "vxs: only vxs, core, xpp, and xmm inputs belong to the renewed pipeline\n");
             return 2;
         }
-        return options.filePath && ProcessSource(*options.filePath, options, effective) ? 0 : 1;
+        return options.filePath ? ProcessSource(*options.filePath, options, effective) : 1;
     }
 
     [[nodiscard]] int

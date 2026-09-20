@@ -73,6 +73,7 @@ Representative labels are:
 
 ```text
 //Compiler/Cli/Tests:cli_parser_tests
+//Compiler/Cli/Commands/Tests:execution_status_tests
 //Compiler/Core/Tests:core_pipeline_tests
 //Compiler/Driver/Tests:closure_pipeline_tests
 //Compiler/Driver/Tests:scalar_pipeline_tests
@@ -146,6 +147,7 @@ change. A scalar pipeline change normally runs:
 ```powershell
 cabal test all
 bazelisk build //Compiler/Cli/Tests:cli_parser_tests `
+  //Compiler/Cli/Commands/Tests:execution_status_tests `
   //Compiler/Driver/Tests:closure_pipeline_tests `
   //Compiler/Driver/Tests:scalar_pipeline_tests `
   //Compiler/Core/Tests:core_pipeline_tests `
