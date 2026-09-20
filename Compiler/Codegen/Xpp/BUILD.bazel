@@ -22,6 +22,7 @@ cc_library(
         "//Compiler/Core:core",
         "//Compiler/Core/Callable:callable",
         "//Compiler/Core/Ownership:ownership",
+        "//Compiler/Headers/Visual/XSharp/ADTs:dense_id_map",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
         "//Compiler/Headers/Visual/XSharp/Xpp:xpp",
         "//Compiler/Headers/Visual/XSharp/Xpp:control_flow_api",

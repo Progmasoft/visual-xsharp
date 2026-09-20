@@ -88,6 +88,7 @@ type systemRunner struct {
 }
 
 var nativeTargets = []string{
+	"//Compiler/ADTs/Tests:adt_tests",
 	"//Compiler/Analysis/Tests:definite_initialization_tests",
 	"//Compiler/Backend/LLVM/Tests:llvm_backend_tests",
 	"//Compiler/Cli/Tests:cli_parser_tests",
@@ -103,6 +104,7 @@ var nativeTargets = []string{
 }
 
 var nativePrograms = []string{
+	"Compiler/ADTs/Tests/adt_tests",
 	"Compiler/Analysis/Tests/definite_initialization_tests",
 	"Compiler/Backend/LLVM/Tests/llvm_backend_tests",
 	"Compiler/Cli/Tests/cli_parser_tests",

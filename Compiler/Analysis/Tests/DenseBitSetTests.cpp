@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -23,6 +24,15 @@ TEST_CASE("an empty dense bit set has no words or values")
     CHECK_FALSE(values.Any());
     CHECK(values.Count() == 0U);
     CHECK(values.SetIndices().empty());
+}
+
+TEST_CASE("a dense bit set rejects universes outside LLVM's index domain")
+{
+    if constexpr (std::numeric_limits<std::size_t>::max() > std::numeric_limits<unsigned>::max())
+    {
+        const auto oversized = static_cast<std::size_t>(std::numeric_limits<unsigned>::max()) + 1U;
+        CHECK_THROWS_AS(DenseBitSet(oversized), std::length_error);
+    }
 }
 
 TEST_CASE("a zero-filled dense bit set retains its requested universe")

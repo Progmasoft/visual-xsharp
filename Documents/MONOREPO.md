@@ -24,6 +24,8 @@ The compiler is decomposed by ownership rather than stored in one `src` director
 
 ```text
 Compiler/
+├── ADTs/                  focused tests for compiler-owned LLVM ADT adapters
+├── Analysis/              shared native dataflow implementations and tests
 ├── Backend/LLVM/          verified Xmm-to-LLVM lowering and target emission
 ├── Build/Bazel/           toolchain discovery and narrow build support
 ├── Cli/

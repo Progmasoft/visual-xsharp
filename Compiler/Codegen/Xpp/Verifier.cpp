@@ -3,10 +3,13 @@
 
 #include <algorithm>
 #include <iterator>
-#include <unordered_map>
-#include <unordered_set>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/Twine.h>
 #include <utility>
 
+#include "Visual/XSharp/ADTs/DenseIdMap.hpp"
 #include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
@@ -21,6 +24,11 @@ namespace Visual::XSharp::Xpp
         namespace Core = ::visual_xsharp::core;
         namespace IR = ::visual_xsharp::xpp;
         namespace Dataflow = ::Visual::XSharp::Analysis;
+        namespace ADTs = ::Visual::XSharp::ADTs;
+
+        using FunctionCatalog = ADTs::DenseIdMap<IR::SymbolId, const IR::Function *>;
+        using StorageCatalog = ADTs::DenseIdMap<IR::SymbolId, Core::Type>;
+        using BlockCatalog = ADTs::DenseIdSet<IR::BlockId>;
 
         struct Context final
         {
@@ -30,9 +38,10 @@ namespace Visual::XSharp::Xpp
             std::size_t instruction{};
 
             void
-            Add(std::string code, std::string message)
+            Add(const llvm::StringRef code, const llvm::Twine &message)
             {
-                issues.push_back({ std::move(code), std::move(message), function, block, instruction });
+                llvm::SmallString<160> storage;
+                issues.push_back({ code.str(), message.toStringRef(storage).str(), function, block, instruction });
             }
         };
 
@@ -96,7 +105,7 @@ namespace Visual::XSharp::Xpp
         }
 
         void
-        VerifyOperand(Context &context, const IR::Operand &operand, const std::unordered_map<IR::SymbolId, Core::Type> &storage, const std::unordered_map<IR::SymbolId, const IR::Function *> &functions)
+        VerifyOperand(Context &context, const IR::Operand &operand, const StorageCatalog &storage, const FunctionCatalog &functions)
         {
             if (operand.kind == IR::Operand::Kind::Literal)
             {
@@ -115,27 +124,27 @@ namespace Visual::XSharp::Xpp
                 // storage containing an AARC closure. Function ids are globally unique,
                 // so checking the declaration catalog first is deterministic and retains
                 // direct-call identity without misclassifying closure registers.
-                if (const auto direct = functions.find(operand.symbol); direct != functions.end())
+                if (const auto *direct = functions.Find(operand.symbol))
                 {
-                    if (operand.type != FunctionType(*direct->second))
+                    if (operand.type != FunctionType(**direct))
                         context.Add("VXP1024", "function operand signature differs from its declaration");
                     return;
                 }
-                if (const auto local = storage.find(operand.symbol); local == storage.end())
+                if (const auto *local = storage.Find(operand.symbol); local == nullptr)
                     context.Add("VXP1012", "callable operand refers to neither a function nor local storage");
-                else if (local->second != operand.type)
+                else if (*local != operand.type)
                     context.Add("VXP1014", "callable operand type differs from its storage declaration");
                 return;
             }
-            const auto found = storage.find(operand.symbol);
-            if (found == storage.end())
+            const auto *found = storage.Find(operand.symbol);
+            if (found == nullptr)
                 context.Add("VXP1013", "operand reads an undefined storage symbol");
-            else if (found->second != operand.type)
+            else if (*found != operand.type)
                 context.Add("VXP1014", "operand type differs from its storage declaration");
         }
 
         void
-        VerifyInstruction(Context &context, const IR::Instruction &value, const std::unordered_map<IR::SymbolId, Core::Type> &storage, const std::unordered_map<IR::SymbolId, const IR::Function *> &functions)
+        VerifyInstruction(Context &context, const IR::Instruction &value, const StorageCatalog &storage, const FunctionCatalog &functions)
         {
             if (value.opcode == IR::Opcode::Call)
             {
@@ -158,28 +167,28 @@ namespace Visual::XSharp::Xpp
             }
             else if (value.opcode == IR::Opcode::MakeClosure)
             {
-                const auto target = functions.find(value.closure_function);
-                if (value.closure_function == 0U || target == functions.end())
+                const auto *target = functions.Find(value.closure_function);
+                if (value.closure_function == 0U || target == nullptr)
                     context.Add("VXP1028", "closure operation refers to an unknown lifted function");
                 if (value.result_type.kind != Core::Type::Kind::Function)
                     context.Add("VXP1029", "closure operation result must have a function type");
                 if (value.capture_modes.size() != value.operands.size())
                     context.Add("VXP1030", "closure capture modes and operands differ in length");
-                if (target != functions.end())
+                if (target != nullptr)
                 {
-                    const auto &parameters = target->second->parameters;
-                    std::vector<Core::Type> targetParameters;
+                    const auto &parameters = (*target)->parameters;
+                    llvm::SmallVector<Core::Type, 8> targetParameters;
                     targetParameters.reserve(parameters.size());
                     for (const auto &parameter : parameters)
                         targetParameters.push_back(parameter.type);
-                    std::vector<Core::Type> captures;
+                    llvm::SmallVector<Core::Type, 8> captures;
                     captures.reserve(value.operands.size());
                     for (const auto &operand : value.operands)
                         captures.push_back(operand.type);
                     const auto contract = ::Visual::XSharp::Core::Callable::ValidateClosure(
                         captures,
                         targetParameters,
-                        target->second->return_type,
+                        (*target)->return_type,
                         value.result_type);
                     using ContractError = ::Visual::XSharp::Core::Callable::ClosureContractError;
                     switch (contract.error)
@@ -258,10 +267,10 @@ namespace Visual::XSharp::Xpp
             }
             else
             {
-                const auto found = storage.find(value.destination);
-                if (value.destination == 0U || found == storage.end())
+                const auto *found = storage.Find(value.destination);
+                if (value.destination == 0U || found == nullptr)
                     context.Add("VXP1018", "result destination does not name declared storage");
-                else if (found->second != value.result_type)
+                else if (*found != value.result_type)
                     context.Add("VXP1019", "result type differs from destination storage");
             }
             for (const auto &operand : value.operands)
@@ -269,7 +278,7 @@ namespace Visual::XSharp::Xpp
         }
 
         void
-        VerifyTerminator(Context &context, const IR::Terminator &value, const IR::Function &function, const std::unordered_map<IR::SymbolId, Core::Type> &storage, const std::unordered_map<IR::SymbolId, const IR::Function *> &functions, const std::unordered_set<IR::BlockId> &blocks)
+        VerifyTerminator(Context &context, const IR::Terminator &value, const IR::Function &function, const StorageCatalog &storage, const FunctionCatalog &functions, const BlockCatalog &blocks)
         {
             if (value.kind == IR::Terminator::Kind::Return)
             {
@@ -282,10 +291,10 @@ namespace Visual::XSharp::Xpp
                 VerifyOperand(context, value.value, storage, functions);
                 if (value.value.type.kind != Core::Type::Kind::Bool)
                     context.Add("VXP1021", "branch condition must be Bool");
-                if (!blocks.contains(value.true_target) || !blocks.contains(value.false_target))
+                if (!blocks.Contains(value.true_target) || !blocks.Contains(value.false_target))
                     context.Add("VXP1022", "branch target does not name a function block");
             }
-            else if (value.kind == IR::Terminator::Kind::Jump && !blocks.contains(value.true_target))
+            else if (value.kind == IR::Terminator::Kind::Jump && !blocks.Contains(value.true_target))
                 context.Add("VXP1023", "jump target does not name a function block");
         }
 
@@ -308,8 +317,8 @@ namespace Visual::XSharp::Xpp
         void
         AppendStorageRead(
             const IR::Operand &operand,
-            const std::unordered_map<IR::SymbolId, Core::Type> &storage,
-            const std::unordered_map<IR::SymbolId, const IR::Function *> &functions,
+            const StorageCatalog &storage,
+            const FunctionCatalog &functions,
             std::vector<Dataflow::StorageId> &reads)
         {
             if (operand.kind != IR::Operand::Kind::Symbol)
@@ -317,31 +326,30 @@ namespace Visual::XSharp::Xpp
             // A direct function symbol is callable identity, not local storage.
             // Closure values have the same function type but are present in the
             // storage catalog and therefore participate in initialization.
-            if (functions.contains(operand.symbol))
+            if (functions.Contains(operand.symbol))
                 return;
-            if (storage.contains(operand.symbol))
+            if (storage.Contains(operand.symbol))
                 reads.push_back(operand.symbol);
         }
 
         [[nodiscard]] auto
         DataflowFunction(
             const IR::Function &function,
-            const std::unordered_map<IR::SymbolId, Core::Type> &storage,
-            const std::unordered_map<IR::SymbolId, const IR::Function *> &functions) -> Dataflow::Function
+            const StorageCatalog &storage,
+            const FunctionCatalog &functions) -> Dataflow::Function
         {
             Dataflow::Function model;
             model.entry = function.entry;
-            model.declarations.reserve(storage.size());
-            for (const auto &[symbol, type] : storage)
-            {
+            model.declarations.reserve(storage.Size());
+            storage.ForEach([&model](const IR::SymbolId symbol, const Core::Type &type) {
                 static_cast<void>(type);
                 model.declarations.push_back(symbol);
-            }
+            });
             std::ranges::sort(model.declarations);
 
             model.initiallyInitialized.reserve(function.parameters.size());
             for (const auto &parameter : function.parameters)
-                if (storage.contains(parameter.symbol.id))
+                if (storage.Contains(parameter.symbol.id))
                     model.initiallyInitialized.push_back(parameter.symbol.id);
 
             model.blocks.reserve(function.blocks.size());
@@ -359,7 +367,7 @@ namespace Visual::XSharp::Xpp
                     for (const auto &operand : instruction.operands)
                         AppendStorageRead(operand, storage, functions, access.reads);
                     if (instruction.effect != IR::Instruction::Effect::Discard
-                        && storage.contains(instruction.destination))
+                        && storage.Contains(instruction.destination))
                         access.write = instruction.destination;
                     flowBlock.accesses.push_back(std::move(access));
                 }
@@ -380,8 +388,8 @@ namespace Visual::XSharp::Xpp
         VerifyDefiniteInitialization(
             Context &context,
             const IR::Function &function,
-            const std::unordered_map<IR::SymbolId, Core::Type> &storage,
-            const std::unordered_map<IR::SymbolId, const IR::Function *> &functions)
+            const StorageCatalog &storage,
+            const FunctionCatalog &functions)
         {
             const auto result = Dataflow::Analyze(
                 DataflowFunction(function, storage, functions),
@@ -412,9 +420,11 @@ namespace Visual::XSharp::Xpp
         if (module.functions.empty())
             context.Add("VXP1002", "Xpp module contains no functions");
 
-        std::unordered_map<IR::SymbolId, const IR::Function *> functions;
+        FunctionCatalog functions;
+        functions.Reserve(module.functions.size());
         for (const auto &function : module.functions)
-            if (function.symbol.id == 0U || function.symbol.spelling.empty() || !functions.emplace(function.symbol.id, &function).second)
+            if (function.symbol.id == 0U || function.symbol.spelling.empty()
+                || !functions.TryEmplace(function.symbol.id, &function).inserted)
             {
                 context.function = function.symbol.id;
                 context.Add("VXP1003", "function symbol is missing, empty, or duplicated");
@@ -423,19 +433,21 @@ namespace Visual::XSharp::Xpp
         for (const auto &function : module.functions)
         {
             context.function = function.symbol.id;
-            std::unordered_set<IR::BlockId> blocks;
+            BlockCatalog blocks;
+            blocks.Reserve(function.blocks.size());
             for (const auto &block : function.blocks)
-                if (!blocks.insert(block.id).second)
+                if (!blocks.Insert(block.id))
                 {
                     context.block = block.id;
                     context.Add("VXP1004", "block id is declared more than once");
                 }
-            if (!blocks.contains(function.entry))
+            if (!blocks.Contains(function.entry))
                 context.Add("VXP1005", "function entry does not name a block");
 
-            std::unordered_map<IR::SymbolId, Core::Type> storage;
+            StorageCatalog storage;
+            storage.Reserve(function.parameters.size());
             for (const auto &parameter : function.parameters)
-                if (parameter.symbol.id == 0U || !storage.emplace(parameter.symbol.id, parameter.type).second)
+                if (parameter.symbol.id == 0U || !storage.TryEmplace(parameter.symbol.id, parameter.type).inserted)
                     context.Add("VXP1006", "parameter storage symbol is missing or duplicated");
             for (const auto &block : function.blocks)
             {
@@ -444,7 +456,9 @@ namespace Visual::XSharp::Xpp
                 {
                     context.instruction = index;
                     const auto &instruction = block.instructions[index];
-                    if (instruction.effect == IR::Instruction::Effect::Define && (instruction.destination == 0U || !storage.emplace(instruction.destination, instruction.result_type).second))
+                    if (instruction.effect == IR::Instruction::Effect::Define
+                        && (instruction.destination == 0U
+                            || !storage.TryEmplace(instruction.destination, instruction.result_type).inserted))
                         context.Add("VXP1007", "defined storage symbol is missing or duplicated");
                 }
             }

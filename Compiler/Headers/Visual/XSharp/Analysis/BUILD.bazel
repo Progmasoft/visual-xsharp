@@ -6,6 +6,7 @@ cc_library(
     name = "dense_bit_set",
     hdrs = ["DenseBitSet.hpp"],
     strip_include_prefix = "/Compiler/Headers",
+    deps = ["@llvm//:llvm"],
 )
 
 cc_library(

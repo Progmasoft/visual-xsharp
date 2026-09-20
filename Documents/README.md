@@ -26,6 +26,7 @@ following vocabulary:
 | Understand short-circuit CFG and initialized storage | [Control-flow safety](CONTROL-FLOW-SAFETY.md) |
 | Understand native liveness and dead-code elimination | [Native liveness](LIVENESS-AND-DEAD-CODE.md) |
 | Understand native fixed-point scheduling and lattices | [Native dataflow](NATIVE-DATAFLOW.md) |
+| Understand native compiler container choices | [Compiler ADT policy](COMPILER-ADTS.md) |
 | Understand object ownership and lifetime | [AARC ABI](AARC-ABI.md) |
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
@@ -71,6 +72,7 @@ following vocabulary:
   and memoized trampoline cleanup.
 - [Native dataflow](NATIVE-DATAFLOW.md) defines the directional worklist, dense initialization and packed ownership
   lattices, validation-only results, and structural complexity guards.
+- [Compiler ADT policy](COMPILER-ADTS.md) defines LLVM ADT adoption, full-range identity adapters, and ownership boundaries.
 
 ## User and project set
 
@@ -86,6 +88,7 @@ following vocabulary:
 - [Testing](TESTING.md) maps changes to local gates and GitHub workflows.
 - [Test ownership](TEST-OWNERSHIP.md) assigns suites, fixtures, and Bazel targets to their compiler components.
 - [Benchmarking](BENCHMARKING.md) defines measurement ownership, fixture timing, interpretation, and CI policy.
+- [Compiler ADT policy](COMPILER-ADTS.md) explains when native code uses LLVM containers and when project adapters are required.
 - [Repository layout](MONOREPO.md) explains ownership boundaries and allowed dependency direction.
 - [Contributing](CONTRIBUTING.md) records code style, file naming, decomposition, generated-file hygiene, and update flow.
 

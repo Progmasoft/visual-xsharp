@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
-#include <algorithm>
-#include <bit>
 #include <limits>
 #include <stdexcept>
 
@@ -13,79 +11,67 @@ namespace Visual::XSharp::Analysis
     namespace
     {
         [[nodiscard]] auto
-        WordCount(const std::size_t bitCount) noexcept -> std::size_t
+        CheckedBitCount(const std::size_t bitCount) -> unsigned
         {
-            constexpr auto kBits = std::numeric_limits<std::uint64_t>::digits;
-            return bitCount == 0U ? 0U : ((bitCount - 1U) / kBits) + 1U;
+            if (bitCount > std::numeric_limits<unsigned>::max())
+                throw std::length_error("dense bit set exceeds LLVM BitVector's index domain");
+            return static_cast<unsigned>(bitCount);
         }
     } // namespace
 
     DenseBitSet::DenseBitSet(const std::size_t bitCount, const bool value)
-        : bitCount_(bitCount)
-        , words_(WordCount(bitCount), value ? ~std::uint64_t{} : std::uint64_t{})
+        : bits_(CheckedBitCount(bitCount), value)
     {
-        MaskUnusedBits();
     }
 
     auto
     DenseBitSet::Size() const noexcept -> std::size_t
     {
-        return bitCount_;
+        return bits_.size();
     }
 
     auto
     DenseBitSet::Empty() const noexcept -> bool
     {
-        return bitCount_ == 0U;
+        return bits_.empty();
     }
 
     auto
     DenseBitSet::None() const noexcept -> bool
     {
-        return std::ranges::all_of(words_, [](const auto word) {
-            return word == 0U;
-        });
+        return bits_.none();
     }
 
     auto
     DenseBitSet::Any() const noexcept -> bool
     {
-        return !None();
+        return bits_.any();
     }
 
     auto
     DenseBitSet::Count() const noexcept -> std::size_t
     {
-        std::size_t count{};
-        for (const auto word : words_)
-            count += std::popcount(word);
-        return count;
+        return bits_.count();
     }
 
     auto
     DenseBitSet::Test(const std::size_t index) const noexcept -> bool
     {
-        if (index >= bitCount_)
-            return false;
-        const auto word = index / kWordBits;
-        const auto bit = index % kWordBits;
-        return (words_[word] & (std::uint64_t{ 1U } << bit)) != 0U;
+        return index < bits_.size() && bits_.test(static_cast<unsigned>(index));
     }
 
     void
     DenseBitSet::Set(const std::size_t index) noexcept
     {
-        if (index >= bitCount_)
-            return;
-        words_[index / kWordBits] |= std::uint64_t{ 1U } << (index % kWordBits);
+        if (index < bits_.size())
+            bits_.set(static_cast<unsigned>(index));
     }
 
     void
     DenseBitSet::Reset(const std::size_t index) noexcept
     {
-        if (index >= bitCount_)
-            return;
-        words_[index / kWordBits] &= ~(std::uint64_t{ 1U } << (index % kWordBits));
+        if (index < bits_.size())
+            bits_.reset(static_cast<unsigned>(index));
     }
 
     void
@@ -100,14 +86,13 @@ namespace Visual::XSharp::Analysis
     void
     DenseBitSet::Clear() noexcept
     {
-        std::ranges::fill(words_, std::uint64_t{});
+        bits_.reset();
     }
 
     void
     DenseBitSet::Fill() noexcept
     {
-        std::ranges::fill(words_, ~std::uint64_t{});
-        MaskUnusedBits();
+        bits_.set();
     }
 
     void
@@ -115,8 +100,7 @@ namespace Visual::XSharp::Analysis
     {
         if (!Compatible(other))
             throw std::invalid_argument("cannot union dense bit sets with different sizes");
-        for (std::size_t index = 0U; index < words_.size(); ++index)
-            words_[index] |= other.words_[index];
+        bits_ |= other.bits_;
     }
 
     void
@@ -124,8 +108,7 @@ namespace Visual::XSharp::Analysis
     {
         if (!Compatible(other))
             throw std::invalid_argument("cannot intersect dense bit sets with different sizes");
-        for (std::size_t index = 0U; index < words_.size(); ++index)
-            words_[index] &= other.words_[index];
+        bits_ &= other.bits_;
     }
 
     void
@@ -133,43 +116,21 @@ namespace Visual::XSharp::Analysis
     {
         if (!Compatible(other))
             throw std::invalid_argument("cannot subtract dense bit sets with different sizes");
-        for (std::size_t index = 0U; index < words_.size(); ++index)
-            words_[index] &= ~other.words_[index];
-        MaskUnusedBits();
+        bits_.reset(other.bits_);
     }
 
     auto
     DenseBitSet::SetIndices() const -> std::vector<std::size_t>
     {
         std::vector<std::size_t> indices;
-        // Do not pre-count: dataflow clients commonly enumerate an empty or
-        // very small fact over a large universe. A reserve-sized popcount pass
-        // would scan every word before this loop scans them again.
-        for (std::size_t wordIndex = 0U; wordIndex < words_.size(); ++wordIndex)
-        {
-            auto word = words_[wordIndex];
-            while (word != 0U)
-            {
-                const auto bit = static_cast<std::size_t>(std::countr_zero(word));
-                indices.push_back(wordIndex * kWordBits + bit);
-                word &= word - 1U;
-            }
-        }
+        for (const auto index : bits_.set_bits())
+            indices.push_back(index);
         return indices;
     }
 
     auto
     DenseBitSet::Compatible(const DenseBitSet &other) const noexcept -> bool
     {
-        return bitCount_ == other.bitCount_;
-    }
-
-    void
-    DenseBitSet::MaskUnusedBits() noexcept
-    {
-        if (words_.empty() || bitCount_ % kWordBits == 0U)
-            return;
-        const auto used = bitCount_ % kWordBits;
-        words_.back() &= (std::uint64_t{ 1U } << used) - 1U;
+        return bits_.size() == other.bits_.size();
     }
 } // namespace Visual::XSharp::Analysis

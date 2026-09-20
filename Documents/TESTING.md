@@ -81,7 +81,7 @@ go run scripts/develop.go doctor
 go run scripts/develop.go test
 ```
 
-The command executes all 12 Catch2 binaries directly on Windows 10/11 and macOS Sequoia/Tahoe. Bazel selects the host
+The command executes all 13 Catch2 binaries directly on Windows 10/11 and macOS Sequoia/Tahoe. Bazel selects the host
 configuration automatically; no public test instruction requires `--config`.
 
 Control-flow changes must exercise the stage that creates edges and every
@@ -113,6 +113,7 @@ Use Bazel target boundaries to keep iteration focused:
 
 ```powershell
 bazelisk build //Compiler/Core:core
+bazelisk build //Compiler/ADTs/Tests:adt_tests
 bazelisk build //Compiler/Codegen/Xpp:xpp
 bazelisk build //Compiler/Codegen/Xmm:xmm
 bazelisk build //Compiler/Analysis/Tests:definite_initialization_tests

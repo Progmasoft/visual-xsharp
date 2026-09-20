@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <algorithm>
-#include <unordered_map>
-#include <unordered_set>
+#include <llvm/ADT/ArrayRef.h>
 
+#include "Visual/XSharp/ADTs/DenseIdMap.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Core/Template.hpp"
@@ -20,7 +20,7 @@ namespace Visual::XSharp::Core
             bool mutableBinding{};
             std::u32string spelling;
         };
-        using Environment = std::unordered_map<SymbolId, Definition>;
+        using Environment = ADTs::DenseIdMap<SymbolId, Definition>;
 
         class FunctionVerifier final
         {
@@ -37,15 +37,17 @@ namespace Visual::XSharp::Core
             {
                 CheckSymbol(function_.symbol, "VXC1006", "Core function symbol must be positive");
                 CheckType(function_.returnType, "VXC1003", "Core function has an unresolved return type");
-                std::unordered_set<SymbolId> parameters;
+                ADTs::DenseIdSet<SymbolId> parameters;
+                parameters.Reserve(function_.parameters.size());
                 for (const auto &parameter : function_.parameters)
                 {
                     CheckSymbol(parameter.symbol, "VXC1006", "Core parameter symbol must be positive");
                     CheckType(parameter.type, "VXC1007", "Core parameter has an unresolved type");
-                    if (!parameters.insert(parameter.symbol.id).second)
+                    if (!parameters.Insert(parameter.symbol.id))
                         Add("VXC1004", "duplicate Core parameter symbol", parameter.symbol.id);
-                    environment_.insert_or_assign(parameter.symbol.id,
-                                                  Definition{ parameter.type, false, parameter.symbol.spelling });
+                    environment_.InsertOrAssign(
+                        parameter.symbol.id,
+                        Definition{ parameter.type, false, parameter.symbol.spelling });
                 }
                 VerifyStatements(function_.body, environment_, function_.returnType);
                 if (function_.returnType != Type::unit() && !AlwaysReturns(function_.body))
@@ -61,17 +63,15 @@ namespace Visual::XSharp::Core
             [[nodiscard]] auto
             FindDefinition(const Environment &locals, const SymbolId symbol) const -> const Definition *
             {
-                if (const auto found = locals.find(symbol); found != locals.end())
-                    return &found->second;
-                if (const auto found = functions_.find(symbol); found != functions_.end())
-                    return &found->second;
-                return nullptr;
+                if (const auto *found = locals.Find(symbol))
+                    return found;
+                return functions_.Find(symbol);
             }
 
             [[nodiscard]] auto
             ContainsDefinition(const Environment &locals, const SymbolId symbol) const -> bool
             {
-                return locals.contains(symbol) || functions_.contains(symbol);
+                return locals.Contains(symbol) || functions_.Contains(symbol);
             }
 
             void
@@ -120,7 +120,7 @@ namespace Visual::XSharp::Core
                 });
             }
             [[nodiscard]] static auto
-            AlwaysReturns(const std::vector<Statement> &statements) -> bool
+            AlwaysReturns(const llvm::ArrayRef<Statement> statements) -> bool
             {
                 for (const auto &statement : statements)
                 {
@@ -133,7 +133,7 @@ namespace Visual::XSharp::Core
             }
             void
             VerifyStatements(
-                const std::vector<Statement> &statements,
+                const llvm::ArrayRef<Statement> statements,
                 Environment &environment,
                 const Type &expectedReturnType)
             {
@@ -157,8 +157,9 @@ namespace Visual::XSharp::Core
                         CheckSameType(binding.type, binding.value.type, "VXC1011", "Core binding value type does not match its declaration", binding.symbol.id);
                         if (ContainsDefinition(environment, binding.symbol.id))
                             Add("VXC1010", "Core binding symbol is already defined", binding.symbol.id);
-                        environment.insert_or_assign(binding.symbol.id,
-                                                     Definition{ binding.type, binding.mutableBinding, binding.symbol.spelling });
+                        environment.InsertOrAssign(
+                            binding.symbol.id,
+                            Definition{ binding.type, binding.mutableBinding, binding.symbol.spelling });
                         return;
                     }
                     case Statement::Kind::Assign:
@@ -238,7 +239,7 @@ namespace Visual::XSharp::Core
                         VerifyExpression(*expression.letValue, environment);
                         CheckSameType(expression.letType, expression.letValue->type, "VXC1048", "Core let value has the wrong type");
                         auto bodyEnvironment = environment;
-                        bodyEnvironment.insert_or_assign(
+                        bodyEnvironment.InsertOrAssign(
                             expression.letSymbol.id,
                             Definition{ expression.letType, false, expression.letSymbol.spelling });
                         VerifyExpression(*expression.letBody, bodyEnvironment);
@@ -341,7 +342,8 @@ namespace Visual::XSharp::Core
 
                 CheckType(expression.closureReturnType, "VXC1032", "Core closure has an unresolved return type");
                 Environment closureEnvironment = outerEnvironment;
-                std::unordered_set<SymbolId> localSymbols;
+                ADTs::DenseIdSet<SymbolId> localSymbols;
+                localSymbols.Reserve(expression.captures.size() + expression.closureParameters.size());
 
                 for (const auto &capture : expression.captures)
                 {
@@ -367,9 +369,9 @@ namespace Visual::XSharp::Core
                         "VXC1036",
                         "Core closure capture value type does not match its binding",
                         capture.symbol.id);
-                    if (!localSymbols.insert(capture.symbol.id).second)
+                    if (!localSymbols.Insert(capture.symbol.id))
                         Add("VXC1037", "duplicate Core closure local symbol", capture.symbol.id);
-                    closureEnvironment.insert_or_assign(
+                    closureEnvironment.InsertOrAssign(
                         capture.symbol.id,
                         // Captured storage is addressable inside the callable.
                         // Haskell Core verification uses the same mutability
@@ -385,9 +387,9 @@ namespace Visual::XSharp::Core
                     CheckSymbol(symbol, "VXC1038", "Core closure parameter symbol must be positive");
                     CheckType(type, "VXC1039", "Core closure parameter has an unresolved type");
                     parameterTypes.push_back(type);
-                    if (!localSymbols.insert(symbol.id).second)
+                    if (!localSymbols.Insert(symbol.id))
                         Add("VXC1037", "duplicate Core closure local symbol", symbol.id);
-                    closureEnvironment.insert_or_assign(symbol.id, Definition{ type, false, symbol.spelling });
+                    closureEnvironment.InsertOrAssign(symbol.id, Definition{ type, false, symbol.spelling });
                 }
 
                 const auto expectedType = Type::function(parameterTypes, expression.closureReturnType);
@@ -413,6 +415,7 @@ namespace Visual::XSharp::Core
             issues.push_back({ "VXC1001", "Core module name must contain at least one non-empty part", 0U, 0U });
 
         Environment functions;
+        functions.Reserve(module.functions.size());
         for (const auto &function : module.functions)
         {
             if (function.symbol.id == 0U)
@@ -427,7 +430,10 @@ namespace Visual::XSharp::Core
                     return types;
                 }(),
                 function.returnType);
-            if (!functions.emplace(function.symbol.id, Definition{ functionType, false, function.symbol.spelling }).second)
+            if (!functions.TryEmplace(
+                              function.symbol.id,
+                              Definition{ functionType, false, function.symbol.spelling })
+                     .inserted)
                 issues.push_back({ "VXC1002", "duplicate Core function symbol", function.symbol.id, function.symbol.id });
         }
         for (const auto &function : module.functions)

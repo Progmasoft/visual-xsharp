@@ -4,10 +4,13 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/Twine.h>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 
+#include "Visual/XSharp/ADTs/DenseIdMap.hpp"
 #include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
@@ -20,9 +23,14 @@ namespace Visual::XSharp::Xmm
     namespace core = ::visual_xsharp::core;
     namespace xmm = ::visual_xsharp::xmm;
     namespace dataflow = ::Visual::XSharp::Analysis;
+    namespace adts = ::Visual::XSharp::ADTs;
 
     namespace
     {
+        using FunctionCatalog = adts::DenseIdMap<core::SymbolId, const xmm::Function *>;
+        using RegisterCatalog = adts::DenseIdMap<xmm::VirtualRegister, core::Type>;
+        using BlockCatalog = adts::DenseIdSet<xmm::BlockId>;
+
         // Context records the exact source location while validation walks the module. Keeping
         // diagnostics as data (rather than printing here) lets the CLI, tests and embedding
         // tools choose their own presentation without weakening the verifier.
@@ -34,9 +42,10 @@ namespace Visual::XSharp::Xmm
             std::size_t instruction{};
 
             void
-            add(IssueKind kind, std::string code, std::string message)
+            add(const IssueKind kind, const llvm::StringRef code, const llvm::Twine &message)
             {
-                issues.push_back(VerificationIssue{ kind, std::move(code), std::move(message), function, block, instruction });
+                llvm::SmallString<160> storage;
+                issues.push_back(VerificationIssue{ kind, code.str(), message.toStringRef(storage).str(), function, block, instruction });
             }
         };
 
@@ -82,7 +91,7 @@ namespace Visual::XSharp::Xmm
         }
 
         [[nodiscard]] auto
-        TypeName(const core::Type &type) -> std::string_view
+        TypeName(const core::Type &type) -> llvm::StringRef
         {
             switch (type.kind)
             {
@@ -202,22 +211,25 @@ namespace Visual::XSharp::Xmm
         }
 
         void
-        VerifyValue(Context &context, const xmm::Value &value, const std::unordered_map<xmm::VirtualRegister, core::Type> &registers, const std::unordered_map<core::SymbolId, const xmm::Function *> &functions)
+        VerifyValue(Context &context, const xmm::Value &value, const RegisterCatalog &registers, const FunctionCatalog &functions)
         {
             if (!SupportedType(value.type))
-                context.add(IssueKind::UnsupportedType, "VXL1005", "LLVM lowering does not support " + std::string(TypeName(value.type)) + " yet");
+                context.add(
+                    IssueKind::UnsupportedType,
+                    "VXL1005",
+                    llvm::Twine("LLVM lowering does not support ") + TypeName(value.type) + " yet");
             if (value.kind == xmm::Value::Kind::Register)
             {
-                const auto found = registers.find(value.reg);
-                if (value.reg == 0 || found == registers.end())
+                const auto *found = registers.Find(value.reg);
+                if (value.reg == 0 || found == nullptr)
                     context.add(IssueKind::UndefinedRegister, "VXL1011", "operand reads an undefined virtual register");
-                else if (found->second != value.type)
+                else if (*found != value.type)
                     context.add(IssueKind::OperandType, "VXL1012", "register operand type disagrees with its definition");
             }
             else if (value.kind == xmm::Value::Kind::Function)
             {
-                const auto found = functions.find(value.symbol);
-                if (value.symbol == 0 || found == functions.end())
+                const auto *found = functions.Find(value.symbol);
+                if (value.symbol == 0 || found == nullptr)
                     context.add(IssueKind::InvalidCall, "VXL1013", "call operand refers to an unknown function symbol");
                 if (value.type.kind != core::Type::Kind::Function)
                     context.add(IssueKind::OperandType, "VXL1014", "function operand must carry a function type");
@@ -227,7 +239,7 @@ namespace Visual::XSharp::Xmm
         }
 
         void
-        VerifyInstruction(Context &context, const xmm::Instruction &instruction, std::unordered_map<xmm::VirtualRegister, core::Type> &registers, const std::unordered_map<core::SymbolId, const xmm::Function *> &functions)
+        VerifyInstruction(Context &context, const xmm::Instruction &instruction, const RegisterCatalog &registers, const FunctionCatalog &functions)
         {
             if (!SupportedType(instruction.result_type))
                 context.add(IssueKind::UnsupportedType, "VXL1005", "instruction result has an unsupported LLVM type");
@@ -264,8 +276,8 @@ namespace Visual::XSharp::Xmm
             }
             else if (instruction.opcode == xmm::Opcode::MakeClosure)
             {
-                const auto target = functions.find(instruction.closure_function);
-                if (instruction.closure_function == 0 || target == functions.end())
+                const auto *target = functions.Find(instruction.closure_function);
+                if (instruction.closure_function == 0 || target == nullptr)
                     context.add(IssueKind::InvalidCall, "VXL1032", "closure operation refers to an unknown lifted function");
                 if (instruction.result_type.kind != core::Type::Kind::Function)
                     context.add(IssueKind::ResultType, "VXL1033", "closure operation result must be callable");
@@ -281,17 +293,17 @@ namespace Visual::XSharp::Xmm
                             IssueKind::OperandType,
                             "VXL1051",
                             "weak and unowned closure captures require an AARC reference type");
-                if (target != functions.end())
+                if (target != nullptr)
                 {
-                    const auto &types = target->second->parameter_types;
-                    std::vector<core::Type> captures;
+                    const auto &types = (*target)->parameter_types;
+                    llvm::SmallVector<core::Type, 8> captures;
                     captures.reserve(instruction.operands.size());
                     for (const auto &operand : instruction.operands)
                         captures.push_back(operand.type);
                     const auto contract = ::Visual::XSharp::Core::Callable::ValidateClosure(
                         captures,
                         types,
-                        target->second->return_type,
+                        (*target)->return_type,
                         instruction.result_type);
                     using ContractError = ::Visual::XSharp::Core::Callable::ClosureContractError;
                     switch (contract.error)
@@ -392,8 +404,7 @@ namespace Visual::XSharp::Xmm
             {
                 if (instruction.destination == 0)
                     context.add(IssueKind::InvalidFunction, "VXL1025", "result-producing instruction has register zero");
-                else if (const auto found = registers.find(instruction.destination);
-                         found == registers.end())
+                else if (registers.Find(instruction.destination) == nullptr)
                     context.add(IssueKind::InvalidFunction, "VXL1025", "result destination is absent from the register catalog");
             }
             else if (instruction.result_type.kind != core::Type::Kind::Unit
@@ -403,7 +414,7 @@ namespace Visual::XSharp::Xmm
         }
 
         void
-        VerifyTerminator(Context &context, const xmm::Terminator &terminator, const xmm::Function &function, const std::unordered_map<xmm::VirtualRegister, core::Type> &registers, const std::unordered_map<core::SymbolId, const xmm::Function *> &functions, const std::unordered_set<xmm::BlockId> &blocks)
+        VerifyTerminator(Context &context, const xmm::Terminator &terminator, const xmm::Function &function, const RegisterCatalog &registers, const FunctionCatalog &functions, const BlockCatalog &blocks)
         {
             if (terminator.kind == xmm::Terminator::Kind::Return)
             {
@@ -416,10 +427,10 @@ namespace Visual::XSharp::Xmm
                 VerifyValue(context, terminator.value, registers, functions);
                 if (terminator.value.type.kind != core::Type::Kind::Bool)
                     context.add(IssueKind::InvalidBranch, "VXL1029", "branch condition must be Bool");
-                if (!blocks.contains(terminator.true_target) || !blocks.contains(terminator.false_target))
+                if (!blocks.Contains(terminator.true_target) || !blocks.Contains(terminator.false_target))
                     context.add(IssueKind::InvalidTarget, "VXL1030", "branch target does not name a function block");
             }
-            else if (terminator.kind == xmm::Terminator::Kind::Jump && !blocks.contains(terminator.true_target))
+            else if (terminator.kind == xmm::Terminator::Kind::Jump && !blocks.Contains(terminator.true_target))
                 context.add(IssueKind::InvalidTarget, "VXL1031", "jump target does not name a function block");
         }
 
@@ -442,30 +453,29 @@ namespace Visual::XSharp::Xmm
         void
         AppendRegisterRead(
             const xmm::Value &value,
-            const std::unordered_map<xmm::VirtualRegister, core::Type> &registers,
+            const RegisterCatalog &registers,
             std::vector<dataflow::StorageId> &reads)
         {
-            if (value.kind == xmm::Value::Kind::Register && registers.contains(value.reg))
+            if (value.kind == xmm::Value::Kind::Register && registers.Contains(value.reg))
                 reads.push_back(value.reg);
         }
 
         [[nodiscard]] auto
         DataflowFunction(
             const xmm::Function &function,
-            const std::unordered_map<xmm::VirtualRegister, core::Type> &registers) -> dataflow::Function
+            const RegisterCatalog &registers) -> dataflow::Function
         {
             dataflow::Function model;
             model.entry = function.entry;
-            model.declarations.reserve(registers.size());
-            for (const auto &[reg, type] : registers)
-            {
+            model.declarations.reserve(registers.Size());
+            registers.ForEach([&model](const xmm::VirtualRegister reg, const core::Type &type) {
                 static_cast<void>(type);
                 model.declarations.push_back(reg);
-            }
+            });
             std::ranges::sort(model.declarations);
             model.initiallyInitialized.reserve(function.parameter_registers.size());
             for (const auto reg : function.parameter_registers)
-                if (registers.contains(reg))
+                if (registers.Contains(reg))
                     model.initiallyInitialized.push_back(reg);
 
             model.blocks.reserve(function.blocks.size());
@@ -482,7 +492,7 @@ namespace Visual::XSharp::Xmm
                     access.instruction = index;
                     for (const auto &operand : instruction.operands)
                         AppendRegisterRead(operand, registers, access.reads);
-                    if (instruction.has_result && registers.contains(instruction.destination))
+                    if (instruction.has_result && registers.Contains(instruction.destination))
                         access.write = instruction.destination;
                     flowBlock.accesses.push_back(std::move(access));
                 }
@@ -503,7 +513,7 @@ namespace Visual::XSharp::Xmm
         VerifyDefiniteInitialization(
             Context &context,
             const xmm::Function &function,
-            const std::unordered_map<xmm::VirtualRegister, core::Type> &registers)
+            const RegisterCatalog &registers)
         {
             const auto result = dataflow::Analyze(
                 DataflowFunction(function, registers),
@@ -535,7 +545,8 @@ namespace Visual::XSharp::Xmm
             }))
             context.add(IssueKind::InvalidModuleName, "VXL1002", "Xmm module name must contain non-empty components");
 
-        std::unordered_map<core::SymbolId, const xmm::Function *> functions;
+        FunctionCatalog functions;
+        functions.Reserve(module.functions.size());
         // Build the complete symbol catalog before checking bodies. Forward calls and
         // recursion then validate exactly like calls to functions declared earlier.
         for (const auto &function : module.functions)
@@ -548,7 +559,7 @@ namespace Visual::XSharp::Xmm
                 context.function = function.symbol.id;
                 context.add(IssueKind::InvalidFunction, "VXL1003", "function requires a non-zero symbol and spelling");
             }
-            if (!functions.emplace(function.symbol.id, &function).second)
+            if (!functions.TryEmplace(function.symbol.id, &function).inserted)
             {
                 context.function = function.symbol.id;
                 context.add(IssueKind::DuplicateFunction, "VXL1004", "function symbol is declared more than once");
@@ -565,11 +576,13 @@ namespace Visual::XSharp::Xmm
             if (function.parameter_registers.size() != function.parameter_types.size())
                 context.add(IssueKind::ParameterShape, "VXL1006", "parameter registers and parameter types differ in length");
 
-            std::unordered_map<xmm::VirtualRegister, core::Type> registers;
+            RegisterCatalog registers;
+            registers.Reserve(function.parameter_registers.size());
             const auto parameterCount = std::min(function.parameter_registers.size(), function.parameter_types.size());
             for (std::size_t index = 0; index < parameterCount; ++index)
             {
-                if (function.parameter_registers[index] == 0 || !registers.emplace(function.parameter_registers[index], function.parameter_types[index]).second)
+                if (function.parameter_registers[index] == 0
+                    || !registers.TryEmplace(function.parameter_registers[index], function.parameter_types[index]).inserted)
                     context.add(IssueKind::ParameterShape, "VXL1007", "parameter virtual registers must be unique and non-zero");
                 if (!SupportedType(function.parameter_types[index]))
                     context.add(IssueKind::UnsupportedType, "VXL1005", "parameter type is not lowerable to LLVM");
@@ -582,8 +595,8 @@ namespace Visual::XSharp::Xmm
                 for (const auto &instruction : block.instructions)
                     if (instruction.has_result && instruction.destination != 0)
                     {
-                        const auto [found, inserted] = registers.emplace(instruction.destination, instruction.result_type);
-                        if (!inserted && found->second != instruction.result_type)
+                        const auto [found, inserted] = registers.TryEmplace(instruction.destination, instruction.result_type);
+                        if (!inserted && *found != instruction.result_type)
                         {
                             context.block = block.id;
                             context.add(
@@ -593,14 +606,15 @@ namespace Visual::XSharp::Xmm
                         }
                     }
 
-            std::unordered_set<xmm::BlockId> blocks;
+            BlockCatalog blocks;
+            blocks.Reserve(function.blocks.size());
             for (const auto &block : function.blocks)
-                if (!blocks.insert(block.id).second)
+                if (!blocks.Insert(block.id))
                 {
                     context.block = block.id;
                     context.add(IssueKind::DuplicateBlock, "VXL1008", "block id is declared more than once");
                 }
-            if (!blocks.contains(function.entry))
+            if (!blocks.Contains(function.entry))
                 context.add(IssueKind::MissingEntry, "VXL1009", "function entry does not name a block");
 
             for (const auto &block : function.blocks)

@@ -3,7 +3,7 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
+#include <llvm/ADT/BitVector.h>
 #include <vector>
 
 namespace Visual::XSharp::Analysis
@@ -66,15 +66,12 @@ namespace Visual::XSharp::Analysis
         operator==(const DenseBitSet &) const -> bool = default;
 
     private:
-        static constexpr std::size_t kWordBits = 64U;
-
         [[nodiscard]] auto
         Compatible(const DenseBitSet &other) const noexcept -> bool;
 
-        void
-        MaskUnusedBits() noexcept;
-
-        std::size_t bitCount_{};
-        std::vector<std::uint64_t> words_;
+        // LLVM owns word packing, popcount and set-bit iteration. The wrapper
+        // keeps Visual X#'s bounds-safe and equal-universe semantics stable for
+        // dataflow clients instead of exposing BitVector's assertion surface.
+        llvm::BitVector bits_;
     };
 } // namespace Visual::XSharp::Analysis
