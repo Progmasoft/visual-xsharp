@@ -46,7 +46,7 @@ The official native development hosts are Windows 10/11, macOS 15 Sequoia, and m
 
 - Bazelisk for the production C++20 graph;
 - an LLVM development package containing headers, libraries, and `llvm-config`;
-- GHC 9.10 and Cabal for the Haskell frontend;
+- GHC 9.10 or newer and Cabal for the GHC2024 Haskell frontend;
 - JDK 25 and the Kotlin runner for the project DSL.
 
 Windows uses standalone ClangCL/LLD plus Windows SDK and MSVC CRT/STL development files. macOS uses Clang/LLD plus the

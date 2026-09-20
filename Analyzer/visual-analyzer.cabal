@@ -20,7 +20,7 @@ library
     build-depends:
         base >=4.20 && <4.23,
         visual-xsharp-compiler >=0.3.2 && <0.4
-    default-language: GHC2021
+    default-language: GHC2024
 
 test-suite visual-analyzer-tests
     type: exitcode-stdio-1.0
@@ -30,4 +30,4 @@ test-suite visual-analyzer-tests
         base >=4.20 && <4.23,
         visual-analyzer,
         visual-xsharp-compiler
-    default-language: GHC2021
+    default-language: GHC2024

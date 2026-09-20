@@ -40,4 +40,4 @@ library
         filepath >=1.5 && <1.6,
         text >=2.1 && <2.3,
         visual-xsharp-syntax
-    default-language: GHC2021
+    default-language: GHC2024

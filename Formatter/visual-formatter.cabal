@@ -26,7 +26,7 @@ library
         bytestring >=0.12 && <0.13,
         text >=2.1 && <2.3,
         visual-xsharp-compiler >=0.3.4 && <0.4
-    default-language: GHC2021
+    default-language: GHC2024
 
 executable vfmt
     main-is: Visual/Formatter/Main.hs
@@ -44,7 +44,7 @@ executable vfmt
         text >=2.1 && <2.3,
         visual-formatter,
         visual-xsharp-compiler
-    default-language: GHC2021
+    default-language: GHC2024
 
 test-suite visual-formatter-tests
     type: exitcode-stdio-1.0
@@ -55,4 +55,4 @@ test-suite visual-formatter-tests
         bytestring >=0.12 && <0.13,
         visual-formatter,
         visual-xsharp-compiler
-    default-language: GHC2021
+    default-language: GHC2024

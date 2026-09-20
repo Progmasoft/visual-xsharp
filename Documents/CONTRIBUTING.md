@@ -105,7 +105,8 @@ the maintained path, and any legacy component guide that linked to the old locat
 
 Run the checks appropriate to the changed ownership boundary:
 
-- Haskell: `cabal build all`, `cabal test all`, and `cabal check`.
+- Haskell: keep every component on the repository-wide `GHC2024` edition, then run `cabal build all`, `cabal test all`,
+  and `cabal check`.
 - Kotlin: `ProjectSystem\gradlew.bat -p ProjectSystem test`.
 - Native: `go run scripts/develop.go test` on an official Windows 10/11 or macOS Sequoia/Tahoe host.
 - Sanitizers: `go run scripts/develop.go sanitize address`; macOS also exposes `undefined` and `thread`.

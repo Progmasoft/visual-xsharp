@@ -24,7 +24,7 @@ Required tools:
 - Bazelisk;
 - Clang and LLD from an LLVM installation appropriate to the host;
 - an LLVM development package containing LLVM headers, libraries, and `llvm-config`;
-- GHC 9.10 and Cabal;
+- GHC 9.10 or newer and Cabal; every maintained Haskell component uses the `GHC2024` edition;
 - JDK 25; and
 - the Kotlin command used by project-evaluator tests.
 

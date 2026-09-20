@@ -27,4 +27,4 @@ library
     build-depends:
         base >=4.20 && <4.23,
         bytestring >=0.12 && <0.14
-    default-language: GHC2021
+    default-language: GHC2024

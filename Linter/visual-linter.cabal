@@ -21,7 +21,7 @@ library
         base >=4.20 && <4.23,
         visual-formatter >=0.1 && <0.2,
         visual-xsharp-compiler >=0.3.2 && <0.4
-    default-language: GHC2021
+    default-language: GHC2024
 
 executable vlint
     main-is: Visual/Linter/Main.hs
@@ -34,7 +34,7 @@ executable vlint
         visual-formatter,
         visual-linter,
         visual-xsharp-compiler
-    default-language: GHC2021
+    default-language: GHC2024
 
 test-suite visual-linter-tests
     type: exitcode-stdio-1.0
@@ -45,4 +45,4 @@ test-suite visual-linter-tests
         visual-formatter,
         visual-linter,
         visual-xsharp-compiler
-    default-language: GHC2021
+    default-language: GHC2024
