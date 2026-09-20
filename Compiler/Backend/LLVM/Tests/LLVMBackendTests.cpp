@@ -467,6 +467,43 @@ TEST_CASE("LLVM lowers explicit AARC ownership instructions to the stable runtim
     CHECK(result.artifact->llvm_ir.find("@vxs_aarc_release_unowned") != std::string::npos);
 }
 
+TEST_CASE("LLVM lowers exact type tests through the AARC runtime ABI")
+{
+    using XmmBlock = visual_xsharp::xmm::Block;
+    using XmmFunction = visual_xsharp::xmm::Function;
+    using XmmInstruction = visual_xsharp::xmm::Instruction;
+    using XmmOpcode = visual_xsharp::xmm::Opcode;
+    using XmmTerminator = visual_xsharp::xmm::Terminator;
+    using XmmValue = visual_xsharp::xmm::Value;
+
+    const auto objectType = Type::named({ U"Tests", U"Payload" });
+    const XmmValue identity{
+        XmmValue::Kind::Immediate,
+        Type::uint64(),
+        0U,
+        0U,
+        visual_xsharp::core::integer_from_unsigned(0x51a2U)
+    };
+    XmmFunction function{
+        { 520U, U"Matches" },
+        { 1U },
+        { objectType },
+        Type::boolean(),
+        0U,
+        { XmmBlock{
+            0U,
+            { XmmInstruction{ XmmOpcode::TypeIs, 2U, Type::boolean(), { Register(1U, objectType), identity }, true, 0U, {} } },
+            XmmTerminator{ XmmTerminator::Kind::Return, Register(2U, Type::boolean()), 0U, 0U } } }
+    };
+    const visual_xsharp::xmm::Module module{ { U"Aarc", U"TypeTest" }, { std::move(function) } };
+    Llvm::Options options;
+    options.optimization = Llvm::OptimizationLevel::Debug;
+    const auto result = Llvm::Lower(module, options);
+    REQUIRE(result);
+    CHECK(result.artifact->llvm_ir.find("call i1 @vxs_aarc_is_exact_type") != std::string::npos);
+    CHECK(result.artifact->llvm_ir.find("declare i1 @vxs_aarc_is_exact_type") != std::string::npos);
+}
+
 TEST_CASE("LLVM materializes closure payload ownership and its AARC destructor")
 {
     using XmmBlock = visual_xsharp::xmm::Block;

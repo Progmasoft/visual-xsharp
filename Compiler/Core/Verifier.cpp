@@ -27,7 +27,7 @@ namespace Visual::XSharp::Core
         public:
             FunctionVerifier(const Function &function, const Environment &functions, std::vector<VerificationIssue> &issues)
                 : function_(function)
-                , environment_(functions)
+                , functions_(functions)
                 , issues_(issues)
             {
             }
@@ -54,8 +54,25 @@ namespace Visual::XSharp::Core
 
         private:
             const Function &function_;
+            const Environment &functions_;
             Environment environment_;
             std::vector<VerificationIssue> &issues_;
+
+            [[nodiscard]] auto
+            FindDefinition(const Environment &locals, const SymbolId symbol) const -> const Definition *
+            {
+                if (const auto found = locals.find(symbol); found != locals.end())
+                    return &found->second;
+                if (const auto found = functions_.find(symbol); found != functions_.end())
+                    return &found->second;
+                return nullptr;
+            }
+
+            [[nodiscard]] auto
+            ContainsDefinition(const Environment &locals, const SymbolId symbol) const -> bool
+            {
+                return locals.contains(symbol) || functions_.contains(symbol);
+            }
 
             void
             Add(std::string code, std::string message, SymbolId symbol = 0U)
@@ -138,7 +155,7 @@ namespace Visual::XSharp::Core
                         CheckType(binding.type, "VXC1009", "Core binding has an unresolved type");
                         VerifyExpression(binding.value, environment);
                         CheckSameType(binding.type, binding.value.type, "VXC1011", "Core binding value type does not match its declaration", binding.symbol.id);
-                        if (environment.contains(binding.symbol.id))
+                        if (ContainsDefinition(environment, binding.symbol.id))
                             Add("VXC1010", "Core binding symbol is already defined", binding.symbol.id);
                         environment.insert_or_assign(binding.symbol.id,
                                                      Definition{ binding.type, binding.mutableBinding, binding.symbol.spelling });
@@ -148,13 +165,13 @@ namespace Visual::XSharp::Core
                     {
                         CheckSymbol(statement.destination, "VXC1015", "Core assignment symbol must be positive");
                         VerifyExpression(statement.expression, environment);
-                        const auto found = environment.find(statement.destination.id);
-                        if (found == environment.end())
+                        const auto *found = FindDefinition(environment, statement.destination.id);
+                        if (found == nullptr)
                             Add("VXC1012", "Core assignment targets an undefined symbol", statement.destination.id);
-                        else if (!found->second.mutableBinding)
+                        else if (!found->mutableBinding)
                             Add("VXC1013", "Core assignment targets an immutable symbol", statement.destination.id);
                         else
-                            CheckSameType(found->second.type, statement.expression.type, "VXC1014", "Core assignment value has the wrong type", statement.destination.id);
+                            CheckSameType(found->type, statement.expression.type, "VXC1014", "Core assignment value has the wrong type", statement.destination.id);
                         return;
                     }
                     case Statement::Kind::Return:
@@ -186,13 +203,13 @@ namespace Visual::XSharp::Core
                     case Expression::Kind::Variable:
                     {
                         CheckSymbol(expression.symbol, "VXC1019", "Core variable symbol must be positive");
-                        const auto found = environment.find(expression.symbol.id);
-                        if (found == environment.end())
+                        const auto *found = FindDefinition(environment, expression.symbol.id);
+                        if (found == nullptr)
                             Add("VXC1020", "Core expression references an undefined symbol", expression.symbol.id);
                         else
                         {
-                            CheckSameType(found->second.type, expression.type, "VXC1021", "Core variable type disagrees with its definition", expression.symbol.id);
-                            if (!expression.symbol.spelling.empty() && !found->second.spelling.empty() && expression.symbol.spelling != found->second.spelling)
+                            CheckSameType(found->type, expression.type, "VXC1021", "Core variable type disagrees with its definition", expression.symbol.id);
+                            if (!expression.symbol.spelling.empty() && !found->spelling.empty() && expression.symbol.spelling != found->spelling)
                                 Add("VXC1030", "Core symbol spelling disagrees with its definition", expression.symbol.id);
                         }
                         return;
@@ -293,7 +310,7 @@ namespace Visual::XSharp::Core
                                                       || subjectType.kind == Type::Kind::String
                                                       || subjectType.kind == Type::Kind::Function;
                         if (!referenceSubject || identityType != Type::uint64())
-                            Add("VXC1050", "Core type test requires a reference subject and ulong identity");
+                            Add("VXC1050", "Core type test requires a reference subject and uint identity");
                     }
                 }
                 else if (logical)

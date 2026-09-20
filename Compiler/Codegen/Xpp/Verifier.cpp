@@ -236,6 +236,18 @@ namespace Visual::XSharp::Xpp
                          || value.operands.empty() || value.result_type != value.operands.front().type)
                     context.Add("VXP1037", "producing ownership instruction must preserve its operand type");
             }
+            else if (value.opcode == IR::Opcode::TypeIs)
+            {
+                // TypeIs is the native boundary for source-level type patterns.
+                // Keep its ABI tuple strict here instead of letting malformed
+                // artifacts reach LLVM as an arbitrary runtime call.
+                if (value.result_type.kind != Core::Type::Kind::Bool || value.operands.size() != 2U
+                    || (value.operands[0].type.kind != Core::Type::Kind::Named
+                        && value.operands[0].type.kind != Core::Type::Kind::String
+                        && value.operands[0].type.kind != Core::Type::Kind::Function)
+                    || value.operands[1].type != Core::Type::uint64())
+                    context.Add("VXP1045", "type test requires a reference subject, uint identity and Bool result");
+            }
             else if (value.operands.size() != ExpectedArity(value.opcode))
                 context.Add("VXP1016", "instruction has the wrong operand count");
 

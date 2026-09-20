@@ -218,12 +218,15 @@ primitiveProblems primitive arguments resultType =
         operandProblems
             | primitive == CoreTypeIs = case argumentTypes of
                 [subjectType, identityType]
-                    | isReferenceLike subjectType && identityType == namedType "ulong" -> []
-                    | otherwise -> [problem "VXC1044" "Core type test requires a reference subject and ulong identity"]
+                    | isReferenceLike subjectType && identityType == namedType "uint" -> []
+                    | otherwise -> [problem "VXC1044" "Core type test requires a reference subject and uint identity"]
                 _ -> []
             | logical && not operandsBoolean = [problem "VXC1027" "Core logical primitive requires bool or numeric operands"]
             | integerOnly && not operandsInteger = [problem "VXC1027" "Core bitwise primitive requires integer operands"]
-            | primitive `elem` [CoreEqual, CoreNotEqual] && firstType == boolType && operandsAgree = []
+            | primitive `elem` [CoreEqual, CoreNotEqual]
+            , operandsAgree
+            , firstType == boolType || isReferenceLike firstType =
+                []
             | not logical && not operandsNumeric = [problem "VXC1027" "Core numeric primitive requires numeric operands"]
             | not logical && not operandsAgree = [problem "VXC1027" "Core numeric primitive operands must have the same type"]
             | otherwise = []

@@ -54,6 +54,13 @@ func TestBenchmarkProgramsMirrorComponentOwnedTargets(t *testing.T) {
 	}
 }
 
+func TestCriterionEnvironmentIsUnicodeCapable(t *testing.T) {
+	want := []string{"GHC_CHARENC=UTF-8"}
+	if got := criterionEnvironment(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Criterion environment = %#v, want %#v", got, want)
+	}
+}
+
 func TestSelectAddressSanitizerUsesHostSpecificProfile(t *testing.T) {
 	windows, err := selectSanitizer(host{kind: hostWindows}, "asan")
 	if err != nil {

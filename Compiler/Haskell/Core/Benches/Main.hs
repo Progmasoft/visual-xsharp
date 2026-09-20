@@ -3,9 +3,10 @@
 
 module Main (main) where
 
-import Criterion.Main
 import Control.DeepSeq (NFData (rnf))
+import Criterion.Main
 import Data.Word (Word8)
+import System.IO (hSetEncoding, stdout, utf8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
@@ -28,7 +29,11 @@ instance NFData CorePrepModules where
     rnf (CorePrepModules values) = rnf (show values)
 
 main :: IO ()
-main =
+main = do
+    -- Criterion uses the microsecond symbol in its progress output. Windows can
+    -- otherwise inherit a legacy console encoding and abort after a successful
+    -- sample, so the harness owns its output encoding explicitly.
+    hSetEncoding stdout utf8
     defaultMain
         [ bgroup
             "Core"
@@ -149,6 +154,7 @@ expressionDigest expression = case expression of
     CoreLiteral _ _ -> 1
     CoreApply callee arguments _ -> 1 + expressionDigest callee + sum (map expressionDigest arguments)
     CorePrimitive _ arguments _ -> 1 + sum (map expressionDigest arguments)
+    CoreLet _ _ value body _ -> 1 + expressionDigest value + expressionDigest body
     CoreClosure captures parameters _ body _ ->
         1
             + length parameters

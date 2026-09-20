@@ -154,7 +154,7 @@ lowerPattern subject subjectType patternValue = case patternValue of
     TypePattern _ _ targetType ->
         CorePrimitive
             CoreTypeIs
-            [subject, CoreLiteral (CoreInteger (toInteger (typeIdentity targetType))) (namedType "ulong")]
+            [subject, CoreLiteral (CoreInteger (toInteger (typeIdentity targetType))) (namedType "uint")]
             boolType
     RelationalPattern _ operator literal literalType ->
         CorePrimitive

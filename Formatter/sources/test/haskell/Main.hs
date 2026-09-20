@@ -31,6 +31,7 @@ main = do
     check "formatter rejects a non-positive indentation width" rejectsIndentWidth
     check "formatter rejects a non-positive tab width" rejectsTabWidth
     check "block formatting reaches a fixed point" formattingIsIdempotent
+    check "pattern combinators remain intact while their block is indented" formatsPatternCombinators
     checkIO "encoding conversion follows explicit input and output settings" encodingRoundTrip
     checkIO "UTF-8 input rejects malformed byte sequences" rejectsMalformedUtf8
 
@@ -235,6 +236,13 @@ formattingIsIdempotent = case formatSource defaultFormatOptions (CompilerInput "
         Right second -> not (formattingChanged second) && formattedSource second == formattedSource first
         Left _ -> False
     Left _ -> False
+
+formatsPatternCombinators :: Bool
+formatsPatternCombinators =
+    formats
+        defaultFormatOptions
+        "class Program {\nbool Match(_ String value) {\nreturn value is null or String and not null;\n}\n}\n"
+        "class Program {\n    bool Match(_ String value) {\n        return value is null or String and not null;\n    }\n}\n"
 
 formats :: FormatOptions -> String -> String -> Bool
 formats options source expected = case formatSource options (CompilerInput "Program.vxs" source) of

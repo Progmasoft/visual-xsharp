@@ -31,6 +31,12 @@ namespace
     }
 
     [[nodiscard]] auto
+    TypeIdentity(const std::uint64_t value) -> IR::Operand
+    {
+        return { IR::Operand::Kind::Literal, Core::Type::uint64(), 0U, Core::integer_from_unsigned(value) };
+    }
+
+    [[nodiscard]] auto
     Unit() -> IR::Operand
     {
         return { IR::Operand::Kind::Literal, Core::Type::unit(), 0U, std::monostate{} };
@@ -324,6 +330,37 @@ TEST_CASE("Xpp initialization diagnostic code is stable")
     const auto module = Module({ Block(0U, { Evaluate(10U), Define(10U) }, ReturnUnit()) });
     const auto issues = Xpp::Verify(module);
     CHECK(HasCode(issues, "VXP1041"));
+}
+
+TEST_CASE("Xpp accepts the complete type-test ABI tuple")
+{
+    IR::Instruction typeTest;
+    typeTest.effect = IR::Instruction::Effect::Define;
+    typeTest.opcode = IR::Opcode::TypeIs;
+    typeTest.destination = 10U;
+    typeTest.result_type = Core::Type::boolean();
+    typeTest.operands = { Symbol(5U, Core::Type::string()), TypeIdentity(0x51a2U) };
+
+    auto module = Module({ Block(0U, { typeTest }, ReturnUnit()) });
+    module.functions.front().parameters.push_back({ { 5U, U"value" }, Core::Type::string() });
+    CHECK_FALSE(HasCode(Xpp::Verify(module), "VXP1045"));
+}
+
+TEST_CASE("Xpp rejects every malformed type-test ABI dimension")
+{
+    IR::Instruction typeTest;
+    typeTest.effect = IR::Instruction::Effect::Define;
+    typeTest.opcode = IR::Opcode::TypeIs;
+    typeTest.destination = 10U;
+    typeTest.result_type = Core::Type::int64();
+    typeTest.operands = { Symbol(5U), Integer(1) };
+
+    auto module = Module({ Block(0U, { typeTest }, ReturnUnit()) });
+    module.functions.front().parameters.push_back({ { 5U, U"value" }, Core::Type::int64() });
+    CHECK(HasCode(Xpp::Verify(module), "VXP1045"));
+
+    module.functions.front().blocks.front().instructions.front().operands.pop_back();
+    CHECK(HasCode(Xpp::Verify(module), "VXP1045"));
 }
 
 TEST_CASE("Xpp reports every uninitialized operand at its instruction")

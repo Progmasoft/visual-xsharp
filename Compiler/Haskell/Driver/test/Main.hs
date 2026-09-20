@@ -15,6 +15,7 @@ import DiagnosticSideChannelTests (diagnosticSideChannelTests)
 import MonomorphizationTests (monomorphizationTests)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
+import PatternTests (patternTests)
 import ScalarWireTests (scalarWireTests)
 import ShortCircuitTests (shortCircuitTests)
 import SourceSetTests (sourceSetTests)
@@ -129,6 +130,7 @@ main = do
     mapM_ (uncurry check) diagnosticProtocolTests
     mapM_ (uncurry checkIO) diagnosticSideChannelTests
     mapM_ (uncurry check) numericTests
+    mapM_ (uncurry check) patternTests
     mapM_ (uncurry check) monomorphizationTests
     mapM_ (uncurry check) parserContractTests
     mapM_ (uncurry check) scalarWireTests

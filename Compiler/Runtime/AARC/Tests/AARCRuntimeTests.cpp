@@ -153,6 +153,19 @@ TEST_CASE("strong references destroy the payload exactly once")
     CHECK(destructions.load() == 1U);
 }
 
+TEST_CASE("exact type tests use stable metadata identity and reject null")
+{
+    auto *payload = static_cast<Payload *>(Aarc::Allocate(kMetadata));
+    REQUIRE(payload != nullptr);
+
+    CHECK(Aarc::IsExactType(payload, kMetadata.typeIdentity));
+    CHECK(vxs_aarc_is_exact_type(payload, kMetadata.typeIdentity));
+    CHECK_FALSE(Aarc::IsExactType(payload, Aarc::TypeIdentity("Tests.OtherPayload")));
+    CHECK_FALSE(Aarc::IsExactType(payload, Aarc::TypeIdentity("tests.payload")));
+    CHECK_FALSE(Aarc::IsExactType(nullptr, kMetadata.typeIdentity));
+    Aarc::ReleaseStrong(payload);
+}
+
 TEST_CASE("allocation validates ABI version size and alignment")
 {
     auto metadata = kMetadata;

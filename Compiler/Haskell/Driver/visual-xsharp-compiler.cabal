@@ -91,6 +91,7 @@ test-suite visual-xsharp-compiler-tests
         DiagnosticProtocolTests
         DiagnosticSideChannelTests
         NumericTests
+        PatternTests
         MonomorphizationTests
         ParserContractTests
         ScalarWireTests

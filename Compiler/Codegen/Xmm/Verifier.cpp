@@ -279,7 +279,7 @@ namespace Visual::XSharp::Xmm
                         && !IsAarcType(instruction.operands[index].type))
                         context.add(
                             IssueKind::OperandType,
-                            "VXL1046",
+                            "VXL1051",
                             "weak and unowned closure captures require an AARC reference type");
                 if (target != functions.end())
                 {
@@ -367,7 +367,7 @@ namespace Visual::XSharp::Xmm
                             && instruction.operands[0].type.kind != core::Type::Kind::String
                             && instruction.operands[0].type.kind != core::Type::Kind::Function)
                         || instruction.operands[1].type != core::Type::uint64())
-                        context.add(IssueKind::OperandType, "VXL1048", "type test requires a reference subject, ulong identity and Bool result");
+                        context.add(IssueKind::OperandType, "VXL1049", "type test requires a reference subject, uint identity and Bool result");
                 }
                 else if (instruction.opcode == xmm::Opcode::ShiftLeft || instruction.opcode == xmm::Opcode::ShiftRight
                          || instruction.opcode == xmm::Opcode::BitwiseAnd || instruction.opcode == xmm::Opcode::BitwiseXor
@@ -377,7 +377,7 @@ namespace Visual::XSharp::Xmm
                         || std::ranges::any_of(instruction.operands, [&instruction](const xmm::Value &value) {
                                return value.type != instruction.result_type;
                            }))
-                        context.add(IssueKind::OperandType, "VXL1047", "bitwise instruction operands and result must use one integer type");
+                        context.add(IssueKind::OperandType, "VXL1050", "bitwise instruction operands and result must use one integer type");
                 }
                 else if (instruction.opcode != xmm::Opcode::Call)
                 {

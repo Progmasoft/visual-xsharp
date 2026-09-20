@@ -51,3 +51,4 @@ statistical comparisons once it can provide fixed CPU frequency, warm-up policy,
 - `2026-09-13-Native-Liveness.md` records the Xpp/Xmm optimizer follow-up after native liveness integration.
 - `2026-09-14-Native-Dataflow.md` records the verifier/encoder follow-up after worklist scheduling and packed lattices.
 - `2026-09-14-Dense-Liveness.md` records dense backward-liveness and retention-only optimizer results.
+- `2026-09-20-Core-Verifier-Environment.md` records removal of the quadratic per-function global-environment copy.

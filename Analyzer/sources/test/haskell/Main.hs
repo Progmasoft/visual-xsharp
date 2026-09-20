@@ -12,6 +12,7 @@ main = do
     check "syntax analysis returns compiler-owned syntax artifacts" syntaxAnalysis
     check "full analysis reaches CorePrep" fullAnalysis
     check "compiler positions are translated to zero-based protocol positions" protocolPositions
+    check "syntax mode does not perform name resolution" syntaxModeStopsAtItsBoundary
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure
@@ -43,3 +44,11 @@ protocolPositions = case analyzeDocument Syntax (CompilerInput "Broken.vxs" "@")
         Just (ProtocolRange (ProtocolPosition 0 0) (ProtocolPosition 0 1)) -> analyzerCode problem == "VXL0001"
         _ -> False
     _ -> False
+
+syntaxModeStopsAtItsBoundary :: Bool
+syntaxModeStopsAtItsBoundary =
+    let source = "class Program { int Value() { return MissingName; } }"
+        input = CompilerInput "Unknown.vxs" source
+     in case (analyzeDocument Syntax input, analyzeDocument Semantic input) of
+            (Right SyntaxResult {}, Left problems) -> any ((== "VXN0001") . analyzerCode) problems
+            _ -> False

@@ -568,9 +568,10 @@ func runBenchmarks(repository string, currentHost host, runner commandRunner, ba
 	}
 	fmt.Println("\nRunning Criterion Core and CorePrep benchmarks...")
 	compilerDirectory := filepath.Join(repository, "Compiler")
+	benchmarkEnvironment := criterionEnvironment()
 	if err := runner.Run(
 		compilerDirectory,
-		nil,
+		benchmarkEnvironment,
 		cabal,
 		"bench",
 		"visual-xsharp-core:core-benches",
@@ -579,6 +580,13 @@ func runBenchmarks(repository string, currentHost host, runner commandRunner, ba
 		return fmt.Errorf("Haskell benchmark run failed: %w", err)
 	}
 	return nil
+}
+
+func criterionEnvironment() []string {
+	// Criterion prints the microsecond symbol even when the benchmark names are
+	// otherwise ASCII. Force a Unicode-capable GHC handle encoding so Windows
+	// consoles cannot abort an otherwise valid benchmark after measurements.
+	return []string{"GHC_CHARENC=UTF-8"}
 }
 
 func buildBundle(repository string, currentHost host, runner commandRunner, bazelArguments []string) error {

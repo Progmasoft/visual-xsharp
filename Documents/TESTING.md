@@ -128,6 +128,19 @@ bazelisk build //Compiler/Backend/LLVM/Tests:llvm_backend_tests
 
 The exact label names are source-owned API. If a package is reorganized, update this guide and CI with the same change.
 
+### Native framework decision
+
+Catch2 remains the native assertion and test-discovery framework. The current suites need ordinary test cases, sections,
+matchers, readable fatal/non-fatal assertions, and direct standalone executables; Catch2 supplies all of those without a
+second adapter layer. Google Benchmark remains separate because statistically repeated timing is a different concern from
+correctness testing. Moving to GoogleTest would currently rewrite mature component-owned suites without adding a required
+capability or improving the production boundary they exercise.
+
+Revisit this decision when a concrete suite needs a facility Catch2 cannot provide, or when measured clean-build time,
+binary size, or maintenance cost is materially worse than an equivalent GoogleTest prototype. Framework popularity alone
+is not a migration criterion. Death tests are also not a reason by themselves: compiler and runtime validation should
+normally return structured diagnostics rather than terminating the test process.
+
 ### Component-local ownership
 
 Native tests do not live in a root `tests/` directory. The directory holding a

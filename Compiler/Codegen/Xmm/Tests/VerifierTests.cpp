@@ -30,6 +30,12 @@ namespace
     }
 
     [[nodiscard]] auto
+    TypeIdentity(const std::uint64_t value) -> IR::Value
+    {
+        return { IR::Value::Kind::Immediate, Core::Type::uint64(), 0U, 0U, Core::integer_from_unsigned(value) };
+    }
+
+    [[nodiscard]] auto
     Unit() -> IR::Value
     {
         return { IR::Value::Kind::Immediate, Core::Type::unit(), 0U, 0U, std::monostate{} };
@@ -171,7 +177,7 @@ TEST_CASE("Xmm rejects weak value captures and bounds malformed capture metadata
         return issue.code == "VXL1034";
     }));
     CHECK(std::ranges::any_of(issues, [](const auto &issue) {
-        return issue.code == "VXL1046";
+        return issue.code == "VXL1051";
     }));
 }
 
@@ -184,6 +190,56 @@ TEST_CASE("Xmm rejects a read that precedes its definition")
     CHECK(issues.front().function == 1U);
     CHECK(issues.front().block == 0U);
     CHECK(issues.front().instruction == 0U);
+}
+
+TEST_CASE("Xmm accepts the complete type-test ABI tuple")
+{
+    IR::Instruction typeTest;
+    typeTest.opcode = IR::Opcode::TypeIs;
+    typeTest.destination = 10U;
+    typeTest.result_type = Core::Type::boolean();
+    typeTest.operands = { Register(5U, Core::Type::string()), TypeIdentity(0x51a2U) };
+    typeTest.has_result = true;
+
+    auto module = Module({ Block(0U, { typeTest }, ReturnUnit()) });
+    module.functions.front().parameter_registers = { 5U };
+    module.functions.front().parameter_types = { Core::Type::string() };
+    const auto issues = Xmm::Verify(module);
+    CHECK(std::ranges::none_of(issues, [](const auto &issue) {
+        return issue.code == "VXL1049";
+    }));
+}
+
+TEST_CASE("Xmm rejects malformed type-test operands and result")
+{
+    IR::Instruction typeTest;
+    typeTest.opcode = IR::Opcode::TypeIs;
+    typeTest.destination = 10U;
+    typeTest.result_type = Core::Type::int64();
+    typeTest.operands = { Register(5U), Integer(1) };
+    typeTest.has_result = true;
+
+    auto module = Module({ Block(0U, { typeTest }, ReturnUnit()) });
+    module.functions.front().parameter_registers = { 5U };
+    module.functions.front().parameter_types = { Core::Type::int64() };
+    CHECK(std::ranges::any_of(Xmm::Verify(module), [](const auto &issue) {
+        return issue.code == "VXL1049";
+    }));
+}
+
+TEST_CASE("Xmm rejects bitwise operations whose operands are not one integer type")
+{
+    IR::Instruction bitwiseNot;
+    bitwiseNot.opcode = IR::Opcode::BitwiseNot;
+    bitwiseNot.destination = 10U;
+    bitwiseNot.result_type = Core::Type::boolean();
+    bitwiseNot.operands = { Boolean(true) };
+    bitwiseNot.has_result = true;
+
+    const auto module = Module({ Block(0U, { bitwiseNot }, ReturnUnit()) });
+    CHECK(std::ranges::any_of(Xmm::Verify(module), [](const auto &issue) {
+        return issue.code == "VXL1050";
+    }));
 }
 
 TEST_CASE("Xmm parameters are initialized at function entry")

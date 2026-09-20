@@ -133,8 +133,8 @@ verifyPrimitive primitive atoms resultType
         operandProblems
             | primitive == Core.CoreTypeIs = case operandTypes of
                 [subjectType, identityType]
-                    | referenceLike subjectType && typeSpelling identityType == "ulong" -> []
-                    | otherwise -> [problem "VXC0024" "CorePrep type test requires a reference subject and ulong identity"]
+                    | referenceLike subjectType && typeSpelling identityType == "uint" -> []
+                    | otherwise -> [problem "VXC0024" "CorePrep type test requires a reference subject and uint identity"]
                 _ -> []
             | not operandsAgree = [problem "VXC0019" "CorePrep primitive operand types do not agree"]
             | logical && not booleanContext = [problem "VXC0020" "CorePrep logical primitive requires bool or numeric operands"]

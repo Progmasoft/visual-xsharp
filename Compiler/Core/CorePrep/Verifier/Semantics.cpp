@@ -277,7 +277,7 @@ namespace visual_xsharp::core
                             && instruction.operands.front().type.kind != Type::Kind::String
                             && instruction.operands.front().type.kind != Type::Kind::Function)
                         || instruction.operands.back().type != Type::uint64())
-                        issues.push_back(issue("VXC1054", "type test requires a reference subject and ulong identity", function, block));
+                        issues.push_back(issue("VXC1054", "type test requires a reference subject and uint identity", function, block));
                     break;
                 case Operation::Call:
                     if (arity == 0U)
