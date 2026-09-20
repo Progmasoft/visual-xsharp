@@ -21,9 +21,9 @@ coreInliningTests =
     , ("repeated variable reads remain safe", repeatedVariable)
     , ("unused literal parameter may disappear", unusedLiteral)
     , ("unused variable parameter may disappear", unusedVariable)
-    , ("primitive arguments remain at the call boundary", primitiveArgumentRejected)
+    , ("primitive arguments are evaluated once behind a fresh let", primitiveArgumentPreserved)
     , ("a nested pure call becomes a safe inline argument", nestedCallBecomesSafe)
-    , ("closure arguments remain at the call boundary", closureArgumentRejected)
+    , ("closure arguments are allocated once behind a fresh let", closureArgumentPreserved)
     , ("allocating functions are not candidates", allocatingCalleeRejected)
     , ("possibly failing functions are not candidates", failingCalleeRejected)
     , ("indirectly calling functions are not candidates", indirectCalleeRejected)
@@ -172,12 +172,18 @@ unusedArgument argument callerParameters =
         invocation = call helperName [intType] intType [argument]
      in optimizedReturn (moduleWith [entry callerParameters intType [CoreReturn invocation], helper]) == Just (integer 42)
 
-primitiveArgumentRejected :: Bool
-primitiveArgumentRejected =
+primitiveArgumentPreserved :: Bool
+primitiveArgumentPreserved =
     let argument = primitive CoreAdd [integer 20, integer 22] intType
-        invocation = call helperName [intType] intType [argument]
         options = defaultOptimizerOptions {optimizerConstantPropagation = False}
-     in (runWith options (identityFixture argument []) >>= returnValue) == Just invocation
+     in case runWith options (identityFixture argument []) >>= returnValue of
+            Just (CoreLet fresh bindingType value (CoreVariable used resultType) letType) ->
+                bindingType == intType
+                    && value == argument
+                    && resolvedSymbol fresh == resolvedSymbol used
+                    && resultType == intType
+                    && letType == intType
+            _ -> False
 
 nestedCallBecomesSafe :: Bool
 nestedCallBecomesSafe =
@@ -189,13 +195,25 @@ nestedCallBecomesSafe =
      in (runWith options (moduleWith [entry [] intType [CoreReturn invocation], helper, leaf]) >>= returnValue)
             == Just (integer 42)
 
-closureArgumentRejected :: Bool
-closureArgumentRejected =
+closureArgumentPreserved :: Bool
+closureArgumentPreserved =
     let callableType = FunctionType [] intType
         argument = closure [] intType [CoreReturn (integer 42)]
         invocation = call helperName [callableType] callableType [argument]
         helper = returning helperName [(parameterName, callableType)] callableType (variable parameterName callableType)
-     in optimizedReturn (moduleWith [entry [] callableType [CoreReturn invocation], helper]) == Just invocation
+        options =
+            defaultOptimizerOptions
+                { optimizerConstantPropagation = False
+                , optimizerDeadCodeElimination = False
+                }
+     in case runWith options (moduleWith [entry [] callableType [CoreReturn invocation], helper]) >>= returnValue of
+            Just (CoreLet fresh bindingType value (CoreVariable used resultType) letType) ->
+                bindingType == callableType
+                    && value == argument
+                    && resolvedSymbol fresh == resolvedSymbol used
+                    && resultType == callableType
+                    && letType == callableType
+            _ -> False
 
 allocatingCalleeRejected :: Bool
 allocatingCalleeRejected =

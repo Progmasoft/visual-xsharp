@@ -12,6 +12,7 @@ import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
 import Visual.XSharp.Core.CorePrep.Verifier
 import Visual.XSharp.Core.CorePrep.Wire
+import Visual.XSharp.Core.Optimizer
 import Visual.XSharp.Core.Verifier
 import Visual.XSharp.Core.Wire
 
@@ -43,6 +44,8 @@ main = do
                 bgroup "Encode" [benchAt size encodeDigest (coreModuleAt size modules) | size <- sizes]
             , env (traverse encodedFixture sizes) $ \documents ->
                 bgroup "Decode" [benchAt size decodeDigest (documentAt size documents) | size <- sizes]
+            , env (pure (CoreModules (inlineFixtures inlineSizes))) $ \modules ->
+                bgroup "InlineLinearBody" [benchAt size optimizeDigest (coreModuleAt size modules) | size <- inlineSizes]
             ]
         , bgroup
             "CorePrep"
@@ -58,6 +61,7 @@ main = do
         ]
     where
         sizes = [8, 32, 128, 512]
+        inlineSizes = [8, 32, 128, 256]
 
 benchAt :: Int -> (a -> Int) -> a -> Benchmark
 benchAt size measure input = bench (show size) (whnf measure input)
@@ -84,6 +88,9 @@ fixtures = map (\size -> (size, makeCoreModule size))
 
 preparedFixtures :: [Int] -> [(Int, CoreModule)]
 preparedFixtures = fixtures
+
+inlineFixtures :: [Int] -> [(Int, CoreModule)]
+inlineFixtures = map (\size -> (size, makeInlineModule size))
 
 encodedFixture :: Int -> IO (Int, [Word8])
 encodedFixture size = case verifyCore (makeCoreModule size) of
@@ -114,6 +121,24 @@ encodeDigest value = either (length . show) length (encodeCore defaultCoreWireLi
 
 decodeDigest :: [Word8] -> Int
 decodeDigest bytes = either (length . show) coreDigest (decodeCore defaultCoreWireLimits bytes)
+
+-- Measure the production verifier/effect/inliner fixed point. Fixture creation
+-- remains in Criterion's environment and is not charged to the sample.
+optimizeDigest :: CoreModule -> Int
+optimizeDigest value = case optimizeCoreWith inlineBenchmarkOptions value of
+    Left diagnostics -> length diagnostics
+    Right result ->
+        coreDigest (optimizedCore result)
+            + optimizationIterations result
+            + sum (map inlineRewrittenCalls (optimizationInlineReports result))
+
+inlineBenchmarkOptions :: OptimizerOptions
+inlineBenchmarkOptions =
+    defaultOptimizerOptions
+        { optimizerConstantPropagation = False
+        , optimizerControlFlowSimplification = False
+        , optimizerDeadCodeElimination = False
+        }
 
 prepareDigest :: CoreModule -> Int
 prepareDigest value = either length corePrepDigest (prepareCore value)
@@ -209,6 +234,58 @@ terminatorDigest terminator = case terminator of
 
 makeCoreModule :: Int -> CoreModule
 makeCoreModule count = CoreModule (QualifiedName [Identifier "Benchmark"]) (map makeFunction [0 .. count - 1])
+
+-- Each call expands a two-binding linear helper. Function and local symbols are
+-- globally disjoint so the benchmark measures fresh allocation and cloning,
+-- not malformed-input rejection.
+makeInlineModule :: Int -> CoreModule
+makeInlineModule count =
+    CoreModule
+        (QualifiedName [Identifier "InlineBenchmark"])
+        (inlineHelper : map makeCaller [0 .. count - 1])
+    where
+        helperName = name 1 "ScaleAndBias"
+        parameterName = name 2 "input"
+        firstName = name 3 "scaled"
+        secondName = name 4 "biased"
+        inlineHelper =
+            CoreFunction
+                helperName
+                [(parameterName, intType)]
+                intType
+                [ CoreBind
+                    ( CoreBinding
+                        firstName
+                        intType
+                        False
+                        (CorePrimitive CoreMultiply [CoreVariable parameterName intType, integer 2] intType)
+                    )
+                , CoreBind
+                    ( CoreBinding
+                        secondName
+                        intType
+                        False
+                        (CorePrimitive CoreAdd [CoreVariable firstName intType, integer 1] intType)
+                    )
+                , CoreReturn (CoreVariable secondName intType)
+                ]
+        makeCaller index =
+            let base = index * 3 + 100
+                argumentName = name (base + 1) "argument"
+                callerName = name (base + 2) "Caller"
+                argument = CorePrimitive CoreAdd [integer (toInteger index), integer 7] intType
+                applied =
+                    CoreApply
+                        (CoreVariable helperName (FunctionType [intType] intType))
+                        [argument]
+                        intType
+             in CoreFunction
+                    callerName
+                    []
+                    intType
+                    [ CoreBind (CoreBinding argumentName intType False applied)
+                    , CoreReturn (CoreVariable argumentName intType)
+                    ]
 
 makeFunction :: Int -> CoreFunction
 makeFunction index =

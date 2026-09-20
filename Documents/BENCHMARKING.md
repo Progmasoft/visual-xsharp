@@ -10,6 +10,14 @@ file-system discovery, terminal output, or process startup. Native fixtures are 
 its measured loop; Criterion fixtures are allocated through `env`. Decode benchmarks encode once and repeatedly decode
 the stable byte document, while encode benchmarks retain a stable in-memory module.
 
+The Criterion Core group also owns `InlineLinearBody`. Its fixtures contain one
+pure two-local helper and a scalable set of callers with non-trivial primitive
+arguments. The measured action uses the production verifier, effect solver,
+capture-avoiding inliner, and fixed-point driver. It therefore observes fresh
+symbol inventory, argument-let construction, local cloning, and report
+assembly together. Fixture creation stays in `env`, and the digest consumes the
+optimized tree plus report counts.
+
 All scalable fixtures contain valid functions and blocks. Increasing the benchmark argument therefore increases real IR
 work rather than padding input with ignored bytes. Each benchmark reports the logical function, block, instruction, or
 byte throughput appropriate to its layer. Complexity fitting is enabled for native scalable cases so a result can expose
@@ -38,3 +46,14 @@ summarize the console result together with enough environment data to reproduce 
 Correctness tests remain authoritative. Benchmark helpers should use production public APIs, verify fixture creation
 outside the timed loop, and consume results so the optimizer cannot erase measured work. Do not add alternate fast paths
 that exist only for the benchmark.
+
+For a quick linear-inlining smoke measurement:
+
+```powershell
+cabal bench visual-xsharp-core:core-benches --enable-benchmarks `
+  --benchmark-options="--match pattern Core/InlineLinearBody/8 --time-limit 0.1"
+```
+
+Use the complete developer benchmark command before publishing a baseline; the
+smoke form verifies the harness and catches gross regressions but its short
+sampling window is not suitable for release-to-release comparison.

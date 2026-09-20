@@ -241,23 +241,36 @@ dead-result removal and bounded inlining without turning optimizer guesses into
 language semantics. See [Core effect analysis](CORE-EFFECT-ANALYSIS.md) for the
 complete retention contract.
 
-## Bounded safe-expression inlining
+## Bounded linear-body inlining
 
-Inlining uses the solved effect reports rather than maintaining a second
-purity model. A candidate must be pure, non-recursive, and contain exactly one
-`CoreReturn`. Its return expression must fit the configured node budget.
+Inlining uses solved effect reports rather than maintaining a second purity
+model. A candidate must be pure, non-recursive, and have a straight-line body:
+zero or more immutable bindings or evaluations followed by exactly one final
+`CoreReturn`. Mutation, assignment, branches, early returns, and fallthrough
+remain outside this expression-level pass.
 
-Arguments are substituted only when each argument is a variable or literal.
-Such values may safely be used zero, one, or several times: removing a read,
-or repeating a read of immutable Core identity, cannot allocate, fail, invoke
-unknown code, or change ownership. Primitive trees, calls, and closures remain
-at the call boundary even if another analysis currently considers them pure.
-That restriction prevents accidental evaluation loss or duplication.
+The accepted statement prefix becomes nested `CoreLet` expressions. Each local
+receives a fresh module-wide `SymbolId`, and later initializers plus the return
+are rewritten through the new identity. This makes two expansions of one
+helper independent to liveness, ownership, and CorePrep.
 
-Rewriting walks expressions bottom-up. A nested pure call may therefore become
-a literal before its enclosing call is considered. The enclosing call can then
-become eligible in the same pass without weakening the argument rule. Longer
-call chains converge through the optimizer's existing fixed-point loop.
+Variables and literals are safe direct substitutions. Primitive trees, calls,
+possible failures, and closure allocations are instead bound to fresh argument
+lets. Consequently each eager argument is evaluated once, from left to right,
+even when a parameter is unused or read repeatedly. Callee purity controls body
+eligibility; it does not require caller arguments to be pure.
+
+Fresh allocation starts above every definition and use observed in the module,
+including expression lets and closure-owned identities. Candidate estimation
+and the fully expanded expression are both checked against the configured node
+budget. A rejected speculative expansion commits neither fresh ids nor report
+counters.
+
+Rewriting walks expressions bottom-up. A nested pure call may become a literal
+before its enclosing call is considered, while longer chains converge through
+the optimizer's fixed-point loop. Generated Core is verified and follows the
+ordinary `CoreLet` CorePrep lowering path. The detailed contract is documented
+in [Core linear-body inlining](CORE-INLINING.md).
 
 Inlining never deletes function declarations. Reachability and link-unit
 pruning are separate decisions because exported visibility is not represented
@@ -434,8 +447,8 @@ The current optimizer does not perform:
 
 - floating arithmetic folding;
 - arbitrary compile-time call evaluation;
-- statement-body or effectful function inlining;
-- inlining of primitive, call, or closure arguments;
+- CFG, mutable, branching, multiple-return, or effectful function inlining;
+- ownership-cleanup or exception-region relocation across an inline boundary;
 - common-subexpression elimination;
 - loop optimization;
 - escape analysis;

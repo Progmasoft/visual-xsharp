@@ -23,6 +23,7 @@ library
         Visual.XSharp.Core.Optimizer
         Visual.XSharp.Core.Scalar
         Visual.XSharp.Core.Specialization
+        Visual.XSharp.Core.Symbols
         Visual.XSharp.Core.Template
         Visual.XSharp.Core.Verifier
         Visual.XSharp.Core.Wire

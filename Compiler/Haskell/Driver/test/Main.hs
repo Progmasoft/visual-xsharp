@@ -5,6 +5,7 @@ module Main (main) where
 import ClosureTests (closureTests)
 import Control.Exception (finally)
 import CoreInliningTests (coreInliningTests)
+import CoreLinearInliningTests (coreLinearInliningTests)
 import CoreOptimizerSourceTests (coreOptimizerSourceTests)
 import CoreOptimizerTests (coreOptimizerTests)
 import CoreVerifierTests (coreVerifierTests)
@@ -53,6 +54,7 @@ import VoidTests (voidTests)
 
 main :: IO ()
 main = do
+    mapM_ (uncurry check) coreLinearInliningTests
     check "full frontend compiles renewed declarations through CorePrep" fullPipeline
     check "operator precedence is preserved and constants fold" precedence
     check "unterminated final expression supplies the function result" finalExpression

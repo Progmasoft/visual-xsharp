@@ -56,6 +56,7 @@ library
         visual-xsharp-core:Visual.XSharp.Core.Optimizer,
         visual-xsharp-core:Visual.XSharp.Core.Scalar,
         visual-xsharp-core:Visual.XSharp.Core.Specialization,
+        visual-xsharp-core:Visual.XSharp.Core.Symbols,
         visual-xsharp-core:Visual.XSharp.Core.Template,
         visual-xsharp-core:Visual.XSharp.Core.Verifier,
         visual-xsharp-core:Visual.XSharp.Core.Wire,
@@ -85,6 +86,7 @@ test-suite visual-xsharp-compiler-tests
     other-modules:
         ClosureTests
         CoreInliningTests
+        CoreLinearInliningTests
         CoreOptimizerTests
         CoreOptimizerSourceTests
         CoreVerifierTests

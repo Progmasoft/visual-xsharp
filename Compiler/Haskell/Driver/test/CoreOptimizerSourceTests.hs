@@ -7,6 +7,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep (corePrepModuleFunctions)
+import Visual.XSharp.Core.CorePrep qualified as CorePrep
 
 -- These cases begin as Visual X# text. The constructor-level optimizer suite
 -- can isolate every rewrite, while this group proves that real desugared trees
@@ -32,6 +33,16 @@ coreOptimizerSourceTests =
     , ("source predicates inline before branch selection", sourceInlinePredicate)
     , ("source repeated parameters inline for literals", sourceInlineRepeated)
     , ("source unused literal arguments may disappear", sourceInlineUnused)
+    , ("source immutable helper locals inline", sourceInlineLocal)
+    , ("source dependent helper locals inline", sourceInlineDependentLocals)
+    , ("source primitive arguments remain single evaluations", sourceInlinePrimitiveArgument)
+    , ("source failing unused arguments remain explicit", sourceInlineFailingArgument)
+    , ("source argument order survives generated lets", sourceInlineArgumentOrder)
+    , ("source mutable helper bodies retain calls", sourceRejectsMutableHelper)
+    , ("source branching helper bodies retain calls", sourceRejectsBranchHelper)
+    , ("source inlined locals receive fresh symbols", sourceInlineFreshSymbols)
+    , ("source inlined locals prepare without calls", sourceInlinePrepares)
+    , ("source separate call sites use separate symbols", sourceInlineDisjointSites)
     ]
 
 compiled :: String -> Maybe FrontendArtifacts
@@ -217,3 +228,216 @@ sourceInlineUnused :: Bool
 sourceInlineUnused = case compiledProgram ["int Answer(_ int ignored) { return 42; }", "int Value() { return Answer(99); }"] of
     Just artifacts -> lastReturn artifacts == Just (integer 42)
     Nothing -> False
+
+sourceInlineLocal :: Bool
+sourceInlineLocal = case compiledProgram members of
+    Just artifacts -> maybe False (\value -> not (containsCall value) && terminalResult value == integer 42) (lastReturn artifacts)
+    Nothing -> False
+    where
+        members =
+            [ "int AddOne(_ int value) { final int result = value + 1; return result; }"
+            , "int Value() { return AddOne(41); }"
+            ]
+
+sourceInlineDependentLocals :: Bool
+sourceInlineDependentLocals = case compiledProgram members of
+    Just artifacts -> maybe False (\value -> not (containsCall value) && terminalResult value == integer 42) (lastReturn artifacts)
+    Nothing -> False
+    where
+        members =
+            [ "int Transform(_ int value) { final int doubled = value * 2; final int result = doubled + 2; return result; }"
+            , "int Value() { return Transform(20); }"
+            ]
+
+sourceInlinePrimitiveArgument :: Bool
+sourceInlinePrimitiveArgument = case compiledProgram members of
+    Just artifacts -> case lastReturn artifacts of
+        Just (CoreLet fresh bindingType value body resultType) ->
+            bindingType == intType
+                && value == integer 42
+                && body == integer 42
+                && resultType == intType
+                && symbolIdValue (resolvedSymbol fresh) > 0
+        _ -> False
+    Nothing -> False
+    where
+        members =
+            [ "int Identity(_ int value) { return value; }"
+            , "int Value() { return Identity(20 + 22); }"
+            ]
+
+sourceInlineFailingArgument :: Bool
+sourceInlineFailingArgument = case compiledProgram members of
+    Just artifacts -> case lastReturn artifacts of
+        Just (CoreLet _ bindingType value result resultType) ->
+            bindingType == intType
+                && value == CorePrimitive CoreDivide [integer 1, integer 0] intType
+                && result == integer 42
+                && resultType == intType
+        _ -> False
+    Nothing -> False
+    where
+        members =
+            [ "int Answer(_ int ignored) { return 42; }"
+            , "int Value() { return Answer(1 / 0); }"
+            ]
+
+sourceInlineArgumentOrder :: Bool
+sourceInlineArgumentOrder = case compiledProgram members of
+    Just artifacts -> case lastReturn artifacts of
+        Just (CoreLet first _ firstValue (CoreLet second _ secondValue _ _) _) ->
+            firstValue == integer 3
+                && secondValue == integer 12
+                && resolvedSymbol first /= resolvedSymbol second
+        _ -> False
+    Nothing -> False
+    where
+        members =
+            [ "int Difference(_ int left, _ int right) { return left - right; }"
+            , "int Value() { return Difference(1 + 2, 3 * 4); }"
+            ]
+
+sourceRejectsMutableHelper :: Bool
+sourceRejectsMutableHelper = case compiledProgram members of
+    Just artifacts -> maybe False containsCall (lastReturn artifacts)
+    Nothing -> False
+    where
+        members =
+            [ "int Change(_ int value) { int result = value; result = result + 1; return result; }"
+            , "int Value() { return Change(41); }"
+            ]
+
+sourceRejectsBranchHelper :: Bool
+sourceRejectsBranchHelper = case compiledProgram members of
+    Just artifacts -> maybe False containsCall (lastReturn artifacts)
+    Nothing -> False
+    where
+        members =
+            [ "int Choose(_ int value) { if (value) { return 42; } else { return 0; } }"
+            , "int Value() { return Choose(1); }"
+            ]
+
+sourceInlineFreshSymbols :: Bool
+sourceInlineFreshSymbols = case compiledProgram members of
+    Just artifacts -> case lastReturn artifacts of
+        Just value ->
+            let sourceMaximum = maximumModuleSymbol (artifactCore artifacts)
+                generated = expressionLetSymbols value
+             in not (null generated) && all ((> sourceMaximum) . symbolIdValue) generated
+        Nothing -> False
+    Nothing -> False
+    where
+        members =
+            [ "int Transform(_ int value) { final int doubled = value * 2; return doubled + 2; }"
+            , "int Value() { return Transform(20 + 0); }"
+            ]
+
+sourceInlinePrepares :: Bool
+sourceInlinePrepares = case compiledProgram members of
+    Just artifacts -> all (not . prepFunctionCalls) (corePrepModuleFunctions (artifactCorePrep artifacts))
+    Nothing -> False
+    where
+        members =
+            [ "int Transform(_ int value) { final int doubled = value * 2; return doubled + 2; }"
+            , "int Value() { return Transform(20); }"
+            ]
+
+sourceInlineDisjointSites :: Bool
+sourceInlineDisjointSites = case compiledProgram members of
+    Just artifacts -> case reverse (coreModuleFunctions (artifactOptimizedCore artifacts)) of
+        caller : _ -> case coreFunctionBody caller of
+            [CoreBind first, CoreReturn second] ->
+                let firstSymbols = expressionLetSymbols (coreBindingValue first)
+                    secondSymbols = expressionLetSymbols second
+                 in not (null firstSymbols)
+                        && not (null secondSymbols)
+                        && null [symbol | symbol <- firstSymbols, symbol `elem` secondSymbols]
+            _ -> False
+        [] -> False
+    Nothing -> False
+    where
+        members =
+            [ "int Transform(_ int value) { final int doubled = value * 2; return doubled + 2; }"
+            , "int Value() { final int first = Transform(10); return Transform(first); }"
+            ]
+
+containsCall :: CoreExpression -> Bool
+containsCall expression = case expression of
+    CoreApply {} -> True
+    CorePrimitive _ arguments _ -> any containsCall arguments
+    CoreLet _ _ value body _ -> containsCall value || containsCall body
+    CoreClosure captures _ _ body _ ->
+        any (containsCall . coreCaptureValue) captures || any statementContainsCall body
+    _ -> False
+
+terminalResult :: CoreExpression -> CoreExpression
+terminalResult expression = case expression of
+    CoreLet _ _ _ body _ -> terminalResult body
+    _ -> expression
+
+statementContainsCall :: CoreStatement -> Bool
+statementContainsCall statement = case statement of
+    CoreBind value -> containsCall (coreBindingValue value)
+    CoreAssign _ value -> containsCall value
+    CoreReturn value -> containsCall value
+    CoreEvaluate value -> containsCall value
+    CoreIf condition yes no -> containsCall condition || any statementContainsCall (yes ++ no)
+
+expressionLetSymbols :: CoreExpression -> [SymbolId]
+expressionLetSymbols expression = case expression of
+    CoreLet name _ value body _ -> resolvedSymbol name : expressionLetSymbols value ++ expressionLetSymbols body
+    CoreApply callee arguments _ -> concatMap expressionLetSymbols (callee : arguments)
+    CorePrimitive _ arguments _ -> concatMap expressionLetSymbols arguments
+    CoreClosure captures _ _ body _ ->
+        concatMap (expressionLetSymbols . coreCaptureValue) captures
+            ++ concatMap statementLetSymbols body
+    _ -> []
+
+statementLetSymbols :: CoreStatement -> [SymbolId]
+statementLetSymbols statement = case statement of
+    CoreBind value -> expressionLetSymbols (coreBindingValue value)
+    CoreAssign _ value -> expressionLetSymbols value
+    CoreReturn value -> expressionLetSymbols value
+    CoreEvaluate value -> expressionLetSymbols value
+    CoreIf condition yes no -> expressionLetSymbols condition ++ concatMap statementLetSymbols (yes ++ no)
+
+maximumModuleSymbol :: CoreModule -> Int
+maximumModuleSymbol moduleValue = maximum (0 : concatMap functionSymbols (coreModuleFunctions moduleValue))
+    where
+        functionSymbols value =
+            symbolIdValue (resolvedSymbol (coreFunctionName value))
+                : map (symbolIdValue . resolvedSymbol . fst) (coreFunctionParameters value)
+                ++ concatMap statementSymbols (coreFunctionBody value)
+        statementSymbols statement = case statement of
+            CoreBind value -> symbolIdValue (resolvedSymbol (coreBindingName value)) : expressionSymbols (coreBindingValue value)
+            CoreAssign name value -> symbolIdValue (resolvedSymbol name) : expressionSymbols value
+            CoreReturn value -> expressionSymbols value
+            CoreEvaluate value -> expressionSymbols value
+            CoreIf condition yes no -> expressionSymbols condition ++ concatMap statementSymbols (yes ++ no)
+        expressionSymbols expression = map (symbolIdValue . resolvedSymbol) (expressionNames expression)
+        expressionNames expression = case expression of
+            CoreVariable name _ -> [name]
+            CoreLiteral {} -> []
+            CoreApply callee arguments _ -> concatMap expressionNames (callee : arguments)
+            CorePrimitive _ arguments _ -> concatMap expressionNames arguments
+            CoreLet name _ value body _ -> name : expressionNames value ++ expressionNames body
+            CoreClosure captures parameters _ body _ ->
+                map coreCaptureName captures
+                    ++ map fst parameters
+                    ++ concatMap (expressionNames . coreCaptureValue) captures
+                    ++ concatMap statementNames body
+        statementNames statement = case statement of
+            CoreBind value -> coreBindingName value : expressionNames (coreBindingValue value)
+            CoreAssign name value -> name : expressionNames value
+            CoreReturn value -> expressionNames value
+            CoreEvaluate value -> expressionNames value
+            CoreIf condition yes no -> expressionNames condition ++ concatMap statementNames (yes ++ no)
+
+prepFunctionCalls :: CorePrep.CorePrepFunction -> Bool
+prepFunctionCalls value = any blockCalls (CorePrep.corePrepFunctionBlocks value)
+    where
+        blockCalls block = any instructionCalls (CorePrep.corePrepBlockInstructions block)
+        instructionCalls instruction = case instruction of
+            CorePrep.CorePrepBind _ _ _ (CorePrep.CorePrepCall _ _) -> True
+            CorePrep.CorePrepEvaluate (CorePrep.CorePrepCall _ _) -> True
+            _ -> False

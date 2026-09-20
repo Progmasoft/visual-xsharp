@@ -43,10 +43,12 @@ It does not yet implement the complete language catalog in `Spec/`.
 
 Core optimization is connected, verifier-guarded, and fixed-point driven. It performs immutable literal propagation,
 exact range-checked integer/boolean folding, conservative algebraic identities, known/identical branch simplification,
-unreachable-code removal, interprocedural effect inference, bounded safe-expression inlining, and effect-aware liveness
-across functions and closure bodies. Unknown, recursive, allocating, and possibly failing calls remain explicit. Typed
-per-pass, effect, and inlining reports expose before/after metrics and convergence. Floating-point arithmetic folding,
-general statement-body inlining, and speculative optimization remain unimplemented.
+unreachable-code removal, interprocedural effect inference, bounded capture-avoiding linear-body inlining, and
+effect-aware liveness across functions and closure bodies. The inliner accepts immutable binding/evaluation prefixes,
+preserves arbitrary eager arguments exactly once with fresh `CoreLet` identities, and verifies the result through
+CorePrep. Unknown, recursive, allocating, and possibly failing callees remain explicit. Typed per-pass, effect, and
+inlining reports expose before/after metrics, generated lets, alpha-renaming, and convergence. Floating-point arithmetic
+folding, CFG/mutable-body inlining, and speculative optimization remain unimplemented.
 
 Project compilation now enters the Haskell frontend as source roots plus project-relative exclusion patterns. The frontend
 owns recursive `.vxs` discovery, strict UTF-8 decoding, canonical root containment, overlapping-root de-duplication, and

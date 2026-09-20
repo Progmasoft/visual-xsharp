@@ -1,536 +1,387 @@
 <!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
 <!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1 -->
 
-# Core safe-expression inlining
+# Core linear-body inlining
 
-## Scope
+## Purpose
 
-The Core inliner is a target-independent simplification pass between verified
-Core and CorePrep. It replaces a deliberately small class of direct calls with
-the callee's return expression. The implementation favors a proof that
-evaluation is preserved over an optimistic estimate that a rewrite is likely
-safe.
+The Core inliner removes selected direct-call boundaries before CorePrep. It is
+an interprocedural optimizer, not a source macro expander: names are already
+resolved, types are already checked, and every decision uses `SymbolId`
+identity rather than source spelling.
 
-This pass is not a general source-level macro expander. It does not copy
-statement bodies, move ownership operations, infer visibility, remove function
-declarations, or choose a target ABI. It operates on resolved `SymbolId`
-identity after type checking and desugaring.
+The pass supports more than a single returned expression. A candidate may have
+a straight-line prefix of immutable bindings and evaluation statements followed
+by exactly one return. That body can be represented without a control-flow
+graph by nested `CoreLet` expressions. The result remains ordinary verified
+Core and follows the same CorePrep path as expression-local sequencing emitted
+by the desugarer.
 
-The inliner builds on the optimizer's interprocedural effect analysis. There is
-one purity decision, shared by dead-code elimination, branch cleanup, and
-inlining. A new call effect must therefore be modeled in effect inference
-before it can become an inlining candidate.
+The implementation is intentionally narrower than a CFG inliner. It does not
+copy branches, loops, mutable locals, assignments, exception regions, ownership
+regions, or multiple return paths. Those forms need block cloning, exit joining,
+and ownership-aware cleanup placement rather than a larger expression rewrite.
 
 ## Pipeline position
 
-One fixed-point iteration has the following relevant order:
+One optimizer iteration runs the relevant stages in this order:
 
 ```text
 verified Core
     |
     v
-effect inference
+interprocedural effect inference
     |
     v
-safe-expression inlining
+linear-body inlining
     |
     v
 constant propagation and folding
     |
     v
-effect recomputation
+effect inference for the rewritten call graph
     |
     v
 control-flow simplification
     |
     v
-effect recomputation
+effect inference for the rewritten control flow
     |
     v
 dead-code elimination
 ```
 
-Inlining precedes constant folding so a call such as a pure `AddOne(41)` can
-expose `41 + 1` and become `42` in the same iteration. Effect recomputation
-after structural rewrites ensures later passes see the current call graph,
-not the graph from the start of the iteration.
-
-The full sequence repeats until Core is unchanged or the configured iteration
-limit is reached. This permits a pure call chain to collapse without recursive
-rewriting inside one candidate expansion.
+Inlining runs before constant folding so copied primitives immediately expose
+new folding opportunities. The complete sequence is a bounded fixed point.
+Pure call chains can therefore collapse over successive iterations without the
+inliner recursively expanding a candidate while it is being copied.
 
 ## Candidate contract
 
-A Core function is eligible only when all of these conditions hold:
+A function becomes a candidate only when every condition below holds:
 
-1. its `SymbolId` has a module-local effect report;
-2. the solved effect is exactly `PureEffect`;
-3. the function is not in a recursive strongly connected component;
-4. the complete body is exactly one `CoreReturn` statement;
-5. parameter and result types already satisfy the Core verifier.
+1. effect inference produced a report for the function;
+2. its transitive classification is exactly `PureEffect`;
+3. it is not a member of a recursive strongly connected component;
+4. its body is a linear prefix followed by one final return;
+5. every binding in the prefix is immutable;
+6. the estimated expression form is within the configured node budget.
 
-The one-return requirement is structural. A function with a pure local binding
-followed by a return is not directly eligible. Earlier optimizer iterations may
-remove the local or propagate its literal, after which a later iteration can
-discover the simpler candidate.
-
-The pass does not maintain an eligibility annotation on `CoreFunction`.
-Candidates are rediscovered from the current verified module on each iteration.
-This avoids stale annotations after propagation, branch removal, or future
-Core transformations.
-
-### Why purity is required
-
-Copying a result expression changes where evaluation occurs. If the callee can
-allocate, fail, invoke unknown code, or diverge, a naive replacement can alter
-observable behavior or ownership. Requiring `PureEffect` makes the candidate
-independent of whether its result is later consumed or discarded.
-
-### Why recursion is separate
-
-Recursive functions are currently classified as divergent, but the explicit
-recursive check remains part of candidate discovery. It documents the
-termination boundary and keeps inlining safe if the effect ordering changes.
-A future termination proof may refine selected recursive functions; such a
-proof must also define an expansion strategy and a finite budget.
-
-### Why one return expression
-
-Statement-body inlining requires fresh local identity, control-flow splicing,
-return-join construction, diagnostic provenance, and ownership transfer. Core
-currently has structured statements while CorePrep owns explicit blocks.
-Pretending that a statement sequence is an expression would blur that stage
-boundary. The current pass therefore handles only an expression already owned
-by a return.
-
-## Argument safety
-
-Every call argument must be either:
-
-- a `CoreLiteral`; or
-- a `CoreVariable` read.
-
-No other expression is substituted, even when its current effect summary is
-pure. This rule handles the three parameter-use cases uniformly.
-
-### Parameter used once
-
-A variable or literal replaces the parameter directly. Type equality has
-already been checked by the Core verifier, and the final replacement is checked
-again against the call's result type.
-
-### Parameter unused
-
-Inlining removes argument evaluation when the return expression does not refer
-to the parameter. Dropping a literal or variable read is safe because neither
-has an observable effect. Dropping a primitive tree or call would need a
-separate proof that evaluation is irrelevant, so those arguments are rejected.
-
-### Parameter used multiple times
-
-Substitution may duplicate the argument. Duplicating a literal value or stable
-variable read is safe at Core. Duplicating a primitive may duplicate failure;
-duplicating a call may repeat user code; duplicating a closure may allocate
-multiple environments. Those forms remain rejected regardless of present
-purity inference.
-
-### Bottom-up rewriting
-
-Children are rewritten before their parent call is considered. A nested call
-can become a literal or variable and then satisfy the outer argument rule. This
-does not bypass safety: the inner call has already passed the complete candidate
-contract and its replacement is the value seen by the outer rewrite.
-
-For example:
+The accepted body grammar is:
 
 ```text
-Identity(Answer())
+InlineBody  := InlineStep* CoreReturn
+InlineStep  := immutable CoreBind
+             | CoreEvaluate
 ```
 
-may become:
+The grammar is structural. A return followed by another statement is not a
+final return and is rejected. A body with no return is rejected by the Core
+verifier before optimization. A branch is rejected even when constant
+propagation could later select one side. Keeping candidate discovery independent
+of speculative simplification makes the safety proof local and reproducible.
+
+`CoreEvaluate` is accepted only because the whole function was proven pure.
+The evaluation is still retained in the expanded expression. This preserves
+the exact Core evaluation structure and avoids making candidate discovery
+depend on a later dead-code pass.
+
+## Argument evaluation
+
+Inlining must preserve eager call semantics. Naive textual substitution fails
+in two directions:
+
+- a parameter read twice duplicates an effectful argument;
+- an unused parameter erases an effectful argument.
+
+Visual X# solves both by distinguishing trivial and non-trivial arguments.
+
+Variables and literals are trivial. Copying a variable read or a literal has no
+observable evaluation, so they may be substituted directly. Every other
+argument receives a fresh `CoreLet` binder before the copied body. Parameter
+references point to that binder.
+
+For a call conceptually shaped as:
 
 ```text
-Identity(42)
+Combine(ProduceLeft(), ProduceRight())
 ```
 
-and then:
+the expansion has this evaluation shape:
 
 ```text
-42
+let $left  = ProduceLeft()  in
+let $right = ProduceRight() in
+    copied body
 ```
 
-in one bottom-up traversal when both functions are proven candidates.
+The outer-to-inner let order is the original left-to-right argument order.
+Each non-trivial argument is evaluated once even when the callee ignores it,
+reads it repeatedly, or returns before a later expression would otherwise use
+it. Calls, primitive trees, possible failures, and closure allocations all keep
+their evaluation boundary.
 
-## Symbol substitution
+The candidate itself must be pure, but the caller's argument need not be pure.
+This distinction is essential. Callee purity permits body copying; argument
+let-binding preserves caller behavior.
 
-The substitution environment is keyed only by `SymbolId`. Source spelling is
-retained for diagnostics and display but never selects a parameter. Two names
-with identical text and distinct symbols remain distinct.
+## Statement conversion
 
-Substitution recursively visits:
-
-- direct and indirect callee expressions;
-- call arguments;
-- primitive arguments;
-- closure capture initializers; and
-- closure bodies.
-
-Closure parameters remove matching entries from the substitution environment
-before the closure body is copied. In normal verified Core, symbol allocation
-already makes identities unique; the deletion is an additional capture-safety
-boundary for hand-built Core and future transformations.
-
-The return expression's type must equal the call expression's result type after
-substitution. A mismatch leaves the call unchanged. The verifier should reject
-such input before optimization, but retaining the local guard prevents this
-pass from manufacturing a type mismatch if candidate construction evolves.
-
-## Node budget
-
-Inlining can increase expression size. The option
-`optimizerMaximumInlineExpressionNodes` limits both the candidate expression
-and the expanded expression at each call site. Candidate discovery deliberately
-retains oversized pure functions in its catalog: doing so lets the report
-distinguish “not semantically eligible” from “eligible but over this call site's
-configured growth budget.” No oversized expression is copied.
-
-The count includes:
-
-- the expression root;
-- each callee expression;
-- every call argument;
-- every primitive argument;
-- each closure capture initializer; and
-- every expression contained in a closure statement body.
-
-Statement nodes are counted when they occur inside a closure expression. A
-branch contributes its condition and both statement regions. This makes the
-budget describe the complete copied payload rather than only its outer
-expression constructor.
-
-Values below one normalize to one. A zero or negative configuration therefore
-does not acquire a special “disable” meaning; `optimizerInlining = False` is the
-explicit way to disable the pass.
-
-Both checks matter:
-
-1. candidate-size checking rejects a call when the function's original return
-   expression is already too large;
-2. post-substitution checking catches expansion caused by a parameter that
-   appears multiple times.
-
-The current default is twenty-four expression nodes. It is a conservative Core
-growth guard, not a target cost model. LLVM instruction count, register
-pressure, machine code size, and branch prediction do not belong in this pass.
-
-## Effect boundaries
-
-The following functions are never candidates under the current model.
-
-### Allocation
-
-A function returning or constructing a closure has `AllocationEffect`.
-Inlining it could duplicate or erase AARC-managed allocation. The closure's
-body may be pure; construction itself remains observable runtime work.
-
-### Possible failure
-
-Integer divide, floor-divide, and remainder with an unproved nonzero divisor
-have `FailureEffect`. A return expression containing such an operation is not
-inlined. Constant propagation may later prove a divisor and allow a future
-iteration to reconsider the function.
-
-### Unknown invocation
-
-A function that invokes an indirect callable has `CallEffect`. The compiler
-does not infer purity from a function type, name spelling, or the purity of a
-particular argument. Callable effect types would require an explicit language
-and Core contract.
-
-### Recursive component
-
-Self-recursive and mutually recursive functions receive `DivergenceEffect`.
-Removing or expanding their calls could remove nontermination or cause
-unbounded compiler expansion. They remain calls.
-
-### Transitive effects
-
-Effect inference solves the module call graph to a fixed point. A syntactically
-simple function that calls an allocating, failing, unknown, or recursive
-function inherits that effect and is excluded. Candidate discovery never looks
-only at the local return constructor.
-
-## Rewriting regions
-
-The pass reaches every Core expression region while preserving statement and
-function order.
-
-### Return values
-
-This is the direct candidate use case. The call is replaced by a substituted
-return expression and later passes may fold it.
-
-### Binding initializers
-
-A rewritten initializer remains attached to the same binding. Constant
-propagation and liveness decide whether the binding becomes a literal fact or
-is removed.
-
-### Assignment values
-
-Only the right-hand expression changes. The assignment target and mutability
-semantics remain untouched.
-
-### Branch conditions
-
-A pure predicate call can become a boolean or numeric expression. Constant
-folding may make it literal, allowing control-flow simplification to select one
-branch.
-
-### Evaluation statements
-
-The value is rewritten but the statement remains until liveness examines its
-effect. If inlining proves the complete evaluation pure, dead-code elimination
-may remove it later in the iteration.
-
-### Closure captures
-
-Capture initializers execute when the closure is constructed. They are visited
-in the enclosing expression region and may be inlined independently. Closure
-allocation still prevents the outer closure expression from being discarded.
-
-### Closure bodies
-
-The body is a separate runtime region, but module-local direct call summaries
-remain valid there. Calls inside it are rewritten without importing enclosing
-statement liveness.
-
-## Non-transformations
-
-The inliner intentionally does not:
-
-- delete an unused callee declaration;
-- change module or function ordering;
-- rename a symbol;
-- generate a fresh `SymbolId`;
-- inline a function with local statements;
-- inline an allocating or failing expression;
-- inline an indirect call;
-- speculate from function spelling;
-- coerce a return type;
-- expose a CorePrep block;
-- insert AARC retain or release operations;
-- perform escape analysis;
-- select an LLVM intrinsic; or
-- alter public source syntax.
-
-Function reachability will require a visibility/export and multi-module link
-unit contract. Statement-body inlining will require a representation-aware
-control-flow design. Ownership-sensitive inlining will require explicit Core or
-Xpp ownership operations. Those are independent compiler milestones.
-
-## Reporting
-
-Each enabled fixed-point iteration produces an `InlineReport` with:
-
-- the number of discovered candidates;
-- the number of rewritten calls;
-- the number of calls skipped because at least one argument was unsafe; and
-- the number of calls skipped because either the original candidate or the
-  substituted result exceeded budget.
-
-The ordinary pass trace also contains `InliningPass` with structural metrics
-before and after the pass. These two reports answer different questions:
-
-- `PassReport` shows whether Core changed and how its total structure changed;
-- `InlineReport` explains candidate and skip decisions specific to inlining.
-
-Disabled inlining produces neither an `InliningPass` entry nor an
-`InlineReport`. Disabling interprocedural effects also disables inlining because
-there is no safe candidate proof. This dependency is explicit rather than
-falling back to a local syntactic purity guess.
-
-Reports are deterministic. Candidate count follows the current module; rewrite
-counts follow source expression traversal; no timestamp, pointer, path, or hash
-iteration order enters the data.
-
-## Examples
-
-These examples use Core-like notation and are not Visual X# source grammar.
-
-### Literal return
+An immutable binding:
 
 ```text
-Answer() = return 42
-Entry()  = return Answer()
+final int doubled = value * 2;
 ```
 
-becomes:
+becomes an expression-local binding:
 
 ```text
-Answer() = return 42
-Entry()  = return 42
+CoreLet freshLocal int (value * 2) remainingBody resultType
 ```
 
-The declaration remains because Core does not yet represent export reachability.
+Bindings are nested in source order. Each initializer sees substitutions for
+parameters and earlier locals. The returned expression sees all preceding
+locals. A pure evaluation statement becomes a `CoreLet` with a compiler-owned
+synthetic binder; its result is intentionally unused, while its evaluation
+remains ordered before the rest of the body.
 
-### Parameter substitution
+This representation needs no new wire opcode. `CoreLet` already has stable Core
+wire support, verification, constant propagation, liveness traversal, and
+CorePrep lowering. CorePrep emits the value operation followed by a binding and
+continues atomizing the body in the same open block.
 
-```text
-Identity(value) = return value
-Entry(input)     = return Identity(input)
-```
+## Capture avoidance
 
-becomes:
+Resolved identity is semantic. Copying a callee-local `SymbolId` into two call
+sites would make unrelated values look identical to later analysis. It could
+also collide with an existing caller binder.
 
-```text
-Identity(value) = return value
-Entry(input)     = return input
-```
+Before rewriting starts, the pass inventories every symbol observed in the
+module:
 
-### Folding after inlining
+- function definitions;
+- function parameters;
+- statement binding definitions;
+- assignment targets;
+- variable references;
+- expression-local let definitions;
+- closure capture definitions and initializers;
+- closure parameters, bodies, and body-local definitions.
 
-```text
-AddOne(value) = return value + 1
-Entry()       = return AddOne(41)
-```
+Fresh allocation starts one above the largest observed numeric id. Uses are
+included as well as definitions. Verified Core cannot have dangling uses, but
+this stronger rule also keeps transformation behavior safe and deterministic
+for partially built test fixtures.
 
-becomes `return 41 + 1` during inlining and `return 42` during constant
-folding in the same optimizer iteration.
+Every copied local, generated argument binder, evaluation binder, nested
+`CoreLet`, closure capture, closure parameter, and closure-local binding receives
+a fresh id. References are rewritten through a lexical substitution environment.
+Closure capture initializers are cloned in the outer environment; the closure
+body then uses the fresh capture and parameter environment. Branch-local
+environments do not escape their branches.
 
-### Unsafe argument
+Generated spellings begin with `$inline.` and contain a role, source spelling,
+and numeric id. The spelling exists for diagnostics and debugging only.
+Correctness depends exclusively on the fresh `SymbolId`.
 
-```text
-Identity(value) = return value
-Entry()         = return Identity(Read())
-```
+## Size budget
 
-The outer call is retained unless bottom-up rewriting first proves and replaces
-`Read()` with a variable or literal. The inliner never duplicates or drops the
-unresolved call evaluation.
+`optimizerMaximumInlineExpressionNodes` bounds growth. Values below one are
+normalized to one. Two checks are used:
 
-### Repeated parameter
+1. candidate discovery records a conservative estimate containing parameter,
+   step, and result nodes;
+2. call rewriting counts the fully expanded expression, including actual
+   arguments and generated lets.
 
-```text
-Twice(value) = return value + value
-```
+The second check matters because one small identity function can receive a very
+large argument. If either check exceeds the limit, the original call is kept.
+Fresh-id state from a discarded expansion is not committed, so rejected calls
+do not create gaps or affect later deterministic output.
 
-`Twice(input)` may inline because duplicating the variable read is safe.
-`Twice(Compute())` does not inline because duplicating `Compute()` could repeat
-observable evaluation.
+The budget is a compile-time and code-growth guard, not a profitability model.
+Future cost modeling may include call frequency, backend target costs, ownership
+traffic, or profile data. Such policy can refine the limit without weakening
+the current semantic contract.
 
-### Unused parameter
+## Effect relationship
 
-```text
-Answer(ignored) = return 42
-```
+Effect inference is the authority for candidate purity. A candidate is rejected
+when it allocates, may fail, makes an unknown or indirect call, or may diverge.
+Known direct callees contribute transitively. Recursive SCCs are divergence
+barriers even if their local expressions look pure.
 
-`Answer(0)` and `Answer(input)` may inline. `Answer(Compute())` remains a call
-because inlining would erase `Compute()`.
+This produces several deliberate outcomes:
 
-### Closure allocation
+- a helper returning a closure is not a candidate because closure construction
+  allocates;
+- a helper dividing by an unconstrained value is not a candidate because it may
+  fail;
+- a helper invoking a callable parameter is not a candidate because the call is
+  unknown;
+- a non-recursive helper calling another proven-pure helper may be a candidate;
+- an effectful argument passed to a pure identity helper may still be inlined,
+  because the argument is retained behind a let.
 
-```text
-MakeCallable() = return closure { return 42 }
-```
+Disabling interprocedural effects also disables inlining. Running the inliner
+with a separate local purity approximation would give optimizer passes two
+conflicting definitions of observability.
 
-is not a candidate. Even though the closure body is pure, constructing the
-callable allocates an AARC object.
+## Verification boundaries
 
-### Possible arithmetic failure
+The optimizer verifies its input before running and verifies its result after
+the fixed point. Linear-inlining tests additionally take rewritten modules
+through `prepareCore` and the CorePrep verifier. These checks cover:
 
-```text
-Quotient(divisor) = return 42 / divisor
-```
+- binding type agreement;
+- result type agreement;
+- positive and defined symbol identity;
+- non-colliding copied locals;
+- coherent copied references;
+- CorePrep atomization of generated let chains;
+- valid blocks and register use after preparation.
 
-is not a candidate because the divisor may be zero. The optimizer preserves
-the failure point.
+The inliner does not modify function declarations or remove candidates.
+Declaration order, function symbols, callable types, and module identity remain
+stable.
 
-### Recursive call
+## Reports
 
-```text
-Again() = return Again()
-```
+Every enabled iteration emits one `InlineReport` with:
 
-is never expanded. Its effect report records recursive divergence.
+- total candidate count;
+- expression-only candidate count;
+- statement-body candidate count;
+- pure non-linear bodies rejected by shape;
+- rewritten direct calls;
+- calls skipped by the size budget;
+- generated argument lets;
+- generated local lets;
+- generated evaluation lets;
+- total fresh alpha-renamed symbols.
 
-## Verification strategy
+Expression and statement candidate counts sum to the total. Generated-let
+counts describe successful expansions only; a budget-rejected speculative
+expansion does not leak counters. Reports are retained per fixed-point iteration
+alongside ordinary `PassReport` metrics.
 
-The focused Core suite covers:
+## Test matrix
 
-- nullary and parameterized literal substitution;
-- multiple parameters and positional mapping;
-- repeated and unused safe arguments;
-- rejection of primitive, call, and closure arguments;
-- allocation, possible failure, and indirect-call rejection;
-- self-recursive and mutually recursive components;
-- original and expanded node budgets;
-- independent option disablement;
-- same-iteration constant folding;
-- fixed-point pure call chains;
-- branch and closure expression regions;
-- typed candidate, rewrite, and pass reports;
-- stable function order;
-- final verifier acceptance; and
-- optimizer idempotence.
+The component-owned Haskell suites cover:
 
-Every integration result passes the Core verifier after optimization. The
-general optimizer suite also checks report continuity across the new pass and
-updates its expected pass count to four per enabled iteration.
+- expression-only compatibility;
+- one and several immutable locals;
+- local dependency order;
+- literal and variable substitution;
+- primitive, direct-call, failing, allocating, repeated, and unused arguments;
+- left-to-right multi-argument evaluation;
+- evaluation statement ordering;
+- rejection of mutation, assignment, branches, early returns, and missing
+  returns;
+- fresh allocation above the complete module inventory;
+- disjoint identities at separate call sites;
+- nested `CoreLet` freshening;
+- typed report counters;
+- candidate and expanded-size limits;
+- Core verification, CorePrep construction, and CorePrep verification;
+- deterministic and idempotent fixed-point output;
+- structural symbol inventory for expression lets and closures.
 
-## Review checklist
+## Deliberate non-goals
 
-Before broadening candidate selection, answer all of these questions:
+The current pass does not implement:
 
-1. Can any argument evaluation be removed?
-2. Can any argument evaluation be duplicated?
-3. Can source evaluation order change?
-4. Can allocation identity change?
-5. Can a failure or divergence disappear?
-6. Can a `SymbolId` cross its valid scope?
-7. Can closure capture shadowing change?
-8. Can the expanded expression exceed the configured budget?
-9. Does the effect solver understand every new expression form?
-10. Does the output pass `verifyCore`?
-11. Is a second optimizer run structurally identical?
-12. Do typed reports explain the new decision?
+- CFG or loop inlining;
+- multiple-return joining;
+- mutable local promotion;
+- ownership cleanup relocation;
+- exception-region cloning;
+- virtual or indirect-call devirtualization;
+- cross-module body import;
+- profile-guided profitability;
+- removal of now-unreferenced function declarations.
 
-If any answer is unknown, retain the call. A conservative call is valid Core;
-an unsound inline expansion is a compiler correctness bug.
+The next semantic expansion should be a CFG inliner only after Core has explicit
+ownership and exception-region rules sufficient to prove cleanup placement.
+Increasing the accepted statement grammar without that model would trade a
+clear safety boundary for accidental backend behavior.
 
-## Future work
+## Maintainer invariants
 
-Potential extensions remain intentionally separate:
+Changes to this pass should preserve the following invariants independently of
+whether the current test fixtures happen to expose them.
 
-- fresh-symbol statement-body inlining;
-- call-site frequency and target-independent cost modeling;
-- function reachability after a public/export contract exists;
-- termination proofs for selected recursive functions;
-- effect-polymorphic callable types;
-- ownership-aware argument movement;
-- escape-informed closure allocation removal;
-- diagnostic provenance for copied statement bodies; and
-- link-unit-aware cross-module candidate discovery.
+### Identity
 
-None of these should weaken the current safe-expression path. They can add new
-proofs and candidate classes while preserving the rule that unknown evaluation
-stays explicit.
+- Never derive freshness from function symbols alone.
+- Never reuse a callee parameter or local id in the caller.
+- Never compare source spelling to decide whether two values are identical.
+- Never let speculative, rejected expansion advance committed fresh state.
+- Keep separate expansions disjoint even when their source body is identical.
+- Preserve function declaration identity and order.
 
-## Diagnostic and compatibility boundary
+### Evaluation
 
-Inlining is silent because it changes neither accepted source programs nor
-their required observable behavior. Candidate and skip information is exposed
-as typed compiler data for tests and development tooling, not as warnings to
-ordinary users. A missed candidate is therefore an optimization outcome rather
-than a source diagnostic.
+- Traverse a call's callee before its arguments.
+- Traverse arguments from left to right.
+- Bind every non-trivial actual exactly once.
+- Retain a non-trivial actual even when its formal parameter is unused.
+- Do not duplicate a non-trivial actual when its formal parameter is repeated.
+- Keep linear body steps in their original source order.
+- Do not classify allocation or failure as harmless merely because the copied
+  callee is pure.
 
-The pass adds no CLI option and no `Visual.XSharp.kts` key. Its options are an
-internal embedding and test surface until the compiler has a stable public
-optimization-profile contract. Artifact compatibility is unchanged: input and
-output are the existing verified Core model and the VXCR wire version does not
-change.
+### Scope
 
-CorePrep consumes only the final verified tree. It is not told which calls were
-inlined and does not reconstruct removed call boundaries. Debug provenance for
-future statement-body inlining must be designed explicitly; this expression
-pass does not invent source positions that Core does not carry.
+- Clone a let initializer in the environment before that let is introduced.
+- Clone later linear steps in the environment containing earlier fresh locals.
+- Clone closure capture initializers in the enclosing environment.
+- Clone closure bodies in an environment extended with fresh captures and
+  fresh parameters.
+- Keep branch-local definitions from escaping a branch while cloning nested
+  closure bodies.
+- Rewrite assignment targets only when they refer to a cloned local identity.
+
+### Types
+
+- Preserve declared parameter and local types on generated lets.
+- Preserve expression result types; do not infer them again in the optimizer.
+- Require the expanded expression type to equal the original call result type.
+- Let the Core verifier reject unresolved or inconsistent types before any
+  output reaches CorePrep.
+- Do not encode fresh-id policy into a type spelling or a wire field.
+
+### Budgets and reports
+
+- Count both the candidate estimate and final expanded tree.
+- Include generated argument and body lets in the final count.
+- Treat a non-positive configured budget as the minimum budget of one node.
+- Count report events only for the iteration in which they occur.
+- Keep report categories additive and unambiguous.
+- Do not use benchmark results to silently widen the semantic candidate set.
+
+## Diagnosing a failed expansion
+
+When an expected call remains, inspect the boundaries in this order:
+
+1. verify that Core accepted the input module;
+2. inspect the function's solved effect and recursive-SCC flag;
+3. confirm the body ends in exactly one final return;
+4. check that every prefix binding is immutable;
+5. compare the candidate estimate with the configured node limit;
+6. compare the fully expanded tree with the same limit;
+7. confirm direct callee identity resolves to the candidate symbol; and
+8. confirm original and expanded result types are equal.
+
+When output verification fails, first compare every generated id with
+`maximumCoreSymbolValue` of the input. Then inspect the lexical substitution
+environment around the first undefined reference. A missing earlier-local
+mapping usually indicates statement order was reversed; a closure-only failure
+usually indicates capture initializers and body scope were cloned under the
+same environment when they require different ones.
+
+When behavior changes but verification succeeds, inspect generated argument
+lets before optimizer simplification. A missing let can erase an unused failure
+or allocation; two copies of one argument can duplicate a call. CorePrep output
+is useful for confirming actual instruction order, but the semantic bug belongs
+to Core if the incorrect order already exists in the let chain.
