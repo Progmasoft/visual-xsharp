@@ -5,7 +5,7 @@
 
 package com.progmasoft.visual.xsharp.project
 
-@XsProjectDsl
+@VisualXsharpKts
 class PluginDeclarationScope internal constructor(private val publisher: String) {
   var name: String? = null
   var version: String? = null
@@ -39,7 +39,7 @@ class PluginDeclarationScope internal constructor(private val publisher: String)
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class PluginsScope internal constructor() {
   private val requests = mutableListOf<PluginRequest>()
 

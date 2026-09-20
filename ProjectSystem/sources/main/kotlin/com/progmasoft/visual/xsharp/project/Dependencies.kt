@@ -9,7 +9,7 @@ import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import kotlin.io.path.extension
 
-@XsProjectDsl
+@VisualXsharpKts
 class DependenciesScope internal constructor() {
   internal val required = mutableListOf<PackageDependency>()
   internal val optional = mutableListOf<OptionalPackageDependency>()

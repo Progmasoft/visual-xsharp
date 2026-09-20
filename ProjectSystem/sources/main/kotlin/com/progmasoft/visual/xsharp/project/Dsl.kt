@@ -5,9 +5,9 @@
 
 package com.progmasoft.visual.xsharp.project
 
-@DslMarker annotation class XsProjectDsl
+@DslMarker annotation class VisualXsharpKts
 
-@XsProjectDsl
+@VisualXsharpKts
 class CompilerScope internal constructor(private val settings: CompilerSettings) {
   var version: String
     get() = settings.version
@@ -76,7 +76,7 @@ class CompilerScope internal constructor(private val settings: CompilerSettings)
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class UnsafeCompilerScope internal constructor(private val settings: CompilerSettings) {
   var xppOptimizationPasses: Boolean
     get() = settings.xppOptimizationPasses
@@ -97,7 +97,7 @@ class UnsafeCompilerScope internal constructor(private val settings: CompilerSet
     }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class LlvmCompilerScope internal constructor(private val settings: CompilerSettings) {
   var optLevel: LlvmOptLevel
     get() =

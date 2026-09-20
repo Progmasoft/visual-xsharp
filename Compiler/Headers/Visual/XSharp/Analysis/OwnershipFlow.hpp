@@ -87,16 +87,16 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
     // A state mask is exposed in facts because a join may deliberately retain
     // several possibilities. This makes diagnostics inspectable and prevents a
     // verifier from silently choosing one predecessor's ownership state.
-    enum StateBit : std::uint8_t
-    {
-        kAbsent = 1U << 0U,
-        kStrong = 1U << 1U,
-        kWeak = 1U << 2U,
-        kUnowned = 1U << 3U,
-        kConsumed = 1U << 4U
-    };
-
     using StateMask = std::uint8_t;
+
+    // These values are bit masks, not mutually exclusive alternatives. Keeping
+    // them as typed constants avoids the implicit integral conversions of the
+    // former C-style enum while preserving cheap combinations at join points.
+    inline constexpr StateMask kAbsent = 1U << 0U;
+    inline constexpr StateMask kStrong = 1U << 1U;
+    inline constexpr StateMask kWeak = 1U << 2U;
+    inline constexpr StateMask kUnowned = 1U << 3U;
+    inline constexpr StateMask kConsumed = 1U << 4U;
 
     struct HandleFact final
     {
@@ -173,7 +173,7 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
     StateFor(HandleKind kind) noexcept -> StateMask;
 
     [[nodiscard]] auto
-    Contains(StateMask states, StateBit state) noexcept -> bool;
+    Contains(StateMask states, StateMask state) noexcept -> bool;
 
     [[nodiscard]] auto
     IsExactly(StateMask states, HandleKind kind) noexcept -> bool;

@@ -6,7 +6,6 @@
 **/*.json
 **/*.jsonc
 **/*.txt
-**/*.rs
 **/*.kt
 **/*.kts
 **/*.java

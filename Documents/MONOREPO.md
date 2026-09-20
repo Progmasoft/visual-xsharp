@@ -7,7 +7,6 @@
 
 ```text
 Compiler/     Native vxs driver, public headers, modular C++20 implementation, Haskell packages, and build support
-xslang/       Retiring Rust reference implementation; not a production build dependency
 ProjectSystem/ Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
 Spec/         Public language-design example suites
 third_party/  Pinned source dependencies
@@ -101,10 +100,10 @@ root Git index or root Bazel graph.
 
 ## Generated directories
 
-Build products, Cargo targets, Cabal `dist-newstyle`, Gradle output, website distribution files, and local service state are
+Build products, Cabal `dist-newstyle`, Gradle output, website distribution files, and local service state are
 generated or local-only data and are not source ownership boundaries.
 
-Typical disposable paths include `bazel-*`, `dist-newstyle`, `.gradle`, `build`, `target`, website package-manager output,
+Typical disposable paths include `bazel-*`, `dist-newstyle`, `.gradle`, `build`, website package-manager output,
 IDE caches, and local service databases. Their presence must not influence source discovery, tests, release content, or
 documentation claims.
 

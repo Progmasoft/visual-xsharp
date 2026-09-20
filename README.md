@@ -11,7 +11,8 @@ project DSL, runtime components, language examples, tests, and supporting develo
 The repository is under an architectural transition. The production `.vxs` route now uses the Haskell lexer-through-Core
 frontend and hands a verified `VXCR` Core artifact to the C++20 CorePrep-to-Xpp-to-Xmm-to-LLVM pipeline. The previous C
 lexer/parser, semantic tree, macro, HIR/MIR duplicate, Rust FFI session bridge, and DIMCLI dependency have been removed.
-The remaining Rust tree is transitional reference material, not a production dependency or a second supported compiler.
+The retired Rust implementation and all project-owned C implementation files have also been removed; the maintained
+compiler is Haskell through CorePrep and C++20 from Xpp onward.
 
 ## Intended compiler pipeline
 

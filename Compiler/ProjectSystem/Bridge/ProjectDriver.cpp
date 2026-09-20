@@ -4,11 +4,11 @@
 #include <cerrno>
 #include <charconv>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <fmt/format.h>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <span>
 #include <string_view>
 #include <system_error>
@@ -35,8 +35,8 @@ namespace Visual::XSharp::Driver
         constexpr std::string_view kRegistryVersion = "visual-xsharp-sources-v6";
         constexpr std::size_t kHeaderRecordCount = 21;
 
-#ifndef XS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT
-#    define XS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT "libexec/xs/project/lib/*"
+#ifndef VXS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT
+#    define VXS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT "libexec/vxs/project/lib/*"
 #endif
 
         class TemporaryRegistry final
@@ -108,16 +108,17 @@ namespace Visual::XSharp::Driver
         Environment(const char *name)
         {
 #ifdef _WIN32
-            char *value{};
+            char *rawValue{};
             std::size_t length{};
-            if (_dupenv_s(&value, &length, name) != 0 || value == nullptr || length <= 1)
-            {
-                std::free(value);
+            if (_dupenv_s(&rawValue, &length, name) != 0)
                 return std::nullopt;
-            }
-            std::string result(value, length - 1);
-            std::free(value);
-            return result;
+
+            // _dupenv_s transfers a malloc allocation to the caller. Capture it
+            // immediately so every return path observes ordinary C++ ownership.
+            const std::unique_ptr<char, decltype(&std::free)> value(rawValue, &std::free);
+            return value == nullptr || length <= 1
+                       ? std::nullopt
+                       : std::optional<std::string>{ std::in_place, value.get(), length - 1 };
 #else
             const char *value = std::getenv(name);
             return value == nullptr || *value == '\0' ? std::nullopt : std::optional<std::string>(value);
@@ -141,24 +142,24 @@ namespace Visual::XSharp::Driver
         [[nodiscard]] std::string
         ProjectEvaluatorClasspath()
         {
-            if (const auto configured = Environment("XS_PROJECT_EVALUATOR_CLASSPATH"))
+            if (const auto configured = Environment("VXS_PROJECT_EVALUATOR_CLASSPATH"))
                 return *configured;
-#ifdef XS_PROJECT_EVALUATOR_CLASSPATH_BUILD
+#ifdef VXS_PROJECT_EVALUATOR_CLASSPATH_BUILD
             {
-                const std::filesystem::path buildLibraryDirectory = std::filesystem::path(XS_PROJECT_EVALUATOR_CLASSPATH_BUILD).parent_path();
+                const std::filesystem::path buildLibraryDirectory = std::filesystem::path(VXS_PROJECT_EVALUATOR_CLASSPATH_BUILD).parent_path();
                 std::error_code error;
                 if (std::filesystem::is_directory(buildLibraryDirectory, error))
-                    return XS_PROJECT_EVALUATOR_CLASSPATH_BUILD;
+                    return VXS_PROJECT_EVALUATOR_CLASSPATH_BUILD;
             }
 #endif
             if (const auto directory = ExecutableDirectory())
             {
-                const auto installed = *directory / ".." / "libexec" / "xs" / "project" / "lib";
+                const auto installed = *directory / ".." / "libexec" / "vxs" / "project" / "lib";
                 std::error_code error;
                 if (std::filesystem::is_directory(installed, error))
                     return (installed.lexically_normal() / "*").string();
             }
-            return XS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT;
+            return VXS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT;
         }
 
         [[nodiscard]] int

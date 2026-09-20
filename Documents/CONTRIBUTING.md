@@ -8,10 +8,8 @@
 - Add frontend behavior through CorePrep in Haskell.
 - Add Xpp/Xmm and native middle-end behavior in C++20.
 - Keep LLVM details inside the backend.
-- Adapt useful behavior from the retiring Rust tree only into its owning Haskell or C++20 layer; do not add new Rust
-  compiler behavior.
-- Reduce C23 ownership only after replacement behavior is verified.
-- Do not add new language behavior to transitional C23 frontend layers.
+- Keep compiler implementation work in its owning Haskell or C++20 layer. Rust and project-owned C compiler trees are
+  retired and must not be recreated as parallel implementations.
 
 ## Language and API changes
 
@@ -22,16 +20,16 @@
 - Keep public documentation in en-US English.
 - Do not expose internal planning notes in public files.
 
-## C and C++ files
+## Native files
 
-- C-only headers use `.h`.
-- Headers shared by C and C++ use `.hh`.
 - C++-only headers use `.hpp`.
 - C++ implementation files use `.cpp` and compile as C++20.
-- C++ namespaces, classes, and functions use PascalCase. The canonical C++ root is `Visual::XSharp`; legacy Rust naming
-  must not be introduced as the target namespace for renewed C++ code.
+- Project-owned `.c` and `.h` files are not accepted. OS and LLVM C headers may be included where their platform APIs
+  require them, but wrappers and ownership remain C++20.
+- C++ namespaces, classes, and functions use PascalCase. The canonical C++ root is `Visual::XSharp`.
 - C++ local variables use camelCase, constants use `kPascalCase`, and macros use `UPPER_SNAKE_CASE`.
-- New or retained C implementation files compile as strict C23 until migrated.
+- The `vxs_aarc_*` runtime entry points are an intentional stable C ABI implemented in C++; do not generalize that
+  exception into a C implementation layer.
 
 The checked-in `.clang-format` profile is the mechanical C++20 style authority and requires LLVM/Clang 23.1.0. It uses
 four-space Allman layout, return types on their own line, system includes before project includes, indented namespace

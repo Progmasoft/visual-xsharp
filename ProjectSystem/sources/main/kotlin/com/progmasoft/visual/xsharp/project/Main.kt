@@ -89,7 +89,7 @@ internal fun kotlinCommand(
   osName: String = System.getProperty("os.name"),
 ): String {
   environment.entries
-    .firstOrNull { it.key.equals("XS_KOTLIN", ignoreCase = true) }
+    .firstOrNull { it.key.equals("VXS_KOTLIN", ignoreCase = true) }
     ?.value
     ?.takeIf(String::isNotBlank)
     ?.let {

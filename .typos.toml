@@ -3,9 +3,6 @@
 
 [files]
 extend-exclude = [
-    "target/",
-    "**/target/**",
-    "Cargo.lock",
     "flake.lock",
     "package-lock.json",
     "pnpm-lock.yaml",
@@ -68,7 +65,6 @@ extend-ignore-identifiers-re = [
     "^[a-zA-Z_]*buf[a-zA-Z_]*$",
     "^[a-zA-Z_]*str[a-zA-Z_]*$",
     "\\bLLVM[A-Z0-9_]*\\b",
-    "\\bXS_[A-Z0-9_]+\\b",
     "\\bTLS_[A-Z0-9_]+\\b",
     "\\bSSL_[A-Z0-9_]+\\b",
     "\\bSHA[0-9_]*\\b",
@@ -79,10 +75,6 @@ extend-ignore-words-re = [
     "(?i)^vulkan$",
     "(?i)^ron$",
     "(?i)^kdl$",
-    "(?i)^serde$",
-    "(?i)^clippy$",
-    "(?i)^rustfmt$",
-    "(?i)^rustsec$",
     "(?i)^toml$",
 ]
 
@@ -124,12 +116,7 @@ vtable = "vtable"
 itable = "itable"
 endianness = "endianness"
 toolchain = "toolchain"
-Serde = "Serde"
-serde = "serde"
 TypeScript = "TypeScript"
-Clippy = "Clippy"
-rustfmt = "rustfmt"
-RustSec = "RustSec"
 RON = "RON"
 KDL = "KDL"
 TOML = "TOML"

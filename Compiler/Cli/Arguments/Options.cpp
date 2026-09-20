@@ -13,8 +13,8 @@
 
 #include "Compiler/Cli/Arguments/Options.hpp"
 
-#ifndef XS_PROJECT_VERSION
-#    define XS_PROJECT_VERSION "0.3.8"
+#ifndef VXS_PROJECT_VERSION
+#    define VXS_PROJECT_VERSION "0.3.8"
 #endif
 
 namespace
@@ -966,5 +966,5 @@ PrintCliHelp(std::optional<CliCommand> command)
 void
 PrintCliVersion()
 {
-    fmt::print("vxs {}\n", XS_PROJECT_VERSION);
+    fmt::print("vxs {}\n", VXS_PROJECT_VERSION);
 }

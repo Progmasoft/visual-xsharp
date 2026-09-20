@@ -5,7 +5,7 @@
 
 package com.progmasoft.visual.xsharp.project
 
-@XsProjectDsl
+@VisualXsharpKts
 class ProjectScope internal constructor() {
   var name: String? = null
   var version: String? = null
@@ -47,7 +47,7 @@ class ProjectScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class ExecutableSourcesScope internal constructor() {
   var name: String? = null
   var srcDir: String = "Sources"
@@ -73,7 +73,7 @@ class ExecutableSourcesScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class LibrarySourcesScope internal constructor() {
   var name: String? = null
   var srcDir: String = "Sources"
@@ -107,7 +107,7 @@ class LibrarySourcesScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class TestSourcesScope internal constructor(private val suiteName: String) {
   var testDir: String = "Tests/$suiteName"
   var framework: String? = null
@@ -119,7 +119,7 @@ class TestSourcesScope internal constructor(private val suiteName: String) {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class ViGetSourcesScope internal constructor() {
   var push: Boolean = false
   internal var excludes: MutableList<String>? = null
@@ -130,7 +130,7 @@ class ViGetSourcesScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class ProjectSourcesScope internal constructor() {
   private val executables = mutableListOf<ExecutableSourcesScope>()
   private val libraries = mutableListOf<LibrarySourcesScope>()
@@ -191,7 +191,7 @@ class ProjectSourcesScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class OutputDirectoriesScope internal constructor() {
   var release: String = "build/release"
   var debug: String = "build/debug"
@@ -201,7 +201,7 @@ class OutputDirectoriesScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class TargetsScope internal constructor() {
   private val values = mutableListOf<String>()
 
@@ -220,7 +220,7 @@ class TargetsScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class PmlScope internal constructor() {
   var enabled: Boolean = true
 
@@ -229,7 +229,7 @@ class PmlScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class WorkspaceScope internal constructor(private val name: String) {
   var path: String? = null
 
@@ -240,7 +240,7 @@ class WorkspaceScope internal constructor(private val name: String) {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class WorkspacesScope internal constructor() {
   private val values = mutableListOf<Workspace>()
 
@@ -257,7 +257,7 @@ class WorkspacesScope internal constructor() {
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class DependencyDeclarationScope internal constructor(private val publisher: String) {
   var name: String? = null
   var version: String? = null
@@ -308,7 +308,7 @@ class DependencyDeclarationScope internal constructor(private val publisher: Str
   }
 }
 
-@XsProjectDsl
+@VisualXsharpKts
 class DependencyFeatureDeclarationScope internal constructor() {
   var enabled: Boolean = false
 }

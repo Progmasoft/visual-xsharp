@@ -700,7 +700,7 @@ func checkReleaseMetadata(repository string, currentHost host, requested string,
 		checkFileLineOnce(filepath.Join(repository, "Compiler", "Haskell", "Frontend", "visual-xsharp-frontend.cabal"), "version: "+requested, false, "Haskell frontend version"),
 		checkFileLineOnce(filepath.Join(repository, "Compiler", "Haskell", "Core", "visual-xsharp-core.cabal"), "version: "+requested, false, "Haskell Core version"),
 		checkFileLineOnce(filepath.Join(repository, "Compiler", "Haskell", "Driver", "visual-xsharp-compiler.cabal"), "version: "+requested, false, "Haskell compiler version"),
-		checkFileLineOnce(filepath.Join(repository, "Compiler", "Cli", "Arguments", "Options.cpp"), "#    define XS_PROJECT_VERSION \""+requested+"\"", false, "native CLI fallback version"),
+		checkFileLineOnce(filepath.Join(repository, "Compiler", "Cli", "Arguments", "Options.cpp"), "#    define VXS_PROJECT_VERSION \""+requested+"\"", false, "native CLI fallback version"),
 		checkFileLineOnce(filepath.Join(repository, "ProjectSystem", "build.gradle.kts"), "version = \""+requested+"\"", false, "Kotlin project runtime version"),
 		checkFileLineOnce(filepath.Join(repository, "ProjectSystem", "Visual.XSharp.kts"), "version = \""+requested+"\"", false, "default compiler model version"),
 	)

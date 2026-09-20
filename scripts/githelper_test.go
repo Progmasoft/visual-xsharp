@@ -46,7 +46,6 @@ func TestGeneratedCoverageMatchesNestedDirectories(t *testing.T) {
 		"Compiler/build/output.o",
 		"ProjectSystem/node_modules/tool",
 		"Compiler/Haskell/dist-newstyle/cache",
-		"xslang/Cargo.lock",
 		".codex/PLAN.md",
 	}
 	for _, path := range generated {
@@ -54,7 +53,7 @@ func TestGeneratedCoverageMatchesNestedDirectories(t *testing.T) {
 			t.Fatalf("expected %q to be generated", path)
 		}
 	}
-	for _, path := range []string{"Compiler/Builder.cpp", "Documents/building.md", "Cargo.toml"} {
+	for _, path := range []string{"Compiler/Builder.cpp", "Documents/building.md", "Package.lock"} {
 		if isCoveredByGeneratedPaths(path) {
 			t.Fatalf("did not expect %q to be generated", path)
 		}

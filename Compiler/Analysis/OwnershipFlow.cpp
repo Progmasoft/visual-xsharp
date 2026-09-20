@@ -512,7 +512,7 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
     }
 
     auto
-    Contains(const StateMask states, const StateBit state) noexcept -> bool
+    Contains(const StateMask states, const StateMask state) noexcept -> bool
     {
         return (states & static_cast<StateMask>(state)) != 0U;
     }

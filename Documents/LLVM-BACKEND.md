@@ -19,10 +19,8 @@ CorePrep, Xpp, and Xmm verification happen before LLVM objects are constructed. 
 LLVM `Verify` entry remains as a source-compatible adapter and `Lower` repeats the check for direct clients. A failed check
 produces structured `VXP` or `VXL` issues and no LLVM artifact.
 
-The canonical C++ spelling is `Visual::XSharp`, with PascalCase namespace segments, classes, and functions. The LLVM backend
-is the first renewed subsystem that uses the canonical spelling as its real namespace rather than an alias. Older C++ middle-
-end models still use their existing spelling during a subsystem-by-subsystem migration; `visual_xsharp` remains the Rust-side
-naming convention and is not the target C++ namespace.
+The canonical C++ spelling is `Visual::XSharp`, with PascalCase namespace segments, classes, and functions. Renewed and
+existing C++ subsystems migrate toward that spelling without recreating the removed Rust naming or implementation layer.
 
 ## Supported values
 

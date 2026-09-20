@@ -123,17 +123,12 @@ unit, and source ownership for project-wide per-file artifacts.
 | Xpp/Xmm disk codecs | connected | bounded v3 `VXPP`/`VXMM` readers and writers |
 | project-wide per-source native outputs | registered contract, not connected | source ownership through Core |
 
-## Retiring Rust compiler core
+## Retired Rust and C implementations
 
-The Rust compiler core is no longer a supported production layer or a required CI gate. Nothing in the native executable,
-Haskell frontend, project evaluator, or Bazel graph links it. Its remaining source tree is transitional reference material:
-useful algorithms and tests may be adapted deliberately, but new compiler behavior must be implemented in the owning
-Haskell or C++20 layer. The tree will be reduced in reviewed slices rather than becoming a second implementation again.
-
-## C23 migration
-
-The C language frontend and duplicate semantic/middle-end implementation have been removed. Retained C code is limited to
-still-used compatibility/package surfaces and is migrated only when a tested replacement exists.
+The duplicate Rust compiler core and project-owned C implementation have been removed. They are not supported production
+layers, reference trees, CI gates, or fallback routes. New compiler behavior is implemented once in the owning Haskell or
+C++20 layer. The AARC runtime's `extern "C"` entry points remain intentionally: generated LLVM code calls that small,
+versioned ABI, while its implementation, ownership, and tests are C++20.
 
 ## CLI and project evaluation
 

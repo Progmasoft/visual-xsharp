@@ -71,10 +71,11 @@ runtime features must not displace completion of that pipeline.
 - preserve one source discovery policy across compiler and project-wide tools; and
 - keep Visual Formatter, Visual Linter, Visual Analyzer, and compiler release versions independent.
 
-### 6. Legacy reduction
+### 6. Legacy removal completed
 
-Retained C and Rust are reduced only after the maintained owner has equivalent behavior and tests. The removed C lexer and
-parser are not restored. Legacy Rust is not a second production compiler and is not expanded with new language behavior.
+The duplicate C and Rust compiler implementations are removed. The C lexer/parser route is not restored, and compiler work
+continues only in the maintained Haskell and C++20 owners. Compatibility is expressed through explicit artifact and runtime
+ABIs rather than dormant source trees.
 
 ## Milestone acceptance
 

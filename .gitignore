@@ -7,10 +7,8 @@ xide_api/
 xide/
 .codex/
 .agents/
-target/
 .gradle/
 .kotlin/
-Cargo.lock
 *.sqlite3
 node_modules/
 dist/

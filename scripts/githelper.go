@@ -25,20 +25,16 @@ const (
 var generatedPaths = []string{
 	"build/",
 	".codex",
-	"target/",
 	"node_modules/",
 	"dist/",
 	"dist-newstyle/",
 	"out/",
 	"XS/",
-	"Cargo.lock",
 	":(glob)**/build/**",
-	":(glob)**/target/**",
 	":(glob)**/node_modules/**",
 	":(glob)**/dist/**",
 	":(glob)**/dist-newstyle/**",
 	":(glob)**/out/**",
-	":(glob)**/Cargo.lock",
 }
 
 const helpText = `usage:
@@ -62,7 +58,7 @@ update automatically runs clean before and after git add --all:
   local generated files stay on disk and remain ignored
 
 generated paths:
-  build/, .codex/, target/, node_modules/, dist/, dist-newstyle/, out/, Cargo.lock
+  build/, .codex/, node_modules/, dist/, dist-newstyle/, out/
 
 update push:
   git push -u origin <current-branch> --force-with-lease
@@ -231,15 +227,12 @@ func isGeneratedDirectory(path string, directory string) bool {
 
 func isCoveredByGeneratedPaths(path string) bool {
 	return isGeneratedDirectory(path, "build") ||
-		isGeneratedDirectory(path, "target") ||
 		isGeneratedDirectory(path, "node_modules") ||
 		isGeneratedDirectory(path, "dist") ||
 		isGeneratedDirectory(path, "dist-newstyle") ||
 		isGeneratedDirectory(path, "out") ||
 		path == ".codex" ||
-		strings.HasPrefix(path, ".codex/") ||
-		path == "Cargo.lock" ||
-		strings.HasSuffix(path, "/Cargo.lock")
+		strings.HasPrefix(path, ".codex/")
 }
 
 func splitNullSeparated(output []byte) []string {

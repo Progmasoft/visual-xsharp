@@ -34,8 +34,9 @@ Stage ownership is deliberate:
 - Lexer through CorePrep belongs to Haskell.
 - Xpp, Xmm, and the native lowering boundary belong to C++20.
 - LLVM types and handles belong only to the backend.
-- The retiring Rust tree is not linked, is not a production implementation, and receives no new compiler behavior.
-- C23 implementation code is migrated subsystem by subsystem after replacement behavior is verified.
+- The retired Rust and C implementation trees are absent from the build and source graph.
+- AARC exposes a deliberately narrow C ABI from C++ so generated LLVM code has stable runtime symbols; this is an ABI
+  boundary, not a retained C implementation layer.
 
 ## Component ownership
 
@@ -182,4 +183,4 @@ not become compiler passes merely because `vxs format` and `vxs lint` dispatch t
 - Public artifacts require an explicit, versioned reader/writer contract.
 - Machine-specific LLVM installation paths never enter tracked files.
 - Native C++ uses the LLVM C++ API and `Visual::XSharp` naming for renewed code.
-- New compiler behavior is not added to the retiring Rust tree or a removed C lexer/parser compatibility route.
+- New compiler behavior belongs to the maintained Haskell or C++20 owner; removed Rust and C routes are not restored.

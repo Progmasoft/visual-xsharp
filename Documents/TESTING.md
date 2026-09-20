@@ -278,7 +278,7 @@ Every implementation, test, build, configuration, and internal source file outsi
 or below 1500 lines. A simple review aid is:
 
 ```powershell
-$extensions = '*.hs','*.cpp','*.hpp','*.hh','*.h','*.kt','*.kts','*.rs','*.go','*.java'
+$extensions = '*.hs','*.cpp','*.hpp','*.hh','*.kt','*.kts','*.go','*.java'
 Get-ChildItem Compiler,ProjectSystem,Analyzer,Formatter,Linter,tests,scripts -Recurse -File -Include $extensions |
   Where-Object { (Get-Content -LiteralPath $_.FullName).Count -gt 1500 } |
   Select-Object FullName

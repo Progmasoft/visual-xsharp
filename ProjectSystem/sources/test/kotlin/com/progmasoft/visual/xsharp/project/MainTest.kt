@@ -14,7 +14,7 @@ class MainTest {
   fun honorsExplicitKotlinRunner() {
     assertEquals(
       "D:/tools/kotlin-custom.bat",
-      kotlinCommand(mapOf("XS_KOTLIN" to "D:/tools/kotlin-custom.bat"), "Windows 11"),
+      kotlinCommand(mapOf("VXS_KOTLIN" to "D:/tools/kotlin-custom.bat"), "Windows 11"),
     )
   }
 
