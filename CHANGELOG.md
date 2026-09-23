@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
-## 0.3.9 - 2026-09-23
+## 0.3.9 - 2026-09-24
 
 ### Compiler
 
@@ -19,6 +19,14 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 - Added optimizer, frontend, native pipeline, and malformed-result regression tests plus a Criterion floating-fold
   workload and its first Windows measurement.
 - Changed `githelper.go update` to regular fast-forward-only push; it no longer uses `--force-with-lease`.
+- Centralized Core integer widths, signedness, and ranges; Core folding now bounds power by squaring, validates shifts
+  before host-width conversion, masks unsigned bitwise complement to the operand width, and leaves out-of-range results
+  explicit.
+- Bounded exact frontend constant and template-value evaluation to magnitudes strictly inside `2^65536`. Multiplication
+  and power preflight intermediate growth; shift evaluation avoids distance-sized allocation, with context-specific
+  diagnostics instead of wrapping or silently treating an oversized expression as nonconstant.
+- Added deterministic arithmetic-oracle, integer-boundary, evaluator-parity, and source-diagnostic matrices. Extended
+  Criterion's Core integer-fold workload through 2,048 operation groups and recorded Windows measurements separately.
 
 ### Release
 
