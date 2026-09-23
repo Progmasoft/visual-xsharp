@@ -15,8 +15,16 @@ module Visual.XSharp.TemplateValue
     , templateValueSyntaxSpan
     ) where
 
+import Data.Bits (complement, xor, (.&.), (.|.))
 import Visual.XSharp.AST
-import Data.Bits (complement, shiftL, shiftR, (.&.), (.|.), xor)
+import Visual.XSharp.IntegerEvaluation
+    ( CompileTimeIntegerError (..)
+    , checkCompileTimeInteger
+    , evaluateCompileTimePower
+    , evaluateCompileTimeShiftLeft
+    , evaluateCompileTimeShiftRight
+    , multiplyCompileTimeIntegers
+    )
 
 data TemplateValueError
     = TemplateValueIsNotConstant QualifiedName
@@ -24,6 +32,7 @@ data TemplateValueError
     | TemplateValueFloorDivisionByZero
     | TemplateValueRemainderByZero
     | TemplateValueNegativeExponent Integer
+    | TemplateValueEvaluationLimitExceeded
     | TemplateValueRequiresInteger TemplateValue
     | TemplateValueNegativeArraySize Integer
     deriving (Eq, Ord, Read, Show)
@@ -49,52 +58,62 @@ evaluateFixedArraySize syntax = do
 
 evaluateExact :: TemplateValueSyntax -> Either TemplateValueError ExactValue
 evaluateExact syntax = case syntax of
-    TemplateIntegerSyntax _ value -> Right (ExactInteger value)
-    TemplateCharacterSyntax _ value -> Right (ExactCharacter value)
+    TemplateIntegerSyntax _ value -> ExactInteger <$> checkedTemplateInteger value
+    TemplateCharacterSyntax _ value -> ExactCharacter <$> checkedTemplateInteger value
     TemplateBooleanSyntax _ value -> Right (ExactBoolean value)
     TemplateNameSyntax _ name -> Left (TemplateValueIsNotConstant name)
     TemplateUnarySyntax _ operator operand -> do
         value <- evaluateExact operand
         evaluateUnary operator value
     TemplateBinarySyntax _ operator left right -> do
+        -- Both operands must be exact values before specialization identity can
+        -- be formed; failures are reported here rather than deferred to Core.
         leftValue <- evaluateExact left
         rightValue <- evaluateExact right
         evaluateBinary operator leftValue rightValue
 
 evaluateUnary :: UnaryOperator -> ExactValue -> Either TemplateValueError ExactValue
 evaluateUnary operator value = case operator of
-    UnaryPlus -> ExactInteger <$> requireInteger value
-    UnaryNegate -> ExactInteger . negate <$> requireInteger value
+    UnaryPlus -> requireInteger value >>= (ExactInteger <$>) . checkedTemplateInteger
+    UnaryNegate -> requireInteger value >>= (ExactInteger <$>) . checkedTemplateInteger . negate
     LogicalNot -> ExactBoolean . not <$> requireBooleanContext value
-    BitwiseNot -> ExactInteger . complement <$> requireInteger value
+    BitwiseNot -> requireInteger value >>= (ExactInteger <$>) . checkedTemplateInteger . complement
 
 evaluateBinary :: BinaryOperator -> ExactValue -> ExactValue -> Either TemplateValueError ExactValue
 evaluateBinary operator left right = case operator of
     Add -> integerBinary (+)
     Subtract -> integerBinary (-)
-    Multiply -> integerBinary (*)
+    Multiply -> integerBinaryEither multiplyCompileTimeIntegers
     Divide -> do
         divisor <- requireInteger right
         if divisor == 0
             then Left TemplateValueDivisionByZero
-            else ExactInteger . (`quot` divisor) <$> requireInteger left
+            else do
+                dividend <- requireInteger left
+                ExactInteger <$> checkedTemplateInteger (dividend `quot` divisor)
     FloorDivide -> do
         divisor <- requireInteger right
         if divisor == 0
             then Left TemplateValueFloorDivisionByZero
-            else ExactInteger . (`roundedIntegerDivision` divisor) <$> requireInteger left
+            else do
+                dividend <- requireInteger left
+                ExactInteger <$> checkedTemplateInteger (roundedIntegerDivision dividend divisor)
     Remainder -> do
         divisor <- requireInteger right
         if divisor == 0
             then Left TemplateValueRemainderByZero
-            else ExactInteger . (`rem` divisor) <$> requireInteger left
+            else do
+                dividend <- requireInteger left
+                ExactInteger <$> checkedTemplateInteger (dividend `rem` divisor)
     Power -> do
         exponentValue <- requireInteger right
         if exponentValue < 0
             then Left (TemplateValueNegativeExponent exponentValue)
-            else ExactInteger . (^ exponentValue) <$> requireInteger left
-    ShiftLeft -> integerBinary (\lhs rhs -> shiftL lhs (fromInteger rhs))
-    ShiftRight -> integerBinary (\lhs rhs -> shiftR lhs (fromInteger rhs))
+            else do
+                base <- requireInteger left
+                ExactInteger <$> mapCompileTimeError exponentValue (evaluateCompileTimePower base exponentValue)
+    ShiftLeft -> integerBinaryEither evaluateCompileTimeShiftLeft
+    ShiftRight -> integerBinaryEither evaluateCompileTimeShiftRight
     BitwiseAnd -> integerBinary (.&.)
     BitwiseXor -> integerBinary xor
     BitwiseOr -> integerBinary (.|.)
@@ -110,7 +129,11 @@ evaluateBinary operator left right = case operator of
         integerBinary operation = do
             lhs <- requireInteger left
             rhs <- requireInteger right
-            Right (ExactInteger (operation lhs rhs))
+            ExactInteger <$> checkedTemplateInteger (operation lhs rhs)
+        integerBinaryEither operation = do
+            lhs <- requireInteger left
+            rhs <- requireInteger right
+            ExactInteger <$> mapCompileTimeError rhs (operation lhs rhs)
         comparison operation = do
             lhs <- requireInteger left
             rhs <- requireInteger right
@@ -161,6 +184,7 @@ renderTemplateValueError issue = case issue of
     TemplateValueFloorDivisionByZero -> "template value performs floor division by zero"
     TemplateValueRemainderByZero -> "template value performs remainder by zero"
     TemplateValueNegativeExponent value -> "template value uses a negative integer exponent: " ++ show value
+    TemplateValueEvaluationLimitExceeded -> "template integer expression exceeds the compile-time evaluation limit"
     TemplateValueRequiresInteger _ -> "fixed System.Array size must evaluate to an integer"
     TemplateValueNegativeArraySize value -> "fixed System.Array size cannot be negative: " ++ show value
 
@@ -168,3 +192,12 @@ joinQualified :: [String] -> String
 joinQualified [] = "<empty>"
 joinQualified [part] = part
 joinQualified (part : parts) = part ++ "." ++ joinQualified parts
+
+checkedTemplateInteger :: Integer -> Either TemplateValueError Integer
+checkedTemplateInteger = mapCompileTimeError 0 . checkCompileTimeInteger
+
+mapCompileTimeError :: Integer -> Either CompileTimeIntegerError value -> Either TemplateValueError value
+mapCompileTimeError exponentValue result = case result of
+    Right value -> Right value
+    Left CompileTimeNegativeExponent -> Left (TemplateValueNegativeExponent exponentValue)
+    Left CompileTimeIntegerLimitExceeded -> Left TemplateValueEvaluationLimitExceeded

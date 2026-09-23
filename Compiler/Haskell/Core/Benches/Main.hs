@@ -48,6 +48,8 @@ main = do
                 bgroup "InlineLinearBody" [benchAt size optimizeDigest (coreModuleAt size modules) | size <- inlineSizes]
             , env (pure (CoreModules (floatingFixtures floatingSizes))) $ \modules ->
                 bgroup "ConstantFoldFloating" [benchAt size floatingOptimizeDigest (coreModuleAt size modules) | size <- floatingSizes]
+            , env (pure (CoreModules (integerFixtures integerSizes))) $ \modules ->
+                bgroup "ConstantFoldInteger" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- integerSizes]
             ]
         , bgroup
             "CorePrep"
@@ -65,6 +67,7 @@ main = do
         sizes = [8, 32, 128, 512]
         inlineSizes = [8, 32, 128, 256]
         floatingSizes = [8, 32, 128, 512]
+        integerSizes = [8, 32, 128, 512, 1024, 2048]
 
 benchAt :: Int -> (a -> Int) -> a -> Benchmark
 benchAt size measure input = bench (show size) (whnf measure input)
@@ -101,6 +104,33 @@ inlineFixtures = map (\size -> (size, makeInlineModule size))
 -- round-trip rendering, and fixed-point stability as one real Core workload.
 floatingFixtures :: [Int] -> [(Int, CoreModule)]
 floatingFixtures = map (\size -> (size, makeFloatingModule size))
+
+-- This workload keeps construction outside Criterion's sample and drives the
+-- real fixed-point optimizer through integer power, shifts, bitwise operations,
+-- and addition at a 128-bit destination width.
+integerFixtures :: [Int] -> [(Int, CoreModule)]
+integerFixtures = map (\size -> (size, makeIntegerModule size))
+
+makeIntegerModule :: Int -> CoreModule
+makeIntegerModule size =
+    CoreModule
+        (QualifiedName [Identifier "Core", Identifier "IntegerBenchmarks"])
+        [ CoreFunction
+            (ResolvedName (SymbolId 1) (Identifier "Evaluate"))
+            []
+            integerType
+            [CoreReturn expression]
+        ]
+    where
+        integerType = namedType "ulongint"
+        expression = foldl appendIntegerOperations (typedInteger 0) [0 .. size - 1]
+        appendIntegerOperations accumulated index =
+            let base = toInteger (2 + index `mod` 3)
+                power = CorePrimitive CorePower [typedInteger base, typedInteger 7] integerType
+                shifted = CorePrimitive CoreShiftLeft [power, typedInteger (toInteger (index `mod` 8))] integerType
+                mixed = CorePrimitive CoreBitwiseXor [accumulated, shifted] integerType
+             in CorePrimitive CoreAdd [mixed, typedInteger 1] integerType
+        typedInteger value = CoreLiteral (CoreInteger value) integerType
 
 makeFloatingModule :: Int -> CoreModule
 makeFloatingModule size =
@@ -161,6 +191,9 @@ optimizeDigest value = case optimizeCoreWith inlineBenchmarkOptions value of
 
 floatingOptimizeDigest :: CoreModule -> Int
 floatingOptimizeDigest value = either length (coreDigest . optimizedCore) (optimizeCoreWith defaultOptimizerOptions value)
+
+integerOptimizeDigest :: CoreModule -> Int
+integerOptimizeDigest value = either length (coreDigest . optimizedCore) (optimizeCoreWith defaultOptimizerOptions value)
 
 inlineBenchmarkOptions :: OptimizerOptions
 inlineBenchmarkOptions =

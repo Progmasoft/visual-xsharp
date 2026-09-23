@@ -167,12 +167,55 @@ expression whose folded result does not fit.
 
 ```vxs
 byte valid = 100 + 27;
-byte overflow = 100 + 28; // compile-time error
+byte overflow = 100 + 28; -- compile-time error
 ```
 
 Division, rounded division, and remainder by a constant zero are diagnosed by
 the type-checking pipeline. Nonconstant arithmetic remains available for
 later Core optimization and native lowering.
+
+Compile-time integer evaluation is exact but bounded to magnitudes below
+`2^65536`. This deterministic resource ceiling applies to intermediate
+compile-time calculations, including template values; it is not a source
+integer width and does not change the built-in scalar ranges above. An
+expression that exceeds the ceiling receives a compile-time diagnostic instead
+of forcing the compiler to allocate an unbounded integer. Power uses bounded
+exponentiation, and shifts check their amount before converting it to a host
+index. The Core optimizer separately leaves any operation it cannot safely
+fold as an explicit Core primitive.
+
+The exact accepted interval is symmetric and excludes both endpoints:
+
+| Compile-time integer | Accepted? |
+|---|---|
+| `2^65536 - 1` | Yes |
+| `2^65536` | No |
+| `1 - 2^65536` | Yes |
+| `-2^65536` | No |
+
+For example, the resource boundary is independent of the destination type:
+`2 ** 65535` is a bounded compile-time integer value, while `2 ** 65536`
+exceeds the evaluator's magnitude ceiling before a narrow destination-range
+check is attempted. Conversely, `0 ** 9223372036854775807` remains inexpensive
+and exact because the evaluator handles the zero-base identity without
+constructing an exponent-sized intermediate. The same identity behavior is
+used when fixed-array dimensions are evaluated from template syntax.
+
+This ceiling applies to intermediate results as well as source literals. The
+compiler checks multiplication's minimum possible result width before building
+an oversized product, then checks the exact value for products near the limit.
+Exponentiation reuses that guard at each step instead of first constructing the
+final power. The check is shared by ordinary constant diagnostics and generic
+template values such as fixed `System.Array` dimensions; their diagnostic codes
+remain specific to their respective contexts.
+
+The limit is intentionally not a promise that every in-range compile-time
+expression has constant-time cost. It is a deterministic upper bound on integer
+magnitude and intermediate allocation, with exponentiation by squaring and
+preflight shift/multiply checks preventing work proportional to a huge exponent
+or shift distance. It does not alter runtime arithmetic, choose a wider source
+type, or authorize an implicit conversion. Fixed-width Core folding still
+requires its own operand-width and result-range proof.
 
 The semantic rule engine is separate from diagnostic construction. Analyzer
 and other compiler clients can therefore ask the same questions—whether a
@@ -198,6 +241,11 @@ int invalid = left + wide; // invalid: long and int differ
 Arithmetic operators preserve the operand scalar type. Relational and
 equality operators produce `bool`. Logical operators accept values valid in
 boolean numeric context and also produce `bool`.
+
+Integer bitwise complement (`!`) also preserves the operand type and uses that
+type's declared width. For example, `!0` has value `255` when its selected
+type is `ubyte`; it does not sign-extend an unbounded host integer into the
+unsigned result.
 
 | Operator class | Operand contract | Result |
 |---|---|---|

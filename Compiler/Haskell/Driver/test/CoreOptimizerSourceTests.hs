@@ -32,6 +32,8 @@ coreOptimizerSourceTests =
     , ("source pure call chains converge", sourceInlineChain)
     , ("source predicates inline before branch selection", sourceInlinePredicate)
     , ("floating rounded division folds to an int through the source pipeline", sourceFloatingRoundedDivision)
+    , ("unsigned source bitwise complement folds at its declared width", sourceUnsignedBitwiseComplement)
+    , ("unsigned source bitwise complement masks away the sign extension", sourceUnsignedBitwiseZeroComplement)
     , ("source repeated parameters inline for literals", sourceInlineRepeated)
     , ("source unused literal arguments may disappear", sourceInlineUnused)
     , ("source immutable helper locals inline", sourceInlineLocal)
@@ -223,6 +225,16 @@ sourceInlinePredicate = case compiledProgram members of
 sourceFloatingRoundedDivision :: Bool
 sourceFloatingRoundedDivision = case compiled "return 7.8 // 2.0;" of
     Just artifacts -> singleReturn artifacts == Just (CoreLiteral (CoreInteger 4) intType)
+    Nothing -> False
+
+sourceUnsignedBitwiseComplement :: Bool
+sourceUnsignedBitwiseComplement = case compiledProgram ["ubyte Value() { return !0; }"] of
+    Just artifacts -> lastReturn artifacts == Just (CoreLiteral (CoreInteger 255) (namedType "ubyte"))
+    Nothing -> False
+
+sourceUnsignedBitwiseZeroComplement :: Bool
+sourceUnsignedBitwiseZeroComplement = case compiledProgram ["ubyte Value() { return !255; }"] of
+    Just artifacts -> lastReturn artifacts == Just (CoreLiteral (CoreInteger 0) (namedType "ubyte"))
     Nothing -> False
 
 sourceInlineRepeated :: Bool

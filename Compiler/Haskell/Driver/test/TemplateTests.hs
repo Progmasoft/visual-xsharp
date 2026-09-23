@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 module TemplateTests (templateTests) where
 
+import Data.Bits (shiftL)
 import Data.List (isInfixOf)
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
@@ -41,6 +42,22 @@ parserAndTypeTests =
     , ("division by zero in fixed size is diagnosed", compileReturn "[int; 4 / 0]" `hasCode` "VXT0016")
     , ("floor division by zero in fixed size is diagnosed", compileReturn "[int; 4 // 0]" `hasCode` "VXT0016")
     , ("remainder by zero in fixed size is diagnosed", compileReturn "[int; 4 % 0]" `hasCode` "VXT0016")
+    ,
+        ( "oversized power in fixed size is rejected without host-sized allocation"
+        , compileReturn "[int; 2 ** 9223372036854775807]" `hasCode` "VXT0016"
+        )
+    ,
+        ( "zero power in fixed size bypasses an enormous exponent"
+        , typedReturn "[int; 0 ** 9223372036854775807]" == Just (fixed intType 0)
+        )
+    ,
+        ( "unit power in fixed size bypasses an enormous exponent"
+        , typedReturn "[int; 1 ** 9223372036854775807]" == Just (fixed intType 1)
+        )
+    , ("over-limit power in fixed size is diagnosed", compileReturn "[int; 2 ** 65536]" `hasCode` "VXT0016")
+    , ("over-limit shift in fixed size is diagnosed", compileReturn "[int; 1 << 65536]" `hasCode` "VXT0016")
+    , ("zero shift in fixed size bypasses a huge intermediate", typedReturn "[int; 0 << 65536]" == Just (fixed intType 0))
+    , ("huge right shift in fixed size saturates", typedReturn "[int; 5 >> 65536]" == Just (fixed intType 0))
     , ("runtime call cannot be a template value", compileReturn "[int; Size()]" `hasCode` "VXP0018")
     , ("explicit numeric template argument is a value", typedReturn "Buffer<32>" == Just (applied "Buffer" [value 32]))
     ,
@@ -103,8 +120,57 @@ evaluationTests =
     , ("rounded division chooses the nearest integer", binaryValue FloorDivide 7 3 == Right (IntegerTemplateValue 2))
     , ("remainder follows dividend", binaryValue Remainder (-7) 2 == Right (IntegerTemplateValue (-1)))
     , ("power evaluates exactly", binaryValue Power 3 4 == Right (IntegerTemplateValue 81))
+    ,
+        ( "compile-time integer limit includes its largest positive value"
+        , evaluateTemplateValue (integerSyntax (compileTimeIntegerMagnitude - 1))
+            == Right (IntegerTemplateValue (compileTimeIntegerMagnitude - 1))
+        )
+    ,
+        ( "compile-time integer limit rejects its first positive overflow"
+        , evaluateTemplateValue (integerSyntax compileTimeIntegerMagnitude) == Left TemplateValueEvaluationLimitExceeded
+        )
+    ,
+        ( "zero power handles a maximum-width exponent directly"
+        , binaryValue Power 0 (2 ^ (63 :: Int) - 1) == Right (IntegerTemplateValue 0)
+        )
+    ,
+        ( "one power handles a maximum-width exponent directly"
+        , binaryValue Power 1 (2 ^ (63 :: Int) - 1) == Right (IntegerTemplateValue 1)
+        )
+    ,
+        ( "large powers stop at the compile-time integer limit"
+        , binaryValue Power 2 (2 ^ (63 :: Int) - 1) == Left TemplateValueEvaluationLimitExceeded
+        )
+    ,
+        ( "power accepts its largest representable intermediate"
+        , binaryValue Power 2 65535 == Right (IntegerTemplateValue (2 ^ (65535 :: Int)))
+        )
+    ,
+        ( "power rejects the first over-limit intermediate"
+        , binaryValue Power 2 65536 == Left TemplateValueEvaluationLimitExceeded
+        )
     , ("shift-left evaluates exactly", binaryValue ShiftLeft 3 4 == Right (IntegerTemplateValue 48))
     , ("shift-right evaluates exactly", binaryValue ShiftRight 48 4 == Right (IntegerTemplateValue 3))
+    ,
+        ( "left shift accepts its largest representable intermediate"
+        , binaryValue ShiftLeft 1 65535 == Right (IntegerTemplateValue (2 ^ (65535 :: Int)))
+        )
+    ,
+        ( "left shift rejects the first over-limit result"
+        , binaryValue ShiftLeft 1 65536 == Left TemplateValueEvaluationLimitExceeded
+        )
+    ,
+        ( "zero left shift handles a maximum-width count directly"
+        , binaryValue ShiftLeft 0 (2 ^ (63 :: Int) - 1) == Right (IntegerTemplateValue 0)
+        )
+    ,
+        ( "large left shifts stop at the compile-time integer limit"
+        , binaryValue ShiftLeft 1 (2 ^ (63 :: Int) - 1) == Left TemplateValueEvaluationLimitExceeded
+        )
+    ,
+        ( "large arithmetic right shift saturates to the sign value"
+        , binaryValue ShiftRight (-3) (2 ^ (63 :: Int) - 1) == Right (IntegerTemplateValue (-1))
+        )
     , ("bitwise and evaluates exactly", binaryValue BitwiseAnd 14 11 == Right (IntegerTemplateValue 10))
     , ("bitwise xor evaluates exactly", binaryValue BitwiseXor 14 11 == Right (IntegerTemplateValue 5))
     , ("bitwise or evaluates exactly", binaryValue BitwiseOr 8 3 == Right (IntegerTemplateValue 11))
@@ -311,6 +377,9 @@ hasCode result code = case result of
 
 spanValue :: SourceSpan
 spanValue = SourceSpan "template-test.vxs" (SourcePosition 1 1) (SourcePosition 1 2)
+
+compileTimeIntegerMagnitude :: Integer
+compileTimeIntegerMagnitude = 1 `shiftL` 65536
 
 integerSyntax :: Integer -> TemplateValueSyntax
 integerSyntax = TemplateIntegerSyntax spanValue

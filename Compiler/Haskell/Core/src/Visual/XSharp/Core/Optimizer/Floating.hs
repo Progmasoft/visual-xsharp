@@ -50,6 +50,13 @@ data FloatingValue
     | Finite Bool Rational
     deriving (Eq, Ord, Read, Show)
 
+-- The optimizer may decline to fold a legal literal without changing the
+-- language's accepted input. This cap keeps exact Rational construction
+-- bounded for externally supplied Core while leaving ample headroom over the
+-- 36 significant decimal digits needed to round-trip binary128.
+maximumFoldedSignificantDigits :: Int
+maximumFoldedSignificantDigits = 512
+
 -- The Boolean records the sign bit even when the rational magnitude is zero.
 -- Rational itself has no representation for negative zero, so discarding this
 -- bit would make `-0.0 + -0.0` observably wrong.
@@ -96,10 +103,17 @@ parseDecimal spelling = do
     if null digits || any (not . isAsciiDigit) digits
         then Nothing
         else
-            let coefficient = read digits
-                scale = decimalExponent - toInteger (length fraction)
-                significantDigits = max 1 (length (dropWhile (== '0') digits))
-             in Just (coefficient, scale, significantDigits)
+            let leadingZeroesRemoved = dropWhile (== '0') digits
+             in if null leadingZeroesRemoved
+                    then Just (0, 0, 1)
+                    else
+                        let trailingZeroes = length (takeWhile (== '0') (reverse leadingZeroesRemoved))
+                            significantSpelling = take (length leadingZeroesRemoved - trailingZeroes) leadingZeroesRemoved
+                            significantDigits = length significantSpelling
+                            scale = decimalExponent - toInteger (length fraction) + toInteger trailingZeroes
+                         in if significantDigits > maximumFoldedSignificantDigits
+                                then Nothing
+                                else Just (read significantSpelling, scale, significantDigits)
 
 readSignedDecimal :: String -> Maybe Integer
 readSignedDecimal spelling = case spelling of
@@ -109,7 +123,7 @@ readSignedDecimal spelling = case spelling of
     digits -> readDigits False digits
     where
         readDigits negative digits
-            | null digits || any (not . isAsciiDigit) digits = Nothing
+            | null digits || length digits > 19 || any (not . isAsciiDigit) digits = Nothing
             | otherwise =
                 let value = read digits
                  in Just (if negative then negate value else value)

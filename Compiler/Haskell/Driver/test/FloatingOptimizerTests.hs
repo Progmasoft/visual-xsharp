@@ -31,6 +31,9 @@ floatingOptimizerTests =
         ( "binary16 halfway rounds to the even upper significand"
         , resultIs CoreAdd ["1.0", "1.46484375e-3"] sfloatType (CoreFloating "1.002e0")
         )
+    , ("binary32 halfway rounds to the even lower significand", halfwayRoundsDown lfloatType 24)
+    , ("binary64 halfway rounds to the even lower significand", halfwayRoundsDown floatType 53)
+    , ("binary128 halfway rounds to the even lower significand", halfwayRoundsDown doubleType 113)
     ,
         ( "binary16 minimum subnormal survives exact addition"
         , resultIs CoreAdd ["5.9604644775390625e-8", "5.9604644775390625e-8"] sfloatType (CoreFloating "1.0e-7")
@@ -154,6 +157,10 @@ floatingOptimizerTests =
     , ("logical truthiness treats NaN as nonzero", logicalNot "nan" (CoreBoolean False))
     , ("logical truthiness treats infinity as nonzero", logicalNot "inf" (CoreBoolean False))
     , ("unsupported floating power stays explicit", powerRemainsExplicit)
+    , ("long runs of insignificant zeroes fold through normalized decimal digits", longZeroRunsFold)
+    , ("the significant-digit fold limit is inclusive", maximumSupportedDecimalFolds)
+    , ("oversized significant decimal input remains a valid explicit primitive", oversizedDecimalRemainsExplicit)
+    , ("oversized exponent text remains a valid explicit primitive", oversizedExponentRemainsExplicit)
     , ("short decimal rendering round-trips through the Core verifier", renderedLiteralVerifies)
     ]
 
@@ -210,6 +217,15 @@ binary128RetainsSmallIncrement =
         Just (CoreLiteral (CoreFloating spelling) _) -> spelling /= "1.0e0"
         _ -> False
 
+halfwayRoundsDown :: Type -> Int -> Bool
+halfwayRoundsDown valueType precision =
+    resultIs CoreAdd ["1.0", exactHalfUlp precision] valueType (CoreFloating "1.0e0")
+
+exactHalfUlp :: Int -> String
+exactHalfUlp precision = "0." ++ replicate (precision - length digits) '0' ++ digits
+    where
+        digits = show (5 ^ precision :: Integer)
+
 roundedQuotientRetained :: Bool
 roundedQuotientRetained =
     case resultOf CoreFloorDivide ["1e100", "1.0"] floatType integerResultType of
@@ -255,6 +271,32 @@ renderedLiteralVerifies :: Bool
 renderedLiteralVerifies = case resultOf CoreAdd ["0.1", "0.2"] floatType floatType of
     Just literal@CoreLiteral {} -> either (const False) (const True) (verifyCore (testModule floatType literal))
     _ -> False
+
+longZeroRunsFold :: Bool
+longZeroRunsFold =
+    case resultOf CoreAdd [spelling, "0.0"] doubleType doubleType of
+        Just literal@(CoreLiteral (CoreFloating "1.0e-1001") _) -> either (const False) (const True) (verifyCore (testModule doubleType literal))
+        _ -> False
+    where
+        spelling = "0." ++ replicate 1000 '0' ++ "1" ++ replicate 1000 '0'
+
+maximumSupportedDecimalFolds :: Bool
+maximumSupportedDecimalFolds =
+    case resultOf CoreAdd ["1" ++ replicate 511 '0', "0.0"] doubleType doubleType of
+        Just CoreLiteral {} -> True
+        _ -> False
+
+oversizedDecimalRemainsExplicit :: Bool
+oversizedDecimalRemainsExplicit =
+    case resultOf CoreAdd [replicate 513 '1', "0.0"] doubleType doubleType of
+        Just CorePrimitive {} -> True
+        _ -> False
+
+oversizedExponentRemainsExplicit :: Bool
+oversizedExponentRemainsExplicit =
+    case resultOf CoreAdd ["1e" ++ replicate 20 '9', "0.0"] doubleType doubleType of
+        Just CorePrimitive {} -> True
+        _ -> False
 
 resultOf :: CorePrimitive -> [String] -> Type -> Type -> Maybe CoreExpression
 resultOf primitive spellings operand value =

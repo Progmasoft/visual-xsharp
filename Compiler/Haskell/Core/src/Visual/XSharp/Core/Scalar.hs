@@ -10,6 +10,8 @@ module Visual.XSharp.Core.Scalar
     , isCoreIntegerType
     , isCoreFloatingType
     , isCoreNumericType
+    , coreIntegerBitWidth
+    , coreIntegerIsSigned
     , integerFitsCoreType
     , validCoreFloatingSpelling
     ) where
@@ -21,19 +23,7 @@ coreTypeSpelling (NamedType (QualifiedName [Identifier name]) []) = name
 coreTypeSpelling _ = ""
 
 coreIntegerTypeNames :: [String]
-coreIntegerTypeNames =
-    [ "char"
-    , "byte"
-    , "short"
-    , "long"
-    , "int"
-    , "longint"
-    , "ubyte"
-    , "ushort"
-    , "ulong"
-    , "uint"
-    , "ulongint"
-    ]
+coreIntegerTypeNames = map fst integerLayouts
 
 coreFloatingTypeNames :: [String]
 coreFloatingTypeNames = ["sfloat", "lfloat", "float", "double"]
@@ -50,28 +40,40 @@ isCoreFloatingType valueType = coreTypeSpelling valueType `elem` coreFloatingTyp
 isCoreNumericType :: Type -> Bool
 isCoreNumericType valueType = coreTypeSpelling valueType `elem` coreNumericTypeNames
 
+{- | Return the source-level storage width for a built-in integer type.
+Keeping this catalog next to range validation lets optimizer operations
+reject unsafe shifts without duplicating the language's integer table.
+-}
+coreIntegerBitWidth :: Type -> Maybe Int
+coreIntegerBitWidth valueType = snd <$> lookup (coreTypeSpelling valueType) integerLayouts
+
+-- | Report whether a scalar integer type uses a sign bit.
+coreIntegerIsSigned :: Type -> Maybe Bool
+coreIntegerIsSigned valueType = fst <$> lookup (coreTypeSpelling valueType) integerLayouts
+
+integerLayouts :: [(String, (Bool, Int))]
+integerLayouts =
+    [ ("char", (False, 32))
+    , ("byte", (True, 8))
+    , ("short", (True, 16))
+    , ("long", (True, 32))
+    , ("int", (True, 64))
+    , ("longint", (True, 128))
+    , ("ubyte", (False, 8))
+    , ("ushort", (False, 16))
+    , ("ulong", (False, 32))
+    , ("uint", (False, 64))
+    , ("ulongint", (False, 128))
+    ]
+
 integerFitsCoreType :: Type -> Integer -> Bool
-integerFitsCoreType valueType value = case lookup (coreTypeSpelling valueType) integerRanges of
-    Just (minimumValue, maximumValue) -> value >= minimumValue && value <= maximumValue
+integerFitsCoreType valueType value = case lookup (coreTypeSpelling valueType) integerLayouts of
+    Just (isSigned, width) ->
+        let magnitude = 2 ^ (width - if isSigned then 1 else 0)
+            minimumValue = if isSigned then negate magnitude else 0
+            maximumValue = magnitude - 1
+         in value >= minimumValue && value <= maximumValue
     Nothing -> False
-    where
-        signed :: Int -> (Integer, Integer)
-        signed width = (negate (2 ^ (width - 1)), 2 ^ (width - 1) - 1)
-        unsigned :: Int -> (Integer, Integer)
-        unsigned width = (0, 2 ^ width - 1)
-        integerRanges =
-            [ ("char", unsigned 32)
-            , ("byte", signed 8)
-            , ("short", signed 16)
-            , ("long", signed 32)
-            , ("int", signed 64)
-            , ("longint", signed 128)
-            , ("ubyte", unsigned 8)
-            , ("ushort", unsigned 16)
-            , ("ulong", unsigned 32)
-            , ("uint", unsigned 64)
-            , ("ulongint", unsigned 128)
-            ]
 
 validCoreFloatingSpelling :: String -> Bool
 validCoreFloatingSpelling spelling

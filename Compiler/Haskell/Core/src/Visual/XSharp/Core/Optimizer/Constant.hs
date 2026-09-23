@@ -12,7 +12,7 @@ import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Floating (floatingTruthValue, foldFloatingPrimitive)
-import Visual.XSharp.Core.Scalar
+import Visual.XSharp.Core.Scalar (coreIntegerBitWidth, coreIntegerIsSigned, integerFitsCoreType)
 
 type ConstantEnvironment = Map SymbolId CoreExpression
 
@@ -113,9 +113,10 @@ evaluatePrimitive primitive arguments valueType =
         (CoreFloorDivide, Just [a, b]) | b /= 0 -> integer (roundedIntegerDivision a b)
         (CoreRemainder, Just [a, b]) | b /= 0 -> integer (a `rem` b)
         (CoreNegate, Just [value]) -> integer (-value)
-        (CorePower, Just [base, exponentValue]) | exponentValue >= 0 -> integer (base ^ exponentValue)
-        (CoreShiftLeft, Just [value, amount]) | amount >= 0 -> integer (shiftL value (fromInteger amount))
-        (CoreShiftRight, Just [value, amount]) | amount >= 0 -> integer (shiftR value (fromInteger amount))
+        (CorePower, Just [base, exponentValue]) -> integerPower base exponentValue
+        (CoreShiftLeft, Just [value, amount]) -> shiftInteger shiftL value amount
+        (CoreShiftRight, Just [value, amount]) -> shiftInteger shiftR value amount
+        (CoreBitwiseNot, Just [value]) -> bitwiseComplement value
         (CoreBitwiseAnd, Just [a, b]) -> integer (a .&. b)
         (CoreBitwiseXor, Just [a, b]) -> integer (xor a b)
         (CoreBitwiseOr, Just [a, b]) -> integer (a .|. b)
@@ -134,6 +135,46 @@ evaluatePrimitive primitive arguments valueType =
             | integerFitsCoreType valueType result = Just (CoreLiteral (CoreInteger result) valueType)
             | otherwise = Nothing
         boolean result = CoreLiteral (CoreBoolean result) boolType
+        integerPower base exponentValue = boundedPower base exponentValue
+        boundedPower base exponentValue
+            | exponentValue < 0 = Nothing
+            | base == 0 = integer (if exponentValue == 0 then 1 else 0)
+            | base == 1 = integer 1
+            | base == -1 = integer (if even exponentValue then 1 else -1)
+            | otherwise = powerLoop 1 base exponentValue
+        powerLoop accumulated factor remaining
+            | remaining == 0 = integer accumulated
+            | otherwise =
+                let (nextAccumulated, canContinue) =
+                        if odd remaining
+                            then
+                                let nextProduct = accumulated * factor
+                                 in (nextProduct, integerFitsCoreType valueType nextProduct)
+                            else (accumulated, True)
+                    nextRemaining = remaining `quot` 2
+                 in if not canContinue
+                        then Nothing
+                        else
+                            if nextRemaining == 0
+                                then integer nextAccumulated
+                                else
+                                    let squaredFactor = factor * factor
+                                     in if integerFitsCoreType valueType squaredFactor
+                                            then powerLoop nextAccumulated squaredFactor nextRemaining
+                                            else Nothing
+        shiftInteger shift value amount = do
+            width <- coreIntegerBitWidth valueType
+            if amount < 0 || amount >= toInteger width
+                then Nothing
+                else integer (shift value (fromInteger amount))
+        bitwiseComplement value = do
+            width <- coreIntegerBitWidth valueType
+            isSigned <- coreIntegerIsSigned valueType
+            let complemented =
+                    if isSigned
+                        then complement value
+                        else complement value .&. ((1 `shiftL` width) - 1)
+            integer complemented
 
 roundedIntegerDivision :: Integer -> Integer -> Integer
 roundedIntegerDivision dividend divisor =

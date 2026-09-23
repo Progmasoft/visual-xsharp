@@ -3,6 +3,7 @@
 module Main (main) where
 
 import ClosureTests (closureTests)
+import CompileTimeParityTests (compileTimeParityTests)
 import Control.Exception (finally)
 import CoreInliningTests (coreInliningTests)
 import CoreLinearInliningTests (coreLinearInliningTests)
@@ -14,6 +15,7 @@ import Data.Word (Word8)
 import DiagnosticProtocolTests (diagnosticProtocolTests)
 import DiagnosticSideChannelTests (diagnosticSideChannelTests)
 import FloatingOptimizerTests (floatingOptimizerTests)
+import IntegerEvaluationTests (integerEvaluationTests)
 import MonomorphizationTests (monomorphizationTests)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
@@ -134,6 +136,8 @@ main = do
     mapM_ (uncurry check) diagnosticProtocolTests
     mapM_ (uncurry checkIO) diagnosticSideChannelTests
     mapM_ (uncurry check) numericTests
+    mapM_ (uncurry check) integerEvaluationTests
+    mapM_ (uncurry check) compileTimeParityTests
     mapM_ (uncurry check) patternTests
     mapM_ (uncurry check) monomorphizationTests
     mapM_ (uncurry check) parserContractTests

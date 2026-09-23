@@ -15,6 +15,7 @@ library
         Visual.XSharp.ConstantEvaluation
         Visual.XSharp.BuiltinTypes
         Visual.XSharp.Frontend
+        Visual.XSharp.IntegerEvaluation
         Visual.XSharp.NumericSemantics
         Visual.XSharp.Resolver.NameResolution
         Visual.XSharp.Resolver.Renamer

@@ -8,39 +8,75 @@ module Visual.XSharp.ConstantEvaluation
     , renderConstantIntegerError
     ) where
 
+import Data.Bits (complement, shiftL, xor, (.&.), (.|.))
 import Visual.XSharp.AST
-import Data.Bits (complement, shiftL, shiftR, (.&.), (.|.), xor)
+import Visual.XSharp.BuiltinTypes
+    ( ScalarFamily (UnsignedIntegerFamily)
+    , scalarTypeFamily
+    , scalarTypeWidth
+    , typeToScalarType
+    )
+import Visual.XSharp.IntegerEvaluation
+    ( CompileTimeIntegerError (..)
+    , checkCompileTimeInteger
+    , evaluateCompileTimePower
+    , evaluateCompileTimeShiftLeft
+    , evaluateCompileTimeShiftRight
+    , multiplyCompileTimeIntegers
+    )
 
 data ConstantIntegerError
     = ConstantDivisionByZero
     | ConstantFloorDivisionByZero
     | ConstantRemainderByZero
     | ConstantNegativeExponent
+    | ConstantEvaluationLimitExceeded
     deriving (Eq, Ord, Read, Show)
 
 -- Non-constant expressions return Nothing. A definite arithmetic failure is
 -- retained as Left so callers can diagnose it without pretending the entire
 -- expression ceased to be constant.
-evaluateConstantInteger :: Expression name annotation -> Either ConstantIntegerError (Maybe Integer)
+-- The resource error is likewise retained: treating an oversized expression
+-- as merely nonconstant would let it bypass the frontend's compile-time bound.
+evaluateConstantInteger :: Expression name Type -> Either ConstantIntegerError (Maybe Integer)
 evaluateConstantInteger expression = case expression of
     LiteralExpression _ literal _ -> case literal of
-        IntegerLiteral value -> pure (Just value)
-        CharacterLiteral value -> pure (Just value)
-        BooleanLiteral value -> pure (Just (if value then 1 else 0))
+        IntegerLiteral value -> checkedValue value
+        CharacterLiteral value -> checkedValue value
+        BooleanLiteral value -> checkedValue (if value then 1 else 0)
         _ -> pure Nothing
-    UnaryExpression _ operator value _ -> do
+    UnaryExpression _ operator value resultType -> do
         operand <- evaluateConstantInteger value
-        pure $ case (operator, operand) of
-            (UnaryPlus, Just number) -> Just number
-            (UnaryNegate, Just number) -> Just (-number)
-            (LogicalNot, Just number) -> Just (if number == 0 then 1 else 0)
-            (BitwiseNot, Just number) -> Just (complement number)
-            _ -> Nothing
+        case (operator, operand) of
+            (UnaryPlus, Just number) -> checkedMaybe number
+            (UnaryNegate, Just number) -> checkedMaybe (-number)
+            (LogicalNot, Just number) -> checkedMaybe (if number == 0 then 1 else 0)
+            (BitwiseNot, Just number) -> checkedMaybe (typedBitwiseComplement resultType number)
+            _ -> pure Nothing
     BinaryExpression _ operator left right _ -> do
         leftValue <- evaluateConstantInteger left
         rightValue <- evaluateConstantInteger right
         evaluateBinary operator leftValue rightValue
     _ -> pure Nothing
+
+typedBitwiseComplement :: Type -> Integer -> Integer
+typedBitwiseComplement resultType value = case typeToScalarType resultType of
+    Just scalar
+        | scalarTypeFamily scalar == UnsignedIntegerFamily ->
+            complement value .&. ((1 `shiftL` scalarTypeWidth scalar) - 1)
+    _ -> complement value
+
+checkedValue :: Integer -> Either ConstantIntegerError (Maybe Integer)
+checkedValue value = Just <$> mapLimitError (checkCompileTimeInteger value)
+
+checkedMaybe :: Integer -> Either ConstantIntegerError (Maybe Integer)
+checkedMaybe value = Just <$> mapLimitError (checkCompileTimeInteger value)
+
+mapLimitError :: Either CompileTimeIntegerError value -> Either ConstantIntegerError value
+mapLimitError result = case result of
+    Right value -> Right value
+    Left CompileTimeNegativeExponent -> Left ConstantNegativeExponent
+    Left CompileTimeIntegerLimitExceeded -> Left ConstantEvaluationLimitExceeded
 
 evaluateBinary :: BinaryOperator -> Maybe Integer -> Maybe Integer -> Either ConstantIntegerError (Maybe Integer)
 evaluateBinary _ Nothing _ = pure Nothing
@@ -48,7 +84,7 @@ evaluateBinary _ _ Nothing = pure Nothing
 evaluateBinary operator (Just left) (Just right) = case operator of
     Add -> value (left + right)
     Subtract -> value (left - right)
-    Multiply -> value (left * right)
+    Multiply -> Just <$> mapLimitError (multiplyCompileTimeIntegers left right)
     Divide
         | right == 0 -> Left ConstantDivisionByZero
         | otherwise -> value (left `quot` right)
@@ -60,9 +96,9 @@ evaluateBinary operator (Just left) (Just right) = case operator of
         | otherwise -> value (left `rem` right)
     Power
         | right < 0 -> Left ConstantNegativeExponent
-        | otherwise -> value (left ^ right)
-    ShiftLeft -> value (shiftL left (fromInteger right))
-    ShiftRight -> value (shiftR left (fromInteger right))
+        | otherwise -> Just <$> mapLimitError (evaluateCompileTimePower left right)
+    ShiftLeft -> Just <$> mapLimitError (evaluateCompileTimeShiftLeft left right)
+    ShiftRight -> Just <$> mapLimitError (evaluateCompileTimeShiftRight left right)
     BitwiseAnd -> value (left .&. right)
     BitwiseXor -> value (xor left right)
     BitwiseOr -> value (left .|. right)
@@ -75,7 +111,7 @@ evaluateBinary operator (Just left) (Just right) = case operator of
     LogicalAnd -> boolean (left /= 0 && right /= 0)
     LogicalOr -> boolean (left /= 0 || right /= 0)
     where
-        value = pure . Just
+        value number = Just <$> mapLimitError (checkCompileTimeInteger number)
         boolean result = value (if result then 1 else 0)
 
 -- `//` is nearest-integer division with exact halves moving away from zero.
@@ -94,3 +130,4 @@ renderConstantIntegerError issue = case issue of
     ConstantFloorDivisionByZero -> "constant floor division by zero"
     ConstantRemainderByZero -> "constant remainder by zero"
     ConstantNegativeExponent -> "constant integer exponent cannot be negative"
+    ConstantEvaluationLimitExceeded -> "constant integer expression exceeds the compile-time evaluation limit"

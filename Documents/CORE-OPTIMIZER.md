@@ -144,10 +144,88 @@ The integer operations currently folded are:
 | rounded divide | nearest integer, with exact halves away from zero |
 | remainder | remainder paired with truncating division |
 | negate | exact unary negation followed by range validation |
+| power | bounded exponentiation by squaring; unsupported or overflowing results remain explicit |
+| bit shifts | fold only nonnegative counts smaller than the operand width |
+| bitwise complement | complement within the declared signed or unsigned width |
 | comparisons | a boolean literal result |
 
 Division, rounded division, and remainder by zero remain explicit. Removing them
 would erase the later stage's required failure behavior.
+
+Integer power never asks the host to construct the full mathematical result
+before checking its destination. The optimizer bounds each multiplication by
+the Core result type and stops as soon as the result cannot fit. Bases `0`,
+`1`, and `-1` are handled directly, so their result does not require a loop
+proportional to a potentially untrusted exponent. A negative exponent or an
+overflowing result stays as a primitive for the later stage to diagnose or
+lower; folding does not invent a wraparound rule.
+
+Core shift primitives accept an integer count in the operand's type, which can
+be wider than the host `Int`. The optimizer checks the count against the
+operand width before converting it to `Int` or allocating a shifted integer.
+Negative and out-of-width counts remain explicit. This avoids both a host-width
+truncation bug and work proportional to artifact-controlled shift counts.
+
+Bitwise complement is evaluated at the declared scalar width. Signed types use
+the corresponding two's-complement result; unsigned types mask away every bit
+above the declared width. The shared integer layout catalog supplies width,
+signedness, and range checks, so those facts cannot silently drift between
+verification and optimization.
+
+The frontend's constant-expression and template-value evaluators have a
+separate 65,536-bit implementation ceiling. This is deliberately much wider
+than any built-in scalar and bounds work on source expressions before a value
+is narrowed to its declared type. It is not a runtime integer width. Power uses
+exponentiation by squaring; shifts validate an arbitrary-precision count before
+converting it to a host index. A nonconstant AST form stays nonconstant; it is
+not treated as an evaluator failure. Multiplication uses operand bit lengths to
+reject a product that cannot fit before building the full intermediate.
+
+The accepted compile-time domain is the half-open interval
+`(-2^65536, 2^65536)`. Values on either excluded edge produce an evaluation
+diagnostic; they are never wrapped, clamped, or silently retyped. The bound
+belongs only to compile-time work. Runtime integer types retain their declared
+8-, 16-, 32-, 64-, and 128-bit ranges, and the Core optimizer continues to
+preserve a fixed-width operation when folding would leave that range.
+
+`IntegerEvaluation` is the single resource-policy module used by constant
+diagnostics and template-value evaluation. The callers retain their own
+diagnostic vocabularies, but share exact boundary checks, power, multiplication,
+and shift behavior. This prevents a fixed-array size and an ordinary constant
+expression from accepting different magnitudes merely because they enter
+through different frontend APIs.
+
+The multiplication guard uses a cheap mathematical lower bound before asking
+GHC's arbitrary-precision `Integer` implementation to construct a product. If
+the two operand bit lengths prove that the result must exceed 65,536 bits, the
+operation fails immediately. Products near the boundary are still computed and
+checked exactly; the lower bound cannot reject a valid edge result. Exponentiation
+by squaring applies this same guard to every accumulated product and square.
+The exact identities for bases `0`, `1`, and `-1` avoid exponent-sized work for
+those results, including a very large exponent.
+
+Left-shift evaluation checks the value's bit length plus the requested distance
+before allocating the shifted integer. An already-zero value needs no shifted
+result. Right shifts compare their arbitrary-precision count against the
+maximum result width before any host-index conversion, so an enormous positive
+count resolves to the sign fill (`0` or `-1`) rather than allocating a large
+temporary or overflowing a machine-sized conversion. These are evaluator
+resource protections; they do not change the optimizer's separate rule that a
+fixed-width Core shift folds only when its count is valid for that operand.
+
+Direct tests compare the reusable bounded operations against simple exact
+oracles for dense small-input matrices, then exercise positive and negative
+magnitudes around machine-word, byte, 128-bit, and 65,536-bit boundaries. A
+second matrix compares constant-expression and template-value evaluator
+outcomes across all binary and unary operators, including matching division,
+negative-exponent, and resource-limit failures. Source-level tests also ensure
+the same cases reach the intended type-checking diagnostic rather than escaping
+to Core optimization.
+
+The Criterion `Core/ConstantFoldInteger` workload combines bounded power,
+left-shift, bitwise XOR, and addition in verified 128-bit Core expressions.
+Its 8/32/128/512/1024/2048-operation-group Windows measurements are recorded separately from the
+floating-fold workload in `Benchmarks/2026-09-24-Core-Integer-Folding.md`.
 
 ## Floating constants
 
@@ -174,6 +252,15 @@ Floating spellings use ASCII digits. Unicode decimal categories are not
 accepted as wire-level numeric text even when a host character library labels
 them as digits. This matches source token rules and keeps artifact validation
 independent of locale.
+
+Decimal parsing for folding strips insignificant leading and trailing zeroes
+before constructing an exact integer ratio. It caps folded significant digits
+at 512 and declines to fold exponents whose text exceeds the bounded parser
+range. These are optimizer resource guards, not source or artifact validity
+limits: the Core expression remains intact and is still checked normally. The
+cap is deliberately much larger than binary128's shortest-round-trip decimal
+precision, while avoiding unbounded big-integer work on externally supplied
+Core literals.
 
 ## Algebraic identities
 

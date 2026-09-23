@@ -198,9 +198,12 @@ int b = a++;
 
 -- ============================================================================
 -- Example 28: 9. Bitwise Operators
--- Demonstrates: ! is bitwise NOT.
+-- Demonstrates: ! is bitwise NOT and operates within the operand type's width.
 
 !mask
+
+ubyte emptyMask = 0;
+ubyte fullMask = !emptyMask; -- 255
 
 -- ============================================================================
 -- Example 29: 9. Bitwise Operators

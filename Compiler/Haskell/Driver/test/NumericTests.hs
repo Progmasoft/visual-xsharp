@@ -3,19 +3,24 @@
 
 module NumericTests (numericTests) where
 
+import Data.Bits (shiftL)
 import Data.List (isInfixOf, isPrefixOf)
 import Visual.XSharp.AST
 import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.CharacterLiteral
 import Visual.XSharp.Compiler
+import Visual.XSharp.ConstantEvaluation
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep
+import Visual.XSharp.Core.Scalar
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.FloatingLiteral
+import Visual.XSharp.IntegerEvaluation
 import Visual.XSharp.Lexer
 import Visual.XSharp.NumericLiteral
 import Visual.XSharp.NumericSemantics
 import Visual.XSharp.Parser
+import Visual.XSharp.TemplateValue (TemplateValueError (..), evaluateTemplateValue)
 
 numericTests :: [(String, Bool)]
 numericTests =
@@ -25,9 +30,13 @@ numericTests =
         ++ characterLiteralTests
         ++ floatingLiteralTests
         ++ scalarMetadataTests
+        ++ coreScalarCatalogTests
         ++ targetBoundaryTests
+        ++ compileTimeIntegerTests
+        ++ evaluatorParityTests
         ++ numericContextTests
         ++ corePropagationTests
+        ++ integerPipelineTests
         ++ semanticRuleTests
 
 lexicalAcceptanceTests :: [(String, Bool)]
@@ -176,6 +185,26 @@ scalarMetadataTests =
     , ("different scalar families have no wider common scalar", widerScalarType IntScalar UIntScalar == Nothing)
     ]
 
+coreScalarCatalogTests :: [(String, Bool)]
+coreScalarCatalogTests =
+    [
+        ( "Core optimizer integer catalog matches frontend scalar order"
+        , coreIntegerTypeNames == map scalarTypeName integerCoreScalars
+        )
+    , ("Core optimizer integer widths match frontend scalar metadata", all widthMatches integerCoreScalars)
+    , ("Core optimizer integer signedness matches frontend scalar metadata", all signednessMatches integerCoreScalars)
+    ,
+        ( "Core optimizer floating catalog matches frontend floating names"
+        , coreFloatingTypeNames == map scalarTypeName floatingCoreScalars
+        )
+    , ("Boolean is not classified as an integer by Core", not (isCoreIntegerType boolType))
+    ]
+    where
+        integerCoreScalars = filter ((`elem` [CharacterFamily, SignedIntegerFamily, UnsignedIntegerFamily]) . scalarTypeFamily) scalarTypes
+        floatingCoreScalars = filter ((== FloatingFamily) . scalarTypeFamily) scalarTypes
+        widthMatches scalar = coreIntegerBitWidth (scalarTypeToType scalar) == Just (scalarTypeWidth scalar)
+        signednessMatches scalar = coreIntegerIsSigned (scalarTypeToType scalar) == Just (scalarTypeSigned scalar)
+
 targetBoundaryTests :: [(String, Bool)]
 targetBoundaryTests =
     concat
@@ -211,10 +240,299 @@ targetBoundaryTests =
            , rejectedWith "constant remainder by zero is diagnosed" "int value = 1 % 0;" "VXT0019"
            , compiles "integer power is accepted" "int value = 2 ** 8;"
            , compiles "integer shift is accepted" "int value = 1 << 8;"
+           , rejectedWith "integer power evaluation is bounded" "int value = 2 ** 9223372036854775807;" "VXT0019"
+           , rejectedWith "integer left shift evaluation is bounded" "int value = 1 << 9223372036854775807;" "VXT0019"
+           , compiles "zero power remains bounded for a huge exponent" "int value = 0 ** 9223372036854775807;"
+           , compiles "one power remains bounded for a huge exponent" "int value = 1 ** 9223372036854775807;"
+           , compiles "negative unit power uses parity for a huge exponent" "int value = (-1) ** 9223372036854775807;"
+           , compiles "zero left shift remains bounded for a huge count" "int value = 0 << 9223372036854775807;"
+           , compiles "right shift by a huge count saturates positive values" "int value = 5 >> 9223372036854775807;"
+           , compiles "right shift by a huge count sign-extends negative values" "int value = -5 >> 9223372036854775807;"
+           , rejectedWith "left shift beyond the compile-time magnitude limit is diagnosed" "int value = 1 << 65536;" "VXT0019"
+           , rejectedWith "power beyond the compile-time magnitude limit is diagnosed" "int value = 2 ** 65536;" "VXT0019"
+           , compiles "zero left shift avoids constructing an over-limit result" "int value = 0 << 65536;"
+           , compiles "large right shift avoids constructing an intermediate" "int value = 1 >> 65536;"
            , compiles "integer bitwise expression is accepted" "int value = !0 & 255 | 4 ^ 1;"
+           , compiles "unsigned bitwise complement uses the selected width" "ubyte value = !0;"
+           , compiles "16-bit unsigned complement uses its selected width" "ushort value = !0;"
+           , compiles "32-bit unsigned complement uses its selected width" "ulong value = !0;"
+           , compiles "64-bit unsigned complement uses its selected width" "uint value = !0;"
+           , compiles "128-bit unsigned bitwise complement uses the selected width" "ulongint value = !0;"
+           , compiles "unsigned complement masks the operand's top bit" "ubyte value = !255;"
            , rejectedWith "bitwise not rejects floating point" "float value = !1.0;" "VXT0011"
            , rejectedWith "bitwise binary rejects floating point" "float value = 1.0 & 2.0;" "VXT0012"
            ]
+
+compileTimeIntegerTests :: [(String, Bool)]
+compileTimeIntegerTests =
+    integerEvaluationTests
+        ++ constantExpressionTests
+        ++ sourceRangeMatrix
+        ++ sourceShiftRangeMatrix
+
+integerEvaluationTests :: [(String, Bool)]
+integerEvaluationTests =
+    [
+        ( "compile-time integer cap accepts its positive edge"
+        , checkCompileTimeInteger (compileTimeMagnitude - 1) == Right (compileTimeMagnitude - 1)
+        )
+    ,
+        ( "compile-time integer cap accepts its negative edge"
+        , checkCompileTimeInteger (1 - compileTimeMagnitude) == Right (1 - compileTimeMagnitude)
+        )
+    ,
+        ( "compile-time integer cap rejects positive overflow"
+        , checkCompileTimeInteger compileTimeMagnitude == Left CompileTimeIntegerLimitExceeded
+        )
+    ,
+        ( "compile-time integer cap rejects negative overflow"
+        , checkCompileTimeInteger (negate compileTimeMagnitude) == Left CompileTimeIntegerLimitExceeded
+        )
+    , ("zero power bypasses an enormous exponent", evaluateCompileTimePower 0 enormousExponent == Right 0)
+    , ("unit power bypasses an enormous exponent", evaluateCompileTimePower 1 enormousExponent == Right 1)
+    , ("negative unit power uses exponent parity", evaluateCompileTimePower (-1) enormousExponent == Right (-1))
+    ,
+        ( "integer power stops at the largest permitted intermediate"
+        , evaluateCompileTimePower 2 65535 == Right (compileTimeMagnitude `quot` 2)
+        )
+    ,
+        ( "integer power rejects its first out-of-limit intermediate"
+        , evaluateCompileTimePower 2 65536 == Left CompileTimeIntegerLimitExceeded
+        )
+    ,
+        ( "integer power reports a negative exponent distinctly"
+        , evaluateCompileTimePower 2 (-1) == Left CompileTimeNegativeExponent
+        )
+    ,
+        ( "bounded multiplication accepts a product below the bit ceiling"
+        , multiplyCompileTimeIntegers (2 ^ (32767 :: Int)) (2 ^ (32767 :: Int)) == Right (2 ^ (65534 :: Int))
+        )
+    ,
+        ( "bounded multiplication accepts the largest represented bit position"
+        , multiplyCompileTimeIntegers (compileTimeMagnitude `quot` 2) 1 == Right (compileTimeMagnitude `quot` 2)
+        )
+    ,
+        ( "bounded multiplication rejects the first out-of-range exact power"
+        , multiplyCompileTimeIntegers (compileTimeMagnitude `quot` 2) 2 == Left CompileTimeIntegerLimitExceeded
+        )
+    ,
+        ( "bounded multiplication rejects products beyond the bit ceiling"
+        , multiplyCompileTimeIntegers (compileTimeMagnitude `quot` 2) 3 == Left CompileTimeIntegerLimitExceeded
+        )
+    ,
+        ( "bounded multiplication handles zero without a large product"
+        , multiplyCompileTimeIntegers 0 (compileTimeMagnitude - 1) == Right 0
+        )
+    , ("zero left shift ignores an enormous shift count", evaluateCompileTimeShiftLeft 0 enormousExponent == Right 0)
+    ,
+        ( "left shift reaches but does not exceed the compile-time width"
+        , evaluateCompileTimeShiftLeft 1 65535 == Right (compileTimeMagnitude `quot` 2)
+        )
+    ,
+        ( "left shift rejects a result beyond the compile-time width"
+        , evaluateCompileTimeShiftLeft 1 65536 == Left CompileTimeIntegerLimitExceeded
+        )
+    , ("positive arithmetic right shift saturates to zero", evaluateCompileTimeShiftRight 3 enormousExponent == Right 0)
+    ,
+        ( "negative arithmetic right shift saturates to minus one"
+        , evaluateCompileTimeShiftRight (-3) enormousExponent == Right (-1)
+        )
+    , ("negative shift count reverses left shift direction", evaluateCompileTimeShiftLeft (-12) (-2) == Right (-3))
+    , ("negative shift count reverses right shift direction", evaluateCompileTimeShiftRight (-12) (-2) == Right (-48))
+    ,
+        ( "reversing a huge right shift is rejected before allocation"
+        , evaluateCompileTimeShiftRight 1 (negate enormousExponent) == Left CompileTimeIntegerLimitExceeded
+        )
+    ]
+
+constantExpressionTests :: [(String, Bool)]
+constantExpressionTests =
+    [
+        ( "unsigned constant complement masks to its annotated width"
+        , evaluateConstantInteger unsignedComplement == Right (Just 0)
+        )
+    ,
+        ( "signed constant complement reports its compile-time limit"
+        , evaluateConstantInteger signedComplementAtLimit == Left ConstantEvaluationLimitExceeded
+        )
+    , ("a runtime name remains non-constant", evaluateConstantInteger runtimeName == Right Nothing)
+    ,
+        ( "a call expression remains non-constant without a pattern-match failure"
+        , evaluateConstantInteger runtimeCall == Right Nothing
+        )
+    ,
+        ( "constant arithmetic limit is rendered for diagnostics"
+        , renderConstantIntegerError ConstantEvaluationLimitExceeded
+            == "constant integer expression exceeds the compile-time evaluation limit"
+        )
+    ]
+    where
+        unsignedComplement = UnaryExpression testSpan BitwiseNot (integerExpression 255 (namedType "ubyte")) (namedType "ubyte")
+        signedComplementAtLimit = UnaryExpression testSpan BitwiseNot (integerExpression (compileTimeMagnitude - 1) intType) intType
+        runtimeName = NameExpression testSpan (ResolvedName (SymbolId 1) (Identifier "runtimeValue")) intType
+        runtimeCall = CallExpression testSpan runtimeName [] intType
+
+sourceRangeMatrix :: [(String, Bool)]
+sourceRangeMatrix = concatMap scalarRangeCases integerScalars
+    where
+        integerScalars = filter isRangeChecked scalarTypes
+        isRangeChecked scalar = scalarTypeFamily scalar `elem` [SignedIntegerFamily, UnsignedIntegerFamily]
+        scalarRangeCases scalar = case (integerMinimum scalar, integerMaximum scalar) of
+            (Just minimumValue, Just maximumValue) ->
+                let typeName = scalarTypeName scalar
+                    literal expression = typeName ++ " value = " ++ expression ++ ";"
+                 in [ compiles (typeName ++ " constant lower edge remains in range") (literal (show (minimumValue + 1) ++ " - 1"))
+                    , compiles (typeName ++ " constant upper edge remains in range") (literal (show (maximumValue - 1) ++ " + 1"))
+                    , compiles (typeName ++ " constant multiplication by one remains in range") (literal (show maximumValue ++ " * 1"))
+                    , rejectedWith (typeName ++ " constant lower overflow is diagnosed") (literal (show minimumValue ++ " - 1")) "VXT0018"
+                    , rejectedWith (typeName ++ " constant upper overflow is diagnosed") (literal (show maximumValue ++ " + 1")) "VXT0018"
+                    , rejectedWith
+                        (typeName ++ " constant multiplication overflow is diagnosed")
+                        (literal (show maximumValue ++ " * 2"))
+                        "VXT0018"
+                    ,
+                        ( typeName ++ " signed lower multiplication overflow is diagnosed"
+                        , scalarTypeFamily scalar /= SignedIntegerFamily
+                            || snd (rejectedWith "signed lower multiplication overflow" (literal (show minimumValue ++ " * 2")) "VXT0018")
+                        )
+                    ]
+            _ -> []
+
+-- The frontend's arbitrary-precision evaluator must still hand its exact value
+-- to the selected fixed-width type range check. This catches accidental
+-- widening or truncation at the source-to-Core boundary for every integer ABI.
+sourceShiftRangeMatrix :: [(String, Bool)]
+sourceShiftRangeMatrix = concatMap scalarShiftCases integerScalars
+    where
+        integerScalars = filter isIntegerScalar scalarTypes
+        isIntegerScalar scalar = scalarTypeFamily scalar `elem` [SignedIntegerFamily, UnsignedIntegerFamily]
+        scalarShiftCases scalar = case (integerMaximum scalar, scalarTypeSigned scalar) of
+            (Just _, isSigned) ->
+                let typeName = scalarTypeName scalar
+                    width = scalarTypeWidth scalar
+                    highestInRangeShift = width - if isSigned then 2 else 1
+                    firstOutOfRangeShift = width - if isSigned then 1 else 0
+                    declaration shiftAmount = typeName ++ " value = 1 << " ++ show shiftAmount ++ ";"
+                 in [ compiles
+                        (typeName ++ " shift produces its highest in-range positive value")
+                        (declaration highestInRangeShift)
+                    , rejectedWith
+                        (typeName ++ " shift beyond its positive range is diagnosed")
+                        (declaration firstOutOfRangeShift)
+                        "VXT0018"
+                    ]
+            _ -> []
+
+compileTimeMagnitude :: Integer
+compileTimeMagnitude = 1 `shiftL` 65536
+
+enormousExponent :: Integer
+enormousExponent = 2 ^ (63 :: Int) - 1
+
+testSpan :: SourceSpan
+testSpan = SourceSpan "numeric-test.vxs" (SourcePosition 1 1) (SourcePosition 1 2)
+
+integerExpression :: Integer -> Type -> Expression ResolvedName Type
+integerExpression value valueType = LiteralExpression testSpan (IntegerLiteral value) valueType
+
+data EvaluatorOutcome
+    = EvaluatedInteger Integer
+    | EvaluatedBoolean Bool
+    | EvaluatedCharacter Integer
+    | EvaluatorDivisionByZero
+    | EvaluatorFloorDivisionByZero
+    | EvaluatorRemainderByZero
+    | EvaluatorNegativeExponent
+    | EvaluatorLimitExceeded
+    | EvaluatorNonconstant
+    | EvaluatorOtherError
+    deriving (Eq, Ord, Read, Show)
+
+evaluatorParityTests :: [(String, Bool)]
+evaluatorParityTests = binaryParityTests ++ unaryParityTests
+
+binaryParityTests :: [(String, Bool)]
+binaryParityTests = map checkOperator binaryOperators
+    where
+        binaryOperators =
+            [ Add
+            , Subtract
+            , Multiply
+            , Divide
+            , FloorDivide
+            , Remainder
+            , Power
+            , ShiftLeft
+            , ShiftRight
+            , BitwiseAnd
+            , BitwiseXor
+            , BitwiseOr
+            , LessThan
+            , LessEqual
+            , GreaterThan
+            , GreaterEqual
+            , Equal
+            , NotEqual
+            , LogicalAnd
+            , LogicalOr
+            ]
+        inputs = [-4 .. 4]
+        checkOperator operator =
+            ( "constant and template evaluators agree for " ++ show operator ++ " across small signed integer inputs"
+            , all (uncurry (sameBinaryOutcome operator)) [(left, right) | left <- inputs, right <- inputs]
+            )
+
+unaryParityTests :: [(String, Bool)]
+unaryParityTests = map checkOperator [UnaryPlus, UnaryNegate, LogicalNot, BitwiseNot]
+    where
+        checkOperator operator =
+            ( "constant and template evaluators agree for unary " ++ show operator
+            , all (sameUnaryOutcome operator) [-8 .. 8]
+            )
+
+sameBinaryOutcome :: BinaryOperator -> Integer -> Integer -> Bool
+sameBinaryOutcome operator left right = constantOutcome resultType constant == templateOutcome (evaluateTemplateValue template)
+    where
+        resultType =
+            if operator `elem` [LessThan, LessEqual, GreaterThan, GreaterEqual, Equal, NotEqual, LogicalAnd, LogicalOr]
+                then boolType
+                else intType
+        constant =
+            evaluateConstantInteger
+                (BinaryExpression testSpan operator (integerExpression left intType) (integerExpression right intType) resultType)
+        template = TemplateBinarySyntax testSpan operator (TemplateIntegerSyntax testSpan left) (TemplateIntegerSyntax testSpan right)
+
+sameUnaryOutcome :: UnaryOperator -> Integer -> Bool
+sameUnaryOutcome operator value = constantOutcome resultType constant == templateOutcome (evaluateTemplateValue template)
+    where
+        resultType = if operator == LogicalNot then boolType else intType
+        constant = evaluateConstantInteger (UnaryExpression testSpan operator (integerExpression value intType) resultType)
+        template = TemplateUnarySyntax testSpan operator (TemplateIntegerSyntax testSpan value)
+
+constantOutcome :: Type -> Either ConstantIntegerError (Maybe Integer) -> EvaluatorOutcome
+constantOutcome _ (Left issue) = case issue of
+    ConstantDivisionByZero -> EvaluatorDivisionByZero
+    ConstantFloorDivisionByZero -> EvaluatorFloorDivisionByZero
+    ConstantRemainderByZero -> EvaluatorRemainderByZero
+    ConstantNegativeExponent -> EvaluatorNegativeExponent
+    ConstantEvaluationLimitExceeded -> EvaluatorLimitExceeded
+constantOutcome _ (Right Nothing) = EvaluatorNonconstant
+constantOutcome resultType (Right (Just value))
+    | resultType == boolType = EvaluatedBoolean (value /= 0)
+    | otherwise = EvaluatedInteger value
+
+templateOutcome :: Either TemplateValueError TemplateValue -> EvaluatorOutcome
+templateOutcome result = case result of
+    Right (IntegerTemplateValue value) -> EvaluatedInteger value
+    Right (BooleanTemplateValue value) -> EvaluatedBoolean value
+    Right (CharacterTemplateValue value) -> EvaluatedCharacter value
+    Right _ -> EvaluatorOtherError
+    Left TemplateValueDivisionByZero -> EvaluatorDivisionByZero
+    Left TemplateValueFloorDivisionByZero -> EvaluatorFloorDivisionByZero
+    Left TemplateValueRemainderByZero -> EvaluatorRemainderByZero
+    Left (TemplateValueNegativeExponent _) -> EvaluatorNegativeExponent
+    Left TemplateValueEvaluationLimitExceeded -> EvaluatorLimitExceeded
+    Left _ -> EvaluatorOtherError
 
 numericContextTests :: [(String, Bool)]
 numericContextTests =
@@ -249,6 +567,56 @@ corePropagationTests =
     , ("numeric branch reaches CorePrep as a canonical boolean", numericBranchCorePrep)
     , ("mixed numeric logical operands become CorePrep booleans", numericLogicalCorePrep)
     ]
+
+integerPipelineTests :: [(String, Bool)]
+integerPipelineTests = case compileToCorePrep compilerInput of
+    Left diagnostics -> [("integer pipeline fixture compiles (" ++ show (map diagnosticCode diagnostics) ++ ")", False)]
+    Right artifacts ->
+        let functions = coreModuleFunctions (artifactOptimizedCore artifacts)
+         in if length functions /= length pipelineCases
+                then [("integer pipeline retains every test function", False)]
+                else zipWith matchesFunction pipelineCases functions
+    where
+        integerScalars = filter ((`elem` [SignedIntegerFamily, UnsignedIntegerFamily]) . scalarTypeFamily) scalarTypes
+        pipelineCases = concatMap casesFor integerScalars
+        sourceMethods =
+            [ typeName ++ " " ++ functionName ++ "() { return " ++ expression ++ "; }"
+            | (functionName, typeName, expression, _) <- pipelineCases
+            ]
+        compilerInput = CompilerInput "integer-optimizer-pipeline.vxs" ("class Numeric { " ++ unwords sourceMethods ++ " }")
+        casesFor scalar =
+            let typeName = scalarTypeName scalar
+                complementZero = if scalarTypeFamily scalar == SignedIntegerFamily then -1 else 2 ^ scalarTypeWidth scalar - 1
+             in [ ("IntegerCaseAdd" ++ typeName, typeName, "20 + 22", 42)
+                , ("IntegerCaseSubtract" ++ typeName, typeName, "50 - 8", 42)
+                , ("IntegerCaseMultiply" ++ typeName, typeName, "6 * 7", 42)
+                , ("IntegerCaseDivide" ++ typeName, typeName, "84 / 2", 42)
+                , ("IntegerCaseRoundedDivide" ++ typeName, typeName, "7 // 2", 4)
+                , ("IntegerCaseRemainder" ++ typeName, typeName, "7 % 3", 1)
+                , ("IntegerCasePower" ++ typeName, typeName, "3 ** 4", 81)
+                , ("IntegerCaseShiftLeft" ++ typeName, typeName, "3 << 4", 48)
+                , ("IntegerCaseShiftRight" ++ typeName, typeName, "48 >> 4", 3)
+                , ("IntegerCaseBitwiseAnd" ++ typeName, typeName, "14 & 11", 10)
+                , ("IntegerCaseBitwiseXor" ++ typeName, typeName, "14 ^ 11", 5)
+                , ("IntegerCaseBitwiseOr" ++ typeName, typeName, "8 | 3", 11)
+                , ("IntegerCaseBitwiseNot" ++ typeName, typeName, "!0", complementZero)
+                ]
+        matchesFunction (functionName, typeName, expression, expected) function =
+            let body = coreFunctionBody function
+                actualName = identifierText (resolvedSpelling (coreFunctionName function))
+                valueMatches = case body of
+                    [CoreReturn (CoreLiteral (CoreInteger value) resultType)] ->
+                        value == expected && resultType == namedType typeName && coreFunctionReturnType function == resultType
+                    _ -> False
+             in ( "source constant operator "
+                    ++ functionName
+                    ++ " folds "
+                    ++ expression
+                    ++ " to the typed expected value (Core: "
+                    ++ show (actualName, body)
+                    ++ ")"
+                , actualName == functionName && valueMatches
+                )
 
 semanticRuleTests :: [(String, Bool)]
 semanticRuleTests =
