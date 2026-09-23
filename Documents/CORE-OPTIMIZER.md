@@ -152,9 +152,23 @@ would erase the later stage's required failure behavior.
 ## Floating constants
 
 The shared scalar module validates floating spellings, including exponents,
-infinity, and NaN, but the optimizer does not yet fold floating arithmetic.
-Host floating arithmetic is not a substitute for a specified target semantic:
-NaN payloads, signed zero, rounding modes, and precision must remain stable.
+infinity, and NaN. Core folds basic floating literal arithmetic with exact
+integer ratios and one target-width round-to-nearest, ties-to-even operation;
+it never narrows through the host's `Double`. `sfloat`, `lfloat`, `float`, and
+`double` use binary16, binary32, binary64, and binary128 respectively.
+
+Addition, subtraction, multiplication, division, remainder, negation,
+comparisons, numeric truth conversion, and floating `//` are supported. NaN
+ordered comparisons remain false, NaN inequality remains true, and the
+implementation retains signed zero, subnormal values, underflow, and overflow.
+Floating `//` rounds the quotient to the source width before applying the
+language's nearest-integer, halves-away-from-zero rule; its result type is the
+language's signed 64-bit `int`. If the folded integer result does not fit that
+Core type, the expression remains explicit.
+
+Power, transcendental functions, arbitrary call evaluation, and NaN payload
+rewrites remain unsupported. They require separate semantics and tests rather
+than a host floating approximation.
 
 Floating spellings use ASCII digits. Unicode decimal categories are not
 accepted as wire-level numeric text even when a host character library labels
@@ -445,7 +459,6 @@ or desugarer coverage.
 
 The current optimizer does not perform:
 
-- floating arithmetic folding;
 - arbitrary compile-time call evaluation;
 - CFG, mutable, branching, multiple-return, or effectful function inlining;
 - ownership-cleanup or exception-region relocation across an inline boundary;

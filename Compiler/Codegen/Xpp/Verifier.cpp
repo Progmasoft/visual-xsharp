@@ -257,6 +257,17 @@ namespace Visual::XSharp::Xpp
                     || value.operands[1].type != Core::Type::uint64())
                     context.Add("VXP1045", "type test requires a reference subject, uint identity and Bool result");
             }
+            else if (value.opcode == IR::Opcode::FloorDivide)
+            {
+                const auto hasNumericPair = value.operands.size() == 2U
+                                            && Core::is_numeric(value.operands[0].type)
+                                            && value.operands[0].type == value.operands[1].type;
+                const auto expectedResult = !hasNumericPair                             ? Core::Type::unit()
+                                            : Core::is_floating(value.operands[0].type) ? Core::Type::int64()
+                                                                                        : value.operands[0].type;
+                if (!hasNumericPair || value.result_type != expectedResult)
+                    context.Add("VXP1046", "rounded division requires matching numeric operands and its specified result type");
+            }
             else if (value.operands.size() != ExpectedArity(value.opcode))
                 context.Add("VXP1016", "instruction has the wrong operand count");
 

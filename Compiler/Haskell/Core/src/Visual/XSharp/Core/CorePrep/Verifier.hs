@@ -144,8 +144,16 @@ verifyPrimitive primitive atoms resultType
             | not logical && not numeric && primitive `notElem` [Core.CoreEqual, Core.CoreNotEqual] =
                 [problem "VXC0022" "CorePrep arithmetic or ordering primitive requires numeric operands"]
             | otherwise = []
-        expectedResult = if comparisonOrLogical then boolType else firstType
-        resultProblems = if resultType == expectedResult then [] else [problem "VXC0009" "CorePrep primitive result type is inconsistent"]
+        expectedResult
+            | comparisonOrLogical = boolType
+            | primitive == Core.CoreFloorDivide && isFloatingType firstType = intType
+            | otherwise = firstType
+        -- Evaluate deliberately discards a primitive's value, so it carries
+        -- the ErrorType sentinel instead of the primitive's result type.
+        resultProblems
+            | resultType == ErrorType = []
+            | resultType == expectedResult = []
+            | otherwise = [problem "VXC0009" "CorePrep primitive result type is inconsistent"]
         referenceLike valueType = case valueType of
             FunctionType _ _ -> True
             NamedType _ _ -> not (isNumericType valueType) && valueType /= unitType

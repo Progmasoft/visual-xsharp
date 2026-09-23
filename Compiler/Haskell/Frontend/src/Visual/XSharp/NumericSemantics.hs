@@ -111,6 +111,7 @@ acceptsBooleanContext valueType = valueType == boolType || isNumericType valueTy
 resultFor :: BinaryOperator -> Type -> Type
 resultFor operator operandType
     | operator `elem` [LessThan, LessEqual, GreaterThan, GreaterEqual, Equal, NotEqual] = boolType
+    | operator == FloorDivide && isFloatingType operandType = intType
     | otherwise = operandType
 
 success :: Type -> NumericRuleResult

@@ -46,6 +46,8 @@ main = do
                 bgroup "Decode" [benchAt size decodeDigest (documentAt size documents) | size <- sizes]
             , env (pure (CoreModules (inlineFixtures inlineSizes))) $ \modules ->
                 bgroup "InlineLinearBody" [benchAt size optimizeDigest (coreModuleAt size modules) | size <- inlineSizes]
+            , env (pure (CoreModules (floatingFixtures floatingSizes))) $ \modules ->
+                bgroup "ConstantFoldFloating" [benchAt size floatingOptimizeDigest (coreModuleAt size modules) | size <- floatingSizes]
             ]
         , bgroup
             "CorePrep"
@@ -62,6 +64,7 @@ main = do
     where
         sizes = [8, 32, 128, 512]
         inlineSizes = [8, 32, 128, 256]
+        floatingSizes = [8, 32, 128, 512]
 
 benchAt :: Int -> (a -> Int) -> a -> Benchmark
 benchAt size measure input = bench (show size) (whnf measure input)
@@ -91,6 +94,30 @@ preparedFixtures = fixtures
 
 inlineFixtures :: [Int] -> [(Int, CoreModule)]
 inlineFixtures = map (\size -> (size, makeInlineModule size))
+
+-- The timed optimizer receives a verified nested expression containing only
+-- binary64 literals. Fixture construction is kept in Criterion's environment;
+-- the varying size measures rational parsing, target rounding, shortest
+-- round-trip rendering, and fixed-point stability as one real Core workload.
+floatingFixtures :: [Int] -> [(Int, CoreModule)]
+floatingFixtures = map (\size -> (size, makeFloatingModule size))
+
+makeFloatingModule :: Int -> CoreModule
+makeFloatingModule size =
+    CoreModule
+        (QualifiedName [Identifier "Core", Identifier "FloatingBenchmarks"])
+        [ CoreFunction
+            (ResolvedName (SymbolId 1) (Identifier "Evaluate"))
+            []
+            (namedType "float")
+            [CoreReturn (foldl addLiteral (CoreLiteral (CoreFloating "0.1") (namedType "float")) [1 .. size])]
+        ]
+    where
+        addLiteral accumulated _ =
+            CorePrimitive
+                CoreAdd
+                [accumulated, CoreLiteral (CoreFloating "0.1") (namedType "float")]
+                (namedType "float")
 
 encodedFixture :: Int -> IO (Int, [Word8])
 encodedFixture size = case verifyCore (makeCoreModule size) of
@@ -131,6 +158,9 @@ optimizeDigest value = case optimizeCoreWith inlineBenchmarkOptions value of
         coreDigest (optimizedCore result)
             + optimizationIterations result
             + sum (map inlineRewrittenCalls (optimizationInlineReports result))
+
+floatingOptimizeDigest :: CoreModule -> Int
+floatingOptimizeDigest value = either length (coreDigest . optimizedCore) (optimizeCoreWith defaultOptimizerOptions value)
 
 inlineBenchmarkOptions :: OptimizerOptions
 inlineBenchmarkOptions =

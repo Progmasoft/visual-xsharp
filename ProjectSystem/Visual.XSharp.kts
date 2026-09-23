@@ -13,7 +13,7 @@ project {
 }
 
 compiler {
-  version = "0.3.8"
+  version = "0.3.9"
   standard = "26"
   backend = Backend.LLVM
   buildMode = BuildMode.RELEASE

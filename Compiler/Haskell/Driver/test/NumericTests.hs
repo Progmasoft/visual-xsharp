@@ -226,6 +226,14 @@ numericContextTests =
     , rejectedWith "string is not a condition" "if (\"yes\") { return; }" "VXT0006"
     , compiles "same-width long arithmetic" "long value = 2 + 3;"
     , compiles "same-width byte arithmetic" "byte value = 2 + 3;"
+    , compiles "floating rounded division returns int" "int value = 7.8 // 2.0;"
+    , compiles
+        "integer rounded division keeps contextual long type"
+        "long left = 7; long right = 2; long value = left // right;"
+    , rejectedWith
+        "floating rounded division rejects mixed operand widths"
+        "float left = 7.8; lfloat right = 2.0; int value = left // right;"
+        "VXT0012"
     , rejectedWith
         "mixed computed widths are not implicit conversions"
         "long left = 1; int right = 2; int sum = left + right;"
@@ -257,6 +265,14 @@ semanticRuleTests =
         "floating division preserves float"
         (namedType "float")
         (binaryNumericRule Divide (namedType "float") (namedType "float"))
+    , ruleSucceeds
+        "floating rounded division returns int"
+        intType
+        (binaryNumericRule FloorDivide (namedType "float") (namedType "float"))
+    , ruleSucceeds
+        "integer rounded division preserves its operand width"
+        (namedType "long")
+        (binaryNumericRule FloorDivide (namedType "long") (namedType "long"))
     , ruleSucceeds "numeric comparison returns bool" boolType (binaryNumericRule LessThan intType intType)
     , ruleSucceeds "integer equality returns bool" boolType (binaryNumericRule Equal intType intType)
     , ruleSucceeds "boolean logical and returns bool" boolType (binaryNumericRule LogicalAnd boolType boolType)

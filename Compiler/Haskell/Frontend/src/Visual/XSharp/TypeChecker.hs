@@ -444,8 +444,16 @@ checkExpressionExpectedWith context environment expected expression = case expre
         -- context into 1 == 2 would convert both literals to true. Comparisons
         -- infer their operand domain; logical operands may use distinct numeric
         -- types and therefore do not borrow each other's expected type.
-        let operandExpected = if booleanResult operator then Nothing else expected
-            (typedLeft, leftType, leftProblems) = checkExpressionExpectedWith context environment operandExpected left
+        let leftResult = case (operator, expected) of
+                (FloorDivide, Just target)
+                    | isIntegerType target ->
+                        let inferred@(_, inferredType, _) = checkExpressionWith context environment left
+                         in if isIntegerType inferredType
+                                then checkExpressionExpectedWith context environment (Just target) left
+                                else inferred
+                (FloorDivide, _) -> checkExpressionWith context environment left
+                _ -> checkExpressionExpectedWith context environment (if booleanResult operator then Nothing else expected) left
+            (typedLeft, leftType, leftProblems) = leftResult
             rightExpected = if operator `elem` [LogicalAnd, LogicalOr] then Nothing else Just leftType
             (typedRight, rightType, rightProblems) = checkExpressionExpectedWith context environment rightExpected right
             rule = binaryNumericRule operator leftType rightType

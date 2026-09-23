@@ -63,6 +63,34 @@ Floating-point spellings remain decimal text through the frontend. This
 prevents an early binary64 rounding step from changing a `double` literal
 before LLVM converts it to fp128.
 
+## Core floating constant folding
+
+The verified Core optimizer folds literal floating arithmetic without using
+the compiler host's `float` or `double`. It decodes the retained decimal text
+as an exact integer ratio, rounds the result once to the operand's declared
+format using round-to-nearest, ties-to-even, and emits a short decimal spelling
+that round-trips to that same format. The mapping is `sfloat` → binary16,
+`lfloat` → binary32, `float` → binary64, and `double` → binary128.
+
+The current foldable set is addition, subtraction, multiplication, division,
+remainder, unary negation, numeric comparisons, and logical truth conversion.
+Rounded division (`//`) first computes the quotient in the source floating
+format, then rounds that quotient to the nearest integer with exact halves
+away from zero, matching the existing operator contract. Operations involving
+NaN and infinity follow IEEE unordered comparison and arithmetic outcomes;
+signed zero, subnormals, underflow, and overflow are retained in the folded
+literal. A rounded integer result is folded only when it fits the Core result
+type.
+
+Power and transcendental operations remain explicit. The optimizer does not
+reinterpret a NaN payload, evaluate arbitrary calls, or use a host-dependent
+approximation. Core verification runs before optimization and again afterward,
+and every output literal must pass the same scalar spelling and type checks.
+The Criterion `Core/ConstantFoldFloating` group measures verified default
+optimization over increasing expression sizes; `FloatingOptimizerTests`
+covers all four widths, rounding boundaries, special values, and verifier
+acceptance.
+
 ## Core representation
 
 Core uses a structured literal variant:
@@ -180,13 +208,14 @@ Instruction selection depends on the scalar family:
 | remainder | `srem` | `urem` | `frem` |
 | less/greater | signed `icmp` | unsigned `icmp` | ordered `fcmp` |
 | equality | `icmp` | `icmp` | ordered `fcmp` |
-| rounded division | nearest quotient, halves away from zero | nearest quotient, halves upward | `round(fdiv)` |
+| rounded division | nearest quotient, halves away from zero | nearest quotient, halves upward | `round(fdiv)` then signed `int` conversion |
 
 Floor division for signed integers corrects truncation when a nonzero
 remainder and opposite operand signs require rounding toward negative
 zero. Signed and unsigned integer lowering compares the exact remainder against
 half the divisor without converting through floating point. Floating rounded
-division calls the LLVM round intrinsic on the quotient.
+division calls the LLVM round intrinsic on the quotient and converts that
+rounded value to the signed 64-bit `int` result.
 
 ## Failure ownership
 

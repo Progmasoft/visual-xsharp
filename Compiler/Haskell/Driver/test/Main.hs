@@ -13,6 +13,7 @@ import Data.List (isInfixOf)
 import Data.Word (Word8)
 import DiagnosticProtocolTests (diagnosticProtocolTests)
 import DiagnosticSideChannelTests (diagnosticSideChannelTests)
+import FloatingOptimizerTests (floatingOptimizerTests)
 import MonomorphizationTests (monomorphizationTests)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
@@ -126,6 +127,7 @@ main = do
     mapM_ (uncurry check) typeClassificationTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests
+    mapM_ (uncurry check) floatingOptimizerTests
     mapM_ (uncurry check) coreInliningTests
     mapM_ (uncurry check) coreOptimizerSourceTests
     mapM_ (uncurry check) coreVerifierTests

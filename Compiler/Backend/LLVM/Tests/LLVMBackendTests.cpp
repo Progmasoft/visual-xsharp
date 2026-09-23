@@ -201,19 +201,22 @@ namespace
     auto
     BinaryScalarOperation(const Type &type, Operation operation) -> CorePrepModule
     {
+        const auto resultType = operation == Operation::FloorDivide && visual_xsharp::core::is_floating(type)
+                                    ? Type::int64()
+                                    : type;
         Function value{ { 101, U"ScalarOperation" },
                         { Parameter{ { 103, U"left" }, type }, Parameter{ { 104, U"right" }, type } },
-                        type,
+                        resultType,
                         0,
                         { Block{ 0,
                                  { Instruction{ Instruction::Kind::Bind,
                                                 { 102, U"result" },
-                                                type,
+                                                resultType,
                                                 false,
                                                 operation,
                                                 { Variable(103, type), Variable(104, type) } } },
                                  Terminator{ Terminator::Kind::Return,
-                                             Variable(102, type),
+                                             Variable(102, resultType),
                                              0,
                                              0 } } } };
         return CorePrepModule{ { U"Backend", U"Scalar" }, { std::move(value) } };
@@ -365,11 +368,29 @@ TEST_CASE("LLVM rounded division distinguishes signed unsigned and floating sema
     CHECK(unsignedResult.artifact->llvm_ir.find("rounded.same.sign") == std::string::npos);
     CHECK(unsignedResult.artifact->llvm_ir.find("rounded.threshold") != std::string::npos);
 
-    const auto floatingResult = LowerModule(
-        BinaryScalarOperation(Type::float32(), Operation::FloorDivide),
-        Llvm::OptimizationLevel::Debug);
-    REQUIRE(floatingResult);
-    CHECK(floatingResult.artifact->llvm_ir.find("llvm.round.f32") != std::string::npos);
+    struct FloatingFormat final
+    {
+        Type type;
+        std::string_view intrinsicSuffix;
+        std::string_view llvmType;
+    };
+    const std::array formats{
+        FloatingFormat{ Type::float16(), "f16", "half" },
+        FloatingFormat{ Type::float32(), "f32", "float" },
+        FloatingFormat{ Type::float64(), "f64", "double" },
+        FloatingFormat{ Type::float128(), "f128", "fp128" },
+    };
+    for (const auto &format : formats)
+    {
+        CAPTURE(format.intrinsicSuffix, format.llvmType);
+        const auto floatingResult = LowerModule(
+            BinaryScalarOperation(format.type, Operation::FloorDivide),
+            Llvm::OptimizationLevel::Debug);
+        REQUIRE(floatingResult);
+        CHECK(floatingResult.artifact->llvm_ir.find("llvm.round." + std::string(format.intrinsicSuffix)) != std::string::npos);
+        CHECK(floatingResult.artifact->llvm_ir.find("fptosi " + std::string(format.llvmType)) != std::string::npos);
+        CHECK(floatingResult.artifact->llvm_ir.find("to i64") != std::string::npos);
+    }
 }
 
 TEST_CASE("Xmm lowering retains function identities signatures and result types")

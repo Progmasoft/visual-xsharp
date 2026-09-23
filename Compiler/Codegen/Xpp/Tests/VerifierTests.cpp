@@ -31,6 +31,12 @@ namespace
     }
 
     [[nodiscard]] auto
+    Floating(const std::string_view spelling) -> IR::Operand
+    {
+        return { IR::Operand::Kind::Literal, Core::Type::float64(), 0U, Core::FloatingLiteral{ std::string(spelling) } };
+    }
+
+    [[nodiscard]] auto
     TypeIdentity(const std::uint64_t value) -> IR::Operand
     {
         return { IR::Operand::Kind::Literal, Core::Type::uint64(), 0U, Core::integer_from_unsigned(value) };
@@ -195,6 +201,21 @@ TEST_CASE("Xpp reports a read before a later definition")
     CHECK(issues.front().function == 1U);
     CHECK(issues.front().block == 0U);
     CHECK(issues.front().instruction == 0U);
+}
+
+TEST_CASE("Xpp requires rounded floating division to return int")
+{
+    IR::Instruction instruction{
+        IR::Instruction::Effect::Define,
+        IR::Opcode::FloorDivide,
+        10U,
+        Core::Type::float64(),
+        { Floating("7.8"), Floating("2.0") },
+        0U,
+        {},
+    };
+    const auto issues = Xpp::Verify(Module({ Block(0U, { instruction }, ReturnUnit()) }));
+    CHECK(HasCode(issues, "VXP1046"));
 }
 
 TEST_CASE("Xpp reads instruction operands before writing their destination")

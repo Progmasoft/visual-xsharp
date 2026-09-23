@@ -200,6 +200,15 @@ corePrepVerifierTests =
            , ("CorePrep verifier rejects integer payload on float", invalidCorePrepLiteral (named "float") (CoreInteger 1))
            , ("CorePrep verifier rejects invalid floating exponent", invalidCorePrepLiteral (named "double") (CoreFloating "1e"))
            , ("CorePrep verifier rejects String payload on bool", invalidCorePrepLiteral boolType (CoreString "wrong"))
+           ,
+               ( "CorePrep verifier accepts discarded integer rounded division"
+               , validDiscardedFloorDivide (named "long") (CoreInteger 7) (CoreInteger 2)
+               )
+           ,
+               ( "CorePrep verifier accepts discarded floating rounded division"
+               , validDiscardedFloorDivide (named "float") (CoreFloating "7.8") (CoreFloating "2.0")
+               )
+           , ("CorePrep verifier rejects mismatched discarded rounded division operands", rejectsMismatchedDiscardedFloorDivide)
            ]
     where
         validFloating (_, valueType) =
@@ -235,6 +244,40 @@ invalidCoreLiteral valueType literal = hasDiagnostic "VXC1029" (verifyCore (core
 
 invalidCorePrepLiteral :: Type -> CoreLiteral -> Bool
 invalidCorePrepLiteral valueType literal = hasDiagnostic "VXC0023" (verifyCorePrep (corePrepModuleFor valueType literal))
+
+validDiscardedFloorDivide :: Type -> CoreLiteral -> CoreLiteral -> Bool
+validDiscardedFloorDivide valueType left right =
+    let moduleValue = discardedFloorDivideModule valueType left valueType right
+     in verifyCorePrep moduleValue == Right moduleValue
+
+rejectsMismatchedDiscardedFloorDivide :: Bool
+rejectsMismatchedDiscardedFloorDivide =
+    hasDiagnostic
+        "VXC0019"
+        (verifyCorePrep (discardedFloorDivideModule intType (CoreInteger 7) (named "long") (CoreInteger 2)))
+
+discardedFloorDivideModule :: Type -> CoreLiteral -> Type -> CoreLiteral -> CorePrepModule
+discardedFloorDivideModule leftType left rightType right =
+    CorePrepModule
+        (QualifiedName [Identifier "Scalar", Identifier "DiscardedFloorDivide"])
+        [ CorePrepFunction
+            (resolved 1 "Run")
+            []
+            unitType
+            1
+            [ CorePrepBlock
+                1
+                [ CorePrepEvaluate
+                    ( CorePrepPrimitive
+                        CoreFloorDivide
+                        [ CorePrepLiteral left leftType
+                        , CorePrepLiteral right rightType
+                        ]
+                    )
+                ]
+                (CorePrepReturn (CorePrepLiteral CoreUnit unitType))
+            ]
+        ]
 
 malformedWireTests :: [(String, Bool)]
 malformedWireTests =

@@ -45,7 +45,7 @@ const helpText = `usage:
 
 commands:
   clean    Stage Git hygiene fixes without committing: untrack generated/ignored files.
-  update   Run safe git add, commit with the given message, then force-with-lease push to origin/current-branch.
+  update   Run safe git add, commit with the given message, then push to origin/current-branch.
   uncom    Show uncommitted changes.
   help     Show this help.
 
@@ -61,7 +61,7 @@ generated paths:
   build/, .codex/, node_modules/, dist/, dist-newstyle/, out/
 
 update push:
-  git push -u origin <current-branch> --force-with-lease
+  git push -u origin <current-branch>
 
 examples:
   go run scripts/githelper.go update "Fix parser"
@@ -359,15 +359,7 @@ func updateRepository(runner processRunner, message string) error {
 	if err != nil {
 		return err
 	}
-	if err := requireSuccessfulRun(
-		runner,
-		"error: git push --force-with-lease failed",
-		"push",
-		"-u",
-		remoteName,
-		branch,
-		"--force-with-lease",
-	); err != nil {
+	if err := requireSuccessfulRun(runner, "error: git push failed", updatePushArguments(branch)...); err != nil {
 		return err
 	}
 
@@ -380,6 +372,11 @@ func updateRepository(runner processRunner, message string) error {
 		return exitError{code: 1, message: "error: update completed, but the work tree is still dirty"}
 	}
 	return nil
+}
+
+func updatePushArguments(branch string) []string {
+	// Reject a diverged remote branch; the helper must not rewrite remote history.
+	return []string{"push", "-u", remoteName, branch}
 }
 
 func requireSuccessfulRun(runner processRunner, message string, arguments ...string) error {

@@ -14,7 +14,7 @@
 #include "Compiler/Cli/Arguments/Options.hpp"
 
 #ifndef VXS_PROJECT_VERSION
-#    define VXS_PROJECT_VERSION "0.3.8"
+#    define VXS_PROJECT_VERSION "0.3.9"
 #endif
 
 namespace

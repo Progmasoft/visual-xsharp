@@ -391,6 +391,17 @@ namespace Visual::XSharp::Xmm
                            }))
                         context.add(IssueKind::OperandType, "VXL1050", "bitwise instruction operands and result must use one integer type");
                 }
+                else if (instruction.opcode == xmm::Opcode::FloorDivide)
+                {
+                    const auto hasNumericPair = instruction.operands.size() == 2U
+                                                && core::is_numeric(instruction.operands[0].type)
+                                                && instruction.operands[0].type == instruction.operands[1].type;
+                    const auto expectedResult = !hasNumericPair                                   ? core::Type::unit()
+                                                : core::is_floating(instruction.operands[0].type) ? core::Type::int64()
+                                                                                                  : instruction.operands[0].type;
+                    if (!hasNumericPair || instruction.result_type != expectedResult)
+                        context.add(IssueKind::OperandType, "VXL1052", "rounded division requires matching numeric operands and its specified result type");
+                }
                 else if (instruction.opcode != xmm::Opcode::Call)
                 {
                     if (!core::is_numeric(instruction.result_type) || std::ranges::any_of(instruction.operands, [&instruction](const xmm::Value &value) {

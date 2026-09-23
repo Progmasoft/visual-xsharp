@@ -195,11 +195,14 @@ namespace visual_xsharp::core
                 case Operation::LogicalNot:
                 case Operation::TypeIs:
                     return Type::boolean();
+                case Operation::FloorDivide:
+                    if (operands.empty())
+                        return std::nullopt;
+                    return is_floating(operands.front().type) ? Type::int64() : operands.front().type;
                 case Operation::Add:
                 case Operation::Subtract:
                 case Operation::Multiply:
                 case Operation::Divide:
-                case Operation::FloorDivide:
                 case Operation::Remainder:
                 case Operation::Negate:
                 case Operation::Power:

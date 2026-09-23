@@ -230,7 +230,10 @@ primitiveProblems primitive arguments resultType =
             | not logical && not operandsNumeric = [problem "VXC1027" "Core numeric primitive requires numeric operands"]
             | not logical && not operandsAgree = [problem "VXC1027" "Core numeric primitive operands must have the same type"]
             | otherwise = []
-        expectedResult = if logical || comparison || primitive == CoreTypeIs then boolType else firstType
+        expectedResult
+            | logical || comparison || primitive == CoreTypeIs = boolType
+            | primitive == CoreFloorDivide && isCoreFloatingType firstType = intType
+            | otherwise = firstType
         isReferenceLike valueType = case valueType of
             FunctionType _ _ -> True
             NamedType _ _ -> not (isCoreNumericType valueType) && valueType /= unitType

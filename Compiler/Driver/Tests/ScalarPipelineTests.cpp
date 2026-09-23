@@ -439,12 +439,16 @@ TEST_CASE("numeric arithmetic remains valid through CorePrep Xpp and Xmm", "[sca
         for (const auto operation : arithmetic)
         {
             CAPTURE(entry.spelling, operation);
-            const auto prepared = binary_module(entry.type, operation, entry.type);
+            const auto resultType = operation == core::Operation::FloorDivide && core::is_floating(entry.type)
+                                        ? core::Type::int64()
+                                        : entry.type;
+            const auto prepared = binary_module(entry.type, operation, resultType);
             CHECK(core::verify(prepared).empty());
             const auto xppModule = xpp::lower(prepared);
             CHECK(::Visual::XSharp::Xpp::Verify(xppModule).empty());
             const auto xmmModule = xmm::lower(xppModule);
             CHECK(::Visual::XSharp::Xmm::Verify(xmmModule).empty());
+            CHECK(xmmModule.functions.front().blocks.front().instructions.front().result_type == resultType);
         }
     }
 }

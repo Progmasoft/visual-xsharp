@@ -11,6 +11,7 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Optimizer.Floating (floatingTruthValue, foldFloatingPrimitive)
 import Visual.XSharp.Core.Scalar
 
 type ConstantEnvironment = Map SymbolId CoreExpression
@@ -125,7 +126,9 @@ evaluatePrimitive primitive arguments valueType =
         (CoreGreaterEqual, Just [a, b]) -> Just (boolean (a >= b))
         (CoreEqual, Just [a, b]) -> Just (boolean (a == b))
         (CoreNotEqual, Just [a, b]) -> Just (boolean (a /= b))
-        _ -> evaluateBoolean primitive arguments
+        _ -> case foldFloatingPrimitive primitive arguments valueType of
+            Just folded -> Just folded
+            Nothing -> evaluateBoolean primitive arguments
     where
         integer result
             | integerFitsCoreType valueType result = Just (CoreLiteral (CoreInteger result) valueType)
@@ -164,6 +167,7 @@ integerLiteral _ = Nothing
 truthValue :: CoreExpression -> Maybe Bool
 truthValue (CoreLiteral (CoreBoolean value) _) = Just value
 truthValue (CoreLiteral (CoreInteger value) _) = Just (value /= 0)
+truthValue expression@CoreLiteral {} = floatingTruthValue expression
 truthValue _ = Nothing
 
 simplifyIdentity :: CorePrimitive -> [CoreExpression] -> Type -> CoreExpression
@@ -174,7 +178,10 @@ simplifyIdentity primitive arguments valueType = case (primitive, arguments) of
     (CoreMultiply, [value, one]) | isIntegerLiteral 1 one -> value
     (CoreMultiply, [one, value]) | isIntegerLiteral 1 one -> value
     (CoreDivide, [value, one]) | isIntegerLiteral 1 one -> value
-    (CoreFloorDivide, [value, one]) | isIntegerLiteral 1 one -> value
+    (CoreFloorDivide, [value, one])
+        | isIntegerLiteral 1 one
+        , expressionType value == valueType ->
+            value
     (CoreRemainder, [value, one])
         | isIntegerLiteral 1 one, isSimpleValue value -> CoreLiteral (CoreInteger 0) valueType
     (CoreNegate, [CorePrimitive CoreNegate [value] innerType])

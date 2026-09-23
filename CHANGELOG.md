@@ -5,6 +5,26 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## 0.3.9 - 2026-09-23
+
+### Compiler
+
+- Added exact-ratio, target-width floating constant folding for binary16, binary32, binary64, and binary128 without using
+  the compiler host's floating-point types. The Core optimizer now folds basic arithmetic, remainder, comparisons,
+  truth conversion, and floating rounded division while preserving ties-to-even, signed zero, subnormals, infinities,
+  and NaN behavior.
+- Aligned floating `//` result typing across the Haskell frontend, Core/CorePrep verifiers, Xpp, Xmm, and LLVM. Floating
+  operands produce `int`; integer operands retain their integer width. Fixed discarded CorePrep operations to validate
+  operands without requiring a value type they no longer carry.
+- Added optimizer, frontend, native pipeline, and malformed-result regression tests plus a Criterion floating-fold
+  workload and its first Windows measurement.
+- Changed `githelper.go update` to regular fast-forward-only push; it no longer uses `--force-with-lease`.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the native CLI, Bazel module, Kotlin project evaluator, and default compiler
+  model to 0.3.9.
+
 ## 0.3.8 - 2026-09-20
 
 ### Compiler

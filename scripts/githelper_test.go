@@ -40,6 +40,13 @@ func TestParseGitHelperRejectsInvalidShapes(t *testing.T) {
 	}
 }
 
+func TestUpdatePushUsesFastForwardOnlyArguments(t *testing.T) {
+	want := []string{"push", "-u", "origin", "main"}
+	if actual := updatePushArguments("main"); !reflect.DeepEqual(actual, want) {
+		t.Fatalf("updatePushArguments(main) = %#v, want %#v", actual, want)
+	}
+}
+
 func TestGeneratedCoverageMatchesNestedDirectories(t *testing.T) {
 	generated := []string{
 		"build",

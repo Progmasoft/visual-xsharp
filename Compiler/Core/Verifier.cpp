@@ -328,7 +328,10 @@ namespace Visual::XSharp::Core
                 if (expression.primitive == Primitive::Negate && !is_signed_integer(operandType) && !is_floating(operandType))
                     Add("VXC1027", "Core negation requires a signed integer or floating operand");
 
-                const auto expectedResult = logical || comparison || typeTest ? Type::boolean() : operandType;
+                const auto expectedResult = logical || comparison || typeTest ? Type::boolean()
+                                            : expression.primitive == Primitive::FloorDivide && is_floating(operandType)
+                                                ? Type::int64()
+                                                : operandType;
                 CheckSameType(expectedResult, expression.type, "VXC1028", "Core primitive result has the wrong type");
             }
             void

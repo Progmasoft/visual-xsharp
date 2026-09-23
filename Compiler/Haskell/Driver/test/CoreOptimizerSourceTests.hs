@@ -31,6 +31,7 @@ coreOptimizerSourceTests =
     , ("source multi-parameter calls preserve position", sourceInlineMultiple)
     , ("source pure call chains converge", sourceInlineChain)
     , ("source predicates inline before branch selection", sourceInlinePredicate)
+    , ("floating rounded division folds to an int through the source pipeline", sourceFloatingRoundedDivision)
     , ("source repeated parameters inline for literals", sourceInlineRepeated)
     , ("source unused literal arguments may disappear", sourceInlineUnused)
     , ("source immutable helper locals inline", sourceInlineLocal)
@@ -218,6 +219,11 @@ sourceInlinePredicate = case compiledProgram members of
             [ "bool Enabled() { return true; }"
             , "int Value() { if (Enabled()) { return 42; } else { return 0; } }"
             ]
+
+sourceFloatingRoundedDivision :: Bool
+sourceFloatingRoundedDivision = case compiled "return 7.8 // 2.0;" of
+    Just artifacts -> singleReturn artifacts == Just (CoreLiteral (CoreInteger 4) intType)
+    Nothing -> False
 
 sourceInlineRepeated :: Bool
 sourceInlineRepeated = case compiledProgram ["int Twice(_ int value) { return value + value; }", "int Value() { return Twice(21); }"] of

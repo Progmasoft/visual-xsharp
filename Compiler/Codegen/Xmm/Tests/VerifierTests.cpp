@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <ranges>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -27,6 +28,12 @@ namespace
     Boolean(const bool value) -> IR::Value
     {
         return { IR::Value::Kind::Immediate, Core::Type::boolean(), 0U, 0U, value };
+    }
+
+    [[nodiscard]] auto
+    Floating(const std::string_view spelling) -> IR::Value
+    {
+        return { IR::Value::Kind::Immediate, Core::Type::float64(), 0U, 0U, Core::FloatingLiteral{ std::string(spelling) } };
     }
 
     [[nodiscard]] auto
@@ -190,6 +197,21 @@ TEST_CASE("Xmm rejects a read that precedes its definition")
     CHECK(issues.front().function == 1U);
     CHECK(issues.front().block == 0U);
     CHECK(issues.front().instruction == 0U);
+}
+
+TEST_CASE("Xmm requires rounded floating division to return int")
+{
+    IR::Instruction instruction;
+    instruction.opcode = IR::Opcode::FloorDivide;
+    instruction.destination = 10U;
+    instruction.result_type = Core::Type::float64();
+    instruction.operands = { Floating("7.8"), Floating("2.0") };
+    instruction.has_result = true;
+
+    const auto issues = Xmm::Verify(Module({ Block(0U, { instruction }, ReturnUnit()) }));
+    CHECK(std::ranges::any_of(issues, [](const auto &issue) {
+        return issue.code == "VXL1052";
+    }));
 }
 
 TEST_CASE("Xmm accepts the complete type-test ABI tuple")

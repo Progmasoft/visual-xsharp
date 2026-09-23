@@ -483,7 +483,8 @@ namespace Visual::XSharp::Backend::LLVM
             {
                 auto *quotient = builder.CreateFDiv(left, right, "rounded.quotient");
                 auto *roundIntrinsic = llvm::Intrinsic::getOrInsertDeclaration(&module, llvm::Intrinsic::round, { left->getType() });
-                return builder.CreateCall(roundIntrinsic, { quotient }, "rounded.result");
+                auto *rounded = builder.CreateCall(roundIntrinsic, { quotient }, "rounded.integral");
+                return builder.CreateFPToSI(rounded, llvm::Type::getInt64Ty(context), "rounded.result");
             }
 
             [[nodiscard]] auto
