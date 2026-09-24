@@ -11,11 +11,14 @@ module Visual.XSharp.Core.Optimizer.Analysis
     , combineEffect
     , expressionEffect
     , expressionEffectWith
+    , expressionEffectWithFacts
+    , primitiveEffectWithProvenNonzeroDivisor
     , expressionSymbols
     , statementSymbols
     , statementsAlwaysReturn
     , discardableExpression
     , discardableExpressionWith
+    , discardableExpressionWithFacts
     ) where
 
 import Data.Map.Strict (Map)
@@ -24,6 +27,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Visual.XSharp.AST (ResolvedName, SymbolId, resolvedSymbol)
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Optimizer.IntegerFacts
 import Visual.XSharp.Core.Scalar (isCoreFloatingType, isCoreIntegerType)
 
 -- Effect ordering is deliberately conservative. The optimizer currently needs
@@ -70,35 +74,84 @@ expressionEffect :: CoreExpression -> Effect
 expressionEffect = expressionEffectWith emptyEffectEnvironment
 
 expressionEffectWith :: EffectEnvironment -> CoreExpression -> Effect
-expressionEffectWith environment expression = case expression of
-    CoreVariable _ _ -> PureEffect
-    CoreLiteral _ _ -> PureEffect
-    CorePrimitive primitive arguments _ ->
-        foldl combineEffect (primitiveEffect primitive arguments) (map (expressionEffectWith environment) arguments)
-    CoreLet _ _ value body _ ->
-        combineEffect (expressionEffectWith environment value) (expressionEffectWith environment body)
-    CoreApply callee arguments _ ->
-        let nested = foldl combineEffect PureEffect (map (expressionEffectWith environment) (callee : arguments))
-            invoked = case callee of
-                CoreVariable name _ ->
-                    maybe CallEffect id (lookupFunctionEffect environment (resolvedSymbol name))
-                _ -> CallEffect
-         in combineEffect invoked nested
-    CoreClosure captures _ _ _ _ ->
-        foldl
-            combineEffect
-            AllocationEffect
-            (map (expressionEffectWith environment . coreCaptureValue) captures)
+expressionEffectWith environment = expressionEffectWithFacts environment emptyIntegerFacts
+
+expressionEffectWithFacts :: EffectEnvironment -> IntegerFacts -> CoreExpression -> Effect
+expressionEffectWithFacts environment facts expression
+    | isUnreachableFacts facts = PureEffect
+    | otherwise = case expression of
+        CoreVariable _ _ -> PureEffect
+        CoreLiteral _ _ -> PureEffect
+        CorePrimitive CoreLogicalAnd [left, right] _ ->
+            shortCircuitEffect environment facts True left right
+        CorePrimitive CoreLogicalOr [left, right] _ ->
+            shortCircuitEffect environment facts False left right
+        CorePrimitive primitive arguments _ ->
+            let (childEffect, afterArguments) = expressionListEffect environment facts arguments
+                divisorIsProvenNonzero = case (primitive, arguments) of
+                    (CoreDivide, [_, CoreVariable name _]) -> knownNonzero afterArguments name
+                    (CoreFloorDivide, [_, CoreVariable name _]) -> knownNonzero afterArguments name
+                    (CoreRemainder, [_, CoreVariable name _]) -> knownNonzero afterArguments name
+                    _ -> False
+                localEffect = primitiveEffectWithProvenNonzeroDivisor divisorIsProvenNonzero primitive arguments
+             in combineEffect childEffect localEffect
+        CoreLet name valueType value body _ ->
+            let valueEffect = expressionEffectWithFacts environment facts value
+                afterValue = transferExpressionFacts facts value
+                binding = CoreBind (CoreBinding name valueType False value)
+                bodyFacts = transferStatementFacts afterValue binding
+             in combineEffect valueEffect (expressionEffectWithFacts environment bodyFacts body)
+        CoreApply callee arguments _ ->
+            let (nested, _) = expressionListEffect environment facts (callee : arguments)
+                invoked = case callee of
+                    CoreVariable name _ ->
+                        maybe CallEffect id (lookupFunctionEffect environment (resolvedSymbol name))
+                    _ -> CallEffect
+             in combineEffect invoked nested
+        CoreClosure captures _ _ _ _ ->
+            let (captureEffect, _) = expressionListEffect environment facts (map coreCaptureValue captures)
+             in combineEffect AllocationEffect captureEffect
+
+shortCircuitEffect :: EffectEnvironment -> IntegerFacts -> Bool -> CoreExpression -> CoreExpression -> Effect
+shortCircuitEffect environment facts isAnd left right =
+    let leftEffect = expressionEffectWithFacts environment facts left
+        afterLeft = transferExpressionFacts facts left
+        leftTruth = conditionTruthFromFacts facts left
+        evaluatesRight = if isAnd then leftTruth /= Just False else leftTruth /= Just True
+        rightInput = refineConditionFacts isAnd left afterLeft
+        rightEffect
+            | evaluatesRight && not (isUnreachableFacts rightInput) =
+                expressionEffectWithFacts environment rightInput right
+            | otherwise = PureEffect
+     in combineEffect leftEffect rightEffect
+
+expressionListEffect :: EffectEnvironment -> IntegerFacts -> [CoreExpression] -> (Effect, IntegerFacts)
+expressionListEffect _ facts [] = (PureEffect, facts)
+expressionListEffect environment facts (expression : remaining) =
+    let currentEffect = expressionEffectWithFacts environment facts expression
+        afterCurrent = transferExpressionFacts facts expression
+        (laterEffect, finalFacts) = expressionListEffect environment afterCurrent remaining
+     in (combineEffect currentEffect laterEffect, finalFacts)
+
+knownNonzero :: IntegerFacts -> ResolvedName -> Bool
+knownNonzero facts name =
+    maybe False factProvesNonzero (lookupIntegerFact facts (resolvedSymbol name))
 
 -- Integer division can fail even though it has no externally visible write.
 -- Treating a variable divisor as pure would let dead-code elimination erase a
 -- required divide-by-zero failure. Floating division follows its IEEE target
 -- semantics and does not use this failure classification.
-primitiveEffect :: CorePrimitive -> [CoreExpression] -> Effect
-primitiveEffect primitive arguments
+
+{- | Classify the local effect of one already type-checked primitive. The
+additional proof is supplied by structured flow analysis, never guessed
+from an arbitrary expression. Child-expression effects are combined by the
+caller, so proving a divisor nonzero cannot erase a call in an operand.
+-}
+primitiveEffectWithProvenNonzeroDivisor :: Bool -> CorePrimitive -> [CoreExpression] -> Effect
+primitiveEffectWithProvenNonzeroDivisor provenNonzero primitive arguments
     | primitive `elem` [CoreDivide, CoreFloorDivide, CoreRemainder]
     , firstTypeIsInteger arguments
-    , not (knownNonzeroDivisor arguments) =
+    , not (knownNonzeroDivisor arguments || provenNonzero) =
         FailureEffect
     | otherwise = PureEffect
 
@@ -116,6 +169,10 @@ discardableExpression = discardableExpressionWith emptyEffectEnvironment
 
 discardableExpressionWith :: EffectEnvironment -> CoreExpression -> Bool
 discardableExpressionWith environment expression = expressionEffectWith environment expression == PureEffect
+
+discardableExpressionWithFacts :: EffectEnvironment -> IntegerFacts -> CoreExpression -> Bool
+discardableExpressionWithFacts environment facts expression =
+    expressionEffectWithFacts environment facts expression == PureEffect
 
 expressionSymbols :: CoreExpression -> Set SymbolId
 expressionSymbols expression = case expression of

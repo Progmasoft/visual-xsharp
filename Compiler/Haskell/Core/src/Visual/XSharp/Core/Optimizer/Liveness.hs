@@ -11,6 +11,7 @@ import Data.Set qualified as Set
 import Visual.XSharp.AST (ResolvedName, SymbolId, resolvedSymbol)
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Analysis
+import Visual.XSharp.Core.Optimizer.IntegerFacts
 
 -- Value liveness and declaration retention are deliberately separate. A
 -- retained assignment kills the previous stored value, but it still requires
@@ -55,36 +56,45 @@ eliminateFunction :: EffectEnvironment -> CoreFunction -> CoreFunction
 eliminateFunction environment function =
     function
         { coreFunctionBody =
-            fst (eliminateStatements environment emptyLiveState (coreFunctionBody function))
+            fst (eliminateStatements environment emptyIntegerFacts emptyLiveState (coreFunctionBody function))
         }
 
 -- Liveness runs backwards. The returned state describes storage and values
 -- required before the optimized statement list executes. Function symbols
 -- can occur in both sets; because they have no local CoreBind, they simply
 -- flow to the function boundary and are ignored by this local pass.
-eliminateStatements :: EffectEnvironment -> LiveState -> [CoreStatement] -> ([CoreStatement], LiveState)
-eliminateStatements environment liveAfter statements =
-    foldr (eliminateOne environment) ([], liveAfter) statements
+eliminateStatements :: EffectEnvironment -> IntegerFacts -> LiveState -> [CoreStatement] -> ([CoreStatement], LiveState)
+eliminateStatements environment incomingFacts liveAfter statements =
+    foldr eliminateWithFacts ([], liveAfter) (zip (factsBeforeStatements incomingFacts statements) statements)
+    where
+        eliminateWithFacts (facts, statement) = eliminateOne environment facts statement
 
-eliminateOne :: EffectEnvironment -> CoreStatement -> ([CoreStatement], LiveState) -> ([CoreStatement], LiveState)
-eliminateOne environment statement (remaining, liveAfter) = case statement of
+factsBeforeStatements :: IntegerFacts -> [CoreStatement] -> [IntegerFacts]
+factsBeforeStatements _ [] = []
+factsBeforeStatements facts (statement : remaining) =
+    facts : factsBeforeStatements (transferStatementFacts facts statement) remaining
+
+eliminateOne ::
+    EffectEnvironment -> IntegerFacts -> CoreStatement -> ([CoreStatement], LiveState) -> ([CoreStatement], LiveState)
+eliminateOne environment facts statement (remaining, liveAfter) = case statement of
     CoreReturn value ->
         let optimized = optimizeExpression environment value
          in ([CoreReturn optimized], stateForSymbols (expressionSymbols optimized))
     CoreEvaluate value ->
         let optimized = optimizeExpression environment value
-         in if discardableExpressionWith environment optimized
+         in if discardableExpressionWithFacts environment facts optimized
                 then (remaining, liveAfter)
                 else
                     ( CoreEvaluate optimized : remaining
                     , addRequiredSymbols (expressionSymbols optimized) liveAfter
                     )
-    CoreBind binding -> eliminateBinding environment binding remaining liveAfter
-    CoreAssign name value -> eliminateAssignment environment name value remaining liveAfter
-    CoreIf condition yes no -> eliminateBranch environment condition yes no remaining liveAfter
+    CoreBind binding -> eliminateBinding environment facts binding remaining liveAfter
+    CoreAssign name value -> eliminateAssignment environment facts name value remaining liveAfter
+    CoreIf condition yes no -> eliminateBranch environment facts condition yes no remaining liveAfter
 
-eliminateBinding :: EffectEnvironment -> CoreBinding -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
-eliminateBinding environment binding remaining liveAfter =
+eliminateBinding ::
+    EffectEnvironment -> IntegerFacts -> CoreBinding -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
+eliminateBinding environment facts binding remaining liveAfter =
     let symbol = resolvedSymbol (coreBindingName binding)
         value = optimizeExpression environment (coreBindingValue binding)
         valueIsNeeded = Set.member symbol (liveValues liveAfter)
@@ -99,16 +109,17 @@ eliminateBinding environment binding remaining liveAfter =
                 ( CoreBind binding {coreBindingValue = value} : remaining
                 , addRequiredSymbols (expressionSymbols value) beforeDefinition
                 )
-            else preserveDeadValue environment value remaining beforeDefinition
+            else preserveDeadValue environment facts value remaining beforeDefinition
 
 eliminateAssignment ::
     EffectEnvironment ->
+    IntegerFacts ->
     ResolvedName ->
     CoreExpression ->
     [CoreStatement] ->
     LiveState ->
     ([CoreStatement], LiveState)
-eliminateAssignment environment name source remaining liveAfter =
+eliminateAssignment environment facts name source remaining liveAfter =
     let symbol = resolvedSymbol name
         value = optimizeExpression environment source
         beforeWrite = liveAfter {liveValues = Set.delete symbol (liveValues liveAfter)}
@@ -124,27 +135,32 @@ eliminateAssignment environment name source remaining liveAfter =
                                 Set.insert symbol (requiredDeclarations withSource)
                             }
                  in (CoreAssign name value : remaining, withDeclaration)
-            else preserveDeadValue environment value remaining beforeWrite
+            else preserveDeadValue environment facts value remaining beforeWrite
 
 eliminateBranch ::
     EffectEnvironment ->
+    IntegerFacts ->
     CoreExpression ->
     [CoreStatement] ->
     [CoreStatement] ->
     [CoreStatement] ->
     LiveState ->
     ([CoreStatement], LiveState)
-eliminateBranch environment condition yes no remaining liveAfter =
+eliminateBranch environment facts condition yes no remaining liveAfter =
     let optimizedCondition = optimizeExpression environment condition
-        (optimizedYes, liveYes) = eliminateStatements environment liveAfter yes
-        (optimizedNo, liveNo) = eliminateStatements environment liveAfter no
+        afterCondition = transferExpressionFacts facts condition
+        trueFacts = refineConditionFacts True condition afterCondition
+        falseFacts = refineConditionFacts False condition afterCondition
+        (optimizedYes, liveYes) = eliminateStatements environment trueFacts liveAfter yes
+        (optimizedNo, liveNo) = eliminateStatements environment falseFacts liveAfter no
         branchState = mergeLiveStates [liveYes, liveNo]
         liveBefore = addRequiredSymbols (expressionSymbols optimizedCondition) branchState
      in (CoreIf optimizedCondition optimizedYes optimizedNo : remaining, liveBefore)
 
-preserveDeadValue :: EffectEnvironment -> CoreExpression -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
-preserveDeadValue environment value remaining liveAfter
-    | discardableExpressionWith environment value = (remaining, liveAfter)
+preserveDeadValue ::
+    EffectEnvironment -> IntegerFacts -> CoreExpression -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
+preserveDeadValue environment facts value remaining liveAfter
+    | discardableExpressionWithFacts environment facts value = (remaining, liveAfter)
     | otherwise =
         ( CoreEvaluate value : remaining
         , addRequiredSymbols (expressionSymbols value) liveAfter
@@ -177,5 +193,5 @@ optimizeExpression environment expression = case expression of
             [capture {coreCaptureValue = optimizeExpression environment (coreCaptureValue capture)} | capture <- captures]
             parameters
             returnType
-            (fst (eliminateStatements environment emptyLiveState body))
+            (fst (eliminateStatements environment emptyIntegerFacts emptyLiveState body))
             valueType

@@ -12,6 +12,7 @@ import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Floating (floatingTruthValue, foldFloatingPrimitive)
+import Visual.XSharp.Core.Optimizer.IntegerFacts
 import Visual.XSharp.Core.Scalar (coreIntegerBitWidth, coreIntegerIsSigned, integerFitsCoreType)
 
 type ConstantEnvironment = Map SymbolId CoreExpression
@@ -22,37 +23,84 @@ propagateConstants moduleValue =
 
 simplifyFunction :: CoreFunction -> CoreFunction
 simplifyFunction function =
-    function {coreFunctionBody = fst (simplifyStatements Map.empty (coreFunctionBody function))}
+    let (body, _, _) = simplifyStatements Map.empty emptyIntegerFacts (coreFunctionBody function)
+     in function {coreFunctionBody = body}
 
-simplifyStatements :: ConstantEnvironment -> [CoreStatement] -> ([CoreStatement], ConstantEnvironment)
-simplifyStatements environment [] = ([], environment)
-simplifyStatements environment (statement : remaining) =
-    let (simplified, nextEnvironment) = simplifyStatement environment statement
-        (rest, finalEnvironment) = simplifyStatements nextEnvironment remaining
-     in (simplified : rest, finalEnvironment)
+simplifyStatements ::
+    ConstantEnvironment -> IntegerFacts -> [CoreStatement] -> ([CoreStatement], ConstantEnvironment, IntegerFacts)
+simplifyStatements environment facts [] = ([], environment, facts)
+simplifyStatements environment facts (statement : remaining) =
+    let (simplified, nextEnvironment, nextFacts) = simplifyStatement environment facts statement
+        (rest, finalEnvironment, finalFacts) =
+            if statementAlwaysReturns simplified
+                then ([], nextEnvironment, nextFacts)
+                else simplifyStatements nextEnvironment nextFacts remaining
+     in (simplified : rest, finalEnvironment, finalFacts)
 
-simplifyStatement :: ConstantEnvironment -> CoreStatement -> (CoreStatement, ConstantEnvironment)
-simplifyStatement environment statement = case statement of
+simplifyStatement ::
+    ConstantEnvironment -> IntegerFacts -> CoreStatement -> (CoreStatement, ConstantEnvironment, IntegerFacts)
+simplifyStatement environment facts statement = case statement of
     CoreBind binding ->
-        let value = simplifyExpression environment (coreBindingValue binding)
+        let value = simplifyExpressionWithFacts environment facts (coreBindingValue binding)
             changed = binding {coreBindingValue = value}
             nextEnvironment
                 | not (coreBindingMutable binding)
                 , isPropagatable value =
                     Map.insert (resolvedSymbol (coreBindingName binding)) value environment
                 | otherwise = Map.delete (resolvedSymbol (coreBindingName binding)) environment
-         in (CoreBind changed, nextEnvironment)
+            nextFacts = transferStatementFacts facts (CoreBind changed)
+         in (CoreBind changed, nextEnvironment, nextFacts)
     CoreAssign name value ->
-        ( CoreAssign name (simplifyExpression environment value)
-        , Map.delete (resolvedSymbol name) environment
-        )
-    CoreReturn value -> (CoreReturn (simplifyExpression environment value), environment)
-    CoreEvaluate value -> (CoreEvaluate (simplifyExpression environment value), environment)
+        let simplified = simplifyExpressionWithFacts environment facts value
+            changed = CoreAssign name simplified
+         in (changed, Map.delete (resolvedSymbol name) environment, transferStatementFacts facts changed)
+    CoreReturn value ->
+        let simplified = simplifyExpressionWithFacts environment facts value
+            changed = CoreReturn simplified
+         in (changed, environment, transferStatementFacts facts changed)
+    CoreEvaluate value ->
+        let simplified = simplifyExpressionWithFacts environment facts value
+            changed = CoreEvaluate simplified
+         in (changed, environment, transferStatementFacts facts changed)
     CoreIf condition yes no ->
-        let simplifiedCondition = simplifyExpression environment condition
-            simplifiedYes = fst (simplifyStatements environment yes)
-            simplifiedNo = fst (simplifyStatements environment no)
-         in (CoreIf simplifiedCondition simplifiedYes simplifiedNo, environment)
+        let simplifiedCondition = simplifyExpressionWithFacts environment facts condition
+            afterCondition = transferExpressionFacts facts simplifiedCondition
+            trueInput = refineConditionFacts True simplifiedCondition afterCondition
+            falseInput = refineConditionFacts False simplifiedCondition afterCondition
+            (simplifiedYes, trueConstants, trueFacts) = simplifyStatements environment trueInput yes
+            (simplifiedNo, falseConstants, falseFacts) = simplifyStatements environment falseInput no
+            changed = CoreIf simplifiedCondition simplifiedYes simplifiedNo
+            knownTruth = conditionTruthFromFacts afterCondition simplifiedCondition
+            nextConstants = case knownTruth of
+                Just True -> trueConstants
+                Just False -> falseConstants
+                Nothing -> joinConstants environment trueConstants falseConstants
+            nextFacts = case knownTruth of
+                Just True -> trueFacts
+                Just False -> falseFacts
+                Nothing -> case (statementsAlwaysReturn simplifiedYes, statementsAlwaysReturn simplifiedNo) of
+                    (True, False) -> falseFacts
+                    (False, True) -> trueFacts
+                    (True, True) -> emptyIntegerFacts
+                    (False, False) -> joinIntegerFacts trueFacts falseFacts
+         in (changed, nextConstants, nextFacts)
+
+joinConstants :: ConstantEnvironment -> ConstantEnvironment -> ConstantEnvironment -> ConstantEnvironment
+joinConstants incoming whenTrue whenFalse =
+    Map.filterWithKey common incoming
+    where
+        common symbol _ = Map.lookup symbol whenTrue == Map.lookup symbol whenFalse
+
+statementAlwaysReturns :: CoreStatement -> Bool
+statementAlwaysReturns statement = case statement of
+    CoreReturn _ -> True
+    CoreIf _ whenTrue whenFalse ->
+        not (null whenFalse) && statementsAlwaysReturn whenTrue && statementsAlwaysReturn whenFalse
+    _ -> False
+
+statementsAlwaysReturn :: [CoreStatement] -> Bool
+statementsAlwaysReturn [] = False
+statementsAlwaysReturn (statement : remaining) = statementAlwaysReturns statement || statementsAlwaysReturn remaining
 
 -- Propagation is intentionally limited to literals. Duplicating calls,
 -- closure allocations, or arbitrary primitive trees could change effects or
@@ -62,7 +110,18 @@ isPropagatable CoreLiteral {} = True
 isPropagatable _ = False
 
 simplifyExpression :: ConstantEnvironment -> CoreExpression -> CoreExpression
-simplifyExpression environment expression = case expression of
+simplifyExpression environment = simplifyExpressionUsing environment emptyIntegerFacts
+
+simplifyExpressionWithFacts :: ConstantEnvironment -> IntegerFacts -> CoreExpression -> CoreExpression
+simplifyExpressionWithFacts environment facts expression =
+    simplifyExpressionUsing environment effectiveFacts expression
+    where
+        effectiveFacts
+            | expressionInvokesCallable expression = emptyIntegerFacts
+            | otherwise = facts
+
+simplifyExpressionUsing :: ConstantEnvironment -> IntegerFacts -> CoreExpression -> CoreExpression
+simplifyExpressionUsing environment facts expression = case expression of
     CoreVariable name valueType ->
         case Map.lookup (resolvedSymbol name) environment of
             Just constant | expressionType constant == valueType -> constant
@@ -70,18 +129,22 @@ simplifyExpression environment expression = case expression of
     CoreLiteral {} -> expression
     CoreApply callee arguments valueType ->
         CoreApply
-            (simplifyExpression environment callee)
-            (map (simplifyExpression environment) arguments)
+            (simplifyExpressionUsing environment facts callee)
+            (map (simplifyExpressionUsing environment facts) arguments)
             valueType
     CorePrimitive primitive arguments valueType ->
-        foldPrimitive primitive (map (simplifyExpression environment) arguments) valueType
+        let simplified = foldPrimitive primitive (map (simplifyExpressionUsing environment facts) arguments) valueType
+         in case conditionTruthFromFacts facts simplified of
+                Just truth | valueType == boolType -> CoreLiteral (CoreBoolean truth) boolType
+                _ -> simplified
     CoreLet name bindingType value body valueType ->
-        let simplifiedValue = simplifyExpression environment value
+        let simplifiedValue = simplifyExpressionUsing environment facts value
             bodyEnvironment =
                 if isPropagatable simplifiedValue
                     then Map.insert (resolvedSymbol name) simplifiedValue environment
                     else Map.delete (resolvedSymbol name) environment
-         in CoreLet name bindingType simplifiedValue (simplifyExpression bodyEnvironment body) valueType
+            bodyFacts = transferStatementFacts facts (CoreBind (CoreBinding name bindingType False simplifiedValue))
+         in CoreLet name bindingType simplifiedValue (simplifyExpressionWithFacts bodyEnvironment bodyFacts body) valueType
     CoreClosure captures parameters returnType body valueType ->
         let simplifiedCaptures = map simplifyCapture captures
             captureConstants =
@@ -91,11 +154,16 @@ simplifyExpression environment expression = case expression of
                 ]
             parameterSymbols = map (resolvedSymbol . fst) parameters
             bodyEnvironment = foldr Map.delete (Map.fromList captureConstants) parameterSymbols
-            simplifiedBody = fst (simplifyStatements bodyEnvironment body)
+            -- Captures may name mutable storage through a cell. Constant
+            -- propagation preserves the legacy literal case above, but a
+            -- zero-ness proof must not assume that a captured value stays
+            -- unchanged between closure creation and invocation.
+            bodyFacts = emptyIntegerFacts
+            (simplifiedBody, _, _) = simplifyStatements bodyEnvironment bodyFacts body
          in CoreClosure simplifiedCaptures parameters returnType simplifiedBody valueType
     where
         simplifyCapture capture =
-            capture {coreCaptureValue = simplifyExpression environment (coreCaptureValue capture)}
+            capture {coreCaptureValue = simplifyExpressionWithFacts environment facts (coreCaptureValue capture)}
 
 foldPrimitive :: CorePrimitive -> [CoreExpression] -> Type -> CoreExpression
 foldPrimitive primitive arguments valueType =

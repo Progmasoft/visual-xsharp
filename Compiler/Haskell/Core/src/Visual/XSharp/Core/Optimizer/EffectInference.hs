@@ -19,9 +19,10 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Visual.XSharp.AST (SymbolId, resolvedSymbol)
+import Visual.XSharp.AST (ResolvedName, SymbolId, resolvedSymbol)
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Analysis
+import Visual.XSharp.Core.Optimizer.IntegerFacts
 
 data DirectFacts = DirectFacts
     { directLocalEffect :: Effect
@@ -106,58 +107,125 @@ recursiveSymbols facts =
         cyclicMembers (AcyclicSCC _) = []
 
 functionFacts :: Set SymbolId -> EffectEnvironment -> CoreFunction -> DirectFacts
-functionFacts knownSymbols pureKnown = statementsFacts knownSymbols pureKnown . coreFunctionBody
+functionFacts knownSymbols pureKnown function =
+    fst (statementsFacts knownSymbols pureKnown emptyIntegerFacts (coreFunctionBody function))
 
-statementsFacts :: Set SymbolId -> EffectEnvironment -> [CoreStatement] -> DirectFacts
-statementsFacts _ _ [] = emptyDirectFacts
-statementsFacts knownSymbols pureKnown (statement : remaining) =
-    let current = statementFacts knownSymbols pureKnown statement
+statementsFacts ::
+    Set SymbolId ->
+    EffectEnvironment ->
+    IntegerFacts ->
+    [CoreStatement] ->
+    (DirectFacts, IntegerFacts)
+statementsFacts _ _ facts _ | isUnreachableFacts facts = (emptyDirectFacts, unreachableIntegerFacts)
+statementsFacts _ _ facts [] = (emptyDirectFacts, facts)
+statementsFacts knownSymbols pureKnown facts (statement : remaining) =
+    let (current, afterCurrent) = statementFacts knownSymbols pureKnown facts statement
      in if statementAlwaysReturns statement
-            then current
-            else combineFacts current (statementsFacts knownSymbols pureKnown remaining)
+            then (current, afterCurrent)
+            else
+                let (later, finalFacts) = statementsFacts knownSymbols pureKnown afterCurrent remaining
+                 in (combineFacts current later, finalFacts)
 
 statementAlwaysReturns :: CoreStatement -> Bool
 statementAlwaysReturns (CoreReturn _) = True
 statementAlwaysReturns (CoreIf _ yes no) = not (null no) && statementsAlwaysReturn yes && statementsAlwaysReturn no
 statementAlwaysReturns _ = False
 
-statementFacts :: Set SymbolId -> EffectEnvironment -> CoreStatement -> DirectFacts
-statementFacts knownSymbols pureKnown statement = case statement of
-    CoreBind binding -> expressionFacts knownSymbols pureKnown (coreBindingValue binding)
-    CoreAssign _ value -> expressionFacts knownSymbols pureKnown value
-    CoreReturn value -> expressionFacts knownSymbols pureKnown value
-    CoreEvaluate value -> expressionFacts knownSymbols pureKnown value
+statementFacts :: Set SymbolId -> EffectEnvironment -> IntegerFacts -> CoreStatement -> (DirectFacts, IntegerFacts)
+statementFacts knownSymbols pureKnown facts statement = case statement of
+    CoreBind binding ->
+        let (valueFacts, _) = expressionFacts knownSymbols pureKnown facts (coreBindingValue binding)
+         in (valueFacts, transferStatementFacts facts statement)
+    CoreAssign _ value ->
+        let (valueFacts, _) = expressionFacts knownSymbols pureKnown facts value
+         in (valueFacts, transferStatementFacts facts statement)
+    CoreReturn value ->
+        let (valueFacts, _) = expressionFacts knownSymbols pureKnown facts value
+         in (valueFacts, transferStatementFacts facts statement)
+    CoreEvaluate value ->
+        let (valueFacts, _) = expressionFacts knownSymbols pureKnown facts value
+         in (valueFacts, transferStatementFacts facts statement)
     CoreIf condition yes no ->
-        combineFacts
-            (expressionFacts knownSymbols pureKnown condition)
-            (combineFacts (statementsFacts knownSymbols pureKnown yes) (statementsFacts knownSymbols pureKnown no))
+        let (conditionFacts, afterCondition) = expressionFacts knownSymbols pureKnown facts condition
+            whenTrue = refineConditionFacts True condition afterCondition
+            whenFalse = refineConditionFacts False condition afterCondition
+            knownTruth = conditionTruthFromFacts afterCondition condition
+            (trueFacts, afterTrue) = statementsFacts knownSymbols pureKnown whenTrue yes
+            (falseFacts, afterFalse) = statementsFacts knownSymbols pureKnown whenFalse no
+            trueUnreachable = isUnreachableFacts whenTrue
+            falseUnreachable = isUnreachableFacts whenFalse
+            branchFacts = case knownTruth of
+                Just True -> trueFacts
+                Just False -> falseFacts
+                Nothing
+                    | trueUnreachable -> falseFacts
+                    | falseUnreachable -> trueFacts
+                    | otherwise -> combineFacts trueFacts falseFacts
+            continuationFacts = case knownTruth of
+                Just True -> afterTrue
+                Just False -> afterFalse
+                Nothing
+                    | trueUnreachable -> afterFalse
+                    | falseUnreachable -> afterTrue
+                    | otherwise -> case (statementsAlwaysReturn yes, statementsAlwaysReturn no) of
+                        (True, False) -> afterFalse
+                        (False, True) -> afterTrue
+                        (True, True) -> unreachableIntegerFacts
+                        (False, False) -> joinIntegerFacts afterTrue afterFalse
+         in (combineFacts conditionFacts branchFacts, continuationFacts)
 
-expressionFacts :: Set SymbolId -> EffectEnvironment -> CoreExpression -> DirectFacts
-expressionFacts knownSymbols pureKnown expression =
-    let nested = case expression of
-            CoreVariable _ _ -> emptyDirectFacts
-            CoreLiteral _ _ -> emptyDirectFacts
-            CorePrimitive _ arguments _ -> foldFacts (map (expressionFacts knownSymbols pureKnown) arguments)
-            CoreLet _ _ value body _ ->
-                combineFacts (expressionFacts knownSymbols pureKnown value) (expressionFacts knownSymbols pureKnown body)
-            CoreApply callee arguments _ ->
-                let children = foldFacts (map (expressionFacts knownSymbols pureKnown) (callee : arguments))
-                 in case directCallee callee of
-                        Just symbol
-                            | Set.member symbol knownSymbols ->
-                                children {directCallees = Set.insert symbol (directCallees children)}
-                        _ -> children {directHasUnknownCall = True}
-            -- A closure body executes only when the callable is invoked. Its
-            -- construction is observable allocation, while capture initializers
-            -- execute now and therefore contribute their own direct facts.
-            CoreClosure captures _ _ _ _ ->
-                foldFacts (map (expressionFacts knownSymbols pureKnown . coreCaptureValue) captures)
-        local = expressionEffectWith pureKnown expression
-     in nested {directLocalEffect = combineEffect local (directLocalEffect nested)}
+expressionFacts ::
+    Set SymbolId ->
+    EffectEnvironment ->
+    IntegerFacts ->
+    CoreExpression ->
+    (DirectFacts, IntegerFacts)
+expressionFacts _ _ facts _ | isUnreachableFacts facts = (emptyDirectFacts, unreachableIntegerFacts)
+expressionFacts _ _ facts (CoreVariable _ _) = (emptyDirectFacts, facts)
+expressionFacts _ _ facts (CoreLiteral _ _) = (emptyDirectFacts, facts)
+expressionFacts knownSymbols pureKnown facts (CorePrimitive primitive arguments _) =
+    let (children, afterArguments) = expressionListFacts knownSymbols pureKnown facts arguments
+        provenNonzero = case (primitive, arguments) of
+            (CoreDivide, [_, CoreVariable name _]) -> knownNonzero afterArguments name
+            (CoreFloorDivide, [_, CoreVariable name _]) -> knownNonzero afterArguments name
+            (CoreRemainder, [_, CoreVariable name _]) -> knownNonzero afterArguments name
+            _ -> False
+        local = primitiveEffectWithProvenNonzeroDivisor provenNonzero primitive arguments
+     in (children {directLocalEffect = combineEffect local (directLocalEffect children)}, afterArguments)
+expressionFacts knownSymbols pureKnown facts (CoreLet name valueType value body _) =
+    let (valueFacts, afterValue) = expressionFacts knownSymbols pureKnown facts value
+        boundState = transferStatementFacts afterValue (CoreBind (CoreBinding name valueType False value))
+        (bodyFacts, afterBody) = expressionFacts knownSymbols pureKnown boundState body
+     in (combineFacts valueFacts bodyFacts, afterBody)
+expressionFacts knownSymbols pureKnown facts (CoreApply callee arguments _) =
+    let (children, _) = expressionListFacts knownSymbols pureKnown facts (callee : arguments)
+        invoked = case directCallee callee of
+            Just symbol
+                | Set.member symbol knownSymbols ->
+                    children {directCallees = Set.insert symbol (directCallees children)}
+            _ -> children {directHasUnknownCall = True}
+     in (invoked, emptyIntegerFacts)
+expressionFacts knownSymbols pureKnown facts (CoreClosure captures _ _ _ _) =
+    let values = map coreCaptureValue captures
+        (children, afterCaptures) = expressionListFacts knownSymbols pureKnown facts values
+     in (children {directLocalEffect = combineEffect AllocationEffect (directLocalEffect children)}, afterCaptures)
 
-foldFacts :: [DirectFacts] -> DirectFacts
-foldFacts = foldl' combineFacts emptyDirectFacts
+expressionListFacts ::
+    Set SymbolId ->
+    EffectEnvironment ->
+    IntegerFacts ->
+    [CoreExpression] ->
+    (DirectFacts, IntegerFacts)
+expressionListFacts _ _ facts [] = (emptyDirectFacts, facts)
+expressionListFacts knownSymbols pureKnown facts (expression : remaining) =
+    let (current, afterCurrent) = expressionFacts knownSymbols pureKnown facts expression
+        (later, finalFacts) = expressionListFacts knownSymbols pureKnown afterCurrent remaining
+     in (combineFacts current later, finalFacts)
 
 directCallee :: CoreExpression -> Maybe SymbolId
 directCallee (CoreVariable name _) = Just (resolvedSymbol name)
 directCallee _ = Nothing
+
+knownNonzero :: IntegerFacts -> ResolvedName -> Bool
+knownNonzero facts name =
+    maybe False factProvesNonzero (lookupIntegerFact facts (resolvedSymbol name))

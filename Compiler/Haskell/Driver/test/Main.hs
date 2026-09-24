@@ -16,6 +16,7 @@ import DiagnosticProtocolTests (diagnosticProtocolTests)
 import DiagnosticSideChannelTests (diagnosticSideChannelTests)
 import FloatingOptimizerTests (floatingOptimizerTests)
 import IntegerEvaluationTests (integerEvaluationTests)
+import IntegerFlowTests (integerFlowTests)
 import MonomorphizationTests (monomorphizationTests)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
@@ -129,6 +130,7 @@ main = do
     mapM_ (uncurry check) typeClassificationTests
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests
+    mapM_ (uncurry check) integerFlowTests
     mapM_ (uncurry check) floatingOptimizerTests
     mapM_ (uncurry check) coreInliningTests
     mapM_ (uncurry check) coreOptimizerSourceTests

@@ -50,6 +50,10 @@ main = do
                 bgroup "ConstantFoldFloating" [benchAt size floatingOptimizeDigest (coreModuleAt size modules) | size <- floatingSizes]
             , env (pure (CoreModules (integerFixtures integerSizes))) $ \modules ->
                 bgroup "ConstantFoldInteger" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- integerSizes]
+            , env (pure (CoreModules (guardedDivisionFixtures flowSizes))) $ \modules ->
+                bgroup "GuardedIntegerEffects" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- flowSizes]
+            , env (pure (CoreModules (contradictoryPathFixtures flowSizes))) $ \modules ->
+                bgroup "ContradictoryIntegerPaths" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- flowSizes]
             ]
         , bgroup
             "CorePrep"
@@ -68,6 +72,7 @@ main = do
         inlineSizes = [8, 32, 128, 256]
         floatingSizes = [8, 32, 128, 512]
         integerSizes = [8, 32, 128, 512, 1024, 2048]
+        flowSizes = [8, 32, 128, 512, 1024]
 
 benchAt :: Int -> (a -> Int) -> a -> Benchmark
 benchAt size measure input = bench (show size) (whnf measure input)
@@ -110,6 +115,69 @@ floatingFixtures = map (\size -> (size, makeFloatingModule size))
 -- and addition at a 128-bit destination width.
 integerFixtures :: [Int] -> [(Int, CoreModule)]
 integerFixtures = map (\size -> (size, makeIntegerModule size))
+
+-- These fixtures target the forward abstract interpreter rather than constant
+-- folding: every divide uses a variable, and safety is available only on a
+-- condition edge. Keeping construction in Criterion's environment makes the
+-- timed region reflect the production optimizer's proof and effect passes.
+guardedDivisionFixtures :: [Int] -> [(Int, CoreModule)]
+guardedDivisionFixtures = map (\size -> (size, makeGuardedDivisionModule size))
+
+contradictoryPathFixtures :: [Int] -> [(Int, CoreModule)]
+contradictoryPathFixtures = map (\size -> (size, makeContradictoryPathModule size))
+
+makeGuardedDivisionModule :: Int -> CoreModule
+makeGuardedDivisionModule size =
+    CoreModule
+        (QualifiedName [Identifier "Core", Identifier "GuardedIntegerFlowBenchmarks"])
+        [ CoreFunction
+            functionName
+            [(divisorName, integerType)]
+            integerType
+            [ CoreIf
+                (CorePrimitive CoreNotEqual [divisor, typedInteger 0] boolType)
+                (replicate size (CoreEvaluate division))
+                [CoreReturn (typedInteger 0)]
+            , CoreReturn (typedInteger 1)
+            ]
+        ]
+    where
+        functionName = resolvedName 1 "Evaluate"
+        divisorName = resolvedName 2 "divisor"
+        divisor = CoreVariable divisorName integerType
+        integerType = namedType "int"
+        typedInteger value = CoreLiteral (CoreInteger value) integerType
+        division = CorePrimitive CoreDivide [typedInteger 42, divisor] integerType
+
+makeContradictoryPathModule :: Int -> CoreModule
+makeContradictoryPathModule size =
+    CoreModule
+        (QualifiedName [Identifier "Core", Identifier "ContradictoryIntegerFlowBenchmarks"])
+        [ CoreFunction
+            functionName
+            [(valueName, integerType)]
+            integerType
+            [ CoreIf condition (replicate size (CoreEvaluate impossibleDivision)) [CoreReturn (typedInteger 0)]
+            , CoreReturn (typedInteger 1)
+            ]
+        ]
+    where
+        functionName = resolvedName 1 "Evaluate"
+        valueName = resolvedName 2 "value"
+        integerType = namedType "int"
+        value = CoreVariable valueName integerType
+        typedInteger number = CoreLiteral (CoreInteger number) integerType
+        condition =
+            CorePrimitive
+                CoreLogicalAnd
+                [ CorePrimitive CoreGreaterThan [value, typedInteger 11] boolType
+                , CorePrimitive CoreLessThan [value, typedInteger 12] boolType
+                ]
+                boolType
+        impossibleDivision = CorePrimitive CoreDivide [typedInteger 42, value] integerType
+
+resolvedName :: Int -> String -> ResolvedName
+resolvedName symbol spelling = ResolvedName (SymbolId symbol) (Identifier spelling)
 
 makeIntegerModule :: Int -> CoreModule
 makeIntegerModule size =

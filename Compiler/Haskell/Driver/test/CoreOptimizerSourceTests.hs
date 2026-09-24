@@ -8,6 +8,7 @@ import Visual.XSharp.Compiler
 import Visual.XSharp.Core
 import Visual.XSharp.Core.CorePrep (corePrepModuleFunctions)
 import Visual.XSharp.Core.CorePrep qualified as CorePrep
+import Visual.XSharp.Core.Scalar (coreIntegerTypeNames)
 
 -- These cases begin as Visual X# text. The constructor-level optimizer suite
 -- can isolate every rewrite, while this group proves that real desugared trees
@@ -46,6 +47,18 @@ coreOptimizerSourceTests =
     , ("source inlined locals receive fresh symbols", sourceInlineFreshSymbols)
     , ("source inlined locals prepare without calls", sourceInlinePrepares)
     , ("source separate call sites use separate symbols", sourceInlineDisjointSites)
+    , ("source guard lets a dead division disappear", sourceGuardedDeadDivision)
+    , ("source unguarded dead division remains observable", sourceUnguardedDeadDivision)
+    , ("source assignment replaces a branch range", sourceAssignmentReplacesGuard)
+    , ("source impossible integer branch is removed", sourceImpossibleIntegerBranch)
+    , ("source equality transfers range facts between locals", sourceVariableEqualityGuard)
+    , ("source ordering derives a positive divisor", sourceVariableOrderingGuard)
+    , ("source short-circuit false edge proves nonzero", sourceFalseDisjunctionGuard)
+    , ("source arithmetic keeps a bounded product nonzero", sourceProductRangeGuard)
+    , ("source arithmetic keeps a bounded difference nonzero", sourceDifferenceRangeGuard)
+    , ("source branch join retains common zero exclusion", sourceNonzeroBranchJoin)
+    , ("source branch join drops conflicting zero exclusion", sourceConflictingBranchJoin)
+    , ("source comparison boundaries match the generated integer oracle", sourceComparisonBoundaryMatrix)
     ]
 
 compiled :: String -> Maybe FrontendArtifacts
@@ -459,3 +472,232 @@ prepFunctionCalls value = any blockCalls (CorePrep.corePrepFunctionBlocks value)
             CorePrep.CorePrepBind _ _ _ (CorePrep.CorePrepCall _ _) -> True
             CorePrep.CorePrepEvaluate (CorePrep.CorePrepCall _ _) -> True
             _ -> False
+
+sourceGuardedDeadDivision :: Bool
+sourceGuardedDeadDivision =
+    case compiledProgram ["void Guarded(_ int divisor) { if (divisor \\= 0) { int result = 10 / divisor; } }"] of
+        Just artifacts ->
+            case coreModuleFunctions (artifactOptimizedCore artifacts) of
+                [function] -> not (containsIntegerDivision (coreFunctionBody function))
+                _ -> False
+        Nothing -> False
+
+sourceUnguardedDeadDivision :: Bool
+sourceUnguardedDeadDivision =
+    case compiledProgram ["void Guarded(_ int divisor) { int result = 10 / divisor; }"] of
+        Just artifacts ->
+            case coreModuleFunctions (artifactOptimizedCore artifacts) of
+                [function] -> containsIntegerDivision (coreFunctionBody function)
+                _ -> False
+        Nothing -> False
+
+sourceAssignmentReplacesGuard :: Bool
+sourceAssignmentReplacesGuard =
+    case compiledProgram
+        ["void Guarded(_ int input) { int divisor = input; if (divisor \\= 0) { divisor = 0; int result = 10 / divisor; } }"] of
+        Just artifacts ->
+            case coreModuleFunctions (artifactOptimizedCore artifacts) of
+                [function] -> containsIntegerDivision (coreFunctionBody function)
+                _ -> False
+        Nothing -> False
+
+sourceImpossibleIntegerBranch :: Bool
+sourceImpossibleIntegerBranch =
+    case compiledProgram ["int Guarded(_ int value) { if (value > 4 && value < 5) { return 24 / value; } else { return 0; } }"] of
+        Just artifacts ->
+            case coreModuleFunctions (artifactOptimizedCore artifacts) of
+                [function] ->
+                    not (containsIntegerDivision (coreFunctionBody function))
+                        && any isZeroReturn (coreFunctionBody function)
+                _ -> False
+        Nothing -> False
+    where
+        isZeroReturn (CoreReturn (CoreLiteral (CoreInteger 0) _)) = True
+        isZeroReturn _ = False
+
+sourceVariableEqualityGuard :: Bool
+sourceVariableEqualityGuard =
+    sourceDivisionExpectation
+        False
+        ["void Guarded(_ int known, _ int divisor) { if (known \\= 0 && divisor == known) { int unused = 24 / divisor; } }"]
+
+sourceVariableOrderingGuard :: Bool
+sourceVariableOrderingGuard =
+    sourceDivisionExpectation
+        False
+        [ "void Guarded(_ int lowerBound, _ int divisor) { if (lowerBound >= 0 && divisor > lowerBound) { int unused = 24 / divisor; } }"
+        ]
+
+sourceFalseDisjunctionGuard :: Bool
+sourceFalseDisjunctionGuard =
+    sourceDivisionExpectation
+        False
+        [ "void Guarded(_ int divisor, _ int other) {"
+        , "  if (divisor == 0 || other == 0) { return; }"
+        , "  int unused = 24 / divisor;"
+        , "}"
+        ]
+
+sourceProductRangeGuard :: Bool
+sourceProductRangeGuard =
+    sourceDivisionExpectation
+        False
+        [ "void Guarded(_ int value) {"
+        , "  if (value > 0 && value < 5) {"
+        , "    int divisor = value * 2;"
+        , "    int unused = 24 / divisor;"
+        , "  }"
+        , "}"
+        ]
+
+sourceDifferenceRangeGuard :: Bool
+sourceDifferenceRangeGuard =
+    sourceDivisionExpectation
+        False
+        [ "void Guarded(_ int value) {"
+        , "  if (value >= 8) {"
+        , "    int divisor = value - 5;"
+        , "    int unused = 24 / divisor;"
+        , "  }"
+        , "}"
+        ]
+
+sourceNonzeroBranchJoin :: Bool
+sourceNonzeroBranchJoin =
+    sourceDivisionExpectation
+        False
+        [ "void Guarded(_ int input, _ bool choose) {"
+        , "  if (input \\= 0) {"
+        , "    int divisor = input;"
+        , "    if (choose) { divisor = 7; } else { divisor = -1; }"
+        , "    int unused = 24 / divisor;"
+        , "  }"
+        , "}"
+        ]
+
+sourceConflictingBranchJoin :: Bool
+sourceConflictingBranchJoin =
+    sourceDivisionExpectation
+        True
+        [ "void Guarded(_ int input, _ bool choose) {"
+        , "  if (input \\= 0) {"
+        , "    int divisor = input;"
+        , "    if (choose) { divisor = 7; } else { divisor = 0; }"
+        , "    int unused = 24 / divisor;"
+        , "  }"
+        , "}"
+        ]
+
+sourceDivisionExpectation :: Bool -> [String] -> Bool
+sourceDivisionExpectation expectedPresent members =
+    case compiledProgram members of
+        Just artifacts ->
+            case coreModuleFunctions (artifactOptimizedCore artifacts) of
+                [function] -> containsIntegerDivision (coreFunctionBody function) == expectedPresent
+                _ -> False
+        Nothing -> False
+
+-- This whole-program matrix checks parser, typing, lowering, fact refinement,
+-- and DCE together. Each generated method places a dead divide on one selected
+-- comparison edge; the oracle decides whether that edge excludes zero.
+sourceComparisonBoundaryMatrix :: Bool
+sourceComparisonBoundaryMatrix =
+    case compiledProgram (zipWith sourceComparisonCase [0 :: Int ..] comparisons) of
+        Just artifacts ->
+            let actual =
+                    [ containsIntegerDivision (coreFunctionBody function)
+                    | function <- coreModuleFunctions (artifactOptimizedCore artifacts)
+                    ]
+                expected =
+                    [ not (sourceComparisonProvesNonzero operator boundary truth reversed)
+                    | (operator, boundary, truth, reversed) <- comparisons
+                    ]
+             in actual == expected
+        Nothing -> False
+    where
+        operators = [CoreEqual, CoreNotEqual, CoreLessThan, CoreLessEqual, CoreGreaterThan, CoreGreaterEqual]
+        comparisons =
+            [ (operator, boundary, trueEdge, reversed)
+            | operator <- operators
+            , boundary <- [-3 .. 3]
+            , trueEdge <- [False, True]
+            , reversed <- [False, True]
+            ]
+
+sourceComparisonCase :: Int -> (CorePrimitive, Integer, Bool, Bool) -> String
+sourceComparisonCase index (operator, boundary, trueEdge, reversed) =
+    "void FlowCase"
+        ++ show index
+        ++ "(_ int value) { if ("
+        ++ leftOperand
+        ++ " "
+        ++ comparisonToken operator
+        ++ " "
+        ++ rightOperand
+        ++ ") {"
+        ++ trueBody
+        ++ "} else {"
+        ++ falseBody
+        ++ "} }"
+    where
+        (leftOperand, rightOperand) =
+            if reversed
+                then (show boundary, "value")
+                else ("value", show boundary)
+        selectedBody = " int unused = 24 / value; "
+        trueBody = if trueEdge then selectedBody else ""
+        falseBody = if trueEdge then "" else selectedBody
+
+comparisonToken :: CorePrimitive -> String
+comparisonToken operator = case operator of
+    CoreEqual -> "=="
+    CoreNotEqual -> "\\="
+    CoreLessThan -> "<"
+    CoreLessEqual -> "<="
+    CoreGreaterThan -> ">"
+    CoreGreaterEqual -> ">="
+    _ -> "?"
+
+sourceComparisonProvesNonzero :: CorePrimitive -> Integer -> Bool -> Bool -> Bool
+sourceComparisonProvesNonzero operator boundary trueEdge reversed = case normalized of
+    CoreEqual -> (trueEdge && boundary /= 0) || (not trueEdge && boundary == 0)
+    CoreNotEqual -> (trueEdge && boundary == 0) || (not trueEdge && boundary /= 0)
+    CoreLessThan -> (trueEdge && boundary <= 0) || (not trueEdge && boundary > 0)
+    CoreLessEqual -> (trueEdge && boundary < 0) || (not trueEdge && boundary >= 0)
+    CoreGreaterThan -> (trueEdge && boundary >= 0) || (not trueEdge && boundary < 0)
+    CoreGreaterEqual -> (trueEdge && boundary > 0) || (not trueEdge && boundary <= 0)
+    _ -> False
+    where
+        normalized = if reversed then reverseSourceComparison operator else operator
+
+reverseSourceComparison :: CorePrimitive -> CorePrimitive
+reverseSourceComparison operator = case operator of
+    CoreLessThan -> CoreGreaterThan
+    CoreLessEqual -> CoreGreaterEqual
+    CoreGreaterThan -> CoreLessThan
+    CoreGreaterEqual -> CoreLessEqual
+    _ -> operator
+
+containsIntegerDivision :: [CoreStatement] -> Bool
+containsIntegerDivision = any statementHasDivision
+
+statementHasDivision :: CoreStatement -> Bool
+statementHasDivision statement = case statement of
+    CoreBind binding -> expressionHasDivision (coreBindingValue binding)
+    CoreAssign _ expression -> expressionHasDivision expression
+    CoreReturn expression -> expressionHasDivision expression
+    CoreEvaluate expression -> expressionHasDivision expression
+    CoreIf condition whenTrue whenFalse ->
+        expressionHasDivision condition || containsIntegerDivision whenTrue || containsIntegerDivision whenFalse
+
+expressionHasDivision :: CoreExpression -> Bool
+expressionHasDivision expression = case expression of
+    CoreVariable _ _ -> False
+    CoreLiteral _ _ -> False
+    CoreApply callee arguments _ -> any expressionHasDivision (callee : arguments)
+    CorePrimitive operator arguments valueType ->
+        (elem operator [CoreDivide, CoreFloorDivide, CoreRemainder] && elem valueType (map namedType coreIntegerTypeNames))
+            || any expressionHasDivision arguments
+    CoreLet _ _ value body _ -> expressionHasDivision value || expressionHasDivision body
+    CoreClosure captures _ _ body _ ->
+        any (expressionHasDivision . coreCaptureValue) captures || containsIntegerDivision body

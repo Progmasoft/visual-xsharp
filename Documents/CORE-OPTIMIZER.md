@@ -110,8 +110,10 @@ This restriction is conservative and intentional:
 
 A mutable binding never becomes a propagated constant. Assignment removes the
 target from the current environment before later statements are simplified.
-Branches receive the incoming environment independently, and no branch-local
-fact leaks to statements after the branch.
+Branches receive the incoming literal environment independently. Only literal
+bindings present with the same value on every path survive a merge. A separate
+integer-fact environment tracks ranges and zero-ness; it is not a constant
+environment and never substitutes a variable with an expression.
 
 ## Integer folding
 
@@ -151,6 +153,147 @@ The integer operations currently folded are:
 
 Division, rounded division, and remainder by zero remain explicit. Removing them
 would erase the later stage's required failure behavior.
+
+## Path-sensitive integer facts
+
+The full state model, transfer equations, operation boundaries, and contributor
+obligations are documented in [Core integer flow analysis](INTEGER-FLOW-ANALYSIS.md).
+The current Windows Criterion observations are recorded in
+[Core integer flow benchmark](../Benchmarks/2026-09-24-Core-Integer-Flow.md).
+
+The optimizer keeps a second, deliberately modest abstract environment while it
+walks Core statements. It records facts keyed by `SymbolId`; source spelling,
+lexical nesting, and declaration order are not identity. Each integer fact is
+an interval plus an independent zero-exclusion bit:
+
+```text
+IntegerFact = [minimum .. maximum] × excludesZero
+```
+
+Either interval endpoint may be absent when no bound is known. Integer type
+limits initialize an unconstrained variable's interval. A signed 64-bit `int`,
+for example, begins at `[-2^63 .. 2^63 - 1]`; an unsigned 8-bit `ubyte` begins at
+`[0 .. 255]`. This makes range reasoning respect Visual X#'s scalar catalog
+instead of the host's `Int` width.
+
+The independent zero-exclusion bit matters for joins. If one arm establishes
+`x > 0` and another establishes `x < 0`, the interval hull spans zero, but no
+execution from either arm has `x == 0`. The merged fact therefore retains the
+exclusion. In the opposite case, if one arm assigns zero and the other assigns
+two, the merged interval contains zero and the exclusion is dropped.
+
+### Refinement rules
+
+An `if` condition is refined once for its true edge and once for its false edge.
+The comparison operand order is normalized before applying constraints. For a
+variable compared with an integer literal `k`, the transfer rules are:
+
+| Condition | True-edge constraint | False-edge constraint |
+| --- | --- | --- |
+| `x == k` | `x` is exactly `k` | exclude zero when `k == 0`; otherwise retain a conservative interval |
+| `x != 0` | exclude zero | `x` is exactly zero |
+| `x != k`, `k != 0` | retain interval | `x` is exactly `k` |
+| `x < k` | upper bound `k - 1` | lower bound `k` |
+| `x <= k` | upper bound `k` | lower bound `k + 1` |
+| `x > k` | lower bound `k + 1` | upper bound `k` |
+| `x >= k` | lower bound `k` | upper bound `k - 1` |
+
+For nonzero literals, the current domain does not retain arbitrary excluded
+points. It intentionally represents `x != 0` because that is the proof needed
+by integer division safety, and uses exact bounds for equality branches. An
+unsupported exclusion loses optimization precision, never soundness.
+
+Logical negation swaps the requested edge. The short-circuit path equations
+are applied structurally:
+
+```text
+true(A && B)   = true(B, true(A, facts))
+false(A && B)  = join(false(A, facts), false(B, true(A, facts)))
+true(A || B)   = join(true(A, facts), true(B, false(A, facts)))
+false(A || B)  = false(B, false(A, facts))
+```
+
+`join` keeps only facts valid on both feasible paths, widens interval endpoints
+to their hull, and carries zero-exclusion only when each input proves it. This
+is a may-value analysis: every concrete value that can reach a program point
+must remain represented by its abstract interval and exclusion state.
+
+### Unreachable paths
+
+An interval whose lower bound exceeds its upper bound is contradictory. The
+environment has an explicit unreachable element so a contradiction is not
+confused with an empty set of facts. For example:
+
+```text
+if (x > 4 && x < 5) {
+    return 24 / x;
+} else {
+    return 0;
+}
+```
+
+Integer discreteness makes the true edge impossible. The effect analysis does
+not charge the impossible divide, and constant/control-flow simplification may
+select the false edge. At a join, unreachable is an identity: `join(bottom, x)`
+is `x`. If both edges are unreachable, the enclosing continuation is
+unreachable as well.
+
+Truth queries use the same feasibility calculation as edge refinement. They
+can prove a condition false because its true edge is impossible, or true
+because its false edge is impossible. The optimizer does not invent values
+when neither edge can be rejected.
+
+### Transfer through statements and expressions
+
+Bindings and assignments compute an abstract value for the right-hand side,
+then install it for the destination symbol. A later assignment replaces the
+previous interval; it never intersects a new assignment with an old value.
+Return and evaluation statements transfer effects from their expressions but
+do not create a value fact for another symbol. Statements after a terminating
+return are outside the continuation.
+
+The current arithmetic transfer supports interval-safe integer negation,
+addition, subtraction, and multiplication when endpoint calculations fit the
+destination Core type. When an endpoint overflows, an operand is unbounded, or
+an operator has no approved transfer rule, the result becomes unknown. The
+analysis is not a substitute for overflow semantics; retaining an unknown fact
+prevents an arithmetic rewrite from silently establishing a proof.
+
+Function calls clear the facts. Core does not yet encode complete read/write
+sets for captured mutable storage or higher-order arguments. Clearing the whole
+environment is more conservative than invalidating only visibly mentioned
+locals, and prevents a call from making an earlier nonzero proof stale. Closure
+bodies are deferred execution regions: capture initializer facts do not become
+assumptions about state at a future invocation. Each closure body starts a new
+fact environment and can establish its own guards.
+
+### Safety boundary
+
+The effect analysis supplies a nonzero proof only when the integer divisor is a
+direct variable whose current path fact proves exclusion of zero. A literal
+nonzero divisor continues to use the existing local proof. Proofs for one
+operator do not erase evaluation effects of its operands; child effects are
+combined independently and in Core evaluation order.
+
+The analysis does not currently prove a divisor safe from floating facts,
+bitwise patterns, arbitrary function summaries, relational facts between two
+variables, or facts across a call. Unsupported forms remain potentially
+failing. In particular, a comparison such as `x != y` cannot prove either
+operand nonzero, and an `x != 9` true edge does not prove `x != 0`.
+
+The corresponding effect rule is therefore:
+
+```text
+integer divide / floor-divide / remainder:
+    nonzero literal divisor       -> no divide-by-zero effect
+    path-proven nonzero variable  -> no divide-by-zero effect
+    known zero or unknown divisor -> FailureEffect
+```
+
+The proof is recomputed from the current Core after every structural optimizer
+pass. It is not serialized into Core, Xpp, Xmm, or the Core wire format, and it
+does not become a user-visible language feature. The optimizer's output still
+passes the ordinary Core verifier before it reaches CorePrep.
 
 Integer power never asks the host to construct the full mathematical result
 before checking its destination. The optimizer bounds each multiplication by

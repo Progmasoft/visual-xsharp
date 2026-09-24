@@ -22,7 +22,99 @@ Each fixed-point optimizer iteration performs constant propagation, recomputes e
 
 ## Arithmetic failures
 
-Integer divide, floor-divide, and remainder operations are discardable only when the divisor is a known nonzero integer literal. A variable or zero divisor is classified as possible failure. Floating-point division follows target floating semantics and remains pure when its operands are pure.
+Integer divide, floor-divide, and remainder operations are discardable when
+their divisor is either a nonzero integer literal or a variable proven nonzero
+at that exact Core program point. The proof comes from the path-sensitive
+integer-fact environment documented in [Core optimization](CORE-OPTIMIZER.md#path-sensitive-integer-facts).
+The complete comparison, arithmetic, join, and invalidation rules live in
+[Core integer flow analysis](INTEGER-FLOW-ANALYSIS.md).
+An unknown or zero divisor remains `FailureEffect`. Floating-point division
+follows target floating semantics and remains pure when its operands are pure.
+
+### Proof sources
+
+Effect inference does not guess from source spelling or from nearby syntax. It
+consumes the following verified Core evidence:
+
+| Evidence | `divide`, rounded divide, remainder |
+| --- | --- |
+| literal divisor `7` | no divide-by-zero failure |
+| divisor `x` on the true edge of `x != 0` | no divide-by-zero failure |
+| divisor `x` on the false edge of `x == 0` | no divide-by-zero failure |
+| divisor `x` on the true edge of `x > 0` or `x < 0` | no divide-by-zero failure |
+| divisor `x` after assigning literal `0` | `FailureEffect` |
+| divisor `x` after an unknown or indirect call | `FailureEffect` |
+| divisor `x` after both branches assign nonzero values | no divide-by-zero failure |
+| divisor `x` after branches disagree about zero-ness | `FailureEffect` |
+
+Every child expression still contributes its own effect. A nonzero proof about
+one operand cannot erase an unknown call, closure allocation, or possible
+failure in another operand. The analysis visits eager Core children in their
+defined order, and a call clears facts before later expressions are analyzed.
+
+### Path-state equations
+
+The condition splitter returns one state for each feasible edge. `bottom`
+represents an edge proved impossible; it is distinct from a reachable state
+with no facts. For short-circuit Boolean Core primitives:
+
+| Expression | Requested edge | Resulting state |
+| --- | --- | --- |
+| `A and B` | true | refine `A` true, then `B` true |
+| `A and B` | false | join (`A` false, `A` true then `B` false) |
+| `A or B` | true | join (`A` true, `A` false then `B` true) |
+| `A or B` | false | refine `A` false, then `B` false |
+| `not A` | true | refine `A` false |
+| `not A` | false | refine `A` true |
+
+The join considers only feasible paths. Its interval is the hull of each
+symbol's incoming intervals. A symbol absent from either reachable path is
+unknown after the join. Zero exclusion survives only if every reachable input
+proves the symbol nonzero. Calls in conditions conservatively discard all
+integer facts; this avoids assuming that captured mutable cells stayed
+unchanged while a condition executed.
+
+### Comparison boundary obligations
+
+The range transfer uses arbitrary-precision mathematical bounds but restricts
+facts to the declared Core integer type. Strict comparisons adjust an endpoint
+by one because integers are discrete. The table includes false edges because
+many safe-divisor proofs occur in an `else` arm:
+
+| Predicate | Edge proving positive | Edge proving negative | Other edge |
+| --- | --- | --- | --- |
+| `x > k` | true when `k >= 0` | false when `k < 0` | may include zero |
+| `x >= k` | true when `k > 0` | false when `k <= 0` | may include zero |
+| `x < k` | false when `k > 0` | true when `k <= 0` | may include zero |
+| `x <= k` | false when `k >= 0` | true when `k < 0` | may include zero |
+| `x == k` | true for nonzero `k` | — | false edge is conservative except `k == 0` |
+| `x != k` | — | false for nonzero `k` | true edge is conservative except `k == 0` |
+
+Reversed literal/variable operands normalize the comparison before applying
+these rules. Thus `0 < x` and `x > 0` lead to the same abstract constraint.
+When a range intersection yields `minimum > maximum`, that path is bottom; it
+cannot contribute a failure or a fact at a later join.
+
+Arithmetic facts are transferred only for negation, addition, subtraction,
+and multiplication with bounded endpoints that remain representable in the
+result type. Overflow or an unsupported primitive drops the computed interval.
+The optimizer does not use a speculative mathematical result as an effect
+proof.
+
+### Deliberate limitations
+
+- No relation between two independent variables is recorded.
+- Arbitrary excluded nonzero constants are not represented as a set.
+- Integer facts do not cross a call, even when the direct callee looks pure.
+- Closure bodies start independently; captures are not assumed immutable at
+  invocation time.
+- Floating-point values do not enter the integer interval domain.
+- No result in this analysis is written into an artifact or public report.
+
+These restrictions can retain a safe call or division unnecessarily. They must
+not make an unsafe call appear removable. A future interprocedural mod/ref
+summary may recover precision, but only after the Core model can describe
+captured writes and higher-order calls completely.
 
 ## Conformance matrix
 
@@ -994,4 +1086,3 @@ Reports follow module function order. Direct callee identifiers are sorted and d
 ## Future extensions
 
 Inlining, escape analysis, allocation sinking, termination proofs, and ownership-sensitive effects may refine `PureEffect`. They must not weaken the conservative boundary without verifier-backed tests. CorePrep remains an internal adapter and is not exposed as a user emission target.
-
