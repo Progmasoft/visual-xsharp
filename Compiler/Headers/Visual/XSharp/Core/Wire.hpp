@@ -29,15 +29,24 @@ namespace Visual::XSharp::Core::Wire
      */
     struct Limits final
     {
-        std::size_t maximumWireBytes{ 64U * 1024U * 1024U }; ///< Total document size.
-        std::size_t maximumTextScalars{ 1024U * 1024U }; ///< Unicode scalars in one text field.
-        std::size_t maximumFunctions{ 65535U }; ///< Functions in a module.
-        std::size_t maximumParameters{ 65535U }; ///< Parameters in one function or closure signature.
-        std::size_t maximumStatements{ 1048576U }; ///< Statements in one function, branch, or closure body list.
-        std::size_t maximumOperands{ 65535U }; ///< Values in one operand or template-argument list.
-        std::size_t maximumTypeDepth{ 128U }; ///< Recursive type nesting.
-        std::size_t maximumExpressionDepth{ 4096U }; ///< Recursive expression nesting.
-        std::size_t maximumNumericBytes{ 4096U }; ///< Magnitude bytes in one numeric literal.
+        /// Total document size.
+        std::size_t maximumWireBytes{ 64U * 1024U * 1024U };
+        /// Unicode scalars in one text field.
+        std::size_t maximumTextScalars{ 1024U * 1024U };
+        /// Functions in a module.
+        std::size_t maximumFunctions{ 65535U };
+        /// Parameters in one function or closure signature.
+        std::size_t maximumParameters{ 65535U };
+        /// Statements in one function, branch, or closure body list.
+        std::size_t maximumStatements{ 1048576U };
+        /// Values in one operand or template-argument list.
+        std::size_t maximumOperands{ 65535U };
+        /// Recursive type nesting.
+        std::size_t maximumTypeDepth{ 128U };
+        /// Recursive expression nesting.
+        std::size_t maximumExpressionDepth{ 4096U };
+        /// Magnitude bytes in one numeric literal.
+        std::size_t maximumNumericBytes{ 4096U };
     };
 
     /** @brief Stable categories for malformed or unrepresentable wire values. */
