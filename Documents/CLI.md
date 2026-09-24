@@ -222,13 +222,12 @@ The accepted source subset is the subset implemented by the Haskell frontend. Na
 routes use the renewed C++20 backend and never fall back to the removed compatibility frontend. Named test-suite execution
 remains pending.
 
-Project artifacts use the active Kotlin DSL output directory (`build/debug` or `build/release` by default). `binary`
-produces one project executable with the `.vxse` extension. Source-oriented outputs such as `object` and `assembly` use
-the source stem directly in that directory, so `Sources/MyApp/Main.vxs` maps to `build/debug/Main.o` in a debug object
-build. Multiple sources consequently produce multiple artifacts, not one merged object. An artifact left by an earlier
-build is replaced by `vxs build`. Two different inputs in the same build that map to the same output name are rejected as
-an ambiguous source-name collision. Project binary emission is connected. Project-wide object and assembly emission remains
-disabled until Core preserves source ownership, so the compiler cannot accidentally collapse multiple inputs into one file.
+For an explicit `-File` source or artifact, the emitted file is a sibling with the selected extension. Project binary builds
+use the Kotlin DSL output directory (`build/debug` or `build/release` by default) and produce one `.vxse`. Project-wide
+object and assembly requests are currently rejected until Core preserves per-source ownership. When that route is connected,
+the output contract is to flatten source paths to stems (for example, `Sources/MyApp/Main.vxs` to `build/debug/Main.o`),
+produce one object or assembly per source, and reject colliding stems rather than overwrite. Successful rebuilds replace the
+selected artifact; failed builds must not leave a stale file looking newly produced.
 
 ## Core input status
 
@@ -269,6 +268,8 @@ stage is permitted and replaces the artifact after successful verification.
 The CLI reserves the renewed artifact vocabulary before all routes are implemented:
 
 - `install` and `viget` report that the ViGet client is not linked into the compiler build.
+- `-Llvm-Compiler orc` is recognized and stored in settings, but does not create an ORC LLJIT or change execution today;
+  `run` remains the AOT build/link/run path. It is not a usable JIT switch yet.
 
 `resolve` and `update` evaluate the project configuration and refresh `Visual.XSharp.Lockfile.sqlite3`.
 

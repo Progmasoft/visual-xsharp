@@ -199,13 +199,13 @@ repository:
 
 ```kotlin
 plugins {
-  plugin("local") {
+  localPlugin {
     path = "plugin.jar"
   }
 }
 
 dependencies {
-  dependency("local") {
+  localDependency {
     path = "dependency.vipkg"
   }
 }

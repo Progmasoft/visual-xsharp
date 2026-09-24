@@ -109,7 +109,7 @@ unit, and source ownership for project-wide per-file artifacts.
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| bounded VXCR v4 decode | connected | C++20 Core reader, template arguments, and scalar payload validation |
+| bounded VXCR v5 decode | connected | C++20 Core reader, closure records, template arguments, and scalar payload validation |
 | native Core semantic verification | connected | `Compiler/Core` |
 | Core-to-CorePrep atomization/CFG | connected | dedicated adapter |
 | CorePrep structural/semantic verification | connected | native CorePrep verifier |

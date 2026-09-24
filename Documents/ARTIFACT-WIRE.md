@@ -11,8 +11,8 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 
 | Contract | Magic | Current version | Producer | Consumer |
 | --- | --- | ---: | --- | --- |
-| Core | `VXCR` | 4 | Haskell frontend | native Core reader |
-| CorePrep | `VXCP` | 4 | CorePrep adapter | native pipeline tools |
+| Core | `VXCR` | 5 | Haskell frontend | native Core reader |
+| CorePrep | `VXCP` | 5 | CorePrep adapter | native pipeline tools |
 | Xpp | `VXPP` | 3 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
 | Xmm | `VXMM` | 3 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
@@ -50,7 +50,7 @@ still fit its declared scalar width.
 
 ## Scalar type tags
 
-Wire v4 assigns an explicit tag to unit/no-result, boolean, string, function,
+Wire v5 assigns an explicit tag to unit/no-result, boolean, string, function,
 named, variable, character, every signed and unsigned integer width, and every
 floating width. A decoder reconstructs the exact type; it does not infer width
 from the literal byte count.
@@ -59,10 +59,10 @@ That separation is required because the same magnitude can inhabit several
 types and because signedness affects native instruction selection even when
 the bit pattern is identical.
 
-### Core v4 scalar tag map
+### Core v5 scalar tag map
 
 The native and Haskell Core codecs use the following assignments for version
-4. This table is an implementation-maintenance aid, not a user extension API.
+5. This table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
 | ---: | --- | ---: | --- |
@@ -82,7 +82,7 @@ The compatibility entry retains an in-memory historical slot. It does not
 create another source spelling, and new numeric values still carry their exact
 declared scalar type.
 
-### CorePrep v4 scalar tag map
+### CorePrep v5 scalar tag map
 
 CorePrep retains historical `int` and `long` positions before the extended
 catalog. Its assignments must therefore not be copied blindly from Core:
@@ -106,8 +106,9 @@ type record is decoded.
 
 ## Ordered template arguments
 
-Core and CorePrep v4 no longer encode every named-type argument as another
-type. Each argument starts with a kind tag and is decoded in source order:
+Since v4, Core and CorePrep encode named-type arguments as typed values rather
+than treating every argument as another type. Version 5 retains this format.
+Each argument starts with a kind tag and is decoded in source order:
 
 | Tag | Argument payload |
 | ---: | --- |
@@ -156,11 +157,12 @@ different role.
 
 ### Version transition
 
-Versions are strict, not feature-negotiated. A v3 Core/CorePrep document or v2
-Xpp/Xmm document fails at the version field when presented to the current
-reader. The compiler does not guess whether a named type happened to contain
-only old type arguments. Recompile the owning source or regenerate the
-intermediate artifact with the current compiler.
+Versions are strict, not feature-negotiated. Core and CorePrep readers accept
+only version 5; Xpp and Xmm readers accept only version 3. Every older or future
+version fails at the version field before body decoding. The compiler does not
+guess whether a document happens to contain only fields from an older schema.
+Recompile the owning source or regenerate the intermediate artifact with the
+current compiler.
 
 Golden fixtures cover the header transition, while mixed type/value round-trip
 tests cover payload ordering, negative arbitrary-precision integers, Boolean
@@ -358,8 +360,9 @@ verified again before serialization or forward lowering.
 
 The version field describes the entire schema. Core/CorePrep version 3 was not
 a permissive extension of version 2: its scalar type and literal tag spaces
-changed. Version 4 adds ordered type/value template arguments to recursive type
-records. Xpp/Xmm began independently at version 1; version 2 added the explicit
+changed. Version 4 adds ordered type/value template arguments to recursive
+type records, and version 5 adds closure values and their capture metadata.
+Xpp/Xmm began independently at version 1; version 2 added the explicit
 strong/weak/unowned opcode catalog used by AARC lowering, and version 3 adds the
 same ordered template-argument type records used at their stage boundary. Every
 current reader rejects earlier and future versions for its own magic.

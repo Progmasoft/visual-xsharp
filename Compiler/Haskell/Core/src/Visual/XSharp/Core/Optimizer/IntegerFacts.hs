@@ -40,32 +40,44 @@ import Visual.XSharp.Core.Scalar
     , isCoreIntegerType
     )
 
+-- | An inclusive interval plus the useful non-convex fact that zero is absent.
 data IntegerFact = IntegerFact
     { integerMinimum :: Maybe Integer
+    -- ^ Inclusive lower bound, if established.
     , integerMaximum :: Maybe Integer
+    -- ^ Inclusive upper bound, if established.
     , integerExcludesZero :: Bool
+    -- ^ True when every represented value is nonzero.
     }
     deriving (Eq, Ord, Read, Show)
 
+{- | Facts valid at one program point, or bottom when that point is unreachable.
+Missing symbol entries mean no path-specific refinement is stored.
+-}
 data IntegerFacts
     = ReachableFacts (Map SymbolId IntegerFact)
     | UnreachableFacts
     deriving (Eq, Ord, Read, Show)
 
+-- | Reachable input state with no path-specific symbol constraints.
 emptyIntegerFacts :: IntegerFacts
 emptyIntegerFacts = ReachableFacts Map.empty
 
+-- | Bottom state used for a contradictory or infeasible control-flow edge.
 unreachableIntegerFacts :: IntegerFacts
 unreachableIntegerFacts = UnreachableFacts
 
+-- | Test whether no execution reaches the represented program point.
 isUnreachableFacts :: IntegerFacts -> Bool
 isUnreachableFacts UnreachableFacts = True
 isUnreachableFacts _ = False
 
+-- | Look up the current refinement for a semantic symbol identity.
 lookupIntegerFact :: IntegerFacts -> SymbolId -> Maybe IntegerFact
 lookupIntegerFact (ReachableFacts facts) symbol = Map.lookup symbol facts
 lookupIntegerFact UnreachableFacts _ = Nothing
 
+-- | Forget one symbol after a write whose resulting value is not modeled.
 forgetIntegerFact :: IntegerFacts -> SymbolId -> IntegerFacts
 forgetIntegerFact (ReachableFacts facts) symbol = ReachableFacts (Map.delete symbol facts)
 forgetIntegerFact UnreachableFacts _ = UnreachableFacts
@@ -118,6 +130,7 @@ impossibleFact fact =
         (integerMinimum fact)
         || (integerExcludesZero fact && factIsZero fact)
 
+-- | Prove that every value represented by this fact is different from zero.
 factProvesNonzero :: IntegerFact -> Bool
 factProvesNonzero fact =
     integerExcludesZero fact
@@ -130,6 +143,10 @@ factTruth fact
     | factProvesNonzero fact = Just True
     | otherwise = Nothing
 
+{- | Derive an interval for the supported pure integer subset of a Core expression.
+Unsupported expressions return 'Nothing'; callers must not treat that as a
+proof of safety or as an empty set of values.
+-}
 factOfIntegerExpression :: IntegerFacts -> CoreExpression -> Maybe IntegerFact
 factOfIntegerExpression facts expression = case expression of
     CoreLiteral (CoreInteger value) valueType
@@ -213,8 +230,9 @@ negateFact valueType fact = case (integerMaximum fact, integerMinimum fact) of
                 (integerExcludesZero fact || lower > 0 || upper < 0)
     _ -> unknownFact
 
--- Calls can mutate a captured mutable cell. Until Core contains complete
--- read/write summaries, forget every proof at a call boundary.
+{- | Account for expression evaluation, invalidating refinements at calls.
+Calls can mutate captured cells; Core has no complete read/write summary yet.
+-}
 transferExpressionFacts :: IntegerFacts -> CoreExpression -> IntegerFacts
 transferExpressionFacts UnreachableFacts _ = UnreachableFacts
 transferExpressionFacts facts (CorePrimitive CoreLogicalAnd [left, right] _) =
@@ -238,6 +256,7 @@ transferShortCircuitFacts isAnd facts left right =
                 Just _ -> afterRight
                 Nothing -> joinIntegerFacts afterLeft afterRight
 
+-- | Whether evaluating an expression can invoke a callable.
 expressionInvokesCallable :: CoreExpression -> Bool
 expressionInvokesCallable expression = case expression of
     CoreVariable {} -> False
@@ -248,6 +267,7 @@ expressionInvokesCallable expression = case expression of
     -- A closure body is deferred; only its capture initializers run now.
     CoreClosure captures _ _ _ _ -> any (expressionInvokesCallable . coreCaptureValue) captures
 
+-- | Transfer one statement's effects and assignments to the next program point.
 transferStatementFacts :: IntegerFacts -> CoreStatement -> IntegerFacts
 transferStatementFacts UnreachableFacts _ = UnreachableFacts
 transferStatementFacts facts statement = case statement of
@@ -282,6 +302,7 @@ transferStatementFacts facts statement = case statement of
                     (True, True) -> UnreachableFacts
                     (False, False) -> joinIntegerFacts trueOutput falseOutput
 
+-- | Transfer statements in source order until control terminates.
 transferStatementsFacts :: IntegerFacts -> [CoreStatement] -> IntegerFacts
 transferStatementsFacts facts [] = facts
 transferStatementsFacts UnreachableFacts _ = UnreachableFacts
@@ -293,6 +314,8 @@ transferStatementsFacts facts (statement : remaining) =
 
 -- At control-flow joins, form an interval hull and retain zero exclusion only
 -- when every continuing path excludes zero. Unreachable arms are identities.
+
+-- | Merge feasible paths, retaining only facts valid on every incoming path.
 joinIntegerFacts :: IntegerFacts -> IntegerFacts -> IntegerFacts
 joinIntegerFacts UnreachableFacts reachable = reachable
 joinIntegerFacts reachable UnreachableFacts = reachable
@@ -314,6 +337,9 @@ joinFact left right =
         upperHull (Just first) (Just second) = Just (max first second)
         upperHull _ _ = Nothing
 
+{- | Refine facts for the requested truth edge of a condition.
+True and false edges may carry different intervals or reachability.
+-}
 refineConditionFacts :: Bool -> CoreExpression -> IntegerFacts -> IntegerFacts
 refineConditionFacts _ _ UnreachableFacts = UnreachableFacts
 refineConditionFacts desired expression facts = refine expression
@@ -534,6 +560,7 @@ reversePrimitive primitive = case primitive of
     CoreGreaterEqual -> CoreLessEqual
     _ -> primitive
 
+-- | Determine truth only when one condition edge is provably infeasible.
 conditionTruthFromFacts :: IntegerFacts -> CoreExpression -> Maybe Bool
 conditionTruthFromFacts UnreachableFacts _ = Nothing
 conditionTruthFromFacts facts expression

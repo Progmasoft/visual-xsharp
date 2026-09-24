@@ -558,7 +558,7 @@ invalidPreparedWeakCapture =
 -- Keep a textual assertion near the wire tests so failures caused by an
 -- accidental version rollback explain themselves in the test output.
 _wireVersionContext :: String
-_wireVersionContext = "closures require Core and CorePrep wire version 3"
+_wireVersionContext = "closures require Core and CorePrep wire version 5"
 
 _diagnosticContext :: Diagnostic -> Bool
 _diagnosticContext diagnostic = "closure" `isInfixOf` diagnosticMessage diagnostic

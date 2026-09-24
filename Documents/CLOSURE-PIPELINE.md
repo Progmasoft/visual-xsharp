@@ -84,11 +84,11 @@ symbol validity, parameter uniqueness, nested expressions, and return behavior.
 Optimization recursively folds capture initializers and closure bodies without
 reordering captures.
 
-Core wire version 4 serializes ownership, captures, parameters, return type, and
+Core wire version 5 serializes ownership, captures, parameters, return type, and
 nested statements. Existing byte, count, type-depth, and expression-depth limits
 also apply to closures.
 
-The native VXCR v4 reader and writer carry the same closure expression tag and
+The native VXCR v5 reader and writer carry the same closure expression tag and
 field order as the Haskell frontend. The C++ Core verifier validates capture
 ownership, callable shape, nested body returns, and capture mutation before
 CorePrep lifting. This keeps callable-containing `.vxs` input on the ordinary
@@ -106,15 +106,15 @@ CorePrep converts each closure by:
 6. processing that queue until nested closures are also lifted.
 
 CorePrep verification checks callable result type, lifted target, capture atom
-types, symbol validity, and non-owning restrictions. Wire version 3 gives
-closure creation a dedicated operation tag; a function symbol is never encoded
-as a fake data operand.
+types, symbol validity, and non-owning restrictions. CorePrep wire v5 preserves
+this lifted closure metadata. Xpp wire v3 gives closure creation a dedicated
+operation tag; a function symbol is never encoded as a fake data operand.
 
 ## Native C++ stages
 
-The C++20 decoder consumes the same version 3 contract. Xpp retains the lifted
-symbol, ordered operands, ownership vector, and callable result. Its verifier
-checks the target's hidden parameter prefix against captures.
+The C++20 Xpp/Xmm decoders consume their version 3 contracts. Xpp retains the
+lifted symbol, ordered operands, ownership vector, and callable result. Its
+verifier checks the target's hidden parameter prefix against captures.
 
 Xmm assigns registers to capture values while preserving the lifted target and
 ownership modes. Its verifier repeats cross-function checks after register
@@ -133,7 +133,7 @@ the remaining callable boundary; construction and destruction are connected.
 Tests cover delimiter and parameter forms, expression/block bodies, empty and
 populated capture lists, aliases and order, duplicate/omitted captures, private
 symbols, invocation checking, non-owning restrictions, implicit free-variable
-discovery, nested conversion, Core/CorePrep verification, and both v4 codecs.
+discovery, nested conversion, Core/CorePrep verification, and both v5 codecs.
 
 Native tests independently verify codec symmetry and metadata preservation
 through Xpp and Xmm. Each stage rejects malformed closures at the boundary it

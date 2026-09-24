@@ -1,5 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | The syntax parser turns one lexed source unit into a positioned parsed AST.
+
+It owns grammar and precedence, but not name binding or type decisions. Parsing
+stops at the first structural error so later phases never receive a guessed or
+partially recovered declaration tree.
+-}
 module Visual.XSharp.Parser (TokenKind (..), Token (..), ParserInput (..), Parser (..), defaultParser, runParser) where
 
 import Visual.XSharp.AST
@@ -10,11 +17,23 @@ import Visual.XSharp.NumericLiteral
 import Visual.XSharp.Parser.Cursor
 import Visual.XSharp.Parser.Token
 
-data ParserInput = ParserInput {parserSourceFile :: FilePath, parserTokens :: [Token]}
+-- | Tokens and diagnostic source identity for one physical input file.
+data ParserInput = ParserInput
+    { parserSourceFile :: FilePath
+    -- ^ Path reported on syntax diagnostics.
+    , parserTokens :: [Token]
+    -- ^ Lexer tokens, including the end-of-file token.
+    }
     deriving (Eq, Ord, Read, Show)
+
+-- | A parser implementation that returns a complete AST or diagnostics.
 newtype Parser = Parser {parseTokens :: ParserInput -> Either [Diagnostic] ParsedAST}
+
+-- | Run the supplied parser over one lexed file.
 runParser :: Parser -> ParserInput -> Either [Diagnostic] ParsedAST
 runParser = parseTokens
+
+-- | The repository grammar parser for the currently supported declaration set.
 defaultParser :: Parser
 defaultParser = Parser parseVisualXSharp
 
@@ -63,9 +82,10 @@ parseOrdinaryTypeDeclaration = do
     close <- symbol "}"
     pure (TypeDeclaration (mergeSpan (tokenSpan start) (tokenSpan close)) name () members)
 
--- The template prefix owns lexical parameter declarations.  It is parsed as
--- part of the class rather than discarded as decoration because later passes
--- need parameter category and order to distinguish type and value arguments.
+{- | Parse a template declaration while preserving ordered, typed parameters.
+Later phases distinguish type and value arguments, so the prefix cannot be
+discarded as decoration after recognizing the class name.
+-}
 parseTemplateDeclaration :: P (Declaration Identifier ())
 parseTemplateDeclaration = do
     start <- keyword "template"

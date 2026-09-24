@@ -29,10 +29,10 @@ and explicit strong/weak/unowned operations. Function types serve checked call s
 AARC pointer representation. Unresolved type variables remain rejected. Nominal field layout stays in type metadata; the
 backend never guesses fields from a name.
 
-Source scalar names do not inherit C widths. The frontend/Core contract selects the Visual X# width, and LLVM lowering must
-construct the corresponding integer or floating type explicitly. The current Core wire revision does not yet transport the
-complete scalar catalog, so unsupported widths and floating payloads fail before target emission rather than being narrowed
-to the older connected subset.
+Source scalar names do not inherit C widths. The frontend/Core contract selects the Visual X# width, and LLVM lowering
+constructs the corresponding integer or floating type explicitly. Core wire v5 transports the complete scalar catalog;
+the backend preserves each declared width, including 128-bit integer and floating types, rather than narrowing values to
+host or C widths.
 
 Source `void` is not a value. The frontend maps it once to the current resultless Core ABI marker. Visual X# has no source
 `unit` type; the legacy native enum's unit-like spelling is private implementation vocabulary.
@@ -83,8 +83,8 @@ The CLI optimization setting selects an LLVM new-pass-manager pipeline:
 
 The generated module is verified before optimization. The backend builds LLVM's standard per-module optimization pipeline
 with the C++ new pass manager and local analysis managers. LLVM contexts, modules, builders, printed IR streams, and bitcode
-buffers have ordinary scoped C++ ownership and are released on every success or error path. The renewed backend does not use
-the LLVM C API; LLVM-C remains confined to the isolated legacy C backend.
+buffers have ordinary scoped C++ ownership and are released on every success or error path. The production backend does not
+use the LLVM C API; the retired C backend was removed rather than retained as a compatibility implementation.
 
 Optimization failure is an artifact failure. The backend does not serialize the pre-optimization module under the requested
 output name after a selected pipeline fails. Tests should verify the module both before and after any custom pass additions.
@@ -119,7 +119,8 @@ artifact APIs:
 `vxs build -Emit llvmll` writes the sibling `.ll` file and `vxs build -Emit llvmbc` writes the sibling `.bc` file for either
 `.vxs` or `VXCR` Core input. `vxs build -Emit object|assembly` writes target-machine output. Binary emission creates an
 executable entry bridge, emits a temporary object, invokes LLD through a typed C++20 argument vector, verifies the `.vxse`,
-and removes the temporary object. `vxs check` never emits. Xpp and Xmm artifact writers are not implied by this connection.
+and removes the temporary object. `vxs check` never emits. Xpp and Xmm artifact codecs are separate C++20 stage-owned
+readers/writers; they are not LLVM-backend operations.
 
 The Haskell frontend is the sole source owner. The backend remains responsible for target lowering and the driver remains
 responsible for linking; no compatibility frontend, shell command construction, or DIMCLI route is used.

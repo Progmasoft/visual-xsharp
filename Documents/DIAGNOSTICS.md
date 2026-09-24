@@ -237,8 +237,9 @@ document bytes. Relevant categories include:
 - unsupported payload in the current wire revision; and
 - private CorePrep bytes supplied as public Core.
 
-Xpp and Xmm have no connected public readers yet. Their verifier messages are still structured boundary failures for tests
-and in-process clients.
+Xpp and Xmm have bounded public readers. Malformed artifacts report framing, version, tag, scalar, or resource-limit failures
+at decode. Structurally valid but semantically invalid artifacts report the owning Xpp or Xmm verifier failure before
+optimization or lowering.
 
 ## Safe output behavior
 
@@ -248,7 +249,8 @@ Failure must not make an old file look newly built.
 - A build replaces its selected output only after the producing stage succeeds.
 - `run` records the exact artifact from the current invocation and never executes a pre-existing `.vxse` after failure.
 - Binary emission removes temporary objects after success and failure.
-- An ambiguous per-source output stem is rejected before either input overwrites the other.
+- Project-wide object and assembly requests are rejected before writing while Core lacks source ownership. Once that route is
+  connected, flattened source-stem collisions must be rejected before either input overwrites the other.
 - Project evaluation aborted by `panic` emits no partial plan and does not begin compilation.
 - VXDC refuses to overwrite the binary lock database with a text dump.
 

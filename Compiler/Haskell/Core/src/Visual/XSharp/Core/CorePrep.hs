@@ -1,5 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | Normalize tree-shaped Core into typed operations and explicit basic blocks.
+
+CorePrep preserves Core identity and evaluation order while making control flow
+and storage actions visible to native Xpp lowering. It is an internal adapter,
+not a user-selectable emission format or an optimization owner.
+-}
 module Visual.XSharp.Core.CorePrep
     ( CorePrepAtom (..)
     , CorePrepCapture (..)
@@ -18,31 +25,41 @@ import Visual.XSharp.Diagnostic
 
 data CorePrepAtom = CorePrepVariable ResolvedName Type | CorePrepLiteral CoreLiteral Type
     deriving (Eq, Ord, Read, Show)
+
+-- | One atom-only computation; nested expressions have already been sequenced.
 data CorePrepOperation
     = CorePrepCopy CorePrepAtom
     | CorePrepCall CorePrepAtom [CorePrepAtom]
     | CorePrepPrimitive CorePrimitive [CorePrepAtom]
     | CorePrepMakeClosure ResolvedName [CorePrepCapture]
     deriving (Eq, Ord, Read, Show)
+
 data CorePrepCapture = CorePrepCapture CaptureMode ResolvedName Type CorePrepAtom
     deriving (Eq, Ord, Read, Show)
+
+-- | A storage definition or side effect that executes in block order.
 data CorePrepInstruction
     = CorePrepBind ResolvedName Type Bool CorePrepOperation
     | CorePrepAssign ResolvedName CorePrepAtom
     | CorePrepEvaluate CorePrepOperation
     deriving (Eq, Ord, Read, Show)
+
+-- | The control transfer that closes a prepared basic block.
 data CorePrepTerminator
     = CorePrepReturn CorePrepAtom
     | CorePrepBranch CorePrepAtom Int Int
     | CorePrepJump Int
     | CorePrepUnreachable
     deriving (Eq, Ord, Read, Show)
+
+-- | A deterministic block identifier, ordered instructions, and final transfer.
 data CorePrepBlock = CorePrepBlock
     { corePrepBlockId :: Int
     , corePrepBlockInstructions :: [CorePrepInstruction]
     , corePrepBlockTerminator :: CorePrepTerminator
     }
     deriving (Eq, Ord, Read, Show)
+
 data CorePrepFunction = CorePrepFunction
     { corePrepFunctionName :: ResolvedName
     , corePrepFunctionParameters :: [(ResolvedName, Type)]
@@ -71,6 +88,10 @@ data OpenBlock = OpenBlock
     , openBlockInstructions :: [CorePrepInstruction]
     }
 
+{- | Adapt one verified Core module without changing its source-level semantics.
+Fresh IDs start above every Core ID so generated temporaries cannot alias
+declarations, locals, parameters, or captures already present in the module.
+-}
 prepareCore :: CoreModule -> Either [Diagnostic] CorePrepModule
 prepareCore moduleValue =
     let seed = 1 + maximum (0 : concatMap symbolIds (coreModuleFunctions moduleValue))

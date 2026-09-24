@@ -73,8 +73,9 @@ and the compiler share one source policy.
 
 ### Explicit artifact
 
-`-Build core -File module.core` selects the public Core reader. Registered Xpp and Xmm inputs are rejected until their
-versioned codecs exist. Object input is meaningful only for a build operation and does not pass through frontend analysis.
+`-Build core -File module.core`, `-Build xpp -File module.xpp`, and `-Build xmm -File module.xmm` select their versioned
+readers. Each decoded artifact is checked by its owning verifier before the pipeline continues. Object input is meaningful
+only for a build operation and does not pass through frontend analysis.
 
 ## 2. Source-set loading
 
@@ -236,7 +237,8 @@ references from weak and unowned control handles, rejects release-after-release 
 possible state at a control-flow join. See [Ownership-flow verification](OWNERSHIP-FLOW.md).
 
 The public `.xpp` artifact uses the bounded versioned `VXPP` reader/writer. Ordinary compilation still keeps Xpp in RAM
-unless the user explicitly selects Xpp input or output.
+unless the user explicitly selects Xpp input or output. The corresponding `.xmm` `VXMM` reader/writer also supports
+verified forward resumption into LLVM.
 
 ## 11. Xmm
 
@@ -259,8 +261,9 @@ Definite initialization and ownership are separate checks. A register may be def
 consumed or carries the wrong AARC representation. Xmm repeats ownership-flow verification after lowering so native callers
 and artifact readers cannot bypass the Xpp boundary.
 
-The backend compatibility `Verify` entry delegates to this verifier, but Xmm remains the owner. Like Xpp, `.xmm` is a
-reserved public artifact whose reader and writer are not yet connected.
+The backend compatibility `Verify` entry delegates to this verifier, but Xmm remains the owner. `.xmm` is a public artifact
+with a bounded, versioned `VXMM` reader/writer. Loaded Xmm is verified before optimization or LLVM lowering and again before
+serialization.
 
 ## 12. LLVM lowering
 
@@ -290,10 +293,11 @@ Artifact ownership is explicit:
 `check` writes no artifact. Binary emission creates the required entry bridge, writes a temporary object, invokes LLD with a
 typed argument vector rather than a shell string, validates the resulting executable, and removes its temporary object.
 
-Project binary builds produce one executable. Per-source output kinds must preserve source ownership: a source such as
-`Sources/MyApp/Main.vxs` maps to `build/debug/Main.o`, not `build/debug/Sources/MyApp/Main.o`. Two inputs with the same stem
-must be rejected rather than overwrite each other. Project-wide object and assembly output remains disconnected until Core
-can preserve that ownership through the whole route.
+Project binary builds produce one executable. Project-wide object and assembly emission is currently rejected because Core
+does not retain the source-file ownership needed to produce one artifact per input. When connected, the declared project
+contract is to flatten source paths to stems (for example, `Sources/MyApp/Main.vxs` to `build/debug/Main.o`) and reject
+colliding stems before writing; the compiler must not merge the source set into one misleading object. Explicit single-file
+builds remain distinct from this disconnected project-source-set route.
 
 ## 14. Failure discipline
 

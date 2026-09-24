@@ -1,5 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | Semantic checker for trees whose references already have stable identities.
+
+The checker attaches types and returns diagnostics without rewriting unresolved
+names. It runs after Renamer and Name Resolution so lexical spelling is never
+used as a substitute for symbol identity.
+-}
 module Visual.XSharp.TypeChecker (TypeChecker (..), defaultTypeChecker, runTypeChecker) where
 
 import Visual.XSharp.AST
@@ -9,9 +16,14 @@ import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
 import Visual.XSharp.TemplateValue
 
+-- | A resolved-tree checker that produces a typed tree only when checking succeeds.
 newtype TypeChecker = TypeChecker {checkResolvedAST :: ResolvedAST -> Either [Diagnostic] TypedAST}
+
+-- | Apply a checker to the output of Name Resolution.
 runTypeChecker :: TypeChecker -> ResolvedAST -> Either [Diagnostic] TypedAST
 runTypeChecker = checkResolvedAST
+
+-- | The production checker for the currently implemented Visual X# subset.
 defaultTypeChecker :: TypeChecker
 defaultTypeChecker = TypeChecker checkTree
 
@@ -29,6 +41,9 @@ data TemplateContext = TemplateContext
 emptyTemplateContext :: TemplateContext
 emptyTemplateContext = TemplateContext [] []
 
+{- | Type-check every top-level declaration and collect independent diagnostics.
+No partially typed AST escapes when any declaration has an error.
+-}
 checkTree :: ResolvedAST -> Either [Diagnostic] TypedAST
 checkTree (ResolvedAST (SyntaxTree namespace declarations)) =
     let checked = map checkTopDeclaration declarations
@@ -74,6 +89,9 @@ checkTopDeclaration declaration = case declaration of
             )
     FunctionDeclaration {} -> checkDeclarationWith emptyTemplateContext [] declaration
 
+{- | Keep type and value parameters in separate lookup tables.
+Identical source spelling in the two categories must not collapse their roles.
+-}
 templateContext :: [TemplateParameter ResolvedName annotation] -> TemplateContext
 templateContext parameters =
     TemplateContext
@@ -139,6 +157,11 @@ syntaxTemplateArgumentIn context argument = case argument of
 -- Exact evaluation here gives every concrete specialization one canonical
 -- identity. Invalid arithmetic becomes a sentinel and is diagnosed by the
 -- type-syntax validation pass before Core can be emitted.
+
+{- | Canonicalize a template argument before it contributes to specialization identity.
+The fallback value is only a recovery sentinel; validation reports the original
+invalid expression before a specialization plan is emitted.
+-}
 syntaxTemplateValueIn :: TemplateContext -> TemplateValueSyntax -> TemplateValue
 syntaxTemplateValueIn context value = case value of
     TemplateNameSyntax _ (QualifiedName [identifier])

@@ -177,7 +177,7 @@ A project can explicitly load a local Kotlin plugin JAR without introducing anot
 
 ```kotlin
 plugins {
-  plugin("local") {
+  localPlugin {
     path = "plugin.jar"
   }
 }
@@ -214,8 +214,18 @@ A local Visual X# package is an explicit file source, not a repository coordinat
 
 ```kotlin
 dependencies {
-  dependency("local") {
+  localDependency {
     path = "dependency.vipkg"
+  }
+}
+```
+
+Test-only package files use their own `localTestDependency` declaration and remain separate from production dependencies:
+
+```kotlin
+dependencies {
+  localTestDependency {
+    path = "TestDependency.vipkg"
   }
 }
 ```
@@ -295,14 +305,14 @@ Debug and Release output directories are independent DSL values. The defaults ar
 The command-line `-Emit` option selects the artifact kind; artifact choice is deliberately not stored in the project DSL.
 The chosen output directory continues to come from the evaluated project mode.
 
-Binary emission creates one `<project-or-entry>.vxse`. Source-owned emissions use flattened source stems inside the selected
-output directory: `Sources/MyApp/Main.vxs` becomes `build/debug/Main.o` for a debug object build. The original source
-directory is not reproduced below `build/debug`. Multiple sources produce multiple objects/assembly files, and equal stems
-are diagnosed as ambiguous instead of overwriting one another.
+Binary emission creates one `<project-or-entry>.vxse`. The project output naming contract for source-owned emissions is to
+flatten source stems inside the selected output directory: `Sources/MyApp/Main.vxs` becomes `build/debug/Main.o` for a
+debug object build. The original source directory is not reproduced below `build/debug`; multiple sources produce multiple
+objects/assembly files, and equal stems are diagnosed as ambiguous instead of overwriting one another.
 
-Project-wide per-source object and assembly emission is currently disconnected until the Core route preserves file
-ownership. The output naming contract is documented now so the implementation cannot incorrectly collapse a source set into
-one object.
+That per-source project route is not connected yet: the current Core module does not preserve physical source ownership, so
+project-wide object and assembly requests fail before writing. The documented naming contract prevents a future route from
+incorrectly collapsing the source set into one object. Explicit `-File` builds currently emit a sibling artifact instead.
 
 ## Case sensitivity and paths
 

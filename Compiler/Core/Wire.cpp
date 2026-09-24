@@ -22,6 +22,12 @@ namespace Visual::XSharp::Core::Wire
                 , limits_(limits)
             {}
 
+            /**
+             * @brief Validate the complete envelope before publishing a module.
+             *
+             * Header checks precede body allocation, and the final offset check
+             * rejects trailing bytes so one document has exactly one meaning.
+             */
             [[nodiscard]] auto
             Document() -> DecodeResult
             {
@@ -85,6 +91,11 @@ namespace Visual::XSharp::Core::Wire
                 }
                 return bytes_[offset_++];
             }
+            /**
+             * @brief Read an unsigned little-endian wire scalar of a fixed width.
+             *
+             * This byte order is explicit so host endianness cannot alter VXCR.
+             */
             template<typename Integer>
             [[nodiscard]] auto
             Unsigned(std::string_view context) -> Integer
@@ -95,6 +106,12 @@ namespace Visual::XSharp::Core::Wire
                     result |= static_cast<Integer>(Byte(context)) << shift;
                 return result;
             }
+            /**
+             * @brief Validate an untrusted collection length before narrowing it.
+             *
+             * Callers use this result before reserve or recursive decoding, which
+             * keeps hostile counts from becoming unchecked allocation requests.
+             */
             [[nodiscard]] auto
             Count(std::size_t maximum, std::string_view context) -> std::size_t
             {
@@ -103,6 +120,7 @@ namespace Visual::XSharp::Core::Wire
                     Fail(ErrorKind::LimitExceeded, std::string(context), "collection count exceeds configured limit");
                 return error_ ? 0U : static_cast<std::size_t>(value);
             }
+            /** @brief Reserve only after Count has enforced the caller's limit. */
             template<typename Value, typename Decode>
             [[nodiscard]] auto
             Vector(std::size_t maximum, std::string_view context, Decode decode) -> std::vector<Value>
@@ -114,6 +132,12 @@ namespace Visual::XSharp::Core::Wire
                     values.push_back(decode());
                 return values;
             }
+            /**
+             * @brief Read scalar-counted UTF-32 text and reject non-scalar values.
+             *
+             * VXCR stores Unicode scalar values, not UTF-8 bytes or UTF-16 code
+             * units; surrogate code points and values above U+10FFFF are invalid.
+             */
             [[nodiscard]] auto
             Text(std::string_view context) -> std::u32string
             {
