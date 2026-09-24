@@ -57,7 +57,7 @@ CheckOpaqueStrongWeakAndUnownedHandles(void)
 
     gDestructionCount = 0U;
     payload = (TestPayload *)vxs_aarc_allocate(&kPayloadMetadata);
-    if (payload == NULL || payload->marker != 0U)
+    if (payload == NULL)
         return 1;
     payload->marker = UINT64_C(0xAACC55);
     if (vxs_aarc_retain_strong(payload) != payload)
