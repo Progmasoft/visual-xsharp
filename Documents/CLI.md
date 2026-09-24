@@ -19,6 +19,7 @@ update
 install
 viget
 version
+interactive
 ```
 
 The general invocation shape is:
@@ -45,8 +46,22 @@ segments. Version reporting is available only through the explicit `vxs version`
 | `install` | install a ViGet package | registered; ViGet client not linked |
 | `viget` | perform registry publication/update action | registered; ViGet client not linked |
 | `version` | report compiler version through command form | recognized version outcome |
+| `interactive` | launch the Visual X# Interactive REPL | connected process dispatch; requires `vxsi` on `PATH` |
 
 Registered commands fail explicitly. They never print success while skipping the requested package or test operation.
+
+`vxs interactive` looks up the `vxsi` companion in the process `PATH` and forwards every subsequent argument unchanged.
+This keeps the public entry point singular while allowing the REPL binary to be installed or staged independently:
+
+```text
+vxs interactive
+vxs interactive -Eval "5 + 5"
+vxs interactive -Help
+```
+
+The no-argument form opens the persistent REPL. One-shot `-Eval` runs a Visual X# expression and exits; `-Help` is handled
+by `vxsi`, not consumed by the outer compiler parser. The native bundle places `vxsi` beside `vxs`, so add that install
+directory to `PATH` before invoking the command. Direct `vxsi` invocation remains available for development and IDEs.
 
 `check`, `build`, `run`, and `test` accept either a discovered `Visual.XSharp.kts` project or a `.vxs` file selected with
 `-File`.

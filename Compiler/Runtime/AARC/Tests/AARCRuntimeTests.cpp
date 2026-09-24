@@ -144,9 +144,7 @@ TEST_CASE("strong references destroy the payload exactly once")
     REQUIRE(payload != nullptr);
     payload->marker = 0xAACC55U;
 
-    CHECK(Aarc::Header(payload)->strongCount.load() == 1U);
     CHECK(Aarc::RetainStrong(payload) == payload);
-    CHECK(Aarc::Header(payload)->strongCount.load() == 2U);
     Aarc::ReleaseStrong(payload);
     CHECK(destructions.load() == 0U);
     Aarc::ReleaseStrong(payload);
@@ -202,7 +200,6 @@ TEST_CASE("weak lock retains a live object and expires after destruction")
     Aarc::ReleaseStrong(payload);
     CHECK(destructions.load() == 1U);
     CHECK(Aarc::LockWeak(weak) == nullptr);
-    CHECK(weak.header->state.load() == Aarc::ObjectState::Destroyed);
     Aarc::ReleaseWeak(copied);
     Aarc::ReleaseWeak(weak);
 }
@@ -224,6 +221,118 @@ TEST_CASE("unowned handles retain only the control header")
     CHECK(Aarc::LoadUnowned(unowned) == nullptr);
     Aarc::ReleaseUnowned(copied);
     Aarc::ReleaseUnowned(unowned);
+}
+
+TEST_CASE("empty control handles and null object operations are inert")
+{
+    CHECK(Aarc::RetainStrong(nullptr) == nullptr);
+    Aarc::ReleaseStrong(nullptr);
+    CHECK_FALSE(Aarc::IsExactType(nullptr, kMetadata.typeIdentity));
+
+    const auto emptyWeak = Aarc::MakeWeak(nullptr);
+    CHECK(emptyWeak.header == nullptr);
+    CHECK(Aarc::CopyWeak(emptyWeak).header == nullptr);
+    CHECK(Aarc::LockWeak(emptyWeak) == nullptr);
+    Aarc::ReleaseWeak(emptyWeak);
+
+    const auto emptyUnowned = Aarc::MakeUnowned(nullptr);
+    CHECK(emptyUnowned.header == nullptr);
+    CHECK(Aarc::CopyUnowned(emptyUnowned).header == nullptr);
+    CHECK(Aarc::LoadUnowned(emptyUnowned) == nullptr);
+    Aarc::ReleaseUnowned(emptyUnowned);
+}
+
+TEST_CASE("control-handle copies outlive their source handles independently")
+{
+    destructions.store(0U);
+    auto *payload = static_cast<Payload *>(Aarc::Allocate(kMetadata));
+    REQUIRE(payload != nullptr);
+
+    const auto weakSource = Aarc::MakeWeak(payload);
+    const auto weakCopy = Aarc::CopyWeak(weakSource);
+    REQUIRE(weakSource.header != nullptr);
+    REQUIRE(weakCopy.header == weakSource.header);
+    Aarc::ReleaseWeak(weakSource);
+    auto *weakLoaded = Aarc::LockWeak(weakCopy);
+    REQUIRE(weakLoaded == payload);
+    Aarc::ReleaseStrong(weakLoaded);
+
+    const auto unownedSource = Aarc::MakeUnowned(payload);
+    const auto unownedCopy = Aarc::CopyUnowned(unownedSource);
+    REQUIRE(unownedSource.header != nullptr);
+    REQUIRE(unownedCopy.header == unownedSource.header);
+    Aarc::ReleaseUnowned(unownedSource);
+    auto *loaded = Aarc::LoadUnowned(unownedCopy);
+    REQUIRE(loaded == payload);
+    Aarc::ReleaseStrong(loaded);
+
+    Aarc::ReleaseStrong(payload);
+    CHECK(destructions.load() == 1U);
+    CHECK(Aarc::LockWeak(weakCopy) == nullptr);
+    CHECK(Aarc::LoadUnowned(unownedCopy) == nullptr);
+    Aarc::ReleaseWeak(weakCopy);
+    Aarc::ReleaseUnowned(unownedCopy);
+}
+
+TEST_CASE("weak upgrades racing the last owner never resurrect a destroyed object", "[aarc][concurrency]")
+{
+    destructions.store(0U);
+    auto *payload = static_cast<Payload *>(Aarc::Allocate(kMetadata));
+    REQUIRE(payload != nullptr);
+    const auto weak = Aarc::MakeWeak(payload);
+    REQUIRE(weak.header != nullptr);
+
+    constexpr std::size_t kThreadCount = 6U;
+    constexpr std::size_t kAttemptsPerThread = 1500U;
+    std::atomic_size_t ready{};
+    std::atomic_bool start{};
+    std::atomic_bool raceStart{};
+    std::atomic_bool failedToUpgradeLiveObject{};
+    std::atomic_size_t primed{};
+    std::vector<std::thread> workers;
+    workers.reserve(kThreadCount);
+    for (std::size_t worker = 0U; worker < kThreadCount; ++worker)
+    {
+        workers.emplace_back([weak, &ready, &start, &raceStart, &failedToUpgradeLiveObject, &primed] {
+            ready.fetch_add(1U, std::memory_order_release);
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+
+            // Prove that every worker can upgrade the same control handle while
+            // the original strong owner is known to remain live.
+            auto *live = Aarc::LockWeak(weak);
+            if (live == nullptr)
+                failedToUpgradeLiveObject.store(true, std::memory_order_relaxed);
+            else
+                Aarc::ReleaseStrong(live);
+            primed.fetch_add(1U, std::memory_order_release);
+            while (!raceStart.load(std::memory_order_acquire))
+                std::this_thread::yield();
+
+            for (std::size_t attempt = 0U; attempt < kAttemptsPerThread; ++attempt)
+            {
+                auto *locked = Aarc::LockWeak(weak);
+                if (locked == nullptr)
+                    continue;
+                Aarc::ReleaseStrong(locked);
+            }
+        });
+    }
+
+    while (ready.load(std::memory_order_acquire) != kThreadCount)
+        std::this_thread::yield();
+    start.store(true, std::memory_order_release);
+    while (primed.load(std::memory_order_acquire) != kThreadCount)
+        std::this_thread::yield();
+    CHECK_FALSE(failedToUpgradeLiveObject.load(std::memory_order_relaxed));
+    raceStart.store(true, std::memory_order_release);
+    Aarc::ReleaseStrong(payload);
+    for (auto &worker : workers)
+        worker.join();
+
+    CHECK(destructions.load() == 1U);
+    CHECK(Aarc::LockWeak(weak) == nullptr);
+    Aarc::ReleaseWeak(weak);
 }
 
 TEST_CASE("concurrent strong retain and release preserves one owner")
@@ -250,7 +359,6 @@ TEST_CASE("concurrent strong retain and release preserves one owner")
         worker.join();
 
     CHECK(retainedEveryTime.load(std::memory_order_relaxed));
-    CHECK(Aarc::Header(payload)->strongCount.load() == 1U);
     CHECK(destructions.load() == 0U);
     Aarc::ReleaseStrong(payload);
     CHECK(destructions.load() == 1U);
@@ -261,10 +369,7 @@ TEST_CASE("Unicode scalar string factory creates an AARC object")
     const std::uint32_t scalars[]{ 0x56U, 0x69U, 0x73U, 0x75U, 0x61U, 0x6cU, 0x20U, 0x58U, 0x23U };
     auto *string = vxs_aarc_string_literal(scalars, std::size(scalars));
     REQUIRE(string != nullptr);
-    auto *header = Aarc::Header(string);
-    REQUIRE(header != nullptr);
-    CHECK(header->metadata->instanceSize != 0U);
-    CHECK(header->strongCount.load() == 1U);
+    CHECK(Aarc::IsExactType(string, Aarc::TypeIdentity("String")));
     Aarc::ReleaseStrong(string);
     const std::uint32_t surrogate[]{ 0xd800U };
     CHECK(vxs_aarc_string_literal(surrogate, 1U) == nullptr);

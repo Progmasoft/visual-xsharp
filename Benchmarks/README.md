@@ -14,6 +14,7 @@ the Haskell frontend and C++20 native pipeline:
 - `Compiler/Codegen/Xpp/Benches` measures Xpp verification, optimization, and artifact encoding/decoding;
 - `Compiler/Codegen/Xmm/Benches` measures Xpp-to-Xmm lowering plus Xmm verification, optimization, and artifact codecs;
 - `Compiler/Haskell/Core/Benches` measures the equivalent Haskell Core and CorePrep operations with Criterion.
+- `Interactive/Benches` measures one production CorePrep-to-Xmm-to-LLVM lowering, ORC module-add/invoke, and resource-reset cycle.
 
 Run every benchmark from the repository root:
 
@@ -52,3 +53,4 @@ statistical comparisons once it can provide fixed CPU frequency, warm-up policy,
 - `2026-09-14-Native-Dataflow.md` records the verifier/encoder follow-up after worklist scheduling and packed lattices.
 - `2026-09-14-Dense-Liveness.md` records dense backward-liveness and retention-only optimizer results.
 - `2026-09-20-Core-Verifier-Environment.md` records removal of the quadratic per-function global-environment copy.
+- `2026-09-24-VXSI-ORC.md` records the first Visual X# Interactive native-cell/JIT lifecycle baseline.

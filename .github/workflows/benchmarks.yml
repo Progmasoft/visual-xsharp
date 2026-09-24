@@ -68,6 +68,7 @@ jobs:
           //Compiler/Codegen/Xmm/Benches:xmm_benches
           //Compiler/Core/Benches:core_benches
           //Compiler/Core/CorePrep/Benches:coreprep_benches
+          //Interactive/Benches:interactive_benches
 
       - name: Smoke native benchmark registration
         shell: pwsh
@@ -76,6 +77,7 @@ jobs:
           .\bazel-bin\Compiler\Core\CorePrep\Benches\coreprep_benches.exe --benchmark_filter="Verify/4" --benchmark_min_time=0.001s
           .\bazel-bin\Compiler\Codegen\Xpp\Benches\xpp_benches.exe --benchmark_filter="Verify/4" --benchmark_min_time=0.001s
           .\bazel-bin\Compiler\Codegen\Xmm\Benches\xmm_benches.exe --benchmark_filter="Lower/4" --benchmark_min_time=0.001s
+          .\bazel-bin\Interactive\Benches\interactive_benches.exe --benchmark_filter="BenchmarkCellLowerAddInvokeReset" --benchmark_min_time=0.001s
 
       - name: Update Haskell package index
         shell: pwsh

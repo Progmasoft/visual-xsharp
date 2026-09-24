@@ -150,6 +150,111 @@ namespace
             return std::nullopt;
         return result;
     }
+
+    /** Resolve an executable strictly from PATH, without an implicit current-directory fallback. */
+    [[nodiscard]] auto
+    FindExecutableOnPath(std::wstring_view executable) -> std::optional<std::filesystem::path>
+    {
+        std::wstring pathValue;
+        DWORD capacity = 256U;
+        while (capacity < 32768U)
+        {
+            std::vector<wchar_t> buffer(capacity);
+            const DWORD length = GetEnvironmentVariableW(L"PATH", buffer.data(), capacity);
+            if (length == 0U)
+                return std::nullopt;
+            if (length < capacity)
+            {
+                pathValue.assign(buffer.data(), length);
+                break;
+            }
+            capacity = length + 1U;
+        }
+        if (pathValue.empty())
+            return std::nullopt;
+
+        std::size_t start{};
+        while (start <= pathValue.size())
+        {
+            const auto end = pathValue.find(L';', start);
+            auto directory = std::wstring_view(pathValue).substr(
+                start,
+                end == std::wstring::npos ? std::wstring::npos : end - start);
+            if (directory.size() >= 2U && directory.front() == L'"' && directory.back() == L'"')
+                directory = directory.substr(1U, directory.size() - 2U);
+            if (!directory.empty())
+            {
+                std::error_code error;
+                const auto candidate = std::filesystem::path(std::wstring(directory)) / std::wstring(executable);
+                if (std::filesystem::is_regular_file(candidate, error) && !error)
+                    return candidate;
+            }
+            if (end == std::wstring::npos)
+                break;
+            start = end + 1U;
+        }
+        return std::nullopt;
+    }
+
+    /** Quote one argv value for the Windows CRT parser used by the spawned image. */
+    [[nodiscard]] auto
+    QuoteWindowsArgument(std::wstring_view argument) -> std::wstring
+    {
+        std::wstring quoted;
+        quoted.push_back(L'"');
+        std::size_t backslashes{};
+        for (const auto character : argument)
+        {
+            if (character == L'\\')
+            {
+                ++backslashes;
+                continue;
+            }
+            if (character == L'"')
+            {
+                quoted.append(backslashes * 2U + 1U, L'\\');
+                quoted.push_back(L'"');
+            }
+            else
+            {
+                quoted.append(backslashes, L'\\');
+                quoted.push_back(character);
+            }
+            backslashes = 0U;
+        }
+        quoted.append(backslashes * 2U, L'\\');
+        quoted.push_back(L'"');
+        return quoted;
+    }
+#else
+    /** Resolve an executable strictly from non-empty PATH entries on POSIX hosts. */
+    [[nodiscard]] auto
+    FindExecutableOnPath(std::string_view executable) -> std::optional<std::filesystem::path>
+    {
+        const auto *const environmentPath = std::getenv("PATH");
+        if (environmentPath == nullptr)
+            return std::nullopt;
+        const std::string_view pathValue(environmentPath);
+        std::size_t start{};
+        while (start <= pathValue.size())
+        {
+            const auto end = pathValue.find(':', start);
+            const auto directory = pathValue.substr(
+                start,
+                end == std::string_view::npos ? std::string_view::npos : end - start);
+            if (!directory.empty())
+            {
+                const auto candidate = std::filesystem::path(std::string(directory)) / std::string(executable);
+                std::error_code error;
+                if (std::filesystem::is_regular_file(candidate, error) && !error && ::access(candidate.c_str(), X_OK) == 0)
+                    return candidate;
+            }
+            if (end == std::string_view::npos)
+                break;
+            start = end + 1U;
+        }
+        return std::nullopt;
+    }
 #endif
 
     [[nodiscard]] int
@@ -308,9 +413,15 @@ namespace
         auto executableWide = Utf8ToWide(executable);
         if (!executableWide)
             return -1;
+        const auto executablePath = FindExecutableOnPath(*executableWide);
+        if (!executablePath)
+        {
+            fmt::print(stderr, "vxs: '{}' was not found on PATH\n", executable);
+            return -1;
+        }
         std::vector<std::wstring> storage;
         storage.reserve(commandArguments.size() + 1);
-        storage.push_back(*executableWide);
+        storage.push_back(executablePath->native());
         for (const auto &argument : commandArguments)
         {
             auto wide = Utf8ToWide(argument);
@@ -318,16 +429,68 @@ namespace
                 return -1;
             storage.push_back(std::move(*wide));
         }
-        std::vector<const wchar_t *> arguments;
-        arguments.reserve(storage.size() + 1);
+        std::wstring commandLine;
         for (const auto &argument : storage)
-            arguments.push_back(argument.c_str());
-        arguments.push_back(nullptr);
-        return static_cast<int>(_wspawnvp(_P_WAIT, executableWide->c_str(), arguments.data()));
+        {
+            if (!commandLine.empty())
+                commandLine.push_back(L' ');
+            commandLine.append(QuoteWindowsArgument(argument));
+        }
+        if (commandLine.size() >= 32767U)
+        {
+            fmt::print(stderr, "vxs: command line for '{}' exceeds the Windows process limit\n", executable);
+            return -1;
+        }
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process{};
+        if (CreateProcessW(executablePath->c_str(),
+                           commandLine.data(),
+                           nullptr,
+                           nullptr,
+                           FALSE,
+                           0,
+                           nullptr,
+                           nullptr,
+                           &startup,
+                           &process)
+            == 0)
+        {
+            const auto error = GetLastError();
+            fmt::print(stderr,
+                       "vxs: could not start '{}': {}\n",
+                       executable,
+                       std::error_code(static_cast<int>(error), std::system_category()).message());
+            return -1;
+        }
+        CloseHandle(process.hThread);
+        const auto waitStatus = WaitForSingleObject(process.hProcess, INFINITE);
+        DWORD exitStatus{};
+        const bool hasExitStatus = waitStatus == WAIT_OBJECT_0 && GetExitCodeProcess(process.hProcess, &exitStatus) != 0;
+        const DWORD waitError = waitStatus == WAIT_FAILED ? GetLastError() : ERROR_SUCCESS;
+        CloseHandle(process.hProcess);
+        if (!hasExitStatus)
+        {
+            if (waitError != ERROR_SUCCESS)
+                fmt::print(stderr,
+                           "vxs: waiting for '{}' failed: {}\n",
+                           executable,
+                           std::error_code(static_cast<int>(waitError), std::system_category()).message());
+            else
+                fmt::print(stderr, "vxs: could not read the exit status from '{}'\n", executable);
+            return -1;
+        }
+        return static_cast<int>(exitStatus);
 #else
+        const auto executablePath = FindExecutableOnPath(executable);
+        if (!executablePath)
+        {
+            fmt::print(stderr, "vxs: '{}' was not found on PATH\n", executable);
+            return -1;
+        }
         std::vector<std::string> storage;
         storage.reserve(commandArguments.size() + 1);
-        storage.emplace_back(executable);
+        storage.push_back(executablePath->string());
         storage.insert(storage.end(), commandArguments.begin(), commandArguments.end());
         std::vector<char *> arguments;
         arguments.reserve(storage.size() + 1);
@@ -335,9 +498,12 @@ namespace
             arguments.push_back(argument.data());
         arguments.push_back(nullptr);
         pid_t process{};
-        const int spawnStatus = posix_spawnp(&process, storage.front().c_str(), nullptr, nullptr, arguments.data(), environ);
+        const int spawnStatus = posix_spawn(&process, storage.front().c_str(), nullptr, nullptr, arguments.data(), environ);
         if (spawnStatus != 0)
+        {
+            fmt::print(stderr, "vxs: could not start '{}': {}\n", executable, std::strerror(spawnStatus));
             return -1;
+        }
         int status{};
         if (waitpid(process, &status, 0) < 0)
             return -1;
@@ -735,6 +901,14 @@ Visual::XSharp::Cli::Run(int argc, char **argv) -> int
         return 2;
     }
     const auto &options = parsed.options;
+    if (options.command == CliCommand::kInteractive)
+        return RunInstalledTool(
+#ifdef _WIN32
+            "vxsi.exe",
+#else
+            "vxsi",
+#endif
+            options.interactiveArguments);
     std::optional<Activity> activity;
     if (options.command == CliCommand::kBuild)
         activity.emplace("building compiler pipeline");

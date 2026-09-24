@@ -26,6 +26,7 @@ enum class CliCommand : std::uint8_t
     kVersion,
     kViGet,
     kViPkg,
+    kInteractive,
 };
 
 enum class ViPkgAction : std::uint8_t
@@ -127,6 +128,7 @@ struct CliOptions
     std::optional<std::string> packageCoordinate;
     std::optional<std::string> target;
     std::vector<std::string> programArguments;
+    std::vector<std::string> interactiveArguments;
     std::vector<std::string> selectedViPkgs;
     std::vector<std::string> selectedExecutables;
     std::vector<std::string> selectedLibraries;

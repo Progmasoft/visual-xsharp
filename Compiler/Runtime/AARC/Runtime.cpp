@@ -6,6 +6,7 @@
 #include <limits>
 #include <new>
 
+#include "Internal.hpp"
 #include "Visual/XSharp/Runtime/AARC.hpp"
 
 namespace Visual::XSharp::Runtime::Aarc
@@ -36,6 +37,12 @@ namespace Visual::XSharp::Runtime::Aarc
             DestroyString,
             "System.String"
         };
+
+        [[nodiscard]] auto
+        ObjectHeaderOf(const void *object) noexcept -> ObjectHeader *
+        {
+            return object == nullptr ? nullptr : *(reinterpret_cast<ObjectHeader *const *>(object) - 1);
+        }
 
         [[nodiscard]] auto
         ValidAlignment(std::size_t alignment) noexcept -> bool
@@ -122,21 +129,15 @@ namespace Visual::XSharp::Runtime::Aarc
     }
 
     auto
-    Header(const void *object) noexcept -> ObjectHeader *
-    {
-        return object == nullptr ? nullptr : *(reinterpret_cast<ObjectHeader *const *>(object) - 1);
-    }
-
-    auto
     RetainStrong(void *object) noexcept -> void *
     {
-        return TryRetain(Header(object));
+        return TryRetain(ObjectHeaderOf(object));
     }
 
     void
     ReleaseStrong(void *object) noexcept
     {
-        auto *header = Header(object);
+        auto *header = ObjectHeaderOf(object);
         if (header == nullptr)
             return;
         if (header->strongCount.load(std::memory_order_relaxed) == std::numeric_limits<std::uint64_t>::max())
@@ -158,7 +159,7 @@ namespace Visual::XSharp::Runtime::Aarc
     auto
     MakeWeak(void *object) noexcept -> Weak
     {
-        auto *header = Header(object);
+        auto *header = ObjectHeaderOf(object);
         return RetainControl(header) ? Weak{ header } : Weak{};
     }
 
@@ -183,7 +184,7 @@ namespace Visual::XSharp::Runtime::Aarc
     auto
     MakeUnowned(void *object) noexcept -> Unowned
     {
-        auto *header = Header(object);
+        auto *header = ObjectHeaderOf(object);
         return RetainControl(header) ? Unowned{ header } : Unowned{};
     }
 
@@ -211,7 +212,7 @@ namespace Visual::XSharp::Runtime::Aarc
     auto
     IsExactType(const void *object, const std::uint64_t typeIdentity) noexcept -> bool
     {
-        const auto *header = Header(object);
+        const auto *header = ObjectHeaderOf(object);
         return header != nullptr && header->state.load(std::memory_order_acquire) == ObjectState::Alive
                && header->metadata != nullptr && header->metadata->typeIdentity == typeIdentity;
     }
@@ -219,6 +220,12 @@ namespace Visual::XSharp::Runtime::Aarc
 
 extern "C"
 {
+    auto
+    vxs_aarc_abi_version() noexcept -> std::uint32_t
+    {
+        return Visual::XSharp::Runtime::Aarc::kAbiVersion;
+    }
+
     auto
     vxs_aarc_allocate(const Visual::XSharp::Runtime::Aarc::TypeMetadata *metadata) noexcept -> void *
     {
@@ -238,39 +245,59 @@ extern "C"
     }
 
     auto
-    vxs_aarc_make_weak(void *object) noexcept -> void *
+    vxs_aarc_make_weak(void *object) noexcept -> VxsAarcWeakHandle *
     {
-        return Visual::XSharp::Runtime::Aarc::MakeWeak(object).header;
+        return reinterpret_cast<VxsAarcWeakHandle *>(Visual::XSharp::Runtime::Aarc::MakeWeak(object).header);
     }
 
     auto
-    vxs_aarc_lock_weak(void *header) noexcept -> void *
+    vxs_aarc_copy_weak(VxsAarcWeakHandle *handle) noexcept -> VxsAarcWeakHandle *
     {
-        return Visual::XSharp::Runtime::Aarc::LockWeak({ static_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(header) });
+        using Visual::XSharp::Runtime::Aarc::ObjectHeader;
+        return reinterpret_cast<VxsAarcWeakHandle *>(
+            Visual::XSharp::Runtime::Aarc::CopyWeak({ reinterpret_cast<ObjectHeader *>(handle) }).header);
+    }
+
+    auto
+    vxs_aarc_lock_weak(VxsAarcWeakHandle *handle) noexcept -> void *
+    {
+        return Visual::XSharp::Runtime::Aarc::LockWeak(
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
     }
 
     void
-    vxs_aarc_release_weak(void *header) noexcept
+    vxs_aarc_release_weak(VxsAarcWeakHandle *handle) noexcept
     {
-        Visual::XSharp::Runtime::Aarc::ReleaseWeak({ static_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(header) });
+        Visual::XSharp::Runtime::Aarc::ReleaseWeak(
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
     }
 
     auto
-    vxs_aarc_make_unowned(void *object) noexcept -> void *
+    vxs_aarc_make_unowned(void *object) noexcept -> VxsAarcUnownedHandle *
     {
-        return Visual::XSharp::Runtime::Aarc::MakeUnowned(object).header;
+        return reinterpret_cast<VxsAarcUnownedHandle *>(Visual::XSharp::Runtime::Aarc::MakeUnowned(object).header);
     }
 
     auto
-    vxs_aarc_load_unowned(void *header) noexcept -> void *
+    vxs_aarc_copy_unowned(VxsAarcUnownedHandle *handle) noexcept -> VxsAarcUnownedHandle *
     {
-        return Visual::XSharp::Runtime::Aarc::LoadUnowned({ static_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(header) });
+        using Visual::XSharp::Runtime::Aarc::ObjectHeader;
+        return reinterpret_cast<VxsAarcUnownedHandle *>(
+            Visual::XSharp::Runtime::Aarc::CopyUnowned({ reinterpret_cast<ObjectHeader *>(handle) }).header);
+    }
+
+    auto
+    vxs_aarc_load_unowned(VxsAarcUnownedHandle *handle) noexcept -> void *
+    {
+        return Visual::XSharp::Runtime::Aarc::LoadUnowned(
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
     }
 
     void
-    vxs_aarc_release_unowned(void *header) noexcept
+    vxs_aarc_release_unowned(VxsAarcUnownedHandle *handle) noexcept
     {
-        Visual::XSharp::Runtime::Aarc::ReleaseUnowned({ static_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(header) });
+        Visual::XSharp::Runtime::Aarc::ReleaseUnowned(
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
     }
 
     auto

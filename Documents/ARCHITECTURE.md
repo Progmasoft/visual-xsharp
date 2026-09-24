@@ -35,8 +35,8 @@ Stage ownership is deliberate:
 - Xpp, Xmm, and the native lowering boundary belong to C++20.
 - LLVM types and handles belong only to the backend.
 - The retired Rust and C implementation trees are absent from the build and source graph.
-- AARC exposes a deliberately narrow C ABI from C++ so generated LLVM code has stable runtime symbols; this is an ABI
-  boundary, not a retained C implementation layer.
+- AARC exposes a C11 `.h` ABI for stable metadata, opaque ownership handles, and unmangled symbols; its runtime and C++
+  convenience API are implemented in C++20. This is a language boundary, not a retained C implementation layer.
 
 ## Component ownership
 
@@ -52,6 +52,7 @@ Stage ownership is deliberate:
 | `Compiler/Backend/LLVM` | C++20/Bazel | verified Xmm lowering, LLVM optimization, serialization, and target emission |
 | `Compiler/Linker` | C++20/Bazel | typed LLD invocation and executable validation |
 | `Compiler/Cli` | C++20/Bazel | command schema, dispatch, output, and exit status |
+| `Interactive/` | C++20/Bazel | `vxsi` REPL, isolated frontend cells, ORC LLJIT session, tests, and benchmarks |
 | `ProjectSystem` | Kotlin/Gradle | project DSL, plugins, plan, SQLite lockfile, and VXDC |
 
 This table is a dependency rule as well as a directory map. The frontend must not include LLVM concepts. LLVM must not parse
@@ -126,6 +127,12 @@ The Bazel graph discovers LLVM through `LLVM_ROOT` or `llvm-config`. The renewed
 new-pass-manager, target-machine, and native-code-generation libraries; LLVM C handles do not enter this pipeline. A target
 machine emits COFF objects or target assembly from verified Xmm. The C++20 driver passes a typed argument vector directly
 to LLD, without a shell or DIMCLI, and validates the resulting `.vxse` artifact.
+
+`Interactive/` reuses that same lowering route rather than interpreting AST nodes itself. Each input cell is wrapped in a
+compiler-valid namespace and method, parsed and type-checked by the Haskell frontend process, then moved through verified
+Core, CorePrep, Xpp, Xmm, LLVM bitcode, and one process-local ORC `LLJIT`. The JIT keeps explicit resource trackers so a REPL
+reset removes code and symbols rather than merely forgetting the last displayed value. Only result types with a deliberate
+host calling convention are invoked; aggregates are not guessed or coerced into machine integers.
 
 ## Entry point
 

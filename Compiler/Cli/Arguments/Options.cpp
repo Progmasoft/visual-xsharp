@@ -189,6 +189,7 @@ namespace
         { "viget", CliCommand::kViGet, PositionalKind::ViGetAction, "publish or update a ViGet package" },
         { "vipkg", CliCommand::kViPkg, PositionalKind::ViPkgAction, "create a local ViPkg without publishing it" },
         { "version", CliCommand::kVersion, PositionalKind::None, "print the compiler version" },
+        { "interactive", CliCommand::kInteractive, PositionalKind::None, "launch the Visual X# Interactive REPL" },
     };
 
     // Option spelling, arity (through domain), command scope, and help description
@@ -515,6 +516,14 @@ namespace
 
         const auto positional = PositionalText(command->positional);
         const auto programArguments = command->command == CliCommand::kRun ? " [-- program-arguments...]" : "";
+        if (command->command == CliCommand::kInteractive)
+        {
+            fmt::print("Usage: vxs interactive [vxsi arguments...]\n\n"
+                       "Starts `vxsi` by searching PATH and forwards all following arguments unchanged.\n"
+                       "Use `vxs interactive -Eval <expression>` for one-shot evaluation or pass no\n"
+                       "arguments to open the interactive REPL. Use `vxs interactive -Help` for details.\n");
+            return;
+        }
         fmt::print("Usage: vxs {} [options]{}{}\n", command->name, positional, programArguments);
         tabulate::Table options;
         options.add_row({ "Option", "Description", "Default" });
@@ -862,6 +871,20 @@ ParseCommandLine(int argc, char **argv)
         return { CliParseResult::kVersion, std::move(options), std::nullopt, {} };
     }
     options.command = command->command;
+
+    // `interactive` is a process boundary, not a compiler option group. Keep
+    // the child parser authoritative and forward its argv spellings verbatim;
+    // in particular, the child's -Eval and -Help must not be consumed here.
+    if (command->command == CliCommand::kInteractive)
+    {
+        for (int index = 2; index < argc; ++index)
+        {
+            if (argv[index] == nullptr)
+                return Failure(std::move(options), "process argument vector contains null");
+            options.interactiveArguments.emplace_back(argv[index]);
+        }
+        return { CliParseResult::kReady, std::move(options), std::nullopt, {} };
+    }
 
     std::array<bool, static_cast<unsigned>(Option::Count)> seen{};
     bool positionalSeen = false;

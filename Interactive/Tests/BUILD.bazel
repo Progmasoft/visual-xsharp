@@ -3,15 +3,12 @@ load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 package(default_visibility = ["//visibility:private"])
 
 cc_binary(
-    name = "llvm_backend_tests",
-    srcs = [
-        "CallableInvocationTests.cpp",
-        "LLVMBackendTests.cpp",
-        "JitSessionTests.cpp",
-    ],
+    name = "interactive_tests",
+    srcs = ["HistoryTests.cpp", "InteractiveTests.cpp", "ReplInputTests.cpp"],
     deps = [
+        "//Interactive:interactive_arguments",
+        "//Interactive:interactive_runtime",
         "//Compiler/Backend/LLVM:llvm_backend",
-        "//Compiler/Driver:core_pipeline",
         "@catch2//:catch2_main",
     ],
 )

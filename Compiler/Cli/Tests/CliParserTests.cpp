@@ -112,6 +112,30 @@ TEST_CASE("help and version are parser outcomes rather than parser side effects"
     REQUIRE(legacyHelp.Diagnostic() == "unknown option '--help'");
 }
 
+TEST_CASE("interactive hands every child argument to vxsi without compiler parsing", "[cli][parser][interactive]")
+{
+    const ParsedInvocation repl{ "vxs", "interactive" };
+    REQUIRE(repl.Result() == CliParseResult::kReady);
+    REQUIRE(repl.Options().command == CliCommand::kInteractive);
+    REQUIRE(repl.Options().interactiveArguments.empty());
+
+    const ParsedInvocation oneShot{ "vxs", "interactive", "-Eval", "5 + 5" };
+    REQUIRE(oneShot.Result() == CliParseResult::kReady);
+    REQUIRE(oneShot.Options().interactiveArguments == std::vector<std::string>{ "-Eval", "5 + 5" });
+
+    const ParsedInvocation help{ "vxs", "interactive", "-Help" };
+    REQUIRE(help.Result() == CliParseResult::kReady);
+    REQUIRE(help.Options().interactiveArguments == std::vector<std::string>{ "-Help" });
+
+    const ParsedInvocation optionLookingExpression{ "vxs", "interactive", "-Eval", "-1 + 2" };
+    REQUIRE(optionLookingExpression.Result() == CliParseResult::kReady);
+    REQUIRE(optionLookingExpression.Options().interactiveArguments == std::vector<std::string>{ "-Eval", "-1 + 2" });
+
+    const ParsedInvocation extra{ "vxs", "interactive", "--", "-Eval", "5 + 5" };
+    REQUIRE(extra.Result() == CliParseResult::kReady);
+    REQUIRE(extra.Options().interactiveArguments == std::vector<std::string>{ "--", "-Eval", "5 + 5" });
+}
+
 TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")
 {
     const ParsedInvocation parsed{

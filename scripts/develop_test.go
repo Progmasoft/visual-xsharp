@@ -61,6 +61,22 @@ func TestCriterionEnvironmentIsUnicodeCapable(t *testing.T) {
 	}
 }
 
+func TestMergeEnvironmentReplacesPathInsteadOfAppendingDuplicates(t *testing.T) {
+	got := mergeEnvironment([]string{"HOME=/tmp", "PATH=/old/bin", "EDITOR=vi"}, []string{"PATH=/bundle/bin"}, false)
+	want := []string{"HOME=/tmp", "EDITOR=vi", "PATH=/bundle/bin"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("merged environment = %#v, want %#v", got, want)
+	}
+}
+
+func TestMergeEnvironmentTreatsWindowsKeysCaseInsensitively(t *testing.T) {
+	got := mergeEnvironment([]string{"Path=C:\\Windows", "TEMP=C:\\Temp"}, []string{"PATH=C:\\bundle"}, true)
+	want := []string{"TEMP=C:\\Temp", "PATH=C:\\bundle"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("merged environment = %#v, want %#v", got, want)
+	}
+}
+
 func TestSelectAddressSanitizerUsesHostSpecificProfile(t *testing.T) {
 	windows, err := selectSanitizer(host{kind: hostWindows}, "asan")
 	if err != nil {
@@ -115,6 +131,10 @@ type fakeRunner struct {
 
 func (runner fakeRunner) Run(string, []string, string, ...string) error {
 	return errors.New("unexpected process execution")
+}
+
+func (runner fakeRunner) RunWithInput(string, []string, string, string, ...string) (string, error) {
+	return "", errors.New("unexpected process execution")
 }
 
 func (runner fakeRunner) Output(string, ...string) (string, error) {

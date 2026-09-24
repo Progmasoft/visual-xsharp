@@ -34,6 +34,7 @@ following vocabulary:
 | Place tests and fixtures | [Test ownership](TEST-OWNERSHIP.md) |
 | Measure compiler throughput | [Benchmarking](BENCHMARKING.md) and [recorded baselines](../Benchmarks/README.md) |
 | Use `vxs` | [CLI](CLI.md) |
+| Use or implement the REPL | [Visual X# Interactive](INTERACTIVE.md) |
 | Write `Visual.XSharp.kts` | [Project files](PROJECT_FILES.md) |
 | Understand diagnostics and exit behavior | [Diagnostics](DIAGNOSTICS.md) |
 | Use Analyzer, Formatter, or Linter | [Ecosystem tools](ECOSYSTEM.md) |
@@ -77,6 +78,7 @@ following vocabulary:
 ## User and project set
 
 - [CLI](CLI.md) is the command and option reference. It also explains precedence and intentionally disconnected commands.
+- [Visual X# Interactive](INTERACTIVE.md) defines the REPL command, cell lifecycle, ORC boundary, result support, and known limits.
 - [Project files](PROJECT_FILES.md) documents discovery, source policy, entry selection, compiler settings, plugins,
   dependencies, publishing metadata, test suites, and the SQLite lockfile.
 - [Diagnostics](DIAGNOSTICS.md) describes error ownership, output streams, source positions, artifact safety, and exit status.

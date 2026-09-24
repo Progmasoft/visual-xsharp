@@ -77,6 +77,7 @@ type releaseCheck struct {
 
 type commandRunner interface {
 	Run(directory string, environment []string, name string, arguments ...string) error
+	RunWithInput(directory string, environment []string, input string, name string, arguments ...string) (string, error)
 	Output(name string, arguments ...string) (string, error)
 	OutputIn(directory string, name string, arguments ...string) (string, error)
 	LookPath(name string) (string, error)
@@ -102,6 +103,8 @@ var nativeTargets = []string{
 	"//Compiler/Codegen/Xmm/Tests:xmm_verifier_tests",
 	"//Compiler/Codegen/Xpp/Tests:xpp_verifier_tests",
 	"//Compiler/Runtime/AARC/Tests:aarc_runtime_tests",
+	"//Compiler/Runtime/AARC/Tests:aarc_c_abi_tests",
+	"//Interactive/Tests:interactive_tests",
 }
 
 var nativePrograms = []string{
@@ -119,6 +122,8 @@ var nativePrograms = []string{
 	"Compiler/Codegen/Xmm/Tests/xmm_verifier_tests",
 	"Compiler/Codegen/Xpp/Tests/xpp_verifier_tests",
 	"Compiler/Runtime/AARC/Tests/aarc_runtime_tests",
+	"Compiler/Runtime/AARC/Tests/aarc_c_abi_tests",
+	"Interactive/Tests/interactive_tests",
 }
 
 var nativeBenchmarkTargets = []string{
@@ -160,11 +165,52 @@ var generatedBuildPaths = []string{
 func (runner systemRunner) Run(directory string, environment []string, name string, arguments ...string) error {
 	command := exec.Command(name, arguments...)
 	command.Dir = directory
-	command.Env = append(os.Environ(), environment...)
+	command.Env = mergedEnvironment(environment)
 	command.Stdin = os.Stdin
 	command.Stdout = runner.stdout
 	command.Stderr = runner.stderr
 	return command.Run()
+}
+
+// RunWithInput drives programs with deterministic stdin while keeping captured
+// output available to the caller for smoke-test assertions.
+func (runner systemRunner) RunWithInput(directory string, environment []string, input string, name string, arguments ...string) (string, error) {
+	command := exec.Command(name, arguments...)
+	command.Dir = directory
+	command.Env = mergedEnvironment(environment)
+	command.Stdin = strings.NewReader(input)
+	output, err := command.CombinedOutput()
+	return string(output), err
+}
+
+// mergedEnvironment replaces inherited keys rather than appending duplicate
+// PATH entries whose precedence differs between host process APIs.
+func mergedEnvironment(overrides []string) []string {
+	return mergeEnvironment(os.Environ(), overrides, runtime.GOOS == "windows")
+}
+
+func mergeEnvironment(base []string, overrides []string, windows bool) []string {
+	environment := append([]string(nil), base...)
+	for _, override := range overrides {
+		key, _, found := strings.Cut(override, "=")
+		if !found || key == "" {
+			environment = append(environment, override)
+			continue
+		}
+		filtered := environment[:0]
+		for _, entry := range environment {
+			entryKey, _, hasValue := strings.Cut(entry, "=")
+			matches := hasValue && entryKey == key
+			if windows {
+				matches = hasValue && strings.EqualFold(entryKey, key)
+			}
+			if !matches {
+				filtered = append(filtered, entry)
+			}
+		}
+		environment = append(filtered, override)
+	}
+	return environment
 }
 
 func (runner systemRunner) Output(name string, arguments ...string) (string, error) {
@@ -535,6 +581,7 @@ func buildTargets(repository string, runner commandRunner, config string, extra 
 		arguments = append(arguments, "--config="+config)
 	}
 	arguments = append(arguments, "//Compiler/Cli:vxs")
+	arguments = append(arguments, "//Interactive:vxsi")
 	arguments = append(arguments, nativeTargets...)
 	arguments = append(arguments, extra...)
 	fmt.Printf("Building compiler and %d native suites...\n", len(nativeTargets))
@@ -646,11 +693,16 @@ func buildBundle(repository string, currentHost host, runner commandRunner, baze
 	}()
 
 	publicExecutable := "vxs" + currentHost.executable
+	interactiveExecutable := "vxsi" + currentHost.executable
 	privateExecutable := "vxs-frontend" + currentHost.executable
 	nativeCompiler := filepath.Join(repository, "bazel-bin", "Compiler", "Cli", publicExecutable)
-	stagedFiles := []string{publicExecutable, privateExecutable}
+	nativeInteractive := filepath.Join(repository, "bazel-bin", "Interactive", interactiveExecutable)
+	stagedFiles := []string{publicExecutable, interactiveExecutable, privateExecutable}
 	if err := copyFile(nativeCompiler, filepath.Join(stagingDirectory, publicExecutable), 0o755); err != nil {
 		return fmt.Errorf("cannot stage the public compiler driver: %w", err)
+	}
+	if err := copyFile(nativeInteractive, filepath.Join(stagingDirectory, interactiveExecutable), 0o755); err != nil {
+		return fmt.Errorf("cannot stage the Visual X# Interactive executable: %w", err)
 	}
 	if err := copyFile(frontend, filepath.Join(stagingDirectory, privateExecutable), 0o755); err != nil {
 		return fmt.Errorf("cannot stage the private frontend companion: %w", err)
@@ -951,6 +1003,14 @@ func smokeTestBundle(repository string, bundleDirectory string, currentHost host
 		return fmt.Errorf("cannot stage the smoke-test source: %w", err)
 	}
 	compiler := filepath.Join(bundleDirectory, "vxs"+currentHost.executable)
+	interactive := filepath.Join(bundleDirectory, "vxsi"+currentHost.executable)
+	pathEnvironment := []string{"PATH=" + bundleDirectory}
+	// A same-named program in the working directory is deliberately wrong. The
+	// public launcher must use PATH only, so this decoy can never shadow vxsi.
+	decoy := filepath.Join(temporary, "vxsi"+currentHost.executable)
+	if err := copyFile(compiler, decoy, 0o755); err != nil {
+		return fmt.Errorf("cannot prepare the current-directory PATH decoy: %w", err)
+	}
 	fmt.Println("Smoke-testing the staged compiler version command...")
 	output, err := runner.OutputIn(temporary, compiler, "version")
 	if err != nil {
@@ -959,6 +1019,53 @@ func smokeTestBundle(repository string, bundleDirectory string, currentHost host
 	wantVersion := "vxs " + version
 	if output != wantVersion {
 		return fmt.Errorf("staged compiler reported %q; expected %q", output, wantVersion)
+	}
+	fmt.Println("Smoke-testing one-shot evaluation through vxs interactive and standalone vxsi...")
+	output, err = runnerOutputWithInput(runner, temporary, pathEnvironment, "", compiler, "interactive", "-Eval", "5 + 5")
+	if err != nil || !strings.HasPrefix(strings.TrimSpace(output), "10 : ") {
+		return fmt.Errorf("vxs interactive -Eval failed or selected the current-directory decoy: %q (%v)", output, err)
+	}
+	output, err = runnerOutputWithInput(runner, temporary, pathEnvironment, "", interactive, "-Eval", "5 + 5")
+	if err != nil || !strings.HasPrefix(strings.TrimSpace(output), "10 : ") {
+		return fmt.Errorf("standalone vxsi -Eval smoke test failed: %q (%v)", output, err)
+	}
+	output, err = runnerOutputWithInput(runner, temporary, pathEnvironment, "", compiler, "interactive", "-Help")
+	if err != nil || !strings.Contains(output, "Visual X# Interactive") || !strings.Contains(output, "Usage:") {
+		return fmt.Errorf("vxs interactive -Help did not reach vxsi: %q (%v)", output, err)
+	}
+	output, err = runnerOutputWithInput(runner, temporary, pathEnvironment, "", interactive, "-Help")
+	if err != nil || !strings.Contains(output, "Visual X# Interactive") || !strings.Contains(output, "Usage:") {
+		return fmt.Errorf("standalone vxsi -Help smoke test failed: %q (%v)", output, err)
+	}
+	output, err = runnerOutputWithInput(runner, temporary, []string{"PATH="}, "", compiler, "interactive", "-Eval", "5 + 5")
+	if err == nil || !strings.Contains(output, "vxsi") || !strings.Contains(output, "PATH") {
+		return fmt.Errorf("vxs interactive should fail clearly when vxsi is absent from PATH: %q (%v)", output, err)
+	}
+	fmt.Println("Smoke-testing the persistent REPL session, history, reset, and error recovery...")
+	replInput := strings.Repeat("x", 1024*1024+1) + "\n" +
+		"5 + 5\n" +
+		"vxsiPrevious * 3\n" +
+		"true + 1\n" +
+		"vxsiPrevious + 1\n" +
+		":type true\n" +
+		":history\n" +
+		":reset\n" +
+		"vxsiPrevious\n" +
+		"7 + 8\n" +
+		":history\n" +
+		":help\n" +
+		":quit\n"
+	output, err = runnerOutputWithInput(runner, temporary, pathEnvironment, replInput, interactive)
+	if err != nil {
+		return fmt.Errorf("persistent REPL smoke test failed: %w\n%s", err, output)
+	}
+	for _, expected := range []string{"10 : ", "30 : ", "31 : ", "bool", "one Visual X# input line cannot exceed 1 MiB", "session values, JIT modules, and history cleared", "   1  7 + 8", "Type :help for commands"} {
+		if !strings.Contains(output, expected) {
+			return fmt.Errorf("persistent REPL output omitted %q:\n%s", expected, output)
+		}
+	}
+	if strings.Count(output, "frontend rejected this input") < 2 {
+		return fmt.Errorf("REPL did not recover from both a type error and a reset binding error:\n%s", output)
 	}
 	fmt.Println("Smoke-testing source-to-native compilation through the staged frontend...")
 	if err := runner.Run(temporary, nil, compiler, "build", "-File", source); err != nil {
@@ -973,6 +1080,10 @@ func smokeTestBundle(repository string, bundleDirectory string, currentHost host
 		return fmt.Errorf("generated native executable smoke test failed: %w", err)
 	}
 	return nil
+}
+
+func runnerOutputWithInput(runner commandRunner, directory string, environment []string, input string, name string, arguments ...string) (string, error) {
+	return runner.RunWithInput(directory, environment, input, name, arguments...)
 }
 
 func runTests(repository string, currentHost host, runner commandRunner, environment []string) error {

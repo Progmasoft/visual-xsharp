@@ -1,0 +1,33 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "interactive_runtime",
+    srcs = ["Runtime/History.cpp", "Runtime/ReplInput.cpp", "Runtime/Session.cpp", "Runtime/Source.cpp", "Runtime/Value.cpp"],
+    hdrs = ["Runtime/Source.hpp", "Runtime/Value.hpp"],
+    deps = [
+        "//Compiler/Backend/LLVM:llvm_backend",
+        "//Compiler/Driver:pipeline",
+        "//Interactive/Headers/Visual/XSharp/Interactive:session",
+        "//Interactive/Headers/Visual/XSharp/Interactive:repl_input",
+        "//Compiler/Headers/Visual/XSharp/Core:scalar",
+        "@fmt//:fmt",
+    ],
+)
+
+cc_library(
+    name = "interactive_arguments",
+    srcs = ["Arguments.cpp"],
+    deps = [
+        "//Interactive/Headers/Visual/XSharp/Interactive:arguments",
+        "@fmt//:fmt",
+    ],
+)
+
+cc_binary(
+    name = "vxsi",
+    srcs = ["Main.cpp"],
+    deps = [":interactive_arguments", ":interactive_runtime", "@fmt//:fmt"],
+)

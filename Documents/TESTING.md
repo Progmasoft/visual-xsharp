@@ -81,8 +81,8 @@ go run scripts/develop.go doctor
 go run scripts/develop.go test
 ```
 
-The command executes all 13 Catch2 binaries directly on Windows 10/11 and macOS Sequoia/Tahoe. Bazel selects the host
-configuration automatically; no public test instruction requires `--config`.
+The command executes 15 Catch2 binaries and one C11 ABI contract executable directly on Windows 10/11 and macOS
+Sequoia/Tahoe. Bazel selects the host configuration automatically; no public test instruction requires `--config`.
 
 Control-flow changes must exercise the stage that creates edges and every
 storage-oriented consumer of those edges. Three component-owned suites make
@@ -125,6 +125,9 @@ bazelisk build //Compiler/Core/Tests:core_pipeline_tests
 bazelisk build //Compiler/Driver/Tests:closure_pipeline_tests
 bazelisk build //Compiler/Driver/Tests:scalar_pipeline_tests
 bazelisk build //Compiler/Backend/LLVM/Tests:llvm_backend_tests
+bazelisk build //Compiler/Runtime/AARC/Tests:aarc_c_abi_tests
+bazelisk build //Interactive:vxsi
+bazelisk build //Interactive/Tests:interactive_tests
 ```
 
 The exact label names are source-owned API. If a package is reorganized, update this guide and CI with the same change.
@@ -156,6 +159,8 @@ test identifies the contract that owns its maintenance:
 | `Compiler/Codegen/Xmm/Tests` | virtual-register verification at the Xmm boundary |
 | `Compiler/Driver/Tests` | connected CorePrep, Xpp, and Xmm stage behavior |
 | `Compiler/Backend/LLVM/Tests` | LLVM IR and native artifact lowering |
+| `Compiler/Runtime/AARC/Tests` | C++ runtime invariants and a C11-only caller of the public ABI |
+| `Interactive/Tests` | REPL input, bounded history, source bindings, and session behavior |
 
 Fixtures follow the same rule. A Core golden document is stored below the Core
 test package, while multi-file `.vxs` projects used by the connected pipeline
@@ -188,6 +193,8 @@ fallback.
 - deterministic Core-to-CorePrep adaptation;
 - Xpp and Xmm lowering, optimizer preservation, and independent verifier failures;
 - LLVM module construction and rejection of values with no layout contract;
+- C11 header validity and C-to-C++ AARC metadata/opaque-handle compatibility;
+- REPL source isolation, line draining, persistent value binding, reset, and history bounds;
 - object/assembly extension checks and target-machine errors;
 - typed LLD invocation and stale-executable prevention; and
 - temporary-file cleanup on success and every failure exit.
@@ -347,6 +354,28 @@ The output under `dist/visual-xsharp-<version>-<platform>-<arch>/` is ignored an
 test input, copy a frontend from another checkout into it, or commit the generated directory. A release or packaging change
 should start from a freshly staged bundle so version, wire contract, native driver, and legal materials are evaluated as one
 unit.
+
+The bundle smoke path also invokes `vxs interactive` with the staged directory prepended to `PATH`. `-Eval` must return the
+expected result, `-Help` must reach `vxsi`, and a piped no-argument REPL transcript must type-check, evaluate, display
+history, reset the ORC resource trackers, and evaluate the same symbol again. This verifies that the singular `vxs` command
+finds its sibling REPL by `PATH` rather than a private absolute path or the current directory.
+
+For focused local feedback, the REPL's owning tests can be built and run directly:
+
+```powershell
+bazelisk build //Compiler/Backend/LLVM/Tests:llvm_backend_tests `
+  //Compiler/Cli/Tests:cli_parser_tests `
+  //Interactive/Tests:interactive_tests
+.\bazel-bin\Compiler\Backend\LLVM\Tests\llvm_backend_tests.exe
+.\bazel-bin\Compiler\Cli\Tests\cli_parser_tests.exe
+.\bazel-bin\Interactive\Tests\interactive_tests.exe
+```
+
+The LLVM suite checks native scalar-call ABI widths, invalid bitcode recovery, module lifetime, and reset; the AARC C11
+executable verifies C header compilation and calls into the C++ runtime; the CLI suite checks transparent child-argument
+forwarding; and the Interactive suite checks generated source isolation, scalar bindings, bounded history, input recovery,
+value formatting, and command parsing. The bundle test is the owning gate that starts the Haskell frontend process and
+proves a real source expression completes the entire Core-to-ORC route.
 
 ## Documentation verification
 

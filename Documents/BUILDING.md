@@ -97,8 +97,8 @@ go run scripts/develop.go build
 go run scripts/develop.go test
 ```
 
-`build` compiles `vxs` and all 14 component-owned native suites. `test` performs the same build and then executes each
-native program directly. This
+`build` compiles `vxs`, `vxsi`, and 16 component-owned test targets (15 Catch2 suites plus the C11 AARC ABI contract).
+`test` performs the same build and then executes each native program directly. This
 avoids introducing Git Bash/MSYS solely for Bazel's POSIX-oriented `cc_test` launcher on Windows while retaining the same
 suite set on macOS.
 
@@ -197,14 +197,17 @@ The brackets above describe the host suffix; they are not literal filename chara
 compiler version, host platform, and architecture so separately built bundles do not silently overwrite one another.
 `dist/` is ignored generated output and is not committed.
 
-The bundle contains two physical programs but exposes one compiler command. Users invoke `vxs`; `vxs-frontend` is the
-private lexer-through-Core process that the driver resolves beside itself. Do not move only `vxs`, place an unrelated
-`vxs-frontend` on `PATH`, or advertise the companion as a second public compiler.
+The bundle contains three physical programs but exposes one compiler command. Users invoke `vxs`; `vxs-frontend` is the
+private lexer-through-Core process that the driver resolves beside itself, and `vxsi` is the REPL companion that
+`vxs interactive` locates on `PATH`. Do not move only `vxs`, place an unrelated `vxs-frontend` on `PATH`, or advertise the
+frontend companion as a second public compiler.
 
 Staging is not considered successful merely because both build systems returned zero. The bundle command invokes the
-staged `vxs`, checks its reported version, compiles a real `.vxs` fixture to a `.vxse`, and executes that native program.
-It fails if the frontend cannot be discovered, compilation does not produce the expected executable, or the program exits
-incorrectly. Finally it writes `SHA256SUMS` for the staged compiler and legal payloads. Consumers can use that manifest to
+staged tools, checks the compiler version, compiles a real `.vxs` fixture to a `.vxse`, and executes that native program.
+It also invokes `vxs interactive -Eval "5 + 5"` with only the staged bundle directory added to `PATH`, checks the result,
+and opens/exits the no-argument REPL. It fails if either companion cannot be discovered, compilation does not produce the
+expected executable, or a smoke program exits incorrectly. Finally it writes `SHA256SUMS` for all staged executables and
+legal payloads. Consumers can use that manifest to
 detect an incomplete or modified local bundle; it is an integrity record, not a code-signing substitute.
 
 The legal payload is intentionally explicit. `LICENSE.txt` contains MPL-2.0, `PATENTS` identifies the applicable patent

@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include "Visual/XSharp/Xmm/IR.hpp"
@@ -115,6 +116,92 @@ namespace Visual::XSharp::Backend::LLVM
         {
             return artifact.has_value();
         }
+    };
+
+    /**
+     * A scalar value returned by a native ORC invocation.
+     *
+     * Only scalar alternatives whose host ABI is explicitly supported by this
+     * interface are represented. The source type remains attached so REPLs and
+     * debuggers can retain exact signedness and width when printing or feeding
+     * the value into the next compilation unit.
+     */
+    struct JitValue final
+    {
+        Core::Type type{ Core::Type::unit() };
+        std::variant<std::monostate, bool, char32_t, std::int64_t, std::uint64_t, double> payload;
+    };
+
+    enum class JitErrorKind : std::uint8_t
+    {
+        Initialization,
+        InvalidBitcode,
+        ModuleAddition,
+        SymbolLookup,
+        UnsupportedResult,
+        Invocation,
+        SignatureMismatch
+    };
+
+    struct JitError final
+    {
+        JitErrorKind kind{ JitErrorKind::Initialization };
+        std::string code;
+        std::string message;
+    };
+
+    struct JitResult final
+    {
+        std::optional<JitValue> value;
+        std::optional<JitError> error;
+
+        [[nodiscard]] explicit
+        operator bool() const noexcept
+        {
+            return value.has_value();
+        }
+    };
+
+    /**
+     * Owns one process-local LLVM ORC LLJIT and all modules added to it.
+     *
+     * Each module is independently verified before insertion. A lookup and
+     * invocation is serialized with insertion, so callers can safely submit
+     * work from several frontend workers without racing LLJIT mutation. The
+     * callable ABI is intentionally zero-argument and scalar-result only;
+     * richer function arguments require an explicit language ABI rather than
+     * host-side guesses.
+     */
+    class JitSession final
+    {
+    public:
+        JitSession();
+        ~JitSession();
+        JitSession(const JitSession &) = delete;
+        auto
+        operator=(const JitSession &) -> JitSession & = delete;
+        JitSession(JitSession &&) noexcept;
+        auto
+        operator=(JitSession &&) noexcept -> JitSession &;
+
+        /** Add verified bitcode and register its zero-argument entry with its exact X# result type. */
+        [[nodiscard]] auto
+        AddModule(std::span<const std::uint8_t> bitcode,
+                  std::string_view identifier,
+                  std::string_view entrySymbol,
+                  const Core::Type &entryResultType) -> std::optional<JitError>;
+
+        /** Remove every module and symbol previously registered in this session. */
+        [[nodiscard]] auto
+        Reset() -> std::optional<JitError>;
+
+        /** Find and invoke one zero-argument function using its Visual X# result type. */
+        [[nodiscard]] auto
+        InvokeScalar(std::string_view symbol, const Core::Type &resultType) -> JitResult;
+
+    private:
+        struct Impl;
+        std::unique_ptr<Impl> impl_;
     };
 
     // Verify is public so tools can diagnose an Xmm artifact without constructing LLVM

@@ -11,3 +11,16 @@ cc_binary(
         "@catch2//:catch2_main",
     ],
 )
+
+cc_binary(
+    name = "aarc_c_abi_tests",
+    srcs = ["AARCCAbiTests.c"],
+    copts = select({
+        "@platforms//os:windows": ["/std:c11"],
+        "//conditions:default": ["-std=c11"],
+    }),
+    deps = [
+        "//Compiler/Runtime/AARC:aarc",
+        "//Compiler/Headers/Visual/XSharp/Runtime:aarc_c_api",
+    ],
+)

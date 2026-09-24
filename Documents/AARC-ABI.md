@@ -47,10 +47,12 @@ step; consumers without it must retain their conservative unresolved boundary.
 
 ## Object header and destruction
 
-Every dynamic AARC payload has an `ObjectHeader`. A back-pointer immediately
-before the aligned payload locates the header from a strong object pointer. The
-header contains the ABI version, atomic lifecycle state, atomic strong and weak
-counts, immutable metadata, live payload pointer, and allocation base.
+Every dynamic AARC payload has a runtime-private `ObjectHeader`. A back-pointer
+immediately before the aligned payload locates the header from a strong object
+pointer. The header contains the ABI version, atomic lifecycle state, atomic
+strong and weak counts, immutable metadata, live payload pointer, and allocation
+base. Its C++ atomic layout and payload offset are implementation details; the
+public C ABI never exposes or allows callers to allocate this header.
 
 The weak count includes one implicit entry while the strong count is non-zero.
 The last strong release changes the state from `Alive` to `Destroying`, invokes
@@ -63,19 +65,46 @@ does not free its own header.
 diagnostic type name. Allocation rejects incompatible metadata and invalid
 alignment before creating an object.
 
+## C11 boundary and C++ implementation
+
+`Compiler/Headers/Visual/XSharp/Runtime/AARC.h` is the language-neutral ABI
+contract. It is valid C11, uses `<stdint.h>`, `<stddef.h>`, and `<stdbool.h>`,
+wraps declarations in `#ifdef __cplusplus` / `extern "C"`, and declares the
+metadata layout and unmangled runtime entry points. C translation units do not
+include C++ namespaces, `std::atomic`, templates, or exceptions. Weak and
+unowned values use distinct opaque handle types; clients may copy or release
+them only through the declared functions.
+
+`AARC.hpp` is the optional C++ convenience surface. It reuses the C metadata
+layout and adds the compiler-facing `TypeIdentity`, typed handle wrappers, and
+namespaced operations. `Compiler/Runtime/AARC/Internal.hpp` alone defines the
+atomic object header, while `Runtime.cpp` implements both surfaces in C++20.
+Destructor callbacks crossing the C boundary must not throw. Metadata remains
+immutable and must outlive the object allocations that refer to it.
+
+The `aarc_c_abi_tests` target compiles an actual `.c` translation unit with
+`/std:c11` on Windows or `-std=c11` on macOS, then links it to the C++20 runtime.
+It checks ABI version discovery, stable metadata use, strong/weak/unowned
+retention and copying, destruction ordering, and UTF-32 string validation. This
+keeps C limited to the ABI contract and test caller; there is no C runtime
+implementation to maintain.
+
 ## Strong, weak, and unowned ABI
 
 Generated code targets unmangled C entry points:
 
 | Entry point | Contract |
 | --- | --- |
+| `vxs_aarc_abi_version` | reports the runtime's metadata and function ABI version |
 | `vxs_aarc_allocate` | creates a payload with one strong owner and one implicit weak entry |
 | `vxs_aarc_retain_strong` | returns the same live payload with one added strong owner |
 | `vxs_aarc_release_strong` | releases an owner and destroys on the last release |
 | `vxs_aarc_make_weak` | creates a control handle that does not keep the payload alive |
+| `vxs_aarc_copy_weak` | creates an independent reference to an existing weak handle |
 | `vxs_aarc_lock_weak` | returns a nullable, newly retained strong result |
 | `vxs_aarc_release_weak` | releases a weak control handle |
 | `vxs_aarc_make_unowned` | creates a non-owning handle that keeps only the header alive |
+| `vxs_aarc_copy_unowned` | creates an independent reference to an existing unowned handle |
 | `vxs_aarc_load_unowned` | returns a nullable, newly retained strong result |
 | `vxs_aarc_release_unowned` | releases an unowned control handle |
 

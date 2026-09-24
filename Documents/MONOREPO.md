@@ -6,6 +6,7 @@
 ## Buildable components
 
 ```text
+Interactive/     Visual X# Interactive (vxsi) source, owned public headers, tests, and LLJIT benchmarks
 Compiler/     Native vxs driver, public headers, modular C++20 implementation, Haskell packages, and build support
 ProjectSystem/ Kotlin project evaluator, VXDC, and Visual.XSharp.kts DSL
 Spec/         Public language-design example suites

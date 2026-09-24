@@ -7,6 +7,11 @@ _COMPONENTS = [
     "support",
     "targetparser",
     "nativecodegen",
+    "bitreader",
+    "orcjit",
+    "executionengine",
+    "runtimedyld",
+    "object",
 ]
 
 def _quote(value):
