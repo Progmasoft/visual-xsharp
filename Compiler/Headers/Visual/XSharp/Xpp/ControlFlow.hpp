@@ -11,5 +11,6 @@ namespace visual_xsharp::xpp
     // function. Optimizers consume this adapter instead of duplicating the
     // terminator-to-edge mapping and accidentally drifting from verifiers.
     [[nodiscard]] auto
-    AnalyzeControlStructure(const Function &function) -> Visual::XSharp::Analysis::DominanceResult;
+    AnalyzeControlStructure(const Function &function)
+        -> Visual::XSharp::Analysis::DominanceResult;
 } // namespace visual_xsharp::xpp

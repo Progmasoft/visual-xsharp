@@ -17,7 +17,8 @@ namespace Visual::XSharp::Interactive::Runtime
     class ScratchCell final
     {
     public:
-        /** Reserve a private directory for one source/Core exchange with vxs-frontend. */
+        /** Reserve a private directory for one source/Core exchange with
+         * vxs-frontend. */
         ScratchCell();
         ScratchCell(const ScratchCell &) = delete;
         auto
@@ -44,15 +45,18 @@ namespace Visual::XSharp::Interactive::Runtime
     WriteCellSource(const ScratchCell &cell,
                     std::uint64_t cellNumber,
                     std::string_view expression,
-                    const std::optional<Backend::LLVM::JitValue> &previous) -> std::optional<std::string>;
-
-    [[nodiscard]] auto
-    RunFrontend(const std::filesystem::path &source, const std::filesystem::path &core) -> int;
-
-    [[nodiscard]] auto
-    ReadCore(const std::filesystem::path &path) -> std::optional<std::vector<std::uint8_t>>;
-
-    [[nodiscard]] auto
-    EvaluationSymbol(const visual_xsharp::xmm::Module &module, std::uint64_t cellNumber)
+                    const std::optional<Backend::LLVM::JitValue> &previous)
         -> std::optional<std::string>;
+
+    [[nodiscard]] auto
+    RunFrontend(const std::filesystem::path &source,
+                const std::filesystem::path &core) -> int;
+
+    [[nodiscard]] auto
+    ReadCore(const std::filesystem::path &path)
+        -> std::optional<std::vector<std::uint8_t>>;
+
+    [[nodiscard]] auto
+    EvaluationSymbol(const visual_xsharp::xmm::Module &module,
+                     std::uint64_t cellNumber) -> std::optional<std::string>;
 } // namespace Visual::XSharp::Interactive::Runtime

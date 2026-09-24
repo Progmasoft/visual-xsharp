@@ -14,7 +14,8 @@ namespace Visual::XSharp::Analysis
 {
     struct DataflowWorklist::Implementation final
     {
-        using EdgeMap = std::unordered_map<ControlFlowBlockId, std::vector<ControlFlowBlockId>>;
+        using EdgeMap = std::unordered_map<ControlFlowBlockId,
+                                           std::vector<ControlFlowBlockId>>;
 
         WorklistDirection direction{ WorklistDirection::Forward };
         EdgeMap forwardEdges;
@@ -24,9 +25,8 @@ namespace Visual::XSharp::Analysis
         std::deque<ControlFlowBlockId> pending;
         WorklistStatistics statistics;
 
-        Implementation(
-            const ControlFlowResult &controlFlow,
-            const WorklistDirection requestedDirection)
+        Implementation(const ControlFlowResult &controlFlow,
+                       const WorklistDirection requestedDirection)
             : direction(requestedDirection)
         {
             forwardEdges.reserve(controlFlow.facts.size());
@@ -41,7 +41,8 @@ namespace Visual::XSharp::Analysis
                     reachable.insert(facts.block);
             }
 
-            std::vector<ControlFlowBlockId> initial = controlFlow.reversePostorder;
+            std::vector<ControlFlowBlockId> initial
+                = controlFlow.reversePostorder;
             if (direction == WorklistDirection::Backward)
                 std::ranges::reverse(initial);
             for (const auto block : initial)
@@ -55,9 +56,8 @@ namespace Visual::XSharp::Analysis
                 return;
             pending.push_back(block);
             ++statistics.scheduledBlocks;
-            statistics.peakPendingBlocks = std::max(
-                statistics.peakPendingBlocks,
-                pending.size());
+            statistics.peakPendingBlocks
+                = std::max(statistics.peakPendingBlocks, pending.size());
         }
 
         [[nodiscard]] auto
@@ -87,24 +87,26 @@ namespace Visual::XSharp::Analysis
         }
     };
 
-    DataflowWorklist::DataflowWorklist(
-        const ControlFlowResult &controlFlow,
-        const WorklistDirection direction)
-        : implementation_(std::make_unique<Implementation>(controlFlow, direction))
-    {
-    }
+    DataflowWorklist::DataflowWorklist(const ControlFlowResult &controlFlow,
+                                       const WorklistDirection direction)
+        : implementation_(
+              std::make_unique<Implementation>(controlFlow, direction))
+    {}
 
-    DataflowWorklist::DataflowWorklist(DataflowWorklist &&other) noexcept = default;
+    DataflowWorklist::DataflowWorklist(DataflowWorklist &&other) noexcept
+        = default;
 
     auto
-    DataflowWorklist::operator=(DataflowWorklist &&other) noexcept -> DataflowWorklist & = default;
+    DataflowWorklist::operator=(DataflowWorklist &&other) noexcept
+        -> DataflowWorklist & = default;
 
     DataflowWorklist::~DataflowWorklist() = default;
 
     auto
     DataflowWorklist::Next() -> std::optional<ControlFlowBlockId>
     {
-        return implementation_ == nullptr ? std::nullopt : implementation_->Next();
+        return implementation_ == nullptr ? std::nullopt
+                                          : implementation_->Next();
     }
 
     void
@@ -131,6 +133,7 @@ namespace Visual::XSharp::Analysis
     DataflowWorklist::Statistics() const noexcept -> const WorklistStatistics &
     {
         static constexpr WorklistStatistics kEmptyStatistics{};
-        return implementation_ == nullptr ? kEmptyStatistics : implementation_->statistics;
+        return implementation_ == nullptr ? kEmptyStatistics
+                                          : implementation_->statistics;
     }
 } // namespace Visual::XSharp::Analysis

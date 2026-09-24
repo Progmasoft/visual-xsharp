@@ -220,18 +220,29 @@ namespace visual_xsharp::core
             return Type{ Kind::Function, {}, std::move(parameters), {}, {} };
         }
         [[nodiscard]] static auto
-        named(std::vector<std::u32string> qualified_name, std::vector<Type> arguments = {}) -> Type
+        named(std::vector<std::u32string> qualified_name,
+              std::vector<Type> arguments = {}) -> Type
         {
             std::vector<TemplateArgument> converted;
             converted.reserve(arguments.size());
             for (auto &argument : arguments)
-                converted.push_back(TemplateArgument::type_argument(std::move(argument)));
-            return Type{ Kind::Named, std::move(qualified_name), {}, std::move(converted), {} };
+                converted.push_back(
+                    TemplateArgument::type_argument(std::move(argument)));
+            return Type{ Kind::Named,
+                         std::move(qualified_name),
+                         {},
+                         std::move(converted),
+                         {} };
         }
         [[nodiscard]] static auto
-        named_template(std::vector<std::u32string> qualified_name, std::vector<TemplateArgument> arguments) -> Type
+        named_template(std::vector<std::u32string> qualified_name,
+                       std::vector<TemplateArgument> arguments) -> Type
         {
-            return Type{ Kind::Named, std::move(qualified_name), {}, std::move(arguments), {} };
+            return Type{ Kind::Named,
+                         std::move(qualified_name),
+                         {},
+                         std::move(arguments),
+                         {} };
         }
         [[nodiscard]] static auto
         type_variable(SymbolName symbol) -> Type
@@ -296,9 +307,10 @@ namespace visual_xsharp::core
         return *type == *other.type;
     }
 
-    // Floating-point literals retain their source-independent decimal spelling until LLVM
-    // selects IEEE semantics for the declared scalar type.  The wire verifier accepts only
-    // a deliberately small ASCII grammar, so this is not an unstructured text escape hatch.
+    // Floating-point literals retain their source-independent decimal spelling
+    // until LLVM selects IEEE semantics for the declared scalar type.  The wire
+    // verifier accepts only a deliberately small ASCII grammar, so this is not
+    // an unstructured text escape hatch.
     struct FloatingLiteral final
     {
         std::string spelling;
@@ -306,9 +318,16 @@ namespace visual_xsharp::core
         operator==(const FloatingLiteral &) const -> bool = default;
     };
 
-    // int64_t and int32_t remain accepted for source compatibility with native clients that
-    // constructed v2 modules directly. New decoders produce IntegerLiteral consistently.
-    using Literal = std::variant<std::monostate, bool, std::int64_t, std::int32_t, IntegerLiteral, FloatingLiteral, std::u32string>;
+    // int64_t and int32_t remain accepted for source compatibility with native
+    // clients that constructed v2 modules directly. New decoders produce
+    // IntegerLiteral consistently.
+    using Literal = std::variant<std::monostate,
+                                 bool,
+                                 std::int64_t,
+                                 std::int32_t,
+                                 IntegerLiteral,
+                                 FloatingLiteral,
+                                 std::u32string>;
 
     struct Atom final
     {
@@ -324,7 +343,10 @@ namespace visual_xsharp::core
         [[nodiscard]] static auto
         variable(SymbolName name, Type value_type) -> Atom
         {
-            return Atom{ Kind::Variable, std::move(value_type), std::move(name), {} };
+            return Atom{ Kind::Variable,
+                         std::move(value_type),
+                         std::move(name),
+                         {} };
         }
         [[nodiscard]] static auto
         variable(SymbolId id, Type value_type) -> Atom
@@ -334,7 +356,10 @@ namespace visual_xsharp::core
         [[nodiscard]] static auto
         constant(Literal value, Type value_type) -> Atom
         {
-            return Atom{ Kind::Literal, std::move(value_type), {}, std::move(value) };
+            return Atom{ Kind::Literal,
+                         std::move(value_type),
+                         {},
+                         std::move(value) };
         }
         [[nodiscard]] auto
         operator==(const Atom &) const -> bool = default;

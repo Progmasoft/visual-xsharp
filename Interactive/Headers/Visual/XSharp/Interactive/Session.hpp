@@ -29,7 +29,8 @@ namespace Visual::XSharp::Interactive
         std::optional<Backend::LLVM::JitValue> value;
     };
 
-    /** One frontend-to-LLJIT session, including the `vxsiPrevious` value and bounded history. */
+    /** One frontend-to-LLJIT session, including the `vxsiPrevious` value and
+     * bounded history. */
     class Session final
     {
     public:

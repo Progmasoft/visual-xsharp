@@ -61,8 +61,9 @@ namespace Visual::XSharp::Diagnostic
 
     struct Location final
     {
-        // `source` is a compiler source identity, normally a project-relative or
-        // absolute path. It is deliberately not forced into a URI by the wire layer.
+        // `source` is a compiler source identity, normally a project-relative
+        // or absolute path. It is deliberately not forced into a URI by the
+        // wire layer.
         std::u32string source;
         Range range{};
 
@@ -173,5 +174,6 @@ namespace Visual::XSharp::Diagnostic
     Encode(const Document &document, const Limits &limits = {}) -> EncodeResult;
 
     [[nodiscard]] auto
-    Decode(const std::vector<std::uint8_t> &bytes, const Limits &limits = {}) -> DecodeResult;
+    Decode(const std::vector<std::uint8_t> &bytes, const Limits &limits = {})
+        -> DecodeResult;
 } // namespace Visual::XSharp::Diagnostic

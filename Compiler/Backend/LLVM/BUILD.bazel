@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "llvm_backend",
     srcs = ["Artifact.cpp", "Codegen.cpp", "JitSession.cpp", "Verifier.cpp"],
+    textual_hdrs = ["CodegenOperations.inc"],
     deps = [
         "//Compiler/Codegen/Xmm:xmm",
         "//Compiler/Core/Callable:callable",

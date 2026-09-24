@@ -14,8 +14,9 @@ namespace Visual::XSharp::ADTs
     // LLVM's integral DenseMapInfo reserves two values for empty and tombstone
     // buckets. Compiler identities are wire-level values, so silently excluding
     // two otherwise valid IDs would make validation depend on the container.
-    // DenseIdMap moves bucket state into a tagged key and preserves the complete
-    // unsigned identity domain, including zero and the two largest values.
+    // DenseIdMap moves bucket state into a tagged key and preserves the
+    // complete unsigned identity domain, including zero and the two largest
+    // values.
     template<std::unsigned_integral Id, typename Value>
     class DenseIdMap final
     {
@@ -40,7 +41,8 @@ namespace Visual::XSharp::ADTs
             [[nodiscard]] auto
             operator==(const Key &other) const noexcept -> bool
             {
-                return slot == other.slot && (slot != Slot::Normal || value == other.value);
+                return slot == other.slot
+                       && (slot != Slot::Normal || value == other.value);
             }
         };
 
@@ -122,9 +124,9 @@ namespace Visual::XSharp::ADTs
         auto
         TryEmplace(const Id id, Arguments &&...arguments) -> InsertResult
         {
-            auto [found, inserted] = values_.try_emplace(
-                Key::Normal(id),
-                std::forward<Arguments>(arguments)...);
+            auto [found, inserted]
+                = values_.try_emplace(Key::Normal(id),
+                                      std::forward<Arguments>(arguments)...);
             return { &found->second, inserted };
         }
 

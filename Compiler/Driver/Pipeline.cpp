@@ -6,7 +6,8 @@
 namespace
 {
     void
-    ContinueFromXmm(visual_xsharp::PipelineResult &result, const visual_xsharp::PipelineOptions &options)
+    ContinueFromXmm(visual_xsharp::PipelineResult &result,
+                    const visual_xsharp::PipelineOptions &options)
     {
         result.xmmVerificationIssues = Visual::XSharp::Xmm::Verify(*result.xmm);
         if (!result.xmmVerificationIssues.empty())
@@ -16,7 +17,8 @@ namespace
             result.succeeded = true;
             return;
         }
-        auto loweredLlvm = Visual::XSharp::Backend::LLVM::Lower(*result.xmm, options.llvm);
+        auto loweredLlvm
+            = Visual::XSharp::Backend::LLVM::Lower(*result.xmm, options.llvm);
         if (!loweredLlvm)
         {
             result.llvm_error = std::move(loweredLlvm.error);
@@ -27,7 +29,8 @@ namespace
     }
 
     void
-    ContinueFromXpp(visual_xsharp::PipelineResult &result, const visual_xsharp::PipelineOptions &options)
+    ContinueFromXpp(visual_xsharp::PipelineResult &result,
+                    const visual_xsharp::PipelineOptions &options)
     {
         result.xppVerificationIssues = Visual::XSharp::Xpp::Verify(*result.xpp);
         if (!result.xppVerificationIssues.empty())
@@ -38,7 +41,9 @@ namespace
             return;
         }
         auto loweredXmm = ::visual_xsharp::xmm::lower(*result.xpp);
-        result.xmm = options.optimize_xmm ? ::visual_xsharp::xmm::optimize(std::move(loweredXmm)) : std::move(loweredXmm);
+        result.xmm = options.optimize_xmm
+                         ? ::visual_xsharp::xmm::optimize(std::move(loweredXmm))
+                         : std::move(loweredXmm);
         ContinueFromXmm(result, options);
     }
 } // namespace
@@ -46,11 +51,13 @@ namespace
 namespace visual_xsharp
 {
     auto
-    consume_coreprep(std::span<const std::uint8_t> bytes, const PipelineOptions &options) -> PipelineResult
+    consume_coreprep(std::span<const std::uint8_t> bytes,
+                     const PipelineOptions &options) -> PipelineResult
     {
         PipelineResult result;
-        // Decode from bounded wire bytes even for in-process callers. A single entry path
-        // keeps size/depth limits identical for files, Haskell output and embedded hosts.
+        // Decode from bounded wire bytes even for in-process callers. A single
+        // entry path keeps size/depth limits identical for files, Haskell
+        // output and embedded hosts.
         auto decoded = core::wire::decode(bytes, options.wire_limits);
         if (!decoded)
         {
@@ -59,16 +66,20 @@ namespace visual_xsharp
         }
 
         result.core_prep = std::move(decoded.module);
-        // Semantic verification precedes every lowering stage. Partial state is retained in
-        // result, but no downstream IR is fabricated from an invalid CorePrep module.
+        // Semantic verification precedes every lowering stage. Partial state is
+        // retained in result, but no downstream IR is fabricated from an
+        // invalid CorePrep module.
         result.verification_issues = core::verify(*result.core_prep);
         if (!result.verification_issues.empty())
             return result;
 
         auto lowered_xpp = xpp::lower(*result.core_prep);
-        // Optimization toggles select identity-vs-optimized forms; they never skip a stage.
-        // Xmm therefore receives the same typed Xpp contract in debug and release modes.
-        result.xpp = options.optimize_xpp ? xpp::optimize(std::move(lowered_xpp)) : std::move(lowered_xpp);
+        // Optimization toggles select identity-vs-optimized forms; they never
+        // skip a stage. Xmm therefore receives the same typed Xpp contract in
+        // debug and release modes.
+        result.xpp = options.optimize_xpp
+                         ? xpp::optimize(std::move(lowered_xpp))
+                         : std::move(lowered_xpp);
         ContinueFromXpp(result, options);
         return result;
     }
@@ -77,7 +88,8 @@ namespace visual_xsharp
 namespace Visual::XSharp::Pipeline
 {
     auto
-    ConsumeCore(std::span<const std::uint8_t> bytes, const Options &options) -> Result
+    ConsumeCore(std::span<const std::uint8_t> bytes, const Options &options)
+        -> Result
     {
         Result result;
         auto decoded = Core::Wire::Decode(bytes, options.coreWireLimits);
@@ -92,22 +104,27 @@ namespace Visual::XSharp::Pipeline
         if (!result.coreVerificationIssues.empty())
             return result;
 
-        // CorePrep remains an internal adapting stage. Re-encoding to VXCP here would add
-        // a redundant memory copy, so native Core input hands the verified model directly
-        // to the existing CorePrep verifier and post-CorePrep owners.
+        // CorePrep remains an internal adapting stage. Re-encoding to VXCP here
+        // would add a redundant memory copy, so native Core input hands the
+        // verified model directly to the existing CorePrep verifier and
+        // post-CorePrep owners.
         result.core_prep = Core::CorePrep::Prepare(*result.core);
-        result.verification_issues = ::visual_xsharp::core::verify(*result.core_prep);
+        result.verification_issues
+            = ::visual_xsharp::core::verify(*result.core_prep);
         if (!result.verification_issues.empty())
             return result;
 
         auto loweredXpp = ::visual_xsharp::xpp::lower(*result.core_prep);
-        result.xpp = options.optimize_xpp ? ::visual_xsharp::xpp::optimize(std::move(loweredXpp)) : std::move(loweredXpp);
+        result.xpp = options.optimize_xpp
+                         ? ::visual_xsharp::xpp::optimize(std::move(loweredXpp))
+                         : std::move(loweredXpp);
         ContinueFromXpp(result, options);
         return result;
     }
 
     auto
-    ConsumeXpp(std::span<const std::uint8_t> bytes, const Options &options) -> Result
+    ConsumeXpp(std::span<const std::uint8_t> bytes, const Options &options)
+        -> Result
     {
         Result result;
         auto decoded = Xpp::Wire::Decode(bytes, options.artifactWireLimits);
@@ -127,7 +144,8 @@ namespace Visual::XSharp::Pipeline
     }
 
     auto
-    ConsumeXmm(std::span<const std::uint8_t> bytes, const Options &options) -> Result
+    ConsumeXmm(std::span<const std::uint8_t> bytes, const Options &options)
+        -> Result
     {
         Result result;
         auto decoded = Xmm::Wire::Decode(bytes, options.artifactWireLimits);

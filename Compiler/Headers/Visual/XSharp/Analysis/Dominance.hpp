@@ -76,31 +76,26 @@ namespace Visual::XSharp::Analysis
     AnalyzeDominance(const ControlFlowGraph &graph) -> DominanceResult;
 
     [[nodiscard]] auto
-    Dominates(
-        const DominanceResult &result,
-        ControlFlowBlockId dominator,
-        ControlFlowBlockId block) -> bool;
+    Dominates(const DominanceResult &result,
+              ControlFlowBlockId dominator,
+              ControlFlowBlockId block) -> bool;
 
     [[nodiscard]] auto
-    StrictlyDominates(
-        const DominanceResult &result,
-        ControlFlowBlockId dominator,
-        ControlFlowBlockId block) -> bool;
+    StrictlyDominates(const DominanceResult &result,
+                      ControlFlowBlockId dominator,
+                      ControlFlowBlockId block) -> bool;
 
     [[nodiscard]] auto
-    PostDominates(
-        const DominanceResult &result,
-        ControlFlowBlockId postDominator,
-        ControlFlowBlockId block) -> bool;
+    PostDominates(const DominanceResult &result,
+                  ControlFlowBlockId postDominator,
+                  ControlFlowBlockId block) -> bool;
 
     [[nodiscard]] auto
-    StrictlyPostDominates(
-        const DominanceResult &result,
-        ControlFlowBlockId postDominator,
-        ControlFlowBlockId block) -> bool;
+    StrictlyPostDominates(const DominanceResult &result,
+                          ControlFlowBlockId postDominator,
+                          ControlFlowBlockId block) -> bool;
 
     [[nodiscard]] auto
-    FactsFor(
-        const DominanceResult &result,
-        ControlFlowBlockId block) -> const DominanceBlockFacts *;
+    FactsFor(const DominanceResult &result, ControlFlowBlockId block)
+        -> const DominanceBlockFacts *;
 } // namespace Visual::XSharp::Analysis

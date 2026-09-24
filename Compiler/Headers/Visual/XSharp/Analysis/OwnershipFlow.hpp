@@ -11,13 +11,14 @@
 namespace Visual::XSharp::Analysis::OwnershipFlow
 {
     using BlockId = std::uint32_t;
-    // Xpp symbols are 64-bit while Xmm registers are 32-bit. The common analysis
-    // uses the wider identity so adapters never truncate a valid source symbol.
+    // Xpp symbols are 64-bit while Xmm registers are 32-bit. The common
+    // analysis uses the wider identity so adapters never truncate a valid
+    // source symbol.
     using HandleId = std::uint64_t;
 
     // Xpp and Xmm intentionally erase source-level weak/unowned syntax from the
-    // value type. HandleKind restores the runtime representation distinction for
-    // dataflow without leaking AARC details into the general Type model.
+    // value type. HandleKind restores the runtime representation distinction
+    // for dataflow without leaking AARC details into the general Type model.
     enum class HandleKind : std::uint8_t
     {
         Strong,
@@ -35,11 +36,12 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         Consume,
 
         // Define replaces the abstract state for the destination. It is used by
-        // ordinary reference-producing operations as well as ownership conversions.
+        // ordinary reference-producing operations as well as ownership
+        // conversions.
         Define,
 
-        // Forget removes a destination from ownership tracking when a stage reuses
-        // storage for a value that does not participate in AARC.
+        // Forget removes a destination from ownership tracking when a stage
+        // reuses storage for a value that does not participate in AARC.
         Forget
     };
 
@@ -154,9 +156,10 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         [[nodiscard]] auto
         operator==(const Result &other) const -> bool
         {
-            // Scheduler statistics describe evaluation cost, not semantic facts.
-            // Presentation-order invariance tests compare only observable analysis
-            // meaning so a different but valid queue path cannot change equality.
+            // Scheduler statistics describe evaluation cost, not semantic
+            // facts. Presentation-order invariance tests compare only
+            // observable analysis meaning so a different but valid queue path
+            // cannot change equality.
             return facts == other.facts && issues == other.issues;
         }
     };
@@ -180,7 +183,8 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
 
     // Analyze performs a forward may-state fixed point. Unlike definite
     // initialization, ownership joins use union: every state that can arrive is
-    // relevant because one consumed predecessor is enough to make a later use unsafe.
+    // relevant because one consumed predecessor is enough to make a later use
+    // unsafe.
     [[nodiscard]] auto
     Analyze(const Function &function, AnalysisOptions options = {}) -> Result;
 } // namespace Visual::XSharp::Analysis::OwnershipFlow

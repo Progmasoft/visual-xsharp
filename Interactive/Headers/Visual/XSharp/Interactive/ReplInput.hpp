@@ -37,9 +37,12 @@ namespace Visual::XSharp::Interactive
 
     /** Read at most the requested byte count and drain any overlong line. */
     [[nodiscard]] auto
-    ReadInputLine(std::istream &input, std::string &line, std::size_t maximumBytes) -> InputLineStatus;
+    ReadInputLine(std::istream &input,
+                  std::string &line,
+                  std::size_t maximumBytes) -> InputLineStatus;
 
-    /** Separate REPL meta-commands from unchanged Visual X# source expressions. */
+    /** Separate REPL meta-commands from unchanged Visual X# source expressions.
+     */
     [[nodiscard]] auto
     ParseReplCommand(std::string_view line) noexcept -> ReplCommand;
 } // namespace Visual::XSharp::Interactive

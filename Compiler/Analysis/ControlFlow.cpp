@@ -12,27 +12,31 @@ namespace Visual::XSharp::Analysis
 {
     namespace
     {
-        using BlockMap = std::unordered_map<ControlFlowBlockId, const ControlFlowBlock *>;
-        using EdgeMap = std::unordered_map<ControlFlowBlockId, std::vector<ControlFlowBlockId>>;
+        using BlockMap
+            = std::unordered_map<ControlFlowBlockId, const ControlFlowBlock *>;
+        using EdgeMap = std::unordered_map<ControlFlowBlockId,
+                                           std::vector<ControlFlowBlockId>>;
 
         [[nodiscard]] auto
-        CatalogBlocks(const ControlFlowGraph &graph, std::vector<ControlFlowIssue> &issues) -> BlockMap
+        CatalogBlocks(const ControlFlowGraph &graph,
+                      std::vector<ControlFlowIssue> &issues) -> BlockMap
         {
             BlockMap blocks;
             blocks.reserve(graph.blocks.size());
             for (const auto &block : graph.blocks)
                 if (!blocks.emplace(block.id, &block).second)
-                    issues.push_back({ ControlFlowIssueKind::DuplicateBlock, block.id, 0U });
+                    issues.push_back(
+                        { ControlFlowIssueKind::DuplicateBlock, block.id, 0U });
             if (!blocks.contains(graph.entry))
-                issues.push_back({ ControlFlowIssueKind::MissingEntry, graph.entry, 0U });
+                issues.push_back(
+                    { ControlFlowIssueKind::MissingEntry, graph.entry, 0U });
             return blocks;
         }
 
         [[nodiscard]] auto
-        ValidSuccessors(
-            const ControlFlowGraph &graph,
-            const BlockMap &blocks,
-            std::vector<ControlFlowIssue> &issues) -> EdgeMap
+        ValidSuccessors(const ControlFlowGraph &graph,
+                        const BlockMap &blocks,
+                        std::vector<ControlFlowIssue> &issues) -> EdgeMap
         {
             EdgeMap successors;
             successors.reserve(blocks.size());
@@ -55,7 +59,9 @@ namespace Visual::XSharp::Analysis
                 {
                     if (!blocks.contains(target))
                     {
-                        issues.push_back({ ControlFlowIssueKind::MissingTarget, block.id, target });
+                        issues.push_back({ ControlFlowIssueKind::MissingTarget,
+                                           block.id,
+                                           target });
                         continue;
                     }
                     if (uniqueTargets.insert(target).second)
@@ -66,7 +72,8 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        BuildPredecessors(const BlockMap &blocks, const EdgeMap &successors) -> EdgeMap
+        BuildPredecessors(const BlockMap &blocks, const EdgeMap &successors)
+            -> EdgeMap
         {
             EdgeMap predecessors;
             predecessors.reserve(blocks.size());
@@ -93,12 +100,11 @@ namespace Visual::XSharp::Analysis
         };
 
         void
-        Traverse(
-            const ControlFlowBlockId entry,
-            const BlockMap &blocks,
-            const EdgeMap &successors,
-            std::vector<ControlFlowBlockId> &preorder,
-            std::vector<ControlFlowBlockId> &reversePostorder)
+        Traverse(const ControlFlowBlockId entry,
+                 const BlockMap &blocks,
+                 const EdgeMap &successors,
+                 std::vector<ControlFlowBlockId> &preorder,
+                 std::vector<ControlFlowBlockId> &reversePostorder)
         {
             if (!blocks.contains(entry))
                 return;
@@ -134,13 +140,15 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        BuildFacts(
-            const BlockMap &blocks,
-            const EdgeMap &predecessors,
-            const EdgeMap &successors,
-            const std::vector<ControlFlowBlockId> &preorder) -> std::vector<ControlFlowBlockFacts>
+        BuildFacts(const BlockMap &blocks,
+                   const EdgeMap &predecessors,
+                   const EdgeMap &successors,
+                   const std::vector<ControlFlowBlockId> &preorder)
+            -> std::vector<ControlFlowBlockFacts>
         {
-            const std::unordered_set<ControlFlowBlockId> reachable(preorder.begin(), preorder.end());
+            const std::unordered_set<ControlFlowBlockId> reachable(
+                preorder.begin(),
+                preorder.end());
             std::vector<ControlFlowBlockFacts> facts;
             facts.reserve(blocks.size());
             for (const auto &[id, block] : blocks)
@@ -152,7 +160,10 @@ namespace Visual::XSharp::Analysis
                     return !reachable.contains(source);
                 });
                 std::ranges::sort(targets);
-                facts.push_back({ id, reachable.contains(id), std::move(sources), std::move(targets) });
+                facts.push_back({ id,
+                                  reachable.contains(id),
+                                  std::move(sources),
+                                  std::move(targets) });
             }
             std::ranges::sort(facts, {}, &ControlFlowBlockFacts::block);
             return facts;
@@ -166,8 +177,13 @@ namespace Visual::XSharp::Analysis
         const auto blocks = CatalogBlocks(graph, result.issues);
         const auto successors = ValidSuccessors(graph, blocks, result.issues);
         const auto predecessors = BuildPredecessors(blocks, successors);
-        Traverse(graph.entry, blocks, successors, result.preorder, result.reversePostorder);
-        result.facts = BuildFacts(blocks, predecessors, successors, result.preorder);
+        Traverse(graph.entry,
+                 blocks,
+                 successors,
+                 result.preorder,
+                 result.reversePostorder);
+        result.facts
+            = BuildFacts(blocks, predecessors, successors, result.preorder);
         return result;
     }
 } // namespace Visual::XSharp::Analysis

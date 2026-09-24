@@ -15,8 +15,9 @@ namespace visual_xsharp::xmm
     {
         struct RegisterMap final
         {
-            // Allocate deterministically on first encounter while preserving one register for
-            // each resolved symbol across all blocks. Register zero remains invalid/reserved.
+            // Allocate deterministically on first encounter while preserving
+            // one register for each resolved symbol across all blocks. Register
+            // zero remains invalid/reserved.
             std::unordered_map<xpp::SymbolId, VirtualRegister> registers;
             VirtualRegister next{ 1U };
 
@@ -51,7 +52,8 @@ namespace visual_xsharp::xmm
                     if (instruction.effect != xpp::Instruction::Effect::Discard)
                         locals.push_back(instruction.destination);
             std::ranges::sort(locals);
-            locals.erase(std::unique(locals.begin(), locals.end()), locals.end());
+            locals.erase(std::unique(locals.begin(), locals.end()),
+                         locals.end());
             for (const auto symbol : locals)
                 map.Reserve(symbol);
             return map;
@@ -139,29 +141,43 @@ namespace visual_xsharp::xmm
         }
 
         auto
-        LowerValue(
-            const xpp::Operand &operand,
-            RegisterMap &map,
-            const std::unordered_set<xpp::SymbolId> &directFunctions) -> Value
+        LowerValue(const xpp::Operand &operand,
+                   RegisterMap &map,
+                   const std::unordered_set<xpp::SymbolId> &directFunctions)
+            -> Value
         {
             if (operand.kind == xpp::Operand::Kind::Symbol)
             {
                 if (operand.type.kind == core::Type::Kind::Function
                     && directFunctions.contains(operand.symbol))
-                    // Direct callees retain symbol identity and never consume a data register.
-                    // Function-typed local storage is deliberately excluded: it contains an
-                    // AARC closure pointer and must become an ordinary Xmm register.
-                    return Value{ Value::Kind::Function, operand.type, 0U, operand.symbol, {} };
-                return Value{ Value::Kind::Register, operand.type, map.Get(operand.symbol), 0U, {} };
+                    // Direct callees retain symbol identity and never consume a
+                    // data register. Function-typed local storage is
+                    // deliberately excluded: it contains an AARC closure
+                    // pointer and must become an ordinary Xmm register.
+                    return Value{ Value::Kind::Function,
+                                  operand.type,
+                                  0U,
+                                  operand.symbol,
+                                  {} };
+                return Value{ Value::Kind::Register,
+                              operand.type,
+                              map.Get(operand.symbol),
+                              0U,
+                              {} };
             }
-            return Value{ Value::Kind::Immediate, operand.type, 0U, 0U, operand.literal };
+            return Value{ Value::Kind::Immediate,
+                          operand.type,
+                          0U,
+                          0U,
+                          operand.literal };
         }
 
         auto
         LowerTerminator(
             const xpp::Terminator &terminator,
             RegisterMap &map,
-            const std::unordered_set<xpp::SymbolId> &directFunctions) -> Terminator
+            const std::unordered_set<xpp::SymbolId> &directFunctions)
+            -> Terminator
         {
             Terminator lowered{
                 Terminator::Kind::Unreachable,
@@ -201,10 +217,14 @@ namespace visual_xsharp::xmm
         for (const auto &function : module.functions)
         {
             auto registerMap = RegisterMapFor(function);
-            Function loweredFunction{ function.symbol, {}, {}, function.return_type, function.entry, {} };
+            Function loweredFunction{
+                function.symbol, {}, {}, function.return_type,
+                function.entry,  {}
+            };
             for (const auto &parameter : function.parameters)
             {
-                loweredFunction.parameter_registers.push_back(registerMap.Get(parameter.symbol.id));
+                loweredFunction.parameter_registers.push_back(
+                    registerMap.Get(parameter.symbol.id));
                 loweredFunction.parameter_types.push_back(parameter.type);
             }
             loweredFunction.blocks.reserve(function.blocks.size());
@@ -216,21 +236,26 @@ namespace visual_xsharp::xmm
                 {
                     Instruction loweredInstruction{};
                     loweredInstruction.opcode = LowerOpcode(instruction.opcode);
-                    loweredInstruction.has_result = instruction.effect != xpp::Instruction::Effect::Discard;
+                    loweredInstruction.has_result
+                        = instruction.effect
+                          != xpp::Instruction::Effect::Discard;
                     loweredInstruction.result_type = instruction.result_type;
                     if (loweredInstruction.has_result)
-                        loweredInstruction.destination = registerMap.Get(instruction.destination);
+                        loweredInstruction.destination
+                            = registerMap.Get(instruction.destination);
                     for (const auto &operand : instruction.operands)
                         loweredInstruction.operands.push_back(
                             LowerValue(operand, registerMap, directFunctions));
-                    loweredInstruction.closure_function = instruction.closure_function;
-                    loweredInstruction.capture_modes = instruction.capture_modes;
-                    loweredBlock.instructions.push_back(std::move(loweredInstruction));
+                    loweredInstruction.closure_function
+                        = instruction.closure_function;
+                    loweredInstruction.capture_modes
+                        = instruction.capture_modes;
+                    loweredBlock.instructions.push_back(
+                        std::move(loweredInstruction));
                 }
-                loweredBlock.terminator = LowerTerminator(
-                    block.terminator,
-                    registerMap,
-                    directFunctions);
+                loweredBlock.terminator = LowerTerminator(block.terminator,
+                                                          registerMap,
+                                                          directFunctions);
                 loweredFunction.blocks.push_back(std::move(loweredBlock));
             }
             lowered.functions.push_back(std::move(loweredFunction));

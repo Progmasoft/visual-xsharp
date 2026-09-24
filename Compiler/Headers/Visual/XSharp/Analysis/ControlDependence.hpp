@@ -47,10 +47,11 @@ namespace Visual::XSharp::Analysis
     // controller block. Edge identity matters when true and false arms later
     // receive different predicates or profile weights.
     [[nodiscard]] auto
-    AnalyzeControlDependence(const ControlFlowGraph &graph) -> ControlDependenceResult;
+    AnalyzeControlDependence(const ControlFlowGraph &graph)
+        -> ControlDependenceResult;
 
     [[nodiscard]] auto
-    ControlDependenceFactsFor(
-        const ControlDependenceResult &result,
-        ControlFlowBlockId block) -> const ControlDependenceBlockFacts *;
+    ControlDependenceFactsFor(const ControlDependenceResult &result,
+                              ControlFlowBlockId block)
+        -> const ControlDependenceBlockFacts *;
 } // namespace Visual::XSharp::Analysis

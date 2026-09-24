@@ -36,24 +36,28 @@ namespace
     [[nodiscard]] auto
     IntegerArgument(const std::int64_t value) -> Model::TemplateArgument
     {
-        return Model::TemplateArgument::value_argument(Model::TemplateValue::integer_value(Integer(value)));
+        return Model::TemplateArgument::value_argument(
+            Model::TemplateValue::integer_value(Integer(value)));
     }
 
     [[nodiscard]] auto
     BooleanArgument(const bool value) -> Model::TemplateArgument
     {
-        return Model::TemplateArgument::value_argument(Model::TemplateValue::boolean_value(value));
+        return Model::TemplateArgument::value_argument(
+            Model::TemplateValue::boolean_value(value));
     }
 
     [[nodiscard]] auto
     CharacterArgument(const std::uint32_t value) -> Model::TemplateArgument
     {
         return Model::TemplateArgument::value_argument(
-            Model::TemplateValue::character_value(Model::integer_from_unsigned(value)));
+            Model::TemplateValue::character_value(
+                Model::integer_from_unsigned(value)));
     }
 
     [[nodiscard]] auto
-    Parameter(const Model::SymbolId id, std::u32string spelling) -> Model::SymbolName
+    Parameter(const Model::SymbolId id, std::u32string spelling)
+        -> Model::SymbolName
     {
         return Model::SymbolName{ id, std::move(spelling) };
     }
@@ -63,25 +67,31 @@ namespace
         -> Model::TemplateArgument
     {
         return Model::TemplateArgument::value_argument(
-            Model::TemplateValue::parameter_value(Parameter(id, std::move(spelling))));
+            Model::TemplateValue::parameter_value(
+                Parameter(id, std::move(spelling))));
     }
 
     [[nodiscard]] auto
-    Applied(std::u32string name, std::vector<Model::TemplateArgument> arguments) -> Model::Type
+    Applied(std::u32string name, std::vector<Model::TemplateArgument> arguments)
+        -> Model::Type
     {
-        return Model::Type::named_template({ std::move(name) }, std::move(arguments));
+        return Model::Type::named_template({ std::move(name) },
+                                           std::move(arguments));
     }
 
     [[nodiscard]] auto
     SystemArray(std::vector<Model::TemplateArgument> arguments) -> Model::Type
     {
-        return Model::Type::named_template({ U"System", U"Array" }, std::move(arguments));
+        return Model::Type::named_template({ U"System", U"Array" },
+                                           std::move(arguments));
     }
 
     [[nodiscard]] auto
     BuiltinArray(Model::Type element) -> Model::Type
     {
-        return Model::Type::named_template({ U"[]" }, { TypeArgument(std::move(element)) });
+        return Model::Type::named_template(
+            { U"[]" },
+            { TypeArgument(std::move(element)) });
     }
 
     [[nodiscard]] auto
@@ -93,11 +103,13 @@ namespace
     [[nodiscard]] auto
     FixedArray(Model::Type element, const std::int64_t size) -> Model::Type
     {
-        return SystemArray({ TypeArgument(std::move(element)), IntegerArgument(size) });
+        return SystemArray(
+            { TypeArgument(std::move(element)), IntegerArgument(size) });
     }
 
     [[nodiscard]] auto
-    HasIssue(const std::vector<Template::Issue> &issues, const Template::IssueKind kind) -> bool
+    HasIssue(const std::vector<Template::Issue> &issues,
+             const Template::IssueKind kind) -> bool
     {
         return std::ranges::any_of(issues, [kind](const auto &issue) {
             return issue.kind == kind;
@@ -107,7 +119,10 @@ namespace
     [[nodiscard]] auto
     CoreModuleWithType(Model::Type type) -> Core::Module
     {
-        return Core::Module{ { U"Template" }, { Core::Function{ { 1U, U"Value" }, {}, std::move(type), {} } } };
+        return Core::Module{
+            { U"Template" },
+            { Core::Function{ { 1U, U"Value" }, {}, std::move(type), {} } }
+        };
     }
 
     [[nodiscard]] auto
@@ -116,27 +131,36 @@ namespace
         Model::Block block;
         block.id = 0U;
         block.terminator.kind = Model::Terminator::Kind::Return;
-        block.terminator.value = Model::Atom::constant(std::monostate{}, Model::Type::unit());
+        block.terminator.value
+            = Model::Atom::constant(std::monostate{}, Model::Type::unit());
         return Model::CorePrepModule{ { U"Template" },
-                                      { Model::Function{ { 1U, U"Value" }, {}, std::move(type), 0U, { std::move(block) } } } };
+                                      { Model::Function{
+                                          { 1U, U"Value" },
+                                          {},
+                                          std::move(type),
+                                          0U,
+                                          { std::move(block) } } } };
     }
 } // namespace
 
 TEST_CASE("array families retain distinct structural shapes")
 {
-    const auto builtin = Template::ClassifyArray(BuiltinArray(Model::Type::int64()));
+    const auto builtin
+        = Template::ClassifyArray(BuiltinArray(Model::Type::int64()));
     REQUIRE(builtin);
     CHECK(builtin->kind == Template::ArrayShape::Kind::Builtin);
     CHECK(builtin->element == Model::Type::int64());
     CHECK_FALSE(builtin->size);
 
-    const auto dynamic = Template::ClassifyArray(DynamicArray(Model::Type::string()));
+    const auto dynamic
+        = Template::ClassifyArray(DynamicArray(Model::Type::string()));
     REQUIRE(dynamic);
     CHECK(dynamic->kind == Template::ArrayShape::Kind::Dynamic);
     CHECK(dynamic->element == Model::Type::string());
     CHECK_FALSE(dynamic->size);
 
-    const auto fixed = Template::ClassifyArray(FixedArray(Model::Type::int32(), 128));
+    const auto fixed
+        = Template::ClassifyArray(FixedArray(Model::Type::int32(), 128));
     REQUIRE(fixed);
     CHECK(fixed->kind == Template::ArrayShape::Kind::Fixed);
     CHECK(fixed->element == Model::Type::int32());
@@ -146,12 +170,16 @@ TEST_CASE("array families retain distinct structural shapes")
 
 TEST_CASE("malformed array families do not masquerade as valid shapes")
 {
-    CHECK_FALSE(Template::ClassifyArray(Model::Type::named({ U"Array" }, { Model::Type::int64() })));
+    CHECK_FALSE(Template::ClassifyArray(
+        Model::Type::named({ U"Array" }, { Model::Type::int64() })));
     CHECK_FALSE(Template::ClassifyArray(SystemArray({})));
     CHECK_FALSE(Template::ClassifyArray(SystemArray({ IntegerArgument(4) })));
-    CHECK_FALSE(Template::ClassifyArray(SystemArray({ TypeArgument(Model::Type::int64()), BooleanArgument(true) })));
     CHECK_FALSE(Template::ClassifyArray(SystemArray(
-        { TypeArgument(Model::Type::int64()), IntegerArgument(4), IntegerArgument(5) })));
+        { TypeArgument(Model::Type::int64()), BooleanArgument(true) })));
+    CHECK_FALSE(Template::ClassifyArray(
+        SystemArray({ TypeArgument(Model::Type::int64()),
+                      IntegerArgument(4),
+                      IntegerArgument(5) })));
     CHECK_FALSE(Template::ClassifyArray(Model::Type::named_template(
         { U"[]" },
         { TypeArgument(Model::Type::int64()), IntegerArgument(4) })));
@@ -189,39 +217,55 @@ TEST_CASE("template validation checks recursive type payloads")
     missing.kind = Model::TemplateArgument::Kind::Type;
     missing.type.reset();
     const auto missingType = Applied(U"Box", { missing });
-    CHECK(HasIssue(Template::Validate(missingType), Template::IssueKind::InvalidTypeArgument));
+    CHECK(HasIssue(Template::Validate(missingType),
+                   Template::IssueKind::InvalidTypeArgument));
 
     auto namedWithComponents = Applied(U"Box", {});
     namedWithComponents.components.push_back(Model::Type::int64());
-    CHECK(HasIssue(Template::Validate(namedWithComponents), Template::IssueKind::InvalidTypeArgument));
+    CHECK(HasIssue(Template::Validate(namedWithComponents),
+                   Template::IssueKind::InvalidTypeArgument));
 
     auto scalarWithArguments = Model::Type::int64();
     scalarWithArguments.templateArguments.push_back(IntegerArgument(4));
-    CHECK(HasIssue(Template::Validate(scalarWithArguments), Template::IssueKind::InvalidTypeArgument));
+    CHECK(HasIssue(Template::Validate(scalarWithArguments),
+                   Template::IssueKind::InvalidTypeArgument));
 
     CHECK(Template::Validate(Model::Type::int64(), 0U).empty());
-    CHECK(HasIssue(Template::Validate(Applied(U"Box", { TypeArgument(Model::Type::int64()) }), 0U),
+    CHECK(HasIssue(Template::Validate(
+                       Applied(U"Box", { TypeArgument(Model::Type::int64()) }),
+                       0U),
                    Template::IssueKind::DepthExceeded));
-    CHECK(Template::Validate(Applied(U"Box", { TypeArgument(Model::Type::int64()) }), 1U).empty());
+    CHECK(Template::Validate(
+              Applied(U"Box", { TypeArgument(Model::Type::int64()) }),
+              1U)
+              .empty());
 }
 
 TEST_CASE("template validation checks value payloads")
 {
     const auto badInteger = Model::IntegerLiteral{ true, {} };
-    const auto integerType = Applied(
-        U"Value",
-        { Model::TemplateArgument::value_argument(Model::TemplateValue::integer_value(badInteger)) });
-    CHECK(HasIssue(Template::Validate(integerType), Template::IssueKind::InvalidInteger));
+    const auto integerType
+        = Applied(U"Value",
+                  { Model::TemplateArgument::value_argument(
+                      Model::TemplateValue::integer_value(badInteger)) });
+    CHECK(HasIssue(Template::Validate(integerType),
+                   Template::IssueKind::InvalidInteger));
 
     const auto surrogate = Applied(U"Code", { CharacterArgument(0xd800U) });
     const auto aboveRange = Applied(U"Code", { CharacterArgument(0x110000U) });
-    CHECK(HasIssue(Template::Validate(surrogate), Template::IssueKind::InvalidCharacter));
-    CHECK(HasIssue(Template::Validate(aboveRange), Template::IssueKind::InvalidCharacter));
+    CHECK(HasIssue(Template::Validate(surrogate),
+                   Template::IssueKind::InvalidCharacter));
+    CHECK(HasIssue(Template::Validate(aboveRange),
+                   Template::IssueKind::InvalidCharacter));
 
-    const auto zeroParameter = Applied(U"Buffer", { ValueParameterArgument(0U, U"N") });
-    const auto emptyParameter = Applied(U"Buffer", { ValueParameterArgument(1U, U"") });
-    CHECK(HasIssue(Template::Validate(zeroParameter), Template::IssueKind::InvalidValueParameter));
-    CHECK(HasIssue(Template::Validate(emptyParameter), Template::IssueKind::InvalidValueParameter));
+    const auto zeroParameter
+        = Applied(U"Buffer", { ValueParameterArgument(0U, U"N") });
+    const auto emptyParameter
+        = Applied(U"Buffer", { ValueParameterArgument(1U, U"") });
+    CHECK(HasIssue(Template::Validate(zeroParameter),
+                   Template::IssueKind::InvalidValueParameter));
+    CHECK(HasIssue(Template::Validate(emptyParameter),
+                   Template::IssueKind::InvalidValueParameter));
 }
 
 TEST_CASE("System.Array overload validation is exact")
@@ -231,19 +275,23 @@ TEST_CASE("System.Array overload validation is exact")
     CHECK(Template::Validate(FixedArray(Model::Type::int64(), 4096)).empty());
     CHECK(HasIssue(Template::Validate(FixedArray(Model::Type::int64(), -1)),
                    Template::IssueKind::NegativeArraySize));
-    CHECK(HasIssue(Template::Validate(SystemArray({})), Template::IssueKind::MalformedArrayFamily));
-    CHECK(HasIssue(Template::Validate(SystemArray(
-                       { TypeArgument(Model::Type::int64()), TypeArgument(Model::Type::int32()) })),
+    CHECK(HasIssue(Template::Validate(SystemArray({})),
                    Template::IssueKind::MalformedArrayFamily));
-    CHECK(HasIssue(Template::Validate(Model::Type::named_template({ U"[]" }, {})),
-                   Template::IssueKind::MalformedArrayFamily));
+    CHECK(HasIssue(
+        Template::Validate(SystemArray({ TypeArgument(Model::Type::int64()),
+                                         TypeArgument(Model::Type::int32()) })),
+        Template::IssueKind::MalformedArrayFamily));
+    CHECK(
+        HasIssue(Template::Validate(Model::Type::named_template({ U"[]" }, {})),
+                 Template::IssueKind::MalformedArrayFamily));
 }
 
 TEST_CASE("Core and CorePrep verifiers enforce specialization structure")
 {
     const auto malformed = FixedArray(Model::Type::int64(), -1);
     const auto coreIssues = Core::Verify(CoreModuleWithType(malformed));
-    const auto corePrepIssues = Model::verify(CorePrepModuleWithType(malformed));
+    const auto corePrepIssues
+        = Model::verify(CorePrepModuleWithType(malformed));
 
     CHECK(std::ranges::any_of(coreIssues, [](const auto &issue) {
         return issue.code == "VXC1040";
@@ -257,8 +305,10 @@ TEST_CASE("template metrics describe mixed recursive identities")
 {
     const auto typeParameter = Model::Type::type_variable(Parameter(10U, U"T"));
     const auto valueParameter = ValueParameterArgument(20U, U"N");
-    const auto genericArray = SystemArray({ TypeArgument(typeParameter), valueParameter });
-    const auto function = Model::Type::function({ genericArray, typeParameter }, Model::Type::boolean());
+    const auto genericArray
+        = SystemArray({ TypeArgument(typeParameter), valueParameter });
+    const auto function = Model::Type::function({ genericArray, typeParameter },
+                                                Model::Type::boolean());
     const auto metrics = Template::Measure(function);
 
     CHECK(metrics.typeNodes == 5U);
@@ -273,11 +323,14 @@ TEST_CASE("parameter collection is sorted and deduplicated")
     const auto first = Model::Type::type_variable(Parameter(40U, U"T"));
     const auto second = Model::Type::type_variable(Parameter(10U, U"U"));
     const auto value = Applied(U"Value", { ValueParameterArgument(30U, U"N") });
-    const auto function = Model::Type::function({ first, second, first }, value);
+    const auto function
+        = Model::Type::function({ first, second, first }, value);
 
-    CHECK(Template::CollectParameters(function) == std::vector<Model::SymbolId>{ 10U, 30U, 40U });
+    CHECK(Template::CollectParameters(function)
+          == std::vector<Model::SymbolId>{ 10U, 30U, 40U });
     CHECK_FALSE(Template::IsConcrete(function));
-    CHECK(Template::CollectParameters(FixedArray(Model::Type::int64(), 4)).empty());
+    CHECK(Template::CollectParameters(FixedArray(Model::Type::int64(), 4))
+              .empty());
     CHECK(Template::IsConcrete(FixedArray(Model::Type::int64(), 4)));
 }
 
@@ -285,27 +338,34 @@ TEST_CASE("substitution handles type and value parameters independently")
 {
     const auto typeName = Parameter(10U, U"T");
     const auto sizeName = Parameter(20U, U"N");
-    const auto generic = SystemArray(
-        { TypeArgument(Model::Type::type_variable(typeName)),
-          Model::TemplateArgument::value_argument(Model::TemplateValue::parameter_value(sizeName)) });
+    const auto generic
+        = SystemArray({ TypeArgument(Model::Type::type_variable(typeName)),
+                        Model::TemplateArgument::value_argument(
+                            Model::TemplateValue::parameter_value(sizeName)) });
     const Template::TypeBindingMap types{ { 10U, Model::Type::string() } };
     const Template::ValueBindingMap values{
         { 20U, Model::TemplateValue::integer_value(Integer(32)) }
     };
 
-    CHECK(Template::Substitute(generic, types, values) == FixedArray(Model::Type::string(), 32));
+    CHECK(Template::Substitute(generic, types, values)
+          == FixedArray(Model::Type::string(), 32));
     CHECK(Template::Substitute(generic, types, {})
-          == SystemArray({ TypeArgument(Model::Type::string()), ValueParameterArgument(20U, U"N") }));
+          == SystemArray({ TypeArgument(Model::Type::string()),
+                           ValueParameterArgument(20U, U"N") }));
     CHECK(Template::Substitute(generic, {}, values)
-          == SystemArray({ TypeArgument(Model::Type::type_variable(typeName)), IntegerArgument(32) }));
-    CHECK(Template::Substitute(Model::Type::int64(), types, values) == Model::Type::int64());
+          == SystemArray({ TypeArgument(Model::Type::type_variable(typeName)),
+                           IntegerArgument(32) }));
+    CHECK(Template::Substitute(Model::Type::int64(), types, values)
+          == Model::Type::int64());
 }
 
 TEST_CASE("substitution descends through callable signatures")
 {
     const auto typeParameter = Model::Type::type_variable(Parameter(10U, U"T"));
-    const auto genericArray = SystemArray({ TypeArgument(typeParameter), ValueParameterArgument(20U, U"N") });
-    const auto genericFunction = Model::Type::function({ genericArray, typeParameter }, typeParameter);
+    const auto genericArray = SystemArray(
+        { TypeArgument(typeParameter), ValueParameterArgument(20U, U"N") });
+    const auto genericFunction
+        = Model::Type::function({ genericArray, typeParameter }, typeParameter);
     const Template::TypeBindingMap types{ { 10U, Model::Type::string() } };
     const Template::ValueBindingMap values{
         { 20U, Model::TemplateValue::integer_value(Integer(8)) }
@@ -323,18 +383,29 @@ TEST_CASE("rendered identity distinguishes every specialization dimension")
     const auto fixedFour = FixedArray(Model::Type::int64(), 4);
     const auto fixedFive = FixedArray(Model::Type::int64(), 5);
     const auto valueType = Applied(U"Box", { IntegerArgument(4) });
-    const auto typeType = Applied(U"Box", { TypeArgument(Model::Type::int32()) });
-    const auto ordered = Applied(U"Mix", { TypeArgument(Model::Type::int32()), IntegerArgument(4) });
-    const auto reversed = Applied(U"Mix", { IntegerArgument(4), TypeArgument(Model::Type::int32()) });
+    const auto typeType
+        = Applied(U"Box", { TypeArgument(Model::Type::int32()) });
+    const auto ordered
+        = Applied(U"Mix",
+                  { TypeArgument(Model::Type::int32()), IntegerArgument(4) });
+    const auto reversed
+        = Applied(U"Mix",
+                  { IntegerArgument(4), TypeArgument(Model::Type::int32()) });
 
-    CHECK(Template::RenderIdentity(dynamic) != Template::RenderIdentity(fixedFour));
-    CHECK(Template::RenderIdentity(fixedFour) != Template::RenderIdentity(fixedFive));
-    CHECK(Template::RenderIdentity(valueType) != Template::RenderIdentity(typeType));
-    CHECK(Template::RenderIdentity(ordered) != Template::RenderIdentity(reversed));
+    CHECK(Template::RenderIdentity(dynamic)
+          != Template::RenderIdentity(fixedFour));
+    CHECK(Template::RenderIdentity(fixedFour)
+          != Template::RenderIdentity(fixedFive));
+    CHECK(Template::RenderIdentity(valueType)
+          != Template::RenderIdentity(typeType));
+    CHECK(Template::RenderIdentity(ordered)
+          != Template::RenderIdentity(reversed));
     CHECK(Template::RenderIdentity(Applied(U"Flag", { BooleanArgument(false) }))
-          != Template::RenderIdentity(Applied(U"Flag", { BooleanArgument(true) })));
+          != Template::RenderIdentity(
+              Applied(U"Flag", { BooleanArgument(true) })));
     CHECK(Template::RenderIdentity(Applied(U"Code", { IntegerArgument(65) }))
-          != Template::RenderIdentity(Applied(U"Code", { CharacterArgument(65) })));
+          != Template::RenderIdentity(
+              Applied(U"Code", { CharacterArgument(65) })));
 }
 
 TEST_CASE("rendered identity length-prefixes qualified components")
@@ -414,17 +485,22 @@ TEST_CASE("specialization table allocates stable insertion-order ids")
     CHECK(four.specialization->id == 1U);
     CHECK(five.specialization->id == 2U);
     CHECK(dynamic.specialization->id == 3U);
-    CHECK(table.Snapshot() == std::vector<Template::Specialization>{ *four.specialization, *five.specialization, *dynamic.specialization });
+    CHECK(table.Snapshot()
+          == std::vector<Template::Specialization>{ *four.specialization,
+                                                    *five.specialization,
+                                                    *dynamic.specialization });
 }
 
 TEST_CASE("specialization table rejects malformed and generic types")
 {
     Template::SpecializationTable table;
     const auto malformed = table.Intern(SystemArray({}));
-    const auto generic = table.Intern(Model::Type::type_variable(Parameter(10U, U"T")));
+    const auto generic
+        = table.Intern(Model::Type::type_variable(Parameter(10U, U"T")));
 
     CHECK_FALSE(malformed);
-    CHECK(HasIssue(malformed.issues, Template::IssueKind::MalformedArrayFamily));
+    CHECK(
+        HasIssue(malformed.issues, Template::IssueKind::MalformedArrayFamily));
     CHECK_FALSE(generic);
     CHECK_FALSE(generic.issues.empty());
     CHECK(table.Size() == 0U);
@@ -442,7 +518,8 @@ TEST_CASE("specialization table coalesces concurrent insertion races")
     for (std::size_t index = 0; index < kWorkerCount; ++index)
     {
         workers.emplace_back([&] {
-            const auto result = table.Intern(FixedArray(Model::Type::int64(), 64));
+            const auto result
+                = table.Intern(FixedArray(Model::Type::int64(), 64));
             if (result)
                 ++successful;
             if (result.inserted)

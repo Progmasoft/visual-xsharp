@@ -9,13 +9,15 @@
 
 namespace Visual::XSharp::Interactive::Runtime
 {
-    /** Bounded, insertion-ordered history of successfully evaluated source cells. */
+    /** Bounded, insertion-ordered history of successfully evaluated source
+     * cells. */
     class History final
     {
     public:
         static constexpr std::size_t kMaximumEntries = 256U;
 
-        /** Append one non-empty cell and discard the oldest cell if the cap is exceeded. */
+        /** Append one non-empty cell and discard the oldest cell if the cap is
+         * exceeded. */
         void
         Append(std::string_view expression);
 

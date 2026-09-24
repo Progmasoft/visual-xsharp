@@ -37,9 +37,8 @@ namespace
     [[nodiscard]] auto
     ClosureModule() -> Core::CorePrepModule
     {
-        const auto callableType = Core::Type::function(
-            { Core::Type::int64() },
-            Core::Type::int64());
+        const auto callableType = Core::Type::function({ Core::Type::int64() },
+                                                       Core::Type::int64());
 
         Core::Instruction seed;
         seed.kind = Core::Instruction::Kind::Bind;
@@ -155,7 +154,9 @@ TEST_CASE("LLVM lowers closure invocation through an environment-aware thunk")
     CHECK(Contains(ir, "closure.invoke = load ptr"));
     CHECK(Contains(ir, "call i64 %closure.invoke(ptr"));
     CHECK(Contains(ir, "capture.load = load i64"));
-    CHECK(Contains(ir, "closure.result = call i64 @\"Callable.Backend.$addBase.10\""));
+    CHECK(Contains(
+        ir,
+        "closure.result = call i64 @\"Callable.Backend.$addBase.10\""));
     CHECK(Contains(ir, "addBase.10"));
 }
 

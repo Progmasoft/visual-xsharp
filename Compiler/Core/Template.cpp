@@ -18,33 +18,47 @@ namespace Visual::XSharp::Core::Template
     {
         namespace Model = ::visual_xsharp::core;
 
-        constexpr std::array<char, 16> kHexDigits{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+        constexpr std::array<char, 16> kHexDigits{ '0', '1', '2', '3', '4', '5',
+                                                   '6', '7', '8', '9', 'a', 'b',
+                                                   'c', 'd', 'e', 'f' };
 
         [[nodiscard]] auto
-        IsName(const Model::Type &type, const std::initializer_list<std::u32string_view> expected) -> bool
+        IsName(const Model::Type &type,
+               const std::initializer_list<std::u32string_view> expected)
+            -> bool
         {
-            if (type.kind != Model::Type::Kind::Named || type.name.size() != expected.size())
+            if (type.kind != Model::Type::Kind::Named
+                || type.name.size() != expected.size())
                 return false;
-            return std::ranges::equal(type.name, expected, {}, [](const auto &part) {
-                return std::u32string_view(part);
-            });
+            return std::ranges::equal(type.name,
+                                      expected,
+                                      {},
+                                      [](const auto &part) {
+                                          return std::u32string_view(part);
+                                      });
         }
 
         [[nodiscard]] auto
-        TypeArgument(const Model::TemplateArgument &argument) -> const Model::Type *
+        TypeArgument(const Model::TemplateArgument &argument)
+            -> const Model::Type *
         {
-            return argument.kind == Model::TemplateArgument::Kind::Type && argument.type ? argument.type.get() : nullptr;
+            return argument.kind == Model::TemplateArgument::Kind::Type
+                           && argument.type
+                       ? argument.type.get()
+                       : nullptr;
         }
 
         [[nodiscard]] auto
         IsUnicodeScalar(const Model::IntegerLiteral &value) -> bool
         {
-            if (value.negative || !Model::integer_is_canonical(value) || value.magnitude.size() > 3U)
+            if (value.negative || !Model::integer_is_canonical(value)
+                || value.magnitude.size() > 3U)
                 return false;
             std::uint32_t scalar{};
             for (const auto octet : value.magnitude)
                 scalar = (scalar << 8U) | octet;
-            return scalar <= 0x10ffffU && !(scalar >= 0xd800U && scalar <= 0xdfffU);
+            return scalar <= 0x10ffffU
+                   && !(scalar >= 0xd800U && scalar <= 0xdfffU);
         }
 
         [[nodiscard]] auto
@@ -54,7 +68,10 @@ namespace Visual::XSharp::Core::Template
         }
 
         void
-        AddIssue(std::vector<Issue> &issues, IssueKind kind, const std::vector<std::size_t> &path, std::string message)
+        AddIssue(std::vector<Issue> &issues,
+                 IssueKind kind,
+                 const std::vector<std::size_t> &path,
+                 std::string message)
         {
             issues.push_back(Issue{ kind, path, std::move(message) });
         }
@@ -65,9 +82,15 @@ namespace Visual::XSharp::Core::Template
                           std::vector<Issue> &issues)
         {
             if (parameter.id == 0U)
-                AddIssue(issues, IssueKind::InvalidValueParameter, path, "template parameter SymbolId must be positive");
+                AddIssue(issues,
+                         IssueKind::InvalidValueParameter,
+                         path,
+                         "template parameter SymbolId must be positive");
             if (parameter.spelling.empty())
-                AddIssue(issues, IssueKind::InvalidValueParameter, path, "template parameter spelling cannot be empty");
+                AddIssue(issues,
+                         IssueKind::InvalidValueParameter,
+                         path,
+                         "template parameter spelling cannot be empty");
         }
 
         void
@@ -84,11 +107,17 @@ namespace Visual::XSharp::Core::Template
                     return;
                 case Model::TemplateValue::Kind::Integer:
                     if (!Model::integer_is_canonical(value.integer))
-                        AddIssue(issues, IssueKind::InvalidInteger, path, "template integer is not canonical");
+                        AddIssue(issues,
+                                 IssueKind::InvalidInteger,
+                                 path,
+                                 "template integer is not canonical");
                     return;
                 case Model::TemplateValue::Kind::Character:
                     if (!IsUnicodeScalar(value.integer))
-                        AddIssue(issues, IssueKind::InvalidCharacter, path, "template character is not a Unicode scalar");
+                        AddIssue(issues,
+                                 IssueKind::InvalidCharacter,
+                                 path,
+                                 "template character is not a Unicode scalar");
                     return;
             }
         }
@@ -100,15 +129,21 @@ namespace Visual::XSharp::Core::Template
         {
             if (IsName(type, { U"[]" }))
             {
-                if (type.templateArguments.size() != 1U || !TypeArgument(type.templateArguments.front()))
-                    AddIssue(issues, IssueKind::MalformedArrayFamily, path, "built-in [] requires exactly one type argument");
+                if (type.templateArguments.size() != 1U
+                    || !TypeArgument(type.templateArguments.front()))
+                    AddIssue(issues,
+                             IssueKind::MalformedArrayFamily,
+                             path,
+                             "built-in [] requires exactly one type argument");
                 return;
             }
             if (!IsName(type, { U"System", U"Array" }))
                 return;
-            if (type.templateArguments.size() == 1U && TypeArgument(type.templateArguments.front()))
+            if (type.templateArguments.size() == 1U
+                && TypeArgument(type.templateArguments.front()))
                 return;
-            if (type.templateArguments.size() == 2U && TypeArgument(type.templateArguments.front()))
+            if (type.templateArguments.size() == 2U
+                && TypeArgument(type.templateArguments.front()))
             {
                 const auto &size = type.templateArguments[1U];
                 if (size.kind == Model::TemplateArgument::Kind::Value
@@ -118,7 +153,10 @@ namespace Visual::XSharp::Core::Template
                     {
                         auto sizePath = path;
                         sizePath.push_back(1U);
-                        AddIssue(issues, IssueKind::NegativeArraySize, sizePath, "fixed System.Array size cannot be negative");
+                        AddIssue(issues,
+                                 IssueKind::NegativeArraySize,
+                                 sizePath,
+                                 "fixed System.Array size cannot be negative");
                     }
                     return;
                 }
@@ -126,7 +164,10 @@ namespace Visual::XSharp::Core::Template
                     && size.value.kind == Model::TemplateValue::Kind::Parameter)
                     return;
             }
-            AddIssue(issues, IssueKind::MalformedArrayFamily, path, "System.Array requires <T> or <T, integral size N>");
+            AddIssue(issues,
+                     IssueKind::MalformedArrayFamily,
+                     path,
+                     "System.Array requires <T> or <T, integral size N>");
         }
 
         void
@@ -138,35 +179,56 @@ namespace Visual::XSharp::Core::Template
         {
             if (depth > maximumDepth)
             {
-                AddIssue(issues, IssueKind::DepthExceeded, path, "template type nesting exceeds the configured limit");
+                AddIssue(issues,
+                         IssueKind::DepthExceeded,
+                         path,
+                         "template type nesting exceeds the configured limit");
                 return;
             }
 
             if (type.kind == Model::Type::Kind::Named)
             {
                 if (type.name.empty())
-                    AddIssue(issues, IssueKind::EmptyQualifiedName, path, "named type has an empty qualified name");
+                    AddIssue(issues,
+                             IssueKind::EmptyQualifiedName,
+                             path,
+                             "named type has an empty qualified name");
                 for (std::size_t index = 0; index < type.name.size(); ++index)
                 {
                     if (type.name[index].empty())
                     {
                         auto namePath = path;
                         namePath.push_back(index);
-                        AddIssue(issues, IssueKind::EmptyNamePart, namePath, "named type contains an empty name component");
+                        AddIssue(issues,
+                                 IssueKind::EmptyNamePart,
+                                 namePath,
+                                 "named type contains an empty name component");
                     }
                 }
                 if (!type.components.empty())
-                    AddIssue(issues, IssueKind::InvalidTypeArgument, path, "named type contains function components");
-                for (std::size_t index = 0; index < type.templateArguments.size(); ++index)
+                    AddIssue(issues,
+                             IssueKind::InvalidTypeArgument,
+                             path,
+                             "named type contains function components");
+                for (std::size_t index = 0;
+                     index < type.templateArguments.size();
+                     ++index)
                 {
                     path.push_back(index);
                     const auto &argument = type.templateArguments[index];
                     if (argument.kind == Model::TemplateArgument::Kind::Type)
                     {
                         if (!argument.type)
-                            AddIssue(issues, IssueKind::InvalidTypeArgument, path, "type template argument has no payload");
+                            AddIssue(issues,
+                                     IssueKind::InvalidTypeArgument,
+                                     path,
+                                     "type template argument has no payload");
                         else
-                            ValidateType(*argument.type, depth + 1U, maximumDepth, path, issues);
+                            ValidateType(*argument.type,
+                                         depth + 1U,
+                                         maximumDepth,
+                                         path,
+                                         issues);
                     }
                     else
                         ValidateValue(argument.value, path, issues);
@@ -177,23 +239,38 @@ namespace Visual::XSharp::Core::Template
             }
 
             if (!type.templateArguments.empty())
-                AddIssue(issues, IssueKind::InvalidTypeArgument, path, "non-named type contains template arguments");
+                AddIssue(issues,
+                         IssueKind::InvalidTypeArgument,
+                         path,
+                         "non-named type contains template arguments");
             if (type.kind == Model::Type::Kind::Function)
             {
                 if (type.components.empty())
-                    AddIssue(issues, IssueKind::InvalidTypeArgument, path, "function type has no result component");
-                for (std::size_t index = 0; index < type.components.size(); ++index)
+                    AddIssue(issues,
+                             IssueKind::InvalidTypeArgument,
+                             path,
+                             "function type has no result component");
+                for (std::size_t index = 0; index < type.components.size();
+                     ++index)
                 {
                     path.push_back(index);
-                    ValidateType(type.components[index], depth + 1U, maximumDepth, path, issues);
+                    ValidateType(type.components[index],
+                                 depth + 1U,
+                                 maximumDepth,
+                                 path,
+                                 issues);
                     path.pop_back();
                 }
                 return;
             }
             if (type.kind == Model::Type::Kind::TypeVariable)
                 ValidateParameter(type.variable, path, issues);
-            else if (!type.components.empty() || !type.name.empty() || type.variable.id != 0U)
-                AddIssue(issues, IssueKind::InvalidTypeArgument, path, "scalar type contains aggregate payload");
+            else if (!type.components.empty() || !type.name.empty()
+                     || type.variable.id != 0U)
+                AddIssue(issues,
+                         IssueKind::InvalidTypeArgument,
+                         path,
+                         "scalar type contains aggregate payload");
         }
 
         [[nodiscard]] auto
@@ -210,7 +287,12 @@ namespace Visual::XSharp::Core::Template
         [[nodiscard]] auto
         MeasureType(const Model::Type &type, std::size_t depth) -> Metrics
         {
-            Metrics result{ 1U, 0U, 0U, type.kind == Model::Type::Kind::TypeVariable ? 1U : 0U, depth };
+            Metrics result{ 1U,
+                            0U,
+                            0U,
+                            type.kind == Model::Type::Kind::TypeVariable ? 1U
+                                                                         : 0U,
+                            depth };
             for (const auto &component : type.components)
                 result = Add(result, MeasureType(component, depth + 1U));
             for (const auto &argument : type.templateArguments)
@@ -219,13 +301,16 @@ namespace Visual::XSharp::Core::Template
                 {
                     ++result.typeArguments;
                     if (argument.type)
-                        result = Add(result, MeasureType(*argument.type, depth + 1U));
+                        result = Add(result,
+                                     MeasureType(*argument.type, depth + 1U));
                 }
                 else
                 {
                     ++result.valueArguments;
-                    result.maximumDepth = std::max(result.maximumDepth, depth + 1U);
-                    if (argument.value.kind == Model::TemplateValue::Kind::Parameter)
+                    result.maximumDepth
+                        = std::max(result.maximumDepth, depth + 1U);
+                    if (argument.value.kind
+                        == Model::TemplateValue::Kind::Parameter)
                         ++result.parameterReferences;
                 }
             }
@@ -233,7 +318,8 @@ namespace Visual::XSharp::Core::Template
         }
 
         void
-        Collect(const Model::Type &type, std::vector<Model::SymbolId> &parameters)
+        Collect(const Model::Type &type,
+                std::vector<Model::SymbolId> &parameters)
         {
             if (type.kind == Model::Type::Kind::TypeVariable)
                 parameters.push_back(type.variable.id);
@@ -241,10 +327,12 @@ namespace Visual::XSharp::Core::Template
                 Collect(component, parameters);
             for (const auto &argument : type.templateArguments)
             {
-                if (argument.kind == Model::TemplateArgument::Kind::Type && argument.type)
+                if (argument.kind == Model::TemplateArgument::Kind::Type
+                    && argument.type)
                     Collect(*argument.type, parameters);
                 else if (argument.kind == Model::TemplateArgument::Kind::Value
-                         && argument.value.kind == Model::TemplateValue::Kind::Parameter)
+                         && argument.value.kind
+                                == Model::TemplateValue::Kind::Parameter)
                     parameters.push_back(argument.value.parameter.id);
             }
         }
@@ -256,27 +344,36 @@ namespace Visual::XSharp::Core::Template
         {
             if (type.kind == Model::Type::Kind::TypeVariable)
             {
-                if (const auto replacement = typeBindings.find(type.variable.id); replacement != typeBindings.end())
+                if (const auto replacement
+                    = typeBindings.find(type.variable.id);
+                    replacement != typeBindings.end())
                     return replacement->second;
                 return type;
             }
 
             auto result = type;
             for (auto &component : result.components)
-                component = SubstituteType(component, typeBindings, valueBindings);
+                component
+                    = SubstituteType(component, typeBindings, valueBindings);
             for (auto &argument : result.templateArguments)
             {
-                if (argument.kind == Model::TemplateArgument::Kind::Type && argument.type)
+                if (argument.kind == Model::TemplateArgument::Kind::Type
+                    && argument.type)
                 {
                     argument = Model::TemplateArgument::type_argument(
-                        SubstituteType(*argument.type, typeBindings, valueBindings));
+                        SubstituteType(*argument.type,
+                                       typeBindings,
+                                       valueBindings));
                 }
                 else if (argument.kind == Model::TemplateArgument::Kind::Value
-                         && argument.value.kind == Model::TemplateValue::Kind::Parameter)
+                         && argument.value.kind
+                                == Model::TemplateValue::Kind::Parameter)
                 {
-                    if (const auto replacement = valueBindings.find(argument.value.parameter.id);
+                    if (const auto replacement
+                        = valueBindings.find(argument.value.parameter.id);
                         replacement != valueBindings.end())
-                        argument = Model::TemplateArgument::value_argument(replacement->second);
+                        argument = Model::TemplateArgument::value_argument(
+                            replacement->second);
                 }
             }
             return result;
@@ -286,7 +383,9 @@ namespace Visual::XSharp::Core::Template
         AppendUnsigned(std::string &output, std::size_t value)
         {
             std::array<char, 32> buffer{};
-            const auto result = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+            const auto result = std::to_chars(buffer.data(),
+                                              buffer.data() + buffer.size(),
+                                              value);
             output.append(buffer.data(), result.ptr);
         }
 
@@ -297,12 +396,23 @@ namespace Visual::XSharp::Core::Template
             output.push_back(':');
             for (const auto scalar : text)
             {
-                output.push_back(kHexDigits[(static_cast<std::uint32_t>(scalar) >> 20U) & 0xfU]);
-                output.push_back(kHexDigits[(static_cast<std::uint32_t>(scalar) >> 16U) & 0xfU]);
-                output.push_back(kHexDigits[(static_cast<std::uint32_t>(scalar) >> 12U) & 0xfU]);
-                output.push_back(kHexDigits[(static_cast<std::uint32_t>(scalar) >> 8U) & 0xfU]);
-                output.push_back(kHexDigits[(static_cast<std::uint32_t>(scalar) >> 4U) & 0xfU]);
-                output.push_back(kHexDigits[static_cast<std::uint32_t>(scalar) & 0xfU]);
+                output.push_back(
+                    kHexDigits[(static_cast<std::uint32_t>(scalar) >> 20U)
+                               & 0xfU]);
+                output.push_back(
+                    kHexDigits[(static_cast<std::uint32_t>(scalar) >> 16U)
+                               & 0xfU]);
+                output.push_back(
+                    kHexDigits[(static_cast<std::uint32_t>(scalar) >> 12U)
+                               & 0xfU]);
+                output.push_back(
+                    kHexDigits[(static_cast<std::uint32_t>(scalar) >> 8U)
+                               & 0xfU]);
+                output.push_back(
+                    kHexDigits[(static_cast<std::uint32_t>(scalar) >> 4U)
+                               & 0xfU]);
+                output.push_back(
+                    kHexDigits[static_cast<std::uint32_t>(scalar) & 0xfU]);
             }
         }
 
@@ -353,7 +463,9 @@ namespace Visual::XSharp::Core::Template
                     else
                     {
                         output.push_back('v');
-                        AppendUnsigned(output, static_cast<std::size_t>(argument.value.kind));
+                        AppendUnsigned(
+                            output,
+                            static_cast<std::size_t>(argument.value.kind));
                         output.push_back(':');
                         switch (argument.value.kind)
                         {
@@ -362,7 +474,8 @@ namespace Visual::XSharp::Core::Template
                                 RenderInteger(output, argument.value.integer);
                                 break;
                             case Model::TemplateValue::Kind::Boolean:
-                                output.push_back(argument.value.boolean ? '1' : '0');
+                                output.push_back(argument.value.boolean ? '1'
+                                                                        : '0');
                                 break;
                             case Model::TemplateValue::Kind::Parameter:
                                 RenderSymbol(output, argument.value.parameter);
@@ -392,27 +505,35 @@ namespace Visual::XSharp::Core::Template
         if (IsName(type, { U"[]" }) && type.templateArguments.size() == 1U)
         {
             if (const auto *element = TypeArgument(type.templateArguments[0U]))
-                return ArrayShape{ ArrayShape::Kind::Builtin, *element, std::nullopt };
+                return ArrayShape{ ArrayShape::Kind::Builtin,
+                                   *element,
+                                   std::nullopt };
         }
-        if (!IsName(type, { U"System", U"Array" }) || type.templateArguments.empty())
+        if (!IsName(type, { U"System", U"Array" })
+            || type.templateArguments.empty())
             return std::nullopt;
         const auto *element = TypeArgument(type.templateArguments[0U]);
         if (!element)
             return std::nullopt;
         if (type.templateArguments.size() == 1U)
-            return ArrayShape{ ArrayShape::Kind::Dynamic, *element, std::nullopt };
+            return ArrayShape{ ArrayShape::Kind::Dynamic,
+                               *element,
+                               std::nullopt };
         if (type.templateArguments.size() == 2U)
         {
             const auto &size = type.templateArguments[1U];
             if (size.kind == Model::TemplateArgument::Kind::Value
                 && size.value.kind == Model::TemplateValue::Kind::Integer)
-                return ArrayShape{ ArrayShape::Kind::Fixed, *element, size.value.integer };
+                return ArrayShape{ ArrayShape::Kind::Fixed,
+                                   *element,
+                                   size.value.integer };
         }
         return std::nullopt;
     }
 
     auto
-    Validate(const Model::Type &type, const std::size_t maximumDepth) -> std::vector<Issue>
+    Validate(const Model::Type &type, const std::size_t maximumDepth)
+        -> std::vector<Issue>
     {
         std::vector<Issue> issues;
         std::vector<std::size_t> path;
@@ -468,22 +589,31 @@ namespace Visual::XSharp::Core::Template
             return InternResult{ std::nullopt, std::move(issues), false };
         if (!IsConcrete(type))
         {
-            issues.push_back(Issue{ IssueKind::UnboundParameter,
-                                    {},
-                                    "specialization table accepts only concrete types" });
+            issues.push_back(
+                Issue{ IssueKind::UnboundParameter,
+                       {},
+                       "specialization table accepts only concrete types" });
             return InternResult{ std::nullopt, std::move(issues), false };
         }
 
         auto identity = RenderIdentity(type);
         {
             const std::shared_lock lock(mutex_);
-            if (const auto found = byIdentity_.find(identity); found != byIdentity_.end())
-                return InternResult{ entries_.at(static_cast<std::size_t>(found->second - 1U)), {}, false };
+            if (const auto found = byIdentity_.find(identity);
+                found != byIdentity_.end())
+                return InternResult{ entries_.at(static_cast<std::size_t>(
+                                         found->second - 1U)),
+                                     {},
+                                     false };
         }
 
         const std::unique_lock lock(mutex_);
-        if (const auto found = byIdentity_.find(identity); found != byIdentity_.end())
-            return InternResult{ entries_.at(static_cast<std::size_t>(found->second - 1U)), {}, false };
+        if (const auto found = byIdentity_.find(identity);
+            found != byIdentity_.end())
+            return InternResult{ entries_.at(static_cast<std::size_t>(
+                                     found->second - 1U)),
+                                 {},
+                                 false };
 
         const auto id = static_cast<SpecializationId>(entries_.size()) + 1U;
         Specialization entry{ id, std::move(identity), type };
@@ -493,7 +623,8 @@ namespace Visual::XSharp::Core::Template
     }
 
     auto
-    SpecializationTable::Find(const SpecializationId id) const -> std::optional<Specialization>
+    SpecializationTable::Find(const SpecializationId id) const
+        -> std::optional<Specialization>
     {
         const std::shared_lock lock(mutex_);
         if (id == 0U || id > entries_.size())
@@ -502,7 +633,8 @@ namespace Visual::XSharp::Core::Template
     }
 
     auto
-    SpecializationTable::Find(const Model::Type &type) const -> std::optional<Specialization>
+    SpecializationTable::Find(const Model::Type &type) const
+        -> std::optional<Specialization>
     {
         const auto identity = RenderIdentity(type);
         const std::shared_lock lock(mutex_);

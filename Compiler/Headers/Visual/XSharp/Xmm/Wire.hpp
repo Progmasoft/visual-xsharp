@@ -40,7 +40,9 @@ namespace Visual::XSharp::Xmm::Wire
     };
 
     [[nodiscard]] auto
-    Encode(const ::visual_xsharp::xmm::Module &module, const Limits &limits = {}) -> EncodeResult;
+    Encode(const ::visual_xsharp::xmm::Module &module,
+           const Limits &limits = {}) -> EncodeResult;
     [[nodiscard]] auto
-    Decode(std::span<const std::uint8_t> bytes, const Limits &limits = {}) -> DecodeResult;
+    Decode(std::span<const std::uint8_t> bytes, const Limits &limits = {})
+        -> DecodeResult;
 } // namespace Visual::XSharp::Xmm::Wire

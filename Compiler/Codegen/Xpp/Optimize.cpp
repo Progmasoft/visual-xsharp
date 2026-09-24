@@ -44,7 +44,8 @@ namespace visual_xsharp::xpp
             graph.entry = function.entry;
             graph.blocks.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
-                graph.blocks.push_back({ block.id, Successors(block.terminator) });
+                graph.blocks.push_back(
+                    { block.id, Successors(block.terminator) });
             return graph;
         }
 
@@ -55,13 +56,14 @@ namespace visual_xsharp::xpp
                    && instruction.effect != Instruction::Effect::Discard
                    && instruction.operands.size() == 1U
                    && instruction.operands.front().kind == Operand::Kind::Symbol
-                   && instruction.operands.front().symbol == instruction.destination;
+                   && instruction.operands.front().symbol
+                          == instruction.destination;
         }
 
         [[nodiscard]] auto
-        IsRemovableWrite(
-            const Instruction &instruction,
-            const std::unordered_set<SymbolId> &storedSymbols) -> bool
+        IsRemovableWrite(const Instruction &instruction,
+                         const std::unordered_set<SymbolId> &storedSymbols)
+            -> bool
         {
             // Store mutates an existing source-language location, while
             // Discard deliberately preserves evaluation. Only a fresh Copy is
@@ -74,10 +76,9 @@ namespace visual_xsharp::xpp
         }
 
         void
-        AppendRead(
-            const Operand &operand,
-            const std::unordered_set<SymbolId> &functions,
-            std::vector<Live::StorageId> &reads)
+        AppendRead(const Operand &operand,
+                   const std::unordered_set<SymbolId> &functions,
+                   std::vector<Live::StorageId> &reads)
         {
             if (operand.kind != Operand::Kind::Symbol)
                 return;
@@ -89,9 +90,9 @@ namespace visual_xsharp::xpp
         }
 
         [[nodiscard]] auto
-        LivenessFunction(
-            const Function &function,
-            const std::unordered_set<SymbolId> &functions) -> Live::Function
+        LivenessFunction(const Function &function,
+                         const std::unordered_set<SymbolId> &functions)
+            -> Live::Function
         {
             std::unordered_set<SymbolId> storedSymbols;
             for (const auto &block : function.blocks)
@@ -108,7 +109,8 @@ namespace visual_xsharp::xpp
                 liveBlock.id = block.id;
                 liveBlock.successors = Successors(block.terminator);
                 liveBlock.accesses.reserve(block.instructions.size() + 1U);
-                for (std::size_t index = 0U; index < block.instructions.size(); ++index)
+                for (std::size_t index = 0U; index < block.instructions.size();
+                     ++index)
                 {
                     const auto &instruction = block.instructions[index];
                     Live::Access access;
@@ -117,7 +119,8 @@ namespace visual_xsharp::xpp
                         AppendRead(operand, functions, access.reads);
                     if (instruction.effect != Instruction::Effect::Discard)
                         access.write = instruction.destination;
-                    access.removable = IsRemovableWrite(instruction, storedSymbols);
+                    access.removable
+                        = IsRemovableWrite(instruction, storedSymbols);
                     liveBlock.accesses.push_back(std::move(access));
                 }
 
@@ -126,7 +129,9 @@ namespace visual_xsharp::xpp
                 terminator.terminator = true;
                 if (block.terminator.kind == Terminator::Kind::Return
                     || block.terminator.kind == Terminator::Kind::Branch)
-                    AppendRead(block.terminator.value, functions, terminator.reads);
+                    AppendRead(block.terminator.value,
+                               functions,
+                               terminator.reads);
                 liveBlock.accesses.push_back(std::move(terminator));
                 model.blocks.push_back(std::move(liveBlock));
             }
@@ -134,13 +139,12 @@ namespace visual_xsharp::xpp
         }
 
         [[nodiscard]] auto
-        RemoveDeadCopies(
-            Function &function,
-            const std::unordered_set<SymbolId> &functions) -> bool
+        RemoveDeadCopies(Function &function,
+                         const std::unordered_set<SymbolId> &functions) -> bool
         {
-            const auto result = Live::Analyze(
-                LivenessFunction(function, functions),
-                { .materializeLiveSets = false });
+            const auto result
+                = Live::Analyze(LivenessFunction(function, functions),
+                                { .materializeLiveSets = false });
             if (!result.valid())
                 return false;
 
@@ -158,7 +162,8 @@ namespace visual_xsharp::xpp
                 const auto &accesses = found->second->accesses;
                 std::size_t index = 0U;
                 std::erase_if(block.instructions, [&](const Instruction &) {
-                    const auto remove = index < accesses.size() && !accesses[index].retained;
+                    const auto remove
+                        = index < accesses.size() && !accesses[index].retained;
                     ++index;
                     changed = changed || remove;
                     return remove;
@@ -178,10 +183,9 @@ namespace visual_xsharp::xpp
         }
 
         [[nodiscard]] auto
-        ResolveTrampoline(
-            const BlockId start,
-            const BlockMap &blocks,
-            TargetCache &cache) -> BlockId
+        ResolveTrampoline(const BlockId start,
+                          const BlockMap &blocks,
+                          TargetCache &cache) -> BlockId
         {
             if (const auto found = cache.find(start); found != cache.end())
                 return found->second;
@@ -191,7 +195,8 @@ namespace visual_xsharp::xpp
             auto current = start;
             while (true)
             {
-                if (const auto found = cache.find(current); found != cache.end())
+                if (const auto found = cache.find(current);
+                    found != cache.end())
                 {
                     for (const auto block : path)
                         cache.emplace(block, found->second);
@@ -210,12 +215,14 @@ namespace visual_xsharp::xpp
                     return current;
                 }
 
-                if (const auto cycle = positions.find(current); cycle != positions.end())
+                if (const auto cycle = positions.find(current);
+                    cycle != positions.end())
                 {
                     // A trampoline cycle has no semantic exit. Preserve each
                     // cycle edge instead of inventing a representative; only
                     // an acyclic prefix may be shortened to its cycle entry.
-                    for (std::size_t index = cycle->second; index < path.size(); ++index)
+                    for (std::size_t index = cycle->second; index < path.size();
+                         ++index)
                         cache.emplace(path[index], path[index]);
                     for (std::size_t index = 0U; index < cycle->second; ++index)
                         cache.emplace(path[index], current);
@@ -240,15 +247,25 @@ namespace visual_xsharp::xpp
                 auto &terminator = block.terminator;
                 if (terminator.kind == Terminator::Kind::Jump)
                 {
-                    const auto target = ResolveTrampoline(terminator.true_target, blocks, cache);
+                    const auto target
+                        = ResolveTrampoline(terminator.true_target,
+                                            blocks,
+                                            cache);
                     changed = changed || target != terminator.true_target;
                     terminator.true_target = target;
                 }
                 else if (terminator.kind == Terminator::Kind::Branch)
                 {
-                    const auto trueTarget = ResolveTrampoline(terminator.true_target, blocks, cache);
-                    const auto falseTarget = ResolveTrampoline(terminator.false_target, blocks, cache);
-                    changed = changed || trueTarget != terminator.true_target || falseTarget != terminator.false_target;
+                    const auto trueTarget
+                        = ResolveTrampoline(terminator.true_target,
+                                            blocks,
+                                            cache);
+                    const auto falseTarget
+                        = ResolveTrampoline(terminator.false_target,
+                                            blocks,
+                                            cache);
+                    changed = changed || trueTarget != terminator.true_target
+                              || falseTarget != terminator.false_target;
                     terminator.true_target = trueTarget;
                     terminator.false_target = falseTarget;
                     if (trueTarget == falseTarget)
@@ -265,11 +282,13 @@ namespace visual_xsharp::xpp
         [[nodiscard]] auto
         RetainReachableReversePostorder(Function &function) -> bool
         {
-            const auto flow = Flow::AnalyzeControlFlow(ControlFlowFor(function));
+            const auto flow
+                = Flow::AnalyzeControlFlow(ControlFlowFor(function));
             if (!flow.valid())
                 return false;
             const auto &order = flow.reversePostorder;
-            const std::unordered_set<BlockId> reachable(order.begin(), order.end());
+            const std::unordered_set<BlockId> reachable(order.begin(),
+                                                        order.end());
             std::vector<BlockId> previousOrder;
             previousOrder.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
@@ -282,9 +301,11 @@ namespace visual_xsharp::xpp
             positions.reserve(order.size());
             for (std::size_t index = 0U; index < order.size(); ++index)
                 positions.emplace(order[index], index);
-            std::ranges::sort(function.blocks, [&positions](const Block &left, const Block &right) {
-                return positions.at(left.id) < positions.at(right.id);
-            });
+            std::ranges::sort(
+                function.blocks,
+                [&positions](const Block &left, const Block &right) {
+                    return positions.at(left.id) < positions.at(right.id);
+                });
             std::vector<BlockId> currentOrder;
             currentOrder.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
@@ -293,7 +314,8 @@ namespace visual_xsharp::xpp
         }
 
         void
-        OptimizeFunction(Function &function, const std::unordered_set<SymbolId> &functions)
+        OptimizeFunction(Function &function,
+                         const std::unordered_set<SymbolId> &functions)
         {
             for (auto &block : function.blocks)
                 std::erase_if(block.instructions, IsSelfCopy);

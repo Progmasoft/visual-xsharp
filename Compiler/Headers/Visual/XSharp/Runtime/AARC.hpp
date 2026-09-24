@@ -12,13 +12,15 @@ namespace Visual::XSharp::Runtime::Aarc
 {
     inline constexpr std::uint32_t kAbiVersion = VXS_AARC_ABI_VERSION;
 
-    /** Hash a canonical, case-sensitive runtime type name into its stable identity. */
+    /** Hash a canonical, case-sensitive runtime type name into its stable
+     * identity. */
     [[nodiscard]] consteval auto
     TypeIdentity(std::string_view canonicalName) noexcept -> std::uint64_t
     {
         std::uint64_t value = 14695981039346656037ULL;
         for (const auto byte : canonicalName)
-            value = (value ^ static_cast<unsigned char>(byte)) * 1099511628211ULL;
+            value
+                = (value ^ static_cast<unsigned char>(byte)) * 1099511628211ULL;
         return value;
     }
 
@@ -26,18 +28,21 @@ namespace Visual::XSharp::Runtime::Aarc
     using TypeMetadata = VxsAarcTypeMetadata;
 
     // The control header stays incomplete at the API boundary: C++ callers can
-    // own handles without depending on atomic layout or runtime-private offsets.
+    // own handles without depending on atomic layout or runtime-private
+    // offsets.
     struct ObjectHeader;
 
     struct Weak final
     {
-        // Copying this value bitwise does not retain the control block; use CopyWeak.
+        // Copying this value bitwise does not retain the control block; use
+        // CopyWeak.
         ObjectHeader *header{};
     };
 
     struct Unowned final
     {
-        // Copying this value bitwise does not retain the control block; use CopyUnowned.
+        // Copying this value bitwise does not retain the control block; use
+        // CopyUnowned.
         ObjectHeader *header{};
     };
 
@@ -45,11 +50,13 @@ namespace Visual::XSharp::Runtime::Aarc
     [[nodiscard]] auto
     Allocate(const TypeMetadata &metadata) noexcept -> void *;
 
-    /** Retain the live object, returning null if its strong lifetime has ended. */
+    /** Retain the live object, returning null if its strong lifetime has ended.
+     */
     auto
     RetainStrong(void *object) noexcept -> void *;
 
-    /** Release one strong owner and run the payload destructor exactly once at zero. */
+    /** Release one strong owner and run the payload destructor exactly once at
+     * zero. */
     void
     ReleaseStrong(void *object) noexcept;
 
@@ -61,7 +68,8 @@ namespace Visual::XSharp::Runtime::Aarc
     [[nodiscard]] auto
     CopyWeak(Weak value) noexcept -> Weak;
 
-    /** Upgrade a live weak target to one strong owner, or return null after destruction. */
+    /** Upgrade a live weak target to one strong owner, or return null after
+     * destruction. */
     [[nodiscard]] auto
     LockWeak(Weak value) noexcept -> void *;
 
@@ -73,11 +81,13 @@ namespace Visual::XSharp::Runtime::Aarc
     [[nodiscard]] auto
     MakeUnowned(void *object) noexcept -> Unowned;
 
-    /** Retain the control reference represented by an existing unowned value. */
+    /** Retain the control reference represented by an existing unowned value.
+     */
     [[nodiscard]] auto
     CopyUnowned(Unowned value) noexcept -> Unowned;
 
-    /** Load an unowned target as a temporary strong owner, or return null when dead. */
+    /** Load an unowned target as a temporary strong owner, or return null when
+     * dead. */
     [[nodiscard]] auto
     LoadUnowned(Unowned value) noexcept -> void *;
 
@@ -87,5 +97,6 @@ namespace Visual::XSharp::Runtime::Aarc
 
     /** Check exact runtime identity for a live payload; null never matches. */
     [[nodiscard]] auto
-    IsExactType(const void *object, std::uint64_t typeIdentity) noexcept -> bool;
+    IsExactType(const void *object, std::uint64_t typeIdentity) noexcept
+        -> bool;
 } // namespace Visual::XSharp::Runtime::Aarc

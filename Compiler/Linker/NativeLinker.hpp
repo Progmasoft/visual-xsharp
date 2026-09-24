@@ -14,7 +14,9 @@ namespace Visual::XSharp::Driver
     {
         std::filesystem::path outputPath;
         std::vector<std::filesystem::path> objectPaths;
-        Backend::LLVM::ObjectFormat objectFormat{ Backend::LLVM::ObjectFormat::Unknown };
+        Backend::LLVM::ObjectFormat objectFormat{
+            Backend::LLVM::ObjectFormat::Unknown
+        };
     };
 
     struct NativeLinkResult final
@@ -29,9 +31,9 @@ namespace Visual::XSharp::Driver
         }
     };
 
-    // LinkNativeExecutable invokes the platform linker directly with a typed argv.
-    // No command shell, response-file parser, or user-controlled command string sits
-    // between the compiler model and LLD.
+    // LinkNativeExecutable invokes the platform linker directly with a typed
+    // argv. No command shell, response-file parser, or user-controlled command
+    // string sits between the compiler model and LLD.
     [[nodiscard]] auto
     LinkNativeExecutable(const NativeLinkRequest &request) -> NativeLinkResult;
 } // namespace Visual::XSharp::Driver

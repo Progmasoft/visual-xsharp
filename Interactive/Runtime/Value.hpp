@@ -10,7 +10,8 @@
 namespace Visual::XSharp::Interactive::Runtime
 {
     [[nodiscard]] auto
-    SourceBinding(const Backend::LLVM::JitValue &value) -> std::optional<std::string>;
+    SourceBinding(const Backend::LLVM::JitValue &value)
+        -> std::optional<std::string>;
 
     [[nodiscard]] auto
     DisplayValue(const Backend::LLVM::JitValue &value) -> std::string;

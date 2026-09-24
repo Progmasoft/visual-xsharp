@@ -38,7 +38,12 @@ namespace
 #else
             const auto process = static_cast<std::uint64_t>(getpid());
 #endif
-            path_ = artifactBase.parent_path() / (artifactBase.filename().string() + ".vxs-link-" + std::to_string(process) + "-" + std::to_string(sequence.fetch_add(1U, std::memory_order_relaxed)) + ".o");
+            path_ = artifactBase.parent_path()
+                    / (artifactBase.filename().string() + ".vxs-link-"
+                       + std::to_string(process) + "-"
+                       + std::to_string(
+                           sequence.fetch_add(1U, std::memory_order_relaxed))
+                       + ".o");
         }
 
         TemporaryObject(const TemporaryObject &) = delete;
@@ -47,8 +52,8 @@ namespace
 
         ~TemporaryObject()
         {
-            // Cleanup is best-effort and covers every return path, including a failed
-            // link or a later output-validation diagnostic.
+            // Cleanup is best-effort and covers every return path, including a
+            // failed link or a later output-validation diagnostic.
             std::error_code ignored;
             std::filesystem::remove(path_, ignored);
         }
@@ -64,12 +69,14 @@ namespace
     };
 
     [[nodiscard]] auto
-    ReadFile(const std::filesystem::path &path) -> std::optional<std::vector<std::uint8_t>>
+    ReadFile(const std::filesystem::path &path)
+        -> std::optional<std::vector<std::uint8_t>>
     {
         std::ifstream stream(path, std::ios::binary);
         if (!stream)
             return std::nullopt;
-        return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(stream), {});
+        return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(stream),
+                                         {});
     }
 
     [[nodiscard]] auto
@@ -95,55 +102,102 @@ namespace
     {
         if (result.coreWireError)
         {
-            fmt::print(stderr, "vxs: Core artifact error at byte {} ({}): {}\n", result.coreWireError->offset, result.coreWireError->context, result.coreWireError->message);
+            fmt::print(stderr,
+                       "vxs: Core artifact error at byte {} ({}): {}\n",
+                       result.coreWireError->offset,
+                       result.coreWireError->context,
+                       result.coreWireError->message);
             return;
         }
         if (result.xppWireError)
         {
-            fmt::print(stderr, "vxs: Xpp artifact error at byte {} ({}): {}\n", result.xppWireError->offset, result.xppWireError->context, result.xppWireError->message);
+            fmt::print(stderr,
+                       "vxs: Xpp artifact error at byte {} ({}): {}\n",
+                       result.xppWireError->offset,
+                       result.xppWireError->context,
+                       result.xppWireError->message);
             return;
         }
         if (result.xmmWireError)
         {
-            fmt::print(stderr, "vxs: Xmm artifact error at byte {} ({}): {}\n", result.xmmWireError->offset, result.xmmWireError->context, result.xmmWireError->message);
+            fmt::print(stderr,
+                       "vxs: Xmm artifact error at byte {} ({}): {}\n",
+                       result.xmmWireError->offset,
+                       result.xmmWireError->context,
+                       result.xmmWireError->message);
             return;
         }
         for (const auto &issue : result.coreVerificationIssues)
-            fmt::print(stderr, "vxs: {}: {} [function={}, symbol={}]\n", issue.code, issue.message, issue.function, issue.symbol);
+            fmt::print(stderr,
+                       "vxs: {}: {} [function={}, symbol={}]\n",
+                       issue.code,
+                       issue.message,
+                       issue.function,
+                       issue.symbol);
         for (const auto &issue : result.verification_issues)
-            fmt::print(stderr, "vxs: {}: {} [function={}, block={}]\n", issue.code, issue.message, issue.function, issue.block);
+            fmt::print(stderr,
+                       "vxs: {}: {} [function={}, block={}]\n",
+                       issue.code,
+                       issue.message,
+                       issue.function,
+                       issue.block);
         for (const auto &issue : result.xppVerificationIssues)
-            fmt::print(stderr, "vxs: {}: {} [Xpp function={}, block={}, instruction={}]\n", issue.code, issue.message, issue.function, issue.block, issue.instruction);
+            fmt::print(
+                stderr,
+                "vxs: {}: {} [Xpp function={}, block={}, instruction={}]\n",
+                issue.code,
+                issue.message,
+                issue.function,
+                issue.block,
+                issue.instruction);
         for (const auto &issue : result.xmmVerificationIssues)
-            fmt::print(stderr, "vxs: {}: {} [Xmm function={}, block={}, instruction={}]\n", issue.code, issue.message, issue.function, issue.block, issue.instruction);
+            fmt::print(
+                stderr,
+                "vxs: {}: {} [Xmm function={}, block={}, instruction={}]\n",
+                issue.code,
+                issue.message,
+                issue.function,
+                issue.block,
+                issue.instruction);
         if (result.llvm_error)
-            fmt::print(stderr, "vxs: {}: {}\n", result.llvm_error->code, result.llvm_error->message);
+            fmt::print(stderr,
+                       "vxs: {}: {}\n",
+                       result.llvm_error->code,
+                       result.llvm_error->message);
     }
 
     [[nodiscard]] auto
-    ArtifactPath(const char *inputPath, std::string_view extension) -> std::filesystem::path
+    ArtifactPath(const char *inputPath, std::string_view extension)
+        -> std::filesystem::path
     {
         // Project mode deliberately supplies an artifact base unrelated to the
-        // temporary Core path, keeping generated files in the configured build root.
+        // temporary Core path, keeping generated files in the configured build
+        // root.
         auto path = std::filesystem::path(inputPath);
         path.replace_extension(extension);
         return path;
     }
 
     [[nodiscard]] auto
-    ReportWrite(const std::filesystem::path &path, const std::optional<Llvm::Error> &error) -> bool
+    ReportWrite(const std::filesystem::path &path,
+                const std::optional<Llvm::Error> &error) -> bool
     {
         if (error)
         {
             fmt::print(stderr, "vxs: {}: {}\n", error->code, error->message);
             return false;
         }
-        fmt::print(stderr, "vxs: wrote '{}' from verified Core through CorePrep, Xpp, Xmm and LLVM\n", path.string());
+        fmt::print(stderr,
+                   "vxs: wrote '{}' from verified Core through CorePrep, Xpp, "
+                   "Xmm and LLVM\n",
+                   path.string());
         return true;
     }
 
     [[nodiscard]] auto
-    WriteArtifact(const char *inputPath, BuildOutput output, const Llvm::Artifact &artifact) -> bool
+    WriteArtifact(const char *inputPath,
+                  BuildOutput output,
+                  const Llvm::Artifact &artifact) -> bool
     {
         if (output == BuildOutput::kLlvmIr)
         {
@@ -153,7 +207,8 @@ namespace
         if (output == BuildOutput::kLlvmBitcode)
         {
             const auto path = ArtifactPath(inputPath, ".bc");
-            return ReportWrite(path, Llvm::WriteBitcode(path, artifact.bitcode));
+            return ReportWrite(path,
+                               Llvm::WriteBitcode(path, artifact.bitcode));
         }
         if (output == BuildOutput::kObject)
         {
@@ -163,76 +218,112 @@ namespace
         if (output == BuildOutput::kAssembly)
         {
             const auto path = ArtifactPath(inputPath, ".asm");
-            return ReportWrite(path, Llvm::WriteAssembly(path, artifact.assembly));
+            return ReportWrite(path,
+                               Llvm::WriteAssembly(path, artifact.assembly));
         }
         return false;
     }
 
     [[nodiscard]] auto
-    WriteBytes(const std::filesystem::path &path, std::span<const std::uint8_t> bytes, std::string_view stage) -> bool
+    WriteBytes(const std::filesystem::path &path,
+               std::span<const std::uint8_t> bytes,
+               std::string_view stage) -> bool
     {
         std::ofstream stream(path, std::ios::binary | std::ios::trunc);
         if (!stream)
         {
-            fmt::print(stderr, "vxs: could not open {} artifact '{}' for writing\n", stage, path.string());
+            fmt::print(stderr,
+                       "vxs: could not open {} artifact '{}' for writing\n",
+                       stage,
+                       path.string());
             return false;
         }
-        stream.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        stream.write(reinterpret_cast<const char *>(bytes.data()),
+                     static_cast<std::streamsize>(bytes.size()));
         if (!stream)
         {
-            fmt::print(stderr, "vxs: could not finish writing {} artifact '{}'\n", stage, path.string());
+            fmt::print(stderr,
+                       "vxs: could not finish writing {} artifact '{}'\n",
+                       stage,
+                       path.string());
             return false;
         }
-        fmt::print(stderr, "vxs: wrote verified {} artifact '{}'\n", stage, path.string());
+        fmt::print(stderr,
+                   "vxs: wrote verified {} artifact '{}'\n",
+                   stage,
+                   path.string());
         return true;
     }
 
     [[nodiscard]] auto
-    WriteIntermediate(const char *artifactBasePath, BuildOutput output, const visual_xsharp::PipelineResult &result) -> bool
+    WriteIntermediate(const char *artifactBasePath,
+                      BuildOutput output,
+                      const visual_xsharp::PipelineResult &result) -> bool
     {
         if (output == BuildOutput::kXpp && result.xpp)
         {
             auto encoded = Visual::XSharp::Xpp::Wire::Encode(*result.xpp);
             if (!encoded)
             {
-                fmt::print(stderr, "vxs: Xpp encode error at byte {} ({}): {}\n", encoded.error->offset, encoded.error->context, encoded.error->message);
+                fmt::print(stderr,
+                           "vxs: Xpp encode error at byte {} ({}): {}\n",
+                           encoded.error->offset,
+                           encoded.error->context,
+                           encoded.error->message);
                 return false;
             }
-            return WriteBytes(ArtifactPath(artifactBasePath, ".xpp"), encoded.bytes, "Xpp");
+            return WriteBytes(ArtifactPath(artifactBasePath, ".xpp"),
+                              encoded.bytes,
+                              "Xpp");
         }
         if (output == BuildOutput::kXmm && result.xmm)
         {
             auto encoded = Visual::XSharp::Xmm::Wire::Encode(*result.xmm);
             if (!encoded)
             {
-                fmt::print(stderr, "vxs: Xmm encode error at byte {} ({}): {}\n", encoded.error->offset, encoded.error->context, encoded.error->message);
+                fmt::print(stderr,
+                           "vxs: Xmm encode error at byte {} ({}): {}\n",
+                           encoded.error->offset,
+                           encoded.error->context,
+                           encoded.error->message);
                 return false;
             }
-            return WriteBytes(ArtifactPath(artifactBasePath, ".xmm"), encoded.bytes, "Xmm");
+            return WriteBytes(ArtifactPath(artifactBasePath, ".xmm"),
+                              encoded.bytes,
+                              "Xmm");
         }
         return false;
     }
 
     [[nodiscard]] auto
-    WriteExecutable(const char *inputPath, const Llvm::Artifact &artifact) -> bool
+    WriteExecutable(const char *inputPath, const Llvm::Artifact &artifact)
+        -> bool
     {
         const auto output = ArtifactPath(inputPath, ".vxse");
         TemporaryObject temporary(inputPath);
-        // Binary is one user-visible artifact. The object exists only long enough
-        // for LLD and is never confused with an explicit `-Emit object` request.
-        if (const auto error = Llvm::WriteObject(temporary.Path(), artifact.object))
+        // Binary is one user-visible artifact. The object exists only long
+        // enough for LLD and is never confused with an explicit `-Emit object`
+        // request.
+        if (const auto error
+            = Llvm::WriteObject(temporary.Path(), artifact.object))
         {
             fmt::print(stderr, "vxs: {}: {}\n", error->code, error->message);
             return false;
         }
-        const Driver::NativeLinkRequest request{ output, { temporary.Path() }, artifact.objectFormat };
+        const Driver::NativeLinkRequest request{ output,
+                                                 { temporary.Path() },
+                                                 artifact.objectFormat };
         const auto linked = Driver::LinkNativeExecutable(request);
         if (!linked)
         {
-            fmt::print(stderr, "vxs: native link failed: {}\n", linked.diagnostic);
+            fmt::print(stderr,
+                       "vxs: native link failed: {}\n",
+                       linked.diagnostic);
             return false;
         }
-        fmt::print(stderr, "vxs: linked native executable '{}'\n", output.string());
+        fmt::print(stderr,
+                   "vxs: linked native executable '{}'\n",
+                   output.string());
         return true;
     }
 } // namespace
@@ -247,22 +338,35 @@ namespace
     };
 
     [[nodiscard]] auto
-    ProcessArtifact(InputStage inputStage, const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple) -> bool
+    ProcessArtifact(InputStage inputStage,
+                    const char *path,
+                    const char *artifactBasePath,
+                    CliCommand command,
+                    BuildOutput output,
+                    const CompilerSettings *settings,
+                    const char *targetTriple) -> bool
     {
-        if (path == nullptr || artifactBasePath == nullptr || settings == nullptr)
+        if (path == nullptr || artifactBasePath == nullptr
+            || settings == nullptr)
             return false;
         std::error_code sizeError;
         const auto artifactSize = std::filesystem::file_size(path, sizeError);
-        constexpr auto kMaximumArtifactBytes = std::uintmax_t{ 64U * 1024U * 1024U };
+        constexpr auto kMaximumArtifactBytes
+            = std::uintmax_t{ 64U * 1024U * 1024U };
         if (!sizeError && artifactSize > kMaximumArtifactBytes)
         {
-            fmt::print(stderr, "vxs: compiler artifact '{}' exceeds the 64 MiB input limit\n", path);
+            fmt::print(
+                stderr,
+                "vxs: compiler artifact '{}' exceeds the 64 MiB input limit\n",
+                path);
             return false;
         }
         const auto bytes = ReadFile(path);
         if (!bytes)
         {
-            fmt::print(stderr, "vxs: could not read compiler artifact '{}'\n", path);
+            fmt::print(stderr,
+                       "vxs: could not read compiler artifact '{}'\n",
+                       path);
             return false;
         }
 
@@ -270,23 +374,28 @@ namespace
         options.optimize_xpp = settings->xppOptimizationPasses;
         options.optimize_xmm = settings->xmmOptimizationPasses;
         options.llvm.optimization = Optimization(*settings);
-        options.llvm.target_triple = targetTriple == nullptr ? "" : targetTriple;
+        options.llvm.target_triple
+            = targetTriple == nullptr ? "" : targetTriple;
         if (output == BuildOutput::kXpp)
             options.stop_after = visual_xsharp::PipelineStop::Xpp;
         else if (output == BuildOutput::kXmm)
             options.stop_after = visual_xsharp::PipelineStop::Xmm;
         if (command != CliCommand::kCheck)
         {
-            if (output == BuildOutput::kBinary || output == BuildOutput::kObject)
+            if (output == BuildOutput::kBinary
+                || output == BuildOutput::kObject)
                 options.llvm.machineCode = Llvm::MachineCodeEmission::Object;
             else if (output == BuildOutput::kAssembly)
                 options.llvm.machineCode = Llvm::MachineCodeEmission::Assembly;
             options.llvm.executableEntry = output == BuildOutput::kBinary;
         }
 
-        auto result = inputStage == InputStage::Core  ? Visual::XSharp::Pipeline::ConsumeCore(*bytes, options)
-                      : inputStage == InputStage::Xpp ? Visual::XSharp::Pipeline::ConsumeXpp(*bytes, options)
-                                                      : Visual::XSharp::Pipeline::ConsumeXmm(*bytes, options);
+        auto result
+            = inputStage == InputStage::Core
+                  ? Visual::XSharp::Pipeline::ConsumeCore(*bytes, options)
+              : inputStage == InputStage::Xpp
+                  ? Visual::XSharp::Pipeline::ConsumeXpp(*bytes, options)
+                  : Visual::XSharp::Pipeline::ConsumeXmm(*bytes, options);
         if (!result)
         {
             PrintFailure(result);
@@ -294,7 +403,10 @@ namespace
         }
         if (command == CliCommand::kCheck)
         {
-            fmt::print(stderr, "vxs: compiler artifact '{}' is valid through its requested pipeline boundary\n", path);
+            fmt::print(stderr,
+                       "vxs: compiler artifact '{}' is valid through its "
+                       "requested pipeline boundary\n",
+                       path);
             return true;
         }
         if (output == BuildOutput::kXpp || output == BuildOutput::kXmm)
@@ -302,33 +414,78 @@ namespace
         if (output == BuildOutput::kBinary)
             return WriteExecutable(artifactBasePath, *result.llvm);
         if (output == BuildOutput::kObject || output == BuildOutput::kAssembly
-            || output == BuildOutput::kLlvmIr || output == BuildOutput::kLlvmBitcode)
+            || output == BuildOutput::kLlvmIr
+            || output == BuildOutput::kLlvmBitcode)
             return WriteArtifact(artifactBasePath, output, *result.llvm);
-        fmt::print(stderr, "vxs: requested artifact conversion is not supported from this input stage\n");
+        fmt::print(stderr,
+                   "vxs: requested artifact conversion is not supported from "
+                   "this input stage\n");
         return false;
     }
 } // namespace
 
 bool
-ProcessCoreArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
+ProcessCoreArtifactAs(const char *path,
+                      const char *artifactBasePath,
+                      CliCommand command,
+                      BuildOutput output,
+                      const CompilerSettings *settings,
+                      const char *targetTriple)
 {
-    return ProcessArtifact(InputStage::Core, path, artifactBasePath, command, output, settings, targetTriple);
+    return ProcessArtifact(InputStage::Core,
+                           path,
+                           artifactBasePath,
+                           command,
+                           output,
+                           settings,
+                           targetTriple);
 }
 
 bool
-ProcessCoreArtifact(const char *path, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
+ProcessCoreArtifact(const char *path,
+                    CliCommand command,
+                    BuildOutput output,
+                    const CompilerSettings *settings,
+                    const char *targetTriple)
 {
-    return ProcessCoreArtifactAs(path, path, command, output, settings, targetTriple);
+    return ProcessCoreArtifactAs(path,
+                                 path,
+                                 command,
+                                 output,
+                                 settings,
+                                 targetTriple);
 }
 
 bool
-ProcessXppArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
+ProcessXppArtifactAs(const char *path,
+                     const char *artifactBasePath,
+                     CliCommand command,
+                     BuildOutput output,
+                     const CompilerSettings *settings,
+                     const char *targetTriple)
 {
-    return ProcessArtifact(InputStage::Xpp, path, artifactBasePath, command, output, settings, targetTriple);
+    return ProcessArtifact(InputStage::Xpp,
+                           path,
+                           artifactBasePath,
+                           command,
+                           output,
+                           settings,
+                           targetTriple);
 }
 
 bool
-ProcessXmmArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple)
+ProcessXmmArtifactAs(const char *path,
+                     const char *artifactBasePath,
+                     CliCommand command,
+                     BuildOutput output,
+                     const CompilerSettings *settings,
+                     const char *targetTriple)
 {
-    return ProcessArtifact(InputStage::Xmm, path, artifactBasePath, command, output, settings, targetTriple);
+    return ProcessArtifact(InputStage::Xmm,
+                           path,
+                           artifactBasePath,
+                           command,
+                           output,
+                           settings,
+                           targetTriple);
 }

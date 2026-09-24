@@ -19,8 +19,9 @@ namespace Visual::XSharp::Xpp
         std::size_t instruction{};
     };
 
-    // Verify owns the Xpp boundary: optimizer output must remain structurally and
-    // symbolically valid before Xmm assigns storage or virtual registers.
+    // Verify owns the Xpp boundary: optimizer output must remain structurally
+    // and symbolically valid before Xmm assigns storage or virtual registers.
     [[nodiscard]] auto
-    Verify(const ::visual_xsharp::xpp::Module &module) -> std::vector<VerificationIssue>;
+    Verify(const ::visual_xsharp::xpp::Module &module)
+        -> std::vector<VerificationIssue>;
 } // namespace Visual::XSharp::Xpp

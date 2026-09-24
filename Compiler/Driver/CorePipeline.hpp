@@ -8,10 +8,29 @@
 // This internal C++20 boundary receives typed options; the artifact pipeline
 // never reparses CLI spellings or exposes the retired C driver naming.
 [[nodiscard]] bool
-ProcessCoreArtifact(const char *path, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);
+ProcessCoreArtifact(const char *path,
+                    CliCommand command,
+                    BuildOutput output,
+                    const CompilerSettings *settings,
+                    const char *targetTriple);
 [[nodiscard]] bool
-ProcessCoreArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);
+ProcessCoreArtifactAs(const char *path,
+                      const char *artifactBasePath,
+                      CliCommand command,
+                      BuildOutput output,
+                      const CompilerSettings *settings,
+                      const char *targetTriple);
 [[nodiscard]] bool
-ProcessXppArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);
+ProcessXppArtifactAs(const char *path,
+                     const char *artifactBasePath,
+                     CliCommand command,
+                     BuildOutput output,
+                     const CompilerSettings *settings,
+                     const char *targetTriple);
 [[nodiscard]] bool
-ProcessXmmArtifactAs(const char *path, const char *artifactBasePath, CliCommand command, BuildOutput output, const CompilerSettings *settings, const char *targetTriple);
+ProcessXmmArtifactAs(const char *path,
+                     const char *artifactBasePath,
+                     CliCommand command,
+                     BuildOutput output,
+                     const CompilerSettings *settings,
+                     const char *targetTriple);

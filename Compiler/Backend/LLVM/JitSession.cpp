@@ -48,7 +48,8 @@ namespace Visual::XSharp::Backend::LLVM
                     return true;
                 case ScalarFamily::SignedInteger:
                 case ScalarFamily::UnsignedInteger:
-                    return scalar->bit_width == 8U || scalar->bit_width == 16U || scalar->bit_width == 32U
+                    return scalar->bit_width == 8U || scalar->bit_width == 16U
+                           || scalar->bit_width == 32U
                            || scalar->bit_width == 64U;
                 case ScalarFamily::Floating:
                     return scalar->bit_width == 32U || scalar->bit_width == 64U;
@@ -59,7 +60,8 @@ namespace Visual::XSharp::Backend::LLVM
         }
 
         [[nodiscard]] auto
-        MatchesInvocationType(const llvm::Function &function, const Core::Type &type) -> bool
+        MatchesInvocationType(const llvm::Function &function,
+                              const Core::Type &type) -> bool
         {
             if (function.isVarArg() || !function.arg_empty())
                 return false;
@@ -90,64 +92,83 @@ namespace Visual::XSharp::Backend::LLVM
         }
 
         [[nodiscard]] auto
-        MakeJitError(JitErrorKind kind, std::string code, std::string message) -> JitError
+        MakeJitError(JitErrorKind kind, std::string code, std::string message)
+            -> JitError
         {
             return JitError{ kind, std::move(code), std::move(message) };
         }
 
         [[nodiscard]] auto
-        InvokeAddress(llvm::orc::ExecutorAddr address, const Core::Type &type) -> JitResult
+        InvokeAddress(llvm::orc::ExecutorAddr address, const Core::Type &type)
+            -> JitResult
         {
-            // The generated functions use LLVM's host C calling convention. Keep
-            // every C++ function-pointer type exact; calling a function through a
-            // wider or signedness-incompatible type would be undefined behavior.
+            // The generated functions use LLVM's host C calling convention.
+            // Keep every C++ function-pointer type exact; calling a function
+            // through a wider or signedness-incompatible type would be
+            // undefined behavior.
             const auto invoke = [&]<typename Native>() -> Native {
                 using Function = Native (*)();
                 return address.toPtr<Function>()();
             };
             const auto integerResult = [&](auto value) {
-                return JitResult{ JitValue{ type, static_cast<std::int64_t>(value) }, std::nullopt };
+                return JitResult{ JitValue{ type,
+                                            static_cast<std::int64_t>(value) },
+                                  std::nullopt };
             };
             const auto unsignedResult = [&](auto value) {
-                return JitResult{ JitValue{ type, static_cast<std::uint64_t>(value) }, std::nullopt };
+                return JitResult{ JitValue{ type,
+                                            static_cast<std::uint64_t>(value) },
+                                  std::nullopt };
             };
             const auto unsupported = [&] {
                 return JitResult{ std::nullopt,
-                                  MakeJitError(JitErrorKind::UnsupportedResult,
-                                               "VXL4010",
-                                               "this Visual X# scalar width has no portable host invocation ABI yet") };
+                                  MakeJitError(
+                                      JitErrorKind::UnsupportedResult,
+                                      "VXL4010",
+                                      "this Visual X# scalar width has no "
+                                      "portable host invocation ABI yet") };
             };
 
             if (type.kind == Core::Type::Kind::Unit)
             {
                 invoke.template operator()<void>();
-                return JitResult{ JitValue{ type, std::monostate{} }, std::nullopt };
+                return JitResult{ JitValue{ type, std::monostate{} },
+                                  std::nullopt };
             }
             const auto scalar = visual_xsharp::core::describe_scalar(type);
             if (!scalar)
                 return { std::nullopt,
                          MakeJitError(JitErrorKind::UnsupportedResult,
                                       "VXL4009",
-                                      "ORC invocation currently requires a scalar or void expression result") };
+                                      "ORC invocation currently requires a "
+                                      "scalar or void expression result") };
 
             using visual_xsharp::core::ScalarFamily;
             switch (scalar->family)
             {
                 case ScalarFamily::Boolean:
-                    return { JitValue{ type, invoke.template operator()<bool>() }, std::nullopt };
+                    return { JitValue{ type,
+                                       invoke.template operator()<bool>() },
+                             std::nullopt };
                 case ScalarFamily::Character:
-                    return { JitValue{ type, invoke.template operator()<char32_t>() }, std::nullopt };
+                    return { JitValue{ type,
+                                       invoke.template operator()<char32_t>() },
+                             std::nullopt };
                 case ScalarFamily::SignedInteger:
                     switch (scalar->bit_width)
                     {
                         case 8:
-                            return integerResult(invoke.template operator()<std::int8_t>());
+                            return integerResult(
+                                invoke.template operator()<std::int8_t>());
                         case 16:
-                            return integerResult(invoke.template operator()<std::int16_t>());
+                            return integerResult(
+                                invoke.template operator()<std::int16_t>());
                         case 32:
-                            return integerResult(invoke.template operator()<std::int32_t>());
+                            return integerResult(
+                                invoke.template operator()<std::int32_t>());
                         case 64:
-                            return integerResult(invoke.template operator()<std::int64_t>());
+                            return integerResult(
+                                invoke.template operator()<std::int64_t>());
                         default:
                             return unsupported();
                     }
@@ -155,13 +176,17 @@ namespace Visual::XSharp::Backend::LLVM
                     switch (scalar->bit_width)
                     {
                         case 8:
-                            return unsignedResult(invoke.template operator()<std::uint8_t>());
+                            return unsignedResult(
+                                invoke.template operator()<std::uint8_t>());
                         case 16:
-                            return unsignedResult(invoke.template operator()<std::uint16_t>());
+                            return unsignedResult(
+                                invoke.template operator()<std::uint16_t>());
                         case 32:
-                            return unsignedResult(invoke.template operator()<std::uint32_t>());
+                            return unsignedResult(
+                                invoke.template operator()<std::uint32_t>());
                         case 64:
-                            return unsignedResult(invoke.template operator()<std::uint64_t>());
+                            return unsignedResult(
+                                invoke.template operator()<std::uint64_t>());
                         default:
                             return unsupported();
                     }
@@ -169,9 +194,18 @@ namespace Visual::XSharp::Backend::LLVM
                     switch (scalar->bit_width)
                     {
                         case 32:
-                            return { JitValue{ type, static_cast<double>(invoke.template operator()<float>()) }, std::nullopt };
+                            return {
+                                JitValue{
+                                    type,
+                                    static_cast<double>(
+                                        invoke.template operator()<float>()) },
+                                std::nullopt
+                            };
                         case 64:
-                            return { JitValue{ type, invoke.template operator()<double>() }, std::nullopt };
+                            return { JitValue{
+                                         type,
+                                         invoke.template operator()<double>() },
+                                     std::nullopt };
                         default:
                             return unsupported();
                     }
@@ -199,22 +233,25 @@ namespace Visual::XSharp::Backend::LLVM
 
         Impl()
         {
-            // Native target registration is process-wide, but the actual JIT and
-            // its resource trackers remain owned by this session instance.
-            if (llvm::InitializeNativeTarget() || llvm::InitializeNativeTargetAsmPrinter())
+            // Native target registration is process-wide, but the actual JIT
+            // and its resource trackers remain owned by this session instance.
+            if (llvm::InitializeNativeTarget()
+                || llvm::InitializeNativeTargetAsmPrinter())
             {
-                initializationError = MakeJitError(JitErrorKind::Initialization,
-                                                   "VXL4001",
-                                                   "LLVM could not initialize the host execution target");
+                initializationError = MakeJitError(
+                    JitErrorKind::Initialization,
+                    "VXL4001",
+                    "LLVM could not initialize the host execution target");
                 return;
             }
 
             auto created = llvm::orc::LLJITBuilder().create();
             if (!created)
             {
-                initializationError = MakeJitError(JitErrorKind::Initialization,
-                                                   "VXL4002",
-                                                   llvm::toString(created.takeError()));
+                initializationError
+                    = MakeJitError(JitErrorKind::Initialization,
+                                   "VXL4002",
+                                   llvm::toString(created.takeError()));
                 return;
             }
             jit = std::move(*created);
@@ -222,13 +259,14 @@ namespace Visual::XSharp::Backend::LLVM
             // The process generator is the bridge for runtime symbols that are
             // intentionally linked into a hosting executable. Modules that only
             // use language intrinsics do not need to resolve one.
-            auto processSymbols = llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-                jit->getDataLayout().getGlobalPrefix());
+            auto processSymbols = llvm::orc::DynamicLibrarySearchGenerator::
+                GetForCurrentProcess(jit->getDataLayout().getGlobalPrefix());
             if (!processSymbols)
             {
-                initializationError = MakeJitError(JitErrorKind::Initialization,
-                                                   "VXL4003",
-                                                   llvm::toString(processSymbols.takeError()));
+                initializationError
+                    = MakeJitError(JitErrorKind::Initialization,
+                                   "VXL4003",
+                                   llvm::toString(processSymbols.takeError()));
                 jit.reset();
                 return;
             }
@@ -238,8 +276,7 @@ namespace Visual::XSharp::Backend::LLVM
 
     JitSession::JitSession()
         : impl_(std::make_unique<Impl>())
-    {
-    }
+    {}
 
     JitSession::~JitSession() = default;
 
@@ -256,41 +293,65 @@ namespace Visual::XSharp::Backend::LLVM
         -> std::optional<JitError>
     {
         if (!impl_)
-            return MakeJitError(JitErrorKind::Initialization, "VXL4004", "the moved-from ORC session is not usable");
+            return MakeJitError(JitErrorKind::Initialization,
+                                "VXL4004",
+                                "the moved-from ORC session is not usable");
         std::scoped_lock lock(impl_->mutex);
         if (impl_->initializationError)
             return impl_->initializationError;
         if (!impl_->jit)
-            return MakeJitError(JitErrorKind::Initialization, "VXL4005", "LLVM ORC is not initialized");
+            return MakeJitError(JitErrorKind::Initialization,
+                                "VXL4005",
+                                "LLVM ORC is not initialized");
         if (bitcode.empty())
-            return MakeJitError(JitErrorKind::InvalidBitcode, "VXL4006", "cannot add an empty LLVM bitcode module");
+            return MakeJitError(JitErrorKind::InvalidBitcode,
+                                "VXL4006",
+                                "cannot add an empty LLVM bitcode module");
         if (bitcode.size() > kMaximumJitBitcodeBytes)
-            return MakeJitError(JitErrorKind::InvalidBitcode, "VXL4007", "LLVM bitcode exceeds the 256 MiB session limit");
+            return MakeJitError(
+                JitErrorKind::InvalidBitcode,
+                "VXL4007",
+                "LLVM bitcode exceeds the 256 MiB session limit");
         if (identifier.empty())
-            return MakeJitError(JitErrorKind::InvalidBitcode, "VXL4008", "LLVM JIT module identifier cannot be empty");
+            return MakeJitError(JitErrorKind::InvalidBitcode,
+                                "VXL4008",
+                                "LLVM JIT module identifier cannot be empty");
         if (entrySymbol.empty())
-            return MakeJitError(JitErrorKind::SignatureMismatch, "VXL4020", "LLVM JIT entry symbol cannot be empty");
-        if (impl_->entries.contains(std::string(entrySymbol)))
             return MakeJitError(JitErrorKind::SignatureMismatch,
-                                "VXL4021",
-                                "LLVM JIT entry symbol is already registered in this session");
+                                "VXL4020",
+                                "LLVM JIT entry symbol cannot be empty");
+        if (impl_->entries.contains(std::string(entrySymbol)))
+            return MakeJitError(
+                JitErrorKind::SignatureMismatch,
+                "VXL4021",
+                "LLVM JIT entry symbol is already registered in this session");
         if (!IsSupportedInvocationType(entryResultType))
             return MakeJitError(JitErrorKind::UnsupportedResult,
                                 "VXL4010",
-                                "this Visual X# scalar width has no portable host invocation ABI yet");
+                                "this Visual X# scalar width has no portable "
+                                "host invocation ABI yet");
 
         auto context = std::make_unique<llvm::LLVMContext>();
         const auto *data = reinterpret_cast<const char *>(bitcode.data());
-        auto buffer = llvm::MemoryBuffer::getMemBufferCopy(llvm::StringRef(data, bitcode.size()), identifier);
-        auto parsed = llvm::parseBitcodeFile(buffer->getMemBufferRef(), *context);
+        auto buffer = llvm::MemoryBuffer::getMemBufferCopy(
+            llvm::StringRef(data, bitcode.size()),
+            identifier);
+        auto parsed
+            = llvm::parseBitcodeFile(buffer->getMemBufferRef(), *context);
         if (!parsed)
-            return MakeJitError(JitErrorKind::InvalidBitcode, "VXL4011", llvm::toString(parsed.takeError()));
+            return MakeJitError(JitErrorKind::InvalidBitcode,
+                                "VXL4011",
+                                llvm::toString(parsed.takeError()));
 
-        auto *entry = (**parsed).getFunction(llvm::StringRef(entrySymbol.data(), entrySymbol.size()));
-        if (entry == nullptr || entry->isDeclaration() || !MatchesInvocationType(*entry, entryResultType))
-            return MakeJitError(JitErrorKind::SignatureMismatch,
-                                "VXL4022",
-                                "LLVM JIT entry must be a defined zero-argument function with the declared X# result ABI");
+        auto *entry = (**parsed).getFunction(
+            llvm::StringRef(entrySymbol.data(), entrySymbol.size()));
+        if (entry == nullptr || entry->isDeclaration()
+            || !MatchesInvocationType(*entry, entryResultType))
+            return MakeJitError(
+                JitErrorKind::SignatureMismatch,
+                "VXL4022",
+                "LLVM JIT entry must be a defined zero-argument function with "
+                "the declared X# result ABI");
 
         std::string verification;
         llvm::raw_string_ostream diagnostics(verification);
@@ -299,19 +360,27 @@ namespace Visual::XSharp::Backend::LLVM
             diagnostics.flush();
             return MakeJitError(JitErrorKind::InvalidBitcode,
                                 "VXL4012",
-                                verification.empty() ? "LLVM rejected the JIT module" : std::move(verification));
+                                verification.empty()
+                                    ? "LLVM rejected the JIT module"
+                                    : std::move(verification));
         }
 
         auto tracker = impl_->jit->getMainJITDylib().createResourceTracker();
-        llvm::orc::ThreadSafeModule threadSafeModule(std::move(*parsed), std::move(context));
-        if (auto addError = impl_->jit->addIRModule(tracker, std::move(threadSafeModule)))
+        llvm::orc::ThreadSafeModule threadSafeModule(std::move(*parsed),
+                                                     std::move(context));
+        if (auto addError
+            = impl_->jit->addIRModule(tracker, std::move(threadSafeModule)))
         {
             const auto message = llvm::toString(std::move(addError));
             if (auto removeError = tracker->remove())
                 llvm::consumeError(std::move(removeError));
-            return MakeJitError(JitErrorKind::ModuleAddition, "VXL4013", message);
+            return MakeJitError(JitErrorKind::ModuleAddition,
+                                "VXL4013",
+                                message);
         }
-        impl_->modules.push_back(Impl::LoadedModule{ std::move(tracker), std::string(entrySymbol), entryResultType });
+        impl_->modules.push_back(Impl::LoadedModule{ std::move(tracker),
+                                                     std::string(entrySymbol),
+                                                     entryResultType });
         impl_->entries.emplace(std::string(entrySymbol), entryResultType);
         return std::nullopt;
     }
@@ -320,12 +389,16 @@ namespace Visual::XSharp::Backend::LLVM
     JitSession::Reset() -> std::optional<JitError>
     {
         if (!impl_)
-            return MakeJitError(JitErrorKind::Initialization, "VXL4018", "the moved-from ORC session is not usable");
+            return MakeJitError(JitErrorKind::Initialization,
+                                "VXL4018",
+                                "the moved-from ORC session is not usable");
         std::scoped_lock lock(impl_->mutex);
         while (!impl_->modules.empty())
         {
             if (auto removeError = impl_->modules.back().tracker->remove())
-                return MakeJitError(JitErrorKind::ModuleAddition, "VXL4019", llvm::toString(std::move(removeError)));
+                return MakeJitError(JitErrorKind::ModuleAddition,
+                                    "VXL4019",
+                                    llvm::toString(std::move(removeError)));
             impl_->entries.erase(impl_->modules.back().entrySymbol);
             impl_->modules.pop_back();
         }
@@ -333,59 +406,81 @@ namespace Visual::XSharp::Backend::LLVM
     }
 
     auto
-    JitSession::InvokeScalar(std::string_view symbol, const Core::Type &resultType) -> JitResult
+    JitSession::InvokeScalar(std::string_view symbol,
+                             const Core::Type &resultType) -> JitResult
     {
         if (!impl_)
             return { std::nullopt,
-                     MakeJitError(JitErrorKind::Initialization, "VXL4014", "the moved-from ORC session is not usable") };
+                     MakeJitError(JitErrorKind::Initialization,
+                                  "VXL4014",
+                                  "the moved-from ORC session is not usable") };
         std::scoped_lock lock(impl_->mutex);
         if (impl_->initializationError)
             return { std::nullopt, impl_->initializationError };
         if (!impl_->jit)
             return { std::nullopt,
-                     MakeJitError(JitErrorKind::Initialization, "VXL4015", "LLVM ORC is not initialized") };
+                     MakeJitError(JitErrorKind::Initialization,
+                                  "VXL4015",
+                                  "LLVM ORC is not initialized") };
         if (symbol.empty())
             return { std::nullopt,
-                     MakeJitError(JitErrorKind::SymbolLookup, "VXL4016", "LLVM JIT symbol name cannot be empty") };
+                     MakeJitError(JitErrorKind::SymbolLookup,
+                                  "VXL4016",
+                                  "LLVM JIT symbol name cannot be empty") };
 
         const auto registered = impl_->entries.find(std::string(symbol));
         if (registered == impl_->entries.end())
             return { std::nullopt,
                      MakeJitError(JitErrorKind::SymbolLookup,
                                   "VXL4017",
-                                  "LLVM JIT symbol was not registered as a callable module entry") };
+                                  "LLVM JIT symbol was not registered as a "
+                                  "callable module entry") };
         if (registered->second != resultType)
             return { std::nullopt,
                      MakeJitError(JitErrorKind::SignatureMismatch,
                                   "VXL4023",
-                                  "requested Visual X# result type does not match the registered entry type") };
+                                  "requested Visual X# result type does not "
+                                  "match the registered entry type") };
 
         if (resultType.kind != Core::Type::Kind::Unit)
         {
-            const auto scalar = visual_xsharp::core::describe_scalar(resultType);
+            const auto scalar
+                = visual_xsharp::core::describe_scalar(resultType);
             if (!scalar)
                 return { std::nullopt,
                          MakeJitError(JitErrorKind::UnsupportedResult,
                                       "VXL4009",
-                                      "ORC invocation currently requires a scalar or void expression result") };
-            const bool supportedWidth = scalar->family == visual_xsharp::core::ScalarFamily::Boolean
-                                        || scalar->family == visual_xsharp::core::ScalarFamily::Character
-                                        || ((scalar->family == visual_xsharp::core::ScalarFamily::SignedInteger
-                                             || scalar->family == visual_xsharp::core::ScalarFamily::UnsignedInteger)
-                                            && scalar->bit_width <= 64U)
-                                        || (scalar->family == visual_xsharp::core::ScalarFamily::Floating
-                                            && (scalar->bit_width == 32U || scalar->bit_width == 64U));
+                                      "ORC invocation currently requires a "
+                                      "scalar or void expression result") };
+            const bool supportedWidth
+                = scalar->family == visual_xsharp::core::ScalarFamily::Boolean
+                  || scalar->family
+                         == visual_xsharp::core::ScalarFamily::Character
+                  || ((scalar->family
+                           == visual_xsharp::core::ScalarFamily::SignedInteger
+                       || scalar->family
+                              == visual_xsharp::core::ScalarFamily::
+                                  UnsignedInteger)
+                      && scalar->bit_width <= 64U)
+                  || (scalar->family
+                          == visual_xsharp::core::ScalarFamily::Floating
+                      && (scalar->bit_width == 32U
+                          || scalar->bit_width == 64U));
             if (!supportedWidth)
                 return { std::nullopt,
                          MakeJitError(JitErrorKind::UnsupportedResult,
                                       "VXL4010",
-                                      "this Visual X# scalar width has no portable host invocation ABI yet") };
+                                      "this Visual X# scalar width has no "
+                                      "portable host invocation ABI yet") };
         }
 
-        auto found = impl_->jit->lookup(llvm::StringRef(symbol.data(), symbol.size()));
+        auto found
+            = impl_->jit->lookup(llvm::StringRef(symbol.data(), symbol.size()));
         if (!found)
             return { std::nullopt,
-                     MakeJitError(JitErrorKind::SymbolLookup, "VXL4017", llvm::toString(found.takeError())) };
+                     MakeJitError(JitErrorKind::SymbolLookup,
+                                  "VXL4017",
+                                  llvm::toString(found.takeError())) };
         return InvokeAddress(*found, resultType);
     }
 } // namespace Visual::XSharp::Backend::LLVM

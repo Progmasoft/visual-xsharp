@@ -19,9 +19,10 @@ namespace Visual::XSharp::Backend::LLVM
     namespace Core = ::visual_xsharp::core;
     namespace Xmm = ::visual_xsharp::xmm;
 
-    // This boundary deliberately accepts Xmm rather than an earlier language IR. Xmm has
-    // already made control flow, storage and call identity explicit, so the backend never
-    // has to reconstruct source-language meaning or silently invent an ABI decision.
+    // This boundary deliberately accepts Xmm rather than an earlier language
+    // IR. Xmm has already made control flow, storage and call identity
+    // explicit, so the backend never has to reconstruct source-language meaning
+    // or silently invent an ABI decision.
     enum class OptimizationLevel : std::uint8_t
     {
         Debug,
@@ -32,7 +33,8 @@ namespace Visual::XSharp::Backend::LLVM
 
     enum class MachineCodeEmission : std::uint8_t
     {
-        // IR and bitcode remain available without initializing target code generation.
+        // IR and bitcode remain available without initializing target code
+        // generation.
         None,
         Object,
         Assembly
@@ -55,8 +57,9 @@ namespace Visual::XSharp::Backend::LLVM
         // Machine-code generation is opt-in so `check`, `.ll`, and `.bc` stay
         // target-independent until the driver explicitly asks for native bytes.
         MachineCodeEmission machineCode{ MachineCodeEmission::None };
-        // Reusable object files must not acquire an accidental process entry symbol.
-        // The platform ABI bridge is therefore enabled only for final executables.
+        // Reusable object files must not acquire an accidental process entry
+        // symbol. The platform ABI bridge is therefore enabled only for final
+        // executables.
         bool executableEntry{};
     };
 
@@ -87,12 +90,14 @@ namespace Visual::XSharp::Backend::LLVM
 
     struct Artifact final
     {
-        // LLVM objects are owned only while Lower is running. Both representations below
-        // are independent copies and therefore remain valid after the LLVM context dies.
+        // LLVM objects are owned only while Lower is running. Both
+        // representations below are independent copies and therefore remain
+        // valid after the LLVM context dies.
         std::string llvm_ir;
         std::vector<std::uint8_t> bitcode;
-        // Native payloads remain in memory until an explicit driver writer runs;
-        // validation commands consequently cannot leave incidental files behind.
+        // Native payloads remain in memory until an explicit driver writer
+        // runs; validation commands consequently cannot leave incidental files
+        // behind.
         std::vector<std::uint8_t> object;
         std::string assembly;
         std::string target_triple;
@@ -121,15 +126,25 @@ namespace Visual::XSharp::Backend::LLVM
     /**
      * A scalar value returned by a native ORC invocation.
      *
+     *
      * Only scalar alternatives whose host ABI is explicitly supported by this
-     * interface are represented. The source type remains attached so REPLs and
-     * debuggers can retain exact signedness and width when printing or feeding
+
+     * * interface are represented. The source type remains attached so REPLs
+     * and
+     * debuggers can retain exact signedness and width when printing
+     * or feeding
      * the value into the next compilation unit.
      */
     struct JitValue final
     {
         Core::Type type{ Core::Type::unit() };
-        std::variant<std::monostate, bool, char32_t, std::int64_t, std::uint64_t, double> payload;
+        std::variant<std::monostate,
+                     bool,
+                     char32_t,
+                     std::int64_t,
+                     std::uint64_t,
+                     double>
+            payload;
     };
 
     enum class JitErrorKind : std::uint8_t
@@ -163,14 +178,21 @@ namespace Visual::XSharp::Backend::LLVM
     };
 
     /**
-     * Owns one process-local LLVM ORC LLJIT and all modules added to it.
+     * Owns one process-local LLVM ORC LLJIT and all modules added to
+     * it.
      *
-     * Each module is independently verified before insertion. A lookup and
-     * invocation is serialized with insertion, so callers can safely submit
-     * work from several frontend workers without racing LLJIT mutation. The
-     * callable ABI is intentionally zero-argument and scalar-result only;
-     * richer function arguments require an explicit language ABI rather than
+     * Each module is independently verified before insertion.
+     * A lookup and
+     * invocation is serialized with insertion, so callers
+     * can safely submit
+     * work from several frontend workers without
+     * racing LLJIT mutation. The
+     * callable ABI is intentionally
+     * zero-argument and scalar-result only;
+     * richer function arguments
+     * require an explicit language ABI rather than
      * host-side guesses.
+
      */
     class JitSession final
     {
@@ -184,41 +206,50 @@ namespace Visual::XSharp::Backend::LLVM
         auto
         operator=(JitSession &&) noexcept -> JitSession &;
 
-        /** Add verified bitcode and register its zero-argument entry with its exact X# result type. */
+        /** Add verified bitcode and register its zero-argument entry with its
+         * exact X# result type. */
         [[nodiscard]] auto
         AddModule(std::span<const std::uint8_t> bitcode,
                   std::string_view identifier,
                   std::string_view entrySymbol,
                   const Core::Type &entryResultType) -> std::optional<JitError>;
 
-        /** Remove every module and symbol previously registered in this session. */
+        /** Remove every module and symbol previously registered in this
+         * session. */
         [[nodiscard]] auto
         Reset() -> std::optional<JitError>;
 
-        /** Find and invoke one zero-argument function using its Visual X# result type. */
+        /** Find and invoke one zero-argument function using its Visual X#
+         * result type. */
         [[nodiscard]] auto
-        InvokeScalar(std::string_view symbol, const Core::Type &resultType) -> JitResult;
+        InvokeScalar(std::string_view symbol, const Core::Type &resultType)
+            -> JitResult;
 
     private:
         struct Impl;
         std::unique_ptr<Impl> impl_;
     };
 
-    // Verify is public so tools can diagnose an Xmm artifact without constructing LLVM
-    // state. Lower runs the same verifier again; callers cannot accidentally bypass the
-    // backend's structural and type-safety boundary.
+    // Verify is public so tools can diagnose an Xmm artifact without
+    // constructing LLVM state. Lower runs the same verifier again; callers
+    // cannot accidentally bypass the backend's structural and type-safety
+    // boundary.
     [[nodiscard]] auto
     Verify(const Xmm::Module &module) -> std::vector<Issue>;
     [[nodiscard]] auto
     Lower(const Xmm::Module &module, const Options &options = {}) -> Result;
     [[nodiscard]] auto
-    WriteLlvmIr(const std::filesystem::path &path, std::string_view llvmIr) -> std::optional<Error>;
-    [[nodiscard]] auto
-    WriteBitcode(const std::filesystem::path &path, const std::vector<std::uint8_t> &bitcode)
+    WriteLlvmIr(const std::filesystem::path &path, std::string_view llvmIr)
         -> std::optional<Error>;
     [[nodiscard]] auto
-    WriteObject(const std::filesystem::path &path, const std::vector<std::uint8_t> &object)
+    WriteBitcode(const std::filesystem::path &path,
+                 const std::vector<std::uint8_t> &bitcode)
         -> std::optional<Error>;
     [[nodiscard]] auto
-    WriteAssembly(const std::filesystem::path &path, std::string_view assembly) -> std::optional<Error>;
+    WriteObject(const std::filesystem::path &path,
+                const std::vector<std::uint8_t> &object)
+        -> std::optional<Error>;
+    [[nodiscard]] auto
+    WriteAssembly(const std::filesystem::path &path, std::string_view assembly)
+        -> std::optional<Error>;
 } // namespace Visual::XSharp::Backend::LLVM

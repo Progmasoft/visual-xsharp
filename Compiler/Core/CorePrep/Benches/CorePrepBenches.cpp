@@ -22,7 +22,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    MakeModule(std::size_t blockCount, std::size_t instructionsPerBlock) -> Core::CorePrepModule
+    MakeModule(std::size_t blockCount, std::size_t instructionsPerBlock)
+        -> Core::CorePrepModule
     {
         std::vector<Core::Block> blocks;
         blocks.reserve(blockCount);
@@ -31,7 +32,9 @@ namespace
         {
             std::vector<Core::Instruction> instructions;
             instructions.reserve(instructionsPerBlock);
-            for (std::size_t instructionIndex = 0; instructionIndex < instructionsPerBlock; ++instructionIndex)
+            for (std::size_t instructionIndex = 0;
+                 instructionIndex < instructionsPerBlock;
+                 ++instructionIndex)
             {
                 const auto destination = Symbol(nextSymbol++);
                 instructions.push_back({
@@ -40,7 +43,9 @@ namespace
                     Core::Type::int64(),
                     false,
                     Core::Operation::Copy,
-                    { Core::Atom::constant(static_cast<std::int64_t>(instructionIndex), Core::Type::int64()) },
+                    { Core::Atom::constant(
+                        static_cast<std::int64_t>(instructionIndex),
+                        Core::Type::int64()) },
                     {},
                     {},
                 });
@@ -49,16 +54,24 @@ namespace
             if (blockIndex + 1U < blockCount)
             {
                 terminator.kind = Core::Terminator::Kind::Jump;
-                terminator.true_target = static_cast<Core::BlockId>(blockIndex + 1U);
+                terminator.true_target
+                    = static_cast<Core::BlockId>(blockIndex + 1U);
             }
             else
             {
                 terminator.kind = Core::Terminator::Kind::Return;
-                terminator.value = Core::Atom::constant(std::int64_t{ 0 }, Core::Type::int64());
+                terminator.value = Core::Atom::constant(std::int64_t{ 0 },
+                                                        Core::Type::int64());
             }
-            blocks.push_back({ static_cast<Core::BlockId>(blockIndex), std::move(instructions), std::move(terminator) });
+            blocks.push_back({ static_cast<Core::BlockId>(blockIndex),
+                               std::move(instructions),
+                               std::move(terminator) });
         }
-        Core::Function function{ Symbol(1U), {}, Core::Type::int64(), 0U, std::move(blocks) };
+        Core::Function function{ Symbol(1U),
+                                 {},
+                                 Core::Type::int64(),
+                                 0U,
+                                 std::move(blocks) };
         return { { U"Benchmark" }, { std::move(function) } };
     }
 
@@ -73,7 +86,8 @@ namespace
     Verify(benchmark::State &state)
     {
         constexpr std::size_t kInstructionsPerBlock = 8U;
-        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)), kInstructionsPerBlock);
+        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)),
+                                       kInstructionsPerBlock);
         RequireValid(module);
         for (auto _ : state)
         {
@@ -81,14 +95,16 @@ namespace
             benchmark::DoNotOptimize(issues.data());
             benchmark::DoNotOptimize(issues.size());
         }
-        state.SetItemsProcessed(state.iterations() * state.range(0) * kInstructionsPerBlock);
+        state.SetItemsProcessed(state.iterations() * state.range(0)
+                                * kInstructionsPerBlock);
         state.SetComplexityN(state.range(0));
     }
 
     void
     Encode(benchmark::State &state)
     {
-        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)), 8U);
+        const auto module
+            = MakeModule(static_cast<std::size_t>(state.range(0)), 8U);
         RequireValid(module);
         for (auto _ : state)
         {
@@ -103,7 +119,8 @@ namespace
     void
     Decode(benchmark::State &state)
     {
-        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)), 8U);
+        const auto module
+            = MakeModule(static_cast<std::size_t>(state.range(0)), 8U);
         RequireValid(module);
         const auto encoded = Core::wire::encode(module);
         if (!encoded)
@@ -112,9 +129,12 @@ namespace
         {
             const auto decoded = Core::wire::decode(encoded.bytes);
             benchmark::DoNotOptimize(decoded.module.has_value());
-            benchmark::DoNotOptimize(decoded.module ? decoded.module->functions.data() : nullptr);
+            benchmark::DoNotOptimize(
+                decoded.module ? decoded.module->functions.data() : nullptr);
         }
-        state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(encoded.bytes.size()));
+        state.SetBytesProcessed(
+            state.iterations()
+            * static_cast<std::int64_t>(encoded.bytes.size()));
         state.SetItemsProcessed(state.iterations() * state.range(0));
         state.SetComplexityN(state.range(0));
     }
@@ -123,6 +143,15 @@ namespace
     constexpr auto kMaximumBlocks = 256;
 } // namespace
 
-BENCHMARK(Verify)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
-BENCHMARK(Encode)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
-BENCHMARK(Decode)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
+BENCHMARK(Verify)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();
+BENCHMARK(Encode)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();
+BENCHMARK(Decode)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();

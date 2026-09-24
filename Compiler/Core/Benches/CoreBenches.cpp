@@ -32,7 +32,8 @@ namespace
     [[nodiscard]] auto
     Variable(std::uint64_t id) -> Core::Expression
     {
-        return Core::Expression::Variable(Symbol(id, U"value"), Core::Type::int64());
+        return Core::Expression::Variable(Symbol(id, U"value"),
+                                          Core::Type::int64());
     }
 
     // Each generated function is independently valid and has the same shape.
@@ -55,14 +56,24 @@ namespace
                 { Variable(base + 1U), Integer(1) },
                 Core::Type::boolean());
             std::vector<Core::Statement> body;
-            body.emplace_back(Core::Statement::Bind(
-                { Symbol(base + 1U, U"value"), Core::Type::int64(), true, std::move(sum) }));
+            body.emplace_back(
+                Core::Statement::Bind({ Symbol(base + 1U, U"value"),
+                                        Core::Type::int64(),
+                                        true,
+                                        std::move(sum) }));
             body.emplace_back(Core::Statement::If(
                 std::move(comparison),
-                std::vector<Core::Statement>{ Core::Statement::Assign(Symbol(base + 1U, U"value"), Integer(2)) },
-                std::vector<Core::Statement>{ Core::Statement::Assign(Symbol(base + 1U, U"value"), Integer(0)) }));
+                std::vector<Core::Statement>{
+                    Core::Statement::Assign(Symbol(base + 1U, U"value"),
+                                            Integer(2)) },
+                std::vector<Core::Statement>{
+                    Core::Statement::Assign(Symbol(base + 1U, U"value"),
+                                            Integer(0)) }));
             body.emplace_back(Core::Statement::Return(Variable(base + 1U)));
-            functions.push_back({ Symbol(base, U"Function"), {}, Core::Type::int64(), std::move(body) });
+            functions.push_back({ Symbol(base, U"Function"),
+                                  {},
+                                  Core::Type::int64(),
+                                  std::move(body) });
         }
         return { { U"Benchmark" }, std::move(functions) };
     }
@@ -77,7 +88,8 @@ namespace
     void
     CoreVerify(benchmark::State &state)
     {
-        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)));
+        const auto module
+            = MakeModule(static_cast<std::size_t>(state.range(0)));
         RequireValid(module);
         for (auto _ : state)
         {
@@ -92,7 +104,8 @@ namespace
     void
     CoreEncode(benchmark::State &state)
     {
-        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)));
+        const auto module
+            = MakeModule(static_cast<std::size_t>(state.range(0)));
         RequireValid(module);
         for (auto _ : state)
         {
@@ -107,7 +120,8 @@ namespace
     void
     CoreDecode(benchmark::State &state)
     {
-        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)));
+        const auto module
+            = MakeModule(static_cast<std::size_t>(state.range(0)));
         RequireValid(module);
         const auto encoded = Core::Wire::Encode(module);
         if (!encoded)
@@ -116,9 +130,12 @@ namespace
         {
             const auto decoded = Core::Wire::Decode(encoded.bytes);
             benchmark::DoNotOptimize(decoded.module.has_value());
-            benchmark::DoNotOptimize(decoded.module ? decoded.module->functions.data() : nullptr);
+            benchmark::DoNotOptimize(
+                decoded.module ? decoded.module->functions.data() : nullptr);
         }
-        state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(encoded.bytes.size()));
+        state.SetBytesProcessed(
+            state.iterations()
+            * static_cast<std::int64_t>(encoded.bytes.size()));
         state.SetItemsProcessed(state.iterations() * state.range(0));
         state.SetComplexityN(state.range(0));
     }
@@ -126,7 +143,8 @@ namespace
     void
     CorePrepare(benchmark::State &state)
     {
-        const auto module = MakeModule(static_cast<std::size_t>(state.range(0)));
+        const auto module
+            = MakeModule(static_cast<std::size_t>(state.range(0)));
         RequireValid(module);
         for (auto _ : state)
         {
@@ -142,7 +160,19 @@ namespace
     constexpr auto kMaximumFunctions = 512;
 } // namespace
 
-BENCHMARK(CoreVerify)->RangeMultiplier(4)->Range(kMinimumFunctions, kMaximumFunctions)->Complexity();
-BENCHMARK(CoreEncode)->RangeMultiplier(4)->Range(kMinimumFunctions, kMaximumFunctions)->Complexity();
-BENCHMARK(CoreDecode)->RangeMultiplier(4)->Range(kMinimumFunctions, kMaximumFunctions)->Complexity();
-BENCHMARK(CorePrepare)->RangeMultiplier(4)->Range(kMinimumFunctions, kMaximumFunctions)->Complexity();
+BENCHMARK(CoreVerify)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumFunctions, kMaximumFunctions)
+    ->Complexity();
+BENCHMARK(CoreEncode)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumFunctions, kMaximumFunctions)
+    ->Complexity();
+BENCHMARK(CoreDecode)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumFunctions, kMaximumFunctions)
+    ->Complexity();
+BENCHMARK(CorePrepare)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumFunctions, kMaximumFunctions)
+    ->Complexity();

@@ -16,16 +16,21 @@ namespace Visual::XSharp::Core::Wire
     /**
      * @brief Current VXCR schema version.
      *
-     * Decoders require an exact match; they do not negotiate or reinterpret
+     * Decoders
+     * require an exact match; they do not negotiate or reinterpret
+     *
      * artifacts from older revisions.
      */
     inline constexpr std::uint16_t kCurrentVersion = 5;
 
     /**
      * @brief Per-call resource ceilings for encoding and decoding.
-     *
-     * Decoding treats input bytes as untrusted and checks these bounds before
-     * reserving variable-sized containers or descending into recursive values.
+ *
+
+     * * Decoding treats input bytes as untrusted and checks these bounds
+     * before
+     * reserving variable-sized containers or descending into
+     * recursive values.
      */
     struct Limits final
     {
@@ -49,7 +54,8 @@ namespace Visual::XSharp::Core::Wire
         std::size_t maximumNumericBytes{ 4096U };
     };
 
-    /** @brief Stable categories for malformed or unrepresentable wire values. */
+    /** @brief Stable categories for malformed or unrepresentable wire values.
+     */
     enum class ErrorKind : std::uint8_t
     {
         InvalidMagic,
@@ -67,10 +73,13 @@ namespace Visual::XSharp::Core::Wire
     };
 
     /**
-     * @brief One encode/decode failure, with its byte offset and field context.
+     * @brief One encode/decode failure, with its byte offset and field
+     * context.
      *
-     * The offset identifies the reader or writer position at which the
-     * contract violation was detected; presentation belongs to the caller.
+     * The offset identifies the reader or writer
+     * position at which the
+     * contract violation was detected;
+     * presentation belongs to the caller.
      */
     struct Error final
     {
@@ -105,16 +114,21 @@ namespace Visual::XSharp::Core::Wire
     };
 
     /**
-     * @brief Serialize a Core module using the current VXCR schema and limits.
-     * @note Successful encoding does not replace semantic verification.
+     * @brief Serialize a Core module using the current VXCR schema and
+     * limits.
+     * @note Successful encoding does not replace semantic
+     * verification.
      */
     [[nodiscard]] auto
     Encode(const Module &module, const Limits &limits = {}) -> EncodeResult;
 
     /**
-     * @brief Decode bounded VXCR bytes without granting them semantic trust.
-     * @note Call the Core verifier before optimization, adaptation, or lowering.
+     * @brief Decode bounded VXCR bytes without granting them semantic
+     * trust.
+     * @note Call the Core verifier before optimization,
+     * adaptation, or lowering.
      */
     [[nodiscard]] auto
-    Decode(std::span<const std::uint8_t> bytes, const Limits &limits = {}) -> DecodeResult;
+    Decode(std::span<const std::uint8_t> bytes, const Limits &limits = {})
+        -> DecodeResult;
 } // namespace Visual::XSharp::Core::Wire

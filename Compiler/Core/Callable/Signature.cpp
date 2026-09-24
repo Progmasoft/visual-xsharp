@@ -9,13 +9,16 @@
 namespace Visual::XSharp::Core::Callable
 {
     auto
-    Decompose(const ::visual_xsharp::core::Type &type) -> std::optional<Signature>
+    Decompose(const ::visual_xsharp::core::Type &type)
+        -> std::optional<Signature>
     {
-        if (type.kind != ::visual_xsharp::core::Type::Kind::Function || type.components.empty())
+        if (type.kind != ::visual_xsharp::core::Type::Kind::Function
+            || type.components.empty())
             return std::nullopt;
 
         Signature signature;
-        signature.parameters.assign(type.components.begin(), type.components.end() - 1);
+        signature.parameters.assign(type.components.begin(),
+                                    type.components.end() - 1);
         signature.result = type.components.back();
         return signature;
     }
@@ -59,7 +62,8 @@ namespace Visual::XSharp::Core::Callable
                 return contract;
             }
 
-        const auto publicParameterCount = targetParameters.size() - captures.size();
+        const auto publicParameterCount
+            = targetParameters.size() - captures.size();
         if (publicParameterCount != signature->parameters.size())
         {
             contract.error = ClosureContractError::PublicParameterCountMismatch;
@@ -68,9 +72,11 @@ namespace Visual::XSharp::Core::Callable
         }
 
         for (std::size_t index = 0; index < publicParameterCount; ++index)
-            if (targetParameters[captures.size() + index] != signature->parameters[index])
+            if (targetParameters[captures.size() + index]
+                != signature->parameters[index])
             {
-                contract.error = ClosureContractError::PublicParameterTypeMismatch;
+                contract.error
+                    = ClosureContractError::PublicParameterTypeMismatch;
                 contract.index = index;
                 return contract;
             }

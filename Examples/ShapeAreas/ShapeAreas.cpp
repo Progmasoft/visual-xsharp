@@ -41,7 +41,8 @@ Area(const Shape &shape)
 int
 main()
 {
-    const std::array<Shape, 2> shapes = { Circle{ 3.0 }, Rectangle{ 4.0, 5.0 } };
+    const std::array<Shape, 2> shapes
+        = { Circle{ 3.0 }, Rectangle{ 4.0, 5.0 } };
     for (const auto &shape : shapes)
     {
         std::cout << Area(shape) << '\n';

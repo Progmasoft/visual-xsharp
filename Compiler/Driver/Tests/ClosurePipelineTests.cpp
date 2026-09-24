@@ -35,7 +35,8 @@ namespace
     [[nodiscard]] auto
     Integer(std::int64_t value) -> Core::Atom
     {
-        return Core::Atom::constant(Core::integer_from_signed(value), Core::Type::int64());
+        return Core::Atom::constant(Core::integer_from_signed(value),
+                                    Core::Type::int64());
     }
 
     [[nodiscard]] auto
@@ -45,9 +46,9 @@ namespace
     }
 
     [[nodiscard]] auto
-    ClosureInstruction(
-        Core::CaptureMode mode = Core::CaptureMode::Strong,
-        Core::Type captureType = Core::Type::int64()) -> Core::Instruction
+    ClosureInstruction(Core::CaptureMode mode = Core::CaptureMode::Strong,
+                       Core::Type captureType = Core::Type::int64())
+        -> Core::Instruction
     {
         Core::Instruction instruction;
         instruction.kind = Core::Instruction::Kind::Bind;
@@ -98,8 +99,13 @@ namespace
         main.blocks = {
             Core::Block{
                 0U,
-                { std::move(seed), ClosureInstruction(), ClosureCallInstruction() },
-                Core::Terminator{ Core::Terminator::Kind::Return, Unit(), 0U, 0U },
+                { std::move(seed),
+                  ClosureInstruction(),
+                  ClosureCallInstruction() },
+                Core::Terminator{ Core::Terminator::Kind::Return,
+                                  Unit(),
+                                  0U,
+                                  0U },
             },
         };
 
@@ -119,7 +125,8 @@ namespace
 
         Core::Function lifted;
         lifted.symbol = Name(10U, U"$closure10");
-        lifted.parameters = { Core::Parameter{ Name(4U, U"count"), Core::Type::int64() } };
+        lifted.parameters
+            = { Core::Parameter{ Name(4U, U"count"), Core::Type::int64() } };
         lifted.return_type = Core::Type::int64();
         lifted.entry = 0U;
         lifted.blocks = {
@@ -135,11 +142,13 @@ namespace
             },
         };
 
-        return Core::CorePrepModule{ { U"ClosureTests" }, { std::move(main), std::move(lifted) } };
+        return Core::CorePrepModule{ { U"ClosureTests" },
+                                     { std::move(main), std::move(lifted) } };
     }
 
     [[nodiscard]] auto
-    HasIssue(const std::vector<Core::VerificationIssue> &issues, std::string_view code) -> bool
+    HasIssue(const std::vector<Core::VerificationIssue> &issues,
+             std::string_view code) -> bool
     {
         return std::ranges::any_of(issues, [code](const auto &issue) {
             return issue.code == code;
@@ -147,7 +156,9 @@ namespace
     }
 
     [[nodiscard]] auto
-    HasXppIssue(const std::vector<Visual::XSharp::Xpp::VerificationIssue> &issues, std::string_view code) -> bool
+    HasXppIssue(
+        const std::vector<Visual::XSharp::Xpp::VerificationIssue> &issues,
+        std::string_view code) -> bool
     {
         return std::ranges::any_of(issues, [code](const auto &issue) {
             return issue.code == code;
@@ -155,7 +166,9 @@ namespace
     }
 
     [[nodiscard]] auto
-    HasXmmIssue(const std::vector<Visual::XSharp::Xmm::VerificationIssue> &issues, std::string_view code) -> bool
+    HasXmmIssue(
+        const std::vector<Visual::XSharp::Xmm::VerificationIssue> &issues,
+        std::string_view code) -> bool
     {
         return std::ranges::any_of(issues, [code](const auto &issue) {
             return issue.code == code;
@@ -230,14 +243,18 @@ TEST_CASE("CorePrep verifier accepts a well-formed closure conversion")
 TEST_CASE("CorePrep verifier rejects a missing lifted closure target")
 {
     auto module = ClosureModule();
-    module.functions.front().blocks.front().instructions[1].closure_function = Name(99U, U"missing");
+    module.functions.front().blocks.front().instructions[1].closure_function
+        = Name(99U, U"missing");
     CHECK(HasIssue(Core::verify(module), "VXC1040"));
 }
 
 TEST_CASE("CorePrep verifier rejects mismatched capture storage")
 {
     auto module = ClosureModule();
-    auto &capture = module.functions.front().blocks.front().instructions[1].captures.front();
+    auto &capture = module.functions.front()
+                        .blocks.front()
+                        .instructions[1]
+                        .captures.front();
     capture.type = Core::Type::boolean();
     CHECK_FALSE(Core::verify(module).empty());
 }
@@ -263,7 +280,8 @@ TEST_CASE("Xpp distinguishes a callable local from a direct function symbol")
     REQUIRE(call->operands.size() == 1U);
     CHECK(call->operands.front().kind == Xpp::Operand::Kind::Symbol);
     CHECK(call->operands.front().symbol == 3U);
-    CHECK(call->operands.front().type == Core::Type::function({}, Core::Type::int64()));
+    CHECK(call->operands.front().type
+          == Core::Type::function({}, Core::Type::int64()));
 }
 
 TEST_CASE("Xpp rejects a closure whose public arity disagrees with its target")
@@ -271,7 +289,8 @@ TEST_CASE("Xpp rejects a closure whose public arity disagrees with its target")
     auto xpp = Xpp::lower(ClosureModule());
     auto *closure = const_cast<Xpp::Instruction *>(FindClosure(xpp));
     REQUIRE(closure != nullptr);
-    closure->result_type = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
+    closure->result_type
+        = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
     CHECK(HasXppIssue(Visual::XSharp::Xpp::Verify(xpp), "VXP1038"));
 }
 
@@ -319,7 +338,8 @@ TEST_CASE("Xmm lowers a closure callee to a data register")
     REQUIRE(call != nullptr);
     REQUIRE(call->operands.size() == 1U);
     CHECK(call->operands.front().kind == Xmm::Value::Kind::Register);
-    CHECK(call->operands.front().type == Core::Type::function({}, Core::Type::int64()));
+    CHECK(call->operands.front().type
+          == Core::Type::function({}, Core::Type::int64()));
 }
 
 TEST_CASE("Xmm rejects a closure whose public arity disagrees with its target")
@@ -327,7 +347,8 @@ TEST_CASE("Xmm rejects a closure whose public arity disagrees with its target")
     auto xmm = Xmm::lower(Xpp::lower(ClosureModule()));
     auto *closure = const_cast<Xmm::Instruction *>(FindClosure(xmm));
     REQUIRE(closure != nullptr);
-    closure->result_type = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
+    closure->result_type
+        = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
     CHECK(HasXmmIssue(Visual::XSharp::Xmm::Verify(xmm), "VXL1042"));
 }
 
@@ -353,6 +374,10 @@ TEST_CASE("Xmm verifier checks closure metadata independently of LLVM")
 TEST_CASE("non-owning primitive capture is rejected before backend lowering")
 {
     auto module = ClosureModule();
-    module.functions.front().blocks.front().instructions[1].captures.front().mode = Core::CaptureMode::Weak;
+    module.functions.front()
+        .blocks.front()
+        .instructions[1]
+        .captures.front()
+        .mode = Core::CaptureMode::Weak;
     CHECK_FALSE(Core::verify(module).empty());
 }

@@ -10,5 +10,6 @@ namespace visual_xsharp::xmm
     // Xmm preserves Xpp block identity, but it owns its terminator enum. This
     // adapter makes that boundary explicit and keeps structural facts shared.
     [[nodiscard]] auto
-    AnalyzeControlStructure(const Function &function) -> Visual::XSharp::Analysis::DominanceResult;
+    AnalyzeControlStructure(const Function &function)
+        -> Visual::XSharp::Analysis::DominanceResult;
 } // namespace visual_xsharp::xmm

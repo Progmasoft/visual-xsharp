@@ -13,7 +13,8 @@ namespace Visual::XSharp::Diagnostic
         : limits_(limits)
     {
         records_.reserve(std::min<std::size_t>(limits_.maximumRecords, 256U));
-        identities_.reserve(std::min<std::size_t>(limits_.maximumRecords, 256U));
+        identities_.reserve(
+            std::min<std::size_t>(limits_.maximumRecords, 256U));
     }
 
     auto
@@ -36,11 +37,14 @@ namespace Visual::XSharp::Diagnostic
         if (identities_.contains(identity))
             return { AppendStatus::Duplicate, std::nullopt };
         if (records_.size() >= limits_.maximumRecords)
-            return { AppendStatus::LimitExceeded,
-                     Error{ ErrorKind::LimitExceeded,
-                            0U,
-                            "diagnostic count",
-                            "diagnostic collection exceeds configured record limit" } };
+            return {
+                AppendStatus::LimitExceeded,
+                Error{
+                    ErrorKind::LimitExceeded,
+                    0U,
+                    "diagnostic count",
+                    "diagnostic collection exceeds configured record limit" }
+            };
 
         identities_.insert(std::move(identity));
         if (record.severity == Severity::Error)
@@ -55,7 +59,8 @@ namespace Visual::XSharp::Diagnostic
     Collection::Merge(const Document &document) -> AppendResult
     {
         // Copying here is intentional. It makes a multi-stage merge atomic and
-        // keeps rollback logic out of every caller; diagnostic batches are small.
+        // keeps rollback logic out of every caller; diagnostic batches are
+        // small.
         Collection candidate = *this;
         AppendStatus aggregate = AppendStatus::Duplicate;
         for (const auto &record : document.records)

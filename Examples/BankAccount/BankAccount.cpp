@@ -11,8 +11,7 @@ public:
     Account(std::string owner, const int openingBalance)
         : owner_(std::move(owner))
         , balance_(openingBalance)
-    {
-    }
+    {}
 
     void
     Deposit(const int amount)

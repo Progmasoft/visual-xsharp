@@ -51,5 +51,6 @@ namespace Visual::XSharp::Xmm
     };
 
     [[nodiscard]] auto
-    Verify(const ::visual_xsharp::xmm::Module &module) -> std::vector<VerificationIssue>;
+    Verify(const ::visual_xsharp::xmm::Module &module)
+        -> std::vector<VerificationIssue>;
 } // namespace Visual::XSharp::Xmm

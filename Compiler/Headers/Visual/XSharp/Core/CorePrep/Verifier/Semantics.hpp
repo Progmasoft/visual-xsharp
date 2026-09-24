@@ -7,5 +7,6 @@
 namespace visual_xsharp::core
 {
     [[nodiscard]] auto
-    verify_semantics(const CorePrepModule &module) -> std::vector<VerificationIssue>;
+    verify_semantics(const CorePrepModule &module)
+        -> std::vector<VerificationIssue>;
 } // namespace visual_xsharp::core

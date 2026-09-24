@@ -16,32 +16,36 @@ namespace Visual::XSharp::Analysis
         using BlockSet = std::set<ControlFlowBlockId>;
 
         [[nodiscard]] auto
-        PostDominatorChain(
-            const DominanceResult &structure,
-            const ControlFlowBlockId start,
-            const std::optional<ControlFlowBlockId> stop) -> std::vector<ControlFlowBlockId>
+        PostDominatorChain(const DominanceResult &structure,
+                           const ControlFlowBlockId start,
+                           const std::optional<ControlFlowBlockId> stop)
+            -> std::vector<ControlFlowBlockId>
         {
             std::vector<ControlFlowBlockId> result;
             BlockSet visited;
             auto current = std::optional<ControlFlowBlockId>{ start };
-            while (current && current != stop && visited.insert(*current).second)
+            while (current && current != stop
+                   && visited.insert(*current).second)
             {
                 result.push_back(*current);
                 const auto *facts = FactsFor(structure, *current);
-                current = facts == nullptr ? std::nullopt : facts->immediatePostDominator;
+                current = facts == nullptr ? std::nullopt
+                                           : facts->immediatePostDominator;
             }
             return result;
         }
 
         [[nodiscard]] auto
-        BuildEdges(const DominanceResult &structure) -> std::vector<ControlDependenceEdge>
+        BuildEdges(const DominanceResult &structure)
+            -> std::vector<ControlDependenceEdge>
         {
             std::vector<ControlDependenceEdge> edges;
             for (const auto &controller : structure.controlFlow.facts)
             {
                 if (!controller.reachable || controller.successors.size() < 2U)
                     continue;
-                const auto *controllerFacts = FactsFor(structure, controller.block);
+                const auto *controllerFacts
+                    = FactsFor(structure, controller.block);
                 if (controllerFacts == nullptr)
                     continue;
                 for (const auto successor : controller.successors)
@@ -54,21 +58,26 @@ namespace Visual::XSharp::Analysis
                              structure,
                              successor,
                              controllerFacts->immediatePostDominator))
-                        edges.push_back({ controller.block, successor, dependent });
+                        edges.push_back(
+                            { controller.block, successor, dependent });
                 }
             }
             std::ranges::sort(edges, [](const auto &left, const auto &right) {
-                return std::tuple{ left.controller, left.successor, left.dependent }
-                       < std::tuple{ right.controller, right.successor, right.dependent };
+                return std::tuple{ left.controller,
+                                   left.successor,
+                                   left.dependent }
+                       < std::tuple{ right.controller,
+                                     right.successor,
+                                     right.dependent };
             });
             edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
             return edges;
         }
 
         [[nodiscard]] auto
-        BuildFacts(
-            const DominanceResult &structure,
-            const std::vector<ControlDependenceEdge> &edges) -> std::vector<ControlDependenceBlockFacts>
+        BuildFacts(const DominanceResult &structure,
+                   const std::vector<ControlDependenceEdge> &edges)
+            -> std::vector<ControlDependenceBlockFacts>
         {
             std::map<ControlFlowBlockId, BlockSet> controllers;
             std::map<ControlFlowBlockId, BlockSet> dependents;
@@ -89,13 +98,15 @@ namespace Visual::XSharp::Analysis
                 facts.push_back(
                     { block,
                       { controllerSet.begin(), controllerSet.end() },
-                      { dependents.at(block).begin(), dependents.at(block).end() } });
+                      { dependents.at(block).begin(),
+                        dependents.at(block).end() } });
             return facts;
         }
     } // namespace
 
     auto
-    AnalyzeControlDependence(const ControlFlowGraph &graph) -> ControlDependenceResult
+    AnalyzeControlDependence(const ControlFlowGraph &graph)
+        -> ControlDependenceResult
     {
         ControlDependenceResult result;
         result.structure = AnalyzeDominance(graph);
@@ -107,11 +118,16 @@ namespace Visual::XSharp::Analysis
     }
 
     auto
-    ControlDependenceFactsFor(
-        const ControlDependenceResult &result,
-        const ControlFlowBlockId block) -> const ControlDependenceBlockFacts *
+    ControlDependenceFactsFor(const ControlDependenceResult &result,
+                              const ControlFlowBlockId block)
+        -> const ControlDependenceBlockFacts *
     {
-        const auto found = std::ranges::lower_bound(result.facts, block, {}, &ControlDependenceBlockFacts::block);
-        return found != result.facts.end() && found->block == block ? &*found : nullptr;
+        const auto found
+            = std::ranges::lower_bound(result.facts,
+                                       block,
+                                       {},
+                                       &ControlDependenceBlockFacts::block);
+        return found != result.facts.end() && found->block == block ? &*found
+                                                                    : nullptr;
     }
 } // namespace Visual::XSharp::Analysis

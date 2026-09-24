@@ -31,78 +31,107 @@ namespace
         destructions.fetch_add(1U, std::memory_order_relaxed);
     }
 
-    const Aarc::TypeMetadata kMetadata{
-        Aarc::kAbiVersion,
-        0U,
-        Aarc::TypeIdentity("Tests.Payload"),
-        sizeof(Payload),
-        alignof(Payload),
-        DestroyPayload,
-        "Tests.Payload"
-    };
+    const Aarc::TypeMetadata kMetadata{ Aarc::kAbiVersion,
+                                        0U,
+                                        Aarc::TypeIdentity("Tests.Payload"),
+                                        sizeof(Payload),
+                                        alignof(Payload),
+                                        DestroyPayload,
+                                        "Tests.Payload" };
 } // namespace
 
 TEST_CASE("type storage classes follow the language declaration families")
 {
-    CHECK(Core::ClassifyType(Core::Type::int64()) == Core::StorageClass::TrivialValue);
-    CHECK(Core::ClassifyType(Core::Type::string()) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(Core::Type::function({}, Core::Type::unit())) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::Data) == Core::StorageClass::CopyOnWriteValue);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::Type) == Core::StorageClass::CopyOnWriteValue);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::ClassicEnum) == Core::StorageClass::CopyOnWriteValue);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::Class) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::DataClass) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::EnumClass) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::Object) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyNominal(Core::NominalKind::Interface) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(Core::Type::named({ U"Unknown" })) == Core::StorageClass::Unresolved);
+    CHECK(Core::ClassifyType(Core::Type::int64())
+          == Core::StorageClass::TrivialValue);
+    CHECK(Core::ClassifyType(Core::Type::string())
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(Core::Type::function({}, Core::Type::unit()))
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::Data)
+          == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::Type)
+          == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::ClassicEnum)
+          == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::Class)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::DataClass)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::EnumClass)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::Object)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyNominal(Core::NominalKind::Interface)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(Core::Type::named({ U"Unknown" }))
+          == Core::StorageClass::Unresolved);
 }
 
-TEST_CASE("constructed value types inherit reference classification from every nested type argument")
+TEST_CASE("constructed value types inherit reference classification from every "
+          "nested type argument")
 {
     Core::NominalTypeCatalog catalog;
     REQUIRE(catalog.Register({ U"ValueCell" }, Core::NominalKind::Data));
     REQUIRE(catalog.Register({ U"ReferenceCell" }, Core::NominalKind::Class));
 
-    const auto scalar = Core::Type::named({ U"ValueCell" }, { Core::Type::int64() });
+    const auto scalar
+        = Core::Type::named({ U"ValueCell" }, { Core::Type::int64() });
     const auto allValues = Core::Type::named({ U"ValueCell" }, { scalar });
-    const auto directReference = Core::Type::named({ U"ValueCell" }, { Core::Type::string() });
-    const auto nestedReference = Core::Type::named({ U"ValueCell" }, { directReference });
+    const auto directReference
+        = Core::Type::named({ U"ValueCell" }, { Core::Type::string() });
+    const auto nestedReference
+        = Core::Type::named({ U"ValueCell" }, { directReference });
     const auto deepReference = Core::Type::named(
         { U"ValueCell" },
         { Core::Type::named({ U"ValueCell" }, { nestedReference }) });
-    const auto nominalReference = Core::Type::named({ U"ReferenceCell" }, { Core::Type::int64() });
-    const auto containedReference = Core::Type::named({ U"ValueCell" }, { nominalReference });
+    const auto nominalReference
+        = Core::Type::named({ U"ReferenceCell" }, { Core::Type::int64() });
+    const auto containedReference
+        = Core::Type::named({ U"ValueCell" }, { nominalReference });
 
-    CHECK(Core::ClassifyType(scalar, catalog) == Core::StorageClass::CopyOnWriteValue);
-    CHECK(Core::ClassifyType(allValues, catalog) == Core::StorageClass::CopyOnWriteValue);
-    CHECK(Core::ClassifyType(directReference, catalog) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(nestedReference, catalog) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(deepReference, catalog) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(nominalReference, catalog) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(containedReference, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(scalar, catalog)
+          == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyType(allValues, catalog)
+          == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyType(directReference, catalog)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(nestedReference, catalog)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(deepReference, catalog)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(nominalReference, catalog)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(containedReference, catalog)
+          == Core::StorageClass::AarcReference);
     CHECK(Core::UsesCopyOnWrite(allValues, catalog));
     CHECK(Core::UsesAarc(containedReference, catalog));
 }
 
-TEST_CASE("constructed type classification preserves unresolved and non-type argument boundaries")
+TEST_CASE("constructed type classification preserves unresolved and non-type "
+          "argument boundaries")
 {
     Core::NominalTypeCatalog catalog;
     REQUIRE(catalog.Register({ U"Buffer" }, Core::NominalKind::Data));
     REQUIRE(catalog.Register({ U"ReferenceCell" }, Core::NominalKind::Class));
 
-    const auto valueArgument = Core::TemplateArgument::value_argument(Core::TemplateValue::boolean_value(true));
+    const auto valueArgument = Core::TemplateArgument::value_argument(
+        Core::TemplateValue::boolean_value(true));
     const auto concreteBuffer = Core::Type::named_template(
         { U"Buffer" },
-        { Core::TemplateArgument::type_argument(Core::Type::int64()), valueArgument });
-    const auto openBuffer = Core::Type::named(
-        { U"Buffer" },
-        { Core::Type::type_variable({ 91U, U"T" }) });
-    const auto missingDeclaration = Core::Type::named({ U"Missing" }, { Core::Type::int64() });
-    const auto referenceWithOpenArgument = Core::Type::named(
-        { U"ReferenceCell" },
-        { Core::Type::type_variable({ 92U, U"U" }) });
-    const auto malformedBuffer = Core::Type::named_template({ U"Buffer" }, { Core::TemplateArgument{} });
+        { Core::TemplateArgument::type_argument(Core::Type::int64()),
+          valueArgument });
+    const auto openBuffer
+        = Core::Type::named({ U"Buffer" },
+                            { Core::Type::type_variable({ 91U, U"T" }) });
+    const auto missingDeclaration
+        = Core::Type::named({ U"Missing" }, { Core::Type::int64() });
+    const auto referenceWithOpenArgument
+        = Core::Type::named({ U"ReferenceCell" },
+                            { Core::Type::type_variable({ 92U, U"U" }) });
+    const auto malformedBuffer
+        = Core::Type::named_template({ U"Buffer" },
+                                     { Core::TemplateArgument{} });
     const auto unresolvedThenReference = Core::Type::named(
         { U"Buffer" },
         { Core::Type::type_variable({ 93U, U"V" }), Core::Type::string() });
@@ -110,31 +139,47 @@ TEST_CASE("constructed type classification preserves unresolved and non-type arg
         { U"Buffer" },
         { Core::Type::string(), Core::Type::type_variable({ 94U, U"W" }) });
 
-    CHECK(Core::ClassifyType(concreteBuffer, catalog) == Core::StorageClass::CopyOnWriteValue);
-    CHECK(Core::ClassifyType(openBuffer, catalog) == Core::StorageClass::Unresolved);
-    CHECK(Core::ClassifyType(missingDeclaration, catalog) == Core::StorageClass::Unresolved);
-    CHECK(Core::ClassifyType(referenceWithOpenArgument, catalog) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(malformedBuffer, catalog) == Core::StorageClass::Unresolved);
-    CHECK(Core::ClassifyType(unresolvedThenReference, catalog) == Core::StorageClass::AarcReference);
-    CHECK(Core::ClassifyType(referenceThenUnresolved, catalog) == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(concreteBuffer, catalog)
+          == Core::StorageClass::CopyOnWriteValue);
+    CHECK(Core::ClassifyType(openBuffer, catalog)
+          == Core::StorageClass::Unresolved);
+    CHECK(Core::ClassifyType(missingDeclaration, catalog)
+          == Core::StorageClass::Unresolved);
+    CHECK(Core::ClassifyType(referenceWithOpenArgument, catalog)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(malformedBuffer, catalog)
+          == Core::StorageClass::Unresolved);
+    CHECK(Core::ClassifyType(unresolvedThenReference, catalog)
+          == Core::StorageClass::AarcReference);
+    CHECK(Core::ClassifyType(referenceThenUnresolved, catalog)
+          == Core::StorageClass::AarcReference);
 }
 
-TEST_CASE("nominal type catalog rejects ambiguous declarations and compares qualified names case-sensitively")
+TEST_CASE("nominal type catalog rejects ambiguous declarations and compares "
+          "qualified names case-sensitively")
 {
     Core::NominalTypeCatalog catalog;
     CHECK(catalog.Empty());
     CHECK_FALSE(catalog.Register({}, Core::NominalKind::Data));
     CHECK_FALSE(catalog.Register({ U"Example", U"" }, Core::NominalKind::Data));
-    REQUIRE(catalog.Register({ U"Example", U"Value" }, Core::NominalKind::Data));
-    CHECK_FALSE(catalog.Register({ U"Example", U"Value" }, Core::NominalKind::Class));
-    REQUIRE(catalog.Register({ U"Example", U"value" }, Core::NominalKind::Class));
+    REQUIRE(
+        catalog.Register({ U"Example", U"Value" }, Core::NominalKind::Data));
+    CHECK_FALSE(
+        catalog.Register({ U"Example", U"Value" }, Core::NominalKind::Class));
+    REQUIRE(
+        catalog.Register({ U"Example", U"value" }, Core::NominalKind::Class));
 
     CHECK(catalog.Size() == 2U);
-    CHECK(catalog.Lookup(std::array{ std::u32string(U"Example"), std::u32string(U"Value") })
+    CHECK(catalog.Lookup(std::array{ std::u32string(U"Example"),
+                                     std::u32string(U"Value") })
           == Core::NominalKind::Data);
-    CHECK(catalog.Lookup(std::array{ std::u32string(U"Example"), std::u32string(U"value") })
+    CHECK(catalog.Lookup(std::array{ std::u32string(U"Example"),
+                                     std::u32string(U"value") })
           == Core::NominalKind::Class);
-    CHECK_FALSE(catalog.Lookup(std::array{ std::u32string(U"example"), std::u32string(U"Value") }).has_value());
+    CHECK_FALSE(catalog
+                    .Lookup(std::array{ std::u32string(U"example"),
+                                        std::u32string(U"Value") })
+                    .has_value());
 }
 
 TEST_CASE("strong references destroy the payload exactly once")
@@ -158,8 +203,10 @@ TEST_CASE("exact type tests use stable metadata identity and reject null")
 
     CHECK(Aarc::IsExactType(payload, kMetadata.typeIdentity));
     CHECK(vxs_aarc_is_exact_type(payload, kMetadata.typeIdentity));
-    CHECK_FALSE(Aarc::IsExactType(payload, Aarc::TypeIdentity("Tests.OtherPayload")));
-    CHECK_FALSE(Aarc::IsExactType(payload, Aarc::TypeIdentity("tests.payload")));
+    CHECK_FALSE(
+        Aarc::IsExactType(payload, Aarc::TypeIdentity("Tests.OtherPayload")));
+    CHECK_FALSE(
+        Aarc::IsExactType(payload, Aarc::TypeIdentity("tests.payload")));
     CHECK_FALSE(Aarc::IsExactType(nullptr, kMetadata.typeIdentity));
     Aarc::ReleaseStrong(payload);
 }
@@ -274,7 +321,9 @@ TEST_CASE("control-handle copies outlive their source handles independently")
     Aarc::ReleaseUnowned(unownedCopy);
 }
 
-TEST_CASE("weak upgrades racing the last owner never resurrect a destroyed object", "[aarc][concurrency]")
+TEST_CASE(
+    "weak upgrades racing the last owner never resurrect a destroyed object",
+    "[aarc][concurrency]")
 {
     destructions.store(0U);
     auto *payload = static_cast<Payload *>(Aarc::Allocate(kMetadata));
@@ -293,7 +342,12 @@ TEST_CASE("weak upgrades racing the last owner never resurrect a destroyed objec
     workers.reserve(kThreadCount);
     for (std::size_t worker = 0U; worker < kThreadCount; ++worker)
     {
-        workers.emplace_back([weak, &ready, &start, &raceStart, &failedToUpgradeLiveObject, &primed] {
+        workers.emplace_back([weak,
+                              &ready,
+                              &start,
+                              &raceStart,
+                              &failedToUpgradeLiveObject,
+                              &primed] {
             ready.fetch_add(1U, std::memory_order_release);
             while (!start.load(std::memory_order_acquire))
                 std::this_thread::yield();
@@ -302,14 +356,16 @@ TEST_CASE("weak upgrades racing the last owner never resurrect a destroyed objec
             // the original strong owner is known to remain live.
             auto *live = Aarc::LockWeak(weak);
             if (live == nullptr)
-                failedToUpgradeLiveObject.store(true, std::memory_order_relaxed);
+                failedToUpgradeLiveObject.store(true,
+                                                std::memory_order_relaxed);
             else
                 Aarc::ReleaseStrong(live);
             primed.fetch_add(1U, std::memory_order_release);
             while (!raceStart.load(std::memory_order_acquire))
                 std::this_thread::yield();
 
-            for (std::size_t attempt = 0U; attempt < kAttemptsPerThread; ++attempt)
+            for (std::size_t attempt = 0U; attempt < kAttemptsPerThread;
+                 ++attempt)
             {
                 auto *locked = Aarc::LockWeak(weak);
                 if (locked == nullptr)
@@ -366,7 +422,8 @@ TEST_CASE("concurrent strong retain and release preserves one owner")
 
 TEST_CASE("Unicode scalar string factory creates an AARC object")
 {
-    const std::uint32_t scalars[]{ 0x56U, 0x69U, 0x73U, 0x75U, 0x61U, 0x6cU, 0x20U, 0x58U, 0x23U };
+    const std::uint32_t scalars[]{ 0x56U, 0x69U, 0x73U, 0x75U, 0x61U,
+                                   0x6cU, 0x20U, 0x58U, 0x23U };
     auto *string = vxs_aarc_string_literal(scalars, std::size(scalars));
     REQUIRE(string != nullptr);
     CHECK(Aarc::IsExactType(string, Aarc::TypeIdentity("String")));

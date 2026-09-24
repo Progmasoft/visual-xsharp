@@ -5,5 +5,4 @@
 // Canonical root for renewed C++ surfaces. Existing lower-case C++ namespaces
 // are migrated subsystem by subsystem instead of being aliased into this root.
 namespace Visual::XSharp
-{
-}
+{}

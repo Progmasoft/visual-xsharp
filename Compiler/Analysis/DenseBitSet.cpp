@@ -14,15 +14,15 @@ namespace Visual::XSharp::Analysis
         CheckedBitCount(const std::size_t bitCount) -> unsigned
         {
             if (bitCount > std::numeric_limits<unsigned>::max())
-                throw std::length_error("dense bit set exceeds LLVM BitVector's index domain");
+                throw std::length_error(
+                    "dense bit set exceeds LLVM BitVector's index domain");
             return static_cast<unsigned>(bitCount);
         }
     } // namespace
 
     DenseBitSet::DenseBitSet(const std::size_t bitCount, const bool value)
         : bits_(CheckedBitCount(bitCount), value)
-    {
-    }
+    {}
 
     auto
     DenseBitSet::Size() const noexcept -> std::size_t
@@ -99,7 +99,8 @@ namespace Visual::XSharp::Analysis
     DenseBitSet::UnionWith(const DenseBitSet &other)
     {
         if (!Compatible(other))
-            throw std::invalid_argument("cannot union dense bit sets with different sizes");
+            throw std::invalid_argument(
+                "cannot union dense bit sets with different sizes");
         bits_ |= other.bits_;
     }
 
@@ -107,7 +108,8 @@ namespace Visual::XSharp::Analysis
     DenseBitSet::IntersectWith(const DenseBitSet &other)
     {
         if (!Compatible(other))
-            throw std::invalid_argument("cannot intersect dense bit sets with different sizes");
+            throw std::invalid_argument(
+                "cannot intersect dense bit sets with different sizes");
         bits_ &= other.bits_;
     }
 
@@ -115,7 +117,8 @@ namespace Visual::XSharp::Analysis
     DenseBitSet::Subtract(const DenseBitSet &other)
     {
         if (!Compatible(other))
-            throw std::invalid_argument("cannot subtract dense bit sets with different sizes");
+            throw std::invalid_argument(
+                "cannot subtract dense bit sets with different sizes");
         bits_.reset(other.bits_);
     }
 

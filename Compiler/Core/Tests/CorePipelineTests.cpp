@@ -28,7 +28,9 @@ namespace
                  { { { 1U, U"Main" },
                      {},
                      Core::Type::unit(),
-                     { Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())) } } } };
+                     { Core::Statement::Return(Core::Expression::Constant(
+                         std::monostate{},
+                         Core::Type::unit())) } } } };
     }
 
     [[nodiscard]] auto
@@ -37,32 +39,54 @@ namespace
         const auto integer = [](std::int64_t value) {
             return Core::Expression::Constant(value, Core::Type::int64());
         };
-        const auto variable = [](std::uint64_t id, std::u32string spelling, Core::Type type) {
-            return Core::Expression::Variable({ id, std::move(spelling) }, std::move(type));
+        const auto variable
+            = [](std::uint64_t id, std::u32string spelling, Core::Type type) {
+                  return Core::Expression::Variable({ id, std::move(spelling) },
+                                                    std::move(type));
+              };
+        const auto sumType
+            = Core::Type::function({ Core::Type::int64(), Core::Type::int64() },
+                                   Core::Type::int64());
+        Core::Function sum{
+            { 10U, U"Sum" },
+            { { { 11U, U"left" }, Core::Type::int64() },
+              { { 12U, U"right" }, Core::Type::int64() } },
+            Core::Type::int64(),
+            { Core::Statement::Return(Core::Expression::InvokePrimitive(
+                Core::Primitive::Add,
+                { variable(11U, U"left", Core::Type::int64()),
+                  variable(12U, U"right", Core::Type::int64()) },
+                Core::Type::int64())) }
         };
-        const auto sumType = Core::Type::function({ Core::Type::int64(), Core::Type::int64() }, Core::Type::int64());
-        Core::Function sum{ { 10U, U"Sum" },
-                            { { { 11U, U"left" }, Core::Type::int64() }, { { 12U, U"right" }, Core::Type::int64() } },
-                            Core::Type::int64(),
-                            { Core::Statement::Return(Core::Expression::InvokePrimitive(
-                                Core::Primitive::Add,
-                                { variable(11U, U"left", Core::Type::int64()), variable(12U, U"right", Core::Type::int64()) },
-                                Core::Type::int64())) } };
 
-        auto call = Core::Expression::Apply(variable(10U, U"Sum", sumType), { integer(20), integer(22) }, Core::Type::int64());
-        auto condition = Core::Expression::InvokePrimitive(Core::Primitive::GreaterEqual,
-                                                           { variable(21U, U"value", Core::Type::int64()), integer(40) },
-                                                           Core::Type::boolean());
+        auto call = Core::Expression::Apply(variable(10U, U"Sum", sumType),
+                                            { integer(20), integer(22) },
+                                            Core::Type::int64());
+        auto condition = Core::Expression::InvokePrimitive(
+            Core::Primitive::GreaterEqual,
+            { variable(21U, U"value", Core::Type::int64()), integer(40) },
+            Core::Type::boolean());
         Core::Function main{
             { 20U, U"Main" },
             {},
             Core::Type::unit(),
-            { Core::Statement::Bind({ { 21U, U"value" }, Core::Type::int64(), true, std::move(call) }),
+            { Core::Statement::Bind({ { 21U, U"value" },
+                                      Core::Type::int64(),
+                                      true,
+                                      std::move(call) }),
               Core::Statement::If(
                   std::move(condition),
-                  { Core::Statement::Assign({ 21U, U"value" }, Core::Expression::InvokePrimitive(Core::Primitive::Add, { variable(21U, U"value", Core::Type::int64()), integer(1) }, Core::Type::int64())) },
+                  { Core::Statement::Assign(
+                      { 21U, U"value" },
+                      Core::Expression::InvokePrimitive(
+                          Core::Primitive::Add,
+                          { variable(21U, U"value", Core::Type::int64()),
+                            integer(1) },
+                          Core::Type::int64())) },
                   { Core::Statement::Assign({ 21U, U"value" }, integer(0)) }),
-              Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())) }
+              Core::Statement::Return(
+                  Core::Expression::Constant(std::monostate{},
+                                             Core::Type::unit())) }
         };
         return { { U"Name" }, { std::move(sum), std::move(main) } };
     }
@@ -73,57 +97,75 @@ namespace
         const auto integer = [](std::int64_t value) {
             return Core::Expression::Constant(value, Core::Type::int64());
         };
-        const auto variable = [](std::uint64_t id, std::u32string spelling, Core::Type type) {
-            return Core::Expression::Variable({ id, std::move(spelling) }, std::move(type));
-        };
+        const auto variable
+            = [](std::uint64_t id, std::u32string spelling, Core::Type type) {
+                  return Core::Expression::Variable({ id, std::move(spelling) },
+                                                    std::move(type));
+              };
         const auto callableType = Core::Type::function({}, Core::Type::int64());
         Core::Capture capture{
             Core::CaptureMode::Strong,
             { 4U, U"captured" },
             Core::Type::int64(),
-            std::make_shared<Core::Expression>(variable(2U, U"seed", Core::Type::int64())),
+            std::make_shared<Core::Expression>(
+                variable(2U, U"seed", Core::Type::int64())),
         };
         auto closure = Core::Expression::Closure(
             { std::move(capture) },
             {},
             Core::Type::int64(),
-            { Core::Statement::Return(variable(4U, U"captured", Core::Type::int64())) },
+            { Core::Statement::Return(
+                variable(4U, U"captured", Core::Type::int64())) },
             callableType);
         Core::Function main{
             { 1U, U"Main" },
             {},
             Core::Type::unit(),
             {
-                Core::Statement::Bind({ { 2U, U"seed" }, Core::Type::int64(), false, integer(42) }),
-                Core::Statement::Bind({ { 3U, U"answer" }, callableType, false, std::move(closure) }),
-                Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())),
+                Core::Statement::Bind({ { 2U, U"seed" },
+                                        Core::Type::int64(),
+                                        false,
+                                        integer(42) }),
+                Core::Statement::Bind({ { 3U, U"answer" },
+                                        callableType,
+                                        false,
+                                        std::move(closure) }),
+                Core::Statement::Return(
+                    Core::Expression::Constant(std::monostate{},
+                                               Core::Type::unit())),
             },
         };
         return { { U"ClosureBoundary" }, { std::move(main) } };
     }
 
     [[nodiscard]] auto
-    ReadGoldenHex(std::string_view filename = "wire-v5.hex") -> std::vector<std::uint8_t>
+    ReadGoldenHex(std::string_view filename = "wire-v5.hex")
+        -> std::vector<std::uint8_t>
     {
-        const auto path = std::filesystem::path(__FILE__).parent_path() / "Fixtures" / "Core" / std::filesystem::path(filename);
+        const auto path = std::filesystem::path(__FILE__).parent_path()
+                          / "Fixtures" / "Core"
+                          / std::filesystem::path(filename);
         std::ifstream stream(path);
         REQUIRE(stream);
         std::vector<std::uint8_t> bytes;
         std::string line;
         while (std::getline(stream, line))
         {
-            if (const auto comment = line.find('#'); comment != std::string::npos)
+            if (const auto comment = line.find('#');
+                comment != std::string::npos)
                 line.erase(comment);
             std::istringstream tokens(line);
             std::string token;
             while (tokens >> token)
-                bytes.push_back(static_cast<std::uint8_t>(std::stoul(token, nullptr, 16)));
+                bytes.push_back(
+                    static_cast<std::uint8_t>(std::stoul(token, nullptr, 16)));
         }
         return bytes;
     }
 
     [[nodiscard]] auto
-    HasIssue(const std::vector<Core::VerificationIssue> &issues, std::string_view code) -> bool
+    HasIssue(const std::vector<Core::VerificationIssue> &issues,
+             std::string_view code) -> bool
     {
         return std::ranges::any_of(issues, [code](const auto &issue) {
             return issue.code == code;
@@ -191,7 +233,8 @@ TEST_CASE("VXCR v5 carries Haskell Core closure fields into native Core")
     const auto decoded = Core::Wire::Decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(decoded.module == source);
-    const auto &closure = decoded.module->functions.front().body.at(1).binding.value;
+    const auto &closure
+        = decoded.module->functions.front().body.at(1).binding.value;
     REQUIRE(closure.kind == Core::Expression::Kind::Closure);
     REQUIRE(closure.captures.size() == 1U);
     CHECK(closure.captures.front().mode == Core::CaptureMode::Strong);
@@ -214,8 +257,9 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     REQUIRE(body.at(1).kind == Core::Statement::Kind::Evaluate);
     CHECK(body.at(1).expression.kind == Core::Expression::Kind::Closure);
     CHECK(body.at(1).expression.type.kind == Core::Type::Kind::Function);
-    INFO("closure type kind=" << static_cast<int>(body.at(1).expression.type.kind)
-                              << " components=" << body.at(1).expression.type.components.size());
+    INFO("closure type kind="
+         << static_cast<int>(body.at(1).expression.type.kind)
+         << " components=" << body.at(1).expression.type.components.size());
 
     const auto result = Visual::XSharp::Pipeline::ConsumeCore(bytes);
     INFO("core verification issues=" << result.coreVerificationIssues.size());
@@ -241,9 +285,8 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     if (result.llvm_error)
         INFO(result.llvm_error->code << ": " << result.llvm_error->message);
     INFO("core=" << result.core.has_value()
-                 << " coreprep=" << result.core_prep.has_value()
-                 << " xpp=" << result.xpp.has_value()
-                 << " xmm=" << result.xmm.has_value()
+                 << " coreprep=" << result.core_prep.has_value() << " xpp="
+                 << result.xpp.has_value() << " xmm=" << result.xmm.has_value()
                  << " llvm=" << result.llvm.has_value());
     REQUIRE(result);
     REQUIRE(result.core_prep);
@@ -251,20 +294,25 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     CHECK(result.xmmVerificationIssues.empty());
 }
 
-TEST_CASE("Core closure conversion lifts a target and preserves capture metadata")
+TEST_CASE(
+    "Core closure conversion lifts a target and preserves capture metadata")
 {
     const auto prepared = Core::CorePrep::Prepare(ClosureModule());
     REQUIRE(prepared.functions.size() == 2U);
     const auto &main = prepared.functions.front();
     const auto &lifted = prepared.functions.back();
     REQUIRE(main.blocks.size() == 1U);
-    const auto closure = std::ranges::find_if(main.blocks.front().instructions, [](const auto &instruction) {
-        return instruction.operation == visual_xsharp::core::Operation::MakeClosure;
-    });
+    const auto closure = std::ranges::find_if(
+        main.blocks.front().instructions,
+        [](const auto &instruction) {
+            return instruction.operation
+                   == visual_xsharp::core::Operation::MakeClosure;
+        });
     REQUIRE(closure != main.blocks.front().instructions.end());
     CHECK(closure->closure_function.id == lifted.symbol.id);
     REQUIRE(closure->captures.size() == 1U);
-    CHECK(closure->captures.front().symbol.id == lifted.parameters.front().symbol.id);
+    CHECK(closure->captures.front().symbol.id
+          == lifted.parameters.front().symbol.id);
     CHECK(closure->captures.front().value.symbol.id == 2U);
     CHECK(visual_xsharp::core::verify(prepared).empty());
 }
@@ -285,19 +333,24 @@ TEST_CASE("VXCR closure survives the complete RAM compiler pipeline")
     CHECK(result.xmmVerificationIssues.empty());
 }
 
-TEST_CASE("Core verifier rejects incomplete closure payloads before wire lowering")
+TEST_CASE(
+    "Core verifier rejects incomplete closure payloads before wire lowering")
 {
     SECTION("missing capture initializer")
     {
         auto module = ClosureModule();
-        module.functions.front().body.at(1).binding.value.captures.front().value.reset();
+        module.functions.front()
+            .body.at(1)
+            .binding.value.captures.front()
+            .value.reset();
         CHECK(HasIssue(Core::Verify(module), "VXC1035"));
     }
     SECTION("callable arity mismatch")
     {
         auto module = ClosureModule();
         auto &closure = module.functions.front().body.at(1).binding.value;
-        closure.type = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
+        closure.type = Core::Type::function({ Core::Type::int64() },
+                                            Core::Type::int64());
         CHECK(HasIssue(Core::Verify(module), "VXC1041"));
     }
     SECTION("closure result mismatch")
@@ -310,14 +363,16 @@ TEST_CASE("Core verifier rejects incomplete closure payloads before wire lowerin
     SECTION("invalid capture ownership mode")
     {
         auto module = ClosureModule();
-        module.functions.front().body.at(1).binding.value.captures.front().mode = static_cast<Core::CaptureMode>(255U);
+        module.functions.front().body.at(1).binding.value.captures.front().mode
+            = static_cast<Core::CaptureMode>(255U);
         CHECK(HasIssue(Core::Verify(module), "VXC1043"));
         CHECK_FALSE(Core::Wire::Encode(module));
     }
     SECTION("non-owning scalar capture")
     {
         auto module = ClosureModule();
-        module.functions.front().body.at(1).binding.value.captures.front().mode = Core::CaptureMode::Weak;
+        module.functions.front().body.at(1).binding.value.captures.front().mode
+            = Core::CaptureMode::Weak;
         CHECK(HasIssue(Core::Verify(module), "VXC1044"));
     }
 }
@@ -330,9 +385,11 @@ TEST_CASE("native Core accepts mutation of captured closure storage")
         std::vector<Core::Statement>{
             Core::Statement::Assign(
                 { 4U, U"captured" },
-                Core::Expression::Constant(std::int64_t{ 43 }, Core::Type::int64())),
+                Core::Expression::Constant(std::int64_t{ 43 },
+                                           Core::Type::int64())),
             Core::Statement::Return(
-                Core::Expression::Variable({ 4U, U"captured" }, Core::Type::int64())),
+                Core::Expression::Variable({ 4U, U"captured" },
+                                           Core::Type::int64())),
         });
     CHECK(Core::Verify(module).empty());
     const auto encoded = Core::Wire::Encode(module);
@@ -346,7 +403,9 @@ TEST_CASE("native Core verifier blocks invalid references mutation and returns")
     {
         auto module = GoldenModule();
         module.functions.front().returnType = Core::Type::int64();
-        module.functions.front().body.front() = Core::Statement::Return(Core::Expression::Variable({ 90U, U"missing" }, Core::Type::int64()));
+        module.functions.front().body.front() = Core::Statement::Return(
+            Core::Expression::Variable({ 90U, U"missing" },
+                                       Core::Type::int64()));
         REQUIRE(HasIssue(Core::Verify(module), "VXC1020"));
     }
     SECTION("immutable assignment")
@@ -354,13 +413,17 @@ TEST_CASE("native Core verifier blocks invalid references mutation and returns")
         auto module = GoldenModule();
         auto &body = module.functions.front().body;
         body.insert(body.begin(),
-                    Core::Statement::Bind({ { 2U, U"value" },
-                                            Core::Type::int64(),
-                                            false,
-                                            Core::Expression::Constant(std::int64_t{ 1 }, Core::Type::int64()) }));
-        body.insert(
-            body.begin() + 1,
-            Core::Statement::Assign({ 2U, U"value" }, Core::Expression::Constant(std::int64_t{ 2 }, Core::Type::int64())));
+                    Core::Statement::Bind(
+                        { { 2U, U"value" },
+                          Core::Type::int64(),
+                          false,
+                          Core::Expression::Constant(std::int64_t{ 1 },
+                                                     Core::Type::int64()) }));
+        body.insert(body.begin() + 1,
+                    Core::Statement::Assign(
+                        { 2U, U"value" },
+                        Core::Expression::Constant(std::int64_t{ 2 },
+                                                   Core::Type::int64())));
         REQUIRE(HasIssue(Core::Verify(module), "VXC1013"));
     }
     SECTION("missing return path")
@@ -369,7 +432,9 @@ TEST_CASE("native Core verifier blocks invalid references mutation and returns")
         module.functions.front().returnType = Core::Type::int64();
         module.functions.front().body = { Core::Statement::If(
             Core::Expression::Constant(true, Core::Type::boolean()),
-            { Core::Statement::Return(Core::Expression::Constant(std::int64_t{ 1 }, Core::Type::int64())) },
+            { Core::Statement::Return(
+                Core::Expression::Constant(std::int64_t{ 1 },
+                                           Core::Type::int64())) },
             {}) };
         REQUIRE(HasIssue(Core::Verify(module), "VXC1005"));
     }
@@ -382,7 +447,8 @@ TEST_CASE("Core adapter creates explicit CorePrep CFG and temporaries")
     const auto prepared = Core::CorePrep::Prepare(module);
     REQUIRE(prepared.functions.size() == 2U);
     REQUIRE(prepared.functions.at(1).blocks.size() == 4U);
-    REQUIRE(prepared.functions.at(1).blocks.front().terminator.kind == visual_xsharp::core::Terminator::Kind::Branch);
+    REQUIRE(prepared.functions.at(1).blocks.front().terminator.kind
+            == visual_xsharp::core::Terminator::Kind::Branch);
     REQUIRE(prepared.functions.at(1).blocks.at(1).instructions.size() == 2U);
     REQUIRE(visual_xsharp::core::verify(prepared).empty());
 }
@@ -396,22 +462,30 @@ TEST_CASE("CorePrep canonicalizes numeric branch conditions before Xpp")
             {},
             Core::Type::unit(),
             { Core::Statement::If(
-                Core::Expression::Constant(std::int64_t{ 7 }, Core::Type::int64()),
-                { Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())) },
-                { Core::Statement::Return(Core::Expression::Constant(std::monostate{}, Core::Type::unit())) }) },
+                Core::Expression::Constant(std::int64_t{ 7 },
+                                           Core::Type::int64()),
+                { Core::Statement::Return(
+                    Core::Expression::Constant(std::monostate{},
+                                               Core::Type::unit())) },
+                { Core::Statement::Return(
+                    Core::Expression::Constant(std::monostate{},
+                                               Core::Type::unit())) }) },
         } },
     };
     REQUIRE(Core::Verify(module).empty());
     const auto prepared = Core::CorePrep::Prepare(module);
     REQUIRE(visual_xsharp::core::verify(prepared).empty());
     const auto &entry = prepared.functions.front().blocks.front();
-    REQUIRE(entry.terminator.kind == visual_xsharp::core::Terminator::Kind::Branch);
+    REQUIRE(entry.terminator.kind
+            == visual_xsharp::core::Terminator::Kind::Branch);
     CHECK(entry.terminator.value.type == Core::Type::boolean());
     REQUIRE(entry.instructions.size() == 1U);
-    CHECK(entry.instructions.front().operation == visual_xsharp::core::Operation::NotEqual);
+    CHECK(entry.instructions.front().operation
+          == visual_xsharp::core::Operation::NotEqual);
 }
 
-TEST_CASE("logical operands with distinct numeric types become canonical booleans")
+TEST_CASE(
+    "logical operands with distinct numeric types become canonical booleans")
 {
     auto logical = Core::Expression::InvokePrimitive(
         Core::Primitive::LogicalAnd,
@@ -434,12 +508,17 @@ TEST_CASE("logical operands with distinct numeric types become canonical boolean
     REQUIRE(Core::Verify(module).empty());
     const auto prepared = Core::CorePrep::Prepare(module);
     REQUIRE(visual_xsharp::core::verify(prepared).empty());
-    const auto &instructions = prepared.functions.front().blocks.front().instructions;
+    const auto &instructions
+        = prepared.functions.front().blocks.front().instructions;
     REQUIRE(instructions.size() == 3U);
-    CHECK(instructions.at(0).operation == visual_xsharp::core::Operation::NotEqual);
-    CHECK(instructions.at(1).operation == visual_xsharp::core::Operation::NotEqual);
-    CHECK(instructions.at(2).operation == visual_xsharp::core::Operation::LogicalAnd);
-    const auto result = Visual::XSharp::Pipeline::ConsumeCore(Core::Wire::Encode(module).bytes);
+    CHECK(instructions.at(0).operation
+          == visual_xsharp::core::Operation::NotEqual);
+    CHECK(instructions.at(1).operation
+          == visual_xsharp::core::Operation::NotEqual);
+    CHECK(instructions.at(2).operation
+          == visual_xsharp::core::Operation::LogicalAnd);
+    const auto result = Visual::XSharp::Pipeline::ConsumeCore(
+        Core::Wire::Encode(module).bytes);
     REQUIRE(result);
     CHECK(result.xmmVerificationIssues.empty());
 }
@@ -465,7 +544,8 @@ TEST_CASE("VXCR RAM pipeline reaches optimized Xpp Xmm and LLVM")
 TEST_CASE("VXCR RAM pipeline never lowers semantically invalid Core")
 {
     auto module = PipelineModule();
-    module.functions.at(1).body.front().binding.value.type = Core::Type::boolean();
+    module.functions.at(1).body.front().binding.value.type
+        = Core::Type::boolean();
     const auto encoded = Core::Wire::Encode(module);
     REQUIRE(encoded);
     const auto result = Visual::XSharp::Pipeline::ConsumeCore(encoded.bytes);
@@ -482,7 +562,8 @@ TEST_CASE("Core artifact driver validates and emits LLVM and native artifacts")
 {
     const auto encoded = Core::Wire::Encode(GoldenModule());
     REQUIRE(encoded);
-    const auto directory = std::filesystem::temp_directory_path() / "visual-xsharp-core-driver";
+    const auto directory
+        = std::filesystem::temp_directory_path() / "visual-xsharp-core-driver";
     std::filesystem::create_directories(directory);
     const auto corePath = directory / "Golden.core";
     const auto llvmPath = directory / "Golden.ll";
@@ -490,24 +571,46 @@ TEST_CASE("Core artifact driver validates and emits LLVM and native artifacts")
     const auto assemblyPath = directory / "Golden.asm";
     const auto executablePath = directory / "Golden.vxse";
     // Keep every explicit format beside one verified Core input, then exercise
-    // the binary as a process to cover TargetMachine, LLD, and PE loading together.
+    // the binary as a process to cover TargetMachine, LLD, and PE loading
+    // together.
     {
         std::ofstream stream(corePath, std::ios::binary | std::ios::trunc);
         stream.write(reinterpret_cast<const char *>(encoded.bytes.data()),
                      static_cast<std::streamsize>(encoded.bytes.size()));
     }
     const auto settings = DefaultCompilerSettings();
-    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kCheck, BuildOutput::kBinary, &settings, nullptr));
-    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kLlvmIr, &settings, nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(),
+                                CliCommand::kCheck,
+                                BuildOutput::kBinary,
+                                &settings,
+                                nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(),
+                                CliCommand::kBuild,
+                                BuildOutput::kLlvmIr,
+                                &settings,
+                                nullptr));
     REQUIRE(std::filesystem::file_size(llvmPath) > 0U);
 #ifdef _WIN32
-    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kObject, &settings, nullptr));
-    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kAssembly, &settings, nullptr));
-    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(), CliCommand::kBuild, BuildOutput::kBinary, &settings, nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(),
+                                CliCommand::kBuild,
+                                BuildOutput::kObject,
+                                &settings,
+                                nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(),
+                                CliCommand::kBuild,
+                                BuildOutput::kAssembly,
+                                &settings,
+                                nullptr));
+    REQUIRE(ProcessCoreArtifact(corePath.string().c_str(),
+                                CliCommand::kBuild,
+                                BuildOutput::kBinary,
+                                &settings,
+                                nullptr));
     REQUIRE(std::filesystem::file_size(objectPath) > 0U);
     REQUIRE(std::filesystem::file_size(assemblyPath) > 0U);
     REQUIRE(std::filesystem::file_size(executablePath) > 0U);
-    const std::vector<const wchar_t *> arguments{ executablePath.c_str(), nullptr };
+    const std::vector<const wchar_t *> arguments{ executablePath.c_str(),
+                                                  nullptr };
     REQUIRE(_wspawnv(_P_WAIT, executablePath.c_str(), arguments.data()) == 0);
 #endif
     std::filesystem::remove_all(directory);

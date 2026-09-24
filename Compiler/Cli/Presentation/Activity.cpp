@@ -28,10 +28,12 @@ namespace Visual::XSharp::Cli
         {
             // Progress animation is a human-facing enhancement. Build logs and
             // pipes must remain stable input for tools, so environment and TTY
-            // checks are both required before emitting a single carriage return.
+            // checks are both required before emitting a single carriage
+            // return.
             if (std::getenv("CI") != nullptr)
                 return false;
-            if (const auto *term = std::getenv("TERM"); term != nullptr && std::string_view(term) == "dumb")
+            if (const auto *term = std::getenv("TERM");
+                term != nullptr && std::string_view(term) == "dumb")
                 return false;
 #if defined(_WIN32)
             return _isatty(_fileno(stderr)) != 0;
@@ -50,7 +52,8 @@ namespace Visual::XSharp::Cli
                   indicators::option::PostfixText{ std::string(description) },
                   indicators::option::ShowPercentage{ false },
                   indicators::option::ShowElapsedTime{ true },
-                  indicators::option::SpinnerStates{ std::vector<std::string>{ "|", "/", "-", "\\" } },
+                  indicators::option::SpinnerStates{
+                      std::vector<std::string>{ "|", "/", "-", "\\" } },
                   indicators::option::Stream{ std::cerr })
             , worker_([this] {
                 while (!stopRequested_.load(std::memory_order_relaxed))
@@ -59,8 +62,7 @@ namespace Visual::XSharp::Cli
                     std::this_thread::sleep_for(std::chrono::milliseconds(90));
                 }
             })
-        {
-        }
+        {}
 
         ~Implementation()
         {
@@ -70,7 +72,8 @@ namespace Visual::XSharp::Cli
         void
         Update(std::string_view description)
         {
-            spinner_.set_option(indicators::option::PostfixText{ std::string(description) });
+            spinner_.set_option(
+                indicators::option::PostfixText{ std::string(description) });
         }
 
         void
@@ -80,7 +83,8 @@ namespace Visual::XSharp::Cli
                 return;
             stopRequested_.store(true, std::memory_order_relaxed);
             worker_.join();
-            spinner_.set_option(indicators::option::PostfixText{ std::string(description) });
+            spinner_.set_option(
+                indicators::option::PostfixText{ std::string(description) });
             spinner_.set_option(indicators::option::ForegroundColor{ color });
             spinner_.mark_as_completed();
             finished_ = true;

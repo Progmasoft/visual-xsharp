@@ -100,19 +100,25 @@ namespace Visual::XSharp::Core
         [[nodiscard]] static auto
         Constant(Literal value, Type valueType) -> Expression;
         [[nodiscard]] static auto
-        Apply(Expression target, std::vector<Expression> arguments, Type resultType)
-            -> Expression;
+        Apply(Expression target,
+              std::vector<Expression> arguments,
+              Type resultType) -> Expression;
         [[nodiscard]] static auto
-        InvokePrimitive(Core::Primitive operation, std::vector<Expression> arguments, Type resultType) -> Expression;
+        InvokePrimitive(Core::Primitive operation,
+                        std::vector<Expression> arguments,
+                        Type resultType) -> Expression;
         [[nodiscard]] static auto
-        Closure(
-            std::vector<Capture> captured,
-            std::vector<std::pair<SymbolName, Type>> parameters,
-            Type returnType,
-            std::vector<Statement> body,
-            Type valueType) -> Expression;
+        Closure(std::vector<Capture> captured,
+                std::vector<std::pair<SymbolName, Type>> parameters,
+                Type returnType,
+                std::vector<Statement> body,
+                Type valueType) -> Expression;
         [[nodiscard]] static auto
-        Let(SymbolName name, Type bindingType, Expression value, Expression body, Type resultType) -> Expression;
+        Let(SymbolName name,
+            Type bindingType,
+            Expression value,
+            Expression body,
+            Type resultType) -> Expression;
         [[nodiscard]] auto
         operator==(const Expression &other) const -> bool;
     };
@@ -152,7 +158,9 @@ namespace Visual::XSharp::Core
         [[nodiscard]] static auto
         Return(Expression value) -> Statement;
         [[nodiscard]] static auto
-        If(Expression condition, std::vector<Statement> whenTrue, std::vector<Statement> whenFalse) -> Statement;
+        If(Expression condition,
+           std::vector<Statement> whenTrue,
+           std::vector<Statement> whenFalse) -> Statement;
         [[nodiscard]] static auto
         Evaluate(Expression value) -> Statement;
         [[nodiscard]] auto

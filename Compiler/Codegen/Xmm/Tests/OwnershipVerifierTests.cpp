@@ -27,10 +27,7 @@ namespace
     Register(IR::VirtualRegister reg, Core::Type type = TextType()) -> IR::Value
     {
         return {
-            IR::Value::Kind::Register,
-            std::move(type),
-            reg,
-            0U,
+            IR::Value::Kind::Register, std::move(type), reg, 0U,
             std::monostate{},
         };
     }
@@ -39,19 +36,15 @@ namespace
     Unit() -> IR::Value
     {
         return {
-            IR::Value::Kind::Immediate,
-            Core::Type::unit(),
-            0U,
-            0U,
+            IR::Value::Kind::Immediate, Core::Type::unit(), 0U, 0U,
             std::monostate{},
         };
     }
 
     [[nodiscard]] auto
-    Ownership(
-        IR::Opcode opcode,
-        IR::VirtualRegister source,
-        IR::VirtualRegister destination = 0U) -> IR::Instruction
+    Ownership(IR::Opcode opcode,
+              IR::VirtualRegister source,
+              IR::VirtualRegister destination = 0U) -> IR::Instruction
     {
         const auto release = opcode == IR::Opcode::ReleaseStrong
                              || opcode == IR::Opcode::ReleaseWeak
@@ -68,7 +61,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Move(IR::VirtualRegister source, IR::VirtualRegister destination) -> IR::Instruction
+    Move(IR::VirtualRegister source, IR::VirtualRegister destination)
+        -> IR::Instruction
     {
         return {
             IR::Opcode::Move,
@@ -82,7 +76,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    IntegerMove(IR::VirtualRegister source, IR::VirtualRegister destination) -> IR::Instruction
+    IntegerMove(IR::VirtualRegister source, IR::VirtualRegister destination)
+        -> IR::Instruction
     {
         return {
             IR::Opcode::Move,
@@ -128,11 +123,7 @@ namespace
         IR::Terminator terminator;
         terminator.kind = IR::Terminator::Kind::Branch;
         terminator.value = {
-            IR::Value::Kind::Immediate,
-            Core::Type::boolean(),
-            0U,
-            0U,
-            true,
+            IR::Value::Kind::Immediate, Core::Type::boolean(), 0U, 0U, true,
         };
         terminator.true_target = trueTarget;
         terminator.false_target = falseTarget;
@@ -140,10 +131,9 @@ namespace
     }
 
     [[nodiscard]] auto
-    Block(
-        IR::BlockId id,
-        std::vector<IR::Instruction> instructions,
-        IR::Terminator terminator) -> IR::Block
+    Block(IR::BlockId id,
+          std::vector<IR::Instruction> instructions,
+          IR::Terminator terminator) -> IR::Block
     {
         return { id, std::move(instructions), std::move(terminator) };
     }
@@ -168,9 +158,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    HasCode(
-        const std::vector<Xmm::VerificationIssue> &issues,
-        std::string_view code) -> bool
+    HasCode(const std::vector<Xmm::VerificationIssue> &issues,
+            std::string_view code) -> bool
     {
         return std::ranges::any_of(issues, [code](const auto &issue) {
             return issue.code == code;
@@ -180,35 +169,33 @@ namespace
 
 TEST_CASE("Xmm ownership accepts a balanced strong weak and unowned chain")
 {
-    const auto function = Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::RetainStrong, 1U, 2U),
-                Ownership(IR::Opcode::MakeWeak, 2U, 3U),
-                Ownership(IR::Opcode::LockWeak, 3U, 4U),
-                Ownership(IR::Opcode::MakeUnowned, 4U, 5U),
-                Ownership(IR::Opcode::LoadUnowned, 5U, 6U),
-                Ownership(IR::Opcode::ReleaseStrong, 2U),
-                Ownership(IR::Opcode::ReleaseStrong, 4U),
-                Ownership(IR::Opcode::ReleaseStrong, 6U),
-                Ownership(IR::Opcode::ReleaseWeak, 3U),
-                Ownership(IR::Opcode::ReleaseUnowned, 5U),
-            },
-            ReturnUnit()) });
+    const auto function
+        = Function({ Block(0U,
+                           {
+                               Ownership(IR::Opcode::RetainStrong, 1U, 2U),
+                               Ownership(IR::Opcode::MakeWeak, 2U, 3U),
+                               Ownership(IR::Opcode::LockWeak, 3U, 4U),
+                               Ownership(IR::Opcode::MakeUnowned, 4U, 5U),
+                               Ownership(IR::Opcode::LoadUnowned, 5U, 6U),
+                               Ownership(IR::Opcode::ReleaseStrong, 2U),
+                               Ownership(IR::Opcode::ReleaseStrong, 4U),
+                               Ownership(IR::Opcode::ReleaseStrong, 6U),
+                               Ownership(IR::Opcode::ReleaseWeak, 3U),
+                               Ownership(IR::Opcode::ReleaseUnowned, 5U),
+                           },
+                           ReturnUnit()) });
     CHECK(Xmm::VerifyOwnership(function).empty());
 }
 
 TEST_CASE("Xmm ownership rejects a double strong release")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::ReleaseStrong, 1U),
-                Ownership(IR::Opcode::ReleaseStrong, 1U),
-            },
-            ReturnUnit()) }));
+    const auto issues = Xmm::VerifyOwnership(
+        Function({ Block(0U,
+                         {
+                             Ownership(IR::Opcode::ReleaseStrong, 1U),
+                             Ownership(IR::Opcode::ReleaseStrong, 1U),
+                         },
+                         ReturnUnit()) }));
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().code == "VXL1046");
     CHECK(issues.front().instruction == 1U);
@@ -216,42 +203,39 @@ TEST_CASE("Xmm ownership rejects a double strong release")
 
 TEST_CASE("Xmm ownership rejects a weak handle released as strong")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::MakeWeak, 1U, 2U),
-                Ownership(IR::Opcode::ReleaseStrong, 2U),
-            },
-            ReturnUnit()) }));
+    const auto issues = Xmm::VerifyOwnership(
+        Function({ Block(0U,
+                         {
+                             Ownership(IR::Opcode::MakeWeak, 1U, 2U),
+                             Ownership(IR::Opcode::ReleaseStrong, 2U),
+                         },
+                         ReturnUnit()) }));
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().code == "VXL1047");
 }
 
 TEST_CASE("Xmm ownership rejects an unowned handle locked as weak")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::MakeUnowned, 1U, 2U),
-                Ownership(IR::Opcode::LockWeak, 2U, 3U),
-            },
-            ReturnUnit()) }));
+    const auto issues = Xmm::VerifyOwnership(
+        Function({ Block(0U,
+                         {
+                             Ownership(IR::Opcode::MakeUnowned, 1U, 2U),
+                             Ownership(IR::Opcode::LockWeak, 2U, 3U),
+                         },
+                         ReturnUnit()) }));
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().code == "VXL1047");
 }
 
 TEST_CASE("Xmm ownership rejects ordinary use after strong release")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::ReleaseStrong, 1U),
-                Move(1U, 2U),
-            },
-            ReturnUnit()) }));
+    const auto issues = Xmm::VerifyOwnership(
+        Function({ Block(0U,
+                         {
+                             Ownership(IR::Opcode::ReleaseStrong, 1U),
+                             Move(1U, 2U),
+                         },
+                         ReturnUnit()) }));
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().code == "VXL1046");
     CHECK(issues.front().instruction == 1U);
@@ -259,11 +243,10 @@ TEST_CASE("Xmm ownership rejects ordinary use after strong release")
 
 TEST_CASE("Xmm ownership rejects returning a released reference")
 {
-    auto function = Function(
-        { Block(
-            0U,
-            { Ownership(IR::Opcode::ReleaseStrong, 1U) },
-            Return(1U)) });
+    auto function
+        = Function({ Block(0U,
+                           { Ownership(IR::Opcode::ReleaseStrong, 1U) },
+                           Return(1U)) });
     function.return_type = TextType();
     const auto issues = Xmm::VerifyOwnership(function);
     REQUIRE(issues.size() == 1U);
@@ -274,16 +257,12 @@ TEST_CASE("Xmm ownership rejects returning a released reference")
 
 TEST_CASE("Xmm ownership rejects a conditional release followed by use")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        {
-            Block(0U, {}, Branch(1U, 2U)),
-            Block(
-                1U,
-                { Ownership(IR::Opcode::ReleaseStrong, 1U) },
-                Jump(3U)),
-            Block(2U, {}, Jump(3U)),
-            Block(3U, { Move(1U, 2U) }, ReturnUnit()),
-        }));
+    const auto issues = Xmm::VerifyOwnership(Function({
+        Block(0U, {}, Branch(1U, 2U)),
+        Block(1U, { Ownership(IR::Opcode::ReleaseStrong, 1U) }, Jump(3U)),
+        Block(2U, {}, Jump(3U)),
+        Block(3U, { Move(1U, 2U) }, ReturnUnit()),
+    }));
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().code == "VXL1048");
     CHECK(issues.front().block == 3U);
@@ -291,52 +270,34 @@ TEST_CASE("Xmm ownership rejects a conditional release followed by use")
 
 TEST_CASE("Xmm ownership accepts release on every incoming path")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        {
-            Block(0U, {}, Branch(1U, 2U)),
-            Block(
-                1U,
-                { Ownership(IR::Opcode::ReleaseStrong, 1U) },
-                Jump(3U)),
-            Block(
-                2U,
-                { Ownership(IR::Opcode::ReleaseStrong, 1U) },
-                Jump(3U)),
-            Block(3U, {}, ReturnUnit()),
-        }));
+    const auto issues = Xmm::VerifyOwnership(Function({
+        Block(0U, {}, Branch(1U, 2U)),
+        Block(1U, { Ownership(IR::Opcode::ReleaseStrong, 1U) }, Jump(3U)),
+        Block(2U, { Ownership(IR::Opcode::ReleaseStrong, 1U) }, Jump(3U)),
+        Block(3U, {}, ReturnUnit()),
+    }));
     CHECK(issues.empty());
 }
 
 TEST_CASE("Xmm ownership rejects different handle representations at a join")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        {
-            Block(0U, {}, Branch(1U, 2U)),
-            Block(
-                1U,
-                { Ownership(IR::Opcode::MakeWeak, 1U, 2U) },
-                Jump(3U)),
-            Block(
-                2U,
-                { Ownership(IR::Opcode::MakeUnowned, 1U, 2U) },
-                Jump(3U)),
-            Block(
-                3U,
-                { Ownership(IR::Opcode::ReleaseWeak, 2U) },
-                ReturnUnit()),
-        }));
+    const auto issues = Xmm::VerifyOwnership(Function({
+        Block(0U, {}, Branch(1U, 2U)),
+        Block(1U, { Ownership(IR::Opcode::MakeWeak, 1U, 2U) }, Jump(3U)),
+        Block(2U, { Ownership(IR::Opcode::MakeUnowned, 1U, 2U) }, Jump(3U)),
+        Block(3U, { Ownership(IR::Opcode::ReleaseWeak, 2U) }, ReturnUnit()),
+    }));
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().code == "VXL1048");
 }
 
 TEST_CASE("Xmm ownership handles a live loop without depending on block order")
 {
-    auto function = Function(
-        {
-            Block(0U, {}, Jump(1U)),
-            Block(1U, { Move(1U, 2U) }, Branch(1U, 2U)),
-            Block(2U, {}, ReturnUnit()),
-        });
+    auto function = Function({
+        Block(0U, {}, Jump(1U)),
+        Block(1U, { Move(1U, 2U) }, Branch(1U, 2U)),
+        Block(2U, {}, ReturnUnit()),
+    });
     const auto forward = Xmm::VerifyOwnership(function);
     std::ranges::reverse(function.blocks);
     const auto reverse = Xmm::VerifyOwnership(function);
@@ -346,24 +307,22 @@ TEST_CASE("Xmm ownership handles a live loop without depending on block order")
 
 TEST_CASE("Xmm ownership ignores unreachable release misuse")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        {
-            Block(0U, {}, ReturnUnit()),
-            Block(
-                8U,
-                {
-                    Ownership(IR::Opcode::ReleaseStrong, 1U),
-                    Move(1U, 2U),
-                },
-                ReturnUnit()),
-        }));
+    const auto issues = Xmm::VerifyOwnership(Function({
+        Block(0U, {}, ReturnUnit()),
+        Block(8U,
+              {
+                  Ownership(IR::Opcode::ReleaseStrong, 1U),
+                  Move(1U, 2U),
+              },
+              ReturnUnit()),
+    }));
     CHECK(issues.empty());
 }
 
 TEST_CASE("Xmm ownership ignores non-AARC registers")
 {
-    auto function = Function(
-        { Block(0U, { IntegerMove(9U, 10U) }, ReturnUnit()) });
+    auto function
+        = Function({ Block(0U, { IntegerMove(9U, 10U) }, ReturnUnit()) });
     function.parameter_registers.push_back(9U);
     function.parameter_types.push_back(Core::Type::int64());
     CHECK(Xmm::VerifyOwnership(function).empty());
@@ -371,62 +330,58 @@ TEST_CASE("Xmm ownership ignores non-AARC registers")
 
 TEST_CASE("Xmm structural verifier publishes ownership diagnostics")
 {
-    const auto module = Module(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::ReleaseStrong, 1U),
-                Move(1U, 2U),
-            },
-            ReturnUnit()) }));
+    const auto module
+        = Module(Function({ Block(0U,
+                                  {
+                                      Ownership(IR::Opcode::ReleaseStrong, 1U),
+                                      Move(1U, 2U),
+                                  },
+                                  ReturnUnit()) }));
     const auto issues = Xmm::Verify(module);
     CHECK(HasCode(issues, "VXL1046"));
 }
 
 TEST_CASE("Xmm weak lock does not consume the weak handle")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::MakeWeak, 1U, 2U),
-                Ownership(IR::Opcode::LockWeak, 2U, 3U),
-                Ownership(IR::Opcode::LockWeak, 2U, 4U),
-                Ownership(IR::Opcode::ReleaseStrong, 3U),
-                Ownership(IR::Opcode::ReleaseStrong, 4U),
-                Ownership(IR::Opcode::ReleaseWeak, 2U),
-            },
-            ReturnUnit()) }));
+    const auto issues = Xmm::VerifyOwnership(
+        Function({ Block(0U,
+                         {
+                             Ownership(IR::Opcode::MakeWeak, 1U, 2U),
+                             Ownership(IR::Opcode::LockWeak, 2U, 3U),
+                             Ownership(IR::Opcode::LockWeak, 2U, 4U),
+                             Ownership(IR::Opcode::ReleaseStrong, 3U),
+                             Ownership(IR::Opcode::ReleaseStrong, 4U),
+                             Ownership(IR::Opcode::ReleaseWeak, 2U),
+                         },
+                         ReturnUnit()) }));
     CHECK(issues.empty());
 }
 
 TEST_CASE("Xmm unowned load does not consume the unowned handle")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::MakeUnowned, 1U, 2U),
-                Ownership(IR::Opcode::LoadUnowned, 2U, 3U),
-                Ownership(IR::Opcode::LoadUnowned, 2U, 4U),
-                Ownership(IR::Opcode::ReleaseStrong, 3U),
-                Ownership(IR::Opcode::ReleaseStrong, 4U),
-                Ownership(IR::Opcode::ReleaseUnowned, 2U),
-            },
-            ReturnUnit()) }));
+    const auto issues = Xmm::VerifyOwnership(
+        Function({ Block(0U,
+                         {
+                             Ownership(IR::Opcode::MakeUnowned, 1U, 2U),
+                             Ownership(IR::Opcode::LoadUnowned, 2U, 3U),
+                             Ownership(IR::Opcode::LoadUnowned, 2U, 4U),
+                             Ownership(IR::Opcode::ReleaseStrong, 3U),
+                             Ownership(IR::Opcode::ReleaseStrong, 4U),
+                             Ownership(IR::Opcode::ReleaseUnowned, 2U),
+                         },
+                         ReturnUnit()) }));
     CHECK(issues.empty());
 }
 
 TEST_CASE("Xmm retain does not consume the original strong handle")
 {
-    const auto issues = Xmm::VerifyOwnership(Function(
-        { Block(
-            0U,
-            {
-                Ownership(IR::Opcode::RetainStrong, 1U, 2U),
-                Move(1U, 3U),
-                Ownership(IR::Opcode::ReleaseStrong, 2U),
-            },
-            ReturnUnit()) }));
+    const auto issues = Xmm::VerifyOwnership(
+        Function({ Block(0U,
+                         {
+                             Ownership(IR::Opcode::RetainStrong, 1U, 2U),
+                             Move(1U, 3U),
+                             Ownership(IR::Opcode::ReleaseStrong, 2U),
+                         },
+                         ReturnUnit()) }));
     CHECK(issues.empty());
 }

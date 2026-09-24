@@ -38,34 +38,85 @@ namespace
     };
 
     const std::array kScalarCases{
-        ScalarCase{ core::Type::boolean(), core::ScalarFamily::Boolean, 8U, "bool" },
-        ScalarCase{ core::Type::character(), core::ScalarFamily::Character, 32U, "char" },
-        ScalarCase{ core::Type::int8(), core::ScalarFamily::SignedInteger, 8U, "byte" },
-        ScalarCase{ core::Type::int16(), core::ScalarFamily::SignedInteger, 16U, "short" },
-        ScalarCase{ core::Type::int32(), core::ScalarFamily::SignedInteger, 32U, "long" },
-        ScalarCase{ core::Type::int64(), core::ScalarFamily::SignedInteger, 64U, "int" },
-        ScalarCase{ core::Type::int128(), core::ScalarFamily::SignedInteger, 128U, "longint" },
-        ScalarCase{ core::Type::uint8(), core::ScalarFamily::UnsignedInteger, 8U, "ubyte" },
-        ScalarCase{ core::Type::uint16(), core::ScalarFamily::UnsignedInteger, 16U, "ushort" },
-        ScalarCase{ core::Type::uint32(), core::ScalarFamily::UnsignedInteger, 32U, "ulong" },
-        ScalarCase{ core::Type::uint64(), core::ScalarFamily::UnsignedInteger, 64U, "uint" },
-        ScalarCase{ core::Type::uint128(), core::ScalarFamily::UnsignedInteger, 128U, "ulongint" },
-        ScalarCase{ core::Type::float16(), core::ScalarFamily::Floating, 16U, "sfloat" },
-        ScalarCase{ core::Type::float32(), core::ScalarFamily::Floating, 32U, "lfloat" },
-        ScalarCase{ core::Type::float64(), core::ScalarFamily::Floating, 64U, "float" },
-        ScalarCase{ core::Type::float128(), core::ScalarFamily::Floating, 128U, "double" },
+        ScalarCase{ core::Type::boolean(),
+                    core::ScalarFamily::Boolean,
+                    8U,
+                    "bool" },
+        ScalarCase{ core::Type::character(),
+                    core::ScalarFamily::Character,
+                    32U,
+                    "char" },
+        ScalarCase{ core::Type::int8(),
+                    core::ScalarFamily::SignedInteger,
+                    8U,
+                    "byte" },
+        ScalarCase{ core::Type::int16(),
+                    core::ScalarFamily::SignedInteger,
+                    16U,
+                    "short" },
+        ScalarCase{ core::Type::int32(),
+                    core::ScalarFamily::SignedInteger,
+                    32U,
+                    "long" },
+        ScalarCase{ core::Type::int64(),
+                    core::ScalarFamily::SignedInteger,
+                    64U,
+                    "int" },
+        ScalarCase{ core::Type::int128(),
+                    core::ScalarFamily::SignedInteger,
+                    128U,
+                    "longint" },
+        ScalarCase{ core::Type::uint8(),
+                    core::ScalarFamily::UnsignedInteger,
+                    8U,
+                    "ubyte" },
+        ScalarCase{ core::Type::uint16(),
+                    core::ScalarFamily::UnsignedInteger,
+                    16U,
+                    "ushort" },
+        ScalarCase{ core::Type::uint32(),
+                    core::ScalarFamily::UnsignedInteger,
+                    32U,
+                    "ulong" },
+        ScalarCase{ core::Type::uint64(),
+                    core::ScalarFamily::UnsignedInteger,
+                    64U,
+                    "uint" },
+        ScalarCase{ core::Type::uint128(),
+                    core::ScalarFamily::UnsignedInteger,
+                    128U,
+                    "ulongint" },
+        ScalarCase{ core::Type::float16(),
+                    core::ScalarFamily::Floating,
+                    16U,
+                    "sfloat" },
+        ScalarCase{ core::Type::float32(),
+                    core::ScalarFamily::Floating,
+                    32U,
+                    "lfloat" },
+        ScalarCase{ core::Type::float64(),
+                    core::ScalarFamily::Floating,
+                    64U,
+                    "float" },
+        ScalarCase{ core::Type::float128(),
+                    core::ScalarFamily::Floating,
+                    128U,
+                    "double" },
     };
 
     auto
-    integer(bool negative, std::initializer_list<std::uint8_t> magnitude) -> core::IntegerLiteral
+    integer(bool negative, std::initializer_list<std::uint8_t> magnitude)
+        -> core::IntegerLiteral
     {
-        return core::IntegerLiteral{ negative, std::vector<std::uint8_t>(magnitude) };
+        return core::IntegerLiteral{ negative,
+                                     std::vector<std::uint8_t>(magnitude) };
     }
 
     auto
     maximum_unsigned(std::size_t bytes) -> core::IntegerLiteral
     {
-        return core::IntegerLiteral{ false, std::vector<std::uint8_t>(bytes, 0xffU) };
+        return core::IntegerLiteral{ false,
+                                     std::vector<std::uint8_t>(bytes, 0xffU) };
     }
 
     auto
@@ -79,7 +130,8 @@ namespace
     auto
     minimum_signed(std::size_t bytes) -> core::IntegerLiteral
     {
-        core::IntegerLiteral value{ true, std::vector<std::uint8_t>(bytes, 0U) };
+        core::IntegerLiteral value{ true,
+                                    std::vector<std::uint8_t>(bytes, 0U) };
         value.magnitude.front() = 0x80U;
         return value;
     }
@@ -95,7 +147,8 @@ namespace
     auto
     one_past_unsigned_maximum(std::size_t bytes) -> core::IntegerLiteral
     {
-        core::IntegerLiteral value{ false, std::vector<std::uint8_t>(bytes + 1U, 0U) };
+        core::IntegerLiteral value{ false,
+                                    std::vector<std::uint8_t>(bytes + 1U, 0U) };
         value.magnitude.front() = 1U;
         return value;
     }
@@ -121,25 +174,30 @@ namespace
     }
 
     auto
-    coreprep_module(const core::Type &type, core::Literal literal) -> core::CorePrepModule
+    coreprep_module(const core::Type &type, core::Literal literal)
+        -> core::CorePrepModule
     {
         core::Terminator terminator;
         terminator.kind = core::Terminator::Kind::Return;
         terminator.value = core::Atom::constant(std::move(literal), type);
         core::Block block{ 1U, {}, std::move(terminator) };
-        core::Function function{ symbol(1U, U"Value"), {}, type, 1U, { std::move(block) } };
-        return core::CorePrepModule{ { U"Scalar", U"Wire" }, { std::move(function) } };
+        core::Function function{ symbol(1U, U"Value"),
+                                 {},
+                                 type,
+                                 1U,
+                                 { std::move(block) } };
+        return core::CorePrepModule{ { U"Scalar", U"Wire" },
+                                     { std::move(function) } };
     }
 
     auto
-    binary_module(
-        const core::Type &operandType,
-        core::Operation operation,
-        const core::Type &resultType) -> core::CorePrepModule
+    binary_module(const core::Type &operandType,
+                  core::Operation operation,
+                  const core::Type &resultType) -> core::CorePrepModule
     {
-        // Build a complete verified function rather than calling a backend helper
-        // directly. This catches disagreements in operation typing at every native
-        // boundary before the value reaches LLVM.
+        // Build a complete verified function rather than calling a backend
+        // helper directly. This catches disagreements in operation typing at
+        // every native boundary before the value reaches LLVM.
         core::Instruction instruction;
         instruction.kind = core::Instruction::Kind::Bind;
         instruction.destination = symbol(2U, U"result");
@@ -152,20 +210,31 @@ namespace
 
         core::Terminator terminator;
         terminator.kind = core::Terminator::Kind::Return;
-        terminator.value = core::Atom::variable(symbol(2U, U"result"), resultType);
-        core::Block block{ 1U, { std::move(instruction) }, std::move(terminator) };
-        core::Function function{ symbol(1U, U"Calculate"), {}, resultType, 1U, { std::move(block) } };
-        return core::CorePrepModule{ { U"Scalar", U"Operations" }, { std::move(function) } };
+        terminator.value
+            = core::Atom::variable(symbol(2U, U"result"), resultType);
+        core::Block block{ 1U,
+                           { std::move(instruction) },
+                           std::move(terminator) };
+        core::Function function{ symbol(1U, U"Calculate"),
+                                 {},
+                                 resultType,
+                                 1U,
+                                 { std::move(block) } };
+        return core::CorePrepModule{ { U"Scalar", U"Operations" },
+                                     { std::move(function) } };
     }
 
     auto
-    core_module(const core::Type &type, core::Literal literal) -> native_core::Module
+    core_module(const core::Type &type, core::Literal literal)
+        -> native_core::Module
     {
         native_core::Function function;
         function.symbol = symbol(1U, U"Value");
         function.returnType = type;
-        function.body.push_back(native_core::Statement::Return(native_core::Expression::Constant(std::move(literal), type)));
-        return native_core::Module{ { U"Scalar", U"Core" }, { std::move(function) } };
+        function.body.push_back(native_core::Statement::Return(
+            native_core::Expression::Constant(std::move(literal), type)));
+        return native_core::Module{ { U"Scalar", U"Core" },
+                                    { std::move(function) } };
     }
 
     auto
@@ -191,7 +260,8 @@ namespace
     }
 } // namespace
 
-TEST_CASE("the native scalar catalog matches the language width contract", "[scalar][catalog]")
+TEST_CASE("the native scalar catalog matches the language width contract",
+          "[scalar][catalog]")
 {
     for (const auto &entry : kScalarCases)
     {
@@ -201,19 +271,31 @@ TEST_CASE("the native scalar catalog matches the language width contract", "[sca
         CHECK(description->family == entry.family);
         CHECK(description->bit_width == entry.width);
         CHECK(description->spelling == entry.spelling);
-        CHECK(description->is_numeric() == (entry.family == core::ScalarFamily::SignedInteger || entry.family == core::ScalarFamily::UnsignedInteger || entry.family == core::ScalarFamily::Floating));
-        CHECK(description->is_integer() == (entry.family == core::ScalarFamily::SignedInteger || entry.family == core::ScalarFamily::UnsignedInteger));
-        CHECK(description->is_signed() == (entry.family == core::ScalarFamily::SignedInteger));
-        CHECK(description->is_floating() == (entry.family == core::ScalarFamily::Floating));
+        CHECK(description->is_numeric()
+              == (entry.family == core::ScalarFamily::SignedInteger
+                  || entry.family == core::ScalarFamily::UnsignedInteger
+                  || entry.family == core::ScalarFamily::Floating));
+        CHECK(description->is_integer()
+              == (entry.family == core::ScalarFamily::SignedInteger
+                  || entry.family == core::ScalarFamily::UnsignedInteger));
+        CHECK(description->is_signed()
+              == (entry.family == core::ScalarFamily::SignedInteger));
+        CHECK(description->is_floating()
+              == (entry.family == core::ScalarFamily::Floating));
     }
 
     CHECK_FALSE(core::describe_scalar(core::Type::unit()).has_value());
     CHECK_FALSE(core::describe_scalar(core::Type::string()).has_value());
-    CHECK_FALSE(core::describe_scalar(core::Type::named({ U"UserType" })).has_value());
-    CHECK_FALSE(core::describe_scalar(core::Type::function({}, core::Type::unit())).has_value());
+    CHECK_FALSE(
+        core::describe_scalar(core::Type::named({ U"UserType" })).has_value());
+    CHECK_FALSE(
+        core::describe_scalar(core::Type::function({}, core::Type::unit()))
+            .has_value());
 }
 
-TEST_CASE("signed integer ranges include exactly their two's-complement endpoints", "[scalar][integer]")
+TEST_CASE(
+    "signed integer ranges include exactly their two's-complement endpoints",
+    "[scalar][integer]")
 {
     const std::array signedCases{
         std::pair{ core::Type::int8(), 1U },
@@ -238,7 +320,9 @@ TEST_CASE("signed integer ranges include exactly their two's-complement endpoint
     }
 }
 
-TEST_CASE("unsigned integer and character ranges reject negative or oversized payloads", "[scalar][integer]")
+TEST_CASE("unsigned integer and character ranges reject negative or oversized "
+          "payloads",
+          "[scalar][integer]")
 {
     const std::array unsignedCases{
         std::pair{ core::Type::uint8(), 1U },
@@ -258,11 +342,13 @@ TEST_CASE("unsigned integer and character ranges reject negative or oversized pa
     }
 }
 
-TEST_CASE("integer normalization is host independent and canonical", "[scalar][integer]")
+TEST_CASE("integer normalization is host independent and canonical",
+          "[scalar][integer]")
 {
     CHECK(core::normalize_integer(integer(true, { 0U, 0U })).magnitude.empty());
     CHECK_FALSE(core::normalize_integer(integer(true, { 0U, 0U })).negative);
-    CHECK(core::normalize_integer(integer(false, { 0U, 0U, 0x2aU })) == integer(false, { 0x2aU }));
+    CHECK(core::normalize_integer(integer(false, { 0U, 0U, 0x2aU }))
+          == integer(false, { 0x2aU }));
     CHECK(core::integer_is_canonical(integer(false, { 0x80U })));
     CHECK_FALSE(core::integer_is_canonical(integer(false, { 0U, 0x80U })));
     CHECK_FALSE(core::integer_is_canonical(integer(true, {})));
@@ -272,52 +358,25 @@ TEST_CASE("integer normalization is host independent and canonical", "[scalar][i
     CHECK(core::integer_from_signed(0) == core::IntegerLiteral{});
     CHECK(core::integer_from_signed(127) == integer(false, { 0x7fU }));
     CHECK(core::integer_from_signed(-128) == integer(true, { 0x80U }));
-    CHECK(core::integer_from_unsigned(0xffffU) == integer(false, { 0xffU, 0xffU }));
+    CHECK(core::integer_from_unsigned(0xffffU)
+          == integer(false, { 0xffU, 0xffU }));
     CHECK(core::integer_hex_magnitude(core::IntegerLiteral{}) == "0");
-    CHECK(core::integer_hex_magnitude(integer(false, { 0x01U, 0xabU, 0xcdU })) == "1abcd");
+    CHECK(core::integer_hex_magnitude(integer(false, { 0x01U, 0xabU, 0xcdU }))
+          == "1abcd");
     CHECK(core::integer_from_signed(std::numeric_limits<std::int64_t>::min())
           == integer(true, { 0x80U, 0U, 0U, 0U, 0U, 0U, 0U, 0U }));
 }
 
-TEST_CASE("floating spellings use a strict locale-independent grammar", "[scalar][floating]")
+TEST_CASE("floating spellings use a strict locale-independent grammar",
+          "[scalar][floating]")
 {
-    const std::array valid{
-        "0",
-        "1.0",
-        ".5",
-        "5.",
-        "+1.25",
-        "-1.25",
-        "6.022e23",
-        "1e-9",
-        "1E+9",
-        "nan",
-        "+nan",
-        "-nan",
-        "inf",
-        "+inf",
-        "-inf"
-    };
-    const std::array invalid{
-        "",
-        "+",
-        "-",
-        ".",
-        "e1",
-        "1e",
-        "1e+",
-        "1e-",
-        "1.2.3",
-        " 1",
-        "1 ",
-        "1,5",
-        "NaN",
-        "Infinity",
-        "0x1p2",
-        "1_000",
-        "1'000",
-        "--1"
-    };
+    const std::array valid{ "0",     "1.0",      ".5",   "5.",   "+1.25",
+                            "-1.25", "6.022e23", "1e-9", "1E+9", "nan",
+                            "+nan",  "-nan",     "inf",  "+inf", "-inf" };
+    const std::array invalid{ "",      "+",     "-",   ".",        "e1",
+                              "1e",    "1e+",   "1e-", "1.2.3",    " 1",
+                              "1 ",    "1,5",   "NaN", "Infinity", "0x1p2",
+                              "1_000", "1'000", "--1" };
     for (const auto spelling : valid)
     {
         CAPTURE(spelling);
@@ -330,22 +389,32 @@ TEST_CASE("floating spellings use a strict locale-independent grammar", "[scalar
     }
 }
 
-TEST_CASE("literal validation combines payload kind and scalar range", "[scalar][literal]")
+TEST_CASE("literal validation combines payload kind and scalar range",
+          "[scalar][literal]")
 {
     CHECK_FALSE(core::validate_literal(std::monostate{}, core::Type::unit()));
     CHECK_FALSE(core::validate_literal(true, core::Type::boolean()));
-    CHECK_FALSE(core::validate_literal(integer(false, { 0x7fU }), core::Type::int8()));
-    CHECK_FALSE(core::validate_literal(integer(false, { 0xffU }), core::Type::uint8()));
-    CHECK_FALSE(core::validate_literal(core::FloatingLiteral{ "1.25" }, core::Type::float64()));
-    CHECK_FALSE(core::validate_literal(std::u32string(U"text"), core::Type::string()));
-    CHECK(core::validate_literal(integer(false, { 0x80U }), core::Type::int8()));
+    CHECK_FALSE(
+        core::validate_literal(integer(false, { 0x7fU }), core::Type::int8()));
+    CHECK_FALSE(
+        core::validate_literal(integer(false, { 0xffU }), core::Type::uint8()));
+    CHECK_FALSE(core::validate_literal(core::FloatingLiteral{ "1.25" },
+                                       core::Type::float64()));
+    CHECK_FALSE(
+        core::validate_literal(std::u32string(U"text"), core::Type::string()));
+    CHECK(
+        core::validate_literal(integer(false, { 0x80U }), core::Type::int8()));
     CHECK(core::validate_literal(integer(true, { 1U }), core::Type::uint8()));
-    CHECK(core::validate_literal(core::FloatingLiteral{ "1e" }, core::Type::float64()));
-    CHECK(core::validate_literal(core::FloatingLiteral{ "1.0" }, core::Type::int64()));
-    CHECK(core::validate_literal(std::u32string(U"text"), core::Type::boolean()));
+    CHECK(core::validate_literal(core::FloatingLiteral{ "1e" },
+                                 core::Type::float64()));
+    CHECK(core::validate_literal(core::FloatingLiteral{ "1.0" },
+                                 core::Type::int64()));
+    CHECK(
+        core::validate_literal(std::u32string(U"text"), core::Type::boolean()));
 }
 
-TEST_CASE("CorePrep wire v5 round-trips every scalar family", "[scalar][wire][coreprep]")
+TEST_CASE("CorePrep wire v5 round-trips every scalar family",
+          "[scalar][wire][coreprep]")
 {
     CHECK(core_wire::current_version == 5U);
     CHECK(wire_round_trips(core::Type::unit()));
@@ -357,7 +426,8 @@ TEST_CASE("CorePrep wire v5 round-trips every scalar family", "[scalar][wire][co
     }
 }
 
-TEST_CASE("Core wire v5 round-trips every scalar family", "[scalar][wire][core]")
+TEST_CASE("Core wire v5 round-trips every scalar family",
+          "[scalar][wire][core]")
 {
     CHECK(native_wire::kCurrentVersion == 5U);
     CHECK(native_wire_round_trips(core::Type::unit()));
@@ -369,46 +439,58 @@ TEST_CASE("Core wire v5 round-trips every scalar family", "[scalar][wire][core]"
     }
 }
 
-TEST_CASE("CorePrep wire canonicalizes producers and rejects over-limit integer payloads", "[scalar][wire][negative]")
+TEST_CASE("CorePrep wire canonicalizes producers and rejects over-limit "
+          "integer payloads",
+          "[scalar][wire][negative]")
 {
-    auto nonCanonical = coreprep_module(core::Type::int64(), integer(false, { 0U, 1U }));
+    auto nonCanonical
+        = coreprep_module(core::Type::int64(), integer(false, { 0U, 1U }));
     const auto canonicalResult = core_wire::encode(nonCanonical);
     REQUIRE(canonicalResult);
     const auto decoded = core_wire::decode(canonicalResult.bytes);
     REQUIRE(decoded);
-    CHECK(*decoded.module == coreprep_module(core::Type::int64(), integer(false, { 1U })));
+    CHECK(*decoded.module
+          == coreprep_module(core::Type::int64(), integer(false, { 1U })));
 
     core_wire::Limits limits;
     limits.maximum_numeric_bytes = 1U;
-    auto oversized = coreprep_module(core::Type::int16(), integer(false, { 1U, 0U }));
+    auto oversized
+        = coreprep_module(core::Type::int16(), integer(false, { 1U, 0U }));
     const auto oversizedResult = core_wire::encode(oversized, limits);
     REQUIRE_FALSE(oversizedResult);
     CHECK(oversizedResult.error->kind == core_wire::ErrorKind::LimitExceeded);
 }
 
-TEST_CASE("Core and CorePrep verifiers reject scalar payload mismatches", "[scalar][verifier]")
+TEST_CASE("Core and CorePrep verifiers reject scalar payload mismatches",
+          "[scalar][verifier]")
 {
-    const auto invalidCore = core_module(core::Type::uint8(), integer(false, { 1U, 0U }));
+    const auto invalidCore
+        = core_module(core::Type::uint8(), integer(false, { 1U, 0U }));
     const auto coreIssues = native_core::Verify(invalidCore);
     REQUIRE_FALSE(coreIssues.empty());
     CHECK(coreIssues.front().code == "VXC1029");
 
-    const auto invalidCorePrep = coreprep_module(core::Type::float32(), core::FloatingLiteral{ "1e" });
+    const auto invalidCorePrep
+        = coreprep_module(core::Type::float32(), core::FloatingLiteral{ "1e" });
     const auto corePrepIssues = core::verify(invalidCorePrep);
     REQUIRE_FALSE(corePrepIssues.empty());
-    CHECK(std::ranges::any_of(corePrepIssues, [](const core::VerificationIssue &issue) {
-        return issue.code == "VXC1009" || issue.code == "VXC1048";
-    }));
+    CHECK(std::ranges::any_of(corePrepIssues,
+                              [](const core::VerificationIssue &issue) {
+                                  return issue.code == "VXC1009"
+                                         || issue.code == "VXC1048";
+                              }));
 }
 
-TEST_CASE("Xpp and Xmm retain scalar types and literals without narrowing", "[scalar][xpp][xmm]")
+TEST_CASE("Xpp and Xmm retain scalar types and literals without narrowing",
+          "[scalar][xpp][xmm]")
 {
     for (const auto &entry : kScalarCases)
     {
         if (entry.family == core::ScalarFamily::Boolean)
             continue;
         CAPTURE(entry.spelling);
-        const auto prepared = coreprep_module(entry.type, literal_for(entry.type));
+        const auto prepared
+            = coreprep_module(entry.type, literal_for(entry.type));
         REQUIRE(core::verify(prepared).empty());
         const auto xppModule = xpp::lower(prepared);
         CHECK(::Visual::XSharp::Xpp::Verify(xppModule).empty());
@@ -416,20 +498,22 @@ TEST_CASE("Xpp and Xmm retain scalar types and literals without narrowing", "[sc
         CHECK(::Visual::XSharp::Xmm::Verify(xmmModule).empty());
         REQUIRE(xmmModule.functions.size() == 1U);
         CHECK(xmmModule.functions.front().return_type == entry.type);
-        CHECK(xmmModule.functions.front().blocks.front().terminator.value.type == entry.type);
-        CHECK(xmmModule.functions.front().blocks.front().terminator.value.immediate == literal_for(entry.type));
+        CHECK(xmmModule.functions.front().blocks.front().terminator.value.type
+              == entry.type);
+        CHECK(xmmModule.functions.front()
+                  .blocks.front()
+                  .terminator.value.immediate
+              == literal_for(entry.type));
     }
 }
 
-TEST_CASE("numeric arithmetic remains valid through CorePrep Xpp and Xmm", "[scalar][operations]")
+TEST_CASE("numeric arithmetic remains valid through CorePrep Xpp and Xmm",
+          "[scalar][operations]")
 {
     const std::array arithmetic{
-        core::Operation::Add,
-        core::Operation::Subtract,
-        core::Operation::Multiply,
-        core::Operation::Divide,
-        core::Operation::FloorDivide,
-        core::Operation::Remainder,
+        core::Operation::Add,         core::Operation::Subtract,
+        core::Operation::Multiply,    core::Operation::Divide,
+        core::Operation::FloorDivide, core::Operation::Remainder,
     };
 
     for (const auto &entry : kScalarCases)
@@ -439,29 +523,33 @@ TEST_CASE("numeric arithmetic remains valid through CorePrep Xpp and Xmm", "[sca
         for (const auto operation : arithmetic)
         {
             CAPTURE(entry.spelling, operation);
-            const auto resultType = operation == core::Operation::FloorDivide && core::is_floating(entry.type)
+            const auto resultType = operation == core::Operation::FloorDivide
+                                            && core::is_floating(entry.type)
                                         ? core::Type::int64()
                                         : entry.type;
-            const auto prepared = binary_module(entry.type, operation, resultType);
+            const auto prepared
+                = binary_module(entry.type, operation, resultType);
             CHECK(core::verify(prepared).empty());
             const auto xppModule = xpp::lower(prepared);
             CHECK(::Visual::XSharp::Xpp::Verify(xppModule).empty());
             const auto xmmModule = xmm::lower(xppModule);
             CHECK(::Visual::XSharp::Xmm::Verify(xmmModule).empty());
-            CHECK(xmmModule.functions.front().blocks.front().instructions.front().result_type == resultType);
+            CHECK(xmmModule.functions.front()
+                      .blocks.front()
+                      .instructions.front()
+                      .result_type
+                  == resultType);
         }
     }
 }
 
-TEST_CASE("numeric comparisons produce bool through every native verifier", "[scalar][operations]")
+TEST_CASE("numeric comparisons produce bool through every native verifier",
+          "[scalar][operations]")
 {
     const std::array comparisons{
-        core::Operation::Equal,
-        core::Operation::NotEqual,
-        core::Operation::LessThan,
-        core::Operation::LessEqual,
-        core::Operation::GreaterThan,
-        core::Operation::GreaterEqual,
+        core::Operation::Equal,       core::Operation::NotEqual,
+        core::Operation::LessThan,    core::Operation::LessEqual,
+        core::Operation::GreaterThan, core::Operation::GreaterEqual,
     };
 
     for (const auto &entry : kScalarCases)
@@ -471,7 +559,8 @@ TEST_CASE("numeric comparisons produce bool through every native verifier", "[sc
         for (const auto operation : comparisons)
         {
             CAPTURE(entry.spelling, operation);
-            const auto prepared = binary_module(entry.type, operation, core::Type::boolean());
+            const auto prepared
+                = binary_module(entry.type, operation, core::Type::boolean());
             CHECK(core::verify(prepared).empty());
             const auto xppModule = xpp::lower(prepared);
             CHECK(::Visual::XSharp::Xpp::Verify(xppModule).empty());
@@ -481,9 +570,12 @@ TEST_CASE("numeric comparisons produce bool through every native verifier", "[sc
     }
 }
 
-TEST_CASE("CorePrep wire reports structural corruption before semantic lowering", "[scalar][wire][negative]")
+TEST_CASE(
+    "CorePrep wire reports structural corruption before semantic lowering",
+    "[scalar][wire][negative]")
 {
-    const auto source = coreprep_module(core::Type::int128(), integer(false, { 1U, 0U, 0U, 0U, 0U }));
+    const auto source = coreprep_module(core::Type::int128(),
+                                        integer(false, { 1U, 0U, 0U, 0U, 0U }));
     const auto encoded = core_wire::encode(source);
     REQUIRE(encoded);
 
@@ -497,7 +589,8 @@ TEST_CASE("CorePrep wire reports structural corruption before semantic lowering"
     oldVersion[4] = 2U;
     const auto versionResult = core_wire::decode(oldVersion);
     REQUIRE_FALSE(versionResult);
-    CHECK(versionResult.error->kind == core_wire::ErrorKind::UnsupportedVersion);
+    CHECK(versionResult.error->kind
+          == core_wire::ErrorKind::UnsupportedVersion);
 
     auto truncated = encoded.bytes;
     truncated.pop_back();

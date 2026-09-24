@@ -21,40 +21,71 @@ namespace
     [[nodiscard]] auto
     Integer(const std::int64_t value) -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::int64(), 0U, 0U, Core::integer_from_signed(value) };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::int64(),
+                 0U,
+                 0U,
+                 Core::integer_from_signed(value) };
     }
 
     [[nodiscard]] auto
     Boolean(const bool value) -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::boolean(), 0U, 0U, value };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::boolean(),
+                 0U,
+                 0U,
+                 value };
     }
 
     [[nodiscard]] auto
     Register(const IR::VirtualRegister reg) -> IR::Value
     {
-        return { IR::Value::Kind::Register, Core::Type::int64(), reg, 0U, std::monostate{} };
+        return { IR::Value::Kind::Register,
+                 Core::Type::int64(),
+                 reg,
+                 0U,
+                 std::monostate{} };
     }
 
     [[nodiscard]] auto
-    Move(const IR::VirtualRegister destination, const IR::VirtualRegister source) -> IR::Instruction
+    Move(const IR::VirtualRegister destination,
+         const IR::VirtualRegister source) -> IR::Instruction
     {
-        return { IR::Opcode::Move, destination, Core::Type::int64(), { Register(source) }, true, 0U, {} };
+        return { IR::Opcode::Move,
+                 destination,
+                 Core::Type::int64(),
+                 { Register(source) },
+                 true,
+                 0U,
+                 {} };
     }
 
     [[nodiscard]] auto
-    Define(const IR::VirtualRegister destination, const std::int64_t value) -> IR::Instruction
+    Define(const IR::VirtualRegister destination, const std::int64_t value)
+        -> IR::Instruction
     {
-        return { IR::Opcode::LoadImmediate, destination, Core::Type::int64(), { Integer(value) }, true, 0U, {} };
+        return { IR::Opcode::LoadImmediate,
+                 destination,
+                 Core::Type::int64(),
+                 { Integer(value) },
+                 true,
+                 0U,
+                 {} };
     }
 
     [[nodiscard]] auto
-    Add(
-        const IR::VirtualRegister destination,
+    Add(const IR::VirtualRegister destination,
         const IR::Value &left,
         const IR::Value &right) -> IR::Instruction
     {
-        return { IR::Opcode::Add, destination, Core::Type::int64(), { left, right }, true, 0U, {} };
+        return { IR::Opcode::Add,
+                 destination,
+                 Core::Type::int64(),
+                 { left, right },
+                 true,
+                 0U,
+                 {} };
     }
 
     [[nodiscard]] auto
@@ -67,7 +98,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget) -> IR::Terminator
+    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget)
+        -> IR::Terminator
     {
         IR::Terminator terminator;
         terminator.kind = IR::Terminator::Kind::Branch;
@@ -82,12 +114,18 @@ namespace
     {
         IR::Terminator terminator;
         terminator.kind = IR::Terminator::Kind::Return;
-        terminator.value = { IR::Value::Kind::Immediate, Core::Type::unit(), 0U, 0U, std::monostate{} };
+        terminator.value = { IR::Value::Kind::Immediate,
+                             Core::Type::unit(),
+                             0U,
+                             0U,
+                             std::monostate{} };
         return terminator;
     }
 
     [[nodiscard]] auto
-    Block(const IR::BlockId id, std::vector<IR::Instruction> instructions, IR::Terminator terminator) -> IR::Block
+    Block(const IR::BlockId id,
+          std::vector<IR::Instruction> instructions,
+          IR::Terminator terminator) -> IR::Block
     {
         return { id, std::move(instructions), std::move(terminator) };
     }
@@ -113,7 +151,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    FindBlock(const IR::Module &module, const IR::BlockId id) -> const IR::Block &
+    FindBlock(const IR::Module &module, const IR::BlockId id)
+        -> const IR::Block &
     {
         const auto &blocks = module.functions.front().blocks;
         const auto found = std::ranges::find(blocks, id, &IR::Block::id);
@@ -133,11 +172,15 @@ namespace
     [[nodiscard]] auto
     XppInteger(const std::int64_t value) -> Xpp::Operand
     {
-        return { Xpp::Operand::Kind::Literal, Core::Type::int64(), 0U, Core::integer_from_signed(value) };
+        return { Xpp::Operand::Kind::Literal,
+                 Core::Type::int64(),
+                 0U,
+                 Core::integer_from_signed(value) };
     }
 
     [[nodiscard]] auto
-    XppCopy(const Xpp::SymbolId destination, const std::int64_t value) -> Xpp::Instruction
+    XppCopy(const Xpp::SymbolId destination, const std::int64_t value)
+        -> Xpp::Instruction
     {
         return {
             Xpp::Instruction::Effect::Define,
@@ -155,7 +198,10 @@ namespace
     {
         Xpp::Terminator terminator;
         terminator.kind = Xpp::Terminator::Kind::Return;
-        terminator.value = { Xpp::Operand::Kind::Literal, Core::Type::unit(), 0U, std::monostate{} };
+        terminator.value = { Xpp::Operand::Kind::Literal,
+                             Core::Type::unit(),
+                             0U,
+                             std::monostate{} };
         return terminator;
     }
 
@@ -191,7 +237,8 @@ TEST_CASE("Xmm optimization removes unreachable machine blocks")
 
 TEST_CASE("Xmm optimization changes an identical branch into a jump")
 {
-    const auto optimized = IR::optimize(Module({ Block(0U, {}, Branch(2U, 2U)), Block(2U, {}, Return()) }));
+    const auto optimized = IR::optimize(
+        Module({ Block(0U, {}, Branch(2U, 2U)), Block(2U, {}, Return()) }));
     const auto &terminator = FindBlock(optimized, 0U).terminator;
     CHECK(terminator.kind == IR::Terminator::Kind::Jump);
     CHECK(terminator.true_target == 2U);
@@ -214,7 +261,8 @@ TEST_CASE("Xmm optimization bypasses and removes empty trampolines")
     CHECK(BlockOrder(optimized) == std::vector<IR::BlockId>{ 0U, 4U, 3U });
 }
 
-TEST_CASE("Xmm optimization conservatively retains arithmetic with a dead result")
+TEST_CASE(
+    "Xmm optimization conservatively retains arithmetic with a dead result")
 {
     const auto optimized = IR::optimize(Module({
         Block(0U, {}, Jump(1U)),
@@ -240,16 +288,17 @@ TEST_CASE("Xmm optimization removes a register self move")
 
 TEST_CASE("Xmm optimization removes a transitive dead materialization chain")
 {
-    const auto optimized = IR::optimize(Module({ Block(
-        0U,
-        { Define(10U, 1), Move(11U, 10U), Move(12U, 11U) },
-        Return()) }));
+    const auto optimized = IR::optimize(
+        Module({ Block(0U,
+                       { Define(10U, 1), Move(11U, 10U), Move(12U, 11U) },
+                       Return()) }));
 
     CHECK(FindBlock(optimized, 0U).instructions.empty());
     CHECK(Xmm::Verify(optimized).empty());
 }
 
-TEST_CASE("Xmm optimization retains producers consumed by conservative arithmetic")
+TEST_CASE(
+    "Xmm optimization retains producers consumed by conservative arithmetic")
 {
     const auto optimized = IR::optimize(Module({ Block(
         0U,
@@ -290,7 +339,8 @@ TEST_CASE("Xmm optimization canonicalizes shuffled block presentation")
         Block(0U, {}, Branch(1U, 2U)),
         Block(2U, { Define(11U, 2) }, Jump(3U)),
     });
-    CHECK(IR::optimize(std::move(ordered)) == IR::optimize(std::move(shuffled)));
+    CHECK(IR::optimize(std::move(ordered))
+          == IR::optimize(std::move(shuffled)));
 }
 
 TEST_CASE("Xmm optimization is idempotent")
@@ -306,7 +356,8 @@ TEST_CASE("Xmm optimization is idempotent")
 
 TEST_CASE("Xmm optimization terminates when trampolines form a cycle")
 {
-    const auto optimized = IR::optimize(Module({ Block(0U, {}, Jump(1U)), Block(1U, {}, Jump(0U)) }));
+    const auto optimized = IR::optimize(
+        Module({ Block(0U, {}, Jump(1U)), Block(1U, {}, Jump(0U)) }));
     CHECK(optimized.functions.front().blocks.size() == 2U);
 }
 
@@ -317,7 +368,8 @@ TEST_CASE("Xmm lowering preserves ABI order and sorts local SymbolIds")
         Xpp::Block{ 1U, { XppCopy(30U, 3) }, XppReturn() },
     }));
     const auto &function = lowered.functions.front();
-    CHECK(function.parameter_registers == std::vector<IR::VirtualRegister>{ 1U, 2U });
+    CHECK(function.parameter_registers
+          == std::vector<IR::VirtualRegister>{ 1U, 2U });
     CHECK(FindBlock(lowered, 1U).instructions.front().destination == 3U);
     CHECK(FindBlock(lowered, 0U).instructions.front().destination == 4U);
 }
@@ -331,5 +383,6 @@ TEST_CASE("Xmm register assignment ignores source block order")
 
     CHECK(FindBlock(ordered, 0U) == FindBlock(shuffled, 0U));
     CHECK(FindBlock(ordered, 1U) == FindBlock(shuffled, 1U));
-    CHECK(ordered.functions.front().parameter_registers == shuffled.functions.front().parameter_registers);
+    CHECK(ordered.functions.front().parameter_registers
+          == shuffled.functions.front().parameter_registers);
 }

@@ -20,7 +20,10 @@ namespace
     [[nodiscard]] auto
     Integer(const std::int64_t value) -> IR::Operand
     {
-        return { IR::Operand::Kind::Literal, Core::Type::int64(), 0U, Core::integer_from_signed(value) };
+        return { IR::Operand::Kind::Literal,
+                 Core::Type::int64(),
+                 0U,
+                 Core::integer_from_signed(value) };
     }
 
     [[nodiscard]] auto
@@ -32,11 +35,15 @@ namespace
     [[nodiscard]] auto
     Symbol(const IR::SymbolId symbol) -> IR::Operand
     {
-        return { IR::Operand::Kind::Symbol, Core::Type::int64(), symbol, std::monostate{} };
+        return { IR::Operand::Kind::Symbol,
+                 Core::Type::int64(),
+                 symbol,
+                 std::monostate{} };
     }
 
     [[nodiscard]] auto
-    Copy(const IR::SymbolId destination, const IR::Operand &source) -> IR::Instruction
+    Copy(const IR::SymbolId destination, const IR::Operand &source)
+        -> IR::Instruction
     {
         return {
             IR::Instruction::Effect::Define,
@@ -50,7 +57,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Store(const IR::SymbolId destination, const IR::Operand &source) -> IR::Instruction
+    Store(const IR::SymbolId destination, const IR::Operand &source)
+        -> IR::Instruction
     {
         auto instruction = Copy(destination, source);
         instruction.effect = IR::Instruction::Effect::Store;
@@ -81,7 +89,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget) -> IR::Terminator
+    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget)
+        -> IR::Terminator
     {
         IR::Terminator terminator;
         terminator.kind = IR::Terminator::Kind::Branch;
@@ -96,12 +105,17 @@ namespace
     {
         IR::Terminator terminator;
         terminator.kind = IR::Terminator::Kind::Return;
-        terminator.value = { IR::Operand::Kind::Literal, Core::Type::unit(), 0U, std::monostate{} };
+        terminator.value = { IR::Operand::Kind::Literal,
+                             Core::Type::unit(),
+                             0U,
+                             std::monostate{} };
         return terminator;
     }
 
     [[nodiscard]] auto
-    Block(const IR::BlockId id, std::vector<IR::Instruction> instructions, IR::Terminator terminator) -> IR::Block
+    Block(const IR::BlockId id,
+          std::vector<IR::Instruction> instructions,
+          IR::Terminator terminator) -> IR::Block
     {
         return { id, std::move(instructions), std::move(terminator) };
     }
@@ -127,7 +141,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    FindBlock(const IR::Module &module, const IR::BlockId id) -> const IR::Block &
+    FindBlock(const IR::Module &module, const IR::BlockId id)
+        -> const IR::Block &
     {
         const auto &blocks = module.functions.front().blocks;
         const auto found = std::ranges::find(blocks, id, &IR::Block::id);
@@ -161,7 +176,8 @@ TEST_CASE("Xpp optimization removes an unreachable region")
 
 TEST_CASE("Xpp optimization collapses identical branch destinations")
 {
-    const auto optimized = IR::optimize(Module({ Block(0U, {}, Branch(1U, 1U)), Block(1U, {}, Return()) }));
+    const auto optimized = IR::optimize(
+        Module({ Block(0U, {}, Branch(1U, 1U)), Block(1U, {}, Return()) }));
     const auto &terminator = FindBlock(optimized, 0U).terminator;
     CHECK(terminator.kind == IR::Terminator::Kind::Jump);
     CHECK(terminator.true_target == 1U);
@@ -211,7 +227,12 @@ TEST_CASE("Xpp optimization retains a jump block with an observable store")
 TEST_CASE("Xpp optimization removes only true self copies")
 {
     const auto optimized = IR::optimize(ModuleWithIntegerParameter({
-        Block(0U, { Copy(12U, Integer(0)), Store(10U, Symbol(10U)), Copy(11U, Symbol(10U)), Store(12U, Symbol(11U)) }, Return()),
+        Block(0U,
+              { Copy(12U, Integer(0)),
+                Store(10U, Symbol(10U)),
+                Copy(11U, Symbol(10U)),
+                Store(12U, Symbol(11U)) },
+              Return()),
     }));
 
     const auto &instructions = FindBlock(optimized, 0U).instructions;
@@ -224,21 +245,27 @@ TEST_CASE("Xpp optimization removes only true self copies")
 
 TEST_CASE("Xpp optimization removes a transitive dead copy chain")
 {
-    const auto optimized = IR::optimize(Module({ Block(
-        0U,
-        { Copy(10U, Integer(1)), Copy(11U, Symbol(10U)), Copy(12U, Symbol(11U)) },
-        Return()) }));
+    const auto optimized
+        = IR::optimize(Module({ Block(0U,
+                                      { Copy(10U, Integer(1)),
+                                        Copy(11U, Symbol(10U)),
+                                        Copy(12U, Symbol(11U)) },
+                                      Return()) }));
 
     CHECK(FindBlock(optimized, 0U).instructions.empty());
     CHECK(Xpp::Verify(optimized).empty());
 }
 
-TEST_CASE("Xpp optimization retains the complete chain feeding an observable store")
+TEST_CASE(
+    "Xpp optimization retains the complete chain feeding an observable store")
 {
-    const auto optimized = IR::optimize(Module({ Block(
-        0U,
-        { Copy(12U, Integer(0)), Copy(10U, Integer(1)), Copy(11U, Symbol(10U)), Store(12U, Symbol(11U)) },
-        Return()) }));
+    const auto optimized
+        = IR::optimize(Module({ Block(0U,
+                                      { Copy(12U, Integer(0)),
+                                        Copy(10U, Integer(1)),
+                                        Copy(11U, Symbol(10U)),
+                                        Store(12U, Symbol(11U)) },
+                                      Return()) }));
 
     const auto &instructions = FindBlock(optimized, 0U).instructions;
     REQUIRE(instructions.size() == 4U);
@@ -251,10 +278,10 @@ TEST_CASE("Xpp optimization retains the complete chain feeding an observable sto
 
 TEST_CASE("Xpp optimization retains explicit discard evaluation")
 {
-    const auto optimized = IR::optimize(Module({ Block(
-        0U,
-        { Copy(10U, Integer(1)), Discard(Symbol(10U)) },
-        Return()) }));
+    const auto optimized = IR::optimize(
+        Module({ Block(0U,
+                       { Copy(10U, Integer(1)), Discard(Symbol(10U)) },
+                       Return()) }));
 
     REQUIRE(FindBlock(optimized, 0U).instructions.size() == 2U);
     CHECK(Xpp::Verify(optimized).empty());
@@ -275,7 +302,8 @@ TEST_CASE("Xpp optimization is insensitive to source block presentation")
         Block(1U, { Copy(10U, Integer(1)) }, Jump(3U)),
     });
 
-    CHECK(IR::optimize(std::move(ordered)) == IR::optimize(std::move(shuffled)));
+    CHECK(IR::optimize(std::move(ordered))
+          == IR::optimize(std::move(shuffled)));
 }
 
 TEST_CASE("Xpp optimization preserves semantic branch successor order")
@@ -305,6 +333,7 @@ TEST_CASE("Xpp optimization is idempotent")
 
 TEST_CASE("Xpp optimization terminates on an empty jump cycle")
 {
-    const auto optimized = IR::optimize(Module({ Block(0U, {}, Jump(1U)), Block(1U, {}, Jump(0U)) }));
+    const auto optimized = IR::optimize(
+        Module({ Block(0U, {}, Jump(1U)), Block(1U, {}, Jump(0U)) }));
     CHECK(optimized.functions.front().blocks.size() == 2U);
 }

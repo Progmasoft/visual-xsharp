@@ -42,9 +42,10 @@ namespace visual_xsharp
 
     struct PipelineResult final
     {
-        // Successful intermediate stages remain available when a later stage fails. This
-        // is intentional: diagnostics and compiler tests can inspect the last valid form
-        // without rerunning or weakening the end-to-end pipeline contract.
+        // Successful intermediate stages remain available when a later stage
+        // fails. This is intentional: diagnostics and compiler tests can
+        // inspect the last valid form without rerunning or weakening the
+        // end-to-end pipeline contract.
         std::optional<::Visual::XSharp::Core::Module> core;
         std::optional<core::CorePrepModule> core_prep;
         std::optional<xpp::Module> xpp;
@@ -55,14 +56,18 @@ namespace visual_xsharp
         std::optional<::Visual::XSharp::Core::Wire::Error> coreWireError;
         std::optional<::Visual::XSharp::Xpp::Wire::Error> xppWireError;
         std::optional<::Visual::XSharp::Xmm::Wire::Error> xmmWireError;
-        std::vector<::Visual::XSharp::Core::VerificationIssue> coreVerificationIssues;
+        std::vector<::Visual::XSharp::Core::VerificationIssue>
+            coreVerificationIssues;
         std::vector<core::VerificationIssue> verification_issues;
-        std::vector<::Visual::XSharp::Xpp::VerificationIssue> xppVerificationIssues;
-        std::vector<::Visual::XSharp::Xmm::VerificationIssue> xmmVerificationIssues;
+        std::vector<::Visual::XSharp::Xpp::VerificationIssue>
+            xppVerificationIssues;
+        std::vector<::Visual::XSharp::Xmm::VerificationIssue>
+            xmmVerificationIssues;
         bool succeeded{};
 
-        // Success means the requested boundary owns a verified artifact. Callers that stop
-        // at Xpp or Xmm intentionally succeed without manufacturing an LLVM module.
+        // Success means the requested boundary owns a verified artifact.
+        // Callers that stop at Xpp or Xmm intentionally succeed without
+        // manufacturing an LLVM module.
         [[nodiscard]] explicit
         operator bool() const noexcept
         {
@@ -71,8 +76,8 @@ namespace visual_xsharp
     };
 
     [[nodiscard]] auto
-    consume_coreprep(std::span<const std::uint8_t> bytes, const PipelineOptions &options = {})
-        -> PipelineResult;
+    consume_coreprep(std::span<const std::uint8_t> bytes,
+                     const PipelineOptions &options = {}) -> PipelineResult;
 } // namespace visual_xsharp
 
 namespace Visual::XSharp::Pipeline
@@ -81,13 +86,16 @@ namespace Visual::XSharp::Pipeline
     using Result = ::visual_xsharp::PipelineResult;
     using Stop = ::visual_xsharp::PipelineStop;
 
-    // ConsumeCore is the public native entry for a Haskell-produced VXCR document. It
-    // retains each successful stage in Result and stops before CorePrep on any Core wire
-    // or semantic issue.
+    // ConsumeCore is the public native entry for a Haskell-produced VXCR
+    // document. It retains each successful stage in Result and stops before
+    // CorePrep on any Core wire or semantic issue.
     [[nodiscard]] auto
-    ConsumeCore(std::span<const std::uint8_t> bytes, const Options &options = {}) -> Result;
+    ConsumeCore(std::span<const std::uint8_t> bytes,
+                const Options &options = {}) -> Result;
     [[nodiscard]] auto
-    ConsumeXpp(std::span<const std::uint8_t> bytes, const Options &options = {}) -> Result;
+    ConsumeXpp(std::span<const std::uint8_t> bytes, const Options &options = {})
+        -> Result;
     [[nodiscard]] auto
-    ConsumeXmm(std::span<const std::uint8_t> bytes, const Options &options = {}) -> Result;
+    ConsumeXmm(std::span<const std::uint8_t> bytes, const Options &options = {})
+        -> Result;
 } // namespace Visual::XSharp::Pipeline

@@ -10,7 +10,9 @@
 namespace Visual::XSharp::Interactive
 {
     auto
-    ReadInputLine(std::istream &input, std::string &line, std::size_t maximumBytes) -> InputLineStatus
+    ReadInputLine(std::istream &input,
+                  std::string &line,
+                  std::size_t maximumBytes) -> InputLineStatus
     {
         line.clear();
         bool tooLong{};
@@ -23,10 +25,12 @@ namespace Visual::XSharp::Interactive
                     return InputLineStatus::Failure;
                 if (line.empty() && !tooLong)
                     return InputLineStatus::End;
-                return tooLong ? InputLineStatus::TooLong : InputLineStatus::Complete;
+                return tooLong ? InputLineStatus::TooLong
+                               : InputLineStatus::Complete;
             }
             if (next == '\n')
-                return tooLong ? InputLineStatus::TooLong : InputLineStatus::Complete;
+                return tooLong ? InputLineStatus::TooLong
+                               : InputLineStatus::Complete;
             if (tooLong)
                 continue;
             if (line.size() == maximumBytes)
@@ -55,7 +59,8 @@ namespace Visual::XSharp::Interactive
         if (line.starts_with(":type ") || line.starts_with(":type\t"))
         {
             std::size_t start = 5U;
-            while (start < line.size() && (line[start] == ' ' || line[start] == '\t'))
+            while (start < line.size()
+                   && (line[start] == ' ' || line[start] == '\t'))
                 ++start;
             if (start == line.size())
                 return { ReplCommandKind::TypeMissingExpression, {} };

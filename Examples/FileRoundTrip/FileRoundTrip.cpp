@@ -11,7 +11,8 @@ int
 main()
 {
     constexpr std::string_view path = "visual-xsharp-example.txt";
-    constexpr std::string_view expected = "Lexer -> Parser -> Core -> Xpp -> Xmm";
+    constexpr std::string_view expected
+        = "Lexer -> Parser -> Core -> Xpp -> Xmm";
     {
         std::ofstream output(path.data(), std::ios::binary);
         output << expected;
@@ -19,5 +20,6 @@ main()
     std::ifstream input(path.data(), std::ios::binary);
     const std::string actual(std::istreambuf_iterator<char>{ input }, {});
     std::cout << actual << '\n';
-    std::cout << "Round trip preserved content: " << std::boolalpha << (actual == expected) << '\n';
+    std::cout << "Round trip preserved content: " << std::boolalpha
+              << (actual == expected) << '\n';
 }

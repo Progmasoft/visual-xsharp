@@ -12,7 +12,8 @@ namespace
     namespace History = Visual::XSharp::Interactive::Runtime;
 } // namespace
 
-TEST_CASE("interactive history preserves successful-cell order and duplicates", "[vxsi][history]")
+TEST_CASE("interactive history preserves successful-cell order and duplicates",
+          "[vxsi][history]")
 {
     History::History history;
 
@@ -38,11 +39,14 @@ TEST_CASE("interactive history ignores empty cells", "[vxsi][history][input]")
     REQUIRE(history.Entries().front() == "   ");
 }
 
-TEST_CASE("interactive history retains a fixed newest-window and evicts oldest first", "[vxsi][history][limits]")
+TEST_CASE(
+    "interactive history retains a fixed newest-window and evicts oldest first",
+    "[vxsi][history][limits]")
 {
     History::History history;
 
-    for (std::size_t index = 0U; index < History::History::kMaximumEntries; ++index)
+    for (std::size_t index = 0U; index < History::History::kMaximumEntries;
+         ++index)
         history.Append("cell-" + std::to_string(index));
 
     REQUIRE(history.Entries().size() == History::History::kMaximumEntries);
@@ -55,7 +59,8 @@ TEST_CASE("interactive history retains a fixed newest-window and evicts oldest f
     REQUIRE(history.Entries().back() == "cell-256");
 }
 
-TEST_CASE("interactive history clear permits a fresh session history", "[vxsi][history][reset]")
+TEST_CASE("interactive history clear permits a fresh session history",
+          "[vxsi][history][reset]")
 {
     History::History history;
     history.Append("before reset");

@@ -11,13 +11,16 @@
 
 namespace Visual::XSharp::Core::Callable
 {
-    // Function Type stores its public parameters followed by its result. This view
-    // removes that encoding detail from verifier and backend code while retaining an
-    // owning representation that is safe to keep after the source Type is moved.
+    // Function Type stores its public parameters followed by its result. This
+    // view removes that encoding detail from verifier and backend code while
+    // retaining an owning representation that is safe to keep after the source
+    // Type is moved.
     struct Signature final
     {
         std::vector<::visual_xsharp::core::Type> parameters;
-        ::visual_xsharp::core::Type result{ ::visual_xsharp::core::Type::unit() };
+        ::visual_xsharp::core::Type result{
+            ::visual_xsharp::core::Type::unit()
+        };
 
         [[nodiscard]] auto
         operator==(const Signature &) const -> bool = default;
@@ -48,15 +51,16 @@ namespace Visual::XSharp::Core::Callable
     };
 
     [[nodiscard]] auto
-    Decompose(const ::visual_xsharp::core::Type &type) -> std::optional<Signature>;
+    Decompose(const ::visual_xsharp::core::Type &type)
+        -> std::optional<Signature>;
 
     [[nodiscard]] auto
     Compose(Signature signature) -> ::visual_xsharp::core::Type;
 
-    // A lifted closure target receives hidden capture parameters first, followed by
-    // the public callable parameters. Its return type must equal the callable result.
-    // Keeping this contract in one place prevents Xpp, Xmm, and LLVM from accepting
-    // subtly different closure layouts.
+    // A lifted closure target receives hidden capture parameters first,
+    // followed by the public callable parameters. Its return type must equal
+    // the callable result. Keeping this contract in one place prevents Xpp,
+    // Xmm, and LLVM from accepting subtly different closure layouts.
     [[nodiscard]] auto
     ValidateClosure(
         std::span<const ::visual_xsharp::core::Type> captures,

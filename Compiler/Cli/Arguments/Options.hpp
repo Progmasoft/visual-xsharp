@@ -158,7 +158,8 @@ struct CliOptions
 };
 
 // Fully resolved values for one compiler invocation. A project evaluation can
-// provide the base layer; only CLI fields that were actually present replace it.
+// provide the base layer; only CLI fields that were actually present replace
+// it.
 struct EffectiveCompilerOptions
 {
     std::string compilerVersion;
@@ -187,7 +188,8 @@ struct CliParseOutcome
 [[nodiscard]] CompilerSettings
 DefaultCompilerSettings() noexcept;
 void
-ApplyCompilerOverrides(const CliOptions &options, CompilerSettings &settings) noexcept;
+ApplyCompilerOverrides(const CliOptions &options,
+                       CompilerSettings &settings) noexcept;
 [[nodiscard]] const char *
 WarningLevelName(WarningLevel level) noexcept;
 [[nodiscard]] const char *
@@ -196,7 +198,9 @@ OutputExtension(BuildOutput output) noexcept;
 [[nodiscard]] CliParseOutcome
 ParseCommandLine(int argc, char **argv);
 [[nodiscard]] EffectiveCompilerOptions
-ResolveCompilerOptions(const CliOptions &options, const EffectiveCompilerOptions *projectDefaults = nullptr);
+ResolveCompilerOptions(const CliOptions &options,
+                       const EffectiveCompilerOptions *projectDefaults
+                       = nullptr);
 void
 PrintCliHelp(std::optional<CliCommand> command);
 void

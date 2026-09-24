@@ -16,7 +16,9 @@ namespace
     using Visual::XSharp::Interactive::ReplCommandKind;
 } // namespace
 
-TEST_CASE("REPL input accepts the exact byte bound and preserves following lines", "[vxsi][input][limits]")
+TEST_CASE(
+    "REPL input accepts the exact byte bound and preserves following lines",
+    "[vxsi][input][limits]")
 {
     std::istringstream input("1234\nnext\n");
     std::string line;
@@ -28,7 +30,8 @@ TEST_CASE("REPL input accepts the exact byte bound and preserves following lines
     REQUIRE(ReadInputLine(input, line, 4U) == InputLineStatus::End);
 }
 
-TEST_CASE("REPL input drains overlong lines rather than exposing their suffix", "[vxsi][input][recovery]")
+TEST_CASE("REPL input drains overlong lines rather than exposing their suffix",
+          "[vxsi][input][recovery]")
 {
     std::istringstream input("12345\nnext\n");
     std::string line;
@@ -39,7 +42,8 @@ TEST_CASE("REPL input drains overlong lines rather than exposing their suffix", 
     REQUIRE(line == "next");
 }
 
-TEST_CASE("REPL input reports an oversized final line at EOF", "[vxsi][input][eof]")
+TEST_CASE("REPL input reports an oversized final line at EOF",
+          "[vxsi][input][eof]")
 {
     std::istringstream input("12345");
     std::string line;
@@ -49,7 +53,8 @@ TEST_CASE("REPL input reports an oversized final line at EOF", "[vxsi][input][eo
     REQUIRE(ReadInputLine(input, line, 4U) == InputLineStatus::End);
 }
 
-TEST_CASE("REPL input delivers an unterminated final line exactly once", "[vxsi][input][eof]")
+TEST_CASE("REPL input delivers an unterminated final line exactly once",
+          "[vxsi][input][eof]")
 {
     std::istringstream input("last expression");
     std::string line;
@@ -59,7 +64,8 @@ TEST_CASE("REPL input delivers an unterminated final line exactly once", "[vxsi]
     REQUIRE(ReadInputLine(input, line, 64U) == InputLineStatus::End);
 }
 
-TEST_CASE("REPL input limits count UTF-8 bytes without returning partial lines", "[vxsi][input][utf8]")
+TEST_CASE("REPL input limits count UTF-8 bytes without returning partial lines",
+          "[vxsi][input][utf8]")
 {
     std::istringstream input("\xc3\xa9\nnext\n");
     std::string line;
@@ -70,14 +76,17 @@ TEST_CASE("REPL input limits count UTF-8 bytes without returning partial lines",
     REQUIRE(line == "next");
 }
 
-TEST_CASE("REPL commands are exact and preserve source text after type", "[vxsi][commands]")
+TEST_CASE("REPL commands are exact and preserve source text after type",
+          "[vxsi][commands]")
 {
     REQUIRE(ParseReplCommand(":help").kind == ReplCommandKind::Help);
     REQUIRE(ParseReplCommand(":history").kind == ReplCommandKind::History);
     REQUIRE(ParseReplCommand(":reset").kind == ReplCommandKind::Reset);
     REQUIRE(ParseReplCommand(":quit").kind == ReplCommandKind::Quit);
-    REQUIRE(ParseReplCommand(":type").kind == ReplCommandKind::TypeMissingExpression);
-    REQUIRE(ParseReplCommand(":type   ").kind == ReplCommandKind::TypeMissingExpression);
+    REQUIRE(ParseReplCommand(":type").kind
+            == ReplCommandKind::TypeMissingExpression);
+    REQUIRE(ParseReplCommand(":type   ").kind
+            == ReplCommandKind::TypeMissingExpression);
 
     const auto spacedType = ParseReplCommand(":type   5 + 5");
     REQUIRE(spacedType.kind == ReplCommandKind::Type);
@@ -91,7 +100,9 @@ TEST_CASE("REPL commands are exact and preserve source text after type", "[vxsi]
     REQUIRE(ParseReplCommand(":unknown").kind == ReplCommandKind::Unknown);
 }
 
-TEST_CASE("REPL source lines are forwarded byte-for-byte and are not mistaken for commands", "[vxsi][commands]")
+TEST_CASE("REPL source lines are forwarded byte-for-byte and are not mistaken "
+          "for commands",
+          "[vxsi][commands]")
 {
     const auto expression = ParseReplCommand("  5 + 5  ");
     REQUIRE(expression.kind == ReplCommandKind::Expression);

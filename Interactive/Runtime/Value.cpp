@@ -32,20 +32,31 @@ namespace Visual::XSharp::Interactive::Runtime
         }
 
         [[nodiscard]] auto
-        FloatingText(double value, std::uint16_t width) -> std::optional<std::string>
+        FloatingText(double value, std::uint16_t width)
+            -> std::optional<std::string>
         {
             std::array<char, 128> buffer{};
             if (width == 32U)
             {
                 const auto narrowed = static_cast<float>(value);
-                const auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), narrowed, std::chars_format::general, std::numeric_limits<float>::max_digits10);
+                const auto [end, error]
+                    = std::to_chars(buffer.data(),
+                                    buffer.data() + buffer.size(),
+                                    narrowed,
+                                    std::chars_format::general,
+                                    std::numeric_limits<float>::max_digits10);
                 if (error != std::errc{})
                     return std::nullopt;
                 return std::string(buffer.data(), end);
             }
             if (width != 64U)
                 return std::nullopt;
-            const auto [end, error] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value, std::chars_format::general, std::numeric_limits<double>::max_digits10);
+            const auto [end, error]
+                = std::to_chars(buffer.data(),
+                                buffer.data() + buffer.size(),
+                                value,
+                                std::chars_format::general,
+                                std::numeric_limits<double>::max_digits10);
             if (error != std::errc{})
                 return std::nullopt;
             return std::string(buffer.data(), end);
@@ -66,9 +77,11 @@ namespace Visual::XSharp::Interactive::Runtime
     } // namespace
 
     auto
-    SourceBinding(const Backend::LLVM::JitValue &value) -> std::optional<std::string>
+    SourceBinding(const Backend::LLVM::JitValue &value)
+        -> std::optional<std::string>
     {
-        const auto description = visual_xsharp::core::describe_scalar(value.type);
+        const auto description
+            = visual_xsharp::core::describe_scalar(value.type);
         if (!description)
             return std::nullopt;
 
@@ -77,13 +90,16 @@ namespace Visual::XSharp::Interactive::Runtime
                 using Value = std::remove_cvref_t<decltype(payload)>;
                 if constexpr (std::is_same_v<Value, bool>)
                 {
-                    if (description->family != visual_xsharp::core::ScalarFamily::Boolean)
+                    if (description->family
+                        != visual_xsharp::core::ScalarFamily::Boolean)
                         return std::nullopt;
-                    return fmt::format("bool vxsiPrevious = {};", payload ? "true" : "false");
+                    return fmt::format("bool vxsiPrevious = {};",
+                                       payload ? "true" : "false");
                 }
                 else if constexpr (std::is_same_v<Value, char32_t>)
                 {
-                    if (description->family != visual_xsharp::core::ScalarFamily::Character)
+                    if (description->family
+                        != visual_xsharp::core::ScalarFamily::Character)
                         return std::nullopt;
                     const auto literal = CharacterLiteral(payload);
                     if (!literal)
@@ -92,35 +108,48 @@ namespace Visual::XSharp::Interactive::Runtime
                 }
                 else if constexpr (std::is_same_v<Value, std::int64_t>)
                 {
-                    if (description->family != visual_xsharp::core::ScalarFamily::SignedInteger
+                    if (description->family
+                            != visual_xsharp::core::ScalarFamily::SignedInteger
                         || description->bit_width > 64U)
                         return std::nullopt;
                     if (description->bit_width < 64U)
                     {
-                        const auto limit = std::int64_t{ 1 } << (description->bit_width - 1U);
+                        const auto limit = std::int64_t{ 1 }
+                                           << (description->bit_width - 1U);
                         if (payload < -limit || payload >= limit)
                             return std::nullopt;
                     }
-                    return fmt::format("{} vxsiPrevious = {};", description->spelling, IntegerText(payload));
+                    return fmt::format("{} vxsiPrevious = {};",
+                                       description->spelling,
+                                       IntegerText(payload));
                 }
                 else if constexpr (std::is_same_v<Value, std::uint64_t>)
                 {
-                    if (description->family != visual_xsharp::core::ScalarFamily::UnsignedInteger
+                    if (description->family
+                            != visual_xsharp::core::ScalarFamily::
+                                UnsignedInteger
                         || description->bit_width > 64U)
                         return std::nullopt;
                     if (description->bit_width < 64U
-                        && payload >= (std::uint64_t{ 1 } << description->bit_width))
+                        && payload >= (std::uint64_t{ 1 }
+                                       << description->bit_width))
                         return std::nullopt;
-                    return fmt::format("{} vxsiPrevious = {};", description->spelling, IntegerText(payload));
+                    return fmt::format("{} vxsiPrevious = {};",
+                                       description->spelling,
+                                       IntegerText(payload));
                 }
                 else if constexpr (std::is_same_v<Value, double>)
                 {
-                    if (description->family != visual_xsharp::core::ScalarFamily::Floating)
+                    if (description->family
+                        != visual_xsharp::core::ScalarFamily::Floating)
                         return std::nullopt;
-                    auto literal = FloatingText(payload, description->bit_width);
+                    auto literal
+                        = FloatingText(payload, description->bit_width);
                     if (!literal)
                         return std::nullopt;
-                    return fmt::format("{} vxsiPrevious = {};", description->spelling, *literal);
+                    return fmt::format("{} vxsiPrevious = {};",
+                                       description->spelling,
+                                       *literal);
                 }
                 else
                     return std::nullopt;
@@ -139,8 +168,10 @@ namespace Visual::XSharp::Interactive::Runtime
                 else if constexpr (std::is_same_v<Value, bool>)
                     return payload ? "true" : "false";
                 else if constexpr (std::is_same_v<Value, char32_t>)
-                    return fmt::format("U+{:04X}", static_cast<std::uint32_t>(payload));
-                else if constexpr (std::is_same_v<Value, std::int64_t> || std::is_same_v<Value, std::uint64_t>)
+                    return fmt::format("U+{:04X}",
+                                       static_cast<std::uint32_t>(payload));
+                else if constexpr (std::is_same_v<Value, std::int64_t>
+                                   || std::is_same_v<Value, std::uint64_t>)
                     return IntegerText(payload);
                 else if constexpr (std::is_same_v<Value, double>)
                     return fmt::format("{}", payload);

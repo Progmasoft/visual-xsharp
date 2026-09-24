@@ -51,8 +51,9 @@ namespace visual_xsharp::xmm
         BitwiseNot,
         TypeIs,
 
-        // Source-compatible names for pre-v3 native clients. They intentionally alias the
-        // typed operations; width and signedness now come from Instruction::result_type.
+        // Source-compatible names for pre-v3 native clients. They intentionally
+        // alias the typed operations; width and signedness now come from
+        // Instruction::result_type.
         AddI64 = Add,
         SubI64 = Subtract,
         MulI64 = Multiply,
@@ -67,8 +68,9 @@ namespace visual_xsharp::xmm
     };
     struct Value final
     {
-        // Function values preserve callable identity separately from data registers. This
-        // prevents a direct call from being mistaken for a load from mutable Xmm storage.
+        // Function values preserve callable identity separately from data
+        // registers. This prevents a direct call from being mistaken for a load
+        // from mutable Xmm storage.
         enum class Kind : std::uint8_t
         {
             Register,
@@ -86,8 +88,9 @@ namespace visual_xsharp::xmm
     {
         Opcode opcode{ Opcode::Move };
         VirtualRegister destination{};
-        // result_type is retained even when the result is discarded: verification and call
-        // lowering still need the operation's semantic type.
+        // result_type is retained even when the result is discarded:
+        // verification and call lowering still need the operation's semantic
+        // type.
         core::Type result_type{ core::Type::unit() };
         std::vector<Value> operands;
         bool has_result{};
@@ -123,8 +126,9 @@ namespace visual_xsharp::xmm
     {
         core::SymbolName symbol{};
         std::vector<VirtualRegister> parameter_registers;
-        // Registers alone cannot reconstruct an ABI. Keep parameter types in declaration
-        // order so the LLVM function signature never depends on first-use inference.
+        // Registers alone cannot reconstruct an ABI. Keep parameter types in
+        // declaration order so the LLVM function signature never depends on
+        // first-use inference.
         std::vector<core::Type> parameter_types;
         core::Type return_type{ core::Type::unit() };
         BlockId entry{};

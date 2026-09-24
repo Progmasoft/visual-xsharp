@@ -28,20 +28,20 @@ namespace Visual::XSharp::Runtime::Aarc
             string->count = 0U;
         }
 
-        const TypeMetadata kStringMetadata{
-            kAbiVersion,
-            0U,
-            TypeIdentity("String"),
-            sizeof(StringObject),
-            alignof(StringObject),
-            DestroyString,
-            "System.String"
-        };
+        const TypeMetadata kStringMetadata{ kAbiVersion,
+                                            0U,
+                                            TypeIdentity("String"),
+                                            sizeof(StringObject),
+                                            alignof(StringObject),
+                                            DestroyString,
+                                            "System.String" };
 
         [[nodiscard]] auto
         ObjectHeaderOf(const void *object) noexcept -> ObjectHeader *
         {
-            return object == nullptr ? nullptr : *(reinterpret_cast<ObjectHeader *const *>(object) - 1);
+            return object == nullptr
+                       ? nullptr
+                       : *(reinterpret_cast<ObjectHeader *const *>(object) - 1);
         }
 
         [[nodiscard]] auto
@@ -56,7 +56,8 @@ namespace Visual::XSharp::Runtime::Aarc
             if (header == nullptr)
                 return false;
             auto count = header->weakCount.load(std::memory_order_relaxed);
-            while (count != 0U && count != std::numeric_limits<std::uint64_t>::max())
+            while (count != 0U
+                   && count != std::numeric_limits<std::uint64_t>::max())
                 if (header->weakCount.compare_exchange_weak(
                         count,
                         count + 1U,
@@ -69,11 +70,14 @@ namespace Visual::XSharp::Runtime::Aarc
         void
         ReleaseControl(ObjectHeader *header) noexcept
         {
-            if (header == nullptr || header->weakCount.fetch_sub(1U, std::memory_order_acq_rel) != 1U)
+            if (header == nullptr
+                || header->weakCount.fetch_sub(1U, std::memory_order_acq_rel)
+                       != 1U)
                 return;
 
-            // The acquire side of the final decrement observes the destructor and all
-            // preceding handle releases before reclaiming the combined allocation.
+            // The acquire side of the final decrement observes the destructor
+            // and all preceding handle releases before reclaiming the combined
+            // allocation.
             auto *allocation = header->allocation;
             header->~ObjectHeader();
             ::operator delete(allocation);
@@ -103,16 +107,21 @@ namespace Visual::XSharp::Runtime::Aarc
     auto
     Allocate(const TypeMetadata &metadata) noexcept -> void *
     {
-        if (metadata.abiVersion != kAbiVersion || metadata.instanceSize == 0U || !ValidAlignment(metadata.instanceAlignment))
+        if (metadata.abiVersion != kAbiVersion || metadata.instanceSize == 0U
+            || !ValidAlignment(metadata.instanceAlignment))
             return nullptr;
 
-        const auto alignment = std::max(metadata.instanceAlignment, alignof(ObjectHeader *));
+        const auto alignment
+            = std::max(metadata.instanceAlignment, alignof(ObjectHeader *));
         constexpr auto kPrefix = sizeof(ObjectHeader) + sizeof(ObjectHeader *);
-        if (metadata.instanceSize > std::numeric_limits<std::size_t>::max() - kPrefix - alignment)
+        if (metadata.instanceSize
+            > std::numeric_limits<std::size_t>::max() - kPrefix - alignment)
             return nullptr;
 
-        const auto allocationSize = kPrefix + alignment - 1U + metadata.instanceSize;
-        auto *allocation = static_cast<std::byte *>(::operator new(allocationSize, std::nothrow));
+        const auto allocationSize
+            = kPrefix + alignment - 1U + metadata.instanceSize;
+        auto *allocation = static_cast<std::byte *>(
+            ::operator new(allocationSize, std::nothrow));
         if (allocation == nullptr)
             return nullptr;
 
@@ -121,7 +130,8 @@ namespace Visual::XSharp::Runtime::Aarc
         header->allocation = allocation;
 
         auto address = reinterpret_cast<std::uintptr_t>(allocation + kPrefix);
-        address = (address + alignment - 1U) & ~(static_cast<std::uintptr_t>(alignment) - 1U);
+        address = (address + alignment - 1U)
+                  & ~(static_cast<std::uintptr_t>(alignment) - 1U);
         auto *object = reinterpret_cast<void *>(address);
         *(reinterpret_cast<ObjectHeader **>(object) - 1) = header;
         header->object.store(object, std::memory_order_release);
@@ -140,18 +150,22 @@ namespace Visual::XSharp::Runtime::Aarc
         auto *header = ObjectHeaderOf(object);
         if (header == nullptr)
             return;
-        if (header->strongCount.load(std::memory_order_relaxed) == std::numeric_limits<std::uint64_t>::max())
+        if (header->strongCount.load(std::memory_order_relaxed)
+            == std::numeric_limits<std::uint64_t>::max())
             return;
         if (header->strongCount.fetch_sub(1U, std::memory_order_acq_rel) != 1U)
             return;
 
         auto expected = ObjectState::Alive;
-        if (header->state.compare_exchange_strong(expected, ObjectState::Destroying, std::memory_order_acq_rel))
+        if (header->state.compare_exchange_strong(expected,
+                                                  ObjectState::Destroying,
+                                                  std::memory_order_acq_rel))
         {
             if (header->metadata->destructor != nullptr)
                 header->metadata->destructor(object);
             header->object.store(nullptr, std::memory_order_release);
-            header->state.store(ObjectState::Destroyed, std::memory_order_release);
+            header->state.store(ObjectState::Destroyed,
+                                std::memory_order_release);
         }
         ReleaseControl(header); // Drop the implicit weak reference.
     }
@@ -197,9 +211,9 @@ namespace Visual::XSharp::Runtime::Aarc
     auto
     LoadUnowned(Unowned value) noexcept -> void *
     {
-        // Loading upgrades to a temporary strong result. Merely reading object after an
-        // Alive check would race the last release on another thread. The generated owner
-        // pass balances this result like Weak::Lock.
+        // Loading upgrades to a temporary strong result. Merely reading object
+        // after an Alive check would race the last release on another thread.
+        // The generated owner pass balances this result like Weak::Lock.
         return TryRetain(value.header);
     }
 
@@ -210,11 +224,15 @@ namespace Visual::XSharp::Runtime::Aarc
     }
 
     auto
-    IsExactType(const void *object, const std::uint64_t typeIdentity) noexcept -> bool
+    IsExactType(const void *object, const std::uint64_t typeIdentity) noexcept
+        -> bool
     {
         const auto *header = ObjectHeaderOf(object);
-        return header != nullptr && header->state.load(std::memory_order_acquire) == ObjectState::Alive
-               && header->metadata != nullptr && header->metadata->typeIdentity == typeIdentity;
+        return header != nullptr
+               && header->state.load(std::memory_order_acquire)
+                      == ObjectState::Alive
+               && header->metadata != nullptr
+               && header->metadata->typeIdentity == typeIdentity;
     }
 } // namespace Visual::XSharp::Runtime::Aarc
 
@@ -227,9 +245,13 @@ extern "C"
     }
 
     auto
-    vxs_aarc_allocate(const Visual::XSharp::Runtime::Aarc::TypeMetadata *metadata) noexcept -> void *
+    vxs_aarc_allocate(
+        const Visual::XSharp::Runtime::Aarc::TypeMetadata *metadata) noexcept
+        -> void *
     {
-        return metadata == nullptr ? nullptr : Visual::XSharp::Runtime::Aarc::Allocate(*metadata);
+        return metadata == nullptr
+                   ? nullptr
+                   : Visual::XSharp::Runtime::Aarc::Allocate(*metadata);
     }
 
     auto
@@ -247,67 +269,82 @@ extern "C"
     auto
     vxs_aarc_make_weak(void *object) noexcept -> VxsAarcWeakHandle *
     {
-        return reinterpret_cast<VxsAarcWeakHandle *>(Visual::XSharp::Runtime::Aarc::MakeWeak(object).header);
+        return reinterpret_cast<VxsAarcWeakHandle *>(
+            Visual::XSharp::Runtime::Aarc::MakeWeak(object).header);
     }
 
     auto
-    vxs_aarc_copy_weak(VxsAarcWeakHandle *handle) noexcept -> VxsAarcWeakHandle *
+    vxs_aarc_copy_weak(VxsAarcWeakHandle *handle) noexcept
+        -> VxsAarcWeakHandle *
     {
         using Visual::XSharp::Runtime::Aarc::ObjectHeader;
         return reinterpret_cast<VxsAarcWeakHandle *>(
-            Visual::XSharp::Runtime::Aarc::CopyWeak({ reinterpret_cast<ObjectHeader *>(handle) }).header);
+            Visual::XSharp::Runtime::Aarc::CopyWeak(
+                { reinterpret_cast<ObjectHeader *>(handle) })
+                .header);
     }
 
     auto
     vxs_aarc_lock_weak(VxsAarcWeakHandle *handle) noexcept -> void *
     {
         return Visual::XSharp::Runtime::Aarc::LockWeak(
-            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(
+                handle) });
     }
 
     void
     vxs_aarc_release_weak(VxsAarcWeakHandle *handle) noexcept
     {
         Visual::XSharp::Runtime::Aarc::ReleaseWeak(
-            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(
+                handle) });
     }
 
     auto
     vxs_aarc_make_unowned(void *object) noexcept -> VxsAarcUnownedHandle *
     {
-        return reinterpret_cast<VxsAarcUnownedHandle *>(Visual::XSharp::Runtime::Aarc::MakeUnowned(object).header);
+        return reinterpret_cast<VxsAarcUnownedHandle *>(
+            Visual::XSharp::Runtime::Aarc::MakeUnowned(object).header);
     }
 
     auto
-    vxs_aarc_copy_unowned(VxsAarcUnownedHandle *handle) noexcept -> VxsAarcUnownedHandle *
+    vxs_aarc_copy_unowned(VxsAarcUnownedHandle *handle) noexcept
+        -> VxsAarcUnownedHandle *
     {
         using Visual::XSharp::Runtime::Aarc::ObjectHeader;
         return reinterpret_cast<VxsAarcUnownedHandle *>(
-            Visual::XSharp::Runtime::Aarc::CopyUnowned({ reinterpret_cast<ObjectHeader *>(handle) }).header);
+            Visual::XSharp::Runtime::Aarc::CopyUnowned(
+                { reinterpret_cast<ObjectHeader *>(handle) })
+                .header);
     }
 
     auto
     vxs_aarc_load_unowned(VxsAarcUnownedHandle *handle) noexcept -> void *
     {
         return Visual::XSharp::Runtime::Aarc::LoadUnowned(
-            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(
+                handle) });
     }
 
     void
     vxs_aarc_release_unowned(VxsAarcUnownedHandle *handle) noexcept
     {
         Visual::XSharp::Runtime::Aarc::ReleaseUnowned(
-            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(handle) });
+            { reinterpret_cast<Visual::XSharp::Runtime::Aarc::ObjectHeader *>(
+                handle) });
     }
 
     auto
-    vxs_aarc_string_literal(const std::uint32_t *scalars, std::size_t count) noexcept -> void *
+    vxs_aarc_string_literal(const std::uint32_t *scalars,
+                            std::size_t count) noexcept -> void *
     {
         using namespace Visual::XSharp::Runtime::Aarc;
-        if ((scalars == nullptr && count != 0U) || count == std::numeric_limits<std::size_t>::max())
+        if ((scalars == nullptr && count != 0U)
+            || count == std::numeric_limits<std::size_t>::max())
             return nullptr;
         for (std::size_t index = 0; index < count; ++index)
-            if (scalars[index] > 0x10ffffU || (scalars[index] >= 0xd800U && scalars[index] <= 0xdfffU))
+            if (scalars[index] > 0x10ffffU
+                || (scalars[index] >= 0xd800U && scalars[index] <= 0xdfffU))
                 return nullptr;
         auto *object = static_cast<StringObject *>(Allocate(kStringMetadata));
         if (object == nullptr)
@@ -326,7 +363,8 @@ extern "C"
     }
 
     auto
-    vxs_aarc_is_exact_type(const void *object, const std::uint64_t typeIdentity) noexcept -> bool
+    vxs_aarc_is_exact_type(const void *object,
+                           const std::uint64_t typeIdentity) noexcept -> bool
     {
         return Visual::XSharp::Runtime::Aarc::IsExactType(object, typeIdentity);
     }

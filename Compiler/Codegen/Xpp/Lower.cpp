@@ -13,9 +13,15 @@ namespace visual_xsharp::xpp
         auto
         LowerOperand(const core::Atom &atom) -> Operand
         {
-            // CorePrep has already resolved names, so the numeric symbol is authoritative here.
-            // Spelling remains on declarations for diagnostics and eventual external mangling.
-            return Operand{ atom.kind == core::Atom::Kind::Variable ? Operand::Kind::Symbol : Operand::Kind::Literal, atom.type, atom.symbol.id, atom.literal };
+            // CorePrep has already resolved names, so the numeric symbol is
+            // authoritative here. Spelling remains on declarations for
+            // diagnostics and eventual external mangling.
+            return Operand{ atom.kind == core::Atom::Kind::Variable
+                                ? Operand::Kind::Symbol
+                                : Operand::Kind::Literal,
+                            atom.type,
+                            atom.symbol.id,
+                            atom.literal };
         }
 
         auto
@@ -87,11 +93,15 @@ namespace visual_xsharp::xpp
         LowerInstruction(const core::Instruction &instruction) -> Instruction
         {
             Instruction lowered{};
-            // Preserve Bind/Assign/Discard as an explicit effect. Collapsing them into opcode
-            // alone would lose the difference between defining storage and mutating it.
-            lowered.effect = instruction.kind == core::Instruction::Kind::Bind     ? Instruction::Effect::Define
-                             : instruction.kind == core::Instruction::Kind::Assign ? Instruction::Effect::Store
-                                                                                   : Instruction::Effect::Discard;
+            // Preserve Bind/Assign/Discard as an explicit effect. Collapsing
+            // them into opcode alone would lose the difference between defining
+            // storage and mutating it.
+            lowered.effect
+                = instruction.kind == core::Instruction::Kind::Bind
+                      ? Instruction::Effect::Define
+                  : instruction.kind == core::Instruction::Kind::Assign
+                      ? Instruction::Effect::Store
+                      : Instruction::Effect::Discard;
             lowered.opcode = LowerOperation(instruction.operation);
             lowered.destination = instruction.destination.id;
             lowered.result_type = instruction.type;
@@ -146,14 +156,21 @@ namespace visual_xsharp::xpp
         lowered.functions.reserve(module.functions.size());
         for (const auto &function : module.functions)
         {
-            Function loweredFunction{ function.symbol, function.parameters, function.return_type, function.entry, {} };
+            Function loweredFunction{ function.symbol,
+                                      function.parameters,
+                                      function.return_type,
+                                      function.entry,
+                                      {} };
             loweredFunction.blocks.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
             {
-                Block loweredBlock{ block.id, {}, LowerTerminator(block.terminator) };
+                Block loweredBlock{ block.id,
+                                    {},
+                                    LowerTerminator(block.terminator) };
                 loweredBlock.instructions.reserve(block.instructions.size());
                 for (const auto &instruction : block.instructions)
-                    loweredBlock.instructions.push_back(LowerInstruction(instruction));
+                    loweredBlock.instructions.push_back(
+                        LowerInstruction(instruction));
                 loweredFunction.blocks.push_back(std::move(loweredBlock));
             }
             lowered.functions.push_back(std::move(loweredFunction));

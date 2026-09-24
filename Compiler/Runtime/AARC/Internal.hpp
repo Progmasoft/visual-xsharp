@@ -17,7 +17,8 @@ namespace Visual::XSharp::Runtime::Aarc
     };
 
     // The allocation/control-block layout is implementation-private. Only the
-    // C++ runtime owns these atomics; C callers receive opaque weak/unowned handles.
+    // C++ runtime owns these atomics; C callers receive opaque weak/unowned
+    // handles.
     struct ObjectHeader final
     {
         std::uint32_t abiVersion{ kAbiVersion };

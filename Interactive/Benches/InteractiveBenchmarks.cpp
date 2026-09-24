@@ -23,14 +23,18 @@ namespace
             {},
             Core::Type::int64(),
             0,
-            { Core::Block{ 0,
-                           {},
-                           Core::Terminator{ Core::Terminator::Kind::Return,
-                                             Core::Atom::constant(static_cast<std::int64_t>(identity), Core::Type::int64()),
-                                             0,
-                                             0 } } },
+            { Core::Block{
+                0,
+                {},
+                Core::Terminator{
+                    Core::Terminator::Kind::Return,
+                    Core::Atom::constant(static_cast<std::int64_t>(identity),
+                                         Core::Type::int64()),
+                    0,
+                    0 } } },
         };
-        const Core::CorePrepModule module{ { U"VXSI", U"Benchmark" }, { std::move(cell) } };
+        const Core::CorePrepModule module{ { U"VXSI", U"Benchmark" },
+                                           { std::move(cell) } };
         const auto xpp = visual_xsharp::xpp::lower(module);
         const auto xmm = visual_xsharp::xmm::lower(xpp);
         return Llvm::Lower(xmm);
@@ -51,7 +55,10 @@ namespace
                 return;
             }
             const auto name = "VXSI.Benchmark.Evaluate." + std::to_string(cell);
-            if (auto issue = session.AddModule(result.artifact->bitcode, name, name, Core::Type::int64()))
+            if (auto issue = session.AddModule(result.artifact->bitcode,
+                                               name,
+                                               name,
+                                               Core::Type::int64()))
             {
                 state.SkipWithError(issue->message.c_str());
                 return;

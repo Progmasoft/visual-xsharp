@@ -23,7 +23,9 @@ namespace visual_xsharp::core::wire
             finish() && -> EncodeResult
             {
                 if (!error_ && bytes_.size() > limits_.maximum_wire_bytes)
-                    fail(ErrorKind::LimitExceeded, "wire byte length", "encoded document exceeds configured byte limit");
+                    fail(ErrorKind::LimitExceeded,
+                         "wire byte length",
+                         "encoded document exceeds configured byte limit");
                 return EncodeResult{ std::move(bytes_), std::move(error_) };
             }
 
@@ -35,9 +37,12 @@ namespace visual_xsharp::core::wire
                 unsigned_integer(current_version);
                 unsigned_integer<std::uint16_t>(0);
                 qualified_name(module.name, "module name");
-                vector(module.functions, limits_.maximum_functions, "function count", [this](const Function &function) {
-                    this->function(function);
-                });
+                vector(module.functions,
+                       limits_.maximum_functions,
+                       "function count",
+                       [this](const Function &function) {
+                           this->function(function);
+                       });
             }
 
         private:
@@ -49,7 +54,10 @@ namespace visual_xsharp::core::wire
             fail(ErrorKind kind, std::string context, std::string message)
             {
                 if (!error_)
-                    error_ = Error{ kind, bytes_.size(), std::move(context), std::move(message) };
+                    error_ = Error{ kind,
+                                    bytes_.size(),
+                                    std::move(context),
+                                    std::move(message) };
             }
 
             void
@@ -64,16 +72,23 @@ namespace visual_xsharp::core::wire
             unsigned_integer(Integer value)
             {
                 static_assert(std::is_unsigned_v<Integer>);
-                for (std::size_t shift = 0; shift < sizeof(Integer) * 8U; shift += 8U)
-                    byte(static_cast<std::uint8_t>((value >> shift) & static_cast<Integer>(0xffU)));
+                for (std::size_t shift = 0; shift < sizeof(Integer) * 8U;
+                     shift += 8U)
+                    byte(static_cast<std::uint8_t>(
+                        (value >> shift) & static_cast<Integer>(0xffU)));
             }
 
             void
-            count(std::size_t value, std::size_t maximum, std::string_view context)
+            count(std::size_t value,
+                  std::size_t maximum,
+                  std::string_view context)
             {
-                if (value > maximum || value > std::numeric_limits<std::uint32_t>::max())
+                if (value > maximum
+                    || value > std::numeric_limits<std::uint32_t>::max())
                 {
-                    fail(ErrorKind::LimitExceeded, std::string(context), "collection count exceeds wire limit");
+                    fail(ErrorKind::LimitExceeded,
+                         std::string(context),
+                         "collection count exceeds wire limit");
                     return;
                 }
                 unsigned_integer(static_cast<std::uint32_t>(value));
@@ -81,7 +96,10 @@ namespace visual_xsharp::core::wire
 
             template<typename Value, typename Encode>
             void
-            vector(const std::vector<Value> &values, std::size_t maximum, std::string_view context, Encode encode)
+            vector(const std::vector<Value> &values,
+                   std::size_t maximum,
+                   std::string_view context,
+                   Encode encode)
             {
                 count(values.size(), maximum, context);
                 if (error_)
@@ -97,13 +115,18 @@ namespace visual_xsharp::core::wire
             void
             text(const std::u32string &value, std::string_view context)
             {
-                count(value.size(), limits_.maximum_string_code_points, context);
+                count(value.size(),
+                      limits_.maximum_string_code_points,
+                      context);
                 for (const auto code_point : value)
                 {
                     const auto numeric = static_cast<std::uint32_t>(code_point);
-                    if (numeric > 0x10ffffU || (numeric >= 0xd800U && numeric <= 0xdfffU))
+                    if (numeric > 0x10ffffU
+                        || (numeric >= 0xd800U && numeric <= 0xdfffU))
                     {
-                        fail(ErrorKind::InvalidCodePoint, std::string(context), "text contains a non-scalar Unicode code point");
+                        fail(ErrorKind::InvalidCodePoint,
+                             std::string(context),
+                             "text contains a non-scalar Unicode code point");
                         return;
                     }
                     unsigned_integer(numeric);
@@ -111,11 +134,15 @@ namespace visual_xsharp::core::wire
             }
 
             void
-            qualified_name(const std::vector<std::u32string> &parts, std::string_view context)
+            qualified_name(const std::vector<std::u32string> &parts,
+                           std::string_view context)
             {
-                vector(parts, 65535U, context, [this, context](const std::u32string &part) {
-                    text(part, context);
-                });
+                vector(parts,
+                       65535U,
+                       context,
+                       [this, context](const std::u32string &part) {
+                           text(part, context);
+                       });
             }
 
             void
@@ -123,7 +150,9 @@ namespace visual_xsharp::core::wire
             {
                 if (name.id == 0)
                 {
-                    fail(ErrorKind::InvalidSymbol, std::string(context), "symbol id must be positive");
+                    fail(ErrorKind::InvalidSymbol,
+                         std::string(context),
+                         "symbol id must be positive");
                     return;
                 }
                 unsigned_integer(name.id);
@@ -135,10 +164,13 @@ namespace visual_xsharp::core::wire
             {
                 if (depth > limits_.maximum_type_depth)
                 {
-                    fail(ErrorKind::LimitExceeded, "type", "type nesting exceeds configured limit");
+                    fail(ErrorKind::LimitExceeded,
+                         "type",
+                         "type nesting exceeds configured limit");
                     return;
                 }
-                const auto primitive_tag = [](const Type::Kind kind) -> std::optional<std::uint8_t> {
+                const auto primitive_tag
+                    = [](const Type::Kind kind) -> std::optional<std::uint8_t> {
                     using enum Type::Kind;
                     switch (kind)
                     {
@@ -189,7 +221,9 @@ namespace visual_xsharp::core::wire
                 }(value.kind);
                 if (!primitive_tag)
                 {
-                    fail(ErrorKind::UnsupportedType, "type", "type has no CorePrep wire tag");
+                    fail(ErrorKind::UnsupportedType,
+                         "type",
+                         "type has no CorePrep wire tag");
                     return;
                 }
                 byte(*primitive_tag);
@@ -217,48 +251,64 @@ namespace visual_xsharp::core::wire
                     case Type::Kind::Function:
                         if (value.components.empty())
                         {
-                            fail(ErrorKind::UnsupportedType, "function type", "function type has no result component");
+                            fail(ErrorKind::UnsupportedType,
+                                 "function type",
+                                 "function type has no result component");
                             return;
                         }
-                        count(value.components.size() - 1U, 65535U, "function type parameter count");
-                        for (std::size_t index = 0; index + 1U < value.components.size(); ++index)
+                        count(value.components.size() - 1U,
+                              65535U,
+                              "function type parameter count");
+                        for (std::size_t index = 0;
+                             index + 1U < value.components.size();
+                             ++index)
                             type(value.components[index], depth + 1U);
                         type(value.components.back(), depth + 1U);
                         return;
                     case Type::Kind::Named:
                         qualified_name(value.name, "named type");
-                        vector(value.templateArguments, 65535U, "template argument count", [this, depth](const TemplateArgument &argument) {
-                            if (argument.kind == TemplateArgument::Kind::Type)
-                            {
-                                byte(0);
-                                if (!argument.type)
+                        vector(
+                            value.templateArguments,
+                            65535U,
+                            "template argument count",
+                            [this, depth](const TemplateArgument &argument) {
+                                if (argument.kind
+                                    == TemplateArgument::Kind::Type)
                                 {
-                                    fail(ErrorKind::UnsupportedType, "template argument", "type argument has no payload");
+                                    byte(0);
+                                    if (!argument.type)
+                                    {
+                                        fail(ErrorKind::UnsupportedType,
+                                             "template argument",
+                                             "type argument has no payload");
+                                        return;
+                                    }
+                                    type(*argument.type, depth + 1U);
                                     return;
                                 }
-                                type(*argument.type, depth + 1U);
-                                return;
-                            }
-                            switch (argument.value.kind)
-                            {
-                                case TemplateValue::Kind::Integer:
-                                    byte(1);
-                                    template_integer(argument.value.integer, "template integer");
-                                    return;
-                                case TemplateValue::Kind::Boolean:
-                                    byte(2);
-                                    byte(argument.value.boolean ? 1U : 0U);
-                                    return;
-                                case TemplateValue::Kind::Character:
-                                    byte(3);
-                                    template_integer(argument.value.integer, "template character");
-                                    return;
-                                case TemplateValue::Kind::Parameter:
-                                    byte(4);
-                                    symbol(argument.value.parameter, "template value parameter");
-                                    return;
-                            }
-                        });
+                                switch (argument.value.kind)
+                                {
+                                    case TemplateValue::Kind::Integer:
+                                        byte(1);
+                                        template_integer(argument.value.integer,
+                                                         "template integer");
+                                        return;
+                                    case TemplateValue::Kind::Boolean:
+                                        byte(2);
+                                        byte(argument.value.boolean ? 1U : 0U);
+                                        return;
+                                    case TemplateValue::Kind::Character:
+                                        byte(3);
+                                        template_integer(argument.value.integer,
+                                                         "template character");
+                                        return;
+                                    case TemplateValue::Kind::Parameter:
+                                        byte(4);
+                                        symbol(argument.value.parameter,
+                                               "template value parameter");
+                                        return;
+                                }
+                            });
                         return;
                     case Type::Kind::TypeVariable:
                         symbol(value.variable, "type variable symbol");
@@ -272,45 +322,63 @@ namespace visual_xsharp::core::wire
                 value = normalize_integer(std::move(value));
                 if (!integer_is_canonical(value))
                 {
-                    fail(ErrorKind::InvalidInteger, std::string(context), "integer magnitude/sign is not canonical");
+                    fail(ErrorKind::InvalidInteger,
+                         std::string(context),
+                         "integer magnitude/sign is not canonical");
                     return;
                 }
                 byte(value.negative ? 1U : 0U);
-                vector(value.magnitude, limits_.maximum_numeric_bytes, std::string(context) + " magnitude", [this](const auto octet) {
-                    byte(octet);
-                });
+                vector(value.magnitude,
+                       limits_.maximum_numeric_bytes,
+                       std::string(context) + " magnitude",
+                       [this](const auto octet) {
+                           byte(octet);
+                       });
             }
 
             void
             literal(const Atom &value)
             {
-                const auto write_integer = [this, &value](IntegerLiteral integer) {
-                    integer = normalize_integer(std::move(integer));
-                    if (const auto issue = validate_literal(integer, value.type))
-                    {
-                        fail(ErrorKind::InvalidInteger, "integer literal", *issue);
-                        return;
-                    }
-                    byte(integer.negative ? 1U : 0U);
-                    vector(integer.magnitude, limits_.maximum_numeric_bytes, "integer magnitude", [this](const std::uint8_t octet) {
-                        byte(octet);
-                    });
-                };
+                const auto write_integer
+                    = [this, &value](IntegerLiteral integer) {
+                          integer = normalize_integer(std::move(integer));
+                          if (const auto issue
+                              = validate_literal(integer, value.type))
+                          {
+                              fail(ErrorKind::InvalidInteger,
+                                   "integer literal",
+                                   *issue);
+                              return;
+                          }
+                          byte(integer.negative ? 1U : 0U);
+                          vector(integer.magnitude,
+                                 limits_.maximum_numeric_bytes,
+                                 "integer magnitude",
+                                 [this](const std::uint8_t octet) {
+                                     byte(octet);
+                                 });
+                      };
                 switch (value.type.kind)
                 {
                     case Type::Kind::Unit:
-                        if (!std::holds_alternative<std::monostate>(value.literal))
-                            fail(ErrorKind::UnsupportedType, "unit literal", "literal payload does not match unit type");
+                        if (!std::holds_alternative<std::monostate>(
+                                value.literal))
+                            fail(ErrorKind::UnsupportedType,
+                                 "unit literal",
+                                 "literal payload does not match unit type");
                         byte(0U);
                         return;
                     case Type::Kind::Bool:
-                        if (const auto *boolean = std::get_if<bool>(&value.literal))
+                        if (const auto *boolean
+                            = std::get_if<bool>(&value.literal))
                         {
                             byte(1U);
                             byte(*boolean ? 1U : 0U);
                         }
                         else
-                            fail(ErrorKind::UnsupportedType, "bool literal", "literal payload does not match bool type");
+                            fail(ErrorKind::UnsupportedType,
+                                 "bool literal",
+                                 "literal payload does not match bool type");
                         return;
                     case Type::Kind::Character:
                     case Type::Kind::Int8:
@@ -324,54 +392,78 @@ namespace visual_xsharp::core::wire
                     case Type::Kind::UInt64:
                     case Type::Kind::UInt128:
                         byte(2U);
-                        if (const auto *integer = std::get_if<IntegerLiteral>(&value.literal))
+                        if (const auto *integer
+                            = std::get_if<IntegerLiteral>(&value.literal))
                             write_integer(*integer);
-                        else if (const auto *integer64 = std::get_if<std::int64_t>(&value.literal))
+                        else if (const auto *integer64
+                                 = std::get_if<std::int64_t>(&value.literal))
                             write_integer(integer_from_signed(*integer64));
-                        else if (const auto *integer32 = std::get_if<std::int32_t>(&value.literal))
+                        else if (const auto *integer32
+                                 = std::get_if<std::int32_t>(&value.literal))
                             write_integer(integer_from_signed(*integer32));
                         else
-                            fail(ErrorKind::UnsupportedType, "integer literal", "literal payload does not match integer type");
+                            fail(ErrorKind::UnsupportedType,
+                                 "integer literal",
+                                 "literal payload does not match integer type");
                         return;
                     case Type::Kind::Float16:
                     case Type::Kind::Float32:
                     case Type::Kind::Float64:
                     case Type::Kind::Float128:
                         byte(4U);
-                        if (const auto *floating = std::get_if<FloatingLiteral>(&value.literal))
+                        if (const auto *floating
+                            = std::get_if<FloatingLiteral>(&value.literal))
                         {
-                            if (const auto issue = validate_literal(*floating, value.type))
+                            if (const auto issue
+                                = validate_literal(*floating, value.type))
                             {
-                                fail(ErrorKind::InvalidInteger, "floating literal", *issue);
+                                fail(ErrorKind::InvalidInteger,
+                                     "floating literal",
+                                     *issue);
                                 return;
                             }
-                            count(floating->spelling.size(), limits_.maximum_numeric_bytes, "floating literal length");
+                            count(floating->spelling.size(),
+                                  limits_.maximum_numeric_bytes,
+                                  "floating literal length");
                             for (const auto character : floating->spelling)
                                 byte(static_cast<std::uint8_t>(character));
                         }
                         else
-                            fail(ErrorKind::UnsupportedType, "floating literal", "literal payload does not match floating type");
+                            fail(
+                                ErrorKind::UnsupportedType,
+                                "floating literal",
+                                "literal payload does not match floating type");
                         return;
                     case Type::Kind::String:
-                        if (const auto *string = std::get_if<std::u32string>(&value.literal))
+                        if (const auto *string
+                            = std::get_if<std::u32string>(&value.literal))
                         {
                             byte(3U);
                             text(*string, "string literal");
                         }
-                        else if (std::holds_alternative<std::monostate>(value.literal))
+                        else if (std::holds_alternative<std::monostate>(
+                                     value.literal))
                             byte(5U);
                         else
-                            fail(ErrorKind::UnsupportedType, "string literal", "literal payload does not match string type");
+                            fail(ErrorKind::UnsupportedType,
+                                 "string literal",
+                                 "literal payload does not match string type");
                         return;
                     case Type::Kind::Function:
                     case Type::Kind::Named:
-                        if (std::holds_alternative<std::monostate>(value.literal))
+                        if (std::holds_alternative<std::monostate>(
+                                value.literal))
                             byte(5U);
                         else
-                            fail(ErrorKind::UnsupportedType, "literal", "reference literal must be null");
+                            fail(ErrorKind::UnsupportedType,
+                                 "literal",
+                                 "reference literal must be null");
                         return;
                     case Type::Kind::TypeVariable:
-                        fail(ErrorKind::UnsupportedType, "literal", "non-primitive literal types cannot cross CorePrep wire");
+                        fail(ErrorKind::UnsupportedType,
+                             "literal",
+                             "non-primitive literal types cannot cross "
+                             "CorePrep wire");
                         return;
                 }
             }
@@ -400,9 +492,12 @@ namespace visual_xsharp::core::wire
             operation(Operation operation, const std::vector<Atom> &operands)
             {
                 byte(static_cast<std::uint8_t>(operation));
-                vector(operands, limits_.maximum_operands_per_instruction, "operand count", [this](const Atom &operand) {
-                    atom(operand);
-                });
+                vector(operands,
+                       limits_.maximum_operands_per_instruction,
+                       "operand count",
+                       [this](const Atom &operand) {
+                           atom(operand);
+                       });
             }
 
             void
@@ -411,23 +506,22 @@ namespace visual_xsharp::core::wire
                 byte(static_cast<std::uint8_t>(instruction.operation));
                 if (instruction.operation == Operation::MakeClosure)
                 {
-                    symbol(instruction.closure_function, "closure function symbol");
-                    vector(
-                        instruction.captures,
-                        limits_.maximum_operands_per_instruction,
-                        "closure capture count",
-                        [this](const Capture &value) {
-                            capture(value);
-                        });
+                    symbol(instruction.closure_function,
+                           "closure function symbol");
+                    vector(instruction.captures,
+                           limits_.maximum_operands_per_instruction,
+                           "closure capture count",
+                           [this](const Capture &value) {
+                               capture(value);
+                           });
                     return;
                 }
-                vector(
-                    instruction.operands,
-                    limits_.maximum_operands_per_instruction,
-                    "operand count",
-                    [this](const Atom &operand) {
-                        atom(operand);
-                    });
+                vector(instruction.operands,
+                       limits_.maximum_operands_per_instruction,
+                       "operand count",
+                       [this](const Atom &operand) {
+                           atom(operand);
+                       });
             }
 
             void
@@ -446,7 +540,9 @@ namespace visual_xsharp::core::wire
                         symbol(value.destination, "assignment symbol");
                         if (value.operands.size() != 1U)
                         {
-                            fail(ErrorKind::InvalidCount, "assignment", "assignment must contain exactly one atom");
+                            fail(ErrorKind::InvalidCount,
+                                 "assignment",
+                                 "assignment must contain exactly one atom");
                             return;
                         }
                         atom(value.operands.front());
@@ -483,9 +579,12 @@ namespace visual_xsharp::core::wire
             block(const Block &value)
             {
                 unsigned_integer(value.id);
-                vector(value.instructions, limits_.maximum_instructions_per_block, "instruction count", [this](const Instruction &item) {
-                    instruction(item);
-                });
+                vector(value.instructions,
+                       limits_.maximum_instructions_per_block,
+                       "instruction count",
+                       [this](const Instruction &item) {
+                           instruction(item);
+                       });
                 terminator(value.terminator);
             }
 
@@ -500,14 +599,20 @@ namespace visual_xsharp::core::wire
             function(const Function &value)
             {
                 symbol(value.symbol, "function symbol");
-                vector(value.parameters, limits_.maximum_parameters_per_function, "parameter count", [this](const Parameter &item) {
-                    parameter(item);
-                });
+                vector(value.parameters,
+                       limits_.maximum_parameters_per_function,
+                       "parameter count",
+                       [this](const Parameter &item) {
+                           parameter(item);
+                       });
                 type(value.return_type);
                 unsigned_integer(value.entry);
-                vector(value.blocks, limits_.maximum_blocks_per_function, "block count", [this](const Block &item) {
-                    block(item);
-                });
+                vector(value.blocks,
+                       limits_.maximum_blocks_per_function,
+                       "block count",
+                       [this](const Block &item) {
+                           block(item);
+                       });
             }
         };
     } // namespace

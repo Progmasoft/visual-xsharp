@@ -12,7 +12,8 @@ namespace visual_xsharp::xpp
         namespace Analysis = Visual::XSharp::Analysis;
 
         [[nodiscard]] auto
-        Successors(const Terminator &terminator) -> std::vector<Analysis::ControlFlowBlockId>
+        Successors(const Terminator &terminator)
+            -> std::vector<Analysis::ControlFlowBlockId>
         {
             switch (terminator.kind)
             {
@@ -31,7 +32,8 @@ namespace visual_xsharp::xpp
     } // namespace
 
     auto
-    AnalyzeControlStructure(const Function &function) -> Analysis::DominanceResult
+    AnalyzeControlStructure(const Function &function)
+        -> Analysis::DominanceResult
     {
         Analysis::ControlFlowGraph graph;
         graph.entry = function.entry;

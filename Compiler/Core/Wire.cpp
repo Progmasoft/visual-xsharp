@@ -23,35 +23,51 @@ namespace Visual::XSharp::Core::Wire
             {}
 
             /**
-             * @brief Validate the complete envelope before publishing a module.
+             * @brief Validate the complete envelope before
+             * publishing a module.
              *
-             * Header checks precede body allocation, and the final offset check
-             * rejects trailing bytes so one document has exactly one meaning.
-             */
+             * Header checks
+             * precede body allocation, and the final offset check
+ * rejects
+             * trailing bytes so one document has exactly one meaning.
+ */
             [[nodiscard]] auto
             Document() -> DecodeResult
             {
                 if (bytes_.size() > limits_.maximumWireBytes)
-                    return Failure(ErrorKind::LimitExceeded, "wire byte length", "input exceeds configured byte limit");
+                    return Failure(ErrorKind::LimitExceeded,
+                                   "wire byte length",
+                                   "input exceeds configured byte limit");
                 for (const auto expected : kMagic)
                     if (Byte("magic") != expected)
-                        return Failure(ErrorKind::InvalidMagic, "magic", "input is not a Visual X# Core document");
+                        return Failure(
+                            ErrorKind::InvalidMagic,
+                            "magic",
+                            "input is not a Visual X# Core document");
                 const auto version = Unsigned<std::uint16_t>("version");
                 if (!error_ && version != kCurrentVersion)
-                    Fail(ErrorKind::UnsupportedVersion, "version", "unsupported Core wire version");
+                    Fail(ErrorKind::UnsupportedVersion,
+                         "version",
+                         "unsupported Core wire version");
                 const auto flags = Unsigned<std::uint16_t>("flags");
                 if (!error_ && flags != 0U)
-                    Fail(ErrorKind::InvalidTag, "flags", "reserved flags must be zero");
+                    Fail(ErrorKind::InvalidTag,
+                         "flags",
+                         "reserved flags must be zero");
                 if (error_)
                     return Result();
 
                 Module module;
                 module.name = QualifiedName("module name");
-                module.functions = Vector<Function>(limits_.maximumFunctions, "function count", [this] {
-                    return ReadFunction();
-                });
+                module.functions = Vector<Function>(limits_.maximumFunctions,
+                                                    "function count",
+                                                    [this] {
+                                                        return ReadFunction();
+                                                    });
                 if (!error_ && offset_ != bytes_.size())
-                    Fail(ErrorKind::TrailingInput, "document", "bytes remain after Core module");
+                    Fail(ErrorKind::TrailingInput,
+                         "document",
+                         "bytes remain after Core module");
                 if (!error_)
                     module_ = std::move(module);
                 return Result();
@@ -70,7 +86,8 @@ namespace Visual::XSharp::Core::Wire
                 return DecodeResult{ std::move(module_), std::move(error_) };
             }
             [[nodiscard]] auto
-            Failure(ErrorKind kind, std::string context, std::string message) -> DecodeResult
+            Failure(ErrorKind kind, std::string context, std::string message)
+                -> DecodeResult
             {
                 Fail(kind, std::move(context), std::move(message));
                 return Result();
@@ -79,22 +96,29 @@ namespace Visual::XSharp::Core::Wire
             Fail(ErrorKind kind, std::string context, std::string message)
             {
                 if (!error_)
-                    error_ = Error{ kind, offset_, std::move(context), std::move(message) };
+                    error_ = Error{ kind,
+                                    offset_,
+                                    std::move(context),
+                                    std::move(message) };
             }
             [[nodiscard]] auto
             Byte(std::string_view context) -> std::uint8_t
             {
                 if (offset_ >= bytes_.size())
                 {
-                    Fail(ErrorKind::TruncatedInput, std::string(context), "input ended before field was complete");
+                    Fail(ErrorKind::TruncatedInput,
+                         std::string(context),
+                         "input ended before field was complete");
                     return 0U;
                 }
                 return bytes_[offset_++];
             }
             /**
-             * @brief Read an unsigned little-endian wire scalar of a fixed width.
+             * @brief Read an unsigned little-endian wire scalar
+             * of a fixed width.
              *
-             * This byte order is explicit so host endianness cannot alter VXCR.
+             * This byte order
+             * is explicit so host endianness cannot alter VXCR.
              */
             template<typename Integer>
             [[nodiscard]] auto
@@ -102,28 +126,36 @@ namespace Visual::XSharp::Core::Wire
             {
                 static_assert(std::is_unsigned_v<Integer>);
                 Integer result{};
-                for (std::size_t shift = 0; shift < sizeof(Integer) * 8U; shift += 8U)
+                for (std::size_t shift = 0; shift < sizeof(Integer) * 8U;
+                     shift += 8U)
                     result |= static_cast<Integer>(Byte(context)) << shift;
                 return result;
             }
             /**
-             * @brief Validate an untrusted collection length before narrowing it.
+             * @brief Validate an untrusted collection length
+             * before narrowing it.
              *
-             * Callers use this result before reserve or recursive decoding, which
-             * keeps hostile counts from becoming unchecked allocation requests.
-             */
+             * Callers use
+             * this result before reserve or recursive decoding, which
+ * keeps
+             * hostile counts from becoming unchecked allocation requests.
+ */
             [[nodiscard]] auto
             Count(std::size_t maximum, std::string_view context) -> std::size_t
             {
                 const auto value = Unsigned<std::uint32_t>(context);
                 if (!error_ && value > maximum)
-                    Fail(ErrorKind::LimitExceeded, std::string(context), "collection count exceeds configured limit");
+                    Fail(ErrorKind::LimitExceeded,
+                         std::string(context),
+                         "collection count exceeds configured limit");
                 return error_ ? 0U : static_cast<std::size_t>(value);
             }
-            /** @brief Reserve only after Count has enforced the caller's limit. */
+            /** @brief Reserve only after Count has enforced the caller's limit.
+             */
             template<typename Value, typename Decode>
             [[nodiscard]] auto
-            Vector(std::size_t maximum, std::string_view context, Decode decode) -> std::vector<Value>
+            Vector(std::size_t maximum, std::string_view context, Decode decode)
+                -> std::vector<Value>
             {
                 const auto size = Count(maximum, context);
                 std::vector<Value> values;
@@ -133,11 +165,14 @@ namespace Visual::XSharp::Core::Wire
                 return values;
             }
             /**
-             * @brief Read scalar-counted UTF-32 text and reject non-scalar values.
+             * @brief Read scalar-counted UTF-32 text and reject
+             * non-scalar values.
              *
-             * VXCR stores Unicode scalar values, not UTF-8 bytes or UTF-16 code
-             * units; surrogate code points and values above U+10FFFF are invalid.
-             */
+             * VXCR stores
+             * Unicode scalar values, not UTF-8 bytes or UTF-16 code
+ * units;
+             * surrogate code points and values above U+10FFFF are invalid.
+ */
             [[nodiscard]] auto
             Text(std::string_view context) -> std::u32string
             {
@@ -147,9 +182,12 @@ namespace Visual::XSharp::Core::Wire
                 for (std::size_t index = 0; index < size && !error_; ++index)
                 {
                     const auto scalar = Unsigned<std::uint32_t>(context);
-                    if (scalar > 0x10ffffU || (scalar >= 0xd800U && scalar <= 0xdfffU))
+                    if (scalar > 0x10ffffU
+                        || (scalar >= 0xd800U && scalar <= 0xdfffU))
                     {
-                        Fail(ErrorKind::InvalidScalar, std::string(context), "wire text contains a non-scalar Unicode value");
+                        Fail(ErrorKind::InvalidScalar,
+                             std::string(context),
+                             "wire text contains a non-scalar Unicode value");
                         break;
                     }
                     value.push_back(static_cast<char32_t>(scalar));
@@ -157,7 +195,8 @@ namespace Visual::XSharp::Core::Wire
                 return value;
             }
             [[nodiscard]] auto
-            QualifiedName(std::string_view context) -> std::vector<std::u32string>
+            QualifiedName(std::string_view context)
+                -> std::vector<std::u32string>
             {
                 return Vector<std::u32string>(65535U, context, [this, context] {
                     return Text(context);
@@ -168,7 +207,9 @@ namespace Visual::XSharp::Core::Wire
             {
                 const auto id = Unsigned<SymbolId>(context);
                 if (!error_ && id == 0U)
-                    Fail(ErrorKind::InvalidSymbol, std::string(context), "symbol id must be positive");
+                    Fail(ErrorKind::InvalidSymbol,
+                         std::string(context),
+                         "symbol id must be positive");
                 return SymbolName{ id, Text(context) };
             }
             [[nodiscard]] auto
@@ -176,7 +217,9 @@ namespace Visual::XSharp::Core::Wire
             {
                 if (depth > limits_.maximumTypeDepth)
                 {
-                    Fail(ErrorKind::LimitExceeded, "type", "type nesting exceeds configured limit");
+                    Fail(ErrorKind::LimitExceeded,
+                         "type",
+                         "type nesting exceeds configured limit");
                     return Type::unit();
                 }
                 switch (Byte("type tag"))
@@ -192,42 +235,76 @@ namespace Visual::XSharp::Core::Wire
                     case 4:
                     {
                         auto name = QualifiedName("named type");
-                        auto arguments = Vector<::visual_xsharp::core::TemplateArgument>(
+                        auto arguments = Vector<
+                            ::visual_xsharp::core::TemplateArgument>(
                             limits_.maximumOperands,
                             "template argument count",
                             [this, depth] {
                                 switch (Byte("template argument tag"))
                                 {
                                     case 0:
-                                        return ::visual_xsharp::core::TemplateArgument::type_argument(ReadType(depth + 1U));
+                                        return ::visual_xsharp::core::
+                                            TemplateArgument::type_argument(
+                                                ReadType(depth + 1U));
                                     case 1:
-                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
-                                            ::visual_xsharp::core::TemplateValue::integer_value(ReadInteger("template integer")));
+                                        return ::visual_xsharp::core::
+                                            TemplateArgument::value_argument(
+                                                ::visual_xsharp::core::
+                                                    TemplateValue::
+                                                        integer_value(
+                                                            ReadInteger(
+                                                                "template "
+                                                                "integer")));
                                     case 2:
-                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
-                                            ::visual_xsharp::core::TemplateValue::boolean_value(Boolean("template boolean")));
+                                        return ::visual_xsharp::core::
+                                            TemplateArgument::value_argument(
+                                                ::visual_xsharp::core::
+                                                    TemplateValue::
+                                                        boolean_value(Boolean(
+                                                            "template "
+                                                            "boolean")));
                                     case 3:
-                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
-                                            ::visual_xsharp::core::TemplateValue::character_value(ReadInteger("template character")));
+                                        return ::visual_xsharp::core::
+                                            TemplateArgument::value_argument(
+                                                ::visual_xsharp::core::
+                                                    TemplateValue::
+                                                        character_value(
+                                                            ReadInteger(
+                                                                "template "
+                                                                "character")));
                                     case 4:
-                                        return ::visual_xsharp::core::TemplateArgument::value_argument(
-                                            ::visual_xsharp::core::TemplateValue::parameter_value(Symbol("template value parameter")));
+                                        return ::visual_xsharp::core::
+                                            TemplateArgument::value_argument(
+                                                ::visual_xsharp::core::
+                                                    TemplateValue::
+                                                        parameter_value(Symbol(
+                                                            "template value "
+                                                            "parameter")));
                                     default:
-                                        Fail(ErrorKind::InvalidTag, "template argument tag", "unknown template argument tag");
-                                        return ::visual_xsharp::core::TemplateArgument{};
+                                        Fail(ErrorKind::InvalidTag,
+                                             "template argument tag",
+                                             "unknown template argument tag");
+                                        return ::visual_xsharp::core::
+                                            TemplateArgument{};
                                 }
                             });
-                        return Type::named_template(std::move(name), std::move(arguments));
+                        return Type::named_template(std::move(name),
+                                                    std::move(arguments));
                     }
                     case 5:
                     {
-                        auto parameters = Vector<Type>(limits_.maximumParameters, "function type parameter count", [this, depth] {
-                            return ReadType(depth + 1U);
-                        });
-                        return Type::function(std::move(parameters), ReadType(depth + 1U));
+                        auto parameters
+                            = Vector<Type>(limits_.maximumParameters,
+                                           "function type parameter count",
+                                           [this, depth] {
+                                               return ReadType(depth + 1U);
+                                           });
+                        return Type::function(std::move(parameters),
+                                              ReadType(depth + 1U));
                     }
                     case 6:
-                        return Type::type_variable(Symbol("type variable symbol"));
+                        return Type::type_variable(
+                            Symbol("type variable symbol"));
                     case 7:
                         return Type::character();
                     case 8:
@@ -257,7 +334,9 @@ namespace Visual::XSharp::Core::Wire
                     case 20:
                         return Type::float128();
                     default:
-                        Fail(ErrorKind::InvalidTag, "type tag", "unknown Core type tag");
+                        Fail(ErrorKind::InvalidTag,
+                             "type tag",
+                             "unknown Core type tag");
                         return Type::unit();
                 }
             }
@@ -266,19 +345,27 @@ namespace Visual::XSharp::Core::Wire
             {
                 const auto value = Byte(context);
                 if (value > 1U)
-                    Fail(ErrorKind::InvalidBoolean, std::string(context), "boolean byte must be zero or one");
+                    Fail(ErrorKind::InvalidBoolean,
+                         std::string(context),
+                         "boolean byte must be zero or one");
                 return value == 1U;
             }
             [[nodiscard]] auto
-            ReadInteger(std::string_view context) -> ::visual_xsharp::core::IntegerLiteral
+            ReadInteger(std::string_view context)
+                -> ::visual_xsharp::core::IntegerLiteral
             {
                 ::visual_xsharp::core::IntegerLiteral value;
                 value.negative = Boolean(std::string(context) + " sign");
-                value.magnitude = Vector<std::uint8_t>(limits_.maximumNumericBytes, std::string(context) + " magnitude", [this, context] {
-                    return Byte(std::string(context) + " magnitude");
-                });
+                value.magnitude = Vector<std::uint8_t>(
+                    limits_.maximumNumericBytes,
+                    std::string(context) + " magnitude",
+                    [this, context] {
+                        return Byte(std::string(context) + " magnitude");
+                    });
                 if (!::visual_xsharp::core::integer_is_canonical(value))
-                    Fail(ErrorKind::InvalidInteger, std::string(context), "integer magnitude/sign is not canonical");
+                    Fail(ErrorKind::InvalidInteger,
+                         std::string(context),
+                         "integer magnitude/sign is not canonical");
                 return value;
             }
             [[nodiscard]] auto
@@ -291,41 +378,59 @@ namespace Visual::XSharp::Core::Wire
                     case 1:
                         return Boolean("boolean literal");
                     case 2:
-                        return static_cast<std::int64_t>(Unsigned<std::uint64_t>("integer literal"));
+                        return static_cast<std::int64_t>(
+                            Unsigned<std::uint64_t>("integer literal"));
                     case 3:
                         return Text("string literal");
                     case 4:
                     {
                         ::visual_xsharp::core::IntegerLiteral value;
                         value.negative = Boolean("integer sign");
-                        value.magnitude = Vector<std::uint8_t>(limits_.maximumNumericBytes, "integer magnitude", [this] {
-                            return Byte("integer magnitude");
-                        });
+                        value.magnitude = Vector<std::uint8_t>(
+                            limits_.maximumNumericBytes,
+                            "integer magnitude",
+                            [this] {
+                                return Byte("integer magnitude");
+                            });
                         if (!::visual_xsharp::core::integer_is_canonical(value))
-                            Fail(ErrorKind::InvalidInteger, "integer literal", "integer magnitude/sign is not canonical");
+                            Fail(ErrorKind::InvalidInteger,
+                                 "integer literal",
+                                 "integer magnitude/sign is not canonical");
                         return value;
                     }
                     case 5:
                     {
-                        const auto size = Count(limits_.maximumNumericBytes, "floating literal length");
+                        const auto size = Count(limits_.maximumNumericBytes,
+                                                "floating literal length");
                         std::string spelling;
                         spelling.reserve(size);
-                        for (std::size_t index = 0; index < size && !error_; ++index)
+                        for (std::size_t index = 0; index < size && !error_;
+                             ++index)
                         {
                             const auto value = Byte("floating literal");
                             if (value > 0x7fU)
-                                Fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling must be ASCII");
+                                Fail(ErrorKind::InvalidInteger,
+                                     "floating literal",
+                                     "floating spelling must be ASCII");
                             else
                                 spelling.push_back(static_cast<char>(value));
                         }
-                        if (!error_ && !::visual_xsharp::core::floating_spelling_is_valid(spelling))
-                            Fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling is not canonical");
-                        return ::visual_xsharp::core::FloatingLiteral{ std::move(spelling) };
+                        if (!error_
+                            && !::visual_xsharp::core::
+                                   floating_spelling_is_valid(spelling))
+                            Fail(ErrorKind::InvalidInteger,
+                                 "floating literal",
+                                 "floating spelling is not canonical");
+                        return ::visual_xsharp::core::FloatingLiteral{
+                            std::move(spelling)
+                        };
                     }
                     case 6:
                         return std::monostate{};
                     default:
-                        Fail(ErrorKind::InvalidTag, "literal tag", "unknown Core literal tag");
+                        Fail(ErrorKind::InvalidTag,
+                             "literal tag",
+                             "unknown Core literal tag");
                         return std::monostate{};
                 }
             }
@@ -334,57 +439,82 @@ namespace Visual::XSharp::Core::Wire
             {
                 if (depth > limits_.maximumExpressionDepth)
                 {
-                    Fail(ErrorKind::LimitExceeded, "expression", "expression nesting exceeds configured limit");
+                    Fail(ErrorKind::LimitExceeded,
+                         "expression",
+                         "expression nesting exceeds configured limit");
                     return {};
                 }
                 const auto tag = Byte("expression tag");
-                const auto primitiveTag = tag == 3U ? Byte("primitive tag") : 0U;
+                const auto primitiveTag
+                    = tag == 3U ? Byte("primitive tag") : 0U;
                 auto valueType = ReadType();
                 switch (tag)
                 {
                     case 0:
-                        return Expression::Variable(Symbol("variable symbol"), std::move(valueType));
+                        return Expression::Variable(Symbol("variable symbol"),
+                                                    std::move(valueType));
                     case 1:
-                        return Expression::Constant(ReadLiteral(), std::move(valueType));
+                        return Expression::Constant(ReadLiteral(),
+                                                    std::move(valueType));
                     case 2:
                     {
                         auto callee = ReadExpression(depth + 1U);
-                        auto arguments = Vector<Expression>(limits_.maximumOperands, "call argument count", [this, depth] {
-                            return ReadExpression(depth + 1U);
-                        });
-                        return Expression::Apply(std::move(callee), std::move(arguments), std::move(valueType));
+                        auto arguments = Vector<Expression>(
+                            limits_.maximumOperands,
+                            "call argument count",
+                            [this, depth] {
+                                return ReadExpression(depth + 1U);
+                            });
+                        return Expression::Apply(std::move(callee),
+                                                 std::move(arguments),
+                                                 std::move(valueType));
                     }
                     case 3:
                     {
-                        if (primitiveTag > static_cast<std::uint8_t>(Primitive::TypeIs))
-                            Fail(ErrorKind::InvalidTag, "primitive tag", "unknown Core primitive tag");
-                        auto arguments = Vector<Expression>(limits_.maximumOperands, "primitive operand count", [this, depth] {
-                            return ReadExpression(depth + 1U);
-                        });
-                        return Expression::InvokePrimitive(static_cast<Primitive>(primitiveTag), std::move(arguments), std::move(valueType));
+                        if (primitiveTag
+                            > static_cast<std::uint8_t>(Primitive::TypeIs))
+                            Fail(ErrorKind::InvalidTag,
+                                 "primitive tag",
+                                 "unknown Core primitive tag");
+                        auto arguments = Vector<Expression>(
+                            limits_.maximumOperands,
+                            "primitive operand count",
+                            [this, depth] {
+                                return ReadExpression(depth + 1U);
+                            });
+                        return Expression::InvokePrimitive(
+                            static_cast<Primitive>(primitiveTag),
+                            std::move(arguments),
+                            std::move(valueType));
                     }
                     case 4:
                     {
-                        auto captures = Vector<Capture>(limits_.maximumOperands, "closure capture count", [this, depth] {
-                            return ReadCapture(depth + 1U);
-                        });
+                        auto captures = Vector<Capture>(limits_.maximumOperands,
+                                                        "closure capture count",
+                                                        [this, depth] {
+                                                            return ReadCapture(
+                                                                depth + 1U);
+                                                        });
                         auto parameters = Vector<std::pair<SymbolName, Type>>(
                             limits_.maximumParameters,
                             "closure parameter count",
                             [this] {
                                 auto parameter = ReadParameter();
-                                return std::pair{ std::move(parameter.symbol), std::move(parameter.type) };
+                                return std::pair{ std::move(parameter.symbol),
+                                                  std::move(parameter.type) };
                             });
                         auto returnType = ReadType();
-                        auto body = Vector<Statement>(limits_.maximumStatements, "closure statement count", [this] {
-                            return ReadStatement();
-                        });
-                        return Expression::Closure(
-                            std::move(captures),
-                            std::move(parameters),
-                            std::move(returnType),
-                            std::move(body),
-                            std::move(valueType));
+                        auto body
+                            = Vector<Statement>(limits_.maximumStatements,
+                                                "closure statement count",
+                                                [this] {
+                                                    return ReadStatement();
+                                                });
+                        return Expression::Closure(std::move(captures),
+                                                   std::move(parameters),
+                                                   std::move(returnType),
+                                                   std::move(body),
+                                                   std::move(valueType));
                     }
                     case 5:
                     {
@@ -392,15 +522,16 @@ namespace Visual::XSharp::Core::Wire
                         auto bindingType = ReadType();
                         auto value = ReadExpression(depth + 1U);
                         auto body = ReadExpression(depth + 1U);
-                        return Expression::Let(
-                            std::move(symbol),
-                            std::move(bindingType),
-                            std::move(value),
-                            std::move(body),
-                            std::move(valueType));
+                        return Expression::Let(std::move(symbol),
+                                               std::move(bindingType),
+                                               std::move(value),
+                                               std::move(body),
+                                               std::move(valueType));
                     }
                     default:
-                        Fail(ErrorKind::InvalidTag, "expression tag", "unknown Core expression tag");
+                        Fail(ErrorKind::InvalidTag,
+                             "expression tag",
+                             "unknown Core expression tag");
                         return {};
                 }
             }
@@ -409,7 +540,9 @@ namespace Visual::XSharp::Core::Wire
             {
                 const auto tag = Byte("closure capture mode");
                 if (tag > 2U)
-                    Fail(ErrorKind::InvalidTag, "closure capture mode", "unknown Core closure capture mode");
+                    Fail(ErrorKind::InvalidTag,
+                         "closure capture mode",
+                         "unknown Core closure capture mode");
                 auto symbol = Symbol("closure capture symbol");
                 auto type = ReadType();
                 auto value = ReadExpression(depth);
@@ -429,32 +562,47 @@ namespace Visual::XSharp::Core::Wire
                     {
                         auto symbol = Symbol("binding symbol");
                         auto type = ReadType();
-                        const auto mutableBinding = Boolean("binding mutability");
+                        const auto mutableBinding
+                            = Boolean("binding mutability");
                         auto value = ReadExpression();
-                        return Statement::Bind(Binding{ std::move(symbol), std::move(type), mutableBinding, std::move(value) });
+                        return Statement::Bind(Binding{ std::move(symbol),
+                                                        std::move(type),
+                                                        mutableBinding,
+                                                        std::move(value) });
                     }
                     case 1:
                     {
                         auto symbol = Symbol("assignment symbol");
-                        return Statement::Assign(std::move(symbol), ReadExpression());
+                        return Statement::Assign(std::move(symbol),
+                                                 ReadExpression());
                     }
                     case 2:
                         return Statement::Return(ReadExpression());
                     case 3:
                     {
                         auto condition = ReadExpression();
-                        auto whenTrue = Vector<Statement>(limits_.maximumStatements, "true branch statement count", [this] {
-                            return ReadStatement();
-                        });
-                        auto whenFalse = Vector<Statement>(limits_.maximumStatements, "false branch statement count", [this] {
-                            return ReadStatement();
-                        });
-                        return Statement::If(std::move(condition), std::move(whenTrue), std::move(whenFalse));
+                        auto whenTrue
+                            = Vector<Statement>(limits_.maximumStatements,
+                                                "true branch statement count",
+                                                [this] {
+                                                    return ReadStatement();
+                                                });
+                        auto whenFalse
+                            = Vector<Statement>(limits_.maximumStatements,
+                                                "false branch statement count",
+                                                [this] {
+                                                    return ReadStatement();
+                                                });
+                        return Statement::If(std::move(condition),
+                                             std::move(whenTrue),
+                                             std::move(whenFalse));
                     }
                     case 4:
                         return Statement::Evaluate(ReadExpression());
                     default:
-                        Fail(ErrorKind::InvalidTag, "statement tag", "unknown Core statement tag");
+                        Fail(ErrorKind::InvalidTag,
+                             "statement tag",
+                             "unknown Core statement tag");
                         return {};
                 }
             }
@@ -468,13 +616,18 @@ namespace Visual::XSharp::Core::Wire
             {
                 Function function;
                 function.symbol = Symbol("function symbol");
-                function.parameters = Vector<Parameter>(limits_.maximumParameters, "parameter count", [this] {
-                    return ReadParameter();
-                });
+                function.parameters
+                    = Vector<Parameter>(limits_.maximumParameters,
+                                        "parameter count",
+                                        [this] {
+                                            return ReadParameter();
+                                        });
                 function.returnType = ReadType();
-                function.body = Vector<Statement>(limits_.maximumStatements, "statement count", [this] {
-                    return ReadStatement();
-                });
+                function.body = Vector<Statement>(limits_.maximumStatements,
+                                                  "statement count",
+                                                  [this] {
+                                                      return ReadStatement();
+                                                  });
                 return function;
             }
         };
@@ -493,15 +646,20 @@ namespace Visual::XSharp::Core::Wire
                 Unsigned(kCurrentVersion);
                 Unsigned<std::uint16_t>(0U);
                 QualifiedName(module.name, "module name");
-                Vector(module.functions, limits_.maximumFunctions, "function count", [this](const Function &function) {
-                    WriteFunction(function);
-                });
+                Vector(module.functions,
+                       limits_.maximumFunctions,
+                       "function count",
+                       [this](const Function &function) {
+                           WriteFunction(function);
+                       });
             }
             [[nodiscard]] auto
             Finish() && -> EncodeResult
             {
                 if (!error_ && bytes_.size() > limits_.maximumWireBytes)
-                    Fail(ErrorKind::LimitExceeded, "wire byte length", "encoded document exceeds configured limit");
+                    Fail(ErrorKind::LimitExceeded,
+                         "wire byte length",
+                         "encoded document exceeds configured limit");
                 return EncodeResult{ std::move(bytes_), std::move(error_) };
             }
 
@@ -514,7 +672,10 @@ namespace Visual::XSharp::Core::Wire
             Fail(ErrorKind kind, std::string context, std::string message)
             {
                 if (!error_)
-                    error_ = Error{ kind, bytes_.size(), std::move(context), std::move(message) };
+                    error_ = Error{ kind,
+                                    bytes_.size(),
+                                    std::move(context),
+                                    std::move(message) };
             }
             void
             Byte(std::uint8_t value)
@@ -527,20 +688,30 @@ namespace Visual::XSharp::Core::Wire
             Unsigned(Integer value)
             {
                 static_assert(std::is_unsigned_v<Integer>);
-                for (std::size_t shift = 0; shift < sizeof(Integer) * 8U; shift += 8U)
-                    Byte(static_cast<std::uint8_t>((value >> shift) & static_cast<Integer>(0xffU)));
+                for (std::size_t shift = 0; shift < sizeof(Integer) * 8U;
+                     shift += 8U)
+                    Byte(static_cast<std::uint8_t>(
+                        (value >> shift) & static_cast<Integer>(0xffU)));
             }
             void
-            Count(std::size_t value, std::size_t maximum, std::string_view context)
+            Count(std::size_t value,
+                  std::size_t maximum,
+                  std::string_view context)
             {
-                if (value > maximum || value > std::numeric_limits<std::uint32_t>::max())
-                    Fail(ErrorKind::LimitExceeded, std::string(context), "collection count exceeds wire limit");
+                if (value > maximum
+                    || value > std::numeric_limits<std::uint32_t>::max())
+                    Fail(ErrorKind::LimitExceeded,
+                         std::string(context),
+                         "collection count exceeds wire limit");
                 else
                     Unsigned(static_cast<std::uint32_t>(value));
             }
             template<typename Value, typename Encode>
             void
-            Vector(const std::vector<Value> &values, std::size_t maximum, std::string_view context, Encode encode)
+            Vector(const std::vector<Value> &values,
+                   std::size_t maximum,
+                   std::string_view context,
+                   Encode encode)
             {
                 Count(values.size(), maximum, context);
                 for (const auto &value : values)
@@ -557,27 +728,36 @@ namespace Visual::XSharp::Core::Wire
                 for (const auto scalar : value)
                 {
                     const auto numeric = static_cast<std::uint32_t>(scalar);
-                    if (numeric > 0x10ffffU || (numeric >= 0xd800U && numeric <= 0xdfffU))
+                    if (numeric > 0x10ffffU
+                        || (numeric >= 0xd800U && numeric <= 0xdfffU))
                     {
-                        Fail(ErrorKind::InvalidScalar, std::string(context), "text contains a non-scalar Unicode value");
+                        Fail(ErrorKind::InvalidScalar,
+                             std::string(context),
+                             "text contains a non-scalar Unicode value");
                         return;
                     }
                     Unsigned(numeric);
                 }
             }
             void
-            QualifiedName(const std::vector<std::u32string> &parts, std::string_view context)
+            QualifiedName(const std::vector<std::u32string> &parts,
+                          std::string_view context)
             {
-                Vector(parts, 65535U, context, [this, context](const auto &part) {
-                    Text(part, context);
-                });
+                Vector(parts,
+                       65535U,
+                       context,
+                       [this, context](const auto &part) {
+                           Text(part, context);
+                       });
             }
             void
             Symbol(const SymbolName &symbol, std::string_view context)
             {
                 if (symbol.id == 0U)
                 {
-                    Fail(ErrorKind::InvalidSymbol, std::string(context), "symbol id must be positive");
+                    Fail(ErrorKind::InvalidSymbol,
+                         std::string(context),
+                         "symbol id must be positive");
                     return;
                 }
                 Unsigned(symbol.id);
@@ -588,7 +768,9 @@ namespace Visual::XSharp::Core::Wire
             {
                 if (depth > limits_.maximumTypeDepth)
                 {
-                    Fail(ErrorKind::LimitExceeded, "type", "type nesting exceeds configured limit");
+                    Fail(ErrorKind::LimitExceeded,
+                         "type",
+                         "type nesting exceeds configured limit");
                     return;
                 }
                 switch (type.kind)
@@ -608,48 +790,69 @@ namespace Visual::XSharp::Core::Wire
                     case Type::Kind::Named:
                         Byte(4);
                         QualifiedName(type.name, "named type");
-                        Vector(type.templateArguments, limits_.maximumOperands, "template argument count", [this, depth](const auto &argument) {
-                            if (argument.kind == ::visual_xsharp::core::TemplateArgument::Kind::Type)
-                            {
-                                Byte(0);
-                                if (!argument.type)
-                                {
-                                    Fail(ErrorKind::UnsupportedType, "template argument", "type argument has no payload");
-                                    return;
-                                }
-                                WriteType(*argument.type, depth + 1U);
-                                return;
-                            }
-                            switch (argument.value.kind)
-                            {
-                                case ::visual_xsharp::core::TemplateValue::Kind::Integer:
-                                    Byte(1);
-                                    WriteInteger(argument.value.integer, "template integer");
-                                    return;
-                                case ::visual_xsharp::core::TemplateValue::Kind::Boolean:
-                                    Byte(2);
-                                    Byte(argument.value.boolean ? 1U : 0U);
-                                    return;
-                                case ::visual_xsharp::core::TemplateValue::Kind::Character:
-                                    Byte(3);
-                                    WriteInteger(argument.value.integer, "template character");
-                                    return;
-                                case ::visual_xsharp::core::TemplateValue::Kind::Parameter:
-                                    Byte(4);
-                                    Symbol(argument.value.parameter, "template value parameter");
-                                    return;
-                            }
-                        });
+                        Vector(type.templateArguments,
+                               limits_.maximumOperands,
+                               "template argument count",
+                               [this, depth](const auto &argument) {
+                                   if (argument.kind
+                                       == ::visual_xsharp::core::
+                                           TemplateArgument::Kind::Type)
+                                   {
+                                       Byte(0);
+                                       if (!argument.type)
+                                       {
+                                           Fail(ErrorKind::UnsupportedType,
+                                                "template argument",
+                                                "type argument has no payload");
+                                           return;
+                                       }
+                                       WriteType(*argument.type, depth + 1U);
+                                       return;
+                                   }
+                                   switch (argument.value.kind)
+                                   {
+                                       case ::visual_xsharp::core::
+                                           TemplateValue::Kind::Integer:
+                                           Byte(1);
+                                           WriteInteger(argument.value.integer,
+                                                        "template integer");
+                                           return;
+                                       case ::visual_xsharp::core::
+                                           TemplateValue::Kind::Boolean:
+                                           Byte(2);
+                                           Byte(argument.value.boolean ? 1U
+                                                                       : 0U);
+                                           return;
+                                       case ::visual_xsharp::core::
+                                           TemplateValue::Kind::Character:
+                                           Byte(3);
+                                           WriteInteger(argument.value.integer,
+                                                        "template character");
+                                           return;
+                                       case ::visual_xsharp::core::
+                                           TemplateValue::Kind::Parameter:
+                                           Byte(4);
+                                           Symbol(argument.value.parameter,
+                                                  "template value parameter");
+                                           return;
+                                   }
+                               });
                         return;
                     case Type::Kind::Function:
                         Byte(5);
                         if (type.components.empty())
                         {
-                            Fail(ErrorKind::UnsupportedType, "function type", "function type has no result component");
+                            Fail(ErrorKind::UnsupportedType,
+                                 "function type",
+                                 "function type has no result component");
                             return;
                         }
-                        Count(type.components.size() - 1U, limits_.maximumParameters, "function type parameter count");
-                        for (std::size_t index = 0; index + 1U < type.components.size(); ++index)
+                        Count(type.components.size() - 1U,
+                              limits_.maximumParameters,
+                              "function type parameter count");
+                        for (std::size_t index = 0;
+                             index + 1U < type.components.size();
+                             ++index)
                             WriteType(type.components[index], depth + 1U);
                         WriteType(type.components.back(), depth + 1U);
                         return;
@@ -702,17 +905,23 @@ namespace Visual::XSharp::Core::Wire
                 }
             }
             void
-            WriteInteger(const ::visual_xsharp::core::IntegerLiteral &integer, std::string_view context)
+            WriteInteger(const ::visual_xsharp::core::IntegerLiteral &integer,
+                         std::string_view context)
             {
                 if (!::visual_xsharp::core::integer_is_canonical(integer))
                 {
-                    Fail(ErrorKind::InvalidInteger, std::string(context), "integer magnitude/sign is not canonical");
+                    Fail(ErrorKind::InvalidInteger,
+                         std::string(context),
+                         "integer magnitude/sign is not canonical");
                     return;
                 }
                 Byte(integer.negative ? 1U : 0U);
-                Vector(integer.magnitude, limits_.maximumNumericBytes, std::string(context) + " magnitude", [this](const auto octet) {
-                    Byte(octet);
-                });
+                Vector(integer.magnitude,
+                       limits_.maximumNumericBytes,
+                       std::string(context) + " magnitude",
+                       [this](const auto octet) {
+                           Byte(octet);
+                       });
             }
             void
             WriteLiteral(const Literal &literal, const Type &valueType)
@@ -724,59 +933,85 @@ namespace Visual::XSharp::Core::Wire
                     Byte(1);
                     Byte(*boolean ? 1U : 0U);
                 }
-                else if (const auto *integer = std::get_if<std::int64_t>(&literal))
+                else if (const auto *integer
+                         = std::get_if<std::int64_t>(&literal))
                 {
                     Byte(2);
                     Unsigned(static_cast<std::uint64_t>(*integer));
                 }
-                else if (const auto *string = std::get_if<std::u32string>(&literal))
+                else if (const auto *string
+                         = std::get_if<std::u32string>(&literal))
                 {
                     Byte(3);
                     Text(*string, "string literal");
                 }
-                else if (const auto *integer = std::get_if<::visual_xsharp::core::IntegerLiteral>(&literal))
+                else if (const auto *integer
+                         = std::get_if<::visual_xsharp::core::IntegerLiteral>(
+                             &literal))
                 {
                     if (!::visual_xsharp::core::integer_is_canonical(*integer))
                     {
-                        Fail(ErrorKind::InvalidInteger, "integer literal", "integer magnitude/sign is not canonical");
+                        Fail(ErrorKind::InvalidInteger,
+                             "integer literal",
+                             "integer magnitude/sign is not canonical");
                         return;
                     }
                     Byte(4);
                     Byte(integer->negative ? 1U : 0U);
-                    Vector(integer->magnitude, limits_.maximumNumericBytes, "integer magnitude", [this](const std::uint8_t octet) {
-                        Byte(octet);
-                    });
+                    Vector(integer->magnitude,
+                           limits_.maximumNumericBytes,
+                           "integer magnitude",
+                           [this](const std::uint8_t octet) {
+                               Byte(octet);
+                           });
                 }
-                else if (const auto *floating = std::get_if<::visual_xsharp::core::FloatingLiteral>(&literal))
+                else if (const auto *floating
+                         = std::get_if<::visual_xsharp::core::FloatingLiteral>(
+                             &literal))
                 {
-                    if (!::visual_xsharp::core::floating_spelling_is_valid(floating->spelling))
+                    if (!::visual_xsharp::core::floating_spelling_is_valid(
+                            floating->spelling))
                     {
-                        Fail(ErrorKind::InvalidInteger, "floating literal", "floating spelling is not canonical");
+                        Fail(ErrorKind::InvalidInteger,
+                             "floating literal",
+                             "floating spelling is not canonical");
                         return;
                     }
                     Byte(5);
-                    Count(floating->spelling.size(), limits_.maximumNumericBytes, "floating literal length");
+                    Count(floating->spelling.size(),
+                          limits_.maximumNumericBytes,
+                          "floating literal length");
                     for (const auto character : floating->spelling)
                         Byte(static_cast<std::uint8_t>(character));
                 }
-                else if (const auto *integer = std::get_if<std::int32_t>(&literal))
+                else if (const auto *integer
+                         = std::get_if<std::int32_t>(&literal))
                 {
                     Byte(4);
-                    const auto normalized = ::visual_xsharp::core::integer_from_signed(*integer);
+                    const auto normalized
+                        = ::visual_xsharp::core::integer_from_signed(*integer);
                     Byte(normalized.negative ? 1U : 0U);
-                    Vector(normalized.magnitude, limits_.maximumNumericBytes, "integer magnitude", [this](const std::uint8_t octet) {
-                        Byte(octet);
-                    });
+                    Vector(normalized.magnitude,
+                           limits_.maximumNumericBytes,
+                           "integer magnitude",
+                           [this](const std::uint8_t octet) {
+                               Byte(octet);
+                           });
                 }
                 else
-                    Fail(ErrorKind::UnsupportedType, "literal", "literal cannot cross the Core v5 boundary");
+                    Fail(ErrorKind::UnsupportedType,
+                         "literal",
+                         "literal cannot cross the Core v5 boundary");
             }
             void
-            WriteExpression(const Expression &expression, std::size_t depth = 0U)
+            WriteExpression(const Expression &expression,
+                            std::size_t depth = 0U)
             {
                 if (depth > limits_.maximumExpressionDepth)
                 {
-                    Fail(ErrorKind::LimitExceeded, "expression", "expression nesting exceeds configured limit");
+                    Fail(ErrorKind::LimitExceeded,
+                         "expression",
+                         "expression nesting exceeds configured limit");
                     return;
                 }
                 Byte(static_cast<std::uint8_t>(expression.kind));
@@ -794,58 +1029,86 @@ namespace Visual::XSharp::Core::Wire
                     case Expression::Kind::Apply:
                         if (!expression.callee)
                         {
-                            Fail(ErrorKind::InvalidCount, "callee", "Core call must contain a callee");
+                            Fail(ErrorKind::InvalidCount,
+                                 "callee",
+                                 "Core call must contain a callee");
                             return;
                         }
                         WriteExpression(*expression.callee, depth + 1U);
-                        Vector(expression.operands, limits_.maximumOperands, "call argument count", [this, depth](const Expression &value) {
-                            WriteExpression(value, depth + 1U);
-                        });
+                        Vector(expression.operands,
+                               limits_.maximumOperands,
+                               "call argument count",
+                               [this, depth](const Expression &value) {
+                                   WriteExpression(value, depth + 1U);
+                               });
                         return;
                     case Expression::Kind::Primitive:
-                        Vector(expression.operands, limits_.maximumOperands, "primitive operand count", [this, depth](const Expression &value) {
-                            WriteExpression(value, depth + 1U);
-                        });
+                        Vector(expression.operands,
+                               limits_.maximumOperands,
+                               "primitive operand count",
+                               [this, depth](const Expression &value) {
+                                   WriteExpression(value, depth + 1U);
+                               });
                         return;
                     case Expression::Kind::Closure:
-                        Vector(expression.captures, limits_.maximumOperands, "closure capture count", [this, depth](const Capture &capture) {
-                            if (capture.mode != CaptureMode::Strong
-                                && capture.mode != CaptureMode::Weak
-                                && capture.mode != CaptureMode::Unowned)
-                            {
-                                Fail(ErrorKind::InvalidTag, "closure capture mode", "unknown Core closure capture mode");
-                                return;
-                            }
-                            Byte(static_cast<std::uint8_t>(capture.mode));
-                            Symbol(capture.symbol, "closure capture symbol");
-                            WriteType(capture.type);
-                            if (!capture.value)
-                            {
-                                Fail(ErrorKind::InvalidCount, "closure capture value", "Core closure capture must contain a value");
-                                return;
-                            }
-                            WriteExpression(*capture.value, depth + 1U);
-                        });
-                        Vector(expression.closureParameters, limits_.maximumParameters, "closure parameter count", [this](const auto &parameter) {
-                            Symbol(parameter.first, "parameter symbol");
-                            WriteType(parameter.second);
-                        });
+                        Vector(
+                            expression.captures,
+                            limits_.maximumOperands,
+                            "closure capture count",
+                            [this, depth](const Capture &capture) {
+                                if (capture.mode != CaptureMode::Strong
+                                    && capture.mode != CaptureMode::Weak
+                                    && capture.mode != CaptureMode::Unowned)
+                                {
+                                    Fail(ErrorKind::InvalidTag,
+                                         "closure capture mode",
+                                         "unknown Core closure capture mode");
+                                    return;
+                                }
+                                Byte(static_cast<std::uint8_t>(capture.mode));
+                                Symbol(capture.symbol,
+                                       "closure capture symbol");
+                                WriteType(capture.type);
+                                if (!capture.value)
+                                {
+                                    Fail(ErrorKind::InvalidCount,
+                                         "closure capture value",
+                                         "Core closure capture must contain a "
+                                         "value");
+                                    return;
+                                }
+                                WriteExpression(*capture.value, depth + 1U);
+                            });
+                        Vector(expression.closureParameters,
+                               limits_.maximumParameters,
+                               "closure parameter count",
+                               [this](const auto &parameter) {
+                                   Symbol(parameter.first, "parameter symbol");
+                                   WriteType(parameter.second);
+                               });
                         WriteType(expression.closureReturnType);
                         if (!expression.closureBody)
                         {
-                            Fail(ErrorKind::InvalidCount, "closure body", "Core closure must contain a body");
+                            Fail(ErrorKind::InvalidCount,
+                                 "closure body",
+                                 "Core closure must contain a body");
                             return;
                         }
-                        Vector(*expression.closureBody, limits_.maximumStatements, "closure statement count", [this](const Statement &statement) {
-                            WriteStatement(statement);
-                        });
+                        Vector(*expression.closureBody,
+                               limits_.maximumStatements,
+                               "closure statement count",
+                               [this](const Statement &statement) {
+                                   WriteStatement(statement);
+                               });
                         return;
                     case Expression::Kind::Let:
                         Symbol(expression.letSymbol, "let symbol");
                         WriteType(expression.letType);
                         if (!expression.letValue || !expression.letBody)
                         {
-                            Fail(ErrorKind::InvalidCount, "let expression", "Core let must contain a value and body");
+                            Fail(ErrorKind::InvalidCount,
+                                 "let expression",
+                                 "Core let must contain a value and body");
                             return;
                         }
                         WriteExpression(*expression.letValue, depth + 1U);
@@ -874,12 +1137,18 @@ namespace Visual::XSharp::Core::Wire
                         return;
                     case Statement::Kind::If:
                         WriteExpression(statement.expression);
-                        Vector(statement.trueBranch, limits_.maximumStatements, "true branch statement count", [this](const Statement &value) {
-                            WriteStatement(value);
-                        });
-                        Vector(statement.falseBranch, limits_.maximumStatements, "false branch statement count", [this](const Statement &value) {
-                            WriteStatement(value);
-                        });
+                        Vector(statement.trueBranch,
+                               limits_.maximumStatements,
+                               "true branch statement count",
+                               [this](const Statement &value) {
+                                   WriteStatement(value);
+                               });
+                        Vector(statement.falseBranch,
+                               limits_.maximumStatements,
+                               "false branch statement count",
+                               [this](const Statement &value) {
+                                   WriteStatement(value);
+                               });
                         return;
                     case Statement::Kind::Evaluate:
                         WriteExpression(statement.expression);
@@ -890,14 +1159,20 @@ namespace Visual::XSharp::Core::Wire
             WriteFunction(const Function &function)
             {
                 Symbol(function.symbol, "function symbol");
-                Vector(function.parameters, limits_.maximumParameters, "parameter count", [this](const Parameter &parameter) {
-                    Symbol(parameter.symbol, "parameter symbol");
-                    WriteType(parameter.type);
-                });
+                Vector(function.parameters,
+                       limits_.maximumParameters,
+                       "parameter count",
+                       [this](const Parameter &parameter) {
+                           Symbol(parameter.symbol, "parameter symbol");
+                           WriteType(parameter.type);
+                       });
                 WriteType(function.returnType);
-                Vector(function.body, limits_.maximumStatements, "statement count", [this](const Statement &statement) {
-                    WriteStatement(statement);
-                });
+                Vector(function.body,
+                       limits_.maximumStatements,
+                       "statement count",
+                       [this](const Statement &statement) {
+                           WriteStatement(statement);
+                       });
             }
         };
     } // namespace
@@ -911,7 +1186,8 @@ namespace Visual::XSharp::Core::Wire
     }
 
     auto
-    Decode(std::span<const std::uint8_t> bytes, const Limits &limits) -> DecodeResult
+    Decode(std::span<const std::uint8_t> bytes, const Limits &limits)
+        -> DecodeResult
     {
         return Reader(bytes, limits).Document();
     }

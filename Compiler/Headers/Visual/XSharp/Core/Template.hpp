@@ -15,8 +15,11 @@
 
 namespace Visual::XSharp::Core::Template
 {
-    using TypeBindingMap = std::unordered_map<::visual_xsharp::core::SymbolId, ::visual_xsharp::core::Type>;
-    using ValueBindingMap = std::unordered_map<::visual_xsharp::core::SymbolId, ::visual_xsharp::core::TemplateValue>;
+    using TypeBindingMap = std::unordered_map<::visual_xsharp::core::SymbolId,
+                                              ::visual_xsharp::core::Type>;
+    using ValueBindingMap
+        = std::unordered_map<::visual_xsharp::core::SymbolId,
+                             ::visual_xsharp::core::TemplateValue>;
 
     enum class IssueKind : std::uint8_t
     {
@@ -74,14 +77,15 @@ namespace Visual::XSharp::Core::Template
     // Identify the three array spellings without inventing a runtime class for
     // built-in []T or a second class for fixed System.Array<T, N>.
     [[nodiscard]] auto
-    ClassifyArray(const ::visual_xsharp::core::Type &type) -> std::optional<ArrayShape>;
+    ClassifyArray(const ::visual_xsharp::core::Type &type)
+        -> std::optional<ArrayShape>;
 
     // Validate the structural specialization key before an artifact writer or
     // monomorphization cache accepts it. Paths index ordered template/function
     // components from the root and are stable enough for diagnostics.
     [[nodiscard]] auto
-    Validate(const ::visual_xsharp::core::Type &type, std::size_t maximumDepth = 128U)
-        -> std::vector<Issue>;
+    Validate(const ::visual_xsharp::core::Type &type,
+             std::size_t maximumDepth = 128U) -> std::vector<Issue>;
 
     [[nodiscard]] auto
     Measure(const ::visual_xsharp::core::Type &type) -> Metrics;
@@ -131,21 +135,24 @@ namespace Visual::XSharp::Core::Template
 
     // The table is safe to share between parallel frontend jobs. A read pass is
     // attempted before the exclusive insertion pass; the identity is checked
-    // again after acquiring the writer lock to coalesce races deterministically.
+    // again after acquiring the writer lock to coalesce races
+    // deterministically.
     class SpecializationTable final
     {
     public:
         SpecializationTable() = default;
         SpecializationTable(const SpecializationTable &) = delete;
         auto
-        operator=(const SpecializationTable &) -> SpecializationTable & = delete;
+        operator=(const SpecializationTable &)
+            -> SpecializationTable & = delete;
 
         [[nodiscard]] auto
         Intern(const ::visual_xsharp::core::Type &type) -> InternResult;
         [[nodiscard]] auto
         Find(SpecializationId id) const -> std::optional<Specialization>;
         [[nodiscard]] auto
-        Find(const ::visual_xsharp::core::Type &type) const -> std::optional<Specialization>;
+        Find(const ::visual_xsharp::core::Type &type) const
+            -> std::optional<Specialization>;
         [[nodiscard]] auto
         Snapshot() const -> std::vector<Specialization>;
         [[nodiscard]] auto

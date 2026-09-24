@@ -23,17 +23,29 @@ namespace
     [[nodiscard]] auto
     Immediate(std::int64_t value) -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::int64(), 0U, 0U, Core::integer_from_signed(value) };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::int64(),
+                 0U,
+                 0U,
+                 Core::integer_from_signed(value) };
     }
 
     [[nodiscard]] auto
-    Define(IR::VirtualRegister destination, std::int64_t value) -> IR::Instruction
+    Define(IR::VirtualRegister destination, std::int64_t value)
+        -> IR::Instruction
     {
-        return { IR::Opcode::LoadImmediate, destination, Core::Type::int64(), { Immediate(value) }, true, 0U, {} };
+        return { IR::Opcode::LoadImmediate,
+                 destination,
+                 Core::Type::int64(),
+                 { Immediate(value) },
+                 true,
+                 0U,
+                 {} };
     }
 
     [[nodiscard]] auto
-    MakeXmmModule(std::size_t blockCount, std::size_t instructionsPerBlock) -> IR::Module
+    MakeXmmModule(std::size_t blockCount, std::size_t instructionsPerBlock)
+        -> IR::Module
     {
         std::vector<IR::Block> blocks;
         blocks.reserve(blockCount);
@@ -42,22 +54,33 @@ namespace
         {
             std::vector<IR::Instruction> instructions;
             instructions.reserve(instructionsPerBlock);
-            for (std::size_t instructionIndex = 0; instructionIndex < instructionsPerBlock; ++instructionIndex)
+            for (std::size_t instructionIndex = 0;
+                 instructionIndex < instructionsPerBlock;
+                 ++instructionIndex)
             {
-                instructions.push_back(Define(nextRegister++, static_cast<std::int64_t>(instructionIndex)));
+                instructions.push_back(
+                    Define(nextRegister++,
+                           static_cast<std::int64_t>(instructionIndex)));
             }
             IR::Terminator terminator;
             if (blockIndex + 1U < blockCount)
             {
                 terminator.kind = IR::Terminator::Kind::Jump;
-                terminator.true_target = static_cast<IR::BlockId>(blockIndex + 1U);
+                terminator.true_target
+                    = static_cast<IR::BlockId>(blockIndex + 1U);
             }
             else
             {
                 terminator.kind = IR::Terminator::Kind::Return;
-                terminator.value = { IR::Value::Kind::Immediate, Core::Type::unit(), 0U, 0U, std::monostate{} };
+                terminator.value = { IR::Value::Kind::Immediate,
+                                     Core::Type::unit(),
+                                     0U,
+                                     0U,
+                                     std::monostate{} };
             }
-            blocks.push_back({ static_cast<IR::BlockId>(blockIndex), std::move(instructions), std::move(terminator) });
+            blocks.push_back({ static_cast<IR::BlockId>(blockIndex),
+                               std::move(instructions),
+                               std::move(terminator) });
         }
 
         IR::Function function;
@@ -69,7 +92,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    MakeXppModule(std::size_t blockCount, std::size_t instructionsPerBlock) -> Xpp::Module
+    MakeXppModule(std::size_t blockCount, std::size_t instructionsPerBlock)
+        -> Xpp::Module
     {
         std::vector<Xpp::Block> blocks;
         blocks.reserve(blockCount);
@@ -78,12 +102,16 @@ namespace
         {
             std::vector<Xpp::Instruction> instructions;
             instructions.reserve(instructionsPerBlock);
-            for (std::size_t instructionIndex = 0; instructionIndex < instructionsPerBlock; ++instructionIndex)
+            for (std::size_t instructionIndex = 0;
+                 instructionIndex < instructionsPerBlock;
+                 ++instructionIndex)
             {
                 Xpp::Operand literal{ Xpp::Operand::Kind::Literal,
                                       Core::Type::int64(),
                                       0U,
-                                      Core::integer_from_signed(static_cast<std::int64_t>(instructionIndex)) };
+                                      Core::integer_from_signed(
+                                          static_cast<std::int64_t>(
+                                              instructionIndex)) };
                 instructions.push_back({ Xpp::Instruction::Effect::Define,
                                          Xpp::Opcode::Copy,
                                          nextSymbol++,
@@ -96,14 +124,20 @@ namespace
             if (blockIndex + 1U < blockCount)
             {
                 terminator.kind = Xpp::Terminator::Kind::Jump;
-                terminator.true_target = static_cast<Xpp::BlockId>(blockIndex + 1U);
+                terminator.true_target
+                    = static_cast<Xpp::BlockId>(blockIndex + 1U);
             }
             else
             {
                 terminator.kind = Xpp::Terminator::Kind::Return;
-                terminator.value = { Xpp::Operand::Kind::Literal, Core::Type::unit(), 0U, std::monostate{} };
+                terminator.value = { Xpp::Operand::Kind::Literal,
+                                     Core::Type::unit(),
+                                     0U,
+                                     std::monostate{} };
             }
-            blocks.push_back({ static_cast<Xpp::BlockId>(blockIndex), std::move(instructions), std::move(terminator) });
+            blocks.push_back({ static_cast<Xpp::BlockId>(blockIndex),
+                               std::move(instructions),
+                               std::move(terminator) });
         }
 
         Xpp::Function function;
@@ -125,7 +159,9 @@ namespace
     Verify(benchmark::State &state)
     {
         constexpr std::size_t kInstructionsPerBlock = 8U;
-        const auto module = MakeXmmModule(static_cast<std::size_t>(state.range(0)), kInstructionsPerBlock);
+        const auto module
+            = MakeXmmModule(static_cast<std::size_t>(state.range(0)),
+                            kInstructionsPerBlock);
         RequireValid(module);
         for (auto _ : state)
         {
@@ -133,14 +169,16 @@ namespace
             benchmark::DoNotOptimize(issues.data());
             benchmark::DoNotOptimize(issues.size());
         }
-        state.SetItemsProcessed(state.iterations() * state.range(0) * kInstructionsPerBlock);
+        state.SetItemsProcessed(state.iterations() * state.range(0)
+                                * kInstructionsPerBlock);
         state.SetComplexityN(state.range(0));
     }
 
     void
     Optimize(benchmark::State &state)
     {
-        const auto module = MakeXmmModule(static_cast<std::size_t>(state.range(0)), 8U);
+        const auto module
+            = MakeXmmModule(static_cast<std::size_t>(state.range(0)), 8U);
         RequireValid(module);
         for (auto _ : state)
         {
@@ -155,7 +193,8 @@ namespace
     void
     Lower(benchmark::State &state)
     {
-        const auto module = MakeXppModule(static_cast<std::size_t>(state.range(0)), 8U);
+        const auto module
+            = MakeXppModule(static_cast<std::size_t>(state.range(0)), 8U);
         RequireValid(IR::lower(module));
         for (auto _ : state)
         {
@@ -170,7 +209,8 @@ namespace
     void
     Encode(benchmark::State &state)
     {
-        const auto module = MakeXmmModule(static_cast<std::size_t>(state.range(0)), 8U);
+        const auto module
+            = MakeXmmModule(static_cast<std::size_t>(state.range(0)), 8U);
         RequireValid(module);
         for (auto _ : state)
         {
@@ -185,18 +225,23 @@ namespace
     void
     Decode(benchmark::State &state)
     {
-        const auto module = MakeXmmModule(static_cast<std::size_t>(state.range(0)), 8U);
+        const auto module
+            = MakeXmmModule(static_cast<std::size_t>(state.range(0)), 8U);
         RequireValid(module);
         const auto encoded = Xmm::Wire::Encode(module);
         if (!encoded)
-            throw std::runtime_error("Xmm benchmark fixture could not be encoded");
+            throw std::runtime_error(
+                "Xmm benchmark fixture could not be encoded");
         for (auto _ : state)
         {
             const auto decoded = Xmm::Wire::Decode(encoded.bytes);
             benchmark::DoNotOptimize(decoded.module.has_value());
-            benchmark::DoNotOptimize(decoded.module ? decoded.module->functions.data() : nullptr);
+            benchmark::DoNotOptimize(
+                decoded.module ? decoded.module->functions.data() : nullptr);
         }
-        state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(encoded.bytes.size()));
+        state.SetBytesProcessed(
+            state.iterations()
+            * static_cast<std::int64_t>(encoded.bytes.size()));
         state.SetItemsProcessed(state.iterations() * state.range(0));
         state.SetComplexityN(state.range(0));
     }
@@ -205,8 +250,23 @@ namespace
     constexpr auto kMaximumBlocks = 256;
 } // namespace
 
-BENCHMARK(Verify)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
-BENCHMARK(Optimize)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
-BENCHMARK(Lower)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
-BENCHMARK(Encode)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
-BENCHMARK(Decode)->RangeMultiplier(4)->Range(kMinimumBlocks, kMaximumBlocks)->Complexity();
+BENCHMARK(Verify)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();
+BENCHMARK(Optimize)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();
+BENCHMARK(Lower)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();
+BENCHMARK(Encode)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();
+BENCHMARK(Decode)
+    ->RangeMultiplier(4)
+    ->Range(kMinimumBlocks, kMaximumBlocks)
+    ->Complexity();

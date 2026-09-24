@@ -42,7 +42,8 @@ namespace Visual::XSharp::Interactive::Runtime
         {
 #ifdef _WIN32
             const auto text = path.u8string();
-            return std::string(reinterpret_cast<const char *>(text.data()), text.size());
+            return std::string(reinterpret_cast<const char *>(text.data()),
+                               text.size());
 #else
             return path.string();
 #endif
@@ -54,11 +55,23 @@ namespace Visual::XSharp::Interactive::Runtime
         {
             if (text.empty())
                 return std::wstring{};
-            const auto length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+            const auto length
+                = MultiByteToWideChar(CP_UTF8,
+                                      MB_ERR_INVALID_CHARS,
+                                      text.data(),
+                                      static_cast<int>(text.size()),
+                                      nullptr,
+                                      0);
             if (length <= 0)
                 return std::nullopt;
             std::wstring result(static_cast<std::size_t>(length), L'\0');
-            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), length) != length)
+            if (MultiByteToWideChar(CP_UTF8,
+                                    MB_ERR_INVALID_CHARS,
+                                    text.data(),
+                                    static_cast<int>(text.size()),
+                                    result.data(),
+                                    length)
+                != length)
                 return std::nullopt;
             return result;
         }
@@ -67,18 +80,23 @@ namespace Visual::XSharp::Interactive::Runtime
         FrontendPath() -> std::optional<std::filesystem::path>
         {
             std::wstring buffer(32768U, L'\0');
-            const auto length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+            const auto length
+                = GetModuleFileNameW(nullptr,
+                                     buffer.data(),
+                                     static_cast<DWORD>(buffer.size()));
             if (length == 0U || length >= buffer.size())
                 return std::nullopt;
             buffer.resize(length);
-            return std::filesystem::path(buffer).parent_path() / L"vxs-frontend.exe";
+            return std::filesystem::path(buffer).parent_path()
+                   / L"vxs-frontend.exe";
         }
 #else
         [[nodiscard]] auto
         FrontendPath() -> std::optional<std::filesystem::path>
         {
             std::error_code error;
-            auto executable = std::filesystem::read_symlink("/proc/self/exe", error);
+            auto executable
+                = std::filesystem::read_symlink("/proc/self/exe", error);
             if (error)
                 return std::nullopt;
             return executable.parent_path() / "vxs-frontend";
@@ -102,7 +120,8 @@ namespace Visual::XSharp::Interactive::Runtime
             std::random_device entropy;
             for (unsigned attempt = 0U; attempt < 64U; ++attempt)
             {
-                const auto suffix = fmt::format("{:08x}{:08x}", entropy(), entropy());
+                const auto suffix
+                    = fmt::format("{:08x}{:08x}", entropy(), entropy());
                 auto candidate = root / ("vxsi-" + suffix);
                 error.clear();
                 if (std::filesystem::create_directory(candidate, error))
@@ -165,19 +184,23 @@ namespace Visual::XSharp::Interactive::Runtime
     WriteCellSource(const ScratchCell &cell,
                     std::uint64_t cellNumber,
                     std::string_view expression,
-                    const std::optional<Backend::LLVM::JitValue> &previous) -> std::optional<std::string>
+                    const std::optional<Backend::LLVM::JitValue> &previous)
+        -> std::optional<std::string>
     {
         if (!cell.Valid())
-            return "could not reserve a private temporary directory for the input cell";
+            return "could not reserve a private temporary directory for the "
+                   "input cell";
         if (expression.empty())
             return "an empty line is not an expression";
         if (expression.size() > 1024U * 1024U)
             return "one Visual X# expression cannot exceed 1 MiB";
 
-        std::ofstream output(cell.SourcePath(), std::ios::binary | std::ios::trunc);
+        std::ofstream output(cell.SourcePath(),
+                             std::ios::binary | std::ios::trunc);
         if (!output)
             return "could not create the temporary Visual X# source file";
-        output << "namespace VisualXSharp.Interactive.Cell" << cellNumber << ";\n"
+        output << "namespace VisualXSharp.Interactive.Cell" << cellNumber
+               << ";\n"
                << "class Session {\n"
                << "    public static auto Evaluate() {\n";
         if (previous)
@@ -191,17 +214,21 @@ namespace Visual::XSharp::Interactive::Runtime
                << "}\n";
         output.close();
         if (!output)
-            return "could not finish writing the temporary Visual X# source file";
+            return "could not finish writing the temporary Visual X# source "
+                   "file";
         return std::nullopt;
     }
 
     auto
-    RunFrontend(const std::filesystem::path &source, const std::filesystem::path &core) -> int
+    RunFrontend(const std::filesystem::path &source,
+                const std::filesystem::path &core) -> int
     {
         const auto frontend = FrontendPath();
         if (!frontend)
         {
-            fmt::print(stderr, "vxsi: could not locate the executable directory for vxs-frontend\n");
+            fmt::print(stderr,
+                       "vxsi: could not locate the executable directory for "
+                       "vxs-frontend\n");
             return -1;
         }
         const auto outputText = PathText(core);
@@ -210,12 +237,17 @@ namespace Visual::XSharp::Interactive::Runtime
         std::vector<std::wstring> storage;
         storage.reserve(5U);
         storage.push_back(frontend->wstring());
-        for (const auto &argument : { std::string("--output"), outputText, std::string("--source-file"), sourceText })
+        for (const auto &argument : { std::string("--output"),
+                                      outputText,
+                                      std::string("--source-file"),
+                                      sourceText })
         {
             auto wide = Utf8ToWide(argument);
             if (!wide)
             {
-                fmt::print(stderr, "vxsi: generated frontend path is not valid UTF-8\n");
+                fmt::print(
+                    stderr,
+                    "vxsi: generated frontend path is not valid UTF-8\n");
                 return -1;
             }
             storage.push_back(std::move(*wide));
@@ -225,22 +257,38 @@ namespace Visual::XSharp::Interactive::Runtime
         for (const auto &argument : storage)
             arguments.push_back(argument.c_str());
         arguments.push_back(nullptr);
-        const auto status = _wspawnv(_P_WAIT, frontend->c_str(), arguments.data());
+        const auto status
+            = _wspawnv(_P_WAIT, frontend->c_str(), arguments.data());
         if (status == -1)
-            fmt::print(stderr, "vxsi: could not start the Visual X# Haskell frontend (error {})\n", errno);
+            fmt::print(stderr,
+                       "vxsi: could not start the Visual X# Haskell frontend "
+                       "(error {})\n",
+                       errno);
         return static_cast<int>(status);
 #else
-        std::vector<std::string> storage{ frontend->string(), "--output", outputText, "--source-file", sourceText };
+        std::vector<std::string> storage{ frontend->string(),
+                                          "--output",
+                                          outputText,
+                                          "--source-file",
+                                          sourceText };
         std::vector<char *> arguments;
         arguments.reserve(storage.size() + 1U);
         for (auto &argument : storage)
             arguments.push_back(argument.data());
         arguments.push_back(nullptr);
         pid_t process{};
-        const auto status = posix_spawn(&process, storage.front().c_str(), nullptr, nullptr, arguments.data(), environ);
+        const auto status = posix_spawn(&process,
+                                        storage.front().c_str(),
+                                        nullptr,
+                                        nullptr,
+                                        arguments.data(),
+                                        environ);
         if (status != 0)
         {
-            fmt::print(stderr, "vxsi: could not start the Visual X# Haskell frontend (error {})\n", status);
+            fmt::print(stderr,
+                       "vxsi: could not start the Visual X# Haskell frontend "
+                       "(error {})\n",
+                       status);
             return -1;
         }
         int result{};
@@ -251,7 +299,8 @@ namespace Visual::XSharp::Interactive::Runtime
     }
 
     auto
-    ReadCore(const std::filesystem::path &path) -> std::optional<std::vector<std::uint8_t>>
+    ReadCore(const std::filesystem::path &path)
+        -> std::optional<std::vector<std::uint8_t>>
     {
         std::error_code error;
         const auto size = std::filesystem::file_size(path, error);
@@ -261,20 +310,24 @@ namespace Visual::XSharp::Interactive::Runtime
         if (!input)
             return std::nullopt;
         std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
-        input.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        input.read(reinterpret_cast<char *>(bytes.data()),
+                   static_cast<std::streamsize>(bytes.size()));
         if (!input || input.peek() != std::char_traits<char>::eof())
             return std::nullopt;
         return bytes;
     }
 
     auto
-    EvaluationSymbol(const visual_xsharp::xmm::Module &module, std::uint64_t cellNumber)
-        -> std::optional<std::string>
+    EvaluationSymbol(const visual_xsharp::xmm::Module &module,
+                     std::uint64_t cellNumber) -> std::optional<std::string>
     {
         auto expectedCell = std::u32string(U"Cell");
         for (const auto digit : std::to_string(cellNumber))
             expectedCell.push_back(static_cast<char32_t>(digit));
-        const std::vector<std::u32string> expectedName{ U"VisualXSharp", U"Interactive", std::move(expectedCell) };
+        const std::vector<std::u32string> expectedName{ U"VisualXSharp",
+                                                        U"Interactive",
+                                                        std::move(
+                                                            expectedCell) };
         if (module.name != expectedName)
             return std::nullopt;
         const visual_xsharp::xmm::Function *evaluation{};

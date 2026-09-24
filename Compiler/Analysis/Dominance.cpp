@@ -17,8 +17,10 @@ namespace Visual::XSharp::Analysis
     {
         using BlockSet = std::set<ControlFlowBlockId>;
         using BlockSets = std::map<ControlFlowBlockId, BlockSet>;
-        using ParentMap = std::map<ControlFlowBlockId, std::optional<ControlFlowBlockId>>;
-        using EdgeMap = std::map<ControlFlowBlockId, std::vector<ControlFlowBlockId>>;
+        using ParentMap
+            = std::map<ControlFlowBlockId, std::optional<ControlFlowBlockId>>;
+        using EdgeMap
+            = std::map<ControlFlowBlockId, std::vector<ControlFlowBlockId>>;
 
         [[nodiscard]] auto
         ReachableIds(const ControlFlowResult &flow) -> BlockSet
@@ -27,12 +29,15 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        ReachableEdges(const ControlFlowResult &flow, const bool reverse) -> EdgeMap
+        ReachableEdges(const ControlFlowResult &flow, const bool reverse)
+            -> EdgeMap
         {
             EdgeMap edges;
             for (const auto &facts : flow.facts)
                 if (facts.reachable)
-                    edges.emplace(facts.block, reverse ? facts.predecessors : facts.successors);
+                    edges.emplace(facts.block,
+                                  reverse ? facts.predecessors
+                                          : facts.successors);
             return edges;
         }
 
@@ -40,21 +45,23 @@ namespace Visual::XSharp::Analysis
         Intersection(const BlockSet &left, const BlockSet &right) -> BlockSet
         {
             BlockSet result;
-            std::ranges::set_intersection(left, right, std::inserter(result, result.end()));
+            std::ranges::set_intersection(left,
+                                          right,
+                                          std::inserter(result, result.end()));
             return result;
         }
 
         [[nodiscard]] auto
-        IntersectInputs(
-            const std::vector<ControlFlowBlockId> &inputs,
-            const BlockSets &sets,
-            const BlockSet &fallback) -> BlockSet
+        IntersectInputs(const std::vector<ControlFlowBlockId> &inputs,
+                        const BlockSets &sets,
+                        const BlockSet &fallback) -> BlockSet
         {
             if (inputs.empty())
                 return fallback;
             auto found = sets.find(inputs.front());
             BlockSet result = found == sets.end() ? fallback : found->second;
-            for (auto input = std::next(inputs.begin()); input != inputs.end(); ++input)
+            for (auto input = std::next(inputs.begin()); input != inputs.end();
+                 ++input)
             {
                 found = sets.find(*input);
                 if (found == sets.end())
@@ -65,16 +72,18 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        ComputeDominatingSets(
-            const BlockSet &nodes,
-            const std::vector<ControlFlowBlockId> &roots,
-            const EdgeMap &predecessors,
-            const std::vector<ControlFlowBlockId> &visitOrder) -> BlockSets
+        ComputeDominatingSets(const BlockSet &nodes,
+                              const std::vector<ControlFlowBlockId> &roots,
+                              const EdgeMap &predecessors,
+                              const std::vector<ControlFlowBlockId> &visitOrder)
+            -> BlockSets
         {
             const BlockSet rootSet(roots.begin(), roots.end());
             BlockSets result;
             for (const auto node : nodes)
-                result.emplace(node, rootSet.contains(node) ? BlockSet{ node } : nodes);
+                result.emplace(node,
+                               rootSet.contains(node) ? BlockSet{ node }
+                                                      : nodes);
 
             // The finite set lattice can lose at most |V| facts per node, so
             // convergence does not depend on an arbitrary iteration budget.
@@ -87,9 +96,10 @@ namespace Visual::XSharp::Analysis
                     if (rootSet.contains(node))
                         continue;
                     const auto edge = predecessors.find(node);
-                    const auto incoming = edge == predecessors.end()
-                                              ? std::vector<ControlFlowBlockId>{}
-                                              : edge->second;
+                    const auto incoming
+                        = edge == predecessors.end()
+                              ? std::vector<ControlFlowBlockId>{}
+                              : edge->second;
                     auto next = incoming.empty()
                                     ? BlockSet{ node }
                                     : IntersectInputs(incoming, result, nodes);
@@ -105,10 +115,9 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        ImmediateParents(
-            const BlockSet &nodes,
-            const std::vector<ControlFlowBlockId> &roots,
-            const BlockSets &dominatingSets) -> ParentMap
+        ImmediateParents(const BlockSet &nodes,
+                         const std::vector<ControlFlowBlockId> &roots,
+                         const BlockSets &dominatingSets) -> ParentMap
         {
             const BlockSet rootSet(roots.begin(), roots.end());
             ParentMap parents;
@@ -138,10 +147,9 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        ComputeFrontiers(
-            const BlockSet &nodes,
-            const EdgeMap &predecessors,
-            const ParentMap &parents) -> BlockSets
+        ComputeFrontiers(const BlockSet &nodes,
+                         const EdgeMap &predecessors,
+                         const ParentMap &parents) -> BlockSets
         {
             BlockSets frontiers;
             for (const auto node : nodes)
@@ -149,14 +157,17 @@ namespace Visual::XSharp::Analysis
             for (const auto join : nodes)
             {
                 const auto incoming = predecessors.find(join);
-                if (incoming == predecessors.end() || incoming->second.size() < 2U)
+                if (incoming == predecessors.end()
+                    || incoming->second.size() < 2U)
                     continue;
                 const auto stop = parents.at(join);
                 for (const auto predecessor : incoming->second)
                 {
-                    auto runner = std::optional<ControlFlowBlockId>{ predecessor };
+                    auto runner
+                        = std::optional<ControlFlowBlockId>{ predecessor };
                     std::unordered_set<ControlFlowBlockId> visited;
-                    while (runner && runner != stop && visited.insert(*runner).second)
+                    while (runner && runner != stop
+                           && visited.insert(*runner).second)
                     {
                         frontiers.at(*runner).insert(join);
                         runner = parents.at(*runner);
@@ -173,7 +184,8 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        FindExits(const ControlFlowResult &flow) -> std::vector<ControlFlowBlockId>
+        FindExits(const ControlFlowResult &flow)
+            -> std::vector<ControlFlowBlockId>
         {
             std::vector<ControlFlowBlockId> exits;
             for (const auto &facts : flow.facts)
@@ -191,7 +203,8 @@ namespace Visual::XSharp::Analysis
             if (exits.empty())
                 return false;
             BlockSet reachesExit(exits.begin(), exits.end());
-            std::vector<ControlFlowBlockId> worklist(exits.begin(), exits.end());
+            std::vector<ControlFlowBlockId> worklist(exits.begin(),
+                                                     exits.end());
             while (!worklist.empty())
             {
                 const auto current = worklist.back();
@@ -207,16 +220,16 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        ReverseOrder(const std::vector<ControlFlowBlockId> &order) -> std::vector<ControlFlowBlockId>
+        ReverseOrder(const std::vector<ControlFlowBlockId> &order)
+            -> std::vector<ControlFlowBlockId>
         {
             return { order.rbegin(), order.rend() };
         }
 
         [[nodiscard]] auto
-        NaturalLoopMembers(
-            const ControlFlowBlockId header,
-            const ControlFlowBlockId latch,
-            const EdgeMap &predecessors) -> BlockSet
+        NaturalLoopMembers(const ControlFlowBlockId header,
+                           const ControlFlowBlockId latch,
+                           const EdgeMap &predecessors) -> BlockSet
         {
             BlockSet members{ header, latch };
             std::vector<ControlFlowBlockId> worklist;
@@ -230,14 +243,16 @@ namespace Visual::XSharp::Analysis
                 if (found == predecessors.end())
                     continue;
                 for (const auto predecessor : found->second)
-                    if (members.insert(predecessor).second && predecessor != header)
+                    if (members.insert(predecessor).second
+                        && predecessor != header)
                         worklist.push_back(predecessor);
             }
             return members;
         }
 
         [[nodiscard]] auto
-        LoopExits(const BlockSet &members, const EdgeMap &successors) -> BlockSet
+        LoopExits(const BlockSet &members, const EdgeMap &successors)
+            -> BlockSet
         {
             BlockSet exits;
             for (const auto member : members)
@@ -253,11 +268,11 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        FindNaturalLoops(
-            const BlockSet &nodes,
-            const EdgeMap &successors,
-            const EdgeMap &predecessors,
-            const BlockSets &dominators) -> std::vector<NaturalLoop>
+        FindNaturalLoops(const BlockSet &nodes,
+                         const EdgeMap &successors,
+                         const EdgeMap &predecessors,
+                         const BlockSets &dominators)
+            -> std::vector<NaturalLoop>
         {
             std::vector<NaturalLoop> loops;
             for (const auto source : nodes)
@@ -269,14 +284,21 @@ namespace Visual::XSharp::Analysis
                 {
                     if (!dominators.at(source).contains(target))
                         continue;
-                    const auto members = NaturalLoopMembers(target, source, predecessors);
+                    const auto members
+                        = NaturalLoopMembers(target, source, predecessors);
                     loops.push_back(
-                        { target, source, ToVector(members), ToVector(LoopExits(members, successors)) });
+                        { target,
+                          source,
+                          ToVector(members),
+                          ToVector(LoopExits(members, successors)) });
                 }
             }
-            std::ranges::sort(loops, [](const NaturalLoop &left, const NaturalLoop &right) {
-                return std::pair{ left.header, left.latch } < std::pair{ right.header, right.latch };
-            });
+            std::ranges::sort(
+                loops,
+                [](const NaturalLoop &left, const NaturalLoop &right) {
+                    return std::pair{ left.header, left.latch }
+                           < std::pair{ right.header, right.latch };
+                });
             return loops;
         }
 
@@ -287,7 +309,8 @@ namespace Visual::XSharp::Analysis
         };
 
         [[nodiscard]] auto
-        FinishOrder(const BlockSet &nodes, const EdgeMap &successors) -> std::vector<ControlFlowBlockId>
+        FinishOrder(const BlockSet &nodes, const EdgeMap &successors)
+            -> std::vector<ControlFlowBlockId>
         {
             std::unordered_set<ControlFlowBlockId> visited;
             std::vector<ControlFlowBlockId> finished;
@@ -318,15 +341,16 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        StronglyConnectedComponents(
-            const BlockSet &nodes,
-            const EdgeMap &successors,
-            const EdgeMap &predecessors) -> std::vector<BlockSet>
+        StronglyConnectedComponents(const BlockSet &nodes,
+                                    const EdgeMap &successors,
+                                    const EdgeMap &predecessors)
+            -> std::vector<BlockSet>
         {
             const auto order = FinishOrder(nodes, successors);
             std::unordered_set<ControlFlowBlockId> visited;
             std::vector<BlockSet> components;
-            for (auto current = order.rbegin(); current != order.rend(); ++current)
+            for (auto current = order.rbegin(); current != order.rend();
+                 ++current)
             {
                 if (!visited.insert(*current).second)
                     continue;
@@ -350,7 +374,8 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        IsCyclicComponent(const BlockSet &component, const EdgeMap &successors) -> bool
+        IsCyclicComponent(const BlockSet &component, const EdgeMap &successors)
+            -> bool
         {
             if (component.size() > 1U)
                 return true;
@@ -359,27 +384,32 @@ namespace Visual::XSharp::Analysis
             const auto block = *component.begin();
             const auto found = successors.find(block);
             return found != successors.end()
-                   && std::ranges::find(found->second, block) != found->second.end();
+                   && std::ranges::find(found->second, block)
+                          != found->second.end();
         }
 
         [[nodiscard]] auto
-        RegionEntries(const BlockSet &component, const EdgeMap &predecessors) -> BlockSet
+        RegionEntries(const BlockSet &component, const EdgeMap &predecessors)
+            -> BlockSet
         {
             BlockSet entries;
             for (const auto member : component)
             {
                 const auto found = predecessors.find(member);
                 if (found != predecessors.end()
-                    && std::ranges::any_of(found->second, [&component](const auto source) {
-                           return !component.contains(source);
-                       }))
+                    && std::ranges::any_of(found->second,
+                                           [&component](const auto source) {
+                                               return !component.contains(
+                                                   source);
+                                           }))
                     entries.insert(member);
             }
             return entries;
         }
 
         [[nodiscard]] auto
-        HasDominatingHeader(const BlockSet &component, const BlockSets &dominators) -> bool
+        HasDominatingHeader(const BlockSet &component,
+                            const BlockSets &dominators) -> bool
         {
             return std::ranges::any_of(component, [&](const auto candidate) {
                 return std::ranges::all_of(component, [&](const auto member) {
@@ -389,18 +419,22 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        FindIrreducibleRegions(
-            const BlockSet &nodes,
-            const EdgeMap &successors,
-            const EdgeMap &predecessors,
-            const BlockSets &dominators) -> std::vector<IrreducibleRegion>
+        FindIrreducibleRegions(const BlockSet &nodes,
+                               const EdgeMap &successors,
+                               const EdgeMap &predecessors,
+                               const BlockSets &dominators)
+            -> std::vector<IrreducibleRegion>
         {
             std::vector<IrreducibleRegion> regions;
-            for (const auto &component : StronglyConnectedComponents(nodes, successors, predecessors))
+            for (const auto &component :
+                 StronglyConnectedComponents(nodes, successors, predecessors))
             {
-                if (!IsCyclicComponent(component, successors) || HasDominatingHeader(component, dominators))
+                if (!IsCyclicComponent(component, successors)
+                    || HasDominatingHeader(component, dominators))
                     continue;
-                regions.push_back({ ToVector(component), ToVector(RegionEntries(component, predecessors)) });
+                regions.push_back(
+                    { ToVector(component),
+                      ToVector(RegionEntries(component, predecessors)) });
             }
             std::ranges::sort(regions, [](const auto &left, const auto &right) {
                 return left.members < right.members;
@@ -409,34 +443,37 @@ namespace Visual::XSharp::Analysis
         }
 
         void
-        AddLoopFacts(std::vector<DominanceBlockFacts> &facts, const std::vector<NaturalLoop> &loops)
+        AddLoopFacts(std::vector<DominanceBlockFacts> &facts,
+                     const std::vector<NaturalLoop> &loops)
         {
             for (auto &blockFacts : facts)
             {
                 for (const auto &loop : loops)
                 {
-                    if (!std::ranges::binary_search(loop.members, blockFacts.block))
+                    if (!std::ranges::binary_search(loop.members,
+                                                    blockFacts.block))
                         continue;
                     ++blockFacts.loopDepth;
                     blockFacts.loopHeaders.push_back(loop.header);
                 }
                 std::ranges::sort(blockFacts.loopHeaders);
                 blockFacts.loopHeaders.erase(
-                    std::unique(blockFacts.loopHeaders.begin(), blockFacts.loopHeaders.end()),
+                    std::unique(blockFacts.loopHeaders.begin(),
+                                blockFacts.loopHeaders.end()),
                     blockFacts.loopHeaders.end());
             }
         }
 
         [[nodiscard]] auto
-        BuildBlockFacts(
-            const ControlFlowResult &flow,
-            const BlockSets &dominators,
-            const ParentMap &immediateDominators,
-            const BlockSets &frontiers,
-            const BlockSets &postDominators,
-            const ParentMap &immediatePostDominators,
-            const BlockSets &postFrontiers,
-            const bool hasPostDominance) -> std::vector<DominanceBlockFacts>
+        BuildBlockFacts(const ControlFlowResult &flow,
+                        const BlockSets &dominators,
+                        const ParentMap &immediateDominators,
+                        const BlockSets &frontiers,
+                        const BlockSets &postDominators,
+                        const ParentMap &immediatePostDominators,
+                        const BlockSets &postFrontiers,
+                        const bool hasPostDominance)
+            -> std::vector<DominanceBlockFacts>
         {
             std::vector<DominanceBlockFacts> result;
             result.reserve(flow.facts.size());
@@ -447,14 +484,19 @@ namespace Visual::XSharp::Analysis
                 facts.reachable = flowFacts.reachable;
                 if (flowFacts.reachable)
                 {
-                    facts.immediateDominator = immediateDominators.at(flowFacts.block);
+                    facts.immediateDominator
+                        = immediateDominators.at(flowFacts.block);
                     facts.dominators = ToVector(dominators.at(flowFacts.block));
-                    facts.dominanceFrontier = ToVector(frontiers.at(flowFacts.block));
+                    facts.dominanceFrontier
+                        = ToVector(frontiers.at(flowFacts.block));
                     if (hasPostDominance)
                     {
-                        facts.immediatePostDominator = immediatePostDominators.at(flowFacts.block);
-                        facts.postDominators = ToVector(postDominators.at(flowFacts.block));
-                        facts.postDominanceFrontier = ToVector(postFrontiers.at(flowFacts.block));
+                        facts.immediatePostDominator
+                            = immediatePostDominators.at(flowFacts.block);
+                        facts.postDominators
+                            = ToVector(postDominators.at(flowFacts.block));
+                        facts.postDominanceFrontier
+                            = ToVector(postFrontiers.at(flowFacts.block));
                     }
                 }
                 result.push_back(std::move(facts));
@@ -484,19 +526,24 @@ namespace Visual::XSharp::Analysis
             return result;
         }
 
-        const auto dominators = ComputeDominatingSets(
-            nodes,
-            { graph.entry },
-            predecessors,
-            result.controlFlow.reversePostorder);
-        const auto immediateDominators = ImmediateParents(nodes, { graph.entry }, dominators);
-        const auto frontiers = ComputeFrontiers(nodes, predecessors, immediateDominators);
+        const auto dominators
+            = ComputeDominatingSets(nodes,
+                                    { graph.entry },
+                                    predecessors,
+                                    result.controlFlow.reversePostorder);
+        const auto immediateDominators
+            = ImmediateParents(nodes, { graph.entry }, dominators);
+        const auto frontiers
+            = ComputeFrontiers(nodes, predecessors, immediateDominators);
 
         result.exits = FindExits(result.controlFlow);
         // A closed non-returning SCC next to a returning arm would otherwise
         // leave the all-node initialization in place as false proof. Decline
         // post-dominance unless every reachable block can reach a real exit.
-        result.hasPostDominance = EveryReachableBlockCanReachAnExit(nodes, result.exits, predecessors);
+        result.hasPostDominance
+            = EveryReachableBlockCanReachAnExit(nodes,
+                                                result.exits,
+                                                predecessors);
         BlockSets postDominators;
         ParentMap immediatePostDominators;
         BlockSets postFrontiers;
@@ -507,72 +554,78 @@ namespace Visual::XSharp::Analysis
                 result.exits,
                 successors,
                 ReverseOrder(result.controlFlow.reversePostorder));
-            immediatePostDominators = ImmediateParents(nodes, result.exits, postDominators);
-            postFrontiers = ComputeFrontiers(nodes, successors, immediatePostDominators);
+            immediatePostDominators
+                = ImmediateParents(nodes, result.exits, postDominators);
+            postFrontiers
+                = ComputeFrontiers(nodes, successors, immediatePostDominators);
         }
 
-        result.naturalLoops = FindNaturalLoops(nodes, successors, predecessors, dominators);
-        result.irreducibleRegions = FindIrreducibleRegions(nodes, successors, predecessors, dominators);
-        result.facts = BuildBlockFacts(
-            result.controlFlow,
-            dominators,
-            immediateDominators,
-            frontiers,
-            postDominators,
-            immediatePostDominators,
-            postFrontiers,
-            result.hasPostDominance);
+        result.naturalLoops
+            = FindNaturalLoops(nodes, successors, predecessors, dominators);
+        result.irreducibleRegions = FindIrreducibleRegions(nodes,
+                                                           successors,
+                                                           predecessors,
+                                                           dominators);
+        result.facts = BuildBlockFacts(result.controlFlow,
+                                       dominators,
+                                       immediateDominators,
+                                       frontiers,
+                                       postDominators,
+                                       immediatePostDominators,
+                                       postFrontiers,
+                                       result.hasPostDominance);
         AddLoopFacts(result.facts, result.naturalLoops);
         return result;
     }
 
     auto
-    FactsFor(const DominanceResult &result, const ControlFlowBlockId block) -> const DominanceBlockFacts *
+    FactsFor(const DominanceResult &result, const ControlFlowBlockId block)
+        -> const DominanceBlockFacts *
     {
-        const auto found = std::ranges::lower_bound(result.facts, block, {}, &DominanceBlockFacts::block);
-        return found != result.facts.end() && found->block == block ? &*found : nullptr;
+        const auto found
+            = std::ranges::lower_bound(result.facts,
+                                       block,
+                                       {},
+                                       &DominanceBlockFacts::block);
+        return found != result.facts.end() && found->block == block ? &*found
+                                                                    : nullptr;
     }
 
     auto
-    Dominates(
-        const DominanceResult &result,
-        const ControlFlowBlockId dominator,
-        const ControlFlowBlockId block) -> bool
+    Dominates(const DominanceResult &result,
+              const ControlFlowBlockId dominator,
+              const ControlFlowBlockId block) -> bool
     {
         const auto *facts = FactsFor(result, block);
-        return facts != nullptr
-               && facts->reachable
+        return facts != nullptr && facts->reachable
                && std::ranges::binary_search(facts->dominators, dominator);
     }
 
     auto
-    StrictlyDominates(
-        const DominanceResult &result,
-        const ControlFlowBlockId dominator,
-        const ControlFlowBlockId block) -> bool
+    StrictlyDominates(const DominanceResult &result,
+                      const ControlFlowBlockId dominator,
+                      const ControlFlowBlockId block) -> bool
     {
         return dominator != block && Dominates(result, dominator, block);
     }
 
     auto
-    PostDominates(
-        const DominanceResult &result,
-        const ControlFlowBlockId postDominator,
-        const ControlFlowBlockId block) -> bool
+    PostDominates(const DominanceResult &result,
+                  const ControlFlowBlockId postDominator,
+                  const ControlFlowBlockId block) -> bool
     {
         const auto *facts = FactsFor(result, block);
-        return result.hasPostDominance
-               && facts != nullptr
-               && facts->reachable
-               && std::ranges::binary_search(facts->postDominators, postDominator);
+        return result.hasPostDominance && facts != nullptr && facts->reachable
+               && std::ranges::binary_search(facts->postDominators,
+                                             postDominator);
     }
 
     auto
-    StrictlyPostDominates(
-        const DominanceResult &result,
-        const ControlFlowBlockId postDominator,
-        const ControlFlowBlockId block) -> bool
+    StrictlyPostDominates(const DominanceResult &result,
+                          const ControlFlowBlockId postDominator,
+                          const ControlFlowBlockId block) -> bool
     {
-        return postDominator != block && PostDominates(result, postDominator, block);
+        return postDominator != block
+               && PostDominates(result, postDominator, block);
     }
 } // namespace Visual::XSharp::Analysis

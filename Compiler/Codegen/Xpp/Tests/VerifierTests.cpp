@@ -21,7 +21,10 @@ namespace
     [[nodiscard]] auto
     Integer(const std::int64_t value) -> IR::Operand
     {
-        return { IR::Operand::Kind::Literal, Core::Type::int64(), 0U, Core::integer_from_signed(value) };
+        return { IR::Operand::Kind::Literal,
+                 Core::Type::int64(),
+                 0U,
+                 Core::integer_from_signed(value) };
     }
 
     [[nodiscard]] auto
@@ -33,29 +36,43 @@ namespace
     [[nodiscard]] auto
     Floating(const std::string_view spelling) -> IR::Operand
     {
-        return { IR::Operand::Kind::Literal, Core::Type::float64(), 0U, Core::FloatingLiteral{ std::string(spelling) } };
+        return { IR::Operand::Kind::Literal,
+                 Core::Type::float64(),
+                 0U,
+                 Core::FloatingLiteral{ std::string(spelling) } };
     }
 
     [[nodiscard]] auto
     TypeIdentity(const std::uint64_t value) -> IR::Operand
     {
-        return { IR::Operand::Kind::Literal, Core::Type::uint64(), 0U, Core::integer_from_unsigned(value) };
+        return { IR::Operand::Kind::Literal,
+                 Core::Type::uint64(),
+                 0U,
+                 Core::integer_from_unsigned(value) };
     }
 
     [[nodiscard]] auto
     Unit() -> IR::Operand
     {
-        return { IR::Operand::Kind::Literal, Core::Type::unit(), 0U, std::monostate{} };
+        return { IR::Operand::Kind::Literal,
+                 Core::Type::unit(),
+                 0U,
+                 std::monostate{} };
     }
 
     [[nodiscard]] auto
-    Symbol(const IR::SymbolId symbol, Core::Type type = Core::Type::int64()) -> IR::Operand
+    Symbol(const IR::SymbolId symbol, Core::Type type = Core::Type::int64())
+        -> IR::Operand
     {
-        return { IR::Operand::Kind::Symbol, std::move(type), symbol, std::monostate{} };
+        return { IR::Operand::Kind::Symbol,
+                 std::move(type),
+                 symbol,
+                 std::monostate{} };
     }
 
     [[nodiscard]] auto
-    Define(const IR::SymbolId destination, const std::int64_t value = 0) -> IR::Instruction
+    Define(const IR::SymbolId destination, const std::int64_t value = 0)
+        -> IR::Instruction
     {
         return {
             IR::Instruction::Effect::Define,
@@ -69,7 +86,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    DefineFrom(const IR::SymbolId destination, const IR::SymbolId source) -> IR::Instruction
+    DefineFrom(const IR::SymbolId destination, const IR::SymbolId source)
+        -> IR::Instruction
     {
         return {
             IR::Instruction::Effect::Define,
@@ -83,7 +101,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Store(const IR::SymbolId destination, const std::int64_t value) -> IR::Instruction
+    Store(const IR::SymbolId destination, const std::int64_t value)
+        -> IR::Instruction
     {
         return {
             IR::Instruction::Effect::Store,
@@ -138,7 +157,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget) -> IR::Terminator
+    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget)
+        -> IR::Terminator
     {
         IR::Terminator terminator;
         terminator.kind = IR::Terminator::Kind::Branch;
@@ -149,16 +169,16 @@ namespace
     }
 
     [[nodiscard]] auto
-    Block(
-        const IR::BlockId id,
-        std::vector<IR::Instruction> instructions,
-        IR::Terminator terminator) -> IR::Block
+    Block(const IR::BlockId id,
+          std::vector<IR::Instruction> instructions,
+          IR::Terminator terminator) -> IR::Block
     {
         return { id, std::move(instructions), std::move(terminator) };
     }
 
     [[nodiscard]] auto
-    Module(std::vector<IR::Block> blocks, Core::Type result = Core::Type::unit()) -> IR::Module
+    Module(std::vector<IR::Block> blocks,
+           Core::Type result = Core::Type::unit()) -> IR::Module
     {
         IR::Function function;
         function.symbol = { 1U, U"Evaluate" };
@@ -169,7 +189,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    HasCode(const std::vector<Xpp::VerificationIssue> &issues, const std::string_view code) -> bool
+    HasCode(const std::vector<Xpp::VerificationIssue> &issues,
+            const std::string_view code) -> bool
     {
         return std::ranges::any_of(issues, [code](const auto &issue) {
             return issue.code == code;
@@ -177,7 +198,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    InitializationIssues(const IR::Module &module) -> std::vector<Xpp::VerificationIssue>
+    InitializationIssues(const IR::Module &module)
+        -> std::vector<Xpp::VerificationIssue>
     {
         auto issues = Xpp::Verify(module);
         std::erase_if(issues, [](const auto &issue) {
@@ -189,13 +211,15 @@ namespace
 
 TEST_CASE("Xpp accepts a definition followed by a read")
 {
-    const auto module = Module({ Block(0U, { Define(10U), Evaluate(10U) }, ReturnUnit()) });
+    const auto module
+        = Module({ Block(0U, { Define(10U), Evaluate(10U) }, ReturnUnit()) });
     CHECK(InitializationIssues(module).empty());
 }
 
 TEST_CASE("Xpp reports a read before a later definition")
 {
-    const auto module = Module({ Block(0U, { Evaluate(10U), Define(10U) }, ReturnUnit()) });
+    const auto module
+        = Module({ Block(0U, { Evaluate(10U), Define(10U) }, ReturnUnit()) });
     const auto issues = InitializationIssues(module);
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().function == 1U);
@@ -214,26 +238,31 @@ TEST_CASE("Xpp requires rounded floating division to return int")
         0U,
         {},
     };
-    const auto issues = Xpp::Verify(Module({ Block(0U, { instruction }, ReturnUnit()) }));
+    const auto issues
+        = Xpp::Verify(Module({ Block(0U, { instruction }, ReturnUnit()) }));
     CHECK(HasCode(issues, "VXP1046"));
 }
 
 TEST_CASE("Xpp reads instruction operands before writing their destination")
 {
-    const auto module = Module({ Block(0U, { DefineFrom(10U, 10U) }, ReturnUnit()) });
+    const auto module
+        = Module({ Block(0U, { DefineFrom(10U, 10U) }, ReturnUnit()) });
     CHECK(InitializationIssues(module).size() == 1U);
 }
 
 TEST_CASE("Xpp parameters seed definite initialization")
 {
     auto module = Module({ Block(0U, { Evaluate(5U) }, ReturnUnit()) });
-    module.functions.front().parameters.push_back({ { 5U, U"value" }, Core::Type::int64() });
+    module.functions.front().parameters.push_back(
+        { { 5U, U"value" }, Core::Type::int64() });
     CHECK(InitializationIssues(module).empty());
 }
 
 TEST_CASE("Xpp detects an uninitialized return operand")
 {
-    const auto module = Module({ Block(0U, { Define(10U) }, Return(11U)), Block(1U, { Define(11U) }, Return(11U)) }, Core::Type::int64());
+    const auto module = Module({ Block(0U, { Define(10U) }, Return(11U)),
+                                 Block(1U, { Define(11U) }, Return(11U)) },
+                               Core::Type::int64());
     const auto issues = InitializationIssues(module);
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().instruction == 1U);
@@ -242,13 +271,12 @@ TEST_CASE("Xpp detects an uninitialized return operand")
 
 TEST_CASE("Xpp requires a definition on both paths of a diamond")
 {
-    const auto partial = Module(
-        {
-            Block(0U, {}, Branch(1U, 2U)),
-            Block(1U, { Define(10U) }, Jump(3U)),
-            Block(2U, {}, Jump(3U)),
-            Block(3U, { Evaluate(10U) }, ReturnUnit()),
-        });
+    const auto partial = Module({
+        Block(0U, {}, Branch(1U, 2U)),
+        Block(1U, { Define(10U) }, Jump(3U)),
+        Block(2U, {}, Jump(3U)),
+        Block(3U, { Evaluate(10U) }, ReturnUnit()),
+    });
     CHECK(InitializationIssues(partial).size() == 1U);
 
     auto complete = partial;
@@ -258,11 +286,10 @@ TEST_CASE("Xpp requires a definition on both paths of a diamond")
 
 TEST_CASE("Xpp block vector order is not execution order")
 {
-    auto module = Module(
-        {
-            Block(0U, { Define(10U) }, Jump(1U)),
-            Block(1U, { Evaluate(10U) }, ReturnUnit()),
-        });
+    auto module = Module({
+        Block(0U, { Define(10U) }, Jump(1U)),
+        Block(1U, { Evaluate(10U) }, ReturnUnit()),
+    });
     const auto ordered = InitializationIssues(module);
     std::ranges::reverse(module.functions.front().blocks);
     const auto reversed = InitializationIssues(module);
@@ -272,11 +299,10 @@ TEST_CASE("Xpp block vector order is not execution order")
 
 TEST_CASE("Xpp does not validate unreachable storage reads as executions")
 {
-    const auto module = Module(
-        {
-            Block(0U, { Define(10U) }, ReturnUnit()),
-            Block(4U, { Evaluate(10U) }, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, { Define(10U) }, ReturnUnit()),
+        Block(4U, { Evaluate(10U) }, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).empty());
 }
 
@@ -294,15 +320,18 @@ TEST_CASE("Xpp direct function symbols are not local storage reads")
     call.effect = IR::Instruction::Effect::Discard;
     call.opcode = IR::Opcode::Call;
     call.result_type = Core::Type::unit();
-    call.operands = { Symbol(2U, Core::Type::function({}, Core::Type::unit())) };
+    call.operands
+        = { Symbol(2U, Core::Type::function({}, Core::Type::unit())) };
     module.functions.front().blocks.front().instructions.push_back(call);
     CHECK(InitializationIssues(module).empty());
 }
 
-TEST_CASE("Xpp closure storage is a local read even though its type is callable")
+TEST_CASE(
+    "Xpp closure storage is a local read even though its type is callable")
 {
     const auto callable = Core::Type::function({}, Core::Type::unit());
-    auto module = Module({ Block(0U, {}, ReturnUnit()), Block(1U, {}, ReturnUnit()) });
+    auto module
+        = Module({ Block(0U, {}, ReturnUnit()), Block(1U, {}, ReturnUnit()) });
     IR::Instruction declaration;
     declaration.effect = IR::Instruction::Effect::Define;
     declaration.opcode = IR::Opcode::Copy;
@@ -330,7 +359,8 @@ TEST_CASE("Xpp safely rejects malformed weak closure capture metadata")
     closure.result_type = callable;
     closure.operands = { Integer(42) };
     closure.closure_function = 2U;
-    closure.capture_modes = { Core::CaptureMode::Weak, Core::CaptureMode::Strong };
+    closure.capture_modes
+        = { Core::CaptureMode::Weak, Core::CaptureMode::Strong };
 
     auto module = Module({ Block(0U, { closure }, ReturnUnit()) });
     IR::Function target;
@@ -348,7 +378,8 @@ TEST_CASE("Xpp safely rejects malformed weak closure capture metadata")
 
 TEST_CASE("Xpp initialization diagnostic code is stable")
 {
-    const auto module = Module({ Block(0U, { Evaluate(10U), Define(10U) }, ReturnUnit()) });
+    const auto module
+        = Module({ Block(0U, { Evaluate(10U), Define(10U) }, ReturnUnit()) });
     const auto issues = Xpp::Verify(module);
     CHECK(HasCode(issues, "VXP1041"));
 }
@@ -360,10 +391,12 @@ TEST_CASE("Xpp accepts the complete type-test ABI tuple")
     typeTest.opcode = IR::Opcode::TypeIs;
     typeTest.destination = 10U;
     typeTest.result_type = Core::Type::boolean();
-    typeTest.operands = { Symbol(5U, Core::Type::string()), TypeIdentity(0x51a2U) };
+    typeTest.operands
+        = { Symbol(5U, Core::Type::string()), TypeIdentity(0x51a2U) };
 
     auto module = Module({ Block(0U, { typeTest }, ReturnUnit()) });
-    module.functions.front().parameters.push_back({ { 5U, U"value" }, Core::Type::string() });
+    module.functions.front().parameters.push_back(
+        { { 5U, U"value" }, Core::Type::string() });
     CHECK_FALSE(HasCode(Xpp::Verify(module), "VXP1045"));
 }
 
@@ -377,10 +410,14 @@ TEST_CASE("Xpp rejects every malformed type-test ABI dimension")
     typeTest.operands = { Symbol(5U), Integer(1) };
 
     auto module = Module({ Block(0U, { typeTest }, ReturnUnit()) });
-    module.functions.front().parameters.push_back({ { 5U, U"value" }, Core::Type::int64() });
+    module.functions.front().parameters.push_back(
+        { { 5U, U"value" }, Core::Type::int64() });
     CHECK(HasCode(Xpp::Verify(module), "VXP1045"));
 
-    module.functions.front().blocks.front().instructions.front().operands.pop_back();
+    module.functions.front()
+        .blocks.front()
+        .instructions.front()
+        .operands.pop_back();
     CHECK(HasCode(Xpp::Verify(module), "VXP1045"));
 }
 
@@ -392,7 +429,8 @@ TEST_CASE("Xpp reports every uninitialized operand at its instruction")
     sum.destination = 12U;
     sum.result_type = Core::Type::int64();
     sum.operands = { Symbol(10U), Symbol(11U) };
-    const auto module = Module({ Block(0U, { sum, Define(10U), Define(11U) }, ReturnUnit()) });
+    const auto module = Module(
+        { Block(0U, { sum, Define(10U), Define(11U) }, ReturnUnit()) });
     const auto issues = InitializationIssues(module);
     REQUIRE(issues.size() == 2U);
     CHECK(std::ranges::all_of(issues, [](const auto &issue) {
@@ -402,22 +440,20 @@ TEST_CASE("Xpp reports every uninitialized operand at its instruction")
 
 TEST_CASE("Xpp initialization survives a loop with a preheader")
 {
-    const auto module = Module(
-        {
-            Block(0U, { Define(10U) }, Jump(1U)),
-            Block(1U, { Evaluate(10U) }, Branch(1U, 2U)),
-            Block(2U, { Evaluate(10U) }, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, { Define(10U) }, Jump(1U)),
+        Block(1U, { Evaluate(10U) }, Branch(1U, 2U)),
+        Block(2U, { Evaluate(10U) }, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).empty());
 }
 
 TEST_CASE("Xpp loop-only writes cannot initialize first iteration reads")
 {
-    const auto module = Module(
-        {
-            Block(0U, {}, Jump(1U)),
-            Block(1U, { Evaluate(10U), Define(10U) }, Branch(1U, 2U)),
-            Block(2U, {}, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, {}, Jump(1U)),
+        Block(1U, { Evaluate(10U), Define(10U) }, Branch(1U, 2U)),
+        Block(2U, {}, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).size() == 1U);
 }

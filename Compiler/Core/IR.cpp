@@ -8,8 +8,11 @@ namespace Visual::XSharp::Core
     auto
     Capture::operator==(const Capture &other) const -> bool
     {
-        const auto equalValue = (!value && !other.value) || (value && other.value && *value == *other.value);
-        return mode == other.mode && symbol == other.symbol && type == other.type && equalValue;
+        const auto equalValue
+            = (!value && !other.value)
+              || (value && other.value && *value == *other.value);
+        return mode == other.mode && symbol == other.symbol
+               && type == other.type && equalValue;
     }
 
     auto
@@ -33,7 +36,9 @@ namespace Visual::XSharp::Core
     }
 
     auto
-    Expression::Apply(Expression target, std::vector<Expression> arguments, Type resultType) -> Expression
+    Expression::Apply(Expression target,
+                      std::vector<Expression> arguments,
+                      Type resultType) -> Expression
     {
         Expression expression;
         expression.kind = Kind::Apply;
@@ -44,8 +49,9 @@ namespace Visual::XSharp::Core
     }
 
     auto
-    Expression::InvokePrimitive(Core::Primitive operation, std::vector<Expression> arguments, Type resultType)
-        -> Expression
+    Expression::InvokePrimitive(Core::Primitive operation,
+                                std::vector<Expression> arguments,
+                                Type resultType) -> Expression
     {
         Expression expression;
         expression.kind = Kind::Primitive;
@@ -56,12 +62,11 @@ namespace Visual::XSharp::Core
     }
 
     auto
-    Expression::Closure(
-        std::vector<Capture> captured,
-        std::vector<std::pair<SymbolName, Type>> parameters,
-        Type returnType,
-        std::vector<Statement> body,
-        Type valueType) -> Expression
+    Expression::Closure(std::vector<Capture> captured,
+                        std::vector<std::pair<SymbolName, Type>> parameters,
+                        Type returnType,
+                        std::vector<Statement> body,
+                        Type valueType) -> Expression
     {
         Expression expression;
         expression.kind = Kind::Closure;
@@ -69,12 +74,17 @@ namespace Visual::XSharp::Core
         expression.captures = std::move(captured);
         expression.closureParameters = std::move(parameters);
         expression.closureReturnType = std::move(returnType);
-        expression.closureBody = std::make_shared<std::vector<Statement>>(std::move(body));
+        expression.closureBody
+            = std::make_shared<std::vector<Statement>>(std::move(body));
         return expression;
     }
 
     auto
-    Expression::Let(SymbolName name, Type bindingType, Expression value, Expression body, Type resultType) -> Expression
+    Expression::Let(SymbolName name,
+                    Type bindingType,
+                    Expression value,
+                    Expression body,
+                    Type resultType) -> Expression
     {
         Expression expression;
         expression.kind = Kind::Let;
@@ -89,16 +99,22 @@ namespace Visual::XSharp::Core
     auto
     Expression::operator==(const Expression &other) const -> bool
     {
-        const auto equalCallee = (!callee && !other.callee) || (callee && other.callee && *callee == *other.callee);
+        const auto equalCallee
+            = (!callee && !other.callee)
+              || (callee && other.callee && *callee == *other.callee);
         const auto equalBody = (!closureBody && !other.closureBody)
-                               || (closureBody && other.closureBody && *closureBody == *other.closureBody);
-        const auto equalLetValue = (!letValue && !other.letValue)
-                                   || (letValue && other.letValue && *letValue == *other.letValue);
-        const auto equalLetBody = (!letBody && !other.letBody)
-                                  || (letBody && other.letBody && *letBody == *other.letBody);
-        return kind == other.kind && type == other.type && symbol == other.symbol
-               && literal == other.literal && primitive == other.primitive
-               && equalCallee && operands == other.operands && captures == other.captures
+                               || (closureBody && other.closureBody
+                                   && *closureBody == *other.closureBody);
+        const auto equalLetValue
+            = (!letValue && !other.letValue)
+              || (letValue && other.letValue && *letValue == *other.letValue);
+        const auto equalLetBody
+            = (!letBody && !other.letBody)
+              || (letBody && other.letBody && *letBody == *other.letBody);
+        return kind == other.kind && type == other.type
+               && symbol == other.symbol && literal == other.literal
+               && primitive == other.primitive && equalCallee
+               && operands == other.operands && captures == other.captures
                && closureParameters == other.closureParameters
                && closureReturnType == other.closureReturnType && equalBody
                && letSymbol == other.letSymbol && letType == other.letType
@@ -134,7 +150,9 @@ namespace Visual::XSharp::Core
     }
 
     auto
-    Statement::If(Expression condition, std::vector<Statement> whenTrue, std::vector<Statement> whenFalse) -> Statement
+    Statement::If(Expression condition,
+                  std::vector<Statement> whenTrue,
+                  std::vector<Statement> whenFalse) -> Statement
     {
         Statement statement;
         statement.kind = Kind::If;

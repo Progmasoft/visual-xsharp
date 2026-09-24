@@ -71,7 +71,8 @@ namespace Visual::XSharp::Xpp
         }
 
         [[nodiscard]] auto
-        Successors(const IR::Terminator &terminator) -> std::vector<Flow::BlockId>
+        Successors(const IR::Terminator &terminator)
+            -> std::vector<Flow::BlockId>
         {
             switch (terminator.kind)
             {
@@ -87,32 +88,29 @@ namespace Visual::XSharp::Xpp
         }
 
         void
-        AppendRead(
-            const IR::Operand &operand,
-            Flow::HandleKind expected,
-            std::size_t instruction,
-            bool terminator,
-            const std::unordered_set<IR::SymbolId> &functions,
-            std::vector<Flow::Action> &actions)
+        AppendRead(const IR::Operand &operand,
+                   Flow::HandleKind expected,
+                   std::size_t instruction,
+                   bool terminator,
+                   const std::unordered_set<IR::SymbolId> &functions,
+                   std::vector<Flow::Action> &actions)
         {
             if (operand.kind != IR::Operand::Kind::Symbol
                 || functions.contains(operand.symbol)
                 || !IsAarcType(operand.type))
                 return;
-            actions.push_back(
-                { Flow::ActionKind::Observe,
-                  operand.symbol,
-                  expected,
-                  instruction,
-                  terminator });
+            actions.push_back({ Flow::ActionKind::Observe,
+                                operand.symbol,
+                                expected,
+                                instruction,
+                                terminator });
         }
 
         void
-        AppendInstruction(
-            const IR::Instruction &instruction,
-            std::size_t index,
-            const std::unordered_set<IR::SymbolId> &functions,
-            std::vector<Flow::Action> &actions)
+        AppendInstruction(const IR::Instruction &instruction,
+                          std::size_t index,
+                          const std::unordered_set<IR::SymbolId> &functions,
+                          std::vector<Flow::Action> &actions)
         {
             const auto ownershipOpcode = IsOwnershipOpcode(instruction.opcode);
             for (const auto &operand : instruction.operands)
@@ -135,21 +133,20 @@ namespace Visual::XSharp::Xpp
             if (instruction.effect == IR::Instruction::Effect::Discard
                 || instruction.destination == 0U)
                 return;
-            actions.push_back(
-                { IsAarcType(instruction.result_type)
-                      ? Flow::ActionKind::Define
-                      : Flow::ActionKind::Forget,
-                  instruction.destination,
-                  ownershipOpcode ? ResultKind(instruction.opcode)
-                                  : Flow::HandleKind::Strong,
-                  index,
-                  false });
+            actions.push_back({ IsAarcType(instruction.result_type)
+                                    ? Flow::ActionKind::Define
+                                    : Flow::ActionKind::Forget,
+                                instruction.destination,
+                                ownershipOpcode ? ResultKind(instruction.opcode)
+                                                : Flow::HandleKind::Strong,
+                                index,
+                                false });
         }
 
         [[nodiscard]] auto
-        Adapt(
-            const IR::Function &function,
-            const std::unordered_set<IR::SymbolId> &functions) -> Flow::Function
+        Adapt(const IR::Function &function,
+              const std::unordered_set<IR::SymbolId> &functions)
+            -> Flow::Function
         {
             Flow::Function model;
             model.entry = function.entry;
@@ -166,38 +163,39 @@ namespace Visual::XSharp::Xpp
                 flowBlock.id = block.id;
                 flowBlock.successors = Successors(block.terminator);
                 flowBlock.actions.reserve(block.instructions.size() * 2U + 1U);
-                for (std::size_t index = 0U; index < block.instructions.size(); ++index)
-                    AppendInstruction(
-                        block.instructions[index],
-                        index,
-                        functions,
-                        flowBlock.actions);
+                for (std::size_t index = 0U; index < block.instructions.size();
+                     ++index)
+                    AppendInstruction(block.instructions[index],
+                                      index,
+                                      functions,
+                                      flowBlock.actions);
                 if (block.terminator.kind == IR::Terminator::Kind::Return)
-                    AppendRead(
-                        block.terminator.value,
-                        Flow::HandleKind::Strong,
-                        block.instructions.size(),
-                        true,
-                        functions,
-                        flowBlock.actions);
+                    AppendRead(block.terminator.value,
+                               Flow::HandleKind::Strong,
+                               block.instructions.size(),
+                               true,
+                               functions,
+                               flowBlock.actions);
                 model.blocks.push_back(std::move(flowBlock));
             }
             return model;
         }
 
         [[nodiscard]] auto
-        Translate(
-            const Flow::Issue &issue,
-            Core::SymbolId function) -> std::optional<VerificationIssue>
+        Translate(const Flow::Issue &issue, Core::SymbolId function)
+            -> std::optional<VerificationIssue>
         {
             switch (issue.kind)
             {
                 case Flow::IssueKind::UseAfterConsume:
                     return VerificationIssue{
                         "VXP1042",
-                        issue.terminator
-                            ? "return uses ownership handle " + std::to_string(issue.handle) + " after it was released"
-                            : "instruction uses ownership handle " + std::to_string(issue.handle) + " after it was released",
+                        issue.terminator ? "return uses ownership handle "
+                                               + std::to_string(issue.handle)
+                                               + " after it was released"
+                                         : "instruction uses ownership handle "
+                                               + std::to_string(issue.handle)
+                                               + " after it was released",
                         function,
                         issue.block,
                         issue.instruction
@@ -205,7 +203,9 @@ namespace Visual::XSharp::Xpp
                 case Flow::IssueKind::HandleKindMismatch:
                     return VerificationIssue{
                         "VXP1043",
-                        "ownership operation uses handle " + std::to_string(issue.handle) + " as the wrong runtime representation",
+                        "ownership operation uses handle "
+                            + std::to_string(issue.handle)
+                            + " as the wrong runtime representation",
                         function,
                         issue.block,
                         issue.instruction
@@ -213,7 +213,9 @@ namespace Visual::XSharp::Xpp
                 case Flow::IssueKind::PathStateMismatch:
                     return VerificationIssue{
                         "VXP1044",
-                        "ownership handle " + std::to_string(issue.handle) + " has incompatible live, released, or representation states across incoming paths",
+                        "ownership handle " + std::to_string(issue.handle)
+                            + " has incompatible live, released, or "
+                              "representation states across incoming paths",
                         function,
                         issue.block,
                         issue.instruction
@@ -242,9 +244,8 @@ namespace Visual::XSharp::Xpp
         std::vector<VerificationIssue> issues;
         for (const auto &function : module.functions)
         {
-            const auto result = Flow::Analyze(
-                Adapt(function, functions),
-                { .materializeFacts = false });
+            const auto result = Flow::Analyze(Adapt(function, functions),
+                                              { .materializeFacts = false });
             for (const auto &issue : result.issues)
                 if (auto translated = Translate(issue, function.symbol.id))
                     issues.push_back(std::move(*translated));

@@ -15,7 +15,10 @@ namespace Visual::XSharp::Xpp::Wire
         namespace Core = ::visual_xsharp::core;
         namespace IR = ::visual_xsharp::xpp;
 
-        inline constexpr std::array<std::uint8_t, 4U> kMagic{ 'V', 'X', 'P', 'P' };
+        inline constexpr std::array<std::uint8_t, 4U> kMagic{ 'V',
+                                                              'X',
+                                                              'P',
+                                                              'P' };
 
         void
         WriteOperand(Common::Writer &writer, const IR::Operand &operand)
@@ -25,27 +28,36 @@ namespace Visual::XSharp::Xpp::Wire
             if (operand.kind == IR::Operand::Kind::Symbol)
                 writer.U64(operand.symbol);
             else
-                writer.Literal(operand.literal, operand.type, "Xpp operand literal");
+                writer.Literal(operand.literal,
+                               operand.type,
+                               "Xpp operand literal");
         }
 
         void
-        WriteInstruction(Common::Writer &writer, const IR::Instruction &instruction, const Limits &limits)
+        WriteInstruction(Common::Writer &writer,
+                         const IR::Instruction &instruction,
+                         const Limits &limits)
         {
             writer.Byte(static_cast<std::uint8_t>(instruction.effect));
             writer.Byte(static_cast<std::uint8_t>(instruction.opcode));
             writer.U64(instruction.destination);
             writer.Type(instruction.result_type, "Xpp instruction result");
-            writer.Count(instruction.operands.size(), limits.maximumOperands, "Xpp operand count");
+            writer.Count(instruction.operands.size(),
+                         limits.maximumOperands,
+                         "Xpp operand count");
             for (const auto &operand : instruction.operands)
                 WriteOperand(writer, operand);
             writer.U64(instruction.closure_function);
-            writer.Count(instruction.capture_modes.size(), limits.maximumOperands, "Xpp capture mode count");
+            writer.Count(instruction.capture_modes.size(),
+                         limits.maximumOperands,
+                         "Xpp capture mode count");
             for (const auto mode : instruction.capture_modes)
                 writer.Byte(static_cast<std::uint8_t>(mode));
         }
 
         void
-        WriteTerminator(Common::Writer &writer, const IR::Terminator &terminator)
+        WriteTerminator(Common::Writer &writer,
+                        const IR::Terminator &terminator)
         {
             writer.Byte(static_cast<std::uint8_t>(terminator.kind));
             WriteOperand(writer, terminator.value);
@@ -54,10 +66,14 @@ namespace Visual::XSharp::Xpp::Wire
         }
 
         void
-        WriteFunction(Common::Writer &writer, const IR::Function &function, const Limits &limits)
+        WriteFunction(Common::Writer &writer,
+                      const IR::Function &function,
+                      const Limits &limits)
         {
             writer.Symbol(function.symbol, "Xpp function symbol");
-            writer.Count(function.parameters.size(), limits.maximumParameters, "Xpp parameter count");
+            writer.Count(function.parameters.size(),
+                         limits.maximumParameters,
+                         "Xpp parameter count");
             for (const auto &parameter : function.parameters)
             {
                 writer.Symbol(parameter.symbol, "Xpp parameter symbol");
@@ -65,11 +81,15 @@ namespace Visual::XSharp::Xpp::Wire
             }
             writer.Type(function.return_type, "Xpp function result");
             writer.U32(function.entry);
-            writer.Count(function.blocks.size(), limits.maximumBlocks, "Xpp block count");
+            writer.Count(function.blocks.size(),
+                         limits.maximumBlocks,
+                         "Xpp block count");
             for (const auto &block : function.blocks)
             {
                 writer.U32(block.id);
-                writer.Count(block.instructions.size(), limits.maximumInstructions, "Xpp instruction count");
+                writer.Count(block.instructions.size(),
+                             limits.maximumInstructions,
+                             "Xpp instruction count");
                 for (const auto &instruction : block.instructions)
                     WriteInstruction(writer, instruction, limits);
                 WriteTerminator(writer, block.terminator);
@@ -77,11 +97,15 @@ namespace Visual::XSharp::Xpp::Wire
         }
 
         [[nodiscard]] auto
-        ReadTag(Common::Reader &reader, std::uint8_t maximum, std::string context) -> std::uint8_t
+        ReadTag(Common::Reader &reader,
+                std::uint8_t maximum,
+                std::string context) -> std::uint8_t
         {
             const auto tag = reader.Byte(context);
             if (!reader.Failure() && tag > maximum)
-                reader.Fail(ErrorKind::InvalidTag, std::move(context), "wire tag is outside the stage catalog");
+                reader.Fail(ErrorKind::InvalidTag,
+                            std::move(context),
+                            "wire tag is outside the stage catalog");
             return tag;
         }
 
@@ -89,38 +113,51 @@ namespace Visual::XSharp::Xpp::Wire
         ReadOperand(Common::Reader &reader) -> IR::Operand
         {
             IR::Operand operand;
-            operand.kind = static_cast<IR::Operand::Kind>(ReadTag(reader, 1U, "Xpp operand kind"));
+            operand.kind = static_cast<IR::Operand::Kind>(
+                ReadTag(reader, 1U, "Xpp operand kind"));
             operand.type = reader.Type("Xpp operand type");
             if (operand.kind == IR::Operand::Kind::Symbol)
                 operand.symbol = reader.U64("Xpp operand symbol");
             else
-                operand.literal = reader.Literal(operand.type, "Xpp operand literal");
+                operand.literal
+                    = reader.Literal(operand.type, "Xpp operand literal");
             return operand;
         }
 
         [[nodiscard]] auto
         ReadCaptureMode(Common::Reader &reader) -> Core::CaptureMode
         {
-            return static_cast<Core::CaptureMode>(ReadTag(reader, 2U, "Xpp capture mode"));
+            return static_cast<Core::CaptureMode>(
+                ReadTag(reader, 2U, "Xpp capture mode"));
         }
 
         [[nodiscard]] auto
-        ReadInstruction(Common::Reader &reader, const Limits &limits) -> IR::Instruction
+        ReadInstruction(Common::Reader &reader, const Limits &limits)
+            -> IR::Instruction
         {
             IR::Instruction instruction;
-            instruction.effect = static_cast<IR::Instruction::Effect>(ReadTag(reader, 2U, "Xpp instruction effect"));
+            instruction.effect = static_cast<IR::Instruction::Effect>(
+                ReadTag(reader, 2U, "Xpp instruction effect"));
             instruction.opcode = static_cast<IR::Opcode>(
-                ReadTag(reader, static_cast<std::uint8_t>(IR::Opcode::TypeIs), "Xpp opcode"));
+                ReadTag(reader,
+                        static_cast<std::uint8_t>(IR::Opcode::TypeIs),
+                        "Xpp opcode"));
             instruction.destination = reader.U64("Xpp destination");
             instruction.result_type = reader.Type("Xpp instruction result");
-            const auto operandCount = reader.Count(limits.maximumOperands, "Xpp operand count");
+            const auto operandCount
+                = reader.Count(limits.maximumOperands, "Xpp operand count");
             instruction.operands.reserve(operandCount);
-            for (std::size_t index = 0; index < operandCount && !reader.Failure(); ++index)
+            for (std::size_t index = 0;
+                 index < operandCount && !reader.Failure();
+                 ++index)
                 instruction.operands.push_back(ReadOperand(reader));
             instruction.closure_function = reader.U64("Xpp closure function");
-            const auto captureCount = reader.Count(limits.maximumOperands, "Xpp capture mode count");
+            const auto captureCount = reader.Count(limits.maximumOperands,
+                                                   "Xpp capture mode count");
             instruction.capture_modes.reserve(captureCount);
-            for (std::size_t index = 0; index < captureCount && !reader.Failure(); ++index)
+            for (std::size_t index = 0;
+                 index < captureCount && !reader.Failure();
+                 ++index)
                 instruction.capture_modes.push_back(ReadCaptureMode(reader));
             return instruction;
         }
@@ -129,7 +166,8 @@ namespace Visual::XSharp::Xpp::Wire
         ReadTerminator(Common::Reader &reader) -> IR::Terminator
         {
             IR::Terminator terminator;
-            terminator.kind = static_cast<IR::Terminator::Kind>(ReadTag(reader, 3U, "Xpp terminator kind"));
+            terminator.kind = static_cast<IR::Terminator::Kind>(
+                ReadTag(reader, 3U, "Xpp terminator kind"));
             terminator.value = ReadOperand(reader);
             terminator.true_target = reader.U32("Xpp true target");
             terminator.false_target = reader.U32("Xpp false target");
@@ -137,28 +175,40 @@ namespace Visual::XSharp::Xpp::Wire
         }
 
         [[nodiscard]] auto
-        ReadFunction(Common::Reader &reader, const Limits &limits) -> IR::Function
+        ReadFunction(Common::Reader &reader, const Limits &limits)
+            -> IR::Function
         {
             IR::Function function;
             function.symbol = reader.Symbol("Xpp function symbol");
-            const auto parameterCount = reader.Count(limits.maximumParameters, "Xpp parameter count");
+            const auto parameterCount
+                = reader.Count(limits.maximumParameters, "Xpp parameter count");
             function.parameters.reserve(parameterCount);
-            for (std::size_t index = 0; index < parameterCount && !reader.Failure(); ++index)
-                function.parameters.push_back(Core::Parameter{
-                    reader.Symbol("Xpp parameter symbol"),
-                    reader.Type("Xpp parameter type") });
+            for (std::size_t index = 0;
+                 index < parameterCount && !reader.Failure();
+                 ++index)
+                function.parameters.push_back(
+                    Core::Parameter{ reader.Symbol("Xpp parameter symbol"),
+                                     reader.Type("Xpp parameter type") });
             function.return_type = reader.Type("Xpp function result");
             function.entry = reader.U32("Xpp entry block");
-            const auto blockCount = reader.Count(limits.maximumBlocks, "Xpp block count");
+            const auto blockCount
+                = reader.Count(limits.maximumBlocks, "Xpp block count");
             function.blocks.reserve(blockCount);
-            for (std::size_t blockIndex = 0; blockIndex < blockCount && !reader.Failure(); ++blockIndex)
+            for (std::size_t blockIndex = 0;
+                 blockIndex < blockCount && !reader.Failure();
+                 ++blockIndex)
             {
                 IR::Block block;
                 block.id = reader.U32("Xpp block id");
-                const auto instructionCount = reader.Count(limits.maximumInstructions, "Xpp instruction count");
+                const auto instructionCount
+                    = reader.Count(limits.maximumInstructions,
+                                   "Xpp instruction count");
                 block.instructions.reserve(instructionCount);
-                for (std::size_t index = 0; index < instructionCount && !reader.Failure(); ++index)
-                    block.instructions.push_back(ReadInstruction(reader, limits));
+                for (std::size_t index = 0;
+                     index < instructionCount && !reader.Failure();
+                     ++index)
+                    block.instructions.push_back(
+                        ReadInstruction(reader, limits));
                 block.terminator = ReadTerminator(reader);
                 function.blocks.push_back(std::move(block));
             }
@@ -171,7 +221,11 @@ namespace Visual::XSharp::Xpp::Wire
     {
         const auto issues = Verify(module);
         if (!issues.empty())
-            return { {}, Error{ ErrorKind::InvalidModel, 0U, "Xpp verifier", issues.front().message } };
+            return { {},
+                     Error{ ErrorKind::InvalidModel,
+                            0U,
+                            "Xpp verifier",
+                            issues.front().message } };
 
         Common::Writer writer(limits);
         for (const auto byte : kMagic)
@@ -179,7 +233,9 @@ namespace Visual::XSharp::Xpp::Wire
         writer.U16(kCurrentVersion);
         writer.U16(0U);
         writer.QualifiedName(module.name, "Xpp module name");
-        writer.Count(module.functions.size(), limits.maximumFunctions, "Xpp function count");
+        writer.Count(module.functions.size(),
+                     limits.maximumFunctions,
+                     "Xpp function count");
         for (const auto &function : module.functions)
             WriteFunction(writer, function, limits);
         if (writer.Failure())
@@ -188,30 +244,41 @@ namespace Visual::XSharp::Xpp::Wire
     }
 
     auto
-    Decode(std::span<const std::uint8_t> bytes, const Limits &limits) -> DecodeResult
+    Decode(std::span<const std::uint8_t> bytes, const Limits &limits)
+        -> DecodeResult
     {
         Common::Reader reader(bytes, limits);
         for (const auto expected : kMagic)
             if (reader.Byte("Xpp magic") != expected)
             {
-                reader.Fail(ErrorKind::InvalidMagic, "Xpp magic", "input is not a Visual X# Xpp document");
+                reader.Fail(ErrorKind::InvalidMagic,
+                            "Xpp magic",
+                            "input is not a Visual X# Xpp document");
                 break;
             }
         const auto version = reader.U16("Xpp version");
         if (!reader.Failure() && version != kCurrentVersion)
-            reader.Fail(ErrorKind::UnsupportedVersion, "Xpp version", "unsupported Xpp wire version");
+            reader.Fail(ErrorKind::UnsupportedVersion,
+                        "Xpp version",
+                        "unsupported Xpp wire version");
         const auto flags = reader.U16("Xpp flags");
         if (!reader.Failure() && flags != 0U)
-            reader.Fail(ErrorKind::InvalidTag, "Xpp flags", "reserved Xpp flags must be zero");
+            reader.Fail(ErrorKind::InvalidTag,
+                        "Xpp flags",
+                        "reserved Xpp flags must be zero");
 
         IR::Module module;
         module.name = reader.QualifiedName("Xpp module name");
-        const auto functionCount = reader.Count(limits.maximumFunctions, "Xpp function count");
+        const auto functionCount
+            = reader.Count(limits.maximumFunctions, "Xpp function count");
         module.functions.reserve(functionCount);
-        for (std::size_t index = 0; index < functionCount && !reader.Failure(); ++index)
+        for (std::size_t index = 0; index < functionCount && !reader.Failure();
+             ++index)
             module.functions.push_back(ReadFunction(reader, limits));
         if (!reader.Failure() && !reader.AtEnd())
-            reader.Fail(ErrorKind::TrailingInput, "Xpp document", "bytes remain after Xpp module");
+            reader.Fail(ErrorKind::TrailingInput,
+                        "Xpp document",
+                        "bytes remain after Xpp module");
         if (reader.Failure())
             return { std::nullopt, reader.Failure() };
         return { std::move(module), std::nullopt };

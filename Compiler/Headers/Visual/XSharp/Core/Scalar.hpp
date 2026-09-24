@@ -39,10 +39,12 @@ namespace visual_xsharp::core
         is_floating() const noexcept -> bool;
     };
 
-    // Returns no description for aggregate, callable, named, and type-variable shapes.
-    // The function is the one canonical mapping from Core type tags to language scalars.
+    // Returns no description for aggregate, callable, named, and type-variable
+    // shapes. The function is the one canonical mapping from Core type tags to
+    // language scalars.
     [[nodiscard]] auto
-    describe_scalar(const Type &type) noexcept -> std::optional<ScalarDescription>;
+    describe_scalar(const Type &type) noexcept
+        -> std::optional<ScalarDescription>;
     [[nodiscard]] auto
     is_numeric(const Type &type) noexcept -> bool;
     [[nodiscard]] auto
@@ -56,8 +58,9 @@ namespace visual_xsharp::core
     [[nodiscard]] auto
     accepts_boolean_context(const Type &type) noexcept -> bool;
 
-    // Canonical integer helpers are shared by codecs, verifiers, and LLVM lowering. Keeping
-    // normalization here prevents each stage from inventing subtly different zero/sign rules.
+    // Canonical integer helpers are shared by codecs, verifiers, and LLVM
+    // lowering. Keeping normalization here prevents each stage from inventing
+    // subtly different zero/sign rules.
     [[nodiscard]] auto
     normalize_integer(IntegerLiteral value) -> IntegerLiteral;
     [[nodiscard]] auto
@@ -65,7 +68,8 @@ namespace visual_xsharp::core
     [[nodiscard]] auto
     integer_is_zero(const IntegerLiteral &value) noexcept -> bool;
     [[nodiscard]] auto
-    integer_fits(const IntegerLiteral &value, const Type &type) noexcept -> bool;
+    integer_fits(const IntegerLiteral &value, const Type &type) noexcept
+        -> bool;
     [[nodiscard]] auto
     integer_from_signed(std::int64_t value) -> IntegerLiteral;
     [[nodiscard]] auto
@@ -73,13 +77,16 @@ namespace visual_xsharp::core
     [[nodiscard]] auto
     integer_hex_magnitude(const IntegerLiteral &value) -> std::string;
 
-    // Floating spelling is intentionally locale-independent. Accepted forms are decimal
-    // significands with an optional exponent plus inf/nan spellings used by LLVM APFloat.
+    // Floating spelling is intentionally locale-independent. Accepted forms are
+    // decimal significands with an optional exponent plus inf/nan spellings
+    // used by LLVM APFloat.
     [[nodiscard]] auto
     floating_spelling_is_valid(std::string_view spelling) noexcept -> bool;
 
-    // Validates both the variant alternative and scalar range. A diagnostic-ready reason is
-    // returned so artifact readers can reject malformed payloads before any backend sees them.
+    // Validates both the variant alternative and scalar range. A
+    // diagnostic-ready reason is returned so artifact readers can reject
+    // malformed payloads before any backend sees them.
     [[nodiscard]] auto
-    validate_literal(const Literal &literal, const Type &type) -> std::optional<std::string>;
+    validate_literal(const Literal &literal, const Type &type)
+        -> std::optional<std::string>;
 } // namespace visual_xsharp::core

@@ -29,10 +29,9 @@ namespace
     }
 
     [[nodiscard]] auto
-    Source(
-        std::u32string name = U"Sources/App/Main.vxs",
-        Diagnostic::Position start = Point(3U, 8U),
-        Diagnostic::Position end = Point(3U, 13U)) -> Diagnostic::Location
+    Source(std::u32string name = U"Sources/App/Main.vxs",
+           Diagnostic::Position start = Point(3U, 8U),
+           Diagnostic::Position end = Point(3U, 13U)) -> Diagnostic::Location
     {
         return { std::move(name), { start, end } };
     }
@@ -58,7 +57,9 @@ namespace
             { U"Convert the value to String",
               { { Source(), U"value.ToString()" } } },
             { U"Change the parameter type",
-              { { Source(U"Sources/App/Api.vxs", Point(11U, 4U), Point(11U, 17U)),
+              { { Source(U"Sources/App/Api.vxs",
+                         Point(11U, 4U),
+                         Point(11U, 17U)),
                   U"System.Object" } } },
         };
         return { { std::move(record) } };
@@ -77,7 +78,9 @@ namespace
     }
 
     void
-    RequireError(const Diagnostic::DecodeResult &result, ErrorKind kind, std::string_view context)
+    RequireError(const Diagnostic::DecodeResult &result,
+                 ErrorKind kind,
+                 std::string_view context)
     {
         REQUIRE_FALSE(result);
         REQUIRE_FALSE(result.document.has_value());
@@ -88,7 +91,9 @@ namespace
     }
 
     void
-    RequireError(const Diagnostic::EncodeResult &result, ErrorKind kind, std::string_view context)
+    RequireError(const Diagnostic::EncodeResult &result,
+                 ErrorKind kind,
+                 std::string_view context)
     {
         REQUIRE_FALSE(result);
         REQUIRE(result.bytes.empty());
@@ -99,8 +104,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Encoded(const Diagnostic::Document &document, const Diagnostic::Limits &limits = {})
-        -> std::vector<std::uint8_t>
+    Encoded(const Diagnostic::Document &document,
+            const Diagnostic::Limits &limits = {}) -> std::vector<std::uint8_t>
     {
         const auto result = Diagnostic::Encode(document, limits);
         REQUIRE(result);
@@ -109,11 +114,14 @@ namespace
     }
 
     void
-    StoreU32(std::vector<std::uint8_t> &bytes, std::size_t offset, std::uint32_t value)
+    StoreU32(std::vector<std::uint8_t> &bytes,
+             std::size_t offset,
+             std::uint32_t value)
     {
         REQUIRE(offset + 4U <= bytes.size());
         for (std::size_t index = 0U; index < 4U; ++index)
-            bytes[offset + index] = static_cast<std::uint8_t>(value >> (index * 8U));
+            bytes[offset + index]
+                = static_cast<std::uint8_t>(value >> (index * 8U));
     }
 } // namespace
 
@@ -131,10 +139,12 @@ TEST_CASE("diagnostic protocol round-trips the complete v1 model")
     CHECK(record.arguments.size() == 2U);
     CHECK(record.related.size() == 1U);
     CHECK(record.fixes.size() == 2U);
-    CHECK(record.fixes.front().edits.front().replacement == U"value.ToString()");
+    CHECK(record.fixes.front().edits.front().replacement
+          == U"value.ToString()");
 }
 
-TEST_CASE("diagnostic collection preserves order and coalesces exact duplicates")
+TEST_CASE(
+    "diagnostic collection preserves order and coalesces exact duplicates")
 {
     Collection collection;
     auto first = SampleRecord();
@@ -145,7 +155,8 @@ TEST_CASE("diagnostic collection preserves order and coalesces exact duplicates"
     REQUIRE(collection.Append(first).status == AppendStatus::Duplicate);
     REQUIRE(collection.Append(second).status == AppendStatus::Added);
     REQUIRE(collection.Size() == 2U);
-    REQUIRE(collection.Snapshot().records == std::vector<Record>{ first, second });
+    REQUIRE(collection.Snapshot().records
+            == std::vector<Record>{ first, second });
 }
 
 TEST_CASE("diagnostic collection counts only error and warning severities")
@@ -162,7 +173,8 @@ TEST_CASE("diagnostic collection counts only error and warning severities")
     hint.code = U"VXT207";
     hint.severity = Severity::Hint;
 
-    REQUIRE(collection.Merge(Document{ { error, warning, information, hint } }));
+    REQUIRE(
+        collection.Merge(Document{ { error, warning, information, hint } }));
     REQUIRE(collection.ErrorCount() == 1U);
     REQUIRE(collection.WarningCount() == 1U);
 }
@@ -215,7 +227,8 @@ TEST_CASE("diagnostic collection merge rolls back the complete batch")
     REQUIRE(collection.Snapshot() == Document{ { original } });
 }
 
-TEST_CASE("diagnostic collection merge treats an all-duplicate batch as duplicate")
+TEST_CASE(
+    "diagnostic collection merge treats an all-duplicate batch as duplicate")
 {
     Collection collection;
     const auto record = SampleRecord();
@@ -259,18 +272,7 @@ TEST_CASE("empty diagnostic documents have a stable compact header")
 {
     const auto bytes = Encoded({});
     const std::vector<std::uint8_t> expected{
-        'V',
-        'X',
-        'D',
-        'G',
-        1U,
-        0U,
-        0U,
-        0U,
-        0U,
-        0U,
-        0U,
-        0U,
+        'V', 'X', 'D', 'G', 1U, 0U, 0U, 0U, 0U, 0U, 0U, 0U,
     };
     REQUIRE(bytes == expected);
     const auto decoded = Diagnostic::Decode(bytes);
@@ -281,19 +283,24 @@ TEST_CASE("empty diagnostic documents have a stable compact header")
 TEST_CASE("diagnostic source positions are zero-based and lossless")
 {
     auto document = RichDocument();
-    document.records.front().primary = Source(U"Main.vxs", Point(0U, 0U), Point(4294967295U, 4294967295U));
+    document.records.front().primary
+        = Source(U"Main.vxs", Point(0U, 0U), Point(4294967295U, 4294967295U));
 
     const auto decoded = Diagnostic::Decode(Encoded(document));
     REQUIRE(decoded);
     REQUIRE(decoded.document->records.front().primary.has_value());
-    CHECK(decoded.document->records.front().primary->range.start == Point(0U, 0U));
-    CHECK(decoded.document->records.front().primary->range.end == Point(4294967295U, 4294967295U));
+    CHECK(decoded.document->records.front().primary->range.start
+          == Point(0U, 0U));
+    CHECK(decoded.document->records.front().primary->range.end
+          == Point(4294967295U, 4294967295U));
 }
 
 TEST_CASE("diagnostic document preserves every stage tag")
 {
     Diagnostic::Document document;
-    for (std::uint8_t tag = 0U; tag <= static_cast<std::uint8_t>(Diagnostic::Stage::LlvmBackend); ++tag)
+    for (std::uint8_t tag = 0U;
+         tag <= static_cast<std::uint8_t>(Diagnostic::Stage::LlvmBackend);
+         ++tag)
     {
         Diagnostic::Record record;
         record.stage = static_cast<Diagnostic::Stage>(tag);
@@ -305,13 +312,16 @@ TEST_CASE("diagnostic document preserves every stage tag")
     REQUIRE(decoded);
     REQUIRE(decoded.document->records.size() == document.records.size());
     for (std::size_t index = 0U; index < document.records.size(); ++index)
-        CHECK(decoded.document->records[index].stage == document.records[index].stage);
+        CHECK(decoded.document->records[index].stage
+              == document.records[index].stage);
 }
 
 TEST_CASE("diagnostic document preserves every severity tag")
 {
     Diagnostic::Document document;
-    for (std::uint8_t tag = 0U; tag <= static_cast<std::uint8_t>(Diagnostic::Severity::Hint); ++tag)
+    for (std::uint8_t tag = 0U;
+         tag <= static_cast<std::uint8_t>(Diagnostic::Severity::Hint);
+         ++tag)
     {
         Diagnostic::Record record;
         record.severity = static_cast<Diagnostic::Severity>(tag);
@@ -323,7 +333,8 @@ TEST_CASE("diagnostic document preserves every severity tag")
     REQUIRE(decoded);
     REQUIRE(decoded.document->records.size() == document.records.size());
     for (std::size_t index = 0U; index < document.records.size(); ++index)
-        CHECK(decoded.document->records[index].severity == document.records[index].severity);
+        CHECK(decoded.document->records[index].severity
+              == document.records[index].severity);
 }
 
 TEST_CASE("diagnostic protocol rejects invalid framing")
@@ -332,19 +343,25 @@ TEST_CASE("diagnostic protocol rejects invalid framing")
     {
         auto bytes = Encoded({});
         bytes.front() = 'N';
-        RequireError(Diagnostic::Decode(bytes), ErrorKind::InvalidMagic, "magic");
+        RequireError(Diagnostic::Decode(bytes),
+                     ErrorKind::InvalidMagic,
+                     "magic");
     }
     SECTION("old version")
     {
         auto bytes = Encoded({});
         bytes[4] = 0U;
-        RequireError(Diagnostic::Decode(bytes), ErrorKind::UnsupportedVersion, "version");
+        RequireError(Diagnostic::Decode(bytes),
+                     ErrorKind::UnsupportedVersion,
+                     "version");
     }
     SECTION("future version")
     {
         auto bytes = Encoded({});
         bytes[4] = 2U;
-        RequireError(Diagnostic::Decode(bytes), ErrorKind::UnsupportedVersion, "version");
+        RequireError(Diagnostic::Decode(bytes),
+                     ErrorKind::UnsupportedVersion,
+                     "version");
     }
     SECTION("reserved flags")
     {
@@ -356,13 +373,17 @@ TEST_CASE("diagnostic protocol rejects invalid framing")
     {
         auto bytes = Encoded({});
         bytes.pop_back();
-        RequireError(Diagnostic::Decode(bytes), ErrorKind::TruncatedInput, "diagnostic count");
+        RequireError(Diagnostic::Decode(bytes),
+                     ErrorKind::TruncatedInput,
+                     "diagnostic count");
     }
     SECTION("trailing input")
     {
         auto bytes = Encoded({});
         bytes.push_back(0U);
-        RequireError(Diagnostic::Decode(bytes), ErrorKind::TrailingInput, "document");
+        RequireError(Diagnostic::Decode(bytes),
+                     ErrorKind::TrailingInput,
+                     "document");
     }
 }
 
@@ -374,12 +395,16 @@ TEST_CASE("diagnostic decoder rejects unknown semantic tags")
     SECTION("stage")
     {
         bytes[12] = 0xffU;
-        RequireError(Diagnostic::Decode(bytes), ErrorKind::InvalidTag, "diagnostic stage");
+        RequireError(Diagnostic::Decode(bytes),
+                     ErrorKind::InvalidTag,
+                     "diagnostic stage");
     }
     SECTION("severity")
     {
         bytes[13] = 0xffU;
-        RequireError(Diagnostic::Decode(bytes), ErrorKind::InvalidTag, "diagnostic severity");
+        RequireError(Diagnostic::Decode(bytes),
+                     ErrorKind::InvalidTag,
+                     "diagnostic severity");
     }
 }
 
@@ -389,31 +414,42 @@ TEST_CASE("diagnostic encoder validates record identity")
     {
         auto document = RichDocument();
         document.records.front().stage = static_cast<Diagnostic::Stage>(255U);
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidTag, "diagnostic stage");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidTag,
+                     "diagnostic stage");
     }
     SECTION("invalid severity")
     {
         auto document = RichDocument();
-        document.records.front().severity = static_cast<Diagnostic::Severity>(255U);
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidTag, "diagnostic severity");
+        document.records.front().severity
+            = static_cast<Diagnostic::Severity>(255U);
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidTag,
+                     "diagnostic severity");
     }
     SECTION("empty code")
     {
         auto document = RichDocument();
         document.records.front().code.clear();
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "diagnostic code");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "diagnostic code");
     }
     SECTION("lowercase code")
     {
         auto document = RichDocument();
         document.records.front().code = U"Vxt1042";
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "diagnostic code");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "diagnostic code");
     }
     SECTION("empty message")
     {
         auto document = RichDocument();
         document.records.front().message.clear();
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "diagnostic message");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "diagnostic message");
     }
 }
 
@@ -423,24 +459,33 @@ TEST_CASE("diagnostic locations require an identity and ordered range")
     {
         auto document = RichDocument();
         document.records.front().primary->source.clear();
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "primary location");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "primary location");
     }
     SECTION("reversed line")
     {
         auto document = RichDocument();
-        document.records.front().primary->range = { Point(9U, 0U), Point(8U, 99U) };
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "primary location");
+        document.records.front().primary->range
+            = { Point(9U, 0U), Point(8U, 99U) };
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "primary location");
     }
     SECTION("reversed column")
     {
         auto document = RichDocument();
-        document.records.front().primary->range = { Point(9U, 7U), Point(9U, 6U) };
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "primary location");
+        document.records.front().primary->range
+            = { Point(9U, 7U), Point(9U, 6U) };
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "primary location");
     }
     SECTION("multi-line range")
     {
         auto document = RichDocument();
-        document.records.front().primary->range = { Point(9U, 700U), Point(10U, 0U) };
+        document.records.front().primary->range
+            = { Point(9U, 700U), Point(10U, 0U) };
         REQUIRE(Diagnostic::Encode(document));
     }
 }
@@ -451,13 +496,18 @@ TEST_CASE("diagnostic message arguments have unique nonempty names")
     {
         auto document = RichDocument();
         document.records.front().arguments.front().name.clear();
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "diagnostic argument name");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "diagnostic argument name");
     }
     SECTION("duplicate name")
     {
         auto document = RichDocument();
-        document.records.front().arguments.push_back(document.records.front().arguments.front());
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "diagnostic argument name");
+        document.records.front().arguments.push_back(
+            document.records.front().arguments.front());
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "diagnostic argument name");
     }
     SECTION("empty value is meaningful")
     {
@@ -471,7 +521,9 @@ TEST_CASE("diagnostic related locations require explanatory messages")
 {
     auto document = RichDocument();
     document.records.front().related.front().message.clear();
-    RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "related location message");
+    RequireError(Diagnostic::Encode(document),
+                 ErrorKind::InvalidModel,
+                 "related location message");
 }
 
 TEST_CASE("diagnostic fixes are named nonempty edit transactions")
@@ -480,21 +532,31 @@ TEST_CASE("diagnostic fixes are named nonempty edit transactions")
     {
         auto document = RichDocument();
         document.records.front().fixes.front().title.clear();
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "diagnostic fix title");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "diagnostic fix title");
     }
     SECTION("no edits")
     {
         auto document = RichDocument();
         document.records.front().fixes.front().edits.clear();
-        RequireError(Diagnostic::Encode(document), ErrorKind::InvalidModel, "diagnostic fix edits");
+        RequireError(Diagnostic::Encode(document),
+                     ErrorKind::InvalidModel,
+                     "diagnostic fix edits");
     }
     SECTION("empty replacement deletes text")
     {
         auto document = RichDocument();
-        document.records.front().fixes.front().edits.front().replacement.clear();
+        document.records.front()
+            .fixes.front()
+            .edits.front()
+            .replacement.clear();
         const auto decoded = Diagnostic::Decode(Encoded(document));
         REQUIRE(decoded);
-        CHECK(decoded.document->records.front().fixes.front().edits.front().replacement.empty());
+        CHECK(decoded.document->records.front()
+                  .fixes.front()
+                  .edits.front()
+                  .replacement.empty());
     }
 }
 
@@ -505,39 +567,50 @@ TEST_CASE("diagnostic encoder applies every collection limit")
         auto document = RichDocument();
         Diagnostic::Limits limits;
         limits.maximumRecords = 0U;
-        RequireError(Diagnostic::Encode(document, limits), ErrorKind::LimitExceeded, "diagnostic count");
+        RequireError(Diagnostic::Encode(document, limits),
+                     ErrorKind::LimitExceeded,
+                     "diagnostic count");
     }
     SECTION("arguments")
     {
         auto document = RichDocument();
         Diagnostic::Limits limits;
         limits.maximumArguments = 1U;
-        RequireError(Diagnostic::Encode(document, limits), ErrorKind::LimitExceeded, "diagnostic argument count");
+        RequireError(Diagnostic::Encode(document, limits),
+                     ErrorKind::LimitExceeded,
+                     "diagnostic argument count");
     }
     SECTION("related locations")
     {
         auto document = RichDocument();
         Diagnostic::Limits limits;
         limits.maximumRelatedLocations = 0U;
-        RequireError(Diagnostic::Encode(document, limits), ErrorKind::LimitExceeded, "related location count");
+        RequireError(Diagnostic::Encode(document, limits),
+                     ErrorKind::LimitExceeded,
+                     "related location count");
     }
     SECTION("fixes")
     {
         auto document = RichDocument();
         Diagnostic::Limits limits;
         limits.maximumFixes = 1U;
-        RequireError(Diagnostic::Encode(document, limits), ErrorKind::LimitExceeded, "diagnostic fix count");
+        RequireError(Diagnostic::Encode(document, limits),
+                     ErrorKind::LimitExceeded,
+                     "diagnostic fix count");
     }
     SECTION("edits")
     {
         auto document = RichDocument();
         Diagnostic::Limits limits;
         limits.maximumEditsPerFix = 0U;
-        RequireError(Diagnostic::Encode(document, limits), ErrorKind::LimitExceeded, "diagnostic edit count");
+        RequireError(Diagnostic::Encode(document, limits),
+                     ErrorKind::LimitExceeded,
+                     "diagnostic edit count");
     }
 }
 
-TEST_CASE("diagnostic decoder applies record and wire byte limits before allocation")
+TEST_CASE(
+    "diagnostic decoder applies record and wire byte limits before allocation")
 {
     const auto bytes = Encoded(RichDocument());
 
@@ -545,13 +618,17 @@ TEST_CASE("diagnostic decoder applies record and wire byte limits before allocat
     {
         Diagnostic::Limits limits;
         limits.maximumWireBytes = bytes.size() - 1U;
-        RequireError(Diagnostic::Decode(bytes, limits), ErrorKind::LimitExceeded, "wire byte length");
+        RequireError(Diagnostic::Decode(bytes, limits),
+                     ErrorKind::LimitExceeded,
+                     "wire byte length");
     }
     SECTION("record count")
     {
         Diagnostic::Limits limits;
         limits.maximumRecords = 0U;
-        RequireError(Diagnostic::Decode(bytes, limits), ErrorKind::LimitExceeded, "diagnostic count");
+        RequireError(Diagnostic::Decode(bytes, limits),
+                     ErrorKind::LimitExceeded,
+                     "diagnostic count");
     }
 }
 
@@ -578,10 +655,13 @@ TEST_CASE("diagnostic decoder rejects malformed presence booleans")
     const std::size_t primaryPresence = 12U + 2U + 4U + 7U * 4U + 4U + 4U + 4U;
     REQUIRE(primaryPresence < bytes.size());
     bytes[primaryPresence] = 2U;
-    RequireError(Diagnostic::Decode(bytes), ErrorKind::InvalidBoolean, "primary location presence");
+    RequireError(Diagnostic::Decode(bytes),
+                 ErrorKind::InvalidBoolean,
+                 "primary location presence");
 }
 
-TEST_CASE("diagnostic decoder rejects invalid model data from untrusted producers")
+TEST_CASE(
+    "diagnostic decoder rejects invalid model data from untrusted producers")
 {
     Diagnostic::Record record;
     record.code = U"VXD0004";
@@ -594,8 +674,11 @@ TEST_CASE("diagnostic decoder rejects invalid model data from untrusted producer
     // exercises post-decode model validation, not framing validation.
     const auto sourceScalars = record.primary->source.size();
     const std::size_t locationStart = 12U + 2U + (4U + record.code.size() * 4U)
-                                      + (4U + record.message.size() * 4U) + 4U + 1U;
+                                      + (4U + record.message.size() * 4U) + 4U
+                                      + 1U;
     const std::size_t endColumn = locationStart + 4U + sourceScalars * 4U + 12U;
     StoreU32(bytes, endColumn, 1U);
-    RequireError(Diagnostic::Decode(bytes), ErrorKind::InvalidModel, "primary location");
+    RequireError(Diagnostic::Decode(bytes),
+                 ErrorKind::InvalidModel,
+                 "primary location");
 }

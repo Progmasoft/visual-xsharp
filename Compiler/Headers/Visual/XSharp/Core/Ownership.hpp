@@ -12,8 +12,9 @@
 
 namespace visual_xsharp::core
 {
-    // StorageClass is a semantic property, not a target layout. In particular, a CoW
-    // value can contain a hidden shared buffer while still obeying value semantics.
+    // StorageClass is a semantic property, not a target layout. In particular,
+    // a CoW value can contain a hidden shared buffer while still obeying value
+    // semantics.
     enum class StorageClass : std::uint8_t
     {
         TrivialValue,
@@ -22,9 +23,10 @@ namespace visual_xsharp::core
         Unresolved
     };
 
-    // The declaration family is carried separately from Type until the complete source
-    // declaration catalog is serialized in Core. This prevents a Named type from being
-    // guessed from spelling, which would make separate compilation ABI-unsafe.
+    // The declaration family is carried separately from Type until the complete
+    // source declaration catalog is serialized in Core. This prevents a Named
+    // type from being guessed from spelling, which would make separate
+    // compilation ABI-unsafe.
     enum class NominalKind : std::uint8_t
     {
         Data,
@@ -57,7 +59,8 @@ namespace visual_xsharp::core
         [[nodiscard]] auto
         Register(std::vector<std::u32string> name, NominalKind kind) -> bool;
         [[nodiscard]] auto
-        Lookup(std::span<const std::u32string> name) const noexcept -> std::optional<NominalKind>;
+        Lookup(std::span<const std::u32string> name) const noexcept
+            -> std::optional<NominalKind>;
         [[nodiscard]] auto
         Size() const noexcept -> std::size_t;
         [[nodiscard]] auto
@@ -70,17 +73,24 @@ namespace visual_xsharp::core
     [[nodiscard]] auto
     ClassifyNominal(NominalKind kind) noexcept -> StorageClass;
     [[nodiscard]] auto
-    ClassifyType(const Type &type, std::optional<NominalKind> nominal = std::nullopt) noexcept
+    ClassifyType(const Type &type,
+                 std::optional<NominalKind> nominal = std::nullopt) noexcept
         -> StorageClass;
     [[nodiscard]] auto
-    ClassifyType(const Type &type, const NominalTypeCatalog &catalog) noexcept -> StorageClass;
+    ClassifyType(const Type &type, const NominalTypeCatalog &catalog) noexcept
+        -> StorageClass;
     [[nodiscard]] auto
-    UsesAarc(const Type &type, std::optional<NominalKind> nominal = std::nullopt) noexcept -> bool;
-    [[nodiscard]] auto
-    UsesCopyOnWrite(const Type &type, std::optional<NominalKind> nominal = std::nullopt) noexcept
+    UsesAarc(const Type &type,
+             std::optional<NominalKind> nominal = std::nullopt) noexcept
         -> bool;
     [[nodiscard]] auto
-    UsesAarc(const Type &type, const NominalTypeCatalog &catalog) noexcept -> bool;
+    UsesCopyOnWrite(const Type &type,
+                    std::optional<NominalKind> nominal = std::nullopt) noexcept
+        -> bool;
     [[nodiscard]] auto
-    UsesCopyOnWrite(const Type &type, const NominalTypeCatalog &catalog) noexcept -> bool;
+    UsesAarc(const Type &type, const NominalTypeCatalog &catalog) noexcept
+        -> bool;
+    [[nodiscard]] auto
+    UsesCopyOnWrite(const Type &type,
+                    const NominalTypeCatalog &catalog) noexcept -> bool;
 } // namespace visual_xsharp::core

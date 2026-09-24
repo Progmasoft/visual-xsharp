@@ -11,7 +11,8 @@ namespace visual_xsharp::core
     namespace
     {
         [[nodiscard]] auto
-        IntrinsicStorage(const Type &type) noexcept -> std::optional<StorageClass>
+        IntrinsicStorage(const Type &type) noexcept
+            -> std::optional<StorageClass>
         {
             switch (type.kind)
             {
@@ -49,20 +50,27 @@ namespace visual_xsharp::core
         }
 
         [[nodiscard]] auto
-        NameLess(std::span<const std::u32string> left, std::span<const std::u32string> right) noexcept -> bool
+        NameLess(std::span<const std::u32string> left,
+                 std::span<const std::u32string> right) noexcept -> bool
         {
-            return std::lexicographical_compare(left.begin(), left.end(), right.begin(), right.end());
+            return std::lexicographical_compare(left.begin(),
+                                                left.end(),
+                                                right.begin(),
+                                                right.end());
         }
 
         [[nodiscard]] auto
-        NameEqual(std::span<const std::u32string> left, std::span<const std::u32string> right) noexcept -> bool
+        NameEqual(std::span<const std::u32string> left,
+                  std::span<const std::u32string> right) noexcept -> bool
         {
             return std::ranges::equal(left, right);
         }
 
         template<typename Classifier>
         [[nodiscard]] auto
-        RefineConstructedValue(const Type &type, StorageClass outer, const Classifier &classify) noexcept
+        RefineConstructedValue(const Type &type,
+                               StorageClass outer,
+                               const Classifier &classify) noexcept
             -> StorageClass
         {
             // A reference declaration stays a reference independently of its
@@ -93,43 +101,49 @@ namespace visual_xsharp::core
             // An unresolved argument cannot hide a known reference argument.
             // Deferring the unresolved result until every type argument has
             // been inspected makes classification independent of source order.
-            return hasUnresolvedArgument ? StorageClass::Unresolved : StorageClass::CopyOnWriteValue;
+            return hasUnresolvedArgument ? StorageClass::Unresolved
+                                         : StorageClass::CopyOnWriteValue;
         }
     } // namespace
 
     auto
-    NominalTypeCatalog::Register(std::vector<std::u32string> name, NominalKind kind) -> bool
+    NominalTypeCatalog::Register(std::vector<std::u32string> name,
+                                 NominalKind kind) -> bool
     {
-        if (name.empty() || std::ranges::any_of(name, [](const auto &component) {
-                return component.empty();
-            }))
+        if (name.empty()
+            || std::ranges::any_of(name, [](const auto &component) {
+                   return component.empty();
+               }))
             return false;
 
         const auto key = std::span<const std::u32string>(name);
-        const auto insertion = std::lower_bound(
-            declarations_.begin(),
-            declarations_.end(),
-            key,
-            [](const NominalTypeDeclaration &declaration, std::span<const std::u32string> candidate) {
-                return NameLess(declaration.name, candidate);
-            });
+        const auto insertion
+            = std::lower_bound(declarations_.begin(),
+                               declarations_.end(),
+                               key,
+                               [](const NominalTypeDeclaration &declaration,
+                                  std::span<const std::u32string> candidate) {
+                                   return NameLess(declaration.name, candidate);
+                               });
         if (insertion != declarations_.end() && NameEqual(insertion->name, key))
             return false;
-        declarations_.insert(insertion, NominalTypeDeclaration{ std::move(name), kind });
+        declarations_.insert(insertion,
+                             NominalTypeDeclaration{ std::move(name), kind });
         return true;
     }
 
     auto
-    NominalTypeCatalog::Lookup(std::span<const std::u32string> name) const noexcept
-        -> std::optional<NominalKind>
+    NominalTypeCatalog::Lookup(std::span<const std::u32string> name)
+        const noexcept -> std::optional<NominalKind>
     {
-        const auto found = std::lower_bound(
-            declarations_.begin(),
-            declarations_.end(),
-            name,
-            [](const NominalTypeDeclaration &declaration, std::span<const std::u32string> candidate) {
-                return NameLess(declaration.name, candidate);
-            });
+        const auto found
+            = std::lower_bound(declarations_.begin(),
+                               declarations_.end(),
+                               name,
+                               [](const NominalTypeDeclaration &declaration,
+                                  std::span<const std::u32string> candidate) {
+                                   return NameLess(declaration.name, candidate);
+                               });
         if (found != declarations_.end() && NameEqual(found->name, name))
             return found->kind;
         return std::nullopt;
@@ -167,20 +181,24 @@ namespace visual_xsharp::core
     }
 
     auto
-    ClassifyType(const Type &type, std::optional<NominalKind> nominal) noexcept -> StorageClass
+    ClassifyType(const Type &type, std::optional<NominalKind> nominal) noexcept
+        -> StorageClass
     {
         if (const auto intrinsic = IntrinsicStorage(type))
             return *intrinsic;
         if (type.kind != Type::Kind::Named || !nominal)
             return StorageClass::Unresolved;
 
-        return RefineConstructedValue(type, ClassifyNominal(*nominal), [](const Type &nested) {
-            return ClassifyType(nested);
-        });
+        return RefineConstructedValue(type,
+                                      ClassifyNominal(*nominal),
+                                      [](const Type &nested) {
+                                          return ClassifyType(nested);
+                                      });
     }
 
     auto
-    ClassifyType(const Type &type, const NominalTypeCatalog &catalog) noexcept -> StorageClass
+    ClassifyType(const Type &type, const NominalTypeCatalog &catalog) noexcept
+        -> StorageClass
     {
         if (const auto intrinsic = IntrinsicStorage(type))
             return *intrinsic;
@@ -190,31 +208,37 @@ namespace visual_xsharp::core
         const auto nominal = catalog.Lookup(type.name);
         if (!nominal)
             return StorageClass::Unresolved;
-        return RefineConstructedValue(type, ClassifyNominal(*nominal), [&catalog](const Type &nested) {
-            return ClassifyType(nested, catalog);
-        });
+        return RefineConstructedValue(type,
+                                      ClassifyNominal(*nominal),
+                                      [&catalog](const Type &nested) {
+                                          return ClassifyType(nested, catalog);
+                                      });
     }
 
     auto
-    UsesAarc(const Type &type, std::optional<NominalKind> nominal) noexcept -> bool
+    UsesAarc(const Type &type, std::optional<NominalKind> nominal) noexcept
+        -> bool
     {
         return ClassifyType(type, nominal) == StorageClass::AarcReference;
     }
 
     auto
-    UsesCopyOnWrite(const Type &type, std::optional<NominalKind> nominal) noexcept -> bool
+    UsesCopyOnWrite(const Type &type,
+                    std::optional<NominalKind> nominal) noexcept -> bool
     {
         return ClassifyType(type, nominal) == StorageClass::CopyOnWriteValue;
     }
 
     auto
-    UsesAarc(const Type &type, const NominalTypeCatalog &catalog) noexcept -> bool
+    UsesAarc(const Type &type, const NominalTypeCatalog &catalog) noexcept
+        -> bool
     {
         return ClassifyType(type, catalog) == StorageClass::AarcReference;
     }
 
     auto
-    UsesCopyOnWrite(const Type &type, const NominalTypeCatalog &catalog) noexcept -> bool
+    UsesCopyOnWrite(const Type &type,
+                    const NominalTypeCatalog &catalog) noexcept -> bool
     {
         return ClassifyType(type, catalog) == StorageClass::CopyOnWriteValue;
     }

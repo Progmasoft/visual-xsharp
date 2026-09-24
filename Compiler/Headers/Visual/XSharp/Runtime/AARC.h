@@ -17,14 +17,17 @@ extern "C"
 #    define VXS_AARC_NOEXCEPT
 #endif
 
-    /** Destructor callbacks must not throw and must release only payload-owned resources. */
+    /** Destructor callbacks must not throw and must release only payload-owned
+     * resources. */
     typedef void (*VxsAarcDestructor)(void *object);
 
-    /** Opaque control-block handles; callers must never inspect or free them directly. */
+    /** Opaque control-block handles; callers must never inspect or free them
+     * directly. */
     typedef struct VxsAarcWeakHandle VxsAarcWeakHandle;
     typedef struct VxsAarcUnownedHandle VxsAarcUnownedHandle;
 
-    /** Stable metadata layout shared by C11 callers and the C++20 runtime implementation. */
+    /** Stable metadata layout shared by C11 callers and the C++20 runtime
+     * implementation. */
     typedef struct VxsAarcTypeMetadata
     {
         uint32_t abiVersion;
@@ -40,19 +43,23 @@ extern "C"
     uint32_t
     vxs_aarc_abi_version(void) VXS_AARC_NOEXCEPT;
 
-    /** Allocate a payload with one strong owner; metadata must outlive every allocated value. */
+    /** Allocate a payload with one strong owner; metadata must outlive every
+     * allocated value. */
     void *
     vxs_aarc_allocate(const VxsAarcTypeMetadata *metadata) VXS_AARC_NOEXCEPT;
 
-    /** Retain a live object, returning null if the object is no longer retainable. */
+    /** Retain a live object, returning null if the object is no longer
+     * retainable. */
     void *
     vxs_aarc_retain_strong(void *object) VXS_AARC_NOEXCEPT;
 
-    /** Release one strong owner and destroy the payload after the final release. */
+    /** Release one strong owner and destroy the payload after the final
+     * release. */
     void
     vxs_aarc_release_strong(void *object) VXS_AARC_NOEXCEPT;
 
-    /** Create or copy an opaque weak handle; release each successful handle exactly once. */
+    /** Create or copy an opaque weak handle; release each successful handle
+     * exactly once. */
     VxsAarcWeakHandle *
     vxs_aarc_make_weak(void *object) VXS_AARC_NOEXCEPT;
     VxsAarcWeakHandle *
@@ -62,23 +69,31 @@ extern "C"
     void
     vxs_aarc_release_weak(VxsAarcWeakHandle *weakHandle) VXS_AARC_NOEXCEPT;
 
-    /** Create or copy an opaque unowned handle; load upgrades it to a temporary strong owner. */
+    /** Create or copy an opaque unowned handle; load upgrades it to a temporary
+     * strong owner. */
     VxsAarcUnownedHandle *
     vxs_aarc_make_unowned(void *object) VXS_AARC_NOEXCEPT;
     VxsAarcUnownedHandle *
-    vxs_aarc_copy_unowned(VxsAarcUnownedHandle *unownedHandle) VXS_AARC_NOEXCEPT;
+    vxs_aarc_copy_unowned(VxsAarcUnownedHandle *unownedHandle)
+        VXS_AARC_NOEXCEPT;
     void *
-    vxs_aarc_load_unowned(VxsAarcUnownedHandle *unownedHandle) VXS_AARC_NOEXCEPT;
+    vxs_aarc_load_unowned(VxsAarcUnownedHandle *unownedHandle)
+        VXS_AARC_NOEXCEPT;
     void
-    vxs_aarc_release_unowned(VxsAarcUnownedHandle *unownedHandle) VXS_AARC_NOEXCEPT;
+    vxs_aarc_release_unowned(VxsAarcUnownedHandle *unownedHandle)
+        VXS_AARC_NOEXCEPT;
 
-    /** Create an immutable UTF-32 scalar string; reject null input, surrogates, and out-of-range values. */
+    /** Create an immutable UTF-32 scalar string; reject null input, surrogates,
+     * and out-of-range values. */
     void *
-    vxs_aarc_string_literal(const uint32_t *scalars, size_t count) VXS_AARC_NOEXCEPT;
+    vxs_aarc_string_literal(const uint32_t *scalars,
+                            size_t count) VXS_AARC_NOEXCEPT;
 
-    /** Compare the exact registered runtime identity without accepting null/destroyed objects. */
+    /** Compare the exact registered runtime identity without accepting
+     * null/destroyed objects. */
     bool
-    vxs_aarc_is_exact_type(const void *object, uint64_t typeIdentity) VXS_AARC_NOEXCEPT;
+    vxs_aarc_is_exact_type(const void *object,
+                           uint64_t typeIdentity) VXS_AARC_NOEXCEPT;
 
 #ifdef __cplusplus
 }

@@ -21,41 +21,67 @@ namespace
     [[nodiscard]] auto
     Integer(const std::int64_t value) -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::int64(), 0U, 0U, Core::integer_from_signed(value) };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::int64(),
+                 0U,
+                 0U,
+                 Core::integer_from_signed(value) };
     }
 
     [[nodiscard]] auto
     Boolean(const bool value) -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::boolean(), 0U, 0U, value };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::boolean(),
+                 0U,
+                 0U,
+                 value };
     }
 
     [[nodiscard]] auto
     Floating(const std::string_view spelling) -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::float64(), 0U, 0U, Core::FloatingLiteral{ std::string(spelling) } };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::float64(),
+                 0U,
+                 0U,
+                 Core::FloatingLiteral{ std::string(spelling) } };
     }
 
     [[nodiscard]] auto
     TypeIdentity(const std::uint64_t value) -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::uint64(), 0U, 0U, Core::integer_from_unsigned(value) };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::uint64(),
+                 0U,
+                 0U,
+                 Core::integer_from_unsigned(value) };
     }
 
     [[nodiscard]] auto
     Unit() -> IR::Value
     {
-        return { IR::Value::Kind::Immediate, Core::Type::unit(), 0U, 0U, std::monostate{} };
+        return { IR::Value::Kind::Immediate,
+                 Core::Type::unit(),
+                 0U,
+                 0U,
+                 std::monostate{} };
     }
 
     [[nodiscard]] auto
-    Register(const IR::VirtualRegister reg, Core::Type type = Core::Type::int64()) -> IR::Value
+    Register(const IR::VirtualRegister reg,
+             Core::Type type = Core::Type::int64()) -> IR::Value
     {
-        return { IR::Value::Kind::Register, std::move(type), reg, 0U, std::monostate{} };
+        return { IR::Value::Kind::Register,
+                 std::move(type),
+                 reg,
+                 0U,
+                 std::monostate{} };
     }
 
     [[nodiscard]] auto
-    Define(const IR::VirtualRegister destination, const std::int64_t value = 0) -> IR::Instruction
+    Define(const IR::VirtualRegister destination, const std::int64_t value = 0)
+        -> IR::Instruction
     {
         return {
             IR::Opcode::LoadImmediate,
@@ -69,7 +95,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    DefineFrom(const IR::VirtualRegister destination, const IR::VirtualRegister source) -> IR::Instruction
+    DefineFrom(const IR::VirtualRegister destination,
+               const IR::VirtualRegister source) -> IR::Instruction
     {
         return {
             IR::Opcode::Move,
@@ -110,7 +137,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget) -> IR::Terminator
+    Branch(const IR::BlockId trueTarget, const IR::BlockId falseTarget)
+        -> IR::Terminator
     {
         IR::Terminator terminator;
         terminator.kind = IR::Terminator::Kind::Branch;
@@ -121,16 +149,16 @@ namespace
     }
 
     [[nodiscard]] auto
-    Block(
-        const IR::BlockId id,
-        std::vector<IR::Instruction> instructions,
-        IR::Terminator terminator) -> IR::Block
+    Block(const IR::BlockId id,
+          std::vector<IR::Instruction> instructions,
+          IR::Terminator terminator) -> IR::Block
     {
         return { id, std::move(instructions), std::move(terminator) };
     }
 
     [[nodiscard]] auto
-    Module(std::vector<IR::Block> blocks, Core::Type result = Core::Type::unit()) -> IR::Module
+    Module(std::vector<IR::Block> blocks,
+           Core::Type result = Core::Type::unit()) -> IR::Module
     {
         IR::Function function;
         function.symbol = { 1U, U"Evaluate" };
@@ -141,7 +169,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    InitializationIssues(const IR::Module &module) -> std::vector<Xmm::VerificationIssue>
+    InitializationIssues(const IR::Module &module)
+        -> std::vector<Xmm::VerificationIssue>
     {
         auto issues = Xmm::Verify(module);
         std::erase_if(issues, [](const auto &issue) {
@@ -153,11 +182,13 @@ namespace
 
 TEST_CASE("Xmm accepts a register defined before it is read")
 {
-    const auto module = Module({ Block(0U, { Define(10U), DefineFrom(11U, 10U) }, ReturnUnit()) });
+    const auto module = Module(
+        { Block(0U, { Define(10U), DefineFrom(11U, 10U) }, ReturnUnit()) });
     CHECK(InitializationIssues(module).empty());
 }
 
-TEST_CASE("Xmm rejects weak value captures and bounds malformed capture metadata")
+TEST_CASE(
+    "Xmm rejects weak value captures and bounds malformed capture metadata")
 {
     const auto callable = Core::Type::function({}, Core::Type::unit());
     IR::Instruction closure;
@@ -167,7 +198,8 @@ TEST_CASE("Xmm rejects weak value captures and bounds malformed capture metadata
     closure.operands = { Integer(42) };
     closure.has_result = true;
     closure.closure_function = 2U;
-    closure.capture_modes = { Core::CaptureMode::Weak, Core::CaptureMode::Strong };
+    closure.capture_modes
+        = { Core::CaptureMode::Weak, Core::CaptureMode::Strong };
 
     auto module = Module({ Block(0U, { closure }, ReturnUnit()) });
     IR::Function target;
@@ -190,7 +222,8 @@ TEST_CASE("Xmm rejects weak value captures and bounds malformed capture metadata
 
 TEST_CASE("Xmm rejects a read that precedes its definition")
 {
-    const auto module = Module({ Block(0U, { DefineFrom(11U, 10U), Define(10U) }, ReturnUnit()) });
+    const auto module = Module(
+        { Block(0U, { DefineFrom(11U, 10U), Define(10U) }, ReturnUnit()) });
     const auto issues = InitializationIssues(module);
     REQUIRE(issues.size() == 1U);
     CHECK(issues.front().code == "VXL1045");
@@ -208,7 +241,8 @@ TEST_CASE("Xmm requires rounded floating division to return int")
     instruction.operands = { Floating("7.8"), Floating("2.0") };
     instruction.has_result = true;
 
-    const auto issues = Xmm::Verify(Module({ Block(0U, { instruction }, ReturnUnit()) }));
+    const auto issues
+        = Xmm::Verify(Module({ Block(0U, { instruction }, ReturnUnit()) }));
     CHECK(std::ranges::any_of(issues, [](const auto &issue) {
         return issue.code == "VXL1052";
     }));
@@ -220,7 +254,8 @@ TEST_CASE("Xmm accepts the complete type-test ABI tuple")
     typeTest.opcode = IR::Opcode::TypeIs;
     typeTest.destination = 10U;
     typeTest.result_type = Core::Type::boolean();
-    typeTest.operands = { Register(5U, Core::Type::string()), TypeIdentity(0x51a2U) };
+    typeTest.operands
+        = { Register(5U, Core::Type::string()), TypeIdentity(0x51a2U) };
     typeTest.has_result = true;
 
     auto module = Module({ Block(0U, { typeTest }, ReturnUnit()) });
@@ -249,7 +284,8 @@ TEST_CASE("Xmm rejects malformed type-test operands and result")
     }));
 }
 
-TEST_CASE("Xmm rejects bitwise operations whose operands are not one integer type")
+TEST_CASE(
+    "Xmm rejects bitwise operations whose operands are not one integer type")
 {
     IR::Instruction bitwiseNot;
     bitwiseNot.opcode = IR::Opcode::BitwiseNot;
@@ -289,35 +325,32 @@ TEST_CASE("Xmm return registers require definite initialization")
 
 TEST_CASE("Xmm uses predecessor intersection at a join")
 {
-    const auto module = Module(
-        {
-            Block(0U, {}, Branch(1U, 2U)),
-            Block(1U, { Define(10U) }, Jump(3U)),
-            Block(2U, {}, Jump(3U)),
-            Block(3U, { DefineFrom(11U, 10U) }, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, {}, Branch(1U, 2U)),
+        Block(1U, { Define(10U) }, Jump(3U)),
+        Block(2U, {}, Jump(3U)),
+        Block(3U, { DefineFrom(11U, 10U) }, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).size() == 1U);
 }
 
 TEST_CASE("Xmm accepts a joined register written on every path")
 {
-    const auto module = Module(
-        {
-            Block(0U, {}, Branch(1U, 2U)),
-            Block(1U, { Define(10U, 1) }, Jump(3U)),
-            Block(2U, { Define(10U, 2) }, Jump(3U)),
-            Block(3U, { DefineFrom(11U, 10U) }, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, {}, Branch(1U, 2U)),
+        Block(1U, { Define(10U, 1) }, Jump(3U)),
+        Block(2U, { Define(10U, 2) }, Jump(3U)),
+        Block(3U, { DefineFrom(11U, 10U) }, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).empty());
 }
 
 TEST_CASE("Xmm storage discovery is independent of block order")
 {
-    auto module = Module(
-        {
-            Block(0U, { Define(10U) }, Jump(1U)),
-            Block(1U, { DefineFrom(11U, 10U) }, ReturnUnit()),
-        });
+    auto module = Module({
+        Block(0U, { Define(10U) }, Jump(1U)),
+        Block(1U, { DefineFrom(11U, 10U) }, ReturnUnit()),
+    });
     const auto forward = Xmm::Verify(module);
     std::ranges::reverse(module.functions.front().blocks);
     const auto reverse = Xmm::Verify(module);
@@ -326,11 +359,10 @@ TEST_CASE("Xmm storage discovery is independent of block order")
 
 TEST_CASE("Xmm skips unreachable register reads")
 {
-    const auto module = Module(
-        {
-            Block(0U, { Define(10U) }, ReturnUnit()),
-            Block(7U, { DefineFrom(11U, 10U) }, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, { Define(10U) }, ReturnUnit()),
+        Block(7U, { DefineFrom(11U, 10U) }, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).empty());
 }
 
@@ -342,7 +374,8 @@ TEST_CASE("Xmm preserves instruction location for multiple bad reads")
     sum.result_type = Core::Type::int64();
     sum.operands = { Register(10U), Register(11U) };
     sum.has_result = true;
-    const auto module = Module({ Block(0U, { sum, Define(10U), Define(11U) }, ReturnUnit()) });
+    const auto module = Module(
+        { Block(0U, { sum, Define(10U), Define(11U) }, ReturnUnit()) });
     const auto issues = InitializationIssues(module);
     REQUIRE(issues.size() == 2U);
     CHECK(std::ranges::all_of(issues, [](const auto &issue) {
@@ -352,33 +385,30 @@ TEST_CASE("Xmm preserves instruction location for multiple bad reads")
 
 TEST_CASE("Xmm initialization crosses a loop preheader")
 {
-    const auto module = Module(
-        {
-            Block(0U, { Define(10U) }, Jump(1U)),
-            Block(1U, { DefineFrom(11U, 10U) }, Branch(1U, 2U)),
-            Block(2U, { DefineFrom(12U, 10U) }, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, { Define(10U) }, Jump(1U)),
+        Block(1U, { DefineFrom(11U, 10U) }, Branch(1U, 2U)),
+        Block(2U, { DefineFrom(12U, 10U) }, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).empty());
 }
 
 TEST_CASE("Xmm loop-carried writes cannot satisfy the first iteration")
 {
-    const auto module = Module(
-        {
-            Block(0U, {}, Jump(1U)),
-            Block(1U, { DefineFrom(11U, 10U), Define(10U) }, Branch(1U, 2U)),
-            Block(2U, {}, ReturnUnit()),
-        });
+    const auto module = Module({
+        Block(0U, {}, Jump(1U)),
+        Block(1U, { DefineFrom(11U, 10U), Define(10U) }, Branch(1U, 2U)),
+        Block(2U, {}, ReturnUnit()),
+    });
     CHECK(InitializationIssues(module).size() == 1U);
 }
 
 TEST_CASE("Xmm entry backedges do not manufacture register values")
 {
-    const auto module = Module(
-        {
-            Block(0U, { DefineFrom(11U, 10U) }, Jump(1U)),
-            Block(1U, { Define(10U) }, Jump(0U)),
-        });
+    const auto module = Module({
+        Block(0U, { DefineFrom(11U, 10U) }, Jump(1U)),
+        Block(1U, { Define(10U) }, Jump(0U)),
+    });
     CHECK(InitializationIssues(module).size() == 1U);
 }
 

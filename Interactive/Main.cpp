@@ -19,13 +19,15 @@ namespace
     {
         using namespace Visual::XSharp::Interactive;
         Session session;
-        fmt::print("Visual X# Interactive (vxsi)\nType :help for commands; Ctrl+D/Ctrl+Z exits.\n");
+        fmt::print("Visual X# Interactive (vxsi)\nType :help for commands; "
+                   "Ctrl+D/Ctrl+Z exits.\n");
         std::string line;
         while (true)
         {
             fmt::print("vxsi> ");
             std::cout.flush();
-            const auto inputStatus = ReadInputLine(std::cin, line, kMaximumInputLineBytes);
+            const auto inputStatus
+                = ReadInputLine(std::cin, line, kMaximumInputLineBytes);
             if (inputStatus == InputLineStatus::End)
             {
                 fmt::print("\n");
@@ -33,12 +35,15 @@ namespace
             }
             if (inputStatus == InputLineStatus::Failure)
             {
-                fmt::print(stderr, "vxsi: could not read the next input line\n");
+                fmt::print(stderr,
+                           "vxsi: could not read the next input line\n");
                 return 1;
             }
             if (inputStatus == InputLineStatus::TooLong)
             {
-                fmt::print(stderr, "vxsi: one Visual X# input line cannot exceed 1 MiB\n");
+                fmt::print(
+                    stderr,
+                    "vxsi: one Visual X# input line cannot exceed 1 MiB\n");
                 continue;
             }
             if (!line.empty() && line.back() == '\r')
@@ -73,20 +78,25 @@ namespace
                     if (const auto issue = session.Reset())
                         fmt::print(stderr, "vxsi: {}\n", *issue);
                     else
-                        fmt::print("session values, JIT modules, and history cleared\n");
+                        fmt::print("session values, JIT modules, and history "
+                                   "cleared\n");
                     continue;
                 case ReplCommandKind::Quit:
                     return 0;
                 case ReplCommandKind::TypeMissingExpression:
-                    fmt::print(stderr, "vxsi: :type expects a Visual X# expression\n");
+                    fmt::print(stderr,
+                               "vxsi: :type expects a Visual X# expression\n");
                     continue;
                 case ReplCommandKind::Unknown:
-                    fmt::print(stderr, "vxsi: unknown REPL command '{}'; use :help\n", line);
+                    fmt::print(stderr,
+                               "vxsi: unknown REPL command '{}'; use :help\n",
+                               line);
                     continue;
             }
 
             const auto result = session.Evaluate(command.expression);
-            if (result.status == CellStatus::Value || result.status == CellStatus::Void)
+            if (result.status == CellStatus::Value
+                || result.status == CellStatus::Void)
                 fmt::print("{}\n", result.text);
             else
                 fmt::print(stderr, "vxsi: {}\n", result.text);
@@ -113,7 +123,8 @@ main(int argc, char **argv) -> int
         {
             Session session;
             const auto result = session.Evaluate(request.expression);
-            if (result.status != CellStatus::Value && result.status != CellStatus::Void)
+            if (result.status != CellStatus::Value
+                && result.status != CellStatus::Void)
             {
                 fmt::print(stderr, "vxsi: {}\n", result.text);
                 return 1;

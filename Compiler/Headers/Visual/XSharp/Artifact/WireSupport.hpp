@@ -76,13 +76,19 @@ namespace Visual::XSharp::Artifact::Wire
         void
         Text(std::u32string_view value, std::string_view context);
         void
-        QualifiedName(const std::vector<std::u32string> &value, std::string_view context);
+        QualifiedName(const std::vector<std::u32string> &value,
+                      std::string_view context);
         void
-        Symbol(const ::visual_xsharp::core::SymbolName &value, std::string_view context);
+        Symbol(const ::visual_xsharp::core::SymbolName &value,
+               std::string_view context);
         void
-        Type(const ::visual_xsharp::core::Type &value, std::string_view context, std::size_t depth = 0U);
+        Type(const ::visual_xsharp::core::Type &value,
+             std::string_view context,
+             std::size_t depth = 0U);
         void
-        Literal(const ::visual_xsharp::core::Literal &value, const ::visual_xsharp::core::Type &type, std::string_view context);
+        Literal(const ::visual_xsharp::core::Literal &value,
+                const ::visual_xsharp::core::Type &type,
+                std::string_view context);
         void
         Fail(ErrorKind kind, std::string context, std::string message);
 
@@ -125,10 +131,11 @@ namespace Visual::XSharp::Artifact::Wire
         [[nodiscard]] auto
         Symbol(std::string_view context) -> ::visual_xsharp::core::SymbolName;
         [[nodiscard]] auto
-        Type(std::string_view context, std::size_t depth = 0U) -> ::visual_xsharp::core::Type;
+        Type(std::string_view context, std::size_t depth = 0U)
+            -> ::visual_xsharp::core::Type;
         [[nodiscard]] auto
-        Literal(const ::visual_xsharp::core::Type &type, std::string_view context)
-            -> ::visual_xsharp::core::Literal;
+        Literal(const ::visual_xsharp::core::Type &type,
+                std::string_view context) -> ::visual_xsharp::core::Literal;
         void
         Fail(ErrorKind kind, std::string context, std::string message);
 

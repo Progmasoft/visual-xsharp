@@ -28,7 +28,8 @@ namespace Visual::XSharp::Diagnostic
         [[nodiscard]] explicit
         operator bool() const noexcept
         {
-            return status == AppendStatus::Added || status == AppendStatus::Duplicate;
+            return status == AppendStatus::Added
+                   || status == AppendStatus::Duplicate;
         }
     };
 

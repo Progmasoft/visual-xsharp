@@ -13,8 +13,8 @@ namespace Visual::XSharp::Cli::ExecutionStatus
     };
 
     // Compilation and execution are separate outcomes. In particular, a native
-    // program's nonzero exit status is not a compiler failure code and must reach
-    // the caller unchanged after a successful build.
+    // program's nonzero exit status is not a compiler failure code and must
+    // reach the caller unchanged after a successful build.
     [[nodiscard]] auto
     Resolve(const Outcome &outcome) noexcept -> int;
 } // namespace Visual::XSharp::Cli::ExecutionStatus

@@ -35,9 +35,8 @@ namespace Visual::XSharp::Analysis
     class DataflowWorklist final
     {
     public:
-        DataflowWorklist(
-            const ControlFlowResult &controlFlow,
-            WorklistDirection direction);
+        DataflowWorklist(const ControlFlowResult &controlFlow,
+                         WorklistDirection direction);
 
         // Next removes one pending block. Every reachable block is initially
         // scheduled exactly once in a direction-friendly order: reverse

@@ -48,7 +48,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Integer(std::int64_t value, Core::Type type = Core::Type::int64()) -> Core::Atom
+    Integer(std::int64_t value, Core::Type type = Core::Type::int64())
+        -> Core::Atom
     {
         return Immediate(Core::integer_from_signed(value), std::move(type));
     }
@@ -60,7 +61,11 @@ namespace
     }
 
     [[nodiscard]] auto
-    Bind(Core::SymbolId id, std::u32string spelling, Core::Type type, Core::Operation operation, std::vector<Core::Atom> operands) -> Core::Instruction
+    Bind(Core::SymbolId id,
+         std::u32string spelling,
+         Core::Type type,
+         Core::Operation operation,
+         std::vector<Core::Atom> operands) -> Core::Instruction
     {
         Core::Instruction instruction;
         instruction.kind = Core::Instruction::Kind::Bind;
@@ -77,12 +82,44 @@ namespace
     {
         // The fixture deliberately crosses several scalar payload families and
         // two blocks. Codec equality therefore covers more than header framing.
-        auto byte = Bind(10U, U"byteValue", Core::Type::int8(), Core::Operation::Copy, { Integer(42, Core::Type::int8()) });
-        auto wide = Bind(11U, U"wideValue", Core::Type::uint128(), Core::Operation::Copy, { Immediate(Core::IntegerLiteral{ false, { 0x80U, 0x00U, 0x00U, 0x01U } }, Core::Type::uint128()) });
-        auto floating = Bind(12U, U"floatValue", Core::Type::float128(), Core::Operation::Copy, { Immediate(Core::FloatingLiteral{ "-12345.625e-7" }, Core::Type::float128()) });
-        auto text = Bind(13U, U"textValue", Core::Type::string(), Core::Operation::Copy, { Immediate(std::u32string(U"ViGet · Visual X# 🐺"), Core::Type::string()) });
-        auto sum = Bind(14U, U"sum", Core::Type::int8(), Core::Operation::Add, { Variable(10U, Core::Type::int8()), Integer(1, Core::Type::int8()) });
-        auto condition = Bind(15U, U"continue", Core::Type::boolean(), Core::Operation::LessThan, { Variable(14U, Core::Type::int8()), Integer(100, Core::Type::int8()) });
+        auto byte = Bind(10U,
+                         U"byteValue",
+                         Core::Type::int8(),
+                         Core::Operation::Copy,
+                         { Integer(42, Core::Type::int8()) });
+        auto wide = Bind(
+            11U,
+            U"wideValue",
+            Core::Type::uint128(),
+            Core::Operation::Copy,
+            { Immediate(
+                Core::IntegerLiteral{ false, { 0x80U, 0x00U, 0x00U, 0x01U } },
+                Core::Type::uint128()) });
+        auto floating
+            = Bind(12U,
+                   U"floatValue",
+                   Core::Type::float128(),
+                   Core::Operation::Copy,
+                   { Immediate(Core::FloatingLiteral{ "-12345.625e-7" },
+                               Core::Type::float128()) });
+        auto text = Bind(13U,
+                         U"textValue",
+                         Core::Type::string(),
+                         Core::Operation::Copy,
+                         { Immediate(std::u32string(U"ViGet · Visual X# 🐺"),
+                                     Core::Type::string()) });
+        auto sum = Bind(14U,
+                        U"sum",
+                        Core::Type::int8(),
+                        Core::Operation::Add,
+                        { Variable(10U, Core::Type::int8()),
+                          Integer(1, Core::Type::int8()) });
+        auto condition = Bind(15U,
+                              U"continue",
+                              Core::Type::boolean(),
+                              Core::Operation::LessThan,
+                              { Variable(14U, Core::Type::int8()),
+                                Integer(100, Core::Type::int8()) });
 
         Core::Function main;
         main.symbol = Name(1U, U"Main");
@@ -91,21 +128,36 @@ namespace
         main.blocks = {
             Core::Block{
                 1U,
-                { std::move(byte), std::move(wide), std::move(floating), std::move(text), std::move(sum), std::move(condition) },
-                Core::Terminator{ Core::Terminator::Kind::Branch, Variable(15U, Core::Type::boolean()), 2U, 3U },
+                { std::move(byte),
+                  std::move(wide),
+                  std::move(floating),
+                  std::move(text),
+                  std::move(sum),
+                  std::move(condition) },
+                Core::Terminator{ Core::Terminator::Kind::Branch,
+                                  Variable(15U, Core::Type::boolean()),
+                                  2U,
+                                  3U },
             },
             Core::Block{
                 2U,
                 {},
-                Core::Terminator{ Core::Terminator::Kind::Jump, Unit(), 3U, 0U },
+                Core::Terminator{ Core::Terminator::Kind::Jump,
+                                  Unit(),
+                                  3U,
+                                  0U },
             },
             Core::Block{
                 3U,
                 {},
-                Core::Terminator{ Core::Terminator::Kind::Return, Unit(), 0U, 0U },
+                Core::Terminator{ Core::Terminator::Kind::Return,
+                                  Unit(),
+                                  0U,
+                                  0U },
             },
         };
-        return Core::CorePrepModule{ { U"Artifacts", U"Scalar" }, { std::move(main) } };
+        return Core::CorePrepModule{ { U"Artifacts", U"Scalar" },
+                                     { std::move(main) } };
     }
 
     [[nodiscard]] auto
@@ -113,19 +165,32 @@ namespace
     {
         Core::Function helper;
         helper.symbol = Name(20U, U"Increment");
-        helper.parameters = { Core::Parameter{ Name(21U, U"value"), Core::Type::int64() } };
+        helper.parameters
+            = { Core::Parameter{ Name(21U, U"value"), Core::Type::int64() } };
         helper.return_type = Core::Type::int64();
         helper.entry = 1U;
         helper.blocks = {
             Core::Block{
                 1U,
-                { Bind(22U, U"result", Core::Type::int64(), Core::Operation::Add, { Variable(21U, Core::Type::int64()), Integer(1) }) },
-                Core::Terminator{ Core::Terminator::Kind::Return, Variable(22U, Core::Type::int64()), 0U, 0U },
+                { Bind(22U,
+                       U"result",
+                       Core::Type::int64(),
+                       Core::Operation::Add,
+                       { Variable(21U, Core::Type::int64()), Integer(1) }) },
+                Core::Terminator{ Core::Terminator::Kind::Return,
+                                  Variable(22U, Core::Type::int64()),
+                                  0U,
+                                  0U },
             },
         };
 
-        const auto signature = Core::Type::function({ Core::Type::int64() }, Core::Type::int64());
-        auto call = Bind(31U, U"answer", Core::Type::int64(), Core::Operation::Call, { Variable(20U, signature), Integer(41) });
+        const auto signature = Core::Type::function({ Core::Type::int64() },
+                                                    Core::Type::int64());
+        auto call = Bind(31U,
+                         U"answer",
+                         Core::Type::int64(),
+                         Core::Operation::Call,
+                         { Variable(20U, signature), Integer(41) });
         Core::Function main;
         main.symbol = Name(30U, U"Main");
         main.return_type = Core::Type::unit();
@@ -134,10 +199,14 @@ namespace
             Core::Block{
                 1U,
                 { std::move(call) },
-                Core::Terminator{ Core::Terminator::Kind::Return, Unit(), 0U, 0U },
+                Core::Terminator{ Core::Terminator::Kind::Return,
+                                  Unit(),
+                                  0U,
+                                  0U },
             },
         };
-        return Core::CorePrepModule{ { U"Artifacts", U"Calls" }, { std::move(helper), std::move(main) } };
+        return Core::CorePrepModule{ { U"Artifacts", U"Calls" },
+                                     { std::move(helper), std::move(main) } };
     }
 
     [[nodiscard]] auto
@@ -147,13 +216,16 @@ namespace
             { U"System", U"Array" },
             { Core::TemplateArgument::type_argument(Core::Type::string()),
               Core::TemplateArgument::value_argument(
-                  Core::TemplateValue::integer_value(Core::integer_from_unsigned(64U))) });
+                  Core::TemplateValue::integer_value(
+                      Core::integer_from_unsigned(64U))) });
         const auto mixed = Core::Type::named_template(
             { U"Example", U"Matrix" },
             { Core::TemplateArgument::type_argument(fixed),
-              Core::TemplateArgument::value_argument(Core::TemplateValue::boolean_value(true)),
               Core::TemplateArgument::value_argument(
-                  Core::TemplateValue::character_value(Core::integer_from_unsigned(0x1f642U))) });
+                  Core::TemplateValue::boolean_value(true)),
+              Core::TemplateArgument::value_argument(
+                  Core::TemplateValue::character_value(
+                      Core::integer_from_unsigned(0x1f642U))) });
 
         Core::Function main;
         main.symbol = Name(40U, U"Main");
@@ -164,10 +236,14 @@ namespace
             Core::Block{
                 1U,
                 {},
-                Core::Terminator{ Core::Terminator::Kind::Return, Unit(), 0U, 0U },
+                Core::Terminator{ Core::Terminator::Kind::Return,
+                                  Unit(),
+                                  0U,
+                                  0U },
             },
         };
-        return Core::CorePrepModule{ { U"Artifacts", U"Templates" }, { std::move(main) } };
+        return Core::CorePrepModule{ { U"Artifacts", U"Templates" },
+                                     { std::move(main) } };
     }
 
     [[nodiscard]] auto
@@ -196,9 +272,15 @@ namespace
         const auto source = ScalarModule();
         REQUIRE(Core::verify(source).empty());
         auto module = Xpp::lower(source);
-        auto &instructions = module.functions.front().blocks.front().instructions;
-        const auto text = Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 13U, {} };
-        const auto appendProducing = [&instructions](Xpp::Opcode opcode, Core::SymbolId destination, Xpp::Operand operand) {
+        auto &instructions
+            = module.functions.front().blocks.front().instructions;
+        const auto text = Xpp::Operand{ Xpp::Operand::Kind::Symbol,
+                                        Core::Type::string(),
+                                        13U,
+                                        {} };
+        const auto appendProducing = [&instructions](Xpp::Opcode opcode,
+                                                     Core::SymbolId destination,
+                                                     Xpp::Operand operand) {
             Xpp::Instruction instruction;
             instruction.effect = Xpp::Instruction::Effect::Define;
             instruction.opcode = opcode;
@@ -207,19 +289,43 @@ namespace
             instruction.operands = { std::move(operand) };
             instructions.push_back(std::move(instruction));
         };
-        const auto appendRelease = [&instructions](Xpp::Opcode opcode, Core::SymbolId source) {
+        const auto appendRelease = [&instructions](Xpp::Opcode opcode,
+                                                   Core::SymbolId source) {
             Xpp::Instruction instruction;
             instruction.effect = Xpp::Instruction::Effect::Discard;
             instruction.opcode = opcode;
             instruction.result_type = Core::Type::unit();
-            instruction.operands = { Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), source, {} } };
+            instruction.operands = { Xpp::Operand{ Xpp::Operand::Kind::Symbol,
+                                                   Core::Type::string(),
+                                                   source,
+                                                   {} } };
             instructions.push_back(std::move(instruction));
         };
         appendProducing(Xpp::Opcode::RetainStrong, 16U, text);
-        appendProducing(Xpp::Opcode::MakeWeak, 17U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 16U, {} });
-        appendProducing(Xpp::Opcode::LockWeak, 18U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 17U, {} });
-        appendProducing(Xpp::Opcode::MakeUnowned, 19U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 18U, {} });
-        appendProducing(Xpp::Opcode::LoadUnowned, 20U, Xpp::Operand{ Xpp::Operand::Kind::Symbol, Core::Type::string(), 19U, {} });
+        appendProducing(Xpp::Opcode::MakeWeak,
+                        17U,
+                        Xpp::Operand{ Xpp::Operand::Kind::Symbol,
+                                      Core::Type::string(),
+                                      16U,
+                                      {} });
+        appendProducing(Xpp::Opcode::LockWeak,
+                        18U,
+                        Xpp::Operand{ Xpp::Operand::Kind::Symbol,
+                                      Core::Type::string(),
+                                      17U,
+                                      {} });
+        appendProducing(Xpp::Opcode::MakeUnowned,
+                        19U,
+                        Xpp::Operand{ Xpp::Operand::Kind::Symbol,
+                                      Core::Type::string(),
+                                      18U,
+                                      {} });
+        appendProducing(Xpp::Opcode::LoadUnowned,
+                        20U,
+                        Xpp::Operand{ Xpp::Operand::Kind::Symbol,
+                                      Core::Type::string(),
+                                      19U,
+                                      {} });
         appendRelease(Xpp::Opcode::ReleaseStrong, 16U);
         appendRelease(Xpp::Opcode::ReleaseStrong, 18U);
         appendRelease(Xpp::Opcode::ReleaseWeak, 17U);
@@ -239,7 +345,9 @@ namespace
             malformed[0] ^= 0xffU;
             const auto result = decode(malformed);
             REQUIRE_FALSE(result);
-            REQUIRE(result.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidMagic);
+            REQUIRE(
+                result.error->kind
+                == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidMagic);
         }
         SECTION("unsupported version")
         {
@@ -248,7 +356,9 @@ namespace
             malformed[5] = 0xffU;
             const auto result = decode(malformed);
             REQUIRE_FALSE(result);
-            REQUIRE(result.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::UnsupportedVersion);
+            REQUIRE(result.error->kind
+                    == ::Visual::XSharp::Artifact::Wire::ErrorKind::
+                        UnsupportedVersion);
         }
         SECTION("reserved flags")
         {
@@ -256,21 +366,26 @@ namespace
             malformed[6] = 1U;
             const auto result = decode(malformed);
             REQUIRE_FALSE(result);
-            REQUIRE(result.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidTag);
+            REQUIRE(result.error->kind
+                    == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidTag);
         }
         SECTION("truncated document")
         {
             bytes.pop_back();
             const auto result = decode(bytes);
             REQUIRE_FALSE(result);
-            REQUIRE(result.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::TruncatedInput);
+            REQUIRE(
+                result.error->kind
+                == ::Visual::XSharp::Artifact::Wire::ErrorKind::TruncatedInput);
         }
         SECTION("trailing input")
         {
             bytes.push_back(0U);
             const auto result = decode(bytes);
             REQUIRE_FALSE(result);
-            REQUIRE(result.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::TrailingInput);
+            REQUIRE(
+                result.error->kind
+                == ::Visual::XSharp::Artifact::Wire::ErrorKind::TrailingInput);
         }
     }
 } // namespace
@@ -305,7 +420,8 @@ TEST_CASE("Xmm wire preserves virtual-register ABI and typed immediates")
     }
 }
 
-TEST_CASE("Xpp and Xmm v4 wire preserve explicit ownership and type-test operations")
+TEST_CASE(
+    "Xpp and Xmm v4 wire preserve explicit ownership and type-test operations")
 {
     const auto xpp = OwnershipXppModule();
     const auto encodedXpp = XppWire::Encode(xpp);
@@ -334,13 +450,18 @@ TEST_CASE("Xpp v4 wire preserves ordered type and value template arguments")
     REQUIRE(decoded);
     CHECK(*decoded.module == original);
 
-    const auto &parameterType = decoded.module->functions.front().parameters.front().type;
+    const auto &parameterType
+        = decoded.module->functions.front().parameters.front().type;
     REQUIRE(parameterType.templateArguments.size() == 3U);
-    CHECK(parameterType.templateArguments[0].kind == Core::TemplateArgument::Kind::Type);
-    CHECK(parameterType.templateArguments[1].kind == Core::TemplateArgument::Kind::Value);
-    CHECK(parameterType.templateArguments[1].value.kind == Core::TemplateValue::Kind::Boolean);
+    CHECK(parameterType.templateArguments[0].kind
+          == Core::TemplateArgument::Kind::Type);
+    CHECK(parameterType.templateArguments[1].kind
+          == Core::TemplateArgument::Kind::Value);
+    CHECK(parameterType.templateArguments[1].value.kind
+          == Core::TemplateValue::Kind::Boolean);
     CHECK(parameterType.templateArguments[1].value.boolean);
-    CHECK(parameterType.templateArguments[2].value.kind == Core::TemplateValue::Kind::Character);
+    CHECK(parameterType.templateArguments[2].value.kind
+          == Core::TemplateValue::Kind::Character);
 }
 
 TEST_CASE("Xmm v4 wire preserves ordered type and value template arguments")
@@ -353,17 +474,22 @@ TEST_CASE("Xmm v4 wire preserves ordered type and value template arguments")
     REQUIRE(decoded);
     CHECK(*decoded.module == original);
 
-    const auto &parameterType = decoded.module->functions.front().parameter_types.front();
+    const auto &parameterType
+        = decoded.module->functions.front().parameter_types.front();
     REQUIRE(parameterType.templateArguments.size() == 3U);
     REQUIRE(parameterType.templateArguments.front().type);
     const auto &fixed = *parameterType.templateArguments.front().type;
     REQUIRE(fixed.templateArguments.size() == 2U);
-    CHECK(fixed.templateArguments[0].kind == Core::TemplateArgument::Kind::Type);
-    CHECK(fixed.templateArguments[1].value.kind == Core::TemplateValue::Kind::Integer);
-    CHECK(fixed.templateArguments[1].value.integer == Core::integer_from_unsigned(64U));
+    CHECK(fixed.templateArguments[0].kind
+          == Core::TemplateArgument::Kind::Type);
+    CHECK(fixed.templateArguments[1].value.kind
+          == Core::TemplateValue::Kind::Integer);
+    CHECK(fixed.templateArguments[1].value.integer
+          == Core::integer_from_unsigned(64U));
 }
 
-TEST_CASE("shared artifact writer rejects missing recursive template type payload")
+TEST_CASE(
+    "shared artifact writer rejects missing recursive template type payload")
 {
     auto xpp = XppModule(TemplateModule());
     auto &type = xpp.functions.front().parameters.front().type;
@@ -371,7 +497,8 @@ TEST_CASE("shared artifact writer rejects missing recursive template type payloa
     type.templateArguments.front().type.reset();
     const auto result = XppWire::Encode(xpp);
     REQUIRE_FALSE(result);
-    CHECK(result.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
+    CHECK(result.error->kind
+          == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
 }
 
 TEST_CASE("Xpp wire rejects malformed framing without constructing a module")
@@ -399,13 +526,15 @@ TEST_CASE("artifact wire applies configured collection and byte limits")
     tiny.maximumWireBytes = 16U;
     const auto encode = XppWire::Encode(xpp, tiny);
     REQUIRE_FALSE(encode);
-    REQUIRE(encode.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::LimitExceeded);
+    REQUIRE(encode.error->kind
+            == ::Visual::XSharp::Artifact::Wire::ErrorKind::LimitExceeded);
 
     const auto normal = XppWire::Encode(xpp);
     REQUIRE(normal);
     const auto decode = XppWire::Decode(normal.bytes, tiny);
     REQUIRE_FALSE(decode);
-    REQUIRE(decode.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::LimitExceeded);
+    REQUIRE(decode.error->kind
+            == ::Visual::XSharp::Artifact::Wire::ErrorKind::LimitExceeded);
 }
 
 TEST_CASE("artifact encoders reject unverified stage models")
@@ -414,13 +543,15 @@ TEST_CASE("artifact encoders reject unverified stage models")
     xpp.functions.front().symbol.id = 0U;
     const auto xppResult = XppWire::Encode(xpp);
     REQUIRE_FALSE(xppResult);
-    REQUIRE(xppResult.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
+    REQUIRE(xppResult.error->kind
+            == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
 
     auto xmm = XmmModule(XppModule(ScalarModule()));
     xmm.functions.front().entry = 999U;
     const auto xmmResult = XmmWire::Encode(xmm);
     REQUIRE_FALSE(xmmResult);
-    REQUIRE(xmmResult.error->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
+    REQUIRE(xmmResult.error->kind
+            == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
 }
 
 TEST_CASE("pipeline resumes from verified Xpp and Xmm documents")
@@ -447,13 +578,15 @@ TEST_CASE("pipeline resumes from verified Xpp and Xmm documents")
 
 TEST_CASE("pipeline reports stage-specific wire failures")
 {
-    const std::array<std::uint8_t, 8U> badXpp{ 'V', 'X', 'P', 'P', 0xffU, 0xffU, 0U, 0U };
+    const std::array<std::uint8_t, 8U> badXpp{ 'V',   'X',   'P', 'P',
+                                               0xffU, 0xffU, 0U,  0U };
     const auto xpp = Pipeline::ConsumeXpp(badXpp);
     REQUIRE_FALSE(xpp);
     REQUIRE(xpp.xppWireError.has_value());
     REQUIRE_FALSE(xpp.xpp.has_value());
 
-    const std::array<std::uint8_t, 8U> badXmm{ 'V', 'X', 'M', 'M', 0xffU, 0xffU, 0U, 0U };
+    const std::array<std::uint8_t, 8U> badXmm{ 'V',   'X',   'M', 'M',
+                                               0xffU, 0xffU, 0U,  0U };
     const auto xmm = Pipeline::ConsumeXmm(badXmm);
     REQUIRE_FALSE(xmm);
     REQUIRE(xmm.xmmWireError.has_value());
@@ -477,7 +610,8 @@ TEST_CASE("artifact encoders are deterministic for identical verified models")
     REQUIRE(firstXmm.bytes == secondXmm.bytes);
 }
 
-TEST_CASE("pipeline applies the configured artifact limits before stage lowering")
+TEST_CASE(
+    "pipeline applies the configured artifact limits before stage lowering")
 {
     const auto encoded = XppWire::Encode(XppModule(ScalarModule()));
     REQUIRE(encoded);
@@ -488,14 +622,17 @@ TEST_CASE("pipeline applies the configured artifact limits before stage lowering
     const auto result = Pipeline::ConsumeXpp(encoded.bytes, options);
     REQUIRE_FALSE(result);
     REQUIRE(result.xppWireError.has_value());
-    REQUIRE(result.xppWireError->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::LimitExceeded);
+    REQUIRE(result.xppWireError->kind
+            == ::Visual::XSharp::Artifact::Wire::ErrorKind::LimitExceeded);
     REQUIRE_FALSE(result.xpp.has_value());
 }
 
-TEST_CASE("pipeline optimizes a loaded Xpp document before the requested boundary")
+TEST_CASE(
+    "pipeline optimizes a loaded Xpp document before the requested boundary")
 {
     auto module = XppModule(ScalarModule());
-    const auto &existing = module.functions.front().blocks.front().instructions.front();
+    const auto &existing
+        = module.functions.front().blocks.front().instructions.front();
     auto selfCopy = existing;
     selfCopy.effect = Xpp::Instruction::Effect::Store;
     selfCopy.opcode = Xpp::Opcode::Copy;
@@ -505,9 +642,11 @@ TEST_CASE("pipeline optimizes a loaded Xpp document before the requested boundar
         selfCopy.destination,
         {},
     } };
-    module.functions.front().blocks.front().instructions.push_back(std::move(selfCopy));
+    module.functions.front().blocks.front().instructions.push_back(
+        std::move(selfCopy));
     REQUIRE(::Visual::XSharp::Xpp::Verify(module).empty());
-    const auto instructionCount = module.functions.front().blocks.front().instructions.size();
+    const auto instructionCount
+        = module.functions.front().blocks.front().instructions.size();
     const auto encoded = XppWire::Encode(module);
     REQUIRE(encoded);
 
@@ -516,18 +655,22 @@ TEST_CASE("pipeline optimizes a loaded Xpp document before the requested boundar
     options.optimize_xpp = true;
     const auto optimized = Pipeline::ConsumeXpp(encoded.bytes, options);
     REQUIRE(optimized);
-    REQUIRE(optimized.xpp->functions.front().blocks.front().instructions.size() == instructionCount - 1U);
+    REQUIRE(optimized.xpp->functions.front().blocks.front().instructions.size()
+            == instructionCount - 1U);
 
     options.optimize_xpp = false;
     const auto retained = Pipeline::ConsumeXpp(encoded.bytes, options);
     REQUIRE(retained);
-    REQUIRE(retained.xpp->functions.front().blocks.front().instructions.size() == instructionCount);
+    REQUIRE(retained.xpp->functions.front().blocks.front().instructions.size()
+            == instructionCount);
 }
 
-TEST_CASE("pipeline optimizes a loaded Xmm document before the requested boundary")
+TEST_CASE(
+    "pipeline optimizes a loaded Xmm document before the requested boundary")
 {
     auto module = XmmModule(XppModule(ScalarModule()));
-    const auto &existing = module.functions.front().blocks.front().instructions.front();
+    const auto &existing
+        = module.functions.front().blocks.front().instructions.front();
     auto selfMove = existing;
     selfMove.opcode = Xmm::Opcode::Move;
     selfMove.has_result = true;
@@ -538,9 +681,11 @@ TEST_CASE("pipeline optimizes a loaded Xmm document before the requested boundar
         0U,
         {},
     } };
-    module.functions.front().blocks.front().instructions.push_back(std::move(selfMove));
+    module.functions.front().blocks.front().instructions.push_back(
+        std::move(selfMove));
     REQUIRE(::Visual::XSharp::Xmm::Verify(module).empty());
-    const auto instructionCount = module.functions.front().blocks.front().instructions.size();
+    const auto instructionCount
+        = module.functions.front().blocks.front().instructions.size();
     const auto encoded = XmmWire::Encode(module);
     REQUIRE(encoded);
 
@@ -549,12 +694,14 @@ TEST_CASE("pipeline optimizes a loaded Xmm document before the requested boundar
     options.optimize_xmm = true;
     const auto optimized = Pipeline::ConsumeXmm(encoded.bytes, options);
     REQUIRE(optimized);
-    REQUIRE(optimized.xmm->functions.front().blocks.front().instructions.size() == instructionCount - 1U);
+    REQUIRE(optimized.xmm->functions.front().blocks.front().instructions.size()
+            == instructionCount - 1U);
 
     options.optimize_xmm = false;
     const auto retained = Pipeline::ConsumeXmm(encoded.bytes, options);
     REQUIRE(retained);
-    REQUIRE(retained.xmm->functions.front().blocks.front().instructions.size() == instructionCount);
+    REQUIRE(retained.xmm->functions.front().blocks.front().instructions.size()
+            == instructionCount);
 }
 
 TEST_CASE("pipeline rejects a backward Xmm to Xpp boundary request")
@@ -566,6 +713,7 @@ TEST_CASE("pipeline rejects a backward Xmm to Xpp boundary request")
     const auto result = Pipeline::ConsumeXmm(encoded.bytes, options);
     REQUIRE_FALSE(result);
     REQUIRE(result.xmmWireError.has_value());
-    REQUIRE(result.xmmWireError->kind == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
+    REQUIRE(result.xmmWireError->kind
+            == ::Visual::XSharp::Artifact::Wire::ErrorKind::InvalidModel);
     REQUIRE(result.xmmWireError->context == "pipeline boundary");
 }

@@ -35,7 +35,9 @@ namespace visual_xsharp::core::wire
     };
 
     [[nodiscard]] auto
-    encode(const CorePrepModule &module, const Limits &limits = {}) -> EncodeResult;
+    encode(const CorePrepModule &module, const Limits &limits = {})
+        -> EncodeResult;
     [[nodiscard]] auto
-    decode(std::span<const std::uint8_t> bytes, const Limits &limits = {}) -> DecodeResult;
+    decode(std::span<const std::uint8_t> bytes, const Limits &limits = {})
+        -> DecodeResult;
 } // namespace visual_xsharp::core::wire

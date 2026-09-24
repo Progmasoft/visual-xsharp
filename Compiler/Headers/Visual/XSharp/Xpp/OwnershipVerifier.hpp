@@ -9,8 +9,8 @@
 namespace Visual::XSharp::Xpp
 {
     // The module-level entry point lets the adapter distinguish direct function
-    // symbols from register-backed closure values before running generic ownership
-    // dataflow for each function body.
+    // symbols from register-backed closure values before running generic
+    // ownership dataflow for each function body.
     [[nodiscard]] auto
     VerifyOwnership(const ::visual_xsharp::xpp::Module &module)
         -> std::vector<VerificationIssue>;

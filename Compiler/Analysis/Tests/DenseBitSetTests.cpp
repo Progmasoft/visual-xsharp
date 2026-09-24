@@ -28,9 +28,12 @@ TEST_CASE("an empty dense bit set has no words or values")
 
 TEST_CASE("a dense bit set rejects universes outside LLVM's index domain")
 {
-    if constexpr (std::numeric_limits<std::size_t>::max() > std::numeric_limits<unsigned>::max())
+    if constexpr (std::numeric_limits<std::size_t>::max()
+                  > std::numeric_limits<unsigned>::max())
     {
-        const auto oversized = static_cast<std::size_t>(std::numeric_limits<unsigned>::max()) + 1U;
+        const auto oversized
+            = static_cast<std::size_t>(std::numeric_limits<unsigned>::max())
+              + 1U;
         CHECK_THROWS_AS(DenseBitSet(oversized), std::length_error);
     }
 }
@@ -62,12 +65,15 @@ TEST_CASE("set and reset operate across word boundaries")
     for (const auto index : { 0U, 1U, 63U, 64U, 65U, 127U, 128U, 192U })
         values.Set(index);
     CHECK(values.Count() == 8U);
-    CHECK(values.SetIndices() == std::vector<std::size_t>{ 0U, 1U, 63U, 64U, 65U, 127U, 128U, 192U });
+    CHECK(
+        values.SetIndices()
+        == std::vector<std::size_t>{ 0U, 1U, 63U, 64U, 65U, 127U, 128U, 192U });
 
     values.Reset(0U);
     values.Reset(64U);
     values.Reset(192U);
-    CHECK(values.SetIndices() == std::vector<std::size_t>{ 1U, 63U, 65U, 127U, 128U });
+    CHECK(values.SetIndices()
+          == std::vector<std::size_t>{ 1U, 63U, 65U, 127U, 128U });
 }
 
 TEST_CASE("out-of-range bit operations are conservative")

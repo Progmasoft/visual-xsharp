@@ -16,23 +16,24 @@ namespace
     namespace Analysis = Visual::XSharp::Analysis;
 
     [[nodiscard]] auto
-    Block(
-        const Analysis::ControlFlowBlockId id,
-        std::initializer_list<Analysis::ControlFlowBlockId> successors = {}) -> Analysis::ControlFlowBlock
+    Block(const Analysis::ControlFlowBlockId id,
+          std::initializer_list<Analysis::ControlFlowBlockId> successors = {})
+        -> Analysis::ControlFlowBlock
     {
         return { id, successors };
     }
 
     [[nodiscard]] auto
-    Graph(
-        std::initializer_list<Analysis::ControlFlowBlock> blocks,
-        const Analysis::ControlFlowBlockId entry = 0U) -> Analysis::ControlFlowGraph
+    Graph(std::initializer_list<Analysis::ControlFlowBlock> blocks,
+          const Analysis::ControlFlowBlockId entry = 0U)
+        -> Analysis::ControlFlowGraph
     {
         return { entry, blocks };
     }
 
     [[nodiscard]] auto
-    HasIssue(const Analysis::ControlFlowResult &result, const Analysis::ControlFlowIssueKind kind) -> bool
+    HasIssue(const Analysis::ControlFlowResult &result,
+             const Analysis::ControlFlowIssueKind kind) -> bool
     {
         return std::ranges::any_of(result.issues, [kind](const auto &issue) {
             return issue.kind == kind;
@@ -40,11 +41,14 @@ namespace
     }
 
     [[nodiscard]] auto
-    FactsFor(
-        const Analysis::ControlFlowResult &result,
-        const Analysis::ControlFlowBlockId block) -> const Analysis::ControlFlowBlockFacts &
+    FactsFor(const Analysis::ControlFlowResult &result,
+             const Analysis::ControlFlowBlockId block)
+        -> const Analysis::ControlFlowBlockFacts &
     {
-        const auto found = std::ranges::find(result.facts, block, &Analysis::ControlFlowBlockFacts::block);
+        const auto found
+            = std::ranges::find(result.facts,
+                                block,
+                                &Analysis::ControlFlowBlockFacts::block);
         REQUIRE(found != result.facts.end());
         return *found;
     }
@@ -55,7 +59,8 @@ TEST_CASE("control-flow analysis accepts one entry block")
     const auto result = Analysis::AnalyzeControlFlow(Graph({ Block(0U) }));
     CHECK(result.valid());
     CHECK(result.preorder == std::vector<Analysis::ControlFlowBlockId>{ 0U });
-    CHECK(result.reversePostorder == std::vector<Analysis::ControlFlowBlockId>{ 0U });
+    CHECK(result.reversePostorder
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U });
     REQUIRE(result.facts.size() == 1U);
     CHECK(result.facts.front().reachable);
 }
@@ -71,7 +76,8 @@ TEST_CASE("control-flow analysis rejects an absent entry")
 
 TEST_CASE("control-flow analysis diagnoses duplicate identities")
 {
-    const auto result = Analysis::AnalyzeControlFlow(Graph({ Block(0U), Block(0U) }));
+    const auto result
+        = Analysis::AnalyzeControlFlow(Graph({ Block(0U), Block(0U) }));
     CHECK(HasIssue(result, Analysis::ControlFlowIssueKind::DuplicateBlock));
     CHECK(result.facts.size() == 1U);
 }
@@ -87,39 +93,49 @@ TEST_CASE("the first duplicate record is canonical")
 
 TEST_CASE("missing targets retain their source and target identities")
 {
-    const auto result = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 90U }) }));
+    const auto result
+        = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 90U }) }));
     REQUIRE(result.issues.size() == 1U);
-    CHECK(result.issues.front().kind == Analysis::ControlFlowIssueKind::MissingTarget);
+    CHECK(result.issues.front().kind
+          == Analysis::ControlFlowIssueKind::MissingTarget);
     CHECK(result.issues.front().block == 0U);
     CHECK(result.issues.front().target == 90U);
 }
 
 TEST_CASE("invalid targets are not traversed")
 {
-    const auto result = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 90U }), Block(1U) }));
+    const auto result = Analysis::AnalyzeControlFlow(
+        Graph({ Block(0U, { 90U }), Block(1U) }));
     CHECK(result.preorder == std::vector<Analysis::ControlFlowBlockId>{ 0U });
     CHECK_FALSE(FactsFor(result, 1U).reachable);
 }
 
 TEST_CASE("duplicate edges are represented once")
 {
-    const auto result = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 1U, 1U, 1U }), Block(1U) }));
+    const auto result = Analysis::AnalyzeControlFlow(
+        Graph({ Block(0U, { 1U, 1U, 1U }), Block(1U) }));
     CHECK(result.valid());
-    CHECK(FactsFor(result, 0U).successors == std::vector<Analysis::ControlFlowBlockId>{ 1U });
-    CHECK(FactsFor(result, 1U).predecessors == std::vector<Analysis::ControlFlowBlockId>{ 0U });
+    CHECK(FactsFor(result, 0U).successors
+          == std::vector<Analysis::ControlFlowBlockId>{ 1U });
+    CHECK(FactsFor(result, 1U).predecessors
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U });
 }
 
 TEST_CASE("preorder follows declared successor order")
 {
     const auto result = Analysis::AnalyzeControlFlow(
         Graph({ Block(0U, { 2U, 1U }), Block(1U), Block(2U) }));
-    CHECK(result.preorder == std::vector<Analysis::ControlFlowBlockId>{ 0U, 2U, 1U });
+    CHECK(result.preorder
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U, 2U, 1U });
 }
 
 TEST_CASE("reverse postorder keeps entry before a diamond")
 {
-    const auto result = Analysis::AnalyzeControlFlow(
-        Graph({ Block(0U, { 1U, 2U }), Block(1U, { 3U }), Block(2U, { 3U }), Block(3U) }));
+    const auto result
+        = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 1U, 2U }),
+                                               Block(1U, { 3U }),
+                                               Block(2U, { 3U }),
+                                               Block(3U) }));
     REQUIRE(result.reversePostorder.size() == 4U);
     CHECK(result.reversePostorder.front() == 0U);
     CHECK(result.reversePostorder.back() == 3U);
@@ -127,16 +143,21 @@ TEST_CASE("reverse postorder keeps entry before a diamond")
 
 TEST_CASE("diamond joins expose both predecessors")
 {
-    const auto result = Analysis::AnalyzeControlFlow(
-        Graph({ Block(0U, { 1U, 2U }), Block(1U, { 3U }), Block(2U, { 3U }), Block(3U) }));
-    CHECK(FactsFor(result, 3U).predecessors == std::vector<Analysis::ControlFlowBlockId>{ 1U, 2U });
+    const auto result
+        = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 1U, 2U }),
+                                               Block(1U, { 3U }),
+                                               Block(2U, { 3U }),
+                                               Block(3U) }));
+    CHECK(FactsFor(result, 3U).predecessors
+          == std::vector<Analysis::ControlFlowBlockId>{ 1U, 2U });
 }
 
 TEST_CASE("unreachable predecessors are filtered from observable facts")
 {
     const auto result = Analysis::AnalyzeControlFlow(
         Graph({ Block(0U, { 2U }), Block(1U, { 2U }), Block(2U) }));
-    CHECK(FactsFor(result, 2U).predecessors == std::vector<Analysis::ControlFlowBlockId>{ 0U });
+    CHECK(FactsFor(result, 2U).predecessors
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U });
 }
 
 TEST_CASE("unreachable blocks retain their valid successors")
@@ -144,25 +165,34 @@ TEST_CASE("unreachable blocks retain their valid successors")
     const auto result = Analysis::AnalyzeControlFlow(
         Graph({ Block(0U), Block(1U, { 2U }), Block(2U) }));
     CHECK_FALSE(FactsFor(result, 1U).reachable);
-    CHECK(FactsFor(result, 1U).successors == std::vector<Analysis::ControlFlowBlockId>{ 2U });
+    CHECK(FactsFor(result, 1U).successors
+          == std::vector<Analysis::ControlFlowBlockId>{ 2U });
     CHECK(FactsFor(result, 2U).predecessors.empty());
 }
 
 TEST_CASE("self loops terminate traversal")
 {
-    const auto result = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 0U }) }));
+    const auto result
+        = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 0U }) }));
     CHECK(result.valid());
     CHECK(result.preorder == std::vector<Analysis::ControlFlowBlockId>{ 0U });
-    CHECK(result.reversePostorder == std::vector<Analysis::ControlFlowBlockId>{ 0U });
-    CHECK(FactsFor(result, 0U).predecessors == std::vector<Analysis::ControlFlowBlockId>{ 0U });
+    CHECK(result.reversePostorder
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U });
+    CHECK(FactsFor(result, 0U).predecessors
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U });
 }
 
 TEST_CASE("multi-block loops are traversed once")
 {
-    const auto result = Analysis::AnalyzeControlFlow(
-        Graph({ Block(0U, { 1U }), Block(1U, { 2U }), Block(2U, { 1U, 3U }), Block(3U) }));
-    CHECK(result.preorder == std::vector<Analysis::ControlFlowBlockId>{ 0U, 1U, 2U, 3U });
-    CHECK(result.reversePostorder == std::vector<Analysis::ControlFlowBlockId>{ 0U, 1U, 2U, 3U });
+    const auto result
+        = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 1U }),
+                                               Block(1U, { 2U }),
+                                               Block(2U, { 1U, 3U }),
+                                               Block(3U) }));
+    CHECK(result.preorder
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U, 1U, 2U, 3U });
+    CHECK(result.reversePostorder
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U, 1U, 2U, 3U });
 }
 
 TEST_CASE("block facts are sorted by identity")
@@ -180,22 +210,34 @@ TEST_CASE("successor facts are sorted without changing traversal order")
 {
     const auto result = Analysis::AnalyzeControlFlow(
         Graph({ Block(0U, { 8U, 2U, 5U }), Block(2U), Block(5U), Block(8U) }));
-    CHECK(result.preorder == std::vector<Analysis::ControlFlowBlockId>{ 0U, 8U, 2U, 5U });
-    CHECK(FactsFor(result, 0U).successors == std::vector<Analysis::ControlFlowBlockId>{ 2U, 5U, 8U });
+    CHECK(result.preorder
+          == std::vector<Analysis::ControlFlowBlockId>{ 0U, 8U, 2U, 5U });
+    CHECK(FactsFor(result, 0U).successors
+          == std::vector<Analysis::ControlFlowBlockId>{ 2U, 5U, 8U });
 }
 
 TEST_CASE("predecessor facts are sorted regardless of edge discovery")
 {
-    const auto result = Analysis::AnalyzeControlFlow(
-        Graph({ Block(0U, { 9U, 2U }), Block(2U, { 12U }), Block(9U, { 12U }), Block(12U) }));
-    CHECK(FactsFor(result, 12U).predecessors == std::vector<Analysis::ControlFlowBlockId>{ 2U, 9U });
+    const auto result
+        = Analysis::AnalyzeControlFlow(Graph({ Block(0U, { 9U, 2U }),
+                                               Block(2U, { 12U }),
+                                               Block(9U, { 12U }),
+                                               Block(12U) }));
+    CHECK(FactsFor(result, 12U).predecessors
+          == std::vector<Analysis::ControlFlowBlockId>{ 2U, 9U });
 }
 
 TEST_CASE("presentation order does not change traversal")
 {
-    auto graph = Graph({ Block(0U, { 1U, 2U }), Block(1U, { 3U }), Block(2U, { 3U }), Block(3U) });
+    auto graph = Graph({ Block(0U, { 1U, 2U }),
+                         Block(1U, { 3U }),
+                         Block(2U, { 3U }),
+                         Block(3U) });
     const auto expected = Analysis::AnalyzeControlFlow(graph);
-    graph.blocks = { graph.blocks[3], graph.blocks[1], graph.blocks[0], graph.blocks[2] };
+    graph.blocks = { graph.blocks[3],
+                     graph.blocks[1],
+                     graph.blocks[0],
+                     graph.blocks[2] };
     const auto actual = Analysis::AnalyzeControlFlow(graph);
     CHECK(actual.issues == expected.issues);
     CHECK(actual.preorder == expected.preorder);
@@ -205,7 +247,11 @@ TEST_CASE("presentation order does not change traversal")
 
 TEST_CASE("every presentation permutation has the same result")
 {
-    auto graph = Graph({ Block(0U, { 1U }), Block(1U, { 2U, 3U }), Block(2U, { 4U }), Block(3U, { 4U }), Block(4U) });
+    auto graph = Graph({ Block(0U, { 1U }),
+                         Block(1U, { 2U, 3U }),
+                         Block(2U, { 4U }),
+                         Block(3U, { 4U }),
+                         Block(4U) });
     const auto expected = Analysis::AnalyzeControlFlow(graph);
     std::ranges::sort(graph.blocks, {}, &Analysis::ControlFlowBlock::id);
     do
@@ -214,7 +260,10 @@ TEST_CASE("every presentation permutation has the same result")
         CHECK(actual.preorder == expected.preorder);
         CHECK(actual.reversePostorder == expected.reversePostorder);
         CHECK(actual.facts == expected.facts);
-    } while (std::ranges::next_permutation(graph.blocks, {}, &Analysis::ControlFlowBlock::id).found);
+    } while (std::ranges::next_permutation(graph.blocks,
+                                           {},
+                                           &Analysis::ControlFlowBlock::id)
+                 .found);
 }
 
 TEST_CASE("iterative traversal handles a deep graph")

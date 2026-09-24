@@ -17,7 +17,8 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
     namespace
     {
         using BlockMap = std::unordered_map<BlockId, const Block *>;
-        using FlowFactMap = std::unordered_map<BlockId, const ControlFlowBlockFacts *>;
+        using FlowFactMap
+            = std::unordered_map<BlockId, const ControlFlowBlockFacts *>;
 
         struct HandleCatalog final
         {
@@ -42,15 +43,12 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         public:
             PackedState() = default;
 
-            explicit PackedState(
-                const std::size_t handleCount,
-                const StateMask initial = 0U)
+            explicit PackedState(const std::size_t handleCount,
+                                 const StateMask initial = 0U)
                 : handleCount_(handleCount)
                 , states_{
-                    DenseBitSet(handleCount),
-                    DenseBitSet(handleCount),
-                    DenseBitSet(handleCount),
-                    DenseBitSet(handleCount),
+                    DenseBitSet(handleCount), DenseBitSet(handleCount),
+                    DenseBitSet(handleCount), DenseBitSet(handleCount),
                     DenseBitSet(handleCount),
                 }
             {
@@ -67,7 +65,8 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 StateMask result{};
                 for (std::uint8_t bit = 0U; bit < states_.size(); ++bit)
                     if (states_[bit].Test(index))
-                        result = static_cast<StateMask>(result | (StateMask{ 1U } << bit));
+                        result = static_cast<StateMask>(
+                            result | (StateMask{ 1U } << bit));
                 return result;
             }
 
@@ -77,7 +76,9 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 if (index >= handleCount_)
                     return;
                 for (std::uint8_t bit = 0U; bit < states_.size(); ++bit)
-                    states_[bit].Assign(index, (value & (StateMask{ 1U } << bit)) != 0U);
+                    states_[bit].Assign(index,
+                                        (value & (StateMask{ 1U } << bit))
+                                            != 0U);
             }
 
             void
@@ -132,10 +133,9 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         }
 
         void
-        AppendControlFlowIssues(
-            const Function &function,
-            const ControlFlowResult &controlFlow,
-            std::vector<Issue> &issues)
+        AppendControlFlowIssues(const Function &function,
+                                const ControlFlowResult &controlFlow,
+                                std::vector<Issue> &issues)
         {
             const auto blocks = CatalogBlocks(function);
             for (const auto &issue : controlFlow.issues)
@@ -158,18 +158,18 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 auto terminator = false;
                 if (issue.kind == ControlFlowIssueKind::MissingTarget)
                 {
-                    if (const auto found = blocks.find(issue.block); found != blocks.end())
+                    if (const auto found = blocks.find(issue.block);
+                        found != blocks.end())
                         instruction = found->second->actions.size();
                     terminator = true;
                 }
-                issues.push_back(
-                    { kind,
-                      issue.block,
-                      instruction,
-                      terminator,
-                      0U,
-                      HandleKind::Strong,
-                      kAbsent });
+                issues.push_back({ kind,
+                                   issue.block,
+                                   instruction,
+                                   terminator,
+                                   0U,
+                                   HandleKind::Strong,
+                                   kAbsent });
             }
         }
 
@@ -201,30 +201,29 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 std::unique(catalog.handles.begin(), catalog.handles.end()),
                 catalog.handles.end());
             catalog.indices.reserve(catalog.handles.size());
-            for (std::size_t index = 0U; index < catalog.handles.size(); ++index)
+            for (std::size_t index = 0U; index < catalog.handles.size();
+                 ++index)
                 catalog.indices.emplace(catalog.handles[index], index);
             return catalog;
         }
 
         [[nodiscard]] auto
-        InitialState(
-            const Function &function,
-            const HandleCatalog &catalog,
-            std::vector<Issue> &issues) -> PackedState
+        InitialState(const Function &function,
+                     const HandleCatalog &catalog,
+                     std::vector<Issue> &issues) -> PackedState
         {
             PackedState states(catalog.handles.size(), kAbsent);
             for (const auto &initial : function.initialHandles)
             {
                 if (initial.handle == 0U)
                 {
-                    issues.push_back(
-                        { IssueKind::InvalidInitialHandle,
-                          function.entry,
-                          0U,
-                          false,
-                          0U,
-                          initial.kind,
-                          kAbsent });
+                    issues.push_back({ IssueKind::InvalidInitialHandle,
+                                       function.entry,
+                                       0U,
+                                       false,
+                                       0U,
+                                       initial.kind,
+                                       kAbsent });
                     continue;
                 }
 
@@ -234,26 +233,25 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 const auto expected = StateFor(initial.kind);
                 const auto actual = states.At(*index);
                 if (actual != kAbsent && actual != expected)
-                    issues.push_back(
-                        { IssueKind::ConflictingInitialKind,
-                          function.entry,
-                          0U,
-                          false,
-                          initial.handle,
-                          initial.kind,
-                          actual });
+                    issues.push_back({ IssueKind::ConflictingInitialKind,
+                                       function.entry,
+                                       0U,
+                                       false,
+                                       initial.handle,
+                                       initial.kind,
+                                       actual });
                 states.Assign(
                     *index,
-                    static_cast<StateMask>((actual == kAbsent ? 0U : actual) | expected));
+                    static_cast<StateMask>((actual == kAbsent ? 0U : actual)
+                                           | expected));
             }
             return states;
         }
 
         void
-        Apply(
-            const Action &action,
-            const HandleCatalog &catalog,
-            PackedState &states)
+        Apply(const Action &action,
+              const HandleCatalog &catalog,
+              PackedState &states)
         {
             const auto index = catalog.Find(action.handle);
             if (!index)
@@ -285,10 +283,9 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         }
 
         [[nodiscard]] auto
-        Transfer(
-            const Block &block,
-            const HandleCatalog &catalog,
-            PackedState incoming) -> PackedState
+        Transfer(const Block &block,
+                 const HandleCatalog &catalog,
+                 PackedState incoming) -> PackedState
         {
             for (const auto &action : block.actions)
                 Apply(action, catalog, incoming);
@@ -296,13 +293,12 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         }
 
         [[nodiscard]] auto
-        JoinPredecessors(
-            const BlockId block,
-            const Function &function,
-            const FlowFactMap &flowFacts,
-            const HandleCatalog &catalog,
-            const PackedState &initial,
-            const FactMap &outgoing) -> PackedState
+        JoinPredecessors(const BlockId block,
+                         const Function &function,
+                         const FlowFactMap &flowFacts,
+                         const HandleCatalog &catalog,
+                         const PackedState &initial,
+                         const FactMap &outgoing) -> PackedState
         {
             // Entry facts are fixed by the external caller. A backedge cannot
             // retroactively manufacture an initial ownership token.
@@ -324,37 +320,35 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         }
 
         [[nodiscard]] auto
-        ComputeFixedPoint(
-            const Function &function,
-            const BlockMap &blocks,
-            const ControlFlowResult &controlFlow,
-            const HandleCatalog &catalog,
-            const PackedState &initial) -> FixedPoint
+        ComputeFixedPoint(const Function &function,
+                          const BlockMap &blocks,
+                          const ControlFlowResult &controlFlow,
+                          const HandleCatalog &catalog,
+                          const PackedState &initial) -> FixedPoint
         {
             FixedPoint result;
             result.incoming.reserve(controlFlow.preorder.size());
             result.outgoing.reserve(controlFlow.preorder.size());
             for (const auto block : controlFlow.preorder)
             {
-                result.incoming.emplace(block, PackedState(catalog.handles.size()));
-                result.outgoing.emplace(block, PackedState(catalog.handles.size()));
+                result.incoming.emplace(block,
+                                        PackedState(catalog.handles.size()));
+                result.outgoing.emplace(block,
+                                        PackedState(catalog.handles.size()));
             }
 
             const auto flowFacts = FlowFacts(controlFlow);
             DataflowWorklist worklist(controlFlow, WorklistDirection::Forward);
             while (const auto block = worklist.Next())
             {
-                auto nextIncoming = JoinPredecessors(
-                    *block,
-                    function,
-                    flowFacts,
-                    catalog,
-                    initial,
-                    result.outgoing);
-                auto nextOutgoing = Transfer(
-                    *blocks.at(*block),
-                    catalog,
-                    nextIncoming);
+                auto nextIncoming = JoinPredecessors(*block,
+                                                     function,
+                                                     flowFacts,
+                                                     catalog,
+                                                     initial,
+                                                     result.outgoing);
+                auto nextOutgoing
+                    = Transfer(*blocks.at(*block), catalog, nextIncoming);
                 if (result.incoming.at(*block) == nextIncoming
                     && result.outgoing.at(*block) == nextOutgoing)
                     continue;
@@ -368,17 +362,17 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         }
 
         [[nodiscard]] auto
-        HasOtherLiveKind(const StateMask actual, const StateMask expected) noexcept -> bool
+        HasOtherLiveKind(const StateMask actual,
+                         const StateMask expected) noexcept -> bool
         {
             return (actual & LiveMask() & ~expected) != 0U;
         }
 
         void
-        ValidateRequirement(
-            const Action &action,
-            const BlockId block,
-            const StateMask actual,
-            std::vector<Issue> &issues)
+        ValidateRequirement(const Action &action,
+                            const BlockId block,
+                            const StateMask actual,
+                            std::vector<Issue> &issues)
         {
             const auto expected = StateFor(action.expected);
             const auto hasExpected = (actual & expected) != 0U;
@@ -387,42 +381,38 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
             const auto hasOtherKind = HasOtherLiveKind(actual, expected);
 
             if (hasExpected && (hasConsumed || hasAbsent || hasOtherKind))
-                issues.push_back(
-                    { IssueKind::PathStateMismatch,
-                      block,
-                      action.instruction,
-                      action.terminator,
-                      action.handle,
-                      action.expected,
-                      actual });
+                issues.push_back({ IssueKind::PathStateMismatch,
+                                   block,
+                                   action.instruction,
+                                   action.terminator,
+                                   action.handle,
+                                   action.expected,
+                                   actual });
             else if (!hasExpected && hasConsumed)
-                issues.push_back(
-                    { IssueKind::UseAfterConsume,
-                      block,
-                      action.instruction,
-                      action.terminator,
-                      action.handle,
-                      action.expected,
-                      actual });
+                issues.push_back({ IssueKind::UseAfterConsume,
+                                   block,
+                                   action.instruction,
+                                   action.terminator,
+                                   action.handle,
+                                   action.expected,
+                                   actual });
             else if (!hasExpected && hasOtherKind)
-                issues.push_back(
-                    { IssueKind::HandleKindMismatch,
-                      block,
-                      action.instruction,
-                      action.terminator,
-                      action.handle,
-                      action.expected,
-                      actual });
+                issues.push_back({ IssueKind::HandleKindMismatch,
+                                   block,
+                                   action.instruction,
+                                   action.terminator,
+                                   action.handle,
+                                   action.expected,
+                                   actual });
             // Definite initialization owns absent-only diagnostics.
         }
 
         void
-        ValidateActions(
-            const BlockMap &blocks,
-            const ControlFlowResult &controlFlow,
-            const HandleCatalog &catalog,
-            const FactMap &incoming,
-            std::vector<Issue> &issues)
+        ValidateActions(const BlockMap &blocks,
+                        const ControlFlowResult &controlFlow,
+                        const HandleCatalog &catalog,
+                        const FactMap &incoming,
+                        std::vector<Issue> &issues)
         {
             for (const auto blockId : controlFlow.preorder)
             {
@@ -432,14 +422,13 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 {
                     if (action.handle == 0U)
                     {
-                        issues.push_back(
-                            { IssueKind::InvalidActionHandle,
-                              block.id,
-                              action.instruction,
-                              action.terminator,
-                              0U,
-                              action.expected,
-                              kAbsent });
+                        issues.push_back({ IssueKind::InvalidActionHandle,
+                                           block.id,
+                                           action.instruction,
+                                           action.terminator,
+                                           0U,
+                                           action.expected,
+                                           kAbsent });
                         continue;
                     }
                     const auto index = catalog.Find(action.handle);
@@ -447,20 +436,23 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                         continue;
                     if (action.kind == ActionKind::Observe
                         || action.kind == ActionKind::Consume)
-                        ValidateRequirement(action, block.id, state.At(*index), issues);
+                        ValidateRequirement(action,
+                                            block.id,
+                                            state.At(*index),
+                                            issues);
                     Apply(action, catalog, state);
                 }
             }
         }
 
         [[nodiscard]] auto
-        VisibleFacts(
-            const HandleCatalog &catalog,
-            const PackedState &states) -> std::vector<HandleFact>
+        VisibleFacts(const HandleCatalog &catalog, const PackedState &states)
+            -> std::vector<HandleFact>
         {
             std::vector<HandleFact> facts;
             facts.reserve(catalog.handles.size());
-            for (std::size_t index = 0U; index < catalog.handles.size(); ++index)
+            for (std::size_t index = 0U; index < catalog.handles.size();
+                 ++index)
             {
                 const auto state = states.At(index);
                 facts.push_back(
@@ -471,11 +463,10 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         }
 
         [[nodiscard]] auto
-        BuildFacts(
-            const ControlFlowResult &controlFlow,
-            const HandleCatalog &catalog,
-            const FactMap &incoming,
-            const FactMap &outgoing) -> std::vector<BlockFacts>
+        BuildFacts(const ControlFlowResult &controlFlow,
+                   const HandleCatalog &catalog,
+                   const FactMap &incoming,
+                   const FactMap &outgoing) -> std::vector<BlockFacts>
         {
             const PackedState unreachable(catalog.handles.size(), kAbsent);
             std::vector<BlockFacts> facts;
@@ -485,12 +476,12 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 facts.push_back(
                     { flow.block,
                       flow.reachable,
-                      VisibleFacts(
-                          catalog,
-                          flow.reachable ? incoming.at(flow.block) : unreachable),
-                      VisibleFacts(
-                          catalog,
-                          flow.reachable ? outgoing.at(flow.block) : unreachable) });
+                      VisibleFacts(catalog,
+                                   flow.reachable ? incoming.at(flow.block)
+                                                  : unreachable),
+                      VisibleFacts(catalog,
+                                   flow.reachable ? outgoing.at(flow.block)
+                                                  : unreachable) });
             }
             return facts;
         }
@@ -532,25 +523,22 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
         AppendControlFlowIssues(function, controlFlow, result.issues);
         const auto catalog = BuildHandleCatalog(function);
         const auto initial = InitialState(function, catalog, result.issues);
-        const auto fixedPoint = ComputeFixedPoint(
-            function,
-            blocks,
-            controlFlow,
-            catalog,
-            initial);
+        const auto fixedPoint = ComputeFixedPoint(function,
+                                                  blocks,
+                                                  controlFlow,
+                                                  catalog,
+                                                  initial);
 
-        ValidateActions(
-            blocks,
-            controlFlow,
-            catalog,
-            fixedPoint.incoming,
-            result.issues);
+        ValidateActions(blocks,
+                        controlFlow,
+                        catalog,
+                        fixedPoint.incoming,
+                        result.issues);
         if (options.materializeFacts)
-            result.facts = BuildFacts(
-                controlFlow,
-                catalog,
-                fixedPoint.incoming,
-                fixedPoint.outgoing);
+            result.facts = BuildFacts(controlFlow,
+                                      catalog,
+                                      fixedPoint.incoming,
+                                      fixedPoint.outgoing);
         result.statistics = fixedPoint.statistics;
         return result;
     }

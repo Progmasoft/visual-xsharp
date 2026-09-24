@@ -50,7 +50,8 @@ namespace Visual::XSharp::Interactive
     Session::Evaluate(std::string_view expression) -> CellResult
     {
         auto result = Compile(expression, true);
-        if (result.status == CellStatus::Value || result.status == CellStatus::Void)
+        if (result.status == CellStatus::Value
+            || result.status == CellStatus::Void)
             history_.Append(expression);
         return result;
     }
@@ -82,15 +83,18 @@ namespace Visual::XSharp::Interactive
     Session::Compile(std::string_view expression, bool execute) -> CellResult
     {
         if (expression.empty())
-            return Error("enter a Visual X# expression, or use :help for REPL commands");
+            return Error(
+                "enter a Visual X# expression, or use :help for REPL commands");
         if (expression.size() > 1024U * 1024U)
             return Error("one Visual X# expression cannot exceed 1 MiB");
 
         Runtime::ScratchCell cell;
-        if (const auto issue = Runtime::WriteCellSource(cell, nextCell_, expression, previous_))
+        if (const auto issue
+            = Runtime::WriteCellSource(cell, nextCell_, expression, previous_))
             return Error(*issue);
         if (Runtime::RunFrontend(cell.SourcePath(), cell.CorePath()) != 0)
-            return Error("frontend rejected this input; the source diagnostic is shown above");
+            return Error("frontend rejected this input; the source diagnostic "
+                         "is shown above");
         auto bytes = Runtime::ReadCore(cell.CorePath());
         if (!bytes)
             return Error("frontend did not produce a readable Core artifact");
@@ -106,30 +110,40 @@ namespace Visual::XSharp::Interactive
                                          pipeline.coreWireError->offset,
                                          pipeline.coreWireError->message));
             if (pipeline.llvm_error)
-                return Error(fmt::format("{}: {}", pipeline.llvm_error->code, pipeline.llvm_error->message));
+                return Error(fmt::format("{}: {}",
+                                         pipeline.llvm_error->code,
+                                         pipeline.llvm_error->message));
             if (!pipeline.coreVerificationIssues.empty())
-                return Error(fmt::format("Core verifier rejected the expression: {} issue(s)",
-                                         pipeline.coreVerificationIssues.size()));
+                return Error(fmt::format(
+                    "Core verifier rejected the expression: {} issue(s)",
+                    pipeline.coreVerificationIssues.size()));
             if (!pipeline.verification_issues.empty())
-                return Error(fmt::format("CorePrep verifier rejected the expression: {} issue(s)",
-                                         pipeline.verification_issues.size()));
+                return Error(fmt::format(
+                    "CorePrep verifier rejected the expression: {} issue(s)",
+                    pipeline.verification_issues.size()));
             if (!pipeline.xppVerificationIssues.empty())
-                return Error(fmt::format("Xpp verifier rejected the expression: {} issue(s)",
-                                         pipeline.xppVerificationIssues.size()));
+                return Error(fmt::format(
+                    "Xpp verifier rejected the expression: {} issue(s)",
+                    pipeline.xppVerificationIssues.size()));
             if (!pipeline.xmmVerificationIssues.empty())
-                return Error(fmt::format("Xmm verifier rejected the expression: {} issue(s)",
-                                         pipeline.xmmVerificationIssues.size()));
-            return Error("compiler pipeline stopped before producing an executable expression");
+                return Error(fmt::format(
+                    "Xmm verifier rejected the expression: {} issue(s)",
+                    pipeline.xmmVerificationIssues.size()));
+            return Error("compiler pipeline stopped before producing an "
+                         "executable expression");
         }
         if (!pipeline.xmm)
-            return Error("compiler pipeline did not retain its verified Xmm module");
+            return Error(
+                "compiler pipeline did not retain its verified Xmm module");
 
         const auto symbol = Runtime::EvaluationSymbol(*pipeline.xmm, nextCell_);
         if (!symbol)
-            return Error("compiler did not emit the unique zero-argument Evaluate function for this cell");
+            return Error("compiler did not emit the unique zero-argument "
+                         "Evaluate function for this cell");
         const auto *function = EvaluationFunction(*pipeline.xmm);
         if (function == nullptr)
-            return Error("compiler emitted an ambiguous Evaluate function for this cell");
+            return Error("compiler emitted an ambiguous Evaluate function for "
+                         "this cell");
 
         if (!execute)
         {
@@ -140,9 +154,13 @@ namespace Visual::XSharp::Interactive
             return Error("LLVM lowering did not produce bitcode for this cell");
         // A module is never re-used after insertion, even if lookup or native
         // invocation fails. Advancing before insertion prevents a later input
-        // from colliding with residual JIT symbols from a partially failed cell.
+        // from colliding with residual JIT symbols from a partially failed
+        // cell.
         ++nextCell_;
-        if (const auto issue = jit_.AddModule(pipeline.llvm->bitcode, *symbol, *symbol, function->return_type))
+        if (const auto issue = jit_.AddModule(pipeline.llvm->bitcode,
+                                              *symbol,
+                                              *symbol,
+                                              function->return_type))
             return Error(BackendError(*issue));
 
         auto invocation = jit_.InvokeScalar(*symbol, function->return_type);
@@ -162,7 +180,9 @@ namespace Visual::XSharp::Interactive
         else
             previous_.reset();
         return { CellStatus::Value,
-                 fmt::format("{} : {}", Runtime::DisplayValue(*invocation.value), FormatType(function->return_type)),
+                 fmt::format("{} : {}",
+                             Runtime::DisplayValue(*invocation.value),
+                             FormatType(function->return_type)),
                  std::move(invocation.value) };
     }
 

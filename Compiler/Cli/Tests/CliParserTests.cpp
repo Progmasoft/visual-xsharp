@@ -19,7 +19,8 @@ namespace
             argv_.reserve(storage_.size());
             for (auto &argument : storage_)
                 argv_.push_back(argument.data());
-            outcome_ = ParseCommandLine(static_cast<int>(argv_.size()), argv_.data());
+            outcome_ = ParseCommandLine(static_cast<int>(argv_.size()),
+                                        argv_.data());
         }
 
         ParsedInvocation(const ParsedInvocation &) = delete;
@@ -85,7 +86,9 @@ TEST_CASE("CLI defaults become typed compiler settings", "[cli][parser]")
     REQUIRE_FALSE(options.targetOverride);
 }
 
-TEST_CASE("help and version are parser outcomes rather than parser side effects", "[cli][parser]")
+TEST_CASE(
+    "help and version are parser outcomes rather than parser side effects",
+    "[cli][parser]")
 {
     const ParsedInvocation globalHelp{ "vxs", "-Help" };
     REQUIRE(globalHelp.Result() == CliParseResult::kHelp);
@@ -112,7 +115,9 @@ TEST_CASE("help and version are parser outcomes rather than parser side effects"
     REQUIRE(legacyHelp.Diagnostic() == "unknown option '--help'");
 }
 
-TEST_CASE("interactive hands every child argument to vxsi without compiler parsing", "[cli][parser][interactive]")
+TEST_CASE(
+    "interactive hands every child argument to vxsi without compiler parsing",
+    "[cli][parser][interactive]")
 {
     const ParsedInvocation repl{ "vxs", "interactive" };
     REQUIRE(repl.Result() == CliParseResult::kReady);
@@ -121,19 +126,30 @@ TEST_CASE("interactive hands every child argument to vxsi without compiler parsi
 
     const ParsedInvocation oneShot{ "vxs", "interactive", "-Eval", "5 + 5" };
     REQUIRE(oneShot.Result() == CliParseResult::kReady);
-    REQUIRE(oneShot.Options().interactiveArguments == std::vector<std::string>{ "-Eval", "5 + 5" });
+    REQUIRE(oneShot.Options().interactiveArguments
+            == std::vector<std::string>{ "-Eval", "5 + 5" });
 
     const ParsedInvocation help{ "vxs", "interactive", "-Help" };
     REQUIRE(help.Result() == CliParseResult::kReady);
-    REQUIRE(help.Options().interactiveArguments == std::vector<std::string>{ "-Help" });
+    REQUIRE(help.Options().interactiveArguments
+            == std::vector<std::string>{ "-Help" });
 
-    const ParsedInvocation optionLookingExpression{ "vxs", "interactive", "-Eval", "-1 + 2" };
+    const ParsedInvocation optionLookingExpression{ "vxs",
+                                                    "interactive",
+                                                    "-Eval",
+                                                    "-1 + 2" };
     REQUIRE(optionLookingExpression.Result() == CliParseResult::kReady);
-    REQUIRE(optionLookingExpression.Options().interactiveArguments == std::vector<std::string>{ "-Eval", "-1 + 2" });
+    REQUIRE(optionLookingExpression.Options().interactiveArguments
+            == std::vector<std::string>{ "-Eval", "-1 + 2" });
 
-    const ParsedInvocation extra{ "vxs", "interactive", "--", "-Eval", "5 + 5" };
+    const ParsedInvocation extra{ "vxs",
+                                  "interactive",
+                                  "--",
+                                  "-Eval",
+                                  "5 + 5" };
     REQUIRE(extra.Result() == CliParseResult::kReady);
-    REQUIRE(extra.Options().interactiveArguments == std::vector<std::string>{ "--", "-Eval", "5 + 5" });
+    REQUIRE(extra.Options().interactiveArguments
+            == std::vector<std::string>{ "--", "-Eval", "5 + 5" });
 }
 
 TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")
@@ -208,7 +224,8 @@ TEST_CASE("compiler arguments are converted to typed values", "[cli][parser]")
     REQUIRE(options.llvmOptOverride);
 }
 
-TEST_CASE("double dash forwards exact program arguments only for run", "[cli][parser]")
+TEST_CASE("double dash forwards exact program arguments only for run",
+          "[cli][parser]")
 {
     const ParsedInvocation run{
         "vxs",
@@ -221,7 +238,10 @@ TEST_CASE("double dash forwards exact program arguments only for run", "[cli][pa
         "-1",
     };
     REQUIRE(run.Result() == CliParseResult::kReady);
-    REQUIRE(run.Options().programArguments == std::vector<std::string>{ "--server-option", "value with spaces", "-1" });
+    REQUIRE(run.Options().programArguments
+            == std::vector<std::string>{ "--server-option",
+                                         "value with spaces",
+                                         "-1" });
 
     const ParsedInvocation emptyTail{ "vxs", "run", "--" };
     REQUIRE(emptyTail.Result() == CliParseResult::kReady);
@@ -234,13 +254,18 @@ TEST_CASE("double dash forwards exact program arguments only for run", "[cli][pa
 
 TEST_CASE("command and option spellings are case-sensitive", "[cli][parser]")
 {
-    REQUIRE(ParsedInvocation{ "vxs", "Build" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-warnings", "all" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Warnings", "ALL" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "--module", "Sources" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "Build" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-warnings", "all" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Warnings", "ALL" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "--module", "Sources" }.Result()
+            == CliParseResult::kError);
 }
 
-TEST_CASE("format and lint are project-wide tool commands", "[cli][parser][tools]")
+TEST_CASE("format and lint are project-wide tool commands",
+          "[cli][parser][tools]")
 {
     const ParsedInvocation format{ "vxs", "format" };
     REQUIRE(format.Result() == CliParseResult::kReady);
@@ -260,47 +285,74 @@ TEST_CASE("format and lint are project-wide tool commands", "[cli][parser][tools
     REQUIRE(lint.Options().command == CliCommand::kLint);
     REQUIRE_FALSE(lint.Options().filePath);
 
-    REQUIRE(ParsedInvocation{ "vxs", "format", "-File", "Program.vxs" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "lint", "Program.vxs" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "format", "-File", "Program.vxs" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "lint", "Program.vxs" }.Result()
+            == CliParseResult::kError);
 }
 
-TEST_CASE("schema enforces arity command scope and duplicate policy", "[cli][parser]")
+TEST_CASE("schema enforces arity command scope and duplicate policy",
+          "[cli][parser]")
 {
-    REQUIRE(ParsedInvocation{ "vxs", "build", "-File" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Emit", "core" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-File", "A.vxs", "-File", "B.vxs" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "resolve", "-Warnings", "all" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "version", "extra" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "build", "-File" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Emit", "core" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(
+        ParsedInvocation{ "vxs", "check", "-File", "A.vxs", "-File", "B.vxs" }
+            .Result()
+        == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "resolve", "-Warnings", "all" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "version", "extra" }.Result()
+            == CliParseResult::kError);
 }
 
 TEST_CASE("every typed value domain rejects unknown values", "[cli][parser]")
 {
-    REQUIRE(ParsedInvocation{ "vxs", "build", "-Emit", "hir" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Build", "source" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Standard", "23" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Werror", "yes" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Backend", "vpi" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Llvm-OptLevel", "0" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Llvm-Compiler", "jit" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Llvm-Lto", "full" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Target", "windows" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Target", "x86_64/windows/msvc" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "build", "-Emit", "hir" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Build", "source" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Standard", "23" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Werror", "yes" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Backend", "vpi" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Llvm-OptLevel", "0" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Llvm-Compiler", "jit" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Llvm-Lto", "full" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Target", "windows" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Target", "x86_64/windows/msvc" }
+                .Result()
+            == CliParseResult::kError);
 
     const ParsedInvocation warning{ "vxs", "check", "-Warnings", "urgent" };
-    REQUIRE(warning.Diagnostic() == "invalid value 'urgent' for -Warnings; expected all|medium|low|none");
+    REQUIRE(warning.Diagnostic()
+            == "invalid value 'urgent' for -Warnings; expected "
+               "all|medium|low|none");
 }
 
-TEST_CASE("explicit artifact input cannot silently become project mode", "[cli][parser]")
+TEST_CASE("explicit artifact input cannot silently become project mode",
+          "[cli][parser]")
 {
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Build", "core" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Build", "core" }.Result()
+            == CliParseResult::kError);
 
-    const ParsedInvocation direct{ "vxs", "check", "-Build", "core", "-File", "Module.core" };
+    const ParsedInvocation direct{ "vxs",  "check", "-Build",
+                                   "core", "-File", "Module.core" };
     REQUIRE(direct.Result() == CliParseResult::kReady);
     REQUIRE(direct.Options().input == BuildInput::kCore);
     REQUIRE(direct.Options().filePath == std::filesystem::path("Module.core"));
 }
 
-TEST_CASE("install and ViGet have distinct typed positional contracts", "[cli][parser]")
+TEST_CASE("install and ViGet have distinct typed positional contracts",
+          "[cli][parser]")
 {
     const ParsedInvocation localInstall{ "vxs", "install", "Publisher.Name" };
     REQUIRE(localInstall.Result() == CliParseResult::kReady);
@@ -308,7 +360,10 @@ TEST_CASE("install and ViGet have distinct typed positional contracts", "[cli][p
     REQUIRE(localInstall.Options().packageCoordinate == "Publisher.Name");
     REQUIRE_FALSE(localInstall.Options().globalInstall);
 
-    const ParsedInvocation globalInstall{ "vxs", "install", "-Global", "Publisher.Name" };
+    const ParsedInvocation globalInstall{ "vxs",
+                                          "install",
+                                          "-Global",
+                                          "Publisher.Name" };
     REQUIRE(globalInstall.Result() == CliParseResult::kReady);
     REQUIRE(globalInstall.Options().globalInstall);
 
@@ -322,18 +377,34 @@ TEST_CASE("install and ViGet have distinct typed positional contracts", "[cli][p
     REQUIRE(update.Result() == CliParseResult::kReady);
     REQUIRE(update.Options().vigetAction == ViGetAction::kUpdate);
 
-    REQUIRE(ParsedInvocation{ "vxs", "install" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "viget" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "viget", "publish" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", ".Name" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher..Name" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Name.More" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Na/me" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Name?version=latest" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Na me" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Nam\xC3\xA9" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Name", "extra" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "install" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "viget" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "viget", "publish" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "install", ".Name" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher..Name" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Name.More" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Na/me" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(
+        ParsedInvocation{ "vxs", "install", "Publisher.Name?version=latest" }
+            .Result()
+        == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "install", "Publisher.Na me" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(
+        ParsedInvocation{ "vxs", "install", "Publisher.Nam\xC3\xA9" }.Result()
+        == CliParseResult::kError);
+    REQUIRE(
+        ParsedInvocation{ "vxs", "install", "Publisher.Name", "extra" }.Result()
+        == CliParseResult::kError);
 }
 
 TEST_CASE("ViPkg creation and VXCI build options are typed", "[cli][parser]")
@@ -343,58 +414,64 @@ TEST_CASE("ViPkg creation and VXCI build options are typed", "[cli][parser]")
     REQUIRE(create.Options().command == CliCommand::kViPkg);
     REQUIRE(create.Options().viPkgAction == ViPkgAction::kCreate);
 
-    const ParsedInvocation library{
-        "vxs",
-        "build",
-        "-File",
-        "Math.vxs",
-        "-Header",
-        "-ViPkgType",
-        "staticlib"
-    };
+    const ParsedInvocation library{ "vxs",      "build",   "-File",
+                                    "Math.vxs", "-Header", "-ViPkgType",
+                                    "staticlib" };
     REQUIRE(library.Result() == CliParseResult::kReady);
     REQUIRE(library.Options().emitHeader);
     REQUIRE(library.Options().viPkgType == ViPkgType::kStaticLibrary);
 
-    REQUIRE(ParsedInvocation{ "vxs", "vipkg" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "vipkg", "push" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Header" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "build", "-ViPkgType", "shared" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "vipkg" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "vipkg", "push" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "check", "-Header" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "build", "-ViPkgType", "shared" }.Result()
+            == CliParseResult::kError);
 }
 
-TEST_CASE("build and run select multiple named project targets", "[cli][parser]")
+TEST_CASE("build and run select multiple named project targets",
+          "[cli][parser]")
 {
     const ParsedInvocation selected{
-        "vxs",
-        "build",
-        "-ViPkg",
-        "PackageOne",
-        "PackageTwo",
-        "-Executable",
-        "Server",
-        "Client",
-        "-Library",
-        "Shared",
+        "vxs",         "build",  "-ViPkg", "PackageOne", "PackageTwo",
+        "-Executable", "Server", "Client", "-Library",   "Shared",
     };
     REQUIRE(selected.Result() == CliParseResult::kReady);
-    REQUIRE(selected.Options().selectedViPkgs == std::vector<std::string>{ "PackageOne", "PackageTwo" });
-    REQUIRE(selected.Options().selectedExecutables == std::vector<std::string>{ "Server", "Client" });
-    REQUIRE(selected.Options().selectedLibraries == std::vector<std::string>{ "Shared" });
+    REQUIRE(selected.Options().selectedViPkgs
+            == std::vector<std::string>{ "PackageOne", "PackageTwo" });
+    REQUIRE(selected.Options().selectedExecutables
+            == std::vector<std::string>{ "Server", "Client" });
+    REQUIRE(selected.Options().selectedLibraries
+            == std::vector<std::string>{ "Shared" });
 
-    const ParsedInvocation run{ "vxs", "run", "-Executable", "Server", "--", "-user-option" };
+    const ParsedInvocation run{ "vxs",    "run", "-Executable",
+                                "Server", "--",  "-user-option" };
     REQUIRE(run.Result() == CliParseResult::kReady);
-    REQUIRE(run.Options().selectedExecutables == std::vector<std::string>{ "Server" });
-    REQUIRE(run.Options().programArguments == std::vector<std::string>{ "-user-option" });
+    REQUIRE(run.Options().selectedExecutables
+            == std::vector<std::string>{ "Server" });
+    REQUIRE(run.Options().programArguments
+            == std::vector<std::string>{ "-user-option" });
 
-    REQUIRE(ParsedInvocation{ "vxs", "build", "-Executable" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "build", "-Library", "bad/name" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "build", "-ViPkg", "Same", "Same" }.Result() == CliParseResult::kError);
-    REQUIRE(ParsedInvocation{ "vxs", "check", "-Executable", "Program" }.Result() == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "build", "-Executable" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(ParsedInvocation{ "vxs", "build", "-Library", "bad/name" }.Result()
+            == CliParseResult::kError);
+    REQUIRE(
+        ParsedInvocation{ "vxs", "build", "-ViPkg", "Same", "Same" }.Result()
+        == CliParseResult::kError);
+    REQUIRE(
+        ParsedInvocation{ "vxs", "check", "-Executable", "Program" }.Result()
+        == CliParseResult::kError);
 }
 
-TEST_CASE("project settings are overridden only by explicitly present CLI values", "[cli][parser]")
+TEST_CASE(
+    "project settings are overridden only by explicitly present CLI values",
+    "[cli][parser]")
 {
-    const ParsedInvocation parsed{ "vxs", "check", "-Wundef", "false", "-Llvm-Compiler", "orc" };
+    const ParsedInvocation parsed{ "vxs",   "check",          "-Wundef",
+                                   "false", "-Llvm-Compiler", "orc" };
     REQUIRE(parsed.Result() == CliParseResult::kReady);
 
     CompilerSettings project{
@@ -425,7 +502,9 @@ TEST_CASE("project settings are overridden only by explicitly present CLI values
     REQUIRE(project.llvmLto == LlvmLto::kFat);
 }
 
-TEST_CASE("effective compiler options follow CLI project and fallback precedence", "[cli][parser]")
+TEST_CASE(
+    "effective compiler options follow CLI project and fallback precedence",
+    "[cli][parser]")
 {
     const ParsedInvocation fallbackInvocation{ "vxs", "build" };
     REQUIRE(fallbackInvocation.Result() == CliParseResult::kReady);
@@ -443,31 +522,25 @@ TEST_CASE("effective compiler options follow CLI project and fallback precedence
         .output = BuildOutput::kObject,
         .compiler = DefaultCompilerSettings(),
     };
-    // Kotlin materializes explicit project settings and DSL defaults alike. Both
-    // outrank CLI fallbacks; only argv presence bits can replace this layer.
+    // Kotlin materializes explicit project settings and DSL defaults alike.
+    // Both outrank CLI fallbacks; only argv presence bits can replace this
+    // layer.
     project.compiler.llvmOptLevel = LlvmOptLevel::kO0;
-    const auto fromProject = ResolveCompilerOptions(fallbackInvocation.Options(), &project);
+    const auto fromProject
+        = ResolveCompilerOptions(fallbackInvocation.Options(), &project);
     REQUIRE(fromProject.compilerVersion == "0.3.1");
     REQUIRE(fromProject.standard == "26");
     REQUIRE(fromProject.output == BuildOutput::kObject);
     REQUIRE(fromProject.compiler.llvmOptLevel == LlvmOptLevel::kO0);
 
     const ParsedInvocation explicitInvocation{
-        "vxs",
-        "build",
-        "-Compiler-Version",
-        "latest",
-        "-Standard",
-        "latest",
-        "-Target",
-        "aarch64-unknown-linux-gnu",
-        "-Emit",
-        "llvmll",
-        "-Llvm-OptLevel",
-        "3",
+        "vxs",       "build",  "-Compiler-Version", "latest",
+        "-Standard", "latest", "-Target",           "aarch64-unknown-linux-gnu",
+        "-Emit",     "llvmll", "-Llvm-OptLevel",    "3",
     };
     REQUIRE(explicitInvocation.Result() == CliParseResult::kReady);
-    const auto explicitResult = ResolveCompilerOptions(explicitInvocation.Options(), &project);
+    const auto explicitResult
+        = ResolveCompilerOptions(explicitInvocation.Options(), &project);
     REQUIRE(explicitResult.compilerVersion == "latest");
     REQUIRE(explicitResult.standard == "latest");
     REQUIRE(explicitResult.target == "aarch64-unknown-linux-gnu");
@@ -475,7 +548,8 @@ TEST_CASE("effective compiler options follow CLI project and fallback precedence
     REQUIRE(explicitResult.compiler.llvmOptLevel == LlvmOptLevel::kO3);
 }
 
-TEST_CASE("parser rejects malformed process argument vectors safely", "[cli][parser]")
+TEST_CASE("parser rejects malformed process argument vectors safely",
+          "[cli][parser]")
 {
     REQUIRE(ParseCommandLine(-1, nullptr).result == CliParseResult::kError);
     REQUIRE(ParseCommandLine(1, nullptr).result == CliParseResult::kError);

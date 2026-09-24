@@ -17,7 +17,8 @@ namespace Visual::XSharp::Analysis
     namespace
     {
         using BlockMap = std::unordered_map<BlockId, const Block *>;
-        using FlowFactMap = std::unordered_map<BlockId, const ControlFlowBlockFacts *>;
+        using FlowFactMap
+            = std::unordered_map<BlockId, const ControlFlowBlockFacts *>;
         using FactMap = std::unordered_map<BlockId, DenseBitSet>;
 
         struct StorageCatalog final
@@ -43,9 +44,8 @@ namespace Visual::XSharp::Analysis
         };
 
         [[nodiscard]] auto
-        BuildStorageCatalog(
-            const Function &function,
-            std::vector<Issue> &issues) -> StorageCatalog
+        BuildStorageCatalog(const Function &function,
+                            std::vector<Issue> &issues) -> StorageCatalog
         {
             StorageCatalog catalog;
             catalog.storage.reserve(function.declarations.size());
@@ -55,23 +55,23 @@ namespace Visual::XSharp::Analysis
             {
                 if (!unique.insert(storage).second)
                 {
-                    issues.push_back(
-                        { IssueKind::DuplicateDeclaration,
-                          function.entry,
-                          0U,
-                          false,
-                          storage,
-                          0U });
+                    issues.push_back({ IssueKind::DuplicateDeclaration,
+                                       function.entry,
+                                       0U,
+                                       false,
+                                       storage,
+                                       0U });
                     continue;
                 }
                 catalog.storage.push_back(storage);
             }
 
-            // A sorted catalog makes dense bit positions deterministic. Facts can
-            // then be materialized without a second per-block sort.
+            // A sorted catalog makes dense bit positions deterministic. Facts
+            // can then be materialized without a second per-block sort.
             std::ranges::sort(catalog.storage);
             catalog.indices.reserve(catalog.storage.size());
-            for (std::size_t index = 0U; index < catalog.storage.size(); ++index)
+            for (std::size_t index = 0U; index < catalog.storage.size();
+                 ++index)
                 catalog.indices.emplace(catalog.storage[index], index);
             return catalog;
         }
@@ -98,10 +98,9 @@ namespace Visual::XSharp::Analysis
         }
 
         void
-        AppendControlFlowIssues(
-            const Function &function,
-            const ControlFlowResult &controlFlow,
-            std::vector<Issue> &issues)
+        AppendControlFlowIssues(const Function &function,
+                                const ControlFlowResult &controlFlow,
+                                std::vector<Issue> &issues)
         {
             const auto blocks = CatalogBlocks(function);
             for (const auto &issue : controlFlow.issues)
@@ -110,7 +109,8 @@ namespace Visual::XSharp::Analysis
                 auto terminator = false;
                 if (issue.kind == ControlFlowIssueKind::MissingTarget)
                 {
-                    if (const auto found = blocks.find(issue.block); found != blocks.end())
+                    if (const auto found = blocks.find(issue.block);
+                        found != blocks.end())
                         instruction = found->second->accesses.size();
                     terminator = true;
                 }
@@ -128,13 +128,12 @@ namespace Visual::XSharp::Analysis
                         kind = IssueKind::MissingTarget;
                         break;
                 }
-                issues.push_back(
-                    { kind,
-                      issue.block,
-                      instruction,
-                      terminator,
-                      0U,
-                      issue.target });
+                issues.push_back({ kind,
+                                   issue.block,
+                                   instruction,
+                                   terminator,
+                                   0U,
+                                   issue.target });
             }
         }
 
@@ -149,10 +148,9 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        InitialStorage(
-            const Function &function,
-            const StorageCatalog &catalog,
-            std::vector<Issue> &issues) -> DenseBitSet
+        InitialStorage(const Function &function,
+                       const StorageCatalog &catalog,
+                       std::vector<Issue> &issues) -> DenseBitSet
         {
             DenseBitSet initialized(catalog.storage.size());
             for (const auto storage : function.initiallyInitialized)
@@ -160,13 +158,12 @@ namespace Visual::XSharp::Analysis
                 const auto index = catalog.Find(storage);
                 if (!index)
                 {
-                    issues.push_back(
-                        { IssueKind::UnknownInitialStorage,
-                          function.entry,
-                          0U,
-                          false,
-                          storage,
-                          0U });
+                    issues.push_back({ IssueKind::UnknownInitialStorage,
+                                       function.entry,
+                                       0U,
+                                       false,
+                                       storage,
+                                       0U });
                     continue;
                 }
                 initialized.Set(*index);
@@ -175,10 +172,9 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        TransferWrites(
-            const Block &block,
-            const StorageCatalog &catalog,
-            DenseBitSet initialized) -> DenseBitSet
+        TransferWrites(const Block &block,
+                       const StorageCatalog &catalog,
+                       DenseBitSet initialized) -> DenseBitSet
         {
             for (const auto &access : block.accesses)
                 if (access.write)
@@ -188,13 +184,12 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        IncomingFacts(
-            const BlockId block,
-            const Function &function,
-            const FlowFactMap &flowFacts,
-            const StorageCatalog &catalog,
-            const DenseBitSet &initial,
-            const FactMap &outgoing) -> DenseBitSet
+        IncomingFacts(const BlockId block,
+                      const Function &function,
+                      const FlowFactMap &flowFacts,
+                      const StorageCatalog &catalog,
+                      const DenseBitSet &initial,
+                      const FactMap &outgoing) -> DenseBitSet
         {
             // The entry represents the external call edge. Backedges never add
             // initialization to the first invocation.
@@ -224,12 +219,11 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        ComputeFixedPoint(
-            const Function &function,
-            const BlockMap &blocks,
-            const ControlFlowResult &controlFlow,
-            const StorageCatalog &catalog,
-            const DenseBitSet &initial) -> FixedPoint
+        ComputeFixedPoint(const Function &function,
+                          const BlockMap &blocks,
+                          const ControlFlowResult &controlFlow,
+                          const StorageCatalog &catalog,
+                          const DenseBitSet &initial) -> FixedPoint
         {
             FixedPoint result;
             result.incoming.reserve(controlFlow.preorder.size());
@@ -252,17 +246,14 @@ namespace Visual::XSharp::Analysis
             DataflowWorklist worklist(controlFlow, WorklistDirection::Forward);
             while (const auto block = worklist.Next())
             {
-                auto nextIncoming = IncomingFacts(
-                    *block,
-                    function,
-                    flowFacts,
-                    catalog,
-                    initial,
-                    result.outgoing);
-                auto nextOutgoing = TransferWrites(
-                    *blocks.at(*block),
-                    catalog,
-                    nextIncoming);
+                auto nextIncoming = IncomingFacts(*block,
+                                                  function,
+                                                  flowFacts,
+                                                  catalog,
+                                                  initial,
+                                                  result.outgoing);
+                auto nextOutgoing
+                    = TransferWrites(*blocks.at(*block), catalog, nextIncoming);
                 if (result.incoming.at(*block) == nextIncoming
                     && result.outgoing.at(*block) == nextOutgoing)
                     continue;
@@ -276,12 +267,11 @@ namespace Visual::XSharp::Analysis
         }
 
         void
-        ValidateAccesses(
-            const BlockMap &blocks,
-            const ControlFlowResult &controlFlow,
-            const StorageCatalog &catalog,
-            const FactMap &incoming,
-            std::vector<Issue> &issues)
+        ValidateAccesses(const BlockMap &blocks,
+                         const ControlFlowResult &controlFlow,
+                         const StorageCatalog &catalog,
+                         const FactMap &incoming,
+                         std::vector<Issue> &issues)
         {
             for (const auto blockId : controlFlow.preorder)
             {
@@ -293,13 +283,12 @@ namespace Visual::XSharp::Analysis
                     {
                         const auto index = catalog.Find(storage);
                         if (!index)
-                            issues.push_back(
-                                { IssueKind::UnknownReadStorage,
-                                  block.id,
-                                  access.instruction,
-                                  access.terminator,
-                                  storage,
-                                  0U });
+                            issues.push_back({ IssueKind::UnknownReadStorage,
+                                               block.id,
+                                               access.instruction,
+                                               access.terminator,
+                                               storage,
+                                               0U });
                         else if (!initialized.Test(*index))
                             issues.push_back(
                                 { IssueKind::ReadBeforeInitialization,
@@ -314,13 +303,12 @@ namespace Visual::XSharp::Analysis
                         continue;
                     const auto index = catalog.Find(*access.write);
                     if (!index)
-                        issues.push_back(
-                            { IssueKind::UnknownWriteStorage,
-                              block.id,
-                              access.instruction,
-                              access.terminator,
-                              *access.write,
-                              0U });
+                        issues.push_back({ IssueKind::UnknownWriteStorage,
+                                           block.id,
+                                           access.instruction,
+                                           access.terminator,
+                                           *access.write,
+                                           0U });
                     else
                         initialized.Set(*index);
                 }
@@ -328,9 +316,8 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        VisibleStorage(
-            const StorageCatalog &catalog,
-            const DenseBitSet &bits) -> std::vector<StorageId>
+        VisibleStorage(const StorageCatalog &catalog, const DenseBitSet &bits)
+            -> std::vector<StorageId>
         {
             const auto indices = bits.SetIndices();
             std::vector<StorageId> storage;
@@ -341,11 +328,10 @@ namespace Visual::XSharp::Analysis
         }
 
         [[nodiscard]] auto
-        BuildFacts(
-            const ControlFlowResult &controlFlow,
-            const StorageCatalog &catalog,
-            const FactMap &incoming,
-            const FactMap &outgoing) -> std::vector<BlockFacts>
+        BuildFacts(const ControlFlowResult &controlFlow,
+                   const StorageCatalog &catalog,
+                   const FactMap &incoming,
+                   const FactMap &outgoing) -> std::vector<BlockFacts>
         {
             std::vector<BlockFacts> facts;
             facts.reserve(controlFlow.facts.size());
@@ -354,10 +340,12 @@ namespace Visual::XSharp::Analysis
                 facts.push_back(
                     { flow.block,
                       flow.reachable,
-                      flow.reachable ? VisibleStorage(catalog, incoming.at(flow.block))
-                                     : std::vector<StorageId>{},
-                      flow.reachable ? VisibleStorage(catalog, outgoing.at(flow.block))
-                                     : std::vector<StorageId>{} });
+                      flow.reachable
+                          ? VisibleStorage(catalog, incoming.at(flow.block))
+                          : std::vector<StorageId>{},
+                      flow.reachable
+                          ? VisibleStorage(catalog, outgoing.at(flow.block))
+                          : std::vector<StorageId>{} });
             }
             return facts;
         }
@@ -372,25 +360,22 @@ namespace Visual::XSharp::Analysis
         const auto controlFlow = AnalyzeControlFlow(ControlFlowFor(function));
         AppendControlFlowIssues(function, controlFlow, result.issues);
         const auto initial = InitialStorage(function, catalog, result.issues);
-        const auto fixedPoint = ComputeFixedPoint(
-            function,
-            blocks,
-            controlFlow,
-            catalog,
-            initial);
+        const auto fixedPoint = ComputeFixedPoint(function,
+                                                  blocks,
+                                                  controlFlow,
+                                                  catalog,
+                                                  initial);
 
-        ValidateAccesses(
-            blocks,
-            controlFlow,
-            catalog,
-            fixedPoint.incoming,
-            result.issues);
+        ValidateAccesses(blocks,
+                         controlFlow,
+                         catalog,
+                         fixedPoint.incoming,
+                         result.issues);
         if (options.materializeFacts)
-            result.facts = BuildFacts(
-                controlFlow,
-                catalog,
-                fixedPoint.incoming,
-                fixedPoint.outgoing);
+            result.facts = BuildFacts(controlFlow,
+                                      catalog,
+                                      fixedPoint.incoming,
+                                      fixedPoint.outgoing);
         result.statistics = fixedPoint.statistics;
         return result;
     }

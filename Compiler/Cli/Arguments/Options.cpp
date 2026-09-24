@@ -94,7 +94,9 @@ namespace
         return 1U << static_cast<unsigned>(command);
     }
 
-    constexpr CommandMask kCompilerCommands = Bit(CliCommand::kBuild) | Bit(CliCommand::kCheck) | Bit(CliCommand::kRun) | Bit(CliCommand::kTest);
+    constexpr CommandMask kCompilerCommands
+        = Bit(CliCommand::kBuild) | Bit(CliCommand::kCheck)
+          | Bit(CliCommand::kRun) | Bit(CliCommand::kTest);
 
     struct CommandSpec
     {
@@ -116,11 +118,13 @@ namespace
     template<typename Value>
     using Choice = std::pair<std::string_view, Value>;
 
-    // All accepted spellings live in these typed domains. Both conversion and help
-    // rendering consume the same tables, preventing documentation from accepting a
-    // value that the parser rejects (or silently omitting a value it supports).
+    // All accepted spellings live in these typed domains. Both conversion and
+    // help rendering consume the same tables, preventing documentation from
+    // accepting a value that the parser rejects (or silently omitting a value
+    // it supports).
     constexpr std::array kStandardValues = { "26"sv, "latest"sv };
-    constexpr std::array kBooleanValues = { Choice{ "true"sv, true }, Choice{ "false"sv, false } };
+    constexpr std::array kBooleanValues
+        = { Choice{ "true"sv, true }, Choice{ "false"sv, false } };
     constexpr std::array kOutputValues = {
         Choice{ "binary"sv, BuildOutput::kBinary },
         Choice{ "object"sv, BuildOutput::kObject },
@@ -177,49 +181,190 @@ namespace
     };
 
     constexpr CommandSpec kCommands[] = {
-        { "check", CliCommand::kCheck, PositionalKind::None, "validate a project or source artifact" },
-        { "build", CliCommand::kBuild, PositionalKind::None, "build a project or source artifact" },
-        { "format", CliCommand::kFormat, PositionalKind::None, "format every source in the project with Visual Formatter" },
-        { "lint", CliCommand::kLint, PositionalKind::None, "lint every source in the project with Visual Linter" },
-        { "run", CliCommand::kRun, PositionalKind::None, "build and run a project or source file" },
-        { "test", CliCommand::kTest, PositionalKind::None, "run the project's named test suites" },
-        { "resolve", CliCommand::kResolve, PositionalKind::None, "resolve project dependencies" },
-        { "update", CliCommand::kUpdate, PositionalKind::None, "update system and project dependencies" },
-        { "install", CliCommand::kInstall, PositionalKind::PackageCoordinate, "install a ViGet package" },
-        { "viget", CliCommand::kViGet, PositionalKind::ViGetAction, "publish or update a ViGet package" },
-        { "vipkg", CliCommand::kViPkg, PositionalKind::ViPkgAction, "create a local ViPkg without publishing it" },
-        { "version", CliCommand::kVersion, PositionalKind::None, "print the compiler version" },
-        { "interactive", CliCommand::kInteractive, PositionalKind::None, "launch the Visual X# Interactive REPL" },
+        { "check",
+          CliCommand::kCheck,
+          PositionalKind::None,
+          "validate a project or source artifact" },
+        { "build",
+          CliCommand::kBuild,
+          PositionalKind::None,
+          "build a project or source artifact" },
+        { "format",
+          CliCommand::kFormat,
+          PositionalKind::None,
+          "format every source in the project with Visual Formatter" },
+        { "lint",
+          CliCommand::kLint,
+          PositionalKind::None,
+          "lint every source in the project with Visual Linter" },
+        { "run",
+          CliCommand::kRun,
+          PositionalKind::None,
+          "build and run a project or source file" },
+        { "test",
+          CliCommand::kTest,
+          PositionalKind::None,
+          "run the project's named test suites" },
+        { "resolve",
+          CliCommand::kResolve,
+          PositionalKind::None,
+          "resolve project dependencies" },
+        { "update",
+          CliCommand::kUpdate,
+          PositionalKind::None,
+          "update system and project dependencies" },
+        { "install",
+          CliCommand::kInstall,
+          PositionalKind::PackageCoordinate,
+          "install a ViGet package" },
+        { "viget",
+          CliCommand::kViGet,
+          PositionalKind::ViGetAction,
+          "publish or update a ViGet package" },
+        { "vipkg",
+          CliCommand::kViPkg,
+          PositionalKind::ViPkgAction,
+          "create a local ViPkg without publishing it" },
+        { "version",
+          CliCommand::kVersion,
+          PositionalKind::None,
+          "print the compiler version" },
+        { "interactive",
+          CliCommand::kInteractive,
+          PositionalKind::None,
+          "launch the Visual X# Interactive REPL" },
     };
 
-    // Option spelling, arity (through domain), command scope, and help description
-    // are deliberately one record. New options must not grow ad-hoc argv branches.
+    // Option spelling, arity (through domain), command scope, and help
+    // description are deliberately one record. New options must not grow ad-hoc
+    // argv branches.
     constexpr OptionSpec kOptions[] = {
-        { "-File", Option::File, kCompilerCommands, ValueDomain::Path, "compile one explicit file instead of the project" },
-        { "-Standard", Option::Standard, kCompilerCommands, ValueDomain::Standard, "select the language standard" },
-        { "-Compiler-Version", Option::CompilerVersion, kCompilerCommands, ValueDomain::Version, "select the compiler version" },
-        { "-Target", Option::Target, kCompilerCommands, ValueDomain::TargetTriple, "select the LLVM target triple" },
-        { "-Emit", Option::Emit, Bit(CliCommand::kBuild), ValueDomain::Output, "select the emitted artifact" },
-        { "-Build", Option::Build, Bit(CliCommand::kBuild) | Bit(CliCommand::kCheck), ValueDomain::Input, "select the explicit input artifact kind" },
-        { "-Warnings", Option::Warnings, kCompilerCommands, ValueDomain::WarningLevel, "select the warning level" },
-        { "-Werror", Option::Werror, kCompilerCommands, ValueDomain::Boolean, "treat warnings as errors" },
-        { "-Wexperimental", Option::Wexperimental, kCompilerCommands, ValueDomain::Boolean, "enable experimental warnings" },
-        { "-Wshadow", Option::Wshadow, kCompilerCommands, ValueDomain::Boolean, "enable shadowing warnings" },
-        { "-Wundef", Option::Wundef, kCompilerCommands, ValueDomain::Boolean, "enable undefined-name warnings" },
-        { "-Type-Safe-Format", Option::TypeSafeFormat, kCompilerCommands, ValueDomain::Boolean, "require strict format-argument type matching; false enables C-like compatibility" },
-        { "-Backend", Option::Backend, kCompilerCommands, ValueDomain::Backend, "select the compiler backend" },
-        { "-Llvm-OptLevel", Option::LlvmOptLevel, kCompilerCommands, ValueDomain::LlvmOptLevel, "select LLVM optimization" },
-        { "-Llvm-Compiler", Option::LlvmCompiler, kCompilerCommands, ValueDomain::LlvmCompiler, "select LLVM execution mode" },
-        { "-Llvm-Lto", Option::LlvmLto, kCompilerCommands, ValueDomain::LlvmLto, "select LLVM link-time optimization" },
-        { "-Xpp-Optimization-Passes", Option::XppOptimization, kCompilerCommands, ValueDomain::Boolean, "enable Xpp optimization passes" },
-        { "-Xmm-Optimization-Passes", Option::XmmOptimization, kCompilerCommands, ValueDomain::Boolean, "enable Xmm optimization passes" },
-        { "-Global", Option::Global, Bit(CliCommand::kInstall), ValueDomain::None, "install into the system package store" },
-        { "-Dry-Run", Option::DryRun, Bit(CliCommand::kFormat), ValueDomain::None, "report formatting differences without writing files" },
-        { "-ViPkg", Option::ViPkg, Bit(CliCommand::kBuild) | Bit(CliCommand::kRun), ValueDomain::TargetNameList, "select one or more ViPkg targets" },
-        { "-Executable", Option::Executable, Bit(CliCommand::kBuild) | Bit(CliCommand::kRun), ValueDomain::TargetNameList, "select one or more executable targets" },
-        { "-Library", Option::Library, Bit(CliCommand::kBuild) | Bit(CliCommand::kRun), ValueDomain::TargetNameList, "select one or more library targets" },
-        { "-Header", Option::Header, Bit(CliCommand::kBuild), ValueDomain::None, "emit a VXCI C header for exported C declarations" },
-        { "-ViPkgType", Option::ViPkgType, Bit(CliCommand::kBuild), ValueDomain::ViPkgType, "select the executable or library package shape" },
+        { "-File",
+          Option::File,
+          kCompilerCommands,
+          ValueDomain::Path,
+          "compile one explicit file instead of the project" },
+        { "-Standard",
+          Option::Standard,
+          kCompilerCommands,
+          ValueDomain::Standard,
+          "select the language standard" },
+        { "-Compiler-Version",
+          Option::CompilerVersion,
+          kCompilerCommands,
+          ValueDomain::Version,
+          "select the compiler version" },
+        { "-Target",
+          Option::Target,
+          kCompilerCommands,
+          ValueDomain::TargetTriple,
+          "select the LLVM target triple" },
+        { "-Emit",
+          Option::Emit,
+          Bit(CliCommand::kBuild),
+          ValueDomain::Output,
+          "select the emitted artifact" },
+        { "-Build",
+          Option::Build,
+          Bit(CliCommand::kBuild) | Bit(CliCommand::kCheck),
+          ValueDomain::Input,
+          "select the explicit input artifact kind" },
+        { "-Warnings",
+          Option::Warnings,
+          kCompilerCommands,
+          ValueDomain::WarningLevel,
+          "select the warning level" },
+        { "-Werror",
+          Option::Werror,
+          kCompilerCommands,
+          ValueDomain::Boolean,
+          "treat warnings as errors" },
+        { "-Wexperimental",
+          Option::Wexperimental,
+          kCompilerCommands,
+          ValueDomain::Boolean,
+          "enable experimental warnings" },
+        { "-Wshadow",
+          Option::Wshadow,
+          kCompilerCommands,
+          ValueDomain::Boolean,
+          "enable shadowing warnings" },
+        { "-Wundef",
+          Option::Wundef,
+          kCompilerCommands,
+          ValueDomain::Boolean,
+          "enable undefined-name warnings" },
+        { "-Type-Safe-Format",
+          Option::TypeSafeFormat,
+          kCompilerCommands,
+          ValueDomain::Boolean,
+          "require strict format-argument type matching; false enables C-like "
+          "compatibility" },
+        { "-Backend",
+          Option::Backend,
+          kCompilerCommands,
+          ValueDomain::Backend,
+          "select the compiler backend" },
+        { "-Llvm-OptLevel",
+          Option::LlvmOptLevel,
+          kCompilerCommands,
+          ValueDomain::LlvmOptLevel,
+          "select LLVM optimization" },
+        { "-Llvm-Compiler",
+          Option::LlvmCompiler,
+          kCompilerCommands,
+          ValueDomain::LlvmCompiler,
+          "select LLVM execution mode" },
+        { "-Llvm-Lto",
+          Option::LlvmLto,
+          kCompilerCommands,
+          ValueDomain::LlvmLto,
+          "select LLVM link-time optimization" },
+        { "-Xpp-Optimization-Passes",
+          Option::XppOptimization,
+          kCompilerCommands,
+          ValueDomain::Boolean,
+          "enable Xpp optimization passes" },
+        { "-Xmm-Optimization-Passes",
+          Option::XmmOptimization,
+          kCompilerCommands,
+          ValueDomain::Boolean,
+          "enable Xmm optimization passes" },
+        { "-Global",
+          Option::Global,
+          Bit(CliCommand::kInstall),
+          ValueDomain::None,
+          "install into the system package store" },
+        { "-Dry-Run",
+          Option::DryRun,
+          Bit(CliCommand::kFormat),
+          ValueDomain::None,
+          "report formatting differences without writing files" },
+        { "-ViPkg",
+          Option::ViPkg,
+          Bit(CliCommand::kBuild) | Bit(CliCommand::kRun),
+          ValueDomain::TargetNameList,
+          "select one or more ViPkg targets" },
+        { "-Executable",
+          Option::Executable,
+          Bit(CliCommand::kBuild) | Bit(CliCommand::kRun),
+          ValueDomain::TargetNameList,
+          "select one or more executable targets" },
+        { "-Library",
+          Option::Library,
+          Bit(CliCommand::kBuild) | Bit(CliCommand::kRun),
+          ValueDomain::TargetNameList,
+          "select one or more library targets" },
+        { "-Header",
+          Option::Header,
+          Bit(CliCommand::kBuild),
+          ValueDomain::None,
+          "emit a VXCI C header for exported C declarations" },
+        { "-ViPkgType",
+          Option::ViPkgType,
+          Bit(CliCommand::kBuild),
+          ValueDomain::ViPkgType,
+          "select the executable or library package shape" },
     };
 
     constexpr CompilerSettings kCompilerDefaults{
@@ -256,7 +401,9 @@ namespace
 
     template<typename Value, std::size_t Size>
     [[nodiscard]] bool
-    ParseChoice(std::string_view value, Value &output, const std::array<Choice<Value>, Size> &choices)
+    ParseChoice(std::string_view value,
+                Value &output,
+                const std::array<Choice<Value>, Size> &choices)
     {
         for (const auto &[spelling, parsed] : choices)
         {
@@ -271,7 +418,8 @@ namespace
 
     template<std::size_t Size>
     [[nodiscard]] bool
-    Contains(std::string_view value, const std::array<std::string_view, Size> &choices)
+    Contains(std::string_view value,
+             const std::array<std::string_view, Size> &choices)
     {
         for (const auto choice : choices)
             if (value == choice)
@@ -281,7 +429,8 @@ namespace
 
     template<typename Value, std::size_t Size>
     void
-    AppendChoices(std::string &output, const std::array<Choice<Value>, Size> &choices)
+    AppendChoices(std::string &output,
+                  const std::array<Choice<Value>, Size> &choices)
     {
         for (std::size_t index = 0; index < choices.size(); ++index)
         {
@@ -293,7 +442,8 @@ namespace
 
     template<std::size_t Size>
     void
-    AppendChoices(std::string &output, const std::array<std::string_view, Size> &choices)
+    AppendChoices(std::string &output,
+                  const std::array<std::string_view, Size> &choices)
     {
         for (std::size_t index = 0; index < choices.size(); ++index)
         {
@@ -373,8 +523,9 @@ namespace
         return {};
     }
 
-    // Help defaults are rendered from the same typed state used by parsing. This
-    // avoids a second prose-only default table that can drift from execution.
+    // Help defaults are rendered from the same typed state used by parsing.
+    // This avoids a second prose-only default table that can drift from
+    // execution.
     [[nodiscard]] std::string_view
     DefaultText(Option option)
     {
@@ -390,7 +541,8 @@ namespace
             case Option::Build:
                 return ChoiceText(BuildInput::kVisualXSharp, kInputValues);
             case Option::Warnings:
-                return ChoiceText(kCompilerDefaults.warningLevel, kWarningValues);
+                return ChoiceText(kCompilerDefaults.warningLevel,
+                                  kWarningValues);
             case Option::Werror:
                 return BoolText(kCompilerDefaults.warningsAsErrors);
             case Option::Wexperimental:
@@ -404,9 +556,11 @@ namespace
             case Option::Backend:
                 return "llvm"sv;
             case Option::LlvmOptLevel:
-                return ChoiceText(kCompilerDefaults.llvmOptLevel, kLlvmOptValues);
+                return ChoiceText(kCompilerDefaults.llvmOptLevel,
+                                  kLlvmOptValues);
             case Option::LlvmCompiler:
-                return ChoiceText(kCompilerDefaults.llvmCompiler, kLlvmCompilerValues);
+                return ChoiceText(kCompilerDefaults.llvmCompiler,
+                                  kLlvmCompilerValues);
             case Option::LlvmLto:
                 return ChoiceText(kCompilerDefaults.llvmLto, kLlvmLtoValues);
             case Option::XppOptimization:
@@ -431,11 +585,16 @@ namespace
     [[nodiscard]] CliParseOutcome
     Failure(CliOptions options, std::string message)
     {
-        return { CliParseResult::kError, std::move(options), std::nullopt, std::move(message) };
+        return { CliParseResult::kError,
+                 std::move(options),
+                 std::nullopt,
+                 std::move(message) };
     }
 
     [[nodiscard]] CliParseOutcome
-    FailOption(CliOptions options, const OptionSpec &spec, std::string_view value)
+    FailOption(CliOptions options,
+               const OptionSpec &spec,
+               std::string_view value)
     {
         std::string message = "invalid value '";
         message.append(value);
@@ -468,7 +627,11 @@ namespace
                 segmentLength = 0U;
                 continue;
             }
-            const bool accepted = (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z') || (character >= '0' && character <= '9') || character == '_' || character == '+' || character == '.';
+            const bool accepted = (character >= 'A' && character <= 'Z')
+                                  || (character >= 'a' && character <= 'z')
+                                  || (character >= '0' && character <= '9')
+                                  || character == '_' || character == '+'
+                                  || character == '.';
             if (!accepted)
                 return false;
             ++segmentLength;
@@ -498,33 +661,44 @@ namespace
     {
         if (command == nullptr)
         {
-            fmt::print("Visual X# compiler, project, and ViGet command-line interface.\n\n"
+            fmt::print("Visual X# compiler, project, and ViGet command-line "
+                       "interface.\n\n"
                        "Usage: vxs <command> [options]\n\n");
             tabulate::Table commands;
             commands.add_row({ "Command", "Description" });
             for (const auto &spec : kCommands)
-                commands.add_row({ std::string(spec.name), std::string(spec.description) });
+                commands.add_row(
+                    { std::string(spec.name), std::string(spec.description) });
             commands[0].format().font_style({ tabulate::FontStyle::bold });
             commands.column(0).format().font_align(tabulate::FontAlign::left);
             commands.column(1).format().font_align(tabulate::FontAlign::left);
             std::ostringstream rendered;
             rendered << commands;
             fmt::print("{}\n\n", rendered.str());
-            fmt::print("\nRun 'vxs <command> -Help' for command-specific options.\n");
+            fmt::print(
+                "\nRun 'vxs <command> -Help' for command-specific options.\n");
             return;
         }
 
         const auto positional = PositionalText(command->positional);
-        const auto programArguments = command->command == CliCommand::kRun ? " [-- program-arguments...]" : "";
+        const auto programArguments = command->command == CliCommand::kRun
+                                          ? " [-- program-arguments...]"
+                                          : "";
         if (command->command == CliCommand::kInteractive)
         {
             fmt::print("Usage: vxs interactive [vxsi arguments...]\n\n"
-                       "Starts `vxsi` by searching PATH and forwards all following arguments unchanged.\n"
-                       "Use `vxs interactive -Eval <expression>` for one-shot evaluation or pass no\n"
-                       "arguments to open the interactive REPL. Use `vxs interactive -Help` for details.\n");
+                       "Starts `vxsi` by searching PATH and forwards all "
+                       "following arguments unchanged.\n"
+                       "Use `vxs interactive -Eval <expression>` for one-shot "
+                       "evaluation or pass no\n"
+                       "arguments to open the interactive REPL. Use `vxs "
+                       "interactive -Help` for details.\n");
             return;
         }
-        fmt::print("Usage: vxs {} [options]{}{}\n", command->name, positional, programArguments);
+        fmt::print("Usage: vxs {} [options]{}{}\n",
+                   command->name,
+                   positional,
+                   programArguments);
         tabulate::Table options;
         options.add_row({ "Option", "Description", "Default" });
         for (const auto &spec : kOptions)
@@ -539,7 +713,9 @@ namespace
                 signature.append(domain);
             }
             const auto defaultValue = DefaultText(spec.option);
-            options.add_row({ std::move(signature), std::string(spec.description), std::string(defaultValue) });
+            options.add_row({ std::move(signature),
+                              std::string(spec.description),
+                              std::string(defaultValue) });
         }
         options.add_row({ "-Help", "show this command help", "" });
         options[0].format().font_style({ tabulate::FontStyle::bold });
@@ -597,13 +773,16 @@ namespace
         return ApplyResult::Applied;
     }
 
-    // Values become typed at this boundary. The rest of the driver never interprets
-    // raw argv text or carries compatibility aliases into project configuration.
+    // Values become typed at this boundary. The rest of the driver never
+    // interprets raw argv text or carries compatibility aliases into project
+    // configuration.
     [[nodiscard]] bool
     IsPackageSegment(std::string_view value);
 
     [[nodiscard]] ApplyResult
-    ApplyOption(const OptionSpec &spec, std::string_view value, CliOptions &options)
+    ApplyOption(const OptionSpec &spec,
+                std::string_view value,
+                CliOptions &options)
     {
         switch (spec.option)
         {
@@ -636,26 +815,37 @@ namespace
                 options.outputOverride = true;
                 return ApplyResult::Applied;
             case Option::Build:
-                return ParseChoice(value, options.input, kInputValues) ? ApplyResult::Applied : ApplyResult::Invalid;
+                return ParseChoice(value, options.input, kInputValues)
+                           ? ApplyResult::Applied
+                           : ApplyResult::Invalid;
             case Option::Warnings:
-                if (!ParseChoice(value, options.compiler.warningLevel, kWarningValues))
+                if (!ParseChoice(value,
+                                 options.compiler.warningLevel,
+                                 kWarningValues))
                     return ApplyResult::Invalid;
                 options.warningOverride = true;
                 return ApplyResult::Applied;
             case Option::Backend:
-                return Contains(value, kBackendValues) ? ApplyResult::Applied : ApplyResult::Invalid;
+                return Contains(value, kBackendValues) ? ApplyResult::Applied
+                                                       : ApplyResult::Invalid;
             case Option::LlvmOptLevel:
-                if (!ParseChoice(value, options.compiler.llvmOptLevel, kLlvmOptValues))
+                if (!ParseChoice(value,
+                                 options.compiler.llvmOptLevel,
+                                 kLlvmOptValues))
                     return ApplyResult::Invalid;
                 options.llvmOptOverride = true;
                 return ApplyResult::Applied;
             case Option::LlvmCompiler:
-                if (!ParseChoice(value, options.compiler.llvmCompiler, kLlvmCompilerValues))
+                if (!ParseChoice(value,
+                                 options.compiler.llvmCompiler,
+                                 kLlvmCompilerValues))
                     return ApplyResult::Invalid;
                 options.llvmCompilerOverride = true;
                 return ApplyResult::Applied;
             case Option::LlvmLto:
-                if (!ParseChoice(value, options.compiler.llvmLto, kLlvmLtoValues))
+                if (!ParseChoice(value,
+                                 options.compiler.llvmLto,
+                                 kLlvmLtoValues))
                     return ApplyResult::Invalid;
                 options.llvmLtoOverride = true;
                 return ApplyResult::Applied;
@@ -669,7 +859,9 @@ namespace
                 options.emitHeader = true;
                 return ApplyResult::Applied;
             case Option::ViPkgType:
-                return ParseChoice(value, options.viPkgType, kViPkgTypes) ? ApplyResult::Applied : ApplyResult::Invalid;
+                return ParseChoice(value, options.viPkgType, kViPkgTypes)
+                           ? ApplyResult::Applied
+                           : ApplyResult::Invalid;
             case Option::ViPkg:
             case Option::Executable:
             case Option::Library:
@@ -681,7 +873,8 @@ namespace
                     selected = &options.selectedExecutables;
                 else if (spec.option == Option::Library)
                     selected = &options.selectedLibraries;
-                if (std::find(selected->begin(), selected->end(), value) != selected->end())
+                if (std::find(selected->begin(), selected->end(), value)
+                    != selected->end())
                     return ApplyResult::Invalid;
                 selected->emplace_back(value);
                 return ApplyResult::Applied;
@@ -708,29 +901,39 @@ namespace
         if (value.empty())
             return false;
         const auto isAsciiLetter = [](char character) {
-            return (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
+            return (character >= 'A' && character <= 'Z')
+                   || (character >= 'a' && character <= 'z');
         };
         if (!isAsciiLetter(value.front()))
             return false;
-        return std::all_of(value.begin() + 1, value.end(), [isAsciiLetter](char character) {
-            return isAsciiLetter(character) || (character >= '0' && character <= '9') || character == '_';
-        });
+        return std::all_of(value.begin() + 1,
+                           value.end(),
+                           [isAsciiLetter](char character) {
+                               return isAsciiLetter(character)
+                                      || (character >= '0' && character <= '9')
+                                      || character == '_';
+                           });
     }
 
     [[nodiscard]] bool
     IsPackageCoordinate(std::string_view value)
     {
-        // This is the same two-identifier contract enforced by the Kotlin project
-        // model. Merely finding one dot accepted slashes, query strings, whitespace,
-        // additional path segments, and non-ASCII bytes into the future ViGet path.
+        // This is the same two-identifier contract enforced by the Kotlin
+        // project model. Merely finding one dot accepted slashes, query
+        // strings, whitespace, additional path segments, and non-ASCII bytes
+        // into the future ViGet path.
         const auto separator = value.find('.');
-        if (separator == std::string_view::npos || value.find('.', separator + 1U) != std::string_view::npos)
+        if (separator == std::string_view::npos
+            || value.find('.', separator + 1U) != std::string_view::npos)
             return false;
-        return IsPackageSegment(value.substr(0U, separator)) && IsPackageSegment(value.substr(separator + 1U));
+        return IsPackageSegment(value.substr(0U, separator))
+               && IsPackageSegment(value.substr(separator + 1U));
     }
 
     [[nodiscard]] bool
-    ApplyPositional(const CommandSpec &command, std::string_view value, CliOptions &options)
+    ApplyPositional(const CommandSpec &command,
+                    std::string_view value,
+                    CliOptions &options)
     {
         if (command.positional == PositionalKind::None || value.empty())
             return false;
@@ -747,16 +950,21 @@ namespace
     [[nodiscard]] std::optional<std::string>
     ValidateCombination(const CommandSpec &command, const CliOptions &options)
     {
-        if (command.positional != PositionalKind::None && !options.packageCoordinate)
+        if (command.positional != PositionalKind::None
+            && !options.packageCoordinate)
         {
-            if (command.positional == PositionalKind::ViGetAction && options.vigetAction != ViGetAction::kNone)
+            if (command.positional == PositionalKind::ViGetAction
+                && options.vigetAction != ViGetAction::kNone)
                 return std::nullopt;
-            if (command.positional == PositionalKind::ViPkgAction && options.viPkgAction != ViPkgAction::kNone)
+            if (command.positional == PositionalKind::ViPkgAction
+                && options.viPkgAction != ViPkgAction::kNone)
                 return std::nullopt;
-            const auto expected = command.positional == PositionalKind::PackageCoordinate
-                                      ? "Publisher.Name"
-                                  : command.positional == PositionalKind::ViGetAction ? "push|update"
-                                                                                      : "create";
+            const auto expected
+                = command.positional == PositionalKind::PackageCoordinate
+                      ? "Publisher.Name"
+                  : command.positional == PositionalKind::ViGetAction
+                      ? "push|update"
+                      : "create";
             return std::string(command.name) + " requires " + expected;
         }
         if (options.input != BuildInput::kVisualXSharp && !options.filePath)
@@ -772,7 +980,8 @@ DefaultCompilerSettings() noexcept
 }
 
 void
-ApplyCompilerOverrides(const CliOptions &options, CompilerSettings &settings) noexcept
+ApplyCompilerOverrides(const CliOptions &options,
+                       CompilerSettings &settings) noexcept
 {
     // Project settings are the base layer. Only command-line fields explicitly
     // present in the schema override them, so defaults never erase DSL choices.
@@ -805,8 +1014,9 @@ ResolveCompilerOptions(const CliOptions &options,
                        const EffectiveCompilerOptions *projectDefaults)
 {
     // Kotlin materializes both explicit DSL values and DSL defaults. Therefore
-    // any project layer outranks CLI fallbacks, while the parser's presence bits
-    // ensure only argv values explicitly supplied by the user can replace it.
+    // any project layer outranks CLI fallbacks, while the parser's presence
+    // bits ensure only argv values explicitly supplied by the user can replace
+    // it.
     EffectiveCompilerOptions result;
     if (projectDefaults != nullptr)
         result = *projectDefaults;
@@ -841,7 +1051,8 @@ WarningLevelName(WarningLevel level) noexcept
 const char *
 OutputExtension(BuildOutput output) noexcept
 {
-    constexpr const char *extensions[] = { ".vxse", ".o", ".core", ".xpp", ".xmm", ".asm", ".ll", ".bc" };
+    constexpr const char *extensions[]
+        = { ".vxse", ".o", ".core", ".xpp", ".xmm", ".asm", ".ll", ".bc" };
     const auto index = static_cast<unsigned>(output);
     return index < 8U ? extensions[index] : "";
 }
@@ -855,20 +1066,30 @@ ParseCommandLine(int argc, char **argv)
         return Failure(std::move(options), "invalid process argument vector");
 
     if (argc < 2 || argv[1] == nullptr)
-        return Failure(std::move(options), "a command is required; use -Help to list commands");
+        return Failure(std::move(options),
+                       "a command is required; use -Help to list commands");
     if (std::string_view(argv[1]) == kHelpOption)
         return { CliParseResult::kHelp, std::move(options), std::nullopt, {} };
 
     const auto command = FindCommand(argv[1]);
     if (!command)
-        return Failure(std::move(options), std::string("unknown command '") + argv[1] + "'");
+        return Failure(std::move(options),
+                       std::string("unknown command '") + argv[1] + "'");
     if (command->command == CliCommand::kVersion)
     {
-        if (argc == 3 && argv[2] != nullptr && std::string_view(argv[2]) == kHelpOption)
-            return { CliParseResult::kHelp, std::move(options), command->command, {} };
+        if (argc == 3 && argv[2] != nullptr
+            && std::string_view(argv[2]) == kHelpOption)
+            return { CliParseResult::kHelp,
+                     std::move(options),
+                     command->command,
+                     {} };
         if (argc != 2)
-            return Failure(std::move(options), "version does not accept arguments");
-        return { CliParseResult::kVersion, std::move(options), std::nullopt, {} };
+            return Failure(std::move(options),
+                           "version does not accept arguments");
+        return { CliParseResult::kVersion,
+                 std::move(options),
+                 std::nullopt,
+                 {} };
     }
     options.command = command->command;
 
@@ -880,7 +1101,8 @@ ParseCommandLine(int argc, char **argv)
         for (int index = 2; index < argc; ++index)
         {
             if (argv[index] == nullptr)
-                return Failure(std::move(options), "process argument vector contains null");
+                return Failure(std::move(options),
+                               "process argument vector contains null");
             options.interactiveArguments.emplace_back(argv[index]);
         }
         return { CliParseResult::kReady, std::move(options), std::nullopt, {} };
@@ -891,39 +1113,56 @@ ParseCommandLine(int argc, char **argv)
     for (int index = 2; index < argc; ++index)
     {
         if (argv[index] == nullptr)
-            return Failure(std::move(options), "process argument vector contains null");
+            return Failure(std::move(options),
+                           "process argument vector contains null");
         const std::string_view argument(argv[index]);
         if (argument == "--")
         {
             if (command->command != CliCommand::kRun)
-                return Failure(std::move(options), "-- is only valid for run program arguments");
+                return Failure(std::move(options),
+                               "-- is only valid for run program arguments");
             for (++index; index < argc; ++index)
             {
                 if (argv[index] == nullptr)
-                    return Failure(std::move(options), "process argument vector contains null");
+                    return Failure(std::move(options),
+                                   "process argument vector contains null");
                 options.programArguments.emplace_back(argv[index]);
             }
             break;
         }
         if (argument == kHelpOption)
         {
-            return { CliParseResult::kHelp, std::move(options), command->command, {} };
+            return { CliParseResult::kHelp,
+                     std::move(options),
+                     command->command,
+                     {} };
         }
         if (!argument.starts_with('-'))
         {
             if (positionalSeen)
                 return Failure(std::move(options),
-                               std::string("unexpected positional argument '") + std::string(argument) + "'");
+                               std::string("unexpected positional argument '")
+                                   + std::string(argument) + "'");
             if (!ApplyPositional(*command, argument, options))
             {
                 if (command->positional == PositionalKind::ViGetAction)
-                    return Failure(std::move(options), std::string("invalid viget action '") + std::string(argument) + "'; expected push|update");
+                    return Failure(std::move(options),
+                                   std::string("invalid viget action '")
+                                       + std::string(argument)
+                                       + "'; expected push|update");
                 if (command->positional == PositionalKind::ViPkgAction)
-                    return Failure(std::move(options), std::string("invalid vipkg action '") + std::string(argument) + "'; expected create");
+                    return Failure(std::move(options),
+                                   std::string("invalid vipkg action '")
+                                       + std::string(argument)
+                                       + "'; expected create");
                 if (command->positional == PositionalKind::PackageCoordinate)
-                    return Failure(std::move(options), std::string("invalid package coordinate '") + std::string(argument) + "'; expected Publisher.Name");
+                    return Failure(std::move(options),
+                                   std::string("invalid package coordinate '")
+                                       + std::string(argument)
+                                       + "'; expected Publisher.Name");
                 return Failure(std::move(options),
-                               std::string("unexpected positional argument '") + std::string(argument) + "'");
+                               std::string("unexpected positional argument '")
+                                   + std::string(argument) + "'");
             }
             positionalSeen = true;
             continue;
@@ -931,21 +1170,28 @@ ParseCommandLine(int argc, char **argv)
 
         const OptionSpec *spec = FindOption(argument);
         if (spec == nullptr)
-            return Failure(std::move(options), std::string("unknown option '") + std::string(argument) + "'");
+            return Failure(std::move(options),
+                           std::string("unknown option '")
+                               + std::string(argument) + "'");
         if ((spec->commands & Bit(command->command)) == 0U)
             return Failure(std::move(options),
-                           std::string(spec->spelling) + " is not valid for " + std::string(command->name));
+                           std::string(spec->spelling) + " is not valid for "
+                               + std::string(command->name));
         const auto optionIndex = static_cast<unsigned>(spec->option);
         if (seen[optionIndex])
-            return Failure(std::move(options), std::string(spec->spelling) + " was specified more than once");
+            return Failure(std::move(options),
+                           std::string(spec->spelling)
+                               + " was specified more than once");
         seen[optionIndex] = true;
 
         std::string_view value;
         if (spec->domain != ValueDomain::None)
         {
-            if (index + 1 >= argc || argv[index + 1] == nullptr || std::string_view(argv[index + 1]).starts_with('-'))
+            if (index + 1 >= argc || argv[index + 1] == nullptr
+                || std::string_view(argv[index + 1]).starts_with('-'))
                 return Failure(std::move(options),
-                               std::string(spec->spelling) + " requires " + DomainText(spec->domain));
+                               std::string(spec->spelling) + " requires "
+                                   + DomainText(spec->domain));
             value = argv[++index];
         }
         const auto applied = ApplyOption(*spec, value, options);

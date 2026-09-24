@@ -32,7 +32,8 @@ namespace Visual::XSharp::Driver
 {
     namespace
     {
-        constexpr std::string_view kRegistryVersion = "visual-xsharp-sources-v6";
+        constexpr std::string_view kRegistryVersion
+            = "visual-xsharp-sources-v6";
         constexpr std::size_t kHeaderRecordCount = 21;
 
 #ifndef VXS_PROJECT_EVALUATOR_CLASSPATH_DEFAULT
@@ -45,15 +46,18 @@ namespace Visual::XSharp::Driver
             TemporaryRegistry()
             {
                 std::error_code error;
-                const auto directory = std::filesystem::temp_directory_path(error);
+                const auto directory
+                    = std::filesystem::temp_directory_path(error);
                 if (error)
                     return;
 #ifdef _WIN32
                 wchar_t candidate[MAX_PATH]{};
-                if (GetTempFileNameW(directory.c_str(), L"xsr", 0, candidate) != 0)
+                if (GetTempFileNameW(directory.c_str(), L"xsr", 0, candidate)
+                    != 0)
                     path_ = candidate;
 #else
-                std::string candidate = (directory / "vxs-project-sources-XXXXXX").string();
+                std::string candidate
+                    = (directory / "vxs-project-sources-XXXXXX").string();
                 const int descriptor = mkstemp(candidate.data());
                 if (descriptor >= 0)
                 {
@@ -92,15 +96,20 @@ namespace Visual::XSharp::Driver
         {
 #ifdef _WIN32
             std::wstring buffer(32768, L'\0');
-            const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+            const DWORD length
+                = GetModuleFileNameW(nullptr,
+                                     buffer.data(),
+                                     static_cast<DWORD>(buffer.size()));
             if (length == 0 || length >= buffer.size())
                 return std::nullopt;
             buffer.resize(length);
             return std::filesystem::path(buffer).parent_path();
 #else
             std::error_code error;
-            const auto executable = std::filesystem::read_symlink("/proc/self/exe", error);
-            return error ? std::nullopt : std::optional(executable.parent_path());
+            const auto executable
+                = std::filesystem::read_symlink("/proc/self/exe", error);
+            return error ? std::nullopt
+                         : std::optional(executable.parent_path());
 #endif
         }
 
@@ -115,13 +124,18 @@ namespace Visual::XSharp::Driver
 
             // _dupenv_s transfers a malloc allocation to the caller. Capture it
             // immediately so every return path observes ordinary C++ ownership.
-            const std::unique_ptr<char, decltype(&std::free)> value(rawValue, &std::free);
+            const std::unique_ptr<char, decltype(&std::free)> value(rawValue,
+                                                                    &std::free);
             return value == nullptr || length <= 1
                        ? std::nullopt
-                       : std::optional<std::string>{ std::in_place, value.get(), length - 1 };
+                       : std::optional<std::string>{ std::in_place,
+                                                     value.get(),
+                                                     length - 1 };
 #else
             const char *value = std::getenv(name);
-            return value == nullptr || *value == '\0' ? std::nullopt : std::optional<std::string>(value);
+            return value == nullptr || *value == '\0'
+                       ? std::nullopt
+                       : std::optional<std::string>(value);
 #endif
         }
 
@@ -130,7 +144,8 @@ namespace Visual::XSharp::Driver
         {
             if (const auto javaHome = Environment("JAVA_HOME"))
             {
-                auto executable = std::filesystem::path(*javaHome) / "bin" / "java";
+                auto executable
+                    = std::filesystem::path(*javaHome) / "bin" / "java";
 #ifdef _WIN32
                 executable.replace_extension(".exe");
 #endif
@@ -142,11 +157,15 @@ namespace Visual::XSharp::Driver
         [[nodiscard]] std::string
         ProjectEvaluatorClasspath()
         {
-            if (const auto configured = Environment("VXS_PROJECT_EVALUATOR_CLASSPATH"))
+            if (const auto configured
+                = Environment("VXS_PROJECT_EVALUATOR_CLASSPATH"))
                 return *configured;
 #ifdef VXS_PROJECT_EVALUATOR_CLASSPATH_BUILD
             {
-                const std::filesystem::path buildLibraryDirectory = std::filesystem::path(VXS_PROJECT_EVALUATOR_CLASSPATH_BUILD).parent_path();
+                const std::filesystem::path buildLibraryDirectory
+                    = std::filesystem::path(
+                          VXS_PROJECT_EVALUATOR_CLASSPATH_BUILD)
+                          .parent_path();
                 std::error_code error;
                 if (std::filesystem::is_directory(buildLibraryDirectory, error))
                     return VXS_PROJECT_EVALUATOR_CLASSPATH_BUILD;
@@ -154,7 +173,8 @@ namespace Visual::XSharp::Driver
 #endif
             if (const auto directory = ExecutableDirectory())
             {
-                const auto installed = *directory / ".." / "libexec" / "vxs" / "project" / "lib";
+                const auto installed
+                    = *directory / ".." / "libexec" / "vxs" / "project" / "lib";
                 std::error_code error;
                 if (std::filesystem::is_directory(installed, error))
                     return (installed.lexically_normal() / "*").string();
@@ -163,20 +183,23 @@ namespace Visual::XSharp::Driver
         }
 
         [[nodiscard]] int
-        RunProgram(const std::filesystem::path &program, std::span<const std::string> arguments)
+        RunProgram(const std::filesystem::path &program,
+                   std::span<const std::string> arguments)
         {
 #ifdef _WIN32
             std::vector<std::wstring> wideArguments;
             wideArguments.reserve(arguments.size() + 1);
             wideArguments.push_back(program.wstring());
             for (const auto &argument : arguments)
-                wideArguments.emplace_back(std::filesystem::path(argument).wstring());
+                wideArguments.emplace_back(
+                    std::filesystem::path(argument).wstring());
             std::vector<const wchar_t *> pointers;
             pointers.reserve(wideArguments.size() + 1);
             for (const auto &argument : wideArguments)
                 pointers.push_back(argument.c_str());
             pointers.push_back(nullptr);
-            const intptr_t status = _wspawnvp(_P_WAIT, program.c_str(), pointers.data());
+            const intptr_t status
+                = _wspawnvp(_P_WAIT, program.c_str(), pointers.data());
             return status == -1 ? -1 : static_cast<int>(status);
 #else
             const std::string executable = program.string();
@@ -190,7 +213,12 @@ namespace Visual::XSharp::Driver
                 pointers.push_back(argument.data());
             pointers.push_back(nullptr);
             pid_t process{};
-            const int spawnStatus = posix_spawnp(&process, executable.c_str(), nullptr, nullptr, pointers.data(), environ);
+            const int spawnStatus = posix_spawnp(&process,
+                                                 executable.c_str(),
+                                                 nullptr,
+                                                 nullptr,
+                                                 pointers.data(),
+                                                 environ);
             if (spawnStatus != 0)
             {
                 errno = spawnStatus;
@@ -213,11 +241,18 @@ namespace Visual::XSharp::Driver
                 ProjectEvaluatorClasspath(),
                 "com.progmasoft.visual.xsharp.project.MainKt",
             };
-            arguments.insert(arguments.end(), commandArguments.begin(), commandArguments.end());
+            arguments.insert(arguments.end(),
+                             commandArguments.begin(),
+                             commandArguments.end());
             const int status = RunProgram(program, arguments);
             if (status < 0)
             {
-                fmt::print(stderr, "vxs: could not start bundled Kotlin project evaluator with '{}': {}\n", program.string(), std::error_code(errno, std::generic_category()).message());
+                fmt::print(
+                    stderr,
+                    "vxs: could not start bundled Kotlin project evaluator "
+                    "with '{}': {}\n",
+                    program.string(),
+                    std::error_code(errno, std::generic_category()).message());
             }
             return status;
         }
@@ -225,7 +260,9 @@ namespace Visual::XSharp::Driver
         [[nodiscard]] bool
         RunResolver(std::string_view mode, const std::filesystem::path &output)
         {
-            const std::vector<std::string> arguments{ std::string(mode), ".", output.string() };
+            const std::vector<std::string> arguments{ std::string(mode),
+                                                      ".",
+                                                      output.string() };
             return RunProjectEvaluator(arguments) == 0;
         }
 
@@ -236,11 +273,15 @@ namespace Visual::XSharp::Driver
             if (!input)
                 return std::nullopt;
             const auto end = static_cast<std::streamoff>(input.tellg());
-            if (end <= 0 || static_cast<std::uintmax_t>(end) > std::numeric_limits<std::size_t>::max())
+            if (end <= 0
+                || static_cast<std::uintmax_t>(end)
+                       > std::numeric_limits<std::size_t>::max())
                 return std::nullopt;
             std::vector<char> bytes(static_cast<std::size_t>(end));
             input.seekg(0);
-            if (!input.read(bytes.data(), static_cast<std::streamsize>(bytes.size())) || bytes.back() != '\0')
+            if (!input.read(bytes.data(),
+                            static_cast<std::streamsize>(bytes.size()))
+                || bytes.back() != '\0')
                 return std::nullopt;
             return bytes;
         }
@@ -284,8 +325,12 @@ namespace Visual::XSharp::Driver
                 if (!text || text->empty())
                     return std::nullopt;
                 std::size_t result{};
-                const auto conversion = std::from_chars(text->data(), text->data() + text->size(), result);
-                if (conversion.ec != std::errc{} || conversion.ptr != text->data() + text->size())
+                const auto conversion
+                    = std::from_chars(text->data(),
+                                      text->data() + text->size(),
+                                      result);
+                if (conversion.ec != std::errc{}
+                    || conversion.ptr != text->data() + text->size())
                     return std::nullopt;
                 return result;
             }
@@ -320,7 +365,8 @@ namespace Visual::XSharp::Driver
             const auto backend = reader.Next();
             const auto buildMode = reader.Next();
             const auto warning = reader.Next();
-            if (!compilerVersion || !standard || backend != "llvm" || (buildMode != "debug" && buildMode != "release") || !warning)
+            if (!compilerVersion || !standard || backend != "llvm"
+                || (buildMode != "debug" && buildMode != "release") || !warning)
                 return false;
 
             project.compilerVersion = *compilerVersion;
@@ -329,7 +375,9 @@ namespace Visual::XSharp::Driver
             project.output = BuildOutput::kBinary;
 
             bool warningFound = false;
-            for (int value = static_cast<int>(WarningLevel::kAll); value <= static_cast<int>(WarningLevel::kNone); ++value)
+            for (int value = static_cast<int>(WarningLevel::kAll);
+                 value <= static_cast<int>(WarningLevel::kNone);
+                 ++value)
             {
                 const auto level = static_cast<WarningLevel>(value);
                 if (*warning == WarningLevelName(level))
@@ -349,7 +397,9 @@ namespace Visual::XSharp::Driver
             const auto optLevel = reader.Next();
             const auto llvmCompiler = reader.Next();
             const auto lto = reader.Next();
-            if (!warningFound || !warningsAsErrors || !experimental || !shadow || !undefined || !typeSafeFormat || !xpp || !xmm || !optLevel || !llvmCompiler || !lto)
+            if (!warningFound || !warningsAsErrors || !experimental || !shadow
+                || !undefined || !typeSafeFormat || !xpp || !xmm || !optLevel
+                || !llvmCompiler || !lto)
                 return false;
             project.settings.warningsAsErrors = *warningsAsErrors;
             project.settings.experimentalWarnings = *experimental;
@@ -394,7 +444,8 @@ namespace Visual::XSharp::Driver
         ParseRegistry(const std::vector<char> &bytes, bool requireSources)
         {
             const auto split = SplitRecords(bytes);
-            if (!split || split->size() < kHeaderRecordCount || split->front() != kRegistryVersion)
+            if (!split || split->size() < kHeaderRecordCount
+                || split->front() != kRegistryVersion)
                 return std::nullopt;
             RecordReader reader(std::span(*split).subspan(1));
             ResolvedProject project;
@@ -405,8 +456,10 @@ namespace Visual::XSharp::Driver
             const auto executableCount = reader.Size();
             const auto libraryCount = reader.Size();
             const auto suiteCount = reader.Size();
-            if (!outputDirectory || outputDirectory->empty() || !targetCount || !executableCount || !libraryCount || !suiteCount
-                || (requireSources && *executableCount == 0 && *libraryCount == 0))
+            if (!outputDirectory || outputDirectory->empty() || !targetCount
+                || !executableCount || !libraryCount || !suiteCount
+                || (requireSources && *executableCount == 0
+                    && *libraryCount == 0))
                 return std::nullopt;
             project.outputDirectory = *outputDirectory;
 
@@ -425,13 +478,15 @@ namespace Visual::XSharp::Driver
                 const auto entry = reader.Next();
                 const auto root = reader.Next();
                 const auto excludeCount = reader.Size();
-                if (!name || name->empty() || !entry || entry->empty() || !root || root->empty() || !excludeCount)
+                if (!name || name->empty() || !entry || entry->empty() || !root
+                    || root->empty() || !excludeCount)
                     return std::nullopt;
                 ResolvedSourceTarget target;
                 target.name = *name;
                 target.entry = std::string(*entry);
                 target.root = *root;
-                for (std::size_t exclude = 0; exclude < *excludeCount; ++exclude)
+                for (std::size_t exclude = 0; exclude < *excludeCount;
+                     ++exclude)
                 {
                     const auto value = reader.Next();
                     if (!value)
@@ -446,7 +501,8 @@ namespace Visual::XSharp::Driver
                 const auto namespaceName = reader.Next();
                 const auto root = reader.Next();
                 const auto typeCount = reader.Size();
-                if (!name || name->empty() || !namespaceName || !root || root->empty() || !typeCount || *typeCount == 0)
+                if (!name || name->empty() || !namespaceName || !root
+                    || root->empty() || !typeCount || *typeCount == 0)
                     return std::nullopt;
                 ResolvedSourceTarget target;
                 target.name = *name;
@@ -457,7 +513,8 @@ namespace Visual::XSharp::Driver
                 {
                     const auto value = reader.Next();
                     if (value == "vxslib")
-                        target.viPkgTypes.push_back(ViPkgType::kVisualXSharpLibrary);
+                        target.viPkgTypes.push_back(
+                            ViPkgType::kVisualXSharpLibrary);
                     else if (value == "staticlib")
                         target.viPkgTypes.push_back(ViPkgType::kStaticLibrary);
                     else if (value == "cdylib")
@@ -468,7 +525,8 @@ namespace Visual::XSharp::Driver
                 const auto excludeCount = reader.Size();
                 if (!excludeCount)
                     return std::nullopt;
-                for (std::size_t exclude = 0; exclude < *excludeCount; ++exclude)
+                for (std::size_t exclude = 0; exclude < *excludeCount;
+                     ++exclude)
                 {
                     const auto value = reader.Next();
                     if (!value)
@@ -483,14 +541,16 @@ namespace Visual::XSharp::Driver
                 const auto framework = reader.Next();
                 const auto root = reader.Next();
                 const auto excludeCount = reader.Size();
-                if (!name || name->empty() || !framework || !root || root->empty() || !excludeCount)
+                if (!name || name->empty() || !framework || !root
+                    || root->empty() || !excludeCount)
                     return std::nullopt;
                 ResolvedTestSuite suite;
                 suite.name = *name;
                 if (!framework->empty())
                     suite.framework = std::string(*framework);
                 suite.root = *root;
-                for (std::size_t exclude = 0; exclude < *excludeCount; ++exclude)
+                for (std::size_t exclude = 0; exclude < *excludeCount;
+                     ++exclude)
                 {
                     const auto value = reader.Next();
                     if (!value)
@@ -499,21 +559,27 @@ namespace Visual::XSharp::Driver
                 }
                 project.testSuites.push_back(std::move(suite));
             }
-            // Tool commands work over all roots. Build/run select a concrete target
-            // and replace this flattened view before invoking the frontend.
+            // Tool commands work over all roots. Build/run select a concrete
+            // target and replace this flattened view before invoking the
+            // frontend.
             for (const auto &target : project.executables)
             {
                 project.sourceRoots.push_back(target.root);
-                project.sourceExcludes.insert(project.sourceExcludes.end(), target.excludes.begin(), target.excludes.end());
+                project.sourceExcludes.insert(project.sourceExcludes.end(),
+                                              target.excludes.begin(),
+                                              target.excludes.end());
             }
             for (const auto &target : project.libraries)
             {
                 project.sourceRoots.push_back(target.root);
-                project.sourceExcludes.insert(project.sourceExcludes.end(), target.excludes.begin(), target.excludes.end());
+                project.sourceExcludes.insert(project.sourceExcludes.end(),
+                                              target.excludes.begin(),
+                                              target.excludes.end());
             }
             if (!project.executables.empty())
                 project.entry = *project.executables.front().entry;
-            return reader.Complete() ? std::optional(std::move(project)) : std::nullopt;
+            return reader.Complete() ? std::optional(std::move(project))
+                                     : std::nullopt;
         }
     } // namespace
 
@@ -523,7 +589,8 @@ namespace Visual::XSharp::Driver
         TemporaryRegistry registry;
         if (!registry)
         {
-            fmt::print(stderr, "vxs: could not create the project source registry\n");
+            fmt::print(stderr,
+                       "vxs: could not create the project source registry\n");
             return std::nullopt;
         }
         if (!RunResolver("sources0", registry.Path()))
@@ -531,12 +598,16 @@ namespace Visual::XSharp::Driver
         const auto bytes = ReadRegistry(registry.Path());
         if (!bytes)
         {
-            fmt::print(stderr, "vxs: bundled project evaluator produced an invalid source registry\n");
+            fmt::print(stderr,
+                       "vxs: bundled project evaluator produced an invalid "
+                       "source registry\n");
             return std::nullopt;
         }
         auto project = ParseRegistry(*bytes, requireSources);
         if (!project)
-            fmt::print(stderr, "vxs: bundled project evaluator returned invalid compiler/source/test-suite records\n");
+            fmt::print(stderr,
+                       "vxs: bundled project evaluator returned invalid "
+                       "compiler/source/test-suite records\n");
         return project;
     }
 
@@ -547,7 +618,9 @@ namespace Visual::XSharp::Driver
         const int status = RunProjectEvaluator(arguments);
         if (status != 0)
             return false;
-        fmt::print(stderr, "vxs: refreshed binary lock file 'Visual.XSharp.Lockfile.sqlite3'\n");
+        fmt::print(stderr,
+                   "vxs: refreshed binary lock file "
+                   "'Visual.XSharp.Lockfile.sqlite3'\n");
         return true;
     }
 } // namespace Visual::XSharp::Driver
