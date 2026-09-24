@@ -22,15 +22,9 @@ namespace Visual::XSharp::Core::Wire
                 , limits_(limits)
             {}
 
-            /**
-             * @brief Validate the complete envelope before
-             * publishing a module.
-             *
-             * Header checks
-             * precede body allocation, and the final offset check
- * rejects
-             * trailing bytes so one document has exactly one meaning.
- */
+            /// @brief Validate the entire envelope before publication.
+            /// Header checks precede allocation; the final offset check
+            /// rejects trailing bytes and ambiguous encodings.
             [[nodiscard]] auto
             Document() -> DecodeResult
             {
@@ -131,15 +125,9 @@ namespace Visual::XSharp::Core::Wire
                     result |= static_cast<Integer>(Byte(context)) << shift;
                 return result;
             }
-            /**
-             * @brief Validate an untrusted collection length
-             * before narrowing it.
-             *
-             * Callers use
-             * this result before reserve or recursive decoding, which
- * keeps
-             * hostile counts from becoming unchecked allocation requests.
- */
+            /// @brief Validate an untrusted length before narrowing it.
+            /// Callers use the checked count before reserving memory or
+            /// decoding recursively, preventing unchecked allocations.
             [[nodiscard]] auto
             Count(std::size_t maximum, std::string_view context) -> std::size_t
             {
@@ -150,8 +138,7 @@ namespace Visual::XSharp::Core::Wire
                          "collection count exceeds configured limit");
                 return error_ ? 0U : static_cast<std::size_t>(value);
             }
-            /** @brief Reserve only after Count has enforced the caller's limit.
-             */
+            /// @brief Reserve only after Count enforces the caller's limit.
             template<typename Value, typename Decode>
             [[nodiscard]] auto
             Vector(std::size_t maximum, std::string_view context, Decode decode)
@@ -164,15 +151,9 @@ namespace Visual::XSharp::Core::Wire
                     values.push_back(decode());
                 return values;
             }
-            /**
-             * @brief Read scalar-counted UTF-32 text and reject
-             * non-scalar values.
-             *
-             * VXCR stores
-             * Unicode scalar values, not UTF-8 bytes or UTF-16 code
- * units;
-             * surrogate code points and values above U+10FFFF are invalid.
- */
+            /// @brief Read UTF-32 text and reject non-scalar values.
+            /// VXCR counts Unicode scalars, not UTF-8 bytes or UTF-16
+            /// code units. Surrogates and values above U+10FFFF are invalid.
             [[nodiscard]] auto
             Text(std::string_view context) -> std::u32string
             {
