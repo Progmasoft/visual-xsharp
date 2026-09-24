@@ -16,8 +16,8 @@ ConstructorInitializerIndentWidth: 4
 AccessModifierOffset: -4
 IndentAccessModifiers: false
 
-# No arbitrary wrapping width: intentional source breaks carry meaning.
-ColumnLimit: 0
+# Keep formatted C++ source within the agreed 80-column width.
+ColumnLimit: 80
 
 BreakBeforeBraces: Custom
 BraceWrapping:
@@ -117,7 +117,7 @@ KeepEmptyLines:
 ReflowComments: true
 SortUsingDeclarations: Lexicographic
 
-# The repository is Windows-first and normalizes tracked text to CRLF.
-LineEnding: CRLF
+# Match the dominant line-ending convention of each input file.
+LineEnding: DeriveLF
 InsertNewlineAtEOF: true
 ...
