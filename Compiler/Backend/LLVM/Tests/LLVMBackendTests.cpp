@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+#include <Progmasoft/Catch3/Assertions.hpp>
 #include <algorithm>
 #include <array>
-#include <catch2/catch_test_macros.hpp>
 #include <concepts>
 #include <filesystem>
 #include <fstream>

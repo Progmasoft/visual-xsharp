@@ -81,7 +81,7 @@ go run scripts/develop.go doctor
 go run scripts/develop.go test
 ```
 
-The command executes 15 Catch2 binaries and one C11 ABI contract executable directly on Windows 10/11 and macOS
+The command executes 15 Catch3 binaries and one C11 ABI contract executable directly on Windows 10/11 and macOS
 Sequoia/Tahoe. Bazel selects the host configuration automatically; no public test instruction requires `--config`.
 
 Control-flow changes must exercise the stage that creates edges and every
@@ -134,16 +134,15 @@ The exact label names are source-owned API. If a package is reorganized, update 
 
 ### Native framework decision
 
-Catch2 remains the native assertion and test-discovery framework. The current suites need ordinary test cases, sections,
-matchers, readable fatal/non-fatal assertions, and direct standalone executables; Catch2 supplies all of those without a
-second adapter layer. Google Benchmark remains separate because statistically repeated timing is a different concern from
-correctness testing. Moving to GoogleTest would currently rewrite mature component-owned suites without adding a required
-capability or improving the production boundary they exercise.
+Progmasoft Catch3 is the native test framework. It retains Catch2-compatible discovery and assertions while adding
+C++20 property checks, snapshots, and structured results in a separately compiled library. Test targets link both the
+compatibility runner and `//src/Progmasoft:catch3`; using only the runner would silently omit Catch3's own features.
+`DenseIdMap` has a deterministic generated-identity property test that exercises this additional surface. Google
+Benchmark remains separate because statistically repeated timing is a different concern from correctness testing.
 
-Revisit this decision when a concrete suite needs a facility Catch2 cannot provide, or when measured clean-build time,
-binary size, or maintenance cost is materially worse than an equivalent GoogleTest prototype. Framework popularity alone
-is not a migration criterion. Death tests are also not a reason by themselves: compiler and runtime validation should
-normally return structured diagnostics rather than terminating the test process.
+Catch3 is still early-stage and its runner remains Catch2-derived. Keep tests on supported public headers and measure
+clean-build time and binary size before expanding use of the umbrella header. Death tests alone are not a migration goal:
+compiler and runtime validation should normally return structured diagnostics rather than terminate the test process.
 
 ### Component-local ownership
 

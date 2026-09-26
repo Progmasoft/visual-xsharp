@@ -23,6 +23,7 @@ cc_binary(
         "//Compiler/Analysis:liveness",
         "//Compiler/Analysis:ownership_flow",
         "//Compiler/Analysis:worklist",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )

@@ -7,6 +7,7 @@ cc_binary(
     srcs = ["DenseIdMapTests.cpp"],
     deps = [
         "//Compiler/Headers/Visual/XSharp/ADTs:dense_id_map",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )

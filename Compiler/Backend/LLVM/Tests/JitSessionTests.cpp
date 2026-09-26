@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+#include <Progmasoft/Catch3/Assertions.hpp>
 #include <array>
-#include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <span>
 #include <string_view>
@@ -224,7 +224,7 @@ TEST_CASE(
                                     "VXSI.Cells.Evaluate.1",
                                     Core::Type::int64()));
 
-    // Each worker writes one distinct slot. Catch2 assertions stay on the main
+    // Each worker writes one distinct slot. Catch3 assertions stay on the main
     // thread, while the shared JIT session is exercised from every worker.
     std::array<bool, kThreadCount> completed{};
     std::array<std::int64_t, kThreadCount> lastValue{};

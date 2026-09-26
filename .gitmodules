@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 # SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
-[submodule "third_party/catch2"]
-	path = third_party/catch2
-	url = https://github.com/catchorg/Catch2.git
 [submodule "third_party/indicators/upstream"]
 	path = third_party/indicators/upstream
 	url = https://github.com/p-ranav/indicators.git
 [submodule "third_party/tabulate/upstream"]
 	path = third_party/tabulate/upstream
 	url = https://github.com/p-ranav/tabulate.git
+[submodule "third_party/catch3"]
+	path = third_party/catch3
+	url = https://github.com/Progmasoft/catch3.git

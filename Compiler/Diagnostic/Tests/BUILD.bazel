@@ -8,6 +8,7 @@ cc_binary(
     deps = [
         "//Compiler/Diagnostic:collection",
         "//Compiler/Diagnostic:protocol",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )

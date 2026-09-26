@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+#include <Progmasoft/Catch3/Assertions.hpp>
+#include <Progmasoft/Catch3/Generators/Integer.hpp>
 #include <algorithm>
-#include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -77,4 +78,26 @@ TEST_CASE("DenseIdSet preserves boundary identities and duplicate semantics")
     CHECK(values.Contains(kMaximum - 1U));
     CHECK(values.Contains(kMaximum));
     CHECK(values.Size() == 3U);
+}
+
+TEST_CASE(
+    "DenseIdMap preserves lookup and duplicate semantics for generated ids")
+{
+    // A fixed seed makes a failure replayable. Catch3 shrinks the failing id
+    // instead of reporting only the first sampled value.
+    CATCH3_CHECK_PROPERTY(
+        Progmasoft::Catch3::Integer<Id>(0U, 1'000'000U),
+        [](const Id id) {
+            ADTs::DenseIdMap<Id, Id> values;
+            const auto inserted = values.TryEmplace(id, id + 1U);
+            const auto duplicate = values.TryEmplace(id, id + 2U);
+            const Id *found = values.Find(id);
+            return inserted.inserted && !duplicate.inserted && found != nullptr
+                   && *found == id + 1U && values.Size() == 1U;
+        },
+        Progmasoft::Catch3::PropertyOptions{
+            .Trials = 256U,
+            .Seed = 0xC3A7C3U,
+            .MaxShrinkSteps = 128U,
+        });
 }

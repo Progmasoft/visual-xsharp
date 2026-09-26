@@ -10,7 +10,8 @@ cc_binary(
         "//Compiler/Codegen/Xpp:xpp",
         "//Compiler/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )
 
@@ -22,7 +23,8 @@ cc_binary(
         "//Compiler/Codegen/Xpp:xpp",
         "//Compiler/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )
 
@@ -40,6 +42,7 @@ cc_binary(
         "//Compiler/Driver:pipeline",
         "//Compiler/Headers/Visual/XSharp:pipeline_api",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )

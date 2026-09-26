@@ -71,7 +71,7 @@ integral `DenseMap` for user-, wire-, symbol-, block-, or register-controlled id
 
 ## Build and test ownership
 
-The ADT contract lives under `Compiler/Headers/Visual/XSharp/ADTs/`. Its focused Catch2 binary is
+The ADT contract lives under `Compiler/Headers/Visual/XSharp/ADTs/`. Its focused Catch3 binary is
 `//Compiler/ADTs/Tests:adt_tests`. Dataflow wrapper behavior remains in
 `//Compiler/Analysis/Tests:definite_initialization_tests`; Core, Xpp, and Xmm verifier suites protect semantic equivalence
 after container changes.

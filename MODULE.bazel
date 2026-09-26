@@ -6,7 +6,7 @@ module(
 bazel_dep(name = "rules_cc", version = "0.2.22")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "fmt", version = "12.1.0")
-bazel_dep(name = "catch2", version = "3.11.0")
+bazel_dep(name = "catch3", version = "0.2.0")
 bazel_dep(name = "google_benchmark", version = "1.9.5")
 bazel_dep(name = "indicators", version = "2.3.0")
 bazel_dep(name = "tabulate", version = "1.5.0")
@@ -23,12 +23,11 @@ local_path_override(
     path = "third_party/tabulate",
 )
 
-# Catch2 is deliberately vendored: tests must remain reproducible even when the
-# registry is unavailable. This override does not make third_party part of the
-# compiler architecture.
+# Catch3 is pinned as a submodule: the Progmasoft test framework is not a
+# registry dependency, and the local override keeps native tests reproducible.
 local_path_override(
-    module_name = "catch2",
-    path = "third_party/catch2",
+    module_name = "catch3",
+    path = "third_party/catch3",
 )
 
 # rules_cc 0.2.22 forgets to populate DUMPBIN in its clang-cl branch but reads

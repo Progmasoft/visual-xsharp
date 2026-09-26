@@ -15,6 +15,7 @@ cc_binary(
         "//Compiler/Headers/Visual/XSharp/Xmm:control_flow_api",
         "//Compiler/Headers/Visual/XSharp/Xpp:control_flow_api",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )

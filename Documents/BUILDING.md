@@ -88,7 +88,7 @@ Initialize all nested dependencies before configuring:
 git submodule update --init --recursive
 ```
 
-The native CLI uses its own typed C++20 command schema. Catch2 remains the only native test submodule.
+The native CLI uses its own typed C++20 command schema. Catch3 is the native test-framework submodule.
 
 ## Production C++20 build and tests
 
@@ -97,7 +97,7 @@ go run scripts/develop.go build
 go run scripts/develop.go test
 ```
 
-`build` compiles `vxs`, `vxsi`, and 16 component-owned test targets (15 Catch2 suites plus the C11 AARC ABI contract).
+`build` compiles `vxs`, `vxsi`, and 16 component-owned test targets (15 Catch3 suites plus the C11 AARC ABI contract).
 `test` performs the same build and then executes each native program directly. This
 avoids introducing Git Bash/MSYS solely for Bazel's POSIX-oriented `cc_test` launcher on Windows while retaining the same
 suite set on macOS.
@@ -227,8 +227,9 @@ The native graph is configured by tracked Bazel files and a small environment di
 | `LLVM_ROOT` | optional LLVM installation prefix |
 | `PATH` | discovery of `clang-cl`, `lld-link`, `llvm-config`, and Bazelisk |
 
-`fmt` is a normal Bazel module dependency used by the C++ CLI/driver. Catch2 is pinned through the recursive
-`third_party/catch2` submodule and a local module override so native test sources do not depend on registry availability.
+`fmt` is a normal Bazel module dependency used by the C++ CLI/driver. Progmasoft Catch3 is pinned through the recursive
+`third_party/catch3` submodule and a local module override so native test sources do not depend on registry availability.
+Each test target links both Catch3's compiled extensions and its Catch2-compatible runner-with-main target.
 
 The rules_cc patch under `Compiler/Build/Bazel` is a narrow ClangCL toolchain workaround. It is not permission to accumulate
 general third-party patches in the compiler tree; remove it when the selected upstream release contains the fix.
@@ -306,7 +307,7 @@ generated build tree, or old installation. Clean the owning generated output and
 
 ### Native test launcher requests a POSIX shell
 
-Build the Catch2 test target with Bazel and execute the resulting `.exe` directly from PowerShell as shown above. A Git Bash
+Build the Catch3 test target with Bazel and execute the resulting `.exe` directly from PowerShell as shown above. A Git Bash
 or fish installation is not a repository prerequisite.
 
 ### Link succeeds but `run` starts an old program

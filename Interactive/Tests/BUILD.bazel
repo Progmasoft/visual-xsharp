@@ -9,6 +9,7 @@ cc_binary(
         "//Interactive:interactive_arguments",
         "//Interactive:interactive_runtime",
         "//Compiler/Backend/LLVM:llvm_backend",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )

@@ -9,6 +9,7 @@ cc_binary(
     srcs = ["CliParserTests.cpp"],
     deps = [
         "//Compiler/Cli/Arguments:arguments",
-        "@catch2//:catch2_main",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
     ],
 )
