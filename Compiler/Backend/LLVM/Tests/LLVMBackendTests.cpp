@@ -845,7 +845,7 @@ TEST_CASE("LLVM native target machine emits host object and assembly artifacts")
     REQUIRE(object.artifact->object.at(1) == 0x86U);
     REQUIRE(object.artifact->llvm_ir.find("mainCRTStartup")
             != std::string::npos);
-#else
+#elif defined(__APPLE__)
     REQUIRE(object.artifact->objectFormat == Llvm::ObjectFormat::MachO);
     // Official macOS hosts emit little-endian 64-bit Mach-O objects on both
     // Apple Silicon and Intel. Assert the complete magic, not the CPU subtype.
@@ -853,6 +853,15 @@ TEST_CASE("LLVM native target machine emits host object and assembly artifacts")
     REQUIRE(object.artifact->object.at(1) == 0xFAU);
     REQUIRE(object.artifact->object.at(2) == 0xEDU);
     REQUIRE(object.artifact->object.at(3) == 0xFEU);
+    REQUIRE(object.artifact->llvm_ir.find("define i32 @main()")
+            != std::string::npos);
+#else
+    REQUIRE(object.artifact->objectFormat == Llvm::ObjectFormat::Elf);
+    // ELF's four-byte identification is independent of CPU architecture.
+    REQUIRE(object.artifact->object.at(0) == 0x7FU);
+    REQUIRE(object.artifact->object.at(1) == 'E');
+    REQUIRE(object.artifact->object.at(2) == 'L');
+    REQUIRE(object.artifact->object.at(3) == 'F');
     REQUIRE(object.artifact->llvm_ir.find("define i32 @main()")
             != std::string::npos);
 #endif

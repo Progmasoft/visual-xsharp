@@ -3,9 +3,9 @@
 
 {- | Compiler-backed document analysis for editor protocol hosts.
 
-The analyzer intentionally has no executable. IntelliJ and VS Code hosts will
-own process lifecycle and transport; this module owns the language result and
-the zero-based positions expected by editor protocols.
+The @visual-analyzer@ executable owns LSP process lifecycle via the Hackage
+@lsp@ package. This module remains transport-independent: it owns the
+language result and the zero-based scalar positions adapted at the boundary.
 -}
 module Visual.Analyzer
     ( AnalysisMode (..)

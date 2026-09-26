@@ -18,7 +18,7 @@ jobs:
   analyzer:
     name: Compiler-backed analysis
     runs-on: windows-2025
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -42,12 +42,12 @@ jobs:
       - name: Build Visual Analyzer
         shell: pwsh
         working-directory: Compiler
-        run: cabal build visual-analyzer
+        run: cabal build visual-analyzer --disable-optimization
 
       - name: Test Visual Analyzer
         shell: pwsh
         working-directory: Compiler
-        run: cabal test visual-analyzer-tests
+        run: cabal test visual-analyzer-tests --disable-optimization
 
       - name: Check package metadata
         shell: pwsh
@@ -57,3 +57,68 @@ jobs:
       - name: Check patch hygiene
         shell: pwsh
         run: git diff --check
+
+  vscode-host:
+    name: VS Code host
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: Analyzer/vscode/package-lock.json
+
+      - name: Check extension types
+        shell: pwsh
+        working-directory: Analyzer/vscode
+        run: |
+          npm ci
+          npm run check
+
+  intellij-host:
+    name: IntelliJ Platform host
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install JDK 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+        with:
+          gradle-version: "9.6.1"
+
+      - name: Compile IntelliJ plugin
+        shell: pwsh
+        run: .\ProjectSystem\gradlew.bat -p Analyzer/intellij compileKotlin processResources dokkaGenerateHtml
+
+  kotlin-config:
+    name: Kotlin configuration model
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install JDK 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
+        with:
+          gradle-version: "9.6.1"
+
+      - name: Test, format, and generate Kotlin API documentation
+        shell: pwsh
+        run: .\ProjectSystem\gradlew.bat -p Analyzer check jacocoTestReport spotlessCheck

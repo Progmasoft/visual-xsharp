@@ -174,8 +174,9 @@ Their typed Kotlin configuration models are implemented. Visual Formatter additi
 and transfers its encoding contract to `vfmt`; the Analyzer and Linter evaluator bridges remain pending. `vxs format` and
 `vxs lint` dispatch installed tools across compiler-discovered project paths; they are not compiler-internal passes.
 
-Visual Formatter and Visual Linter use their own version lines. Visual Analyzer is an LSP service and editor integration, not
-a standalone user binary. See [Ecosystem tools](ECOSYSTEM.md) for the product boundary and current configuration surfaces.
+Visual Formatter and Visual Linter use their own version lines. Visual Analyzer now provides the editor-facing
+`visual-analyzer` stdio LSP executable. It is not a compiler CLI command. See [Ecosystem tools](ECOSYSTEM.md) for the product
+boundary and current configuration surfaces.
 
 ## Data that is intentionally not duplicated
 

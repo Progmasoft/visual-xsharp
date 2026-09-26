@@ -20,6 +20,7 @@ out/
 services/
 website/
 .idea/
+.intellijPlatform/
 .vs/
 vcpkg-debug.log
 vcpkg_installed/

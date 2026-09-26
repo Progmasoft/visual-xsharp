@@ -11,7 +11,7 @@ compiler release number.
 
 | Product | Primary implementation | Public executable | Configuration |
 | --- | --- | --- | --- |
-| Visual Analyzer | Haskell LSP plus editor hosts | no standalone user binary | `Visual.Analyzer.kts` |
+| Visual Analyzer | Haskell LSP plus editor hosts | `visual-analyzer` stdio binary | `Visual.Analyzer.kts` |
 | Visual Formatter | Haskell formatter | `vfmt` | `Visual.Formatter.kts` |
 | Visual Linter | Haskell semantic/source linter | `vlint` | `Visual.Linter.kts` |
 
@@ -49,8 +49,10 @@ the tool.
 
 ## Visual Analyzer
 
-Visual Analyzer is an LSP implementation rather than a separate command-line program. Its Haskell layer can request syntax,
-semantic, or full frontend analysis. Editor-specific hosts connect that service to their platforms.
+Visual Analyzer ships the `visual-analyzer` stdio LSP binary. The Haskell `lsp` package handles standard JSON-RPC framing,
+process lifecycle, and incremental document synchronization. The analyzer calls the shared compiler frontend and publishes
+diagnostics and hierarchical document symbols with UTF-16 positions. Editor-specific hosts launch this server; no Protobuf
+dialect is required.
 
 The intended configuration surface includes:
 
@@ -235,7 +237,7 @@ without coupling all releases to the compiler workflow.
 - Do not make Formatter/Linter installation a compiler build dependency.
 - Do not use filesystem layout as namespace identity.
 - Do not call an unevaluated Kotlin model an active configuration evaluator.
-- Do not treat Visual Analyzer as a standalone binary.
+- Do not treat `visual-analyzer` as a compiler driver: it is an editor-facing stdio LSP process.
 - Do not publish DSL plugin JARs in the `.vipkg` catalog.
 - Do not add user-configurable remote repository lists; ViGet is the hosted registry.
 - Do not share release numbers merely because components live in one source repository.

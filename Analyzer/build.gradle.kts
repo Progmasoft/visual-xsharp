@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("jvm") version "2.4.0"
+    id("org.jetbrains.dokka") version "2.2.0"
     jacoco
     id("com.diffplug.spotless") version "8.9.0"
 }
@@ -53,6 +54,8 @@ spotless {
 }
 
 tasks.test { useJUnitPlatform() }
+
+tasks.check { dependsOn(tasks.dokkaGenerateHtml) }
 
 jacoco { toolVersion = "0.8.15" }
 
