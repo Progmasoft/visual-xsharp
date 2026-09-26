@@ -9,7 +9,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
   kotlin("jvm") version "2.4.0"
   kotlin("plugin.serialization") version "2.4.0"
-  id("com.diffplug.spotless") version "8.9.0"
+  id("com.diffplug.spotless") version "8.10.2"
   application
   jacoco
 }
