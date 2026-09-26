@@ -28,7 +28,7 @@ jobs:
         with:
           go-version: 1.26.x
           cache: false
-      - uses: bazel-contrib/setup-bazel@0.19.0
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
         with:
           bazelisk-cache: true
           disk-cache: fuzz-windows-clangcl
@@ -78,7 +78,7 @@ jobs:
         with:
           go-version: 1.26.x
           cache: false
-      - uses: bazel-contrib/setup-bazel@0.19.0
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
         with:
           bazelisk-cache: true
           disk-cache: fuzz-${{ matrix.runner }}-clang
@@ -113,7 +113,7 @@ jobs:
         with:
           go-version: 1.26.x
           cache: false
-      - uses: bazel-contrib/setup-bazel@0.19.0
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
         with:
           bazelisk-cache: true
           disk-cache: fuzz-ubuntu-2604-clang
@@ -125,7 +125,7 @@ jobs:
           sudo apt-get install -y clang lld llvm-dev libzstd-dev libxml2-dev zlib1g-dev
           llvm_root="$(llvm-config --prefix)"
           echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
-          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+          test -f "$(clang -print-resource-dir)/include/stddef.h"
       - name: Run bounded coverage-guided campaign
         shell: bash
         run: go run scripts/develop.go fuzz
@@ -159,7 +159,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           llvm_root="$(llvm-config --prefix)"
           echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
-          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+          test -f "$(clang -print-resource-dir)/include/stddef.h"
       - name: Run bounded coverage-guided campaign
         shell: bash
         run: go run scripts/develop.go fuzz

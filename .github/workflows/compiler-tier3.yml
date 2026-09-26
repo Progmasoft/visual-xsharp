@@ -41,7 +41,9 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           llvm_root="$(llvm-config --prefix)"
           echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
-          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+          # Fedora's /usr/bin/clang has a valid resource directory; the
+          # versioned LLVM prefix is for llvm-config metadata, not PATH.
+          test -f "$(clang -print-resource-dir)/include/stddef.h"
 
       - name: Verify toolchain and Go helpers
         shell: bash
