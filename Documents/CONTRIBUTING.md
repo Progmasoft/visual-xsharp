@@ -3,6 +3,10 @@
 
 # Contributing
 
+New contributors should start with the [contributor guide](Contributing/README.md). It covers checkout, toolchain setup,
+finding the right component, focused tests, review preparation, and the pull-request workflow. This page records the
+cross-component rules that apply to every change.
+
 ## Preserve architectural ownership
 
 - Add frontend behavior through CorePrep in Haskell.
@@ -24,8 +28,9 @@
 
 - C++-only headers use `.hpp`.
 - C++ implementation files use `.cpp` and compile as C++20.
-- Project-owned `.c` and `.h` files are not accepted. OS and LLVM C headers may be included where their platform APIs
-  require them, but wrappers and ownership remain C++20.
+- Project-owned `.c` implementation files are not accepted. A narrow C11 `.h` header is permitted for a stable external
+  ABI such as `AARC.h`; its implementation remains C++20. OS and LLVM C headers may also be included where their platform
+  APIs require them.
 - C++ namespaces, classes, and functions use PascalCase. The canonical C++ root is `Visual::XSharp`.
 - C++ local variables use camelCase, constants use `kPascalCase`, and macros use `UPPER_SNAKE_CASE`.
 - The `vxs_aarc_*` runtime entry points are an intentional stable C ABI implemented in C++; do not generalize that
@@ -33,8 +38,8 @@
 
 The checked-in `.clang-format` profile is the mechanical C++20 style authority and requires LLVM/Clang 23.1.0. It uses
 four-space Allman layout, return types on their own line, system includes before project includes, indented namespace
-bodies, leading continuation operators, west-const spelling, right-aligned pointer/reference declarators, and no invented
-column limit. Run it only on project-owned C/C++ files; never reformat `third_party/` or generated sources.
+bodies, leading continuation operators, west-const spelling, right-aligned pointer/reference declarators, and an 80-column
+limit. Run it only on project-owned C/C++ files; never reformat `third_party/` or generated sources.
 
 The style profile does not replace the Visual X# naming contract above. In particular, do not rename existing functions
 to camelCase or introduce storage/pointer prefixes from an external style guide. Public API naming changes remain explicit
@@ -81,7 +86,8 @@ Keep comments current with code. Removing or redesigning the behavior includes u
 6. Update public documentation when a connected surface, default, artifact, or limitation changes.
 7. Run formatting, targeted tests, integrated tests, stale-name scans, and `git diff --check`.
 8. Remove only regenerated output created by the work; preserve unrelated local changes.
-9. Review the final diff and use the Java update helper with a detailed en-US message.
+9. Review the final diff; maintainers can use the Go update helper with a detailed en-US message. External contributors
+   normally push their own branch and open a pull request.
 10. Inspect every GitHub workflow triggered by the pushed commit.
 
 If the working tree is already dirty, distinguish the user's changes from the current task. Do not reset, overwrite, or fold
@@ -123,7 +129,7 @@ go run scripts/githelper.go update "Detailed change description"
 ```
 
 The helper excludes generated and local-only paths, applies recursive submodule file-mode hygiene, commits, and pushes the
-current branch with force-with-lease.
+current branch without force. It is a maintainer convenience, not a requirement for external contributors.
 
 The commit message should state the user-visible or architectural outcome and the verification performed, not merely “update
 files.” Generated output, caches, local credentials, internal service state, and ignored nested-repository content remain out

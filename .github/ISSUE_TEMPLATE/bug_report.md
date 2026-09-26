@@ -9,6 +9,8 @@ title: "[Bug] "
 
 This repository owns the Visual X# language, compiler, project DSL, runtime, formatter, linter, and analyzer. Website, Progmasoft account/ViGet, and Xide issues belong in their own repositories. The public language contract is in `Spec/`; please distinguish a specification mismatch from an unimplemented feature. Do not post secrets or private source. Send security vulnerabilities privately to support@progmasoft.com.
 
+If you plan to submit a fix, see the [contributor guide](https://github.com/Progmasoft/visual-xsharp/blob/main/CONTRIBUTING.md).
+
 ### Component and stage
 
 - [ ] Haskell lexer, parser, resolver, type checker, Core, or CorePrep

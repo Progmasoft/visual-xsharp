@@ -273,7 +273,7 @@ when workspace support is connected.
 Project-owned C and C++ sources use the checked-in `.clang-format` file and LLVM/Clang 23.1.0:
 
 ```powershell
-$files = rg --files Compiler tests include -g '*.cpp' -g '*.hpp' -g '*.hh' -g '*.h'
+$files = rg --files Compiler Interactive -g '*.cpp' -g '*.hpp' -g '*.hh' -g '*.h'
 clang-format --dry-run --Werror $files
 ```
 
@@ -285,7 +285,7 @@ or below 1500 lines. A simple review aid is:
 
 ```powershell
 $extensions = '*.hs','*.cpp','*.hpp','*.hh','*.kt','*.kts','*.go','*.java'
-Get-ChildItem Compiler,ProjectSystem,Analyzer,Formatter,Linter,tests,scripts -Recurse -File -Include $extensions |
+Get-ChildItem Compiler,Interactive,ProjectSystem,Analyzer,Formatter,Linter,scripts -Recurse -File -Include $extensions |
   Where-Object { (Get-Content -LiteralPath $_.FullName).Count -gt 1500 } |
   Select-Object FullName
 ```
@@ -294,7 +294,7 @@ Treat any result as a decomposition task, not an invitation to minify the file.
 
 ## GitHub workflows
 
-The repository currently separates six workflow ownership areas:
+The repository currently separates seven workflow ownership areas:
 
 | Workflow | Responsibility |
 | --- | --- |
@@ -304,6 +304,7 @@ The repository currently separates six workflow ownership areas:
 | `analyzer.yml` | Visual Analyzer layers |
 | `formatter.yml` | Visual Formatter layers |
 | `linter.yml` | Visual Linter layers |
+| `benchmarks.yml` | Native and Haskell benchmark build and smoke coverage |
 
 After pushing a normal compiler or repository-wide change, inspect every workflow triggered by the commit:
 

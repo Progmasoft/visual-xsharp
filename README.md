@@ -199,7 +199,7 @@ and Java 21. The C# and Java variants are educational comparisons and do not add
 - [Ecosystem tools](Documents/ECOSYSTEM.md)
 - [Specification guide](Documents/SPECIFICATION.md)
 - [Repository layout](Documents/MONOREPO.md)
-- [Contributing](Documents/CONTRIBUTING.md)
+- [Contributor onboarding](Documents/Contributing/README.md)
 
 ## License
 

@@ -9,6 +9,8 @@ title: "[Proposal] "
 
 Check `Spec/` and existing issues before proposing syntax or semantics. An implementation gap for an already specified feature is usually a bug or implementation task, not a new language design. Public proposals must not cite private internal notes as the language contract.
 
+For an implementation proposal, see the [contributor guide](https://github.com/Progmasoft/visual-xsharp/blob/main/CONTRIBUTING.md).
+
 ### Problem
 
 What real program or workflow is difficult today? Show a short Visual X# example using current syntax when possible.

@@ -46,7 +46,7 @@ following vocabulary:
 | Trace scalars through native lowering | [Scalar pipeline](SCALAR-PIPELINE.md) |
 | Maintain compiler wire contracts | [Artifact wire](ARTIFACT-WIRE.md) |
 | Read or change language examples | [Specification guide](SPECIFICATION.md) |
-| Prepare a change | [Contributing](CONTRIBUTING.md) |
+| Prepare a change | [Contributor guide](Contributing/README.md) and [cross-component rules](CONTRIBUTING.md) |
 | See intended sequencing | [Roadmap](ROADMAP.md) |
 
 ## Architecture set
@@ -92,7 +92,9 @@ following vocabulary:
 - [Benchmarking](BENCHMARKING.md) defines measurement ownership, fixture timing, interpretation, and CI policy.
 - [Compiler ADT policy](COMPILER-ADTS.md) explains when native code uses LLVM containers and when project adapters are required.
 - [Repository layout](MONOREPO.md) explains ownership boundaries and allowed dependency direction.
-- [Contributing](CONTRIBUTING.md) records code style, file naming, decomposition, generated-file hygiene, and update flow.
+- [Contributor guide](Contributing/README.md) walks external contributors through onboarding, component ownership,
+  validation, style/licensing, and pull-request preparation. [Cross-component rules](CONTRIBUTING.md) record the shared
+  code and documentation contract.
 
 ## Specification relationship
 
