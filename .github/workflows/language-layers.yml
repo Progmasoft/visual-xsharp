@@ -39,6 +39,11 @@ jobs:
         shell: pwsh
         run: .\ProjectSystem\gradlew.bat -p ProjectSystem check
 
+      - name: Update Hackage package index
+        shell: pwsh
+        working-directory: Compiler
+        run: cabal update
+
       - name: Build Haskell compiler layers
         shell: pwsh
         working-directory: Compiler

@@ -23,6 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Update Hackage package index
+        shell: pwsh
+        working-directory: Compiler
+        run: cabal update
+
       - name: Test Haskell frontend with HPC
         shell: pwsh
         working-directory: Compiler

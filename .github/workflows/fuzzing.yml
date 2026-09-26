@@ -156,7 +156,10 @@ jobs:
         shell: bash
         run: |
           go install github.com/bazelbuild/bazelisk@v1.29.0
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          # Container jobs do not consistently propagate GITHUB_PATH entries
+          # into later container steps. Expose the pinned Bazelisk as `bazel`
+          # explicitly so develop.go can find it.
+          install -m 0755 "$(go env GOPATH)/bin/bazelisk" /usr/local/bin/bazel
           llvm_root="$(llvm-config --prefix)"
           echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
           test -f "$(clang -print-resource-dir)/include/stddef.h"

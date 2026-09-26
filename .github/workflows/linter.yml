@@ -39,6 +39,11 @@ jobs:
         shell: pwsh
         run: .\ProjectSystem\gradlew.bat -p Linter spotlessCheck test
 
+      - name: Update Hackage package index
+        shell: pwsh
+        working-directory: Compiler
+        run: cabal update
+
       - name: Build Visual Linter
         shell: pwsh
         working-directory: Compiler

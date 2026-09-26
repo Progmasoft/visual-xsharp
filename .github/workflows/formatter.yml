@@ -39,6 +39,11 @@ jobs:
         shell: pwsh
         run: .\ProjectSystem\gradlew.bat -p Formatter spotlessCheck test
 
+      - name: Update Hackage package index
+        shell: pwsh
+        working-directory: Compiler
+        run: cabal update
+
       - name: Build Visual Formatter
         shell: pwsh
         working-directory: Compiler
