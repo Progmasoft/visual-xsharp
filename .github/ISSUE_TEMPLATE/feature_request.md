@@ -1,0 +1,26 @@
+---
+name: Language or tooling proposal
+about: Propose a Visual X# language, compiler, DSL, or tooling improvement
+title: "[Proposal] "
+---
+
+<!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
+<!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1 -->
+
+Check `Spec/` and existing issues before proposing syntax or semantics. An implementation gap for an already specified feature is usually a bug or implementation task, not a new language design. Public proposals must not cite private internal notes as the language contract.
+
+### Problem
+
+What real program or workflow is difficult today? Show a short Visual X# example using current syntax when possible.
+
+### Proposed behavior
+
+Describe the user-visible result. If this changes language syntax or semantics, identify the affected `Spec/` section and show valid and invalid examples. Do not assume C#, Kotlin, or C++ syntax automatically applies to Visual X#.
+
+### Affected layers
+
+Which parts need work: parser, type checker, Core/CorePrep, Xpp/Xmm, runtime, CLI, project DSL, formatter, linter, analyzer, or documentation? Note any ABI, artifact, or compatibility impact you expect.
+
+### Alternatives and acceptance checks
+
+What workaround exists? What tests or examples would demonstrate completion without confusing specified behavior with compiler support?
