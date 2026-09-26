@@ -60,7 +60,8 @@ build:tsan-macos --linkopt=-fsanitize=thread
 build:fuzz-windows --copt=/clang:-fsanitize=fuzzer-no-link
 build:fuzz-windows --linkopt=/DEFAULTLIB:clang_rt.fuzzer-x86_64.lib
 build:fuzz-macos --copt=-fsanitize=fuzzer-no-link
-build:fuzz-macos --linkopt=-fsanitize=fuzzer
+# The host's Homebrew LLVM runtime is resolved by develop.go. Bazel's macOS
+# linker can be Apple Clang, whose Xcode package omits libFuzzer's main.
 
 test --test_output=errors
 test --test_summary=detailed

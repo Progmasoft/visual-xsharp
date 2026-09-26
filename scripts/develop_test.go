@@ -132,6 +132,23 @@ func TestFuzzConfigurationUsesOfficialHostCompiler(t *testing.T) {
 	}
 }
 
+func TestMacOSFuzzerRuntimeFindsOnlyHomebrewRuntime(t *testing.T) {
+	root := t.TempDir()
+	if _, err := macOSFuzzerRuntime(root); err == nil {
+		t.Fatal("missing runtime was accepted")
+	}
+	runtime := filepath.Join(root, "lib", "clang", "22", "lib", "darwin", "libclang_rt.fuzzer_osx.a")
+	if err := os.MkdirAll(filepath.Dir(runtime), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(runtime, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := macOSFuzzerRuntime(root); err != nil || got != runtime {
+		t.Fatalf("runtime = %q, %v; want %q", got, err, runtime)
+	}
+}
+
 func TestSuccessfulFuzzCleanupStaysInsideItsTemporaryRoot(t *testing.T) {
 	root := t.TempDir()
 	work, err := os.MkdirTemp(root, "vxs-fuzz-")

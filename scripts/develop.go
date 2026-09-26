@@ -592,6 +592,17 @@ func fuzzConfiguration(currentHost host) (string, error) {
 	}
 }
 
+func macOSFuzzerRuntime(root string) (string, error) {
+	if root == "" {
+		return "", errors.New("LLVM_ROOT is required to locate the macOS libFuzzer runtime")
+	}
+	matches, err := filepath.Glob(filepath.Join(root, "lib", "clang", "*", "lib", "darwin", "libclang_rt.fuzzer_osx.a"))
+	if err != nil || len(matches) != 1 {
+		return "", fmt.Errorf("expected exactly one Homebrew LLVM macOS libFuzzer runtime under %q, found %d", root, len(matches))
+	}
+	return matches[0], nil
+}
+
 func runWireFuzz(repository string, currentHost host, runner commandRunner) error {
 	configuration, err := fuzzConfiguration(currentHost)
 	if err != nil {
@@ -622,7 +633,16 @@ func runWireFuzz(repository string, currentHost host, runner commandRunner) erro
 	if err := runner.Run(repository, nil, smoke, "-Write-Corpus", corpus); err != nil {
 		return fmt.Errorf("could not export wire corpus; preserved %q: %w", work, err)
 	}
-	if err := runner.Run(repository, nil, bazel, "build", "--config="+configuration, "//Compiler/Fuzzing:wire_fuzzer"); err != nil {
+	buildArguments := []string{"build", "--config=" + configuration}
+	if currentHost.kind == hostMacOS {
+		runtime, err := macOSFuzzerRuntime(os.Getenv("LLVM_ROOT"))
+		if err != nil {
+			return fmt.Errorf("could not locate macOS libFuzzer runtime; preserved %q: %w", work, err)
+		}
+		buildArguments = append(buildArguments, "--linkopt="+runtime)
+	}
+	buildArguments = append(buildArguments, "//Compiler/Fuzzing:wire_fuzzer")
+	if err := runner.Run(repository, nil, bazel, buildArguments...); err != nil {
 		return fmt.Errorf("could not build instrumented wire fuzzer; preserved %q: %w", work, err)
 	}
 	fuzzer := filepath.Join(repository, "bazel-bin", "Compiler", "Fuzzing", "wire_fuzzer"+currentHost.executable)
