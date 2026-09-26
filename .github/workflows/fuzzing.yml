@@ -1,0 +1,172 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+name: Coverage-Guided Fuzzing
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzzing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows ClangCL libFuzzer
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.x
+          cache: false
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: fuzz-windows-clangcl
+          repository-cache: true
+      - name: Install LLVM development package
+        shell: pwsh
+        run: |
+          $llvmRoot = Join-Path $env:RUNNER_TOOL_CACHE "llvm-dev-22.1.6"
+          $llvmConfig = Join-Path $llvmRoot "bin\llvm-config.exe"
+          if (-not (Test-Path $llvmConfig)) {
+            New-Item -ItemType Directory -Force $llvmRoot | Out-Null
+            $archive = Join-Path $env:RUNNER_TEMP "llvm-dev.tar.xz"
+            curl.exe -L --fail --retry 4 --retry-delay 5 `
+              -o $archive `
+              "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.6/clang%2Bllvm-22.1.6-x86_64-pc-windows-msvc.tar.xz"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            tar.exe -xf $archive -C $llvmRoot --strip-components=1
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (-not (Test-Path $llvmConfig)) { throw "llvm-config.exe is missing" }
+          "LLVM_ROOT=$llvmRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          (Join-Path $llvmRoot "bin") | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Run bounded coverage-guided campaign
+        shell: pwsh
+        run: go run scripts/develop.go fuzz
+      - name: Preserve crashing corpus
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/vxs-fuzz-*/
+          if-no-files-found: ignore
+
+  macos:
+    name: ${{ matrix.runner }} Clang libFuzzer
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.x
+          cache: false
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: fuzz-${{ matrix.runner }}-clang
+          repository-cache: true
+      - name: Install LLVM development package
+        shell: bash
+        run: |
+          brew list llvm >/dev/null 2>&1 || brew install llvm
+          llvm_root="$(brew --prefix llvm)"
+          echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
+          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+      - name: Run bounded coverage-guided campaign
+        shell: bash
+        run: go run scripts/develop.go fuzz
+      - name: Preserve crashing corpus
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-${{ matrix.runner }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/vxs-fuzz-*/
+          if-no-files-found: ignore
+
+  ubuntu:
+    name: Ubuntu 26.04 Clang libFuzzer
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.x
+          cache: false
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: fuzz-ubuntu-2604-clang
+          repository-cache: true
+      - name: Install LLVM development package
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm-dev libzstd-dev libxml2-dev zlib1g-dev
+          llvm_root="$(llvm-config --prefix)"
+          echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
+          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+      - name: Run bounded coverage-guided campaign
+        shell: bash
+        run: go run scripts/develop.go fuzz
+      - name: Preserve crashing corpus
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-ubuntu-${{ github.run_id }}
+          path: ${{ runner.temp }}/vxs-fuzz-*/
+          if-no-files-found: ignore
+
+  fedora:
+    name: Fedora 43 Clang libFuzzer
+    runs-on: ubuntu-26.04
+    container: fedora:43
+    timeout-minutes: 60
+    steps:
+      - name: Install checkout and compiler prerequisites
+        shell: bash
+        run: |
+          dnf install -y git ca-certificates curl tar gzip unzip xz which findutils \
+            clang lld llvm-devel llvm-static libzstd-devel libxml2-devel \
+            zlib-devel golang
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+      - name: Install pinned Bazelisk
+        shell: bash
+        run: |
+          go install github.com/bazelbuild/bazelisk@v1.29.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          llvm_root="$(llvm-config --prefix)"
+          echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
+          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+      - name: Run bounded coverage-guided campaign
+        shell: bash
+        run: go run scripts/develop.go fuzz
+      - name: Preserve crashing corpus
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fuzz-fedora-${{ github.run_id }}
+          path: ${{ runner.temp }}/vxs-fuzz-*/
+          if-no-files-found: ignore

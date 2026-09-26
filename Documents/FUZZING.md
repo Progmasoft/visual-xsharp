@@ -46,8 +46,9 @@ go run scripts/develop.go fuzz
 `develop.go` selects the Windows ClangCL, macOS Clang, or Linux Clang profile, builds the corpus generator and instrumented binary,
 runs the campaign, and removes **only its own generated temporary directory** after success. On a crash, timeout, or
 invariant exception, it preserves that directory and prints its path; GitHub Actions uploads it as a failure artifact.
-Keep a minimized failure in the owning component's regression suite before fixing the decoder. Compiler Tier 1 runs
-this coverage-guided step on Windows, macOS Sequoia, and macOS Tahoe in addition to the deterministic smoke.
+Keep a minimized failure in the owning component's regression suite before fixing the decoder. The separate
+`fuzzing.yml` workflow runs this coverage-guided step on Windows, macOS Sequoia/Tahoe, Ubuntu 26.04, and Fedora 43;
+the compiler tiers retain the deterministic smoke target.
 
 The 30-second duration is a continuous regression signal, not a security proof or complete coverage claim. For a longer
 local campaign, export a fresh corpus with `wire_fuzz_smoke -Write-Corpus EMPTY_DIRECTORY`, build

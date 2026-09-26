@@ -31,16 +31,24 @@ def _llvm_repository_impl(repository_ctx):
     if config == None:
         fail("LLVM was not found. Set LLVM_ROOT to the LLVM development tree or put llvm-config on PATH.")
 
-    if not root:
-        prefix = repository_ctx.execute([config, "--prefix"], quiet = True)
-        if prefix.return_code != 0:
-            fail("llvm-config --prefix failed:\n{}".format(prefix.stderr))
-        root = prefix.stdout.strip()
-
-    include_dir = repository_ctx.path(root).get_child("include")
-    library_dir = repository_ctx.path(root).get_child("lib")
+    # Distribution packages do not have to put headers and archives directly
+    # below --prefix. Fedora, for example, uses a versioned lib64 LLVM tree.
+    # Query the selected llvm-config for each location so its headers and
+    # libraries always belong to the same installation.
+    include_location = repository_ctx.execute([config, "--includedir"], quiet = True)
+    library_location = repository_ctx.execute([config, "--libdir"], quiet = True)
+    if include_location.return_code != 0 or library_location.return_code != 0:
+        fail("llvm-config could not resolve its include/library directories:\n{}\n{}".format(
+            include_location.stderr,
+            library_location.stderr,
+        ))
+    include_dir = repository_ctx.path(include_location.stdout.strip())
+    library_dir = repository_ctx.path(library_location.stdout.strip())
     if not include_dir.exists or not library_dir.exists:
-        fail("LLVM_ROOT must contain include/ and lib/: {}".format(root))
+        fail("llvm-config reported missing include/library directories: {} and {}".format(
+            include_dir,
+            library_dir,
+        ))
 
     libraries = repository_ctx.execute(
         [config, "--link-static", "--libnames"] + _COMPONENTS,

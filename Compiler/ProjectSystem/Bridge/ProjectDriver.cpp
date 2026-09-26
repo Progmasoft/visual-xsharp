@@ -447,7 +447,11 @@ namespace Visual::XSharp::Driver
             if (!split || split->size() < kHeaderRecordCount
                 || split->front() != kRegistryVersion)
                 return std::nullopt;
-            RecordReader reader(std::span(*split).subspan(1));
+            // spell out the element type: some C++20 standard libraries do
+            // not provide a range deduction guide for std::span yet.
+            RecordReader reader(
+                std::span<const std::string_view>(split->data(), split->size())
+                    .subspan(1));
             ResolvedProject project;
             if (!ParseCompilerHeader(reader, project))
                 return std::nullopt;

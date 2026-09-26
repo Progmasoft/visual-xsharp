@@ -109,7 +109,7 @@ public authority or change a `Spec/` example merely to match an incomplete imple
 ## Continuous integration
 
 The repository has separate Compiler Tier 1/2/3, Language Layers, Haskell Coverage, Component Coverage, CodeQL,
-Benchmarks, Analyzer, Formatter, and Linter workflows. Find the jobs for your commit and inspect the final status of
+Benchmarks, Analyzer, Formatter, Linter, and Coverage-Guided Fuzzing workflows. Find the jobs for your commit and inspect the final status of
 each triggered workflow. See [Code scanning and coverage](../COVERAGE-AND-SECURITY.md) for report ownership and limits.
 Different operating systems and sanitizer configurations catch failures that one local host cannot. A missing workflow
 is not automatically green; check its trigger before claiming coverage. If CI fails, identify the job and first failing

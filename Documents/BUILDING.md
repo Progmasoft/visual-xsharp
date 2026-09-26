@@ -71,7 +71,9 @@ Do not write a machine-specific LLVM path into the repository. Use one of these 
 - set `LLVM_ROOT` to an LLVM development installation prefix; or
 - put the development package's `llvm-config` on `PATH`.
 
-The Bazel repository rule fails during analysis if it cannot discover a complete LLVM development tree.
+The Bazel repository rule fails during analysis if it cannot discover a complete LLVM development tree. It asks the
+selected `llvm-config` for its actual include and library directories; these may live under `lib64` or a versioned
+distribution path rather than immediately under `LLVM_ROOT`.
 
 The preferred preflight is identical in PowerShell and Unix terminals:
 

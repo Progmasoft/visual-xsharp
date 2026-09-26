@@ -118,8 +118,9 @@ bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
 .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
 ```
 
-Compiler Tier 1 also runs `go run scripts/develop.go fuzz`, a separate 30-second coverage-guided libFuzzer campaign on
-Windows and macOS. See [Fuzzing](FUZZING.md) for the oracle, resource bounds, corpus, crash artifacts, and current limits.
+The separate `fuzzing.yml` workflow runs `go run scripts/develop.go fuzz`, a 30-second coverage-guided libFuzzer
+campaign on Windows, macOS, Ubuntu, and Fedora. See [Fuzzing](FUZZING.md) for the oracle, resource bounds, corpus,
+crash artifacts, and current limits.
 
 Use Bazel target boundaries to keep iteration focused:
 
@@ -306,13 +307,14 @@ Treat any result as a decomposition task, not an invitation to minify the file.
 
 ## GitHub workflows
 
-The repository currently separates eleven workflow ownership areas:
+The repository currently separates twelve workflow ownership areas:
 
 | Workflow | Responsibility |
 | --- | --- |
 | `compiler-tier1.yml` | Windows Server 2025/ClangCL surrogate and macOS 15/26 native suites, sanitizers, and fuzzing |
 | `compiler-tier2.yml` | Ubuntu 26.04 LTS native suites and AddressSanitizer |
 | `compiler-tier3.yml` | Fedora 43 container native suites and wire-mutation smoke |
+| `fuzzing.yml` | Coverage-guided libFuzzer campaigns with crash-corpus artifacts on all four host families |
 | `language-layers.yml` | Kotlin project system plus Haskell compiler layers |
 | `haskell-coverage.yml` | Haskell coverage reporting |
 | `coverage.yml` | Native C++, Kotlin, and Go coverage reports uploaded to Codecov |
