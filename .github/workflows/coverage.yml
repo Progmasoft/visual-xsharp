@@ -1,0 +1,220 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+name: Component Coverage
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: component-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Native C++ LCOV
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Configure Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.x
+          cache: false
+
+      - name: Configure Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: coverage-macos-clang
+          repository-cache: true
+
+      - name: Install LLVM development package
+        shell: bash
+        run: |
+          brew list llvm >/dev/null 2>&1 || brew install llvm
+          llvm_root="$(brew --prefix llvm)"
+          echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
+          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+
+      - name: Run instrumented native suites and export LCOV
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_dir="$GITHUB_WORKSPACE/coverage/native"
+          mkdir -p "$report_dir"
+          export LLVM_PROFILE_FILE="$report_dir/native-%p-%m.profraw"
+
+          # develop.go owns the exact 16 component suites. Only the build flags
+          # differ from the normal native test gate.
+          go run scripts/develop.go test -- \
+            --copt=-fprofile-instr-generate \
+            --copt=-fcoverage-mapping \
+            --linkopt=-fprofile-instr-generate
+
+          profiles=("$report_dir"/*.profraw)
+          if [[ ! -f "${profiles[0]}" ]]; then
+            echo 'The instrumented native tests produced no raw profiles' >&2
+            exit 1
+          fi
+          xcrun llvm-profdata merge -sparse "${profiles[@]}" -o "$report_dir/native.profdata"
+
+          binaries=()
+          while IFS= read -r -d '' binary; do
+            binaries+=("$binary")
+          done < <(find -L bazel-bin/Compiler bazel-bin/Interactive -type f -name '*_tests' -print0)
+          if [[ "${#binaries[@]}" -lt 16 ]]; then
+            echo "Expected at least 16 instrumented native suites; found ${#binaries[@]}" >&2
+            exit 1
+          fi
+
+          objects=()
+          for binary in "${binaries[@]:1}"; do
+            objects+=("-object=$binary")
+          done
+
+          xcrun llvm-cov export \
+            -format=lcov \
+            -instr-profile="$report_dir/native.profdata" \
+            -ignore-filename-regex='(^|/)(third_party|external|bazel-out)/' \
+            "${binaries[0]}" \
+            "${objects[@]}" > "$report_dir/native.lcov"
+          if ! grep -q '^SF:.*Compiler/' "$report_dir/native.lcov"; then
+            echo 'The native LCOV report has no compiler source records' >&2
+            exit 1
+          fi
+
+      - name: Upload native C++ coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          files: ./coverage/native/native.lcov
+          flags: native-cpp
+          name: native-cpp
+
+  kotlin:
+    name: Kotlin JVM coverage
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+
+      - name: Test Kotlin owners with JaCoCo
+        shell: pwsh
+        run: |
+          foreach ($component in @('ProjectSystem', 'Analyzer', 'Formatter', 'Linter')) {
+            gradle -p $component test jacocoTestReport
+            if ($LASTEXITCODE -ne 0) {
+              throw "JaCoCo test/report failed for $component"
+            }
+            $report = Join-Path $component 'build/reports/jacoco/test/jacocoTestReport.xml'
+            if (-not (Test-Path -LiteralPath $report)) {
+              throw "No JaCoCo XML report was produced for $component"
+            }
+          }
+
+      - name: Upload ProjectSystem coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          files: ./ProjectSystem/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: kotlin-project-system
+          name: kotlin-project-system
+
+      - name: Upload Analyzer coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          files: ./Analyzer/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: kotlin-analyzer
+          name: kotlin-analyzer
+
+      - name: Upload Formatter coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          files: ./Formatter/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: kotlin-formatter
+          name: kotlin-formatter
+
+      - name: Upload Linter coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          files: ./Linter/build/reports/jacoco/test/jacocoTestReport.xml
+          flags: kotlin-linter
+          name: kotlin-linter
+
+  go:
+    name: Go helper coverage
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.x
+          cache: false
+
+      - name: Test every Go helper with coverage
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force coverage/go | Out-Null
+          foreach ($component in @('develop', 'githelper', 'prebuild')) {
+            go test -covermode=atomic "-coverprofile=coverage/go/$component.out" `
+              "scripts/$component.go" "scripts/${component}_test.go"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Go coverage tests failed for $component"
+            }
+            if (-not (Test-Path -LiteralPath "coverage/go/$component.out")) {
+              throw "No Go coverage report was produced for $component"
+            }
+          }
+
+      - name: Upload Go helper coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          use_oidc: true
+          fail_ci_if_error: true
+          disable_search: true
+          plugins: noop
+          files: ./coverage/go/develop.out,./coverage/go/githelper.out,./coverage/go/prebuild.out
+          flags: go-tools
+          name: go-tools

@@ -1,0 +1,95 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: ${{ matrix.language }}
+    runs-on: windows-2025
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build_mode: none
+          - language: c-cpp
+            build_mode: none
+          - language: go
+            build_mode: manual
+          - language: java-kotlin
+            build_mode: manual
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install JDK 25
+        if: matrix.language == 'java-kotlin'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install Gradle
+        if: matrix.language == 'java-kotlin'
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.1'
+
+      - name: Install Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.x
+          cache: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@7999b86c43a865dc79d8923397f35af22de63401 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build_mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+          queries: security-extended
+
+      - name: Build Kotlin owners for extraction
+        if: matrix.language == 'java-kotlin'
+        shell: pwsh
+        run: |
+          foreach ($component in @('ProjectSystem', 'Analyzer', 'Formatter', 'Linter')) {
+            gradle -p $component classes
+            if ($LASTEXITCODE -ne 0) {
+              throw "CodeQL Kotlin extraction build failed for $component"
+            }
+          }
+
+      - name: Build Go helpers for extraction
+        if: matrix.language == 'go'
+        shell: pwsh
+        run: |
+          foreach ($component in @('develop', 'githelper', 'prebuild')) {
+            go test "scripts/$component.go" "scripts/${component}_test.go"
+            if ($LASTEXITCODE -ne 0) {
+              throw "CodeQL Go extraction failed for $component"
+            }
+          }
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@7999b86c43a865dc79d8923397f35af22de63401 # v4
+        with:
+          category: /language:${{ matrix.language }}
+

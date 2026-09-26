@@ -31,6 +31,7 @@ following vocabulary:
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
 | Run the correct verification layers | [Testing](TESTING.md) |
+| Read security scans and coverage results | [Code scanning and coverage](COVERAGE-AND-SECURITY.md) |
 | Exercise malformed compiler inputs | [Fuzzing](FUZZING.md) |
 | Place tests and fixtures | [Test ownership](TEST-OWNERSHIP.md) |
 | Measure compiler throughput | [Benchmarking](BENCHMARKING.md) and [recorded baselines](../Benchmarks/README.md) |

@@ -305,17 +305,22 @@ Treat any result as a decomposition task, not an invitation to minify the file.
 
 ## GitHub workflows
 
-The repository currently separates seven workflow ownership areas:
+The repository currently separates nine workflow ownership areas:
 
 | Workflow | Responsibility |
 | --- | --- |
 | `native.yml` | Windows 10/11 and macOS Sequoia/Tahoe native graph, contracts, and sanitizers |
 | `language-layers.yml` | Kotlin project system plus Haskell compiler layers |
 | `haskell-coverage.yml` | Haskell coverage reporting |
+| `coverage.yml` | Native C++, Kotlin, and Go coverage reports uploaded to Codecov |
+| `codeql.yml` | CodeQL scanning for C/C++, Kotlin, Go, and GitHub Actions |
 | `analyzer.yml` | Visual Analyzer layers |
 | `formatter.yml` | Visual Formatter layers |
 | `linter.yml` | Visual Linter layers |
 | `benchmarks.yml` | Native and Haskell benchmark build and smoke coverage |
+
+See [Code scanning and coverage](COVERAGE-AND-SECURITY.md) for language boundaries, report formats, Codecov flags, and
+the limits of each signal.
 
 After pushing a normal compiler or repository-wide change, inspect every workflow triggered by the commit:
 

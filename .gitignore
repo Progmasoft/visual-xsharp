@@ -13,6 +13,9 @@ xide/
 node_modules/
 dist/
 dist-newstyle/
+coverage/
+*.profraw
+*.profdata
 out/
 services/
 website/

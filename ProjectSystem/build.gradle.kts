@@ -11,6 +11,7 @@ plugins {
   kotlin("plugin.serialization") version "2.4.0"
   id("com.diffplug.spotless") version "8.9.0"
   application
+  jacoco
 }
 
 group = "com.progmasoft.visual.xsharp"
@@ -71,4 +72,16 @@ tasks.test {
   useJUnitPlatform()
   maxHeapSize = "512m"
   jvmArgs("--enable-native-access=ALL-UNNAMED")
+}
+
+jacoco {
+  toolVersion = "0.8.15"
+}
+
+tasks.jacocoTestReport {
+  dependsOn(tasks.test)
+  reports {
+    xml.required = true
+    html.required = false
+  }
 }

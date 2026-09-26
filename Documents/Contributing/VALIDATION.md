@@ -108,8 +108,9 @@ public authority or change a `Spec/` example merely to match an incomplete imple
 
 ## Continuous integration
 
-The repository has separate Native, Language Layers, Haskell Coverage, Benchmarks, Visual Analyzer, Visual Formatter,
-and Visual Linter workflows. Find the jobs for your commit and inspect the final status of each triggered workflow.
+The repository has separate Native, Language Layers, Haskell Coverage, Component Coverage, CodeQL, Benchmarks, Visual
+Analyzer, Visual Formatter, and Visual Linter workflows. Find the jobs for your commit and inspect the final status of
+each triggered workflow. See [Code scanning and coverage](../COVERAGE-AND-SECURITY.md) for report ownership and limits.
 Different operating systems and sanitizer configurations catch failures that one local host cannot. A missing workflow
 is not automatically green; check its trigger before claiming coverage. If CI fails, identify the job and first failing
 command, reproduce the relevant gate locally, and report the fix in the PR. Avoid treating a blind rerun as verification.

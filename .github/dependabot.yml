@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: bazel
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: gradle
+    directories:
+      - /ProjectSystem
+      - /Analyzer
+      - /Formatter
+      - /Linter
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+

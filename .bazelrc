@@ -63,5 +63,11 @@ build:fuzz-macos --copt=-fsanitize=fuzzer-no-link
 # The host's Homebrew LLVM runtime is resolved by develop.go. Bazel's macOS
 # linker can be Apple Clang, whose Xcode package omits libFuzzer's main.
 
+# Source-based coverage instruments project-owned C++ code in each native test
+# binary. The coverage workflow executes the same 16 suites as develop.go test.
+build:coverage-macos --copt=-fprofile-instr-generate
+build:coverage-macos --copt=-fcoverage-mapping
+build:coverage-macos --linkopt=-fprofile-instr-generate
+
 test --test_output=errors
 test --test_summary=detailed

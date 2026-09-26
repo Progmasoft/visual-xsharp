@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("jvm") version "2.4.0"
+    jacoco
     id("com.diffplug.spotless") version "8.9.0"
     application
 }
@@ -67,3 +68,13 @@ spotless {
 }
 
 tasks.test { useJUnitPlatform() }
+
+jacoco { toolVersion = "0.8.15" }
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required = true
+        html.required = false
+    }
+}
