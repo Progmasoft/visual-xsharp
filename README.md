@@ -43,7 +43,7 @@ normal compilation keeps intermediate data in memory unless explicit emission is
 
 ## Supported development environments
 
-The official native development hosts are Windows 10/11, macOS 15 Sequoia, and macOS 26 Tahoe. Both host families use:
+The official native development hosts are Windows 10/11, macOS 15 Sequoia, macOS 26 Tahoe, Ubuntu 26.04 LTS, and Fedora 43 (N-1 as of September 2026). All hosts use:
 
 - Bazelisk for the production C++20 graph;
 - an LLVM development package containing headers, libraries, and `llvm-config`;
@@ -51,7 +51,8 @@ The official native development hosts are Windows 10/11, macOS 15 Sequoia, and m
 - JDK 25 and the Kotlin runner for the project DSL.
 
 Windows uses standalone ClangCL/LLD plus Windows SDK and MSVC CRT/STL development files. macOS uses Clang/LLD plus the
-Apple SDK supplied by the Xcode Command Line Tools. Visual Studio and Xcode IDEs are not required.
+Apple SDK supplied by the Xcode Command Line Tools. Ubuntu and Fedora use Clang/LLD with their LLVM development and
+system link packages. Visual Studio and Xcode IDEs are not required.
 
 Repository configuration does not contain a machine-specific LLVM installation path. Set `LLVM_ROOT` or put
 `llvm-config` on `PATH`.
@@ -64,7 +65,8 @@ go run scripts/prebuild.go install
 ```
 
 Windows installation uses exact winget package identities, including Temurin JDK 25, plus the official GHCup bootstrap. macOS uses Homebrew and the
-Xcode Command Line Tools installer. The Windows SDK/CRT workload supplies link resources only; Visual X# still selects
+Xcode Command Line Tools installer. Ubuntu/Fedora use apt/dnf and GHCup; enable Adoptium's signed repository before
+installing Temurin 25 on Linux. The Windows SDK/CRT workload supplies link resources only; Visual X# still selects
 ClangCL and LLD. Open a new terminal after installation, then run `go run scripts/develop.go doctor`.
 
 ## Build
@@ -87,7 +89,7 @@ go run scripts/develop.go benchmark
 go run scripts/develop.go bundle
 ```
 
-The same commands run from Terminal on macOS. Direct `bazelisk build //Compiler/...` remains supported and selects the host
+The same commands run from macOS and Linux terminals. Direct `bazelisk build //Compiler/...` remains supported and selects the host
 configuration automatically; ordinary builds never need `--config`. The Bazel graph discovers LLVM from `LLVM_ROOT` or
 `llvm-config` and does not store a machine-specific installation path.
 

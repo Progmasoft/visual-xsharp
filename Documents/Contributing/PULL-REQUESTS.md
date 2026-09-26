@@ -47,8 +47,8 @@ Do not claim that a new syntax feature is complete solely because a `Spec/` exam
 - [ ] New or copied files have appropriate copyright/SPDX information and third-party provenance.
 - [ ] `git diff --check` is clean; links and command spellings were checked.
 
-The workflow matrix is in [Validation](VALIDATION.md). GitHub runs separate Native, Language Layers, Haskell Coverage,
-Component Coverage, CodeQL, Benchmarks, Analyzer, Formatter, and Linter jobs. Inspect every job triggered by your
+The workflow matrix is in [Validation](VALIDATION.md). GitHub runs separate Compiler Tier 1/2/3, Language Layers,
+Haskell Coverage, Component Coverage, CodeQL, Benchmarks, Analyzer, Formatter, and Linter jobs. Inspect every job triggered by your
 commit; a green single job does not mean the entire change is verified. If CI differs from local results, report the first
 failing command and environment, not only a screenshot of a red badge.
 

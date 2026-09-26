@@ -81,8 +81,9 @@ go run scripts/develop.go doctor
 go run scripts/develop.go test
 ```
 
-The command executes 15 Catch3 binaries and one C11 ABI contract executable directly on Windows 10/11 and macOS
-Sequoia/Tahoe. Bazel selects the host configuration automatically; no public test instruction requires `--config`.
+The command executes 15 Catch3 binaries and one C11 ABI contract executable directly on Windows 10/11, macOS
+Sequoia/Tahoe, Ubuntu 26.04 LTS, and Fedora 43. Bazel selects the host configuration automatically; no public test
+instruction requires `--config`.
 
 Control-flow changes must exercise the stage that creates edges and every
 storage-oriented consumer of those edges. Three component-owned suites make
@@ -106,10 +107,10 @@ Run native memory diagnostics through the same entry point:
 go run scripts/develop.go sanitize address
 ```
 
-macOS additionally supports `sanitize undefined` and `sanitize thread`. Each sanitizer instruments both compilation and
+macOS and Linux additionally support `sanitize undefined` and `sanitize thread`. Each sanitizer instruments both compilation and
 linking and runs the complete native suite set rather than merely proving that instrumented objects compile.
 
-The Native workflow also runs a separate deterministic wire-mutation smoke target. It is not included in the 16
+The Compiler Tier 1/2/3 workflows also run a separate deterministic wire-mutation smoke target. It is not included in the 16
 component-owned `develop.go test` suites. Run it directly when a Core, CorePrep, Xpp, or Xmm decoder changes:
 
 ```powershell
@@ -117,7 +118,7 @@ bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
 .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
 ```
 
-The same workflow runs `go run scripts/develop.go fuzz`, a separate 30-second coverage-guided libFuzzer campaign on
+Compiler Tier 1 also runs `go run scripts/develop.go fuzz`, a separate 30-second coverage-guided libFuzzer campaign on
 Windows and macOS. See [Fuzzing](FUZZING.md) for the oracle, resource bounds, corpus, crash artifacts, and current limits.
 
 Use Bazel target boundaries to keep iteration focused:
@@ -305,11 +306,13 @@ Treat any result as a decomposition task, not an invitation to minify the file.
 
 ## GitHub workflows
 
-The repository currently separates nine workflow ownership areas:
+The repository currently separates eleven workflow ownership areas:
 
 | Workflow | Responsibility |
 | --- | --- |
-| `native.yml` | Windows 10/11 and macOS Sequoia/Tahoe native graph, contracts, and sanitizers |
+| `compiler-tier1.yml` | Windows Server 2025/ClangCL surrogate and macOS 15/26 native suites, sanitizers, and fuzzing |
+| `compiler-tier2.yml` | Ubuntu 26.04 LTS native suites and AddressSanitizer |
+| `compiler-tier3.yml` | Fedora 43 container native suites and wire-mutation smoke |
 | `language-layers.yml` | Kotlin project system plus Haskell compiler layers |
 | `haskell-coverage.yml` | Haskell coverage reporting |
 | `coverage.yml` | Native C++, Kotlin, and Go coverage reports uploaded to Codecov |
@@ -321,6 +324,10 @@ The repository currently separates nine workflow ownership areas:
 
 See [Code scanning and coverage](COVERAGE-AND-SECURITY.md) for language boundaries, report formats, Codecov flags, and
 the limits of each signal.
+
+GitHub has no hosted Windows 10/11 desktop runner. Tier 1 uses a Windows Server 2025 runner with the Windows/ClangCL
+toolchain; that is a useful compatibility surrogate, not a claim that desktop Windows 10 and 11 were tested. Actual
+desktop coverage needs separately maintained self-hosted runners.
 
 After pushing a normal compiler or repository-wide change, inspect every workflow triggered by the commit:
 

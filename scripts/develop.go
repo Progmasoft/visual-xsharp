@@ -4,7 +4,7 @@
 // develop is the human-facing entry point for common native compiler work.
 // Bazel remains the only owner of the native build graph; this command merely
 // detects the host, selects private diagnostic profiles, and runs native test
-// programs consistently on Windows and macOS.
+// programs consistently across the supported Windows, macOS, and Linux tiers.
 package main
 
 import (
@@ -46,8 +46,9 @@ Commands:
   sanitize  Rebuild and execute the suites with a host-supported sanitizer.
   clean     Remove Bazel, Cabal, and Gradle generated build output.
 
-The supported hosts are Windows 10/11 and macOS 15 Sequoia or macOS 26
-Tahoe. Platform selection is automatic. Bazel options after -- are an escape
+The supported hosts are Windows 10/11, macOS 15/26, Ubuntu 26.04 LTS, and
+Fedora 43 (the Fedora N-1 tier as of September 2026). Platform selection is
+automatic. Bazel options after -- are an escape
 hatch for diagnostics; ordinary development does not require --config.`
 
 type hostKind int
@@ -56,6 +57,7 @@ const (
 	hostUnsupported hostKind = iota
 	hostWindows
 	hostMacOS
+	hostLinux
 )
 
 type host struct {
@@ -443,8 +445,32 @@ func detectHost(runner commandRunner) (host, error) {
 			name = "macOS 26 Tahoe"
 		}
 		return host{kind: hostMacOS, name: name, version: version}, nil
+	case "linux":
+		contents, err := os.ReadFile("/etc/os-release")
+		if err != nil {
+			return host{}, fmt.Errorf("cannot identify the Linux distribution: %w", err)
+		}
+		return classifyLinuxHost(string(contents))
 	default:
-		return host{}, fmt.Errorf("%s is not an official development host; use Windows 10/11 or macOS Sequoia/Tahoe", runtime.GOOS)
+		return host{}, fmt.Errorf("%s is not a supported development host", runtime.GOOS)
+	}
+}
+
+func classifyLinuxHost(release string) (host, error) {
+	fields := make(map[string]string)
+	for _, line := range strings.Split(release, "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if ok {
+			fields[key] = strings.Trim(value, `"`)
+		}
+	}
+	switch {
+	case fields["ID"] == "ubuntu" && fields["VERSION_ID"] == "26.04":
+		return host{kind: hostLinux, name: "Ubuntu 26.04 LTS", version: "26.04"}, nil
+	case fields["ID"] == "fedora" && fields["VERSION_ID"] == "43":
+		return host{kind: hostLinux, name: "Fedora 43 (N-1)", version: "43"}, nil
+	default:
+		return host{}, fmt.Errorf("unsupported Linux release %q %q; expected Ubuntu 26.04 LTS or Fedora 43 (N-1)", fields["ID"], fields["VERSION_ID"])
 	}
 }
 
@@ -459,6 +485,9 @@ func selectSanitizer(currentHost host, requested string) (sanitizer, error) {
 				environment: []string{"ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1"},
 			}, nil
 		}
+		if currentHost.kind == hostLinux {
+			return sanitizer{name: "AddressSanitizer", config: "asan-linux", environment: []string{"ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1"}}, nil
+		}
 		return sanitizer{
 			name:   "AddressSanitizer",
 			config: "asan-macos",
@@ -467,8 +496,11 @@ func selectSanitizer(currentHost host, requested string) (sanitizer, error) {
 			environment: []string{"ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1"},
 		}, nil
 	case "undefined", "ubsan":
-		if currentHost.kind != hostMacOS {
-			return sanitizer{}, errors.New("UndefinedBehaviorSanitizer is not exposed on Windows; use address, or run undefined on macOS")
+		if currentHost.kind == hostWindows {
+			return sanitizer{}, errors.New("UndefinedBehaviorSanitizer is not exposed on Windows; use address, or run undefined on macOS/Linux")
+		}
+		if currentHost.kind == hostLinux {
+			return sanitizer{name: "UndefinedBehaviorSanitizer", config: "ubsan-linux", environment: []string{"UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"}}, nil
 		}
 		return sanitizer{
 			name:        "UndefinedBehaviorSanitizer",
@@ -476,8 +508,11 @@ func selectSanitizer(currentHost host, requested string) (sanitizer, error) {
 			environment: []string{"UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"},
 		}, nil
 	case "thread", "tsan":
-		if currentHost.kind != hostMacOS {
-			return sanitizer{}, errors.New("ThreadSanitizer is not exposed on Windows; run thread on macOS")
+		if currentHost.kind == hostWindows {
+			return sanitizer{}, errors.New("ThreadSanitizer is not exposed on Windows; run thread on macOS/Linux")
+		}
+		if currentHost.kind == hostLinux {
+			return sanitizer{name: "ThreadSanitizer", config: "tsan-linux", environment: []string{"TSAN_OPTIONS=halt_on_error=1"}}, nil
 		}
 		return sanitizer{
 			name:        "ThreadSanitizer",
@@ -498,8 +533,10 @@ func runDoctor(currentHost host, runner commandRunner) error {
 	required := []string{"llvm-config"}
 	if currentHost.kind == hostWindows {
 		required = append(required, "clang-cl", "lld-link")
-	} else {
+	} else if currentHost.kind == hostMacOS {
 		required = append(required, "clang++", "xcrun")
+	} else {
+		required = append(required, "clang++")
 	}
 	missing := make([]string, 0)
 	if _, err := findBazel(runner); err != nil {
@@ -538,8 +575,10 @@ func requireBuildTools(currentHost host, runner commandRunner) error {
 	tools := []string{"llvm-config"}
 	if currentHost.kind == hostWindows {
 		tools = append(tools, "clang-cl", "lld-link")
-	} else {
+	} else if currentHost.kind == hostMacOS {
 		tools = append(tools, "clang++", "xcrun")
+	} else {
+		tools = append(tools, "clang++")
 	}
 	for _, tool := range tools {
 		if _, err := locateTool(runner, tool); err != nil {
@@ -587,8 +626,10 @@ func fuzzConfiguration(currentHost host) (string, error) {
 		return "fuzz-windows", nil
 	case hostMacOS:
 		return "fuzz-macos", nil
+	case hostLinux:
+		return "fuzz-linux", nil
 	default:
-		return "", errors.New("coverage-guided fuzzing requires an official Windows or macOS host")
+		return "", errors.New("coverage-guided fuzzing requires a supported host")
 	}
 }
 
@@ -1016,6 +1057,8 @@ func distributionPlatform(currentHost host, architecture string) (string, error)
 		platform = "windows"
 	case hostMacOS:
 		platform = "macos"
+	case hostLinux:
+		platform = "linux"
 	default:
 		return "", errors.New("cannot create a distribution for an unsupported host")
 	}

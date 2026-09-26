@@ -35,7 +35,7 @@ func (runner *bootstrapFakeRunner) LookPath(name string) (string, error) {
 	return "", errors.New("not found")
 }
 
-func TestDetectBootstrapHostAcceptsOnlyOfficialFamilies(t *testing.T) {
+func TestDetectBootstrapHostAcceptsWindowsAndMacOS(t *testing.T) {
 	for goos, want := range map[string]bootstrapHost{"windows": bootstrapWindows, "darwin": bootstrapMacOS} {
 		got, err := detectBootstrapHost(goos)
 		if err != nil {
@@ -45,8 +45,23 @@ func TestDetectBootstrapHostAcceptsOnlyOfficialFamilies(t *testing.T) {
 			t.Fatalf("host for %s = %v, want %v", goos, got, want)
 		}
 	}
-	if _, err := detectBootstrapHost("linux"); err == nil {
-		t.Fatal("Linux unexpectedly became an official bootstrap host")
+}
+
+func TestClassifyBootstrapLinuxUsesPinnedTierReleases(t *testing.T) {
+	for _, test := range []struct {
+		release string
+		want    bootstrapHost
+	}{
+		{`ID=ubuntu` + "\n" + `VERSION_ID="26.04"`, bootstrapUbuntu},
+		{`ID=fedora` + "\n" + `VERSION_ID=43`, bootstrapFedora},
+	} {
+		got, err := classifyBootstrapLinux(test.release)
+		if err != nil || got != test.want {
+			t.Fatalf("classification of %q = %v, %v", test.release, got, err)
+		}
+	}
+	if _, err := classifyBootstrapLinux("ID=fedora\nVERSION_ID=44"); err == nil {
+		t.Fatal("Fedora N was accepted as the Fedora N-1 tier")
 	}
 }
 
@@ -59,6 +74,30 @@ func TestLLVMRequirementIsHostSpecific(t *testing.T) {
 	macOS := requirementExecutables(bootstrapMacOS, llvm)
 	if !reflect.DeepEqual(macOS, []string{"llvm-config", "clang++"}) {
 		t.Fatalf("macOS LLVM tools = %#v", macOS)
+	}
+	for _, host := range []bootstrapHost{bootstrapUbuntu, bootstrapFedora} {
+		if got := requirementExecutables(host, llvm); !reflect.DeepEqual(got, []string{"llvm-config", "clang++"}) {
+			t.Fatalf("Linux LLVM tools = %#v", got)
+		}
+	}
+}
+
+func TestLinuxPackageMappingsKeepClangAndLLVMDevelopmentLibraries(t *testing.T) {
+	llvm := bootstrapTools[3]
+	for _, test := range []struct {
+		host bootstrapHost
+		want string
+	}{
+		{bootstrapUbuntu, "llvm-dev"},
+		{bootstrapFedora, "llvm-static"},
+	} {
+		packages := linuxRequirementPackages(test.host, llvm)
+		if !strings.Contains(strings.Join(packages, ","), test.want) {
+			t.Fatalf("LLVM packages for %v = %#v", test.host, packages)
+		}
+		if got := linuxInstallArguments(packages); len(got) < 3 || got[0] != "install" || got[1] != "-y" {
+			t.Fatalf("package manager arguments = %#v", got)
+		}
 	}
 }
 

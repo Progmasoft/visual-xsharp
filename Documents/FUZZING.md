@@ -23,8 +23,8 @@ bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
 .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
 ```
 
-On macOS, use `./bazel-bin/Compiler/Fuzzing/wire_fuzz_smoke` for the second command. Both hosts run this target in the
-Native workflow. The program prints the seed number, iteration, and hex input before reporting a caught invariant
+On macOS and Linux, use `./bazel-bin/Compiler/Fuzzing/wire_fuzz_smoke` for the second command. All three compiler tiers
+run this target. The program prints the seed number, iteration, and hex input before reporting a caught invariant
 failure. Preserve that input in a focused regression test at the owning codec; do not make a random seed the only proof of
 a fixed bug.
 
@@ -43,10 +43,10 @@ that discover new coverage; comparison value profiling helps it cross binary fie
 go run scripts/develop.go fuzz
 ```
 
-`develop.go` selects the Windows ClangCL or macOS Clang profile, builds the corpus generator and instrumented binary,
+`develop.go` selects the Windows ClangCL, macOS Clang, or Linux Clang profile, builds the corpus generator and instrumented binary,
 runs the campaign, and removes **only its own generated temporary directory** after success. On a crash, timeout, or
 invariant exception, it preserves that directory and prints its path; GitHub Actions uploads it as a failure artifact.
-Keep a minimized failure in the owning component's regression suite before fixing the decoder. The Native workflow runs
+Keep a minimized failure in the owning component's regression suite before fixing the decoder. Compiler Tier 1 runs
 this coverage-guided step on Windows, macOS Sequoia, and macOS Tahoe in addition to the deterministic smoke.
 
 The 30-second duration is a continuous regression signal, not a security proof or complete coverage claim. For a longer

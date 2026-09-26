@@ -71,7 +71,7 @@ jobs:
         shell: pwsh
         run: |
           foreach ($component in @('ProjectSystem', 'Analyzer', 'Formatter', 'Linter')) {
-            gradle -p $component classes
+            gradle -p $component classes --rerun-tasks --no-build-cache
             if ($LASTEXITCODE -ne 0) {
               throw "CodeQL Kotlin extraction build failed for $component"
             }
@@ -92,4 +92,3 @@ jobs:
         uses: github/codeql-action/analyze@7999b86c43a865dc79d8923397f35af22de63401 # v4
         with:
           category: /language:${{ matrix.language }}
-

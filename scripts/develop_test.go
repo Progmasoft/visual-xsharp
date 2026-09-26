@@ -96,6 +96,30 @@ func TestSelectAddressSanitizerUsesHostSpecificProfile(t *testing.T) {
 	if !reflect.DeepEqual(macOS.environment, []string{"ASAN_OPTIONS=halt_on_error=1:strict_string_checks=1"}) {
 		t.Fatalf("unexpected macOS AddressSanitizer environment: %#v", macOS.environment)
 	}
+	linux, err := selectSanitizer(host{kind: hostLinux}, "address")
+	if err != nil || linux.config != "asan-linux" {
+		t.Fatalf("unexpected Linux AddressSanitizer: %#v, %v", linux, err)
+	}
+}
+
+func TestClassifyLinuxHostAcceptsThePinnedTierReleases(t *testing.T) {
+	for _, test := range []struct {
+		release string
+		name    string
+	}{
+		{`ID=ubuntu` + "\n" + `VERSION_ID="26.04"`, "Ubuntu 26.04 LTS"},
+		{`ID=fedora` + "\n" + `VERSION_ID=43`, "Fedora 43 (N-1)"},
+	} {
+		got, err := classifyLinuxHost(test.release)
+		if err != nil || got.kind != hostLinux || got.name != test.name {
+			t.Fatalf("classifyLinuxHost(%q) = %#v, %v", test.release, got, err)
+		}
+	}
+	for _, release := range []string{`ID=ubuntu` + "\n" + `VERSION_ID=24.04`, `ID=fedora` + "\n" + `VERSION_ID=44`, `ID=arch`} {
+		if _, err := classifyLinuxHost(release); err == nil {
+			t.Fatalf("unsupported release %q was accepted", release)
+		}
+	}
 }
 
 func TestSelectSanitizerExplainsUnsupportedWindowsKinds(t *testing.T) {
@@ -103,6 +127,18 @@ func TestSelectSanitizerExplainsUnsupportedWindowsKinds(t *testing.T) {
 		_, err := selectSanitizer(host{kind: hostWindows}, kind)
 		if err == nil {
 			t.Fatalf("expected %s to be rejected on Windows", kind)
+		}
+	}
+}
+
+func TestLinuxSanitizersUseClangProfiles(t *testing.T) {
+	for _, test := range []struct{ name, config string }{
+		{"undefined", "ubsan-linux"},
+		{"thread", "tsan-linux"},
+	} {
+		got, err := selectSanitizer(host{kind: hostLinux}, test.name)
+		if err != nil || got.config != test.config {
+			t.Fatalf("Linux %s sanitizer = %#v, %v", test.name, got, err)
 		}
 	}
 }
@@ -121,6 +157,7 @@ func TestFuzzConfigurationUsesOfficialHostCompiler(t *testing.T) {
 	}{
 		{hostWindows, "fuzz-windows"},
 		{hostMacOS, "fuzz-macos"},
+		{hostLinux, "fuzz-linux"},
 	} {
 		got, err := fuzzConfiguration(host{kind: test.host})
 		if err != nil || got != test.want {
@@ -312,6 +349,7 @@ func TestDistributionPlatformUsesStablePublicNames(t *testing.T) {
 		{host: host{kind: hostWindows}, architecture: "arm64", want: "windows-arm64"},
 		{host: host{kind: hostMacOS}, architecture: "amd64", want: "macos-x86_64"},
 		{host: host{kind: hostMacOS}, architecture: "arm64", want: "macos-arm64"},
+		{host: host{kind: hostLinux}, architecture: "amd64", want: "linux-x86_64"},
 	}
 	for _, test := range tests {
 		got, err := distributionPlatform(test.host, test.architecture)

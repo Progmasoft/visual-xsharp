@@ -33,7 +33,7 @@ jobs:
           repository-cache: true
 
       # Native benchmark targets now exercise the same LLVM-backed ADT layer
-      # as the production verifier. Keep this setup aligned with native.yml so
+      # as the production verifier. Keep this setup aligned with compiler-tier1.yml so
       # benchmark smoke builds never fall back to a runner-bundled toolchain.
       - name: Restore LLVM development package
         uses: actions/cache@v5

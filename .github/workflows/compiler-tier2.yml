@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+name: Compiler Tier 2
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compiler-tier2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ubuntu-clang:
+    name: Ubuntu 26.04 LTS Clang
+    runs-on: ubuntu-26.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Configure Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.x
+          cache: false
+
+      - name: Configure Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: compiler-ubuntu-2604-clang
+          repository-cache: true
+
+      - name: Install LLVM development and link packages
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld llvm-dev libzstd-dev libxml2-dev zlib1g-dev
+          llvm_root="$(llvm-config --prefix)"
+          echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
+          echo "$llvm_root/bin" >> "$GITHUB_PATH"
+
+      - name: Verify toolchain and Go helpers
+        shell: bash
+        run: |
+          go run scripts/develop.go doctor
+          go test scripts/develop.go scripts/develop_test.go
+          go test scripts/prebuild.go scripts/prebuild_test.go
+          go test scripts/githelper.go scripts/githelper_test.go
+
+      - name: Build and run native compiler suites
+        shell: bash
+        run: go run scripts/develop.go test
+
+      - name: Exercise wire decoder mutations
+        shell: bash
+        run: |
+          bazel build //Compiler/Fuzzing:wire_fuzz_smoke
+          ./bazel-bin/Compiler/Fuzzing/wire_fuzz_smoke
+
+      - name: Test with AddressSanitizer
+        shell: bash
+        run: go run scripts/develop.go sanitize address

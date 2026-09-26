@@ -13,10 +13,12 @@ Official Visual X# development is supported on:
 
 - Windows 10 and Windows 11, using standalone LLVM `clang-cl` and LLD;
 - macOS 15 Sequoia, using Clang/LLD and the Apple SDK; and
-- macOS 26 Tahoe, using Clang/LLD and the Apple SDK.
+- macOS 26 Tahoe, using Clang/LLD and the Apple SDK;
+- Ubuntu 26.04 LTS, using Clang/LLD and LLVM development packages; and
+- Fedora 43 (the Fedora N-1 release as of September 2026), using Clang/LLD and LLVM development packages.
 
-Bazel chooses `windows` or `macos` settings automatically. A developer does not pass `--config=windows` or
-`--config=macos`. Visual Studio-bundled compilers are not part of the Windows toolchain, and the full Xcode IDE is not a
+Bazel chooses `windows`, `macos`, or `linux` settings automatically. A developer does not pass an OS-specific `--config`.
+Visual Studio-bundled compilers are not part of the Windows toolchain, and the full Xcode IDE is not a
 macOS prerequisite.
 
 Required tools:
@@ -30,7 +32,7 @@ Required tools:
 
 Windows additionally needs Windows SDK headers/import libraries and MSVC CRT/STL development files. These provide platform
 headers and libraries only; ClangCL, LLD, and Bazelisk remain independent tools. macOS needs the Xcode Command Line Tools,
-which provide `xcrun` and the selected Apple SDK.
+which provide `xcrun` and the selected Apple SDK. Linux needs the distribution's LLVM development and link packages.
 
 ## Host bootstrap
 
@@ -54,9 +56,12 @@ the Build Tools workload solely for those headers and libraries; Bazel continues
 On macOS the bootstrap requires Homebrew, installs the corresponding formulas and Temurin JDK 25 cask, requests Xcode
 Command Line Tools when missing, and delegates Haskell versions to GHCup. Homebrew's LLVM formula is keg-only; follow
 Homebrew's printed shell guidance, open a new terminal, and use `LLVM_ROOT` for LLVM discovery rather than writing an
-absolute path into the repository. Installation never edits tracked build configuration.
+absolute path into the repository. On Ubuntu/Fedora, the bootstrap uses apt/dnf for native dependencies and the official
+GHCup bootstrap for Haskell. Temurin 25 requires Eclipse Adoptium's signed package repository to be enabled first;
+`prebuild.go` reports that prerequisite instead of silently substituting another JDK. Installation never edits tracked
+build configuration.
 
-After either package manager finishes, start a new terminal and run both `prebuild.go check` and `develop.go doctor`.
+After the host package manager finishes, start a new terminal and run both `prebuild.go check` and `develop.go doctor`.
 Package-manager PATH changes cannot be injected back into the parent terminal that launched the bootstrap.
 
 ## LLVM discovery
@@ -68,7 +73,7 @@ Do not write a machine-specific LLVM path into the repository. Use one of these 
 
 The Bazel repository rule fails during analysis if it cannot discover a complete LLVM development tree.
 
-The preferred preflight is identical in PowerShell and macOS Terminal:
+The preferred preflight is identical in PowerShell and Unix terminals:
 
 ```powershell
 go run scripts/develop.go doctor
@@ -244,8 +249,8 @@ go run scripts/develop.go sanitize undefined
 go run scripts/develop.go sanitize thread
 ```
 
-AddressSanitizer is available on both official host families. UndefinedBehaviorSanitizer and ThreadSanitizer are exposed on
-macOS; requesting either on Windows fails before a build and explains the supported alternative. The command rebuilds all
+AddressSanitizer is available on Windows, macOS, and Linux. UndefinedBehaviorSanitizer and ThreadSanitizer are exposed on
+macOS and Linux; requesting either on Windows fails before a build and explains the supported alternative. The command rebuilds all
 native suites with matching compiler and linker instrumentation, sets fail-fast runtime options, identifies the exact suite
 being executed, and returns a nonzero status at the first violation. It accepts `asan`, `ubsan`, and `tsan` as convenient
 aliases.

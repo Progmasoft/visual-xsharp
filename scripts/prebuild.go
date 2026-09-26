@@ -24,10 +24,11 @@ Usage:
 
 Commands:
   check    Report missing host tools without changing the machine.
-  install  Install missing tools with winget on Windows or Homebrew on macOS.
+  install  Install missing tools with winget, Homebrew, apt, or dnf.
   help     Show this help.
 
-Supported hosts are Windows 10/11 and macOS Sequoia/Tahoe. The installed
+Supported hosts are Windows 10/11, macOS 15/26, Ubuntu 26.04 LTS, and
+Fedora 43 (N-1 as of September 2026). The installed
 toolchain includes LLVM, Bazelisk, GHCup/GHC/Cabal, Go, Temurin JDK 25, Git, and the
 platform link resources. Visual X# uses ClangCL/LLD on Windows, not MSVC.`
 
@@ -37,6 +38,8 @@ const (
 	bootstrapUnsupported bootstrapHost = iota
 	bootstrapWindows
 	bootstrapMacOS
+	bootstrapUbuntu
+	bootstrapFedora
 )
 
 type bootstrapRunner interface {
@@ -70,15 +73,17 @@ type toolRequirement struct {
 	executables     []string
 	wingetPackageID string
 	homebrewFormula string
+	aptPackages     []string
+	dnfPackages     []string
 }
 
 var bootstrapTools = []toolRequirement{
-	{name: "Go", executables: []string{"go"}, wingetPackageID: "GoLang.Go", homebrewFormula: "go"},
-	{name: "Git", executables: []string{"git"}, wingetPackageID: "Git.Git", homebrewFormula: "git"},
+	{name: "Go", executables: []string{"go"}, wingetPackageID: "GoLang.Go", homebrewFormula: "go", aptPackages: []string{"golang-go"}, dnfPackages: []string{"golang"}},
+	{name: "Git", executables: []string{"git"}, wingetPackageID: "Git.Git", homebrewFormula: "git", aptPackages: []string{"git"}, dnfPackages: []string{"git"}},
 	{name: "Bazelisk", executables: []string{"bazelisk"}, wingetPackageID: "Bazel.Bazelisk", homebrewFormula: "bazelisk"},
-	{name: "LLVM", executables: []string{"llvm-config"}, wingetPackageID: "LLVM.LLVM", homebrewFormula: "llvm"},
+	{name: "LLVM", executables: []string{"llvm-config"}, wingetPackageID: "LLVM.LLVM", homebrewFormula: "llvm", aptPackages: []string{"clang", "lld", "llvm-dev", "libzstd-dev", "libxml2-dev", "zlib1g-dev"}, dnfPackages: []string{"clang", "lld", "llvm-devel", "llvm-static", "libzstd-devel", "libxml2-devel", "zlib-devel"}},
 	{name: "GHCup", executables: []string{"ghcup"}, homebrewFormula: "ghcup"},
-	{name: "Temurin JDK 25", executables: []string{"java"}, wingetPackageID: "EclipseAdoptium.Temurin.25.JDK", homebrewFormula: "temurin@25"},
+	{name: "Temurin JDK 25", executables: []string{"java"}, wingetPackageID: "EclipseAdoptium.Temurin.25.JDK", homebrewFormula: "temurin@25", aptPackages: []string{"temurin-25-jdk"}, dnfPackages: []string{"temurin-25-jdk"}},
 }
 
 func main() {
@@ -128,8 +133,32 @@ func detectBootstrapHost(goos string) (bootstrapHost, error) {
 		return bootstrapWindows, nil
 	case "darwin":
 		return bootstrapMacOS, nil
+	case "linux":
+		contents, err := os.ReadFile("/etc/os-release")
+		if err != nil {
+			return bootstrapUnsupported, fmt.Errorf("cannot identify the Linux distribution: %w", err)
+		}
+		return classifyBootstrapLinux(string(contents))
 	default:
-		return bootstrapUnsupported, fmt.Errorf("%s is not an official Visual X# development host", goos)
+		return bootstrapUnsupported, fmt.Errorf("%s is not a supported Visual X# development host", goos)
+	}
+}
+
+func classifyBootstrapLinux(release string) (bootstrapHost, error) {
+	fields := make(map[string]string)
+	for _, line := range strings.Split(release, "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if ok {
+			fields[key] = strings.Trim(value, `"`)
+		}
+	}
+	switch {
+	case fields["ID"] == "ubuntu" && fields["VERSION_ID"] == "26.04":
+		return bootstrapUbuntu, nil
+	case fields["ID"] == "fedora" && fields["VERSION_ID"] == "43":
+		return bootstrapFedora, nil
+	default:
+		return bootstrapUnsupported, fmt.Errorf("unsupported Linux release %q %q; expected Ubuntu 26.04 LTS or Fedora 43 (N-1)", fields["ID"], fields["VERSION_ID"])
 	}
 }
 
@@ -216,11 +245,13 @@ func reportBootstrapState(host bootstrapHost, runner bootstrapRunner) error {
 			fmt.Println("[missing] Windows SDK or MSVC CRT/C++ link libraries")
 			missing = append(missing, toolRequirement{name: "Windows link resources"})
 		}
-	} else if _, err := runner.Output("xcode-select", "-p"); err != nil {
-		fmt.Println("[missing] Xcode Command Line Tools")
-		missing = append(missing, toolRequirement{name: "Xcode Command Line Tools"})
-	} else {
-		fmt.Println("[ready]   Xcode Command Line Tools")
+	} else if host == bootstrapMacOS {
+		if _, err := runner.Output("xcode-select", "-p"); err != nil {
+			fmt.Println("[missing] Xcode Command Line Tools")
+			missing = append(missing, toolRequirement{name: "Xcode Command Line Tools"})
+		} else {
+			fmt.Println("[ready]   Xcode Command Line Tools")
+		}
 	}
 	if _, err := runner.LookPath("ghc"); err != nil {
 		fmt.Println("[missing] GHC selected by GHCup")
@@ -277,7 +308,7 @@ func installBootstrapTools(host bootstrapHost, runner bootstrapRunner) error {
 				return err
 			}
 		}
-	} else {
+	} else if host == bootstrapMacOS {
 		brew, err := runner.LookPath("brew")
 		if err != nil {
 			return errors.New("Homebrew is required on macOS; install it from https://brew.sh and rerun prebuild")
@@ -295,8 +326,79 @@ func installBootstrapTools(host bootstrapHost, runner bootstrapRunner) error {
 				return fmt.Errorf("cannot install %s: %w", requirement.name, err)
 			}
 		}
+	} else {
+		if err := installLinuxTools(host, runner, missing); err != nil {
+			return err
+		}
 	}
 	return installHaskellTools(runner)
+}
+
+func installLinuxTools(host bootstrapHost, runner bootstrapRunner, missing []toolRequirement) error {
+	manager := "apt-get"
+	base := []string{"curl", "xz-utils", "libgmp-dev", "libffi-dev", "libncurses-dev"}
+	if host == bootstrapFedora {
+		manager = "dnf"
+		base = []string{"curl", "xz", "gmp-devel", "libffi-devel", "ncurses-devel"}
+	}
+	if _, err := runner.LookPath(manager); err != nil {
+		return fmt.Errorf("%s is required on %s", manager, bootstrapHostName(host))
+	}
+	if host == bootstrapUbuntu {
+		if err := runLinuxPackageManager(runner, manager, []string{"update"}); err != nil {
+			return err
+		}
+	}
+	if err := runLinuxPackageManager(runner, manager, linuxInstallArguments(base)); err != nil {
+		return fmt.Errorf("cannot install Linux bootstrap prerequisites: %w", err)
+	}
+	for _, requirement := range missing {
+		switch requirement.name {
+		case "Bazelisk":
+			if err := runner.Run("go", "install", "github.com/bazelbuild/bazelisk@v1.29.0"); err != nil {
+				return fmt.Errorf("cannot install Bazelisk with Go: %w", err)
+			}
+		case "GHCup":
+			// GHCup's official Unix bootstrap runs as the invoking user, never as root.
+			const bootstrap = "curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_MINIMAL=1 sh"
+			if err := runner.Run("sh", "-c", bootstrap); err != nil {
+				return fmt.Errorf("cannot install GHCup: %w", err)
+			}
+		default:
+			arguments := linuxRequirementPackages(host, requirement)
+			if len(arguments) == 0 {
+				return fmt.Errorf("no %s package is defined for %s", requirement.name, bootstrapHostName(host))
+			}
+			if err := runLinuxPackageManager(runner, manager, linuxInstallArguments(arguments)); err != nil {
+				if requirement.name == "Temurin JDK 25" {
+					return fmt.Errorf("cannot install Temurin 25; enable Eclipse Adoptium's signed apt/dnf repository and rerun prebuild: %w", err)
+				}
+				return fmt.Errorf("cannot install %s: %w", requirement.name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func linuxRequirementPackages(host bootstrapHost, requirement toolRequirement) []string {
+	if host == bootstrapFedora {
+		return requirement.dnfPackages
+	}
+	return requirement.aptPackages
+}
+
+func linuxInstallArguments(packages []string) []string {
+	return append([]string{"install", "-y"}, packages...)
+}
+
+func runLinuxPackageManager(runner bootstrapRunner, manager string, arguments []string) error {
+	if os.Geteuid() == 0 {
+		return runner.Run(manager, arguments...)
+	}
+	if _, err := runner.LookPath("sudo"); err != nil {
+		return errors.New("sudo is required to install distribution packages as a non-root user")
+	}
+	return runner.Run("sudo", append([]string{manager}, arguments...)...)
 }
 
 func homebrewInstallArguments(requirement toolRequirement) []string {
@@ -374,6 +476,9 @@ func findGHCup(runner bootstrapRunner) (string, error) {
 		return path, nil
 	}
 	candidates := []string{`C:\ghcup\bin\ghcup.exe`}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".ghcup", "bin", "ghcup"))
+	}
 	if appData := os.Getenv("APPDATA"); appData != "" {
 		candidates = append(candidates, filepath.Join(appData, "ghcup", "bin", "ghcup.exe"))
 	}
@@ -430,6 +535,10 @@ func bootstrapHostName(host bootstrapHost) string {
 		return "Windows 10/11"
 	case bootstrapMacOS:
 		return "macOS Sequoia/Tahoe"
+	case bootstrapUbuntu:
+		return "Ubuntu 26.04 LTS (Tier 2)"
+	case bootstrapFedora:
+		return "Fedora 43 (Tier 3, N-1)"
 	default:
 		return "unsupported"
 	}

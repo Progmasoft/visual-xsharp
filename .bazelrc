@@ -29,6 +29,16 @@ build:macos --cxxopt=-Wextra
 build:macos --cxxopt=-Wpedantic
 build:macos --host_cxxopt=-std=c++20
 
+# Bazel's Linux platform branch must use Clang for both host and target
+# compilation. GCC's standard library may provide ABI/runtime libraries, but
+# GCC is not selected as the compiler for Visual X# sources.
+build:linux --compiler=clang
+build:linux --cxxopt=-std=c++20
+build:linux --cxxopt=-Wall
+build:linux --cxxopt=-Wextra
+build:linux --cxxopt=-Wpedantic
+build:linux --host_cxxopt=-std=c++20
+
 # These profiles are implementation details of scripts/develop.go. Keeping the
 # compiler and linker flags here makes sanitizer builds reproducible while the
 # command presents host-aware names and diagnostics to developers.
@@ -54,12 +64,20 @@ build:ubsan-macos --copt=-fsanitize=undefined
 build:ubsan-macos --linkopt=-fsanitize=undefined
 build:tsan-macos --copt=-fsanitize=thread
 build:tsan-macos --linkopt=-fsanitize=thread
+build:asan-linux --copt=-fsanitize=address
+build:asan-linux --linkopt=-fsanitize=address
+build:ubsan-linux --copt=-fsanitize=undefined
+build:ubsan-linux --linkopt=-fsanitize=undefined
+build:tsan-linux --copt=-fsanitize=thread
+build:tsan-linux --linkopt=-fsanitize=thread
 
 # Coverage-guided decoder campaigns instrument the transitive project graph,
 # then link libFuzzer's main only into the dedicated driver binary.
 build:fuzz-windows --copt=/clang:-fsanitize=fuzzer-no-link
 build:fuzz-windows --linkopt=/DEFAULTLIB:clang_rt.fuzzer-x86_64.lib
 build:fuzz-macos --copt=-fsanitize=fuzzer-no-link
+build:fuzz-linux --copt=-fsanitize=fuzzer-no-link
+build:fuzz-linux --linkopt=-fsanitize=fuzzer
 # The host's Homebrew LLVM runtime is resolved by develop.go. Bazel's macOS
 # linker can be Apple Clang, whose Xcode package omits libFuzzer's main.
 
