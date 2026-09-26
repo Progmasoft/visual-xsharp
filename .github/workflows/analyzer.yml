@@ -39,6 +39,10 @@ jobs:
         shell: pwsh
         run: .\ProjectSystem\gradlew.bat -p Analyzer spotlessCheck test
 
+      - name: Update Hackage package index
+        shell: pwsh
+        run: cabal update
+
       - name: Build Visual Analyzer
         shell: pwsh
         working-directory: Compiler
