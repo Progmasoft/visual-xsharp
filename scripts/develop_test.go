@@ -114,6 +114,48 @@ func TestSelectSanitizerRejectsUnknownName(t *testing.T) {
 	}
 }
 
+func TestFuzzConfigurationUsesOfficialHostCompiler(t *testing.T) {
+	for _, test := range []struct {
+		host hostKind
+		want string
+	}{
+		{hostWindows, "fuzz-windows"},
+		{hostMacOS, "fuzz-macos"},
+	} {
+		got, err := fuzzConfiguration(host{kind: test.host})
+		if err != nil || got != test.want {
+			t.Fatalf("fuzz configuration for %v = %q, %v", test.host, got, err)
+		}
+	}
+	if _, err := fuzzConfiguration(host{kind: hostUnsupported}); err == nil {
+		t.Fatal("unsupported host unexpectedly received a fuzz configuration")
+	}
+}
+
+func TestSuccessfulFuzzCleanupStaysInsideItsTemporaryRoot(t *testing.T) {
+	root := t.TempDir()
+	work, err := os.MkdirTemp(root, "vxs-fuzz-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(root, "unrelated")
+	if err := os.Mkdir(outside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeSuccessfulFuzzWork(root, outside); err == nil {
+		t.Fatal("cleanup accepted a directory it did not create")
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("cleanup touched unrelated data: %v", err)
+	}
+	if err := removeSuccessfulFuzzWork(root, work); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(work); !os.IsNotExist(err) {
+		t.Fatalf("successful fuzz work remains or cannot be checked: %v", err)
+	}
+}
+
 func TestHelpSpellingsAreAccepted(t *testing.T) {
 	for _, spelling := range []string{"help", "-Help", "--help", "-h"} {
 		if !isHelp(spelling) {

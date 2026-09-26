@@ -3,9 +3,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 #include "WireFuzz.hpp"
@@ -93,16 +96,46 @@ namespace
                       << static_cast<unsigned>(byte);
         std::cerr << std::dec << '\n';
     }
+
+    void
+    WriteCorpus(const std::vector<std::vector<std::uint8_t>> &seeds,
+                const std::filesystem::path &directory)
+    {
+        constexpr std::string_view names[]{ "core", "coreprep", "xpp", "xmm" };
+        std::filesystem::create_directories(directory);
+        if (!std::filesystem::is_empty(directory))
+            throw std::logic_error("Fuzz corpus destination must be empty");
+        for (std::size_t index = 0U; index < seeds.size(); ++index)
+        {
+            std::ofstream output(directory / names[index], std::ios::binary);
+            if (!output)
+                throw std::runtime_error("Could not create fuzz corpus seed");
+            for (const auto byte : seeds[index])
+                output.put(static_cast<char>(byte));
+            if (!output)
+                throw std::runtime_error("Could not finish fuzz corpus seed");
+        }
+    }
 } // namespace
 
 int
-main()
+main(int argc, char **argv)
 {
     try
     {
+        if (argc != 1
+            && (argc != 3 || argv[1] != std::string_view("-Write-Corpus")))
+            throw std::invalid_argument(
+                "Use wire_fuzz_smoke [-Write-Corpus EMPTY_DIRECTORY]");
         const auto seeds = Visual::XSharp::Fuzzing::WireSeeds();
         if (seeds.size() != 4U)
             throw std::logic_error("Expected one valid seed per wire stage");
+        if (argc == 3)
+        {
+            WriteCorpus(seeds, argv[2]);
+            std::cout << "Wrote four valid wire corpus seeds\n";
+            return 0;
+        }
 
         std::size_t cases = 0U;
         for (std::size_t seedIndex = 0U; seedIndex < seeds.size(); ++seedIndex)

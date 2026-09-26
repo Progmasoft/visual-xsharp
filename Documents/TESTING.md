@@ -117,7 +117,8 @@ bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
 .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
 ```
 
-See [Fuzzing](FUZZING.md) for the oracle, resource bounds, reproduction format, and current coverage limits.
+The same workflow runs `go run scripts/develop.go fuzz`, a separate 30-second coverage-guided libFuzzer campaign on
+Windows and macOS. See [Fuzzing](FUZZING.md) for the oracle, resource bounds, corpus, crash artifacts, and current limits.
 
 Use Bazel target boundaries to keep iteration focused:
 

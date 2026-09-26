@@ -124,6 +124,18 @@ jobs:
           & .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Run coverage-guided wire fuzzing
+        shell: pwsh
+        run: go run scripts/develop.go fuzz
+
+      - name: Preserve wire fuzz failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wire-fuzz-windows-${{ github.run_id }}
+          path: ${{ runner.temp }}/vxs-fuzz-*/
+          if-no-files-found: ignore
+
   macos-clang:
     name: ${{ matrix.name }} Clang
     runs-on: ${{ matrix.runner }}
@@ -183,6 +195,18 @@ jobs:
         run: |
           bazel build //Compiler/Fuzzing:wire_fuzz_smoke
           ./bazel-bin/Compiler/Fuzzing/wire_fuzz_smoke
+
+      - name: Run coverage-guided wire fuzzing
+        shell: bash
+        run: go run scripts/develop.go fuzz
+
+      - name: Preserve wire fuzz failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wire-fuzz-${{ matrix.runner }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/vxs-fuzz-*/
+          if-no-files-found: ignore
 
       - name: Test native compiler with ${{ matrix.sanitizer }} sanitizer
         shell: bash

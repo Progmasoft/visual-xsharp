@@ -9,9 +9,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Compiler and verification
 
-- Added bounded, deterministic mutation coverage for the Core, CorePrep, Xpp, and Xmm binary decoders. The Native CI
-  workflow runs 4,096 cases on Windows and macOS, and the harness exposes a separate entry point for a future
-  coverage-guided libFuzzer campaign. This release does not claim that a libFuzzer campaign is already running.
+- Added bounded mutation and coverage-guided libFuzzer campaigns for the Core, CorePrep, Xpp, and Xmm binary decoders.
+  Native CI runs 4,096 deterministic cases plus a 30-second instrumented campaign on Windows and macOS. Crashing inputs
+  are preserved as CI artifacts and can be promoted to component-owned regression tests.
 - Moved native tests to the Progmasoft Catch3 submodule and added an invariant-focused property check.
 
 ### Contributor experience

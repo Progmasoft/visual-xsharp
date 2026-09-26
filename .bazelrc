@@ -55,5 +55,12 @@ build:ubsan-macos --linkopt=-fsanitize=undefined
 build:tsan-macos --copt=-fsanitize=thread
 build:tsan-macos --linkopt=-fsanitize=thread
 
+# Coverage-guided decoder campaigns instrument the transitive project graph,
+# then link libFuzzer's main only into the dedicated driver binary.
+build:fuzz-windows --copt=/clang:-fsanitize=fuzzer-no-link
+build:fuzz-windows --linkopt=/DEFAULTLIB:clang_rt.fuzzer-x86_64.lib
+build:fuzz-macos --copt=-fsanitize=fuzzer-no-link
+build:fuzz-macos --linkopt=-fsanitize=fuzzer
+
 test --test_output=errors
 test --test_summary=detailed

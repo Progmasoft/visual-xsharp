@@ -25,11 +25,10 @@ cc_binary(
     deps = [":wire_fuzz_harness"],
 )
 
-# Compile this entry point for a coverage-guided libFuzzer driver. The driver
-# and sanitizer runtime are deliberately opt-in; ordinary Bazel builds never
-# require a platform-specific fuzzing runtime.
-cc_library(
-    name = "wire_libfuzzer_entry",
+# This binary has no project main: the libFuzzer runtime supplies it. Build it
+# with the host's fuzz profile so all transitive project code is instrumented.
+cc_binary(
+    name = "wire_fuzzer",
     srcs = ["LibFuzzer.cpp"],
     deps = [":wire_fuzz_harness"],
 )

@@ -29,6 +29,7 @@ Usage:
   go run scripts/develop.go build [-- <Bazel options>]
   go run scripts/develop.go benchmark [-- <Bazel options>]
   go run scripts/develop.go bundle [-- <Bazel options>]
+  go run scripts/develop.go fuzz
   go run scripts/develop.go version <major.minor.patch[.revision]>
   go run scripts/develop.go test [-- <Bazel options>]
   go run scripts/develop.go sanitize <address|undefined|thread> [-- <Bazel options>]
@@ -39,6 +40,7 @@ Commands:
   build     Build the compiler and every native contract suite.
   benchmark Build and run the native and Haskell compiler benchmarks.
   bundle    Build, stage, checksum, and smoke-test a host distribution.
+  fuzz      Run a bounded coverage-guided wire-decoder libFuzzer campaign.
   version   Validate release metadata and an available vxs binary.
   test      Build and execute every native contract suite.
   sanitize  Rebuild and execute the suites with a host-supported sanitizer.
@@ -286,6 +288,14 @@ func run(arguments []string, runner commandRunner) error {
 			return err
 		}
 		return buildBundle(repository, currentHost, runner, bazelArguments)
+	case "fuzz":
+		if len(commandArguments) != 0 || len(bazelArguments) != 0 {
+			return errors.New("fuzz does not accept arguments")
+		}
+		if err := requireBuildTools(currentHost, runner); err != nil {
+			return err
+		}
+		return runWireFuzz(repository, currentHost, runner)
 	case "version":
 		if len(commandArguments) != 1 || len(bazelArguments) != 0 {
 			return errors.New("version requires exactly one major.minor.patch[.revision] argument")
@@ -569,6 +579,92 @@ func findBazel(runner commandRunner) (string, error) {
 		return path, nil
 	}
 	return "", errors.New("Bazelisk or Bazel was not found; install Bazelisk and run doctor again")
+}
+
+func fuzzConfiguration(currentHost host) (string, error) {
+	switch currentHost.kind {
+	case hostWindows:
+		return "fuzz-windows", nil
+	case hostMacOS:
+		return "fuzz-macos", nil
+	default:
+		return "", errors.New("coverage-guided fuzzing requires an official Windows or macOS host")
+	}
+}
+
+func runWireFuzz(repository string, currentHost host, runner commandRunner) error {
+	configuration, err := fuzzConfiguration(currentHost)
+	if err != nil {
+		return err
+	}
+	bazel, err := findBazel(runner)
+	if err != nil {
+		return err
+	}
+	if err := runner.Run(repository, nil, bazel, "build", "//Compiler/Fuzzing:wire_fuzz_smoke"); err != nil {
+		return fmt.Errorf("could not build the wire corpus generator: %w", err)
+	}
+
+	temporaryRoot := os.Getenv("RUNNER_TEMP")
+	if temporaryRoot == "" {
+		temporaryRoot = os.TempDir()
+	}
+	work, err := os.MkdirTemp(temporaryRoot, "vxs-fuzz-")
+	if err != nil {
+		return fmt.Errorf("could not create fuzz work directory: %w", err)
+	}
+	corpus := filepath.Join(work, "corpus")
+	artifacts := filepath.Join(work, "artifacts")
+	if err := os.Mkdir(artifacts, 0o700); err != nil {
+		return fmt.Errorf("could not create fuzz artifact directory %q: %w", work, err)
+	}
+	smoke := filepath.Join(repository, "bazel-bin", "Compiler", "Fuzzing", "wire_fuzz_smoke"+currentHost.executable)
+	if err := runner.Run(repository, nil, smoke, "-Write-Corpus", corpus); err != nil {
+		return fmt.Errorf("could not export wire corpus; preserved %q: %w", work, err)
+	}
+	if err := runner.Run(repository, nil, bazel, "build", "--config="+configuration, "//Compiler/Fuzzing:wire_fuzzer"); err != nil {
+		return fmt.Errorf("could not build instrumented wire fuzzer; preserved %q: %w", work, err)
+	}
+	fuzzer := filepath.Join(repository, "bazel-bin", "Compiler", "Fuzzing", "wire_fuzzer"+currentHost.executable)
+	arguments := []string{
+		corpus,
+		"-max_total_time=30",
+		"-max_len=4096",
+		"-timeout=10",
+		"-use_value_profile=1",
+		"-verbosity=0",
+		"-print_final_stats=1",
+		"-artifact_prefix=" + artifacts + string(os.PathSeparator),
+	}
+	if err := runner.Run(repository, nil, fuzzer, arguments...); err != nil {
+		return fmt.Errorf("coverage-guided wire fuzzing failed; corpus and crash artifacts preserved in %q: %w", work, err)
+	}
+	// Only the exact directory returned by MkdirTemp may be removed. On a
+	// failed campaign the same directory remains for replay and minimization.
+	if err := removeSuccessfulFuzzWork(temporaryRoot, work); err != nil {
+		return err
+	}
+	fmt.Println("Coverage-guided wire fuzzing completed without a reported failure.")
+	return nil
+}
+
+func removeSuccessfulFuzzWork(temporaryRoot string, work string) error {
+	root, err := filepath.Abs(temporaryRoot)
+	if err != nil {
+		return err
+	}
+	target, err := filepath.Abs(work)
+	if err != nil {
+		return err
+	}
+	relative, err := filepath.Rel(root, target)
+	if err != nil || filepath.Dir(relative) != "." || !strings.HasPrefix(relative, "vxs-fuzz-") {
+		return fmt.Errorf("refusing to remove fuzz work outside the expected temporary root: %q", work)
+	}
+	if err := os.RemoveAll(target); err != nil {
+		return fmt.Errorf("could not remove successful fuzz work %q: %w", work, err)
+	}
+	return nil
 }
 
 func buildTargets(repository string, runner commandRunner, config string, extra []string) error {
