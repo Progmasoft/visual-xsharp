@@ -216,14 +216,16 @@ func TestParseModuleVersionRejectsMissingAndMalformedVersions(t *testing.T) {
 	}
 }
 
-func TestValidateSemanticVersionRejectsAmbiguousReleaseSpellings(t *testing.T) {
-	for _, version := range []string{"", "0.3", "0.3.6.1", "0.03.6", "v0.3.6", "0.next.6"} {
-		if err := validateSemanticVersion(version); err == nil {
+func TestValidateReleaseVersionRejectsAmbiguousSpellings(t *testing.T) {
+	for _, version := range []string{"", "0.3", "0.3.6.1.2", "0.03.6", "0.3.9.05", "v0.3.6", "0.next.6"} {
+		if err := validateReleaseVersion(version); err == nil {
 			t.Fatalf("expected %q to be rejected", version)
 		}
 	}
-	if err := validateSemanticVersion("0.3.6"); err != nil {
-		t.Fatal(err)
+	for _, version := range []string{"0.3.6", "0.3.9.5"} {
+		if err := validateReleaseVersion(version); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

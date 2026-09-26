@@ -109,6 +109,16 @@ go run scripts/develop.go sanitize address
 macOS additionally supports `sanitize undefined` and `sanitize thread`. Each sanitizer instruments both compilation and
 linking and runs the complete native suite set rather than merely proving that instrumented objects compile.
 
+The Native workflow also runs a separate deterministic wire-mutation smoke target. It is not included in the 16
+component-owned `develop.go test` suites. Run it directly when a Core, CorePrep, Xpp, or Xmm decoder changes:
+
+```powershell
+bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
+.\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
+```
+
+See [Fuzzing](FUZZING.md) for the oracle, resource bounds, reproduction format, and current coverage limits.
+
 Use Bazel target boundaries to keep iteration focused:
 
 ```powershell

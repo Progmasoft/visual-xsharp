@@ -31,6 +31,7 @@ following vocabulary:
 | Check what works now | [Implementation status](IMPLEMENTATION.md) |
 | Build a development checkout | [Building](BUILDING.md) |
 | Run the correct verification layers | [Testing](TESTING.md) |
+| Exercise malformed compiler inputs | [Fuzzing](FUZZING.md) |
 | Place tests and fixtures | [Test ownership](TEST-OWNERSHIP.md) |
 | Measure compiler throughput | [Benchmarking](BENCHMARKING.md) and [recorded baselines](../Benchmarks/README.md) |
 | Use `vxs` | [CLI](CLI.md) |
@@ -88,6 +89,7 @@ following vocabulary:
 
 - [Building](BUILDING.md) contains prerequisites, environment discovery, component builds, and troubleshooting.
 - [Testing](TESTING.md) maps changes to local gates and GitHub workflows.
+- [Fuzzing](FUZZING.md) records the connected wire mutation campaign, its reproducible seed, and remaining input surfaces.
 - [Test ownership](TEST-OWNERSHIP.md) assigns suites, fixtures, and Bazel targets to their compiler components.
 - [Benchmarking](BENCHMARKING.md) defines measurement ownership, fixture timing, interpretation, and CI policy.
 - [Compiler ADT policy](COMPILER-ADTS.md) explains when native code uses LLVM containers and when project adapters are required.

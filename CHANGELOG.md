@@ -5,6 +5,22 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## 0.3.9.5 - 2026-09-26
+
+### Compiler and verification
+
+- Added bounded, deterministic mutation coverage for the Core, CorePrep, Xpp, and Xmm binary decoders. The Native CI
+  workflow runs 4,096 cases on Windows and macOS, and the harness exposes a separate entry point for a future
+  coverage-guided libFuzzer campaign. This release does not claim that a libFuzzer campaign is already running.
+- Moved native tests to the Progmasoft Catch3 submodule and added an invariant-focused property check.
+
+### Contributor experience
+
+- Added a detailed external contributor guide, repository-specific issue templates across the ecosystem, and an explicit
+  fuzzing guide that distinguishes current checks from planned campaigns.
+- Advanced compiler-owned Haskell packages, native CLI, Bazel module, Kotlin project evaluator, and default compiler
+  model to 0.3.9.5. The project's own example version remains independent of the compiler version.
+
 ## 0.3.9 - 2026-09-24
 
 ### Compiler

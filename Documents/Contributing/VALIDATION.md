@@ -45,7 +45,8 @@ go run scripts/develop.go test
 This builds the compiler and executes 16 native suites: 15 Catch3-based programs plus the C11 AARC ABI caller. Run
 `go run scripts/develop.go sanitize address` for ownership, lifetime, or unsafe-memory changes. On macOS, `undefined`
 and `thread` are additional supported sanitizer modes. If a test crosses Haskell Core into native Xpp/Xmm, run the
-Haskell gate too; native tests alone cannot validate frontend semantics.
+Haskell gate too; native tests alone cannot validate frontend semantics. Decoder changes also need the separate
+[wire mutation smoke](../FUZZING.md), which is not part of the 16 `develop.go test` suites.
 
 Use LLVM/Clang **23.1.0** `clang-format` on changed project-owned C/C++ files, then check them again:
 

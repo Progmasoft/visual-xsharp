@@ -1,0 +1,35 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_library(
+    name = "wire_fuzz_harness",
+    srcs = ["WireFuzz.cpp"],
+    hdrs = ["WireFuzz.hpp"],
+    deps = [
+        "//Compiler/Codegen/Xmm:xmm",
+        "//Compiler/Codegen/Xpp:xpp",
+        "//Compiler/Core:core",
+        "//Compiler/Headers/Visual/XSharp/Artifact:wire_support_api",
+        "//Compiler/Headers/Visual/XSharp/Core:core",
+        "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
+        "//Compiler/Headers/Visual/XSharp/Xmm:xmm",
+        "//Compiler/Headers/Visual/XSharp/Xpp:xpp",
+    ],
+)
+
+cc_binary(
+    name = "wire_fuzz_smoke",
+    srcs = ["WireFuzzSmoke.cpp"],
+    deps = [":wire_fuzz_harness"],
+)
+
+# Compile this entry point for a coverage-guided libFuzzer driver. The driver
+# and sanitizer runtime are deliberately opt-in; ordinary Bazel builds never
+# require a platform-specific fuzzing runtime.
+cc_library(
+    name = "wire_libfuzzer_entry",
+    srcs = ["LibFuzzer.cpp"],
+    deps = [":wire_fuzz_harness"],
+)

@@ -116,6 +116,14 @@ jobs:
         shell: pwsh
         run: go run scripts/develop.go test
 
+      - name: Exercise native wire decoder mutations
+        shell: pwsh
+        run: |
+          bazel build //Compiler/Fuzzing:wire_fuzz_smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   macos-clang:
     name: ${{ matrix.name }} Clang
     runs-on: ${{ matrix.runner }}
@@ -169,6 +177,12 @@ jobs:
       - name: Test native compiler
         shell: bash
         run: go run scripts/develop.go test
+
+      - name: Exercise native wire decoder mutations
+        shell: bash
+        run: |
+          bazel build //Compiler/Fuzzing:wire_fuzz_smoke
+          ./bazel-bin/Compiler/Fuzzing/wire_fuzz_smoke
 
       - name: Test native compiler with ${{ matrix.sanitizer }} sanitizer
         shell: bash

@@ -179,7 +179,7 @@
     "//Compiler/Build/Bazel:llvm.bzl%llvm": {
       "general": {
         "bzlTransitiveDigest": "AaCgK9FGocq206DA2UkMhUFeOayCCOpsctU3zYHsNWU=",
-        "usagesDigest": "eO68DGlOBvh/s8Si0ikIrGuoLpF/RzkEdSrco5xjWLQ=",
+        "usagesDigest": "y11wAfX+PZmzcpHInALpbD9P2Oxh9UjYHTtjc3iQVXw=",
         "recordedInputs": [],
         "generatedRepoSpecs": {
           "llvm": {

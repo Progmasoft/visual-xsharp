@@ -80,7 +80,7 @@ the normal workflow:
 
 ```powershell
 go run scripts/develop.go doctor
-go run scripts/develop.go version 0.3.9
+go run scripts/develop.go version 0.3.9.5
 go run scripts/develop.go build
 go run scripts/develop.go test
 go run scripts/develop.go benchmark

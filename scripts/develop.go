@@ -29,7 +29,7 @@ Usage:
   go run scripts/develop.go build [-- <Bazel options>]
   go run scripts/develop.go benchmark [-- <Bazel options>]
   go run scripts/develop.go bundle [-- <Bazel options>]
-  go run scripts/develop.go version <major.minor.patch>
+  go run scripts/develop.go version <major.minor.patch[.revision]>
   go run scripts/develop.go test [-- <Bazel options>]
   go run scripts/develop.go sanitize <address|undefined|thread> [-- <Bazel options>]
   go run scripts/develop.go clean
@@ -288,7 +288,7 @@ func run(arguments []string, runner commandRunner) error {
 		return buildBundle(repository, currentHost, runner, bazelArguments)
 	case "version":
 		if len(commandArguments) != 1 || len(bazelArguments) != 0 {
-			return errors.New("version requires exactly one major.minor.patch argument")
+			return errors.New("version requires exactly one major.minor.patch[.revision] argument")
 		}
 		return checkReleaseMetadata(repository, currentHost, commandArguments[0], runner)
 	case "test":
@@ -738,7 +738,7 @@ func readProjectVersion(repository string) (string, error) {
 }
 
 func checkReleaseMetadata(repository string, currentHost host, requested string, runner commandRunner) error {
-	if err := validateSemanticVersion(requested); err != nil {
+	if err := validateReleaseVersion(requested); err != nil {
 		return err
 	}
 	checks := make([]releaseCheck, 0, 5)
@@ -791,20 +791,23 @@ func checkReleaseMetadata(repository string, currentHost host, requested string,
 	return nil
 }
 
-func validateSemanticVersion(version string) error {
+// validateReleaseVersion accepts the usual three-part release and the
+// repository's optional fourth patch-revision component (for example 0.3.9.5).
+// That four-part form is intentional release notation, not strict SemVer 2.0.
+func validateReleaseVersion(version string) error {
 	parts := strings.Split(version, ".")
-	if len(parts) != 3 {
-		return fmt.Errorf("version %q is not major.minor.patch", version)
+	if len(parts) != 3 && len(parts) != 4 {
+		return fmt.Errorf("version %q is not major.minor.patch[.revision]", version)
 	}
 	for _, part := range parts {
 		if part == "" {
-			return fmt.Errorf("version %q is not major.minor.patch", version)
+			return fmt.Errorf("version %q is not major.minor.patch[.revision]", version)
 		}
 		if len(part) > 1 && part[0] == '0' {
 			return fmt.Errorf("version %q contains a leading zero", version)
 		}
 		if _, err := strconv.ParseUint(part, 10, 32); err != nil {
-			return fmt.Errorf("version %q is not major.minor.patch", version)
+			return fmt.Errorf("version %q is not major.minor.patch[.revision]", version)
 		}
 	}
 	return nil
@@ -884,7 +887,7 @@ func parseModuleVersion(contents string) (string, error) {
 	if version == "" {
 		return "", errors.New("MODULE.bazel does not declare a module version")
 	}
-	if err := validateSemanticVersion(version); err != nil {
+	if err := validateReleaseVersion(version); err != nil {
 		return "", fmt.Errorf("invalid module %w", err)
 	}
 	return version, nil
