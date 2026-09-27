@@ -35,6 +35,8 @@ jobs:
             build_mode: manual
           - language: java-kotlin
             build_mode: manual
+          - language: javascript-typescript
+            build_mode: none
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
