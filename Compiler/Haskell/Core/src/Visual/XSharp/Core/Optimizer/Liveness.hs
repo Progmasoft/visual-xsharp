@@ -12,6 +12,7 @@ import Visual.XSharp.AST (ResolvedName, SymbolId, resolvedSymbol)
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Analysis
 import Visual.XSharp.Core.Optimizer.IntegerFacts
+import Visual.XSharp.Core.Symbols (coreStatementSymbols)
 
 -- Value liveness and declaration retention are deliberately separate. A
 -- retained assignment kills the previous stored value, but it still requires
@@ -91,6 +92,22 @@ eliminateOne environment facts statement (remaining, liveAfter) = case statement
     CoreBind binding -> eliminateBinding environment facts binding remaining liveAfter
     CoreAssign name value -> eliminateAssignment environment facts name value remaining liveAfter
     CoreIf condition yes no -> eliminateBranch environment facts condition yes no remaining liveAfter
+    CoreWhile condition body ->
+        preserveLoop (CoreWhile (optimizeExpression environment condition) body) statement remaining liveAfter
+    CoreDoWhile body condition ->
+        preserveLoop (CoreDoWhile body (optimizeExpression environment condition)) statement remaining liveAfter
+    CoreFor condition body update ->
+        preserveLoop (CoreFor (optimizeExpression environment condition) body update) statement remaining liveAfter
+    CoreBreak -> (CoreBreak : remaining, liveAfter)
+    CoreContinue -> (CoreContinue : remaining, liveAfter)
+
+-- Loops have backedges, so a single reverse tree walk is not a sound liveness
+-- solution. Preserve their bodies verbatim and conservatively mark every
+-- symbol in the loop live until the dedicated loop fixed-point pass is added.
+preserveLoop :: CoreStatement -> CoreStatement -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)
+preserveLoop optimized original remaining liveAfter =
+    let symbols = Set.fromList (map (resolvedSymbol) (coreStatementSymbols original))
+     in (optimized : remaining, addRequiredSymbols symbols liveAfter)
 
 eliminateBinding ::
     EffectEnvironment -> IntegerFacts -> CoreBinding -> [CoreStatement] -> LiveState -> ([CoreStatement], LiveState)

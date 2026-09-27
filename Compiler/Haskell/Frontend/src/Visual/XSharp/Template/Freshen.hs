@@ -160,6 +160,26 @@ freshStatement statement = case statement of
             <$> freshExpression condition
             <*> freshBlock trueBlock
             <*> traverse freshBlock falseBlock
+    WhileStatement spanValue condition body ->
+        WhileStatement spanValue <$> freshExpression condition <*> freshBlock body
+    DoWhileStatement spanValue body condition ->
+        DoWhileStatement spanValue <$> freshBlock body <*> freshExpression condition
+    ForStatement spanValue initializer condition updates body -> do
+        closedInitializer <- traverse freshStatement initializer
+        closedCondition <- traverse freshExpression condition
+        closedUpdates <- traverse freshStatement updates
+        closedBody <- freshBlock body
+        pure (ForStatement spanValue closedInitializer closedCondition closedUpdates closedBody)
+    ForEachStatement spanValue kind syntax name annotation source body -> do
+        closedSource <- freshExpression source
+        closedName <- freshDefinition name
+        closedAnnotation <- freshType annotation
+        closedBody <- freshBlock body
+        pure (ForEachStatement spanValue kind syntax closedName closedAnnotation closedSource closedBody)
+    IncrementStatement spanValue name annotation direction ->
+        IncrementStatement spanValue <$> freshReference name <*> freshType annotation <*> pure direction
+    BreakStatement spanValue value -> BreakStatement spanValue <$> traverse freshExpression value
+    ContinueStatement spanValue -> pure (ContinueStatement spanValue)
     ExpressionStatement spanValue value terminated ->
         ExpressionStatement spanValue <$> freshExpression value <*> pure terminated
 
@@ -272,6 +292,18 @@ statementSymbols statement = case statement of
     ReturnStatement _ value -> maybe [] expressionSymbols value
     IfStatement _ condition trueBlock falseBlock ->
         expressionSymbols condition ++ blockSymbols trueBlock ++ maybe [] blockSymbols falseBlock
+    WhileStatement _ condition body -> expressionSymbols condition ++ blockSymbols body
+    DoWhileStatement _ body condition -> blockSymbols body ++ expressionSymbols condition
+    ForStatement _ initializer condition updates body ->
+        maybe [] statementSymbols initializer
+            ++ maybe [] expressionSymbols condition
+            ++ concatMap statementSymbols updates
+            ++ blockSymbols body
+    ForEachStatement _ _ _ name annotation source body ->
+        nameSymbol name : typeSymbols annotation ++ expressionSymbols source ++ blockSymbols body
+    IncrementStatement _ name annotation _ -> nameSymbol name : typeSymbols annotation
+    BreakStatement _ value -> maybe [] expressionSymbols value
+    ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionSymbols value
 
 expressionSymbols :: Expression ResolvedName Type -> [Int]

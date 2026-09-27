@@ -173,6 +173,24 @@ statementFacts knownSymbols pureKnown facts statement = case statement of
                         (True, True) -> unreachableIntegerFacts
                         (False, False) -> joinIntegerFacts afterTrue afterFalse
          in (combineFacts conditionFacts branchFacts, continuationFacts)
+    CoreWhile condition body ->
+        let (conditionFacts, _) = expressionFacts knownSymbols pureKnown facts condition
+            (bodyFacts, _) = statementsFacts knownSymbols pureKnown facts body
+            divergence = emptyDirectFacts {directLocalEffect = DivergenceEffect}
+         in (combineFacts divergence (combineFacts conditionFacts bodyFacts), emptyIntegerFacts)
+    CoreDoWhile body condition ->
+        let (bodyFacts, _) = statementsFacts knownSymbols pureKnown facts body
+            (conditionFacts, _) = expressionFacts knownSymbols pureKnown emptyIntegerFacts condition
+            divergence = emptyDirectFacts {directLocalEffect = DivergenceEffect}
+         in (combineFacts divergence (combineFacts bodyFacts conditionFacts), emptyIntegerFacts)
+    CoreFor condition body update ->
+        let (conditionFacts, _) = expressionFacts knownSymbols pureKnown facts condition
+            (bodyFacts, _) = statementsFacts knownSymbols pureKnown facts body
+            (updateFacts, _) = statementsFacts knownSymbols pureKnown facts update
+            divergence = emptyDirectFacts {directLocalEffect = DivergenceEffect}
+         in (combineFacts divergence (combineFacts conditionFacts (combineFacts bodyFacts updateFacts)), emptyIntegerFacts)
+    CoreBreak -> (emptyDirectFacts, unreachableIntegerFacts)
+    CoreContinue -> (emptyDirectFacts, unreachableIntegerFacts)
 
 expressionFacts ::
     Set SymbolId ->

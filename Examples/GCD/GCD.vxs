@@ -1,0 +1,22 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+namespace Examples.GCD;
+
+public class GCD {
+    -- Euclid's algorithm is a compact example of loop-carried state.
+    public static int Compute(int left, int right) {
+        int a = left;
+        int b = right;
+        while (b \= 0) {
+            int remainder = a % b;
+            a = b;
+            b = remainder;
+        }
+        return a;
+    }
+
+    public static void Main() {
+        Console.Printfn("gcd(1071, 462) = %d", Compute(1071, 462));
+    }
+}

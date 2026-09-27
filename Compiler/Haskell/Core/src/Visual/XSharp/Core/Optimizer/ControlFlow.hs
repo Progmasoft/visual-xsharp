@@ -48,6 +48,18 @@ simplifyStatement environment statement = case statement of
                     | null simplifiedYes && null simplifiedNo ->
                         preserveCondition environment simplifiedCondition []
                     | otherwise -> [CoreIf simplifiedCondition simplifiedYes simplifiedNo]
+    CoreWhile condition body ->
+        [CoreWhile (simplifyNestedExpression environment condition) (simplifyStatements environment body)]
+    CoreDoWhile body condition ->
+        [CoreDoWhile (simplifyStatements environment body) (simplifyNestedExpression environment condition)]
+    CoreFor condition body update ->
+        [ CoreFor
+            (simplifyNestedExpression environment condition)
+            (simplifyStatements environment body)
+            (simplifyStatements environment update)
+        ]
+    CoreBreak -> [CoreBreak]
+    CoreContinue -> [CoreContinue]
 
 preserveCondition :: EffectEnvironment -> CoreExpression -> [CoreStatement] -> [CoreStatement]
 preserveCondition environment condition statements

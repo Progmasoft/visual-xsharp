@@ -116,7 +116,7 @@ For a wire change, cover at least:
 ## Test naming
 
 Names describe behavior and boundary, not implementation trivia. Prefer
-`Core wire v6 rejects a noncanonical integer magnitude` over `test decode 7`.
+`Core wire v7 rejects a noncanonical integer magnitude` over `test decode 7`.
 Use tags where the framework supports them so scalar, verifier, wire, and LLVM
 groups can be selected without changing ownership.
 

@@ -22,6 +22,7 @@ module Visual.XSharp.Core.CorePrep
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Verifier (verifyCore)
 import Visual.XSharp.Diagnostic
 
 data CorePrepAtom = CorePrepVariable ResolvedName Type | CorePrepLiteral CoreLiteral Type
@@ -82,6 +83,8 @@ data PrepState = PrepState
     , nextBlock :: Int
     , pendingFunctions :: [(CoreFunction, FilePath)]
     , currentSourceFile :: FilePath
+    , loopTargets :: [(Int, Int)]
+    -- ^ Innermost first; each pair is the `break` exit and `continue` target.
     }
 
 -- An OpenBlock is the current continuation while expressions are being
@@ -100,17 +103,19 @@ declarations, locals, parameters, or captures already present in the module.
 -}
 prepareCore :: CoreModule -> Either [Diagnostic] CorePrepModule
 prepareCore moduleValue =
-    let seed = 1 + maximum (0 : concatMap symbolIds (coreModuleFunctions moduleValue))
-        sourceOwners = Map.fromList (coreModuleFunctionSources moduleValue)
-        sourceOf function =
-            Map.findWithDefault
-                ""
-                (symbolIdValue (resolvedSymbol (coreFunctionName function)))
-                sourceOwners
-        initial = PrepState seed 1 [] ""
-        work = [(function, sourceOf function) | function <- coreModuleFunctions moduleValue]
-        (functions, _) = prepareFunctionQueue initial work
-     in Right (CorePrepModule (coreModuleName moduleValue) functions (coreModuleSourceFiles moduleValue))
+    do
+        verified <- verifyCore moduleValue
+        let seed = 1 + maximum (0 : concatMap symbolIds (coreModuleFunctions verified))
+            sourceOwners = Map.fromList (coreModuleFunctionSources verified)
+            sourceOf function =
+                Map.findWithDefault
+                    ""
+                    (symbolIdValue (resolvedSymbol (coreFunctionName function)))
+                    sourceOwners
+            initial = PrepState seed 1 [] "" []
+            work = [(function, sourceOf function) | function <- coreModuleFunctions verified]
+            (functions, _) = prepareFunctionQueue initial work
+        pure (CorePrepModule (coreModuleName verified) functions (coreModuleSourceFiles verified))
 
 -- Closure conversion appends lifted functions together with their source
 -- owner. Processing the queue to exhaustion also supports nested closures
@@ -128,7 +133,7 @@ prepareFunctionQueue state ((function, sourceFile) : remaining) =
 
 prepareFunction :: PrepState -> CoreFunction -> (CorePrepFunction, PrepState)
 prepareFunction state function =
-    let (blocks, after) = prepareStatements state (OpenBlock 0 []) (coreFunctionBody function)
+    let (blocks, after) = prepareStatements (state {loopTargets = []}) (OpenBlock 0 []) (coreFunctionBody function)
      in ( CorePrepFunction
             (coreFunctionName function)
             (currentSourceFile state)
@@ -152,6 +157,12 @@ statementSymbolIds statement = case statement of
     CoreReturn expression -> expressionSymbolIds expression
     CoreIf condition trueBranch falseBranch ->
         expressionSymbolIds condition ++ concatMap statementSymbolIds trueBranch ++ concatMap statementSymbolIds falseBranch
+    CoreWhile condition body -> expressionSymbolIds condition ++ concatMap statementSymbolIds body
+    CoreDoWhile body condition -> concatMap statementSymbolIds body ++ expressionSymbolIds condition
+    CoreFor condition body update ->
+        expressionSymbolIds condition ++ concatMap statementSymbolIds body ++ concatMap statementSymbolIds update
+    CoreBreak -> []
+    CoreContinue -> []
     CoreEvaluate expression -> expressionSymbolIds expression
     where
         symbol = symbolIdValue . resolvedSymbol
@@ -202,6 +213,113 @@ prepareStatements state open (statement : remaining) = case statement of
             header = closeBlock booleanOpen (CorePrepBranch booleanAtom trueId falseId)
             (tailBlocks, final) = prepareStatements afterFalse (OpenBlock joinId []) remaining
          in (conditionBlocks ++ [header] ++ trueBlocks ++ falseBlocks ++ tailBlocks, final)
+    CoreWhile condition body ->
+        let (loopBlocks, exitOpen, afterLoop) = prepareWhile state open condition body
+            (tailBlocks, final) = prepareStatements afterLoop exitOpen remaining
+         in (loopBlocks ++ tailBlocks, final)
+    CoreDoWhile body condition ->
+        let (loopBlocks, exitOpen, afterLoop) = prepareDoWhile state open body condition
+            (tailBlocks, final) = prepareStatements afterLoop exitOpen remaining
+         in (loopBlocks ++ tailBlocks, final)
+    CoreFor condition body update ->
+        let (loopBlocks, exitOpen, afterLoop) = prepareFor state open condition body update
+            (tailBlocks, final) = prepareStatements afterLoop exitOpen remaining
+         in (loopBlocks ++ tailBlocks, final)
+    CoreBreak -> closeLoopControl state open True
+    CoreContinue -> closeLoopControl state open False
+
+{- | Close the current block at the innermost loop transfer destination.
+The Boolean selects `break` (exit) versus `continue` (continuation point);
+Core verification rejects either transfer when this stack is empty.
+-}
+closeLoopControl :: PrepState -> OpenBlock -> Bool -> ([CorePrepBlock], PrepState)
+closeLoopControl state open isBreak = case loopTargets state of
+    (breakTarget, continueTarget) : _ ->
+        let target = if isBreak then breakTarget else continueTarget
+         in ([closeBlock open (CorePrepJump target)], state)
+    [] -> ([closeBlock open CorePrepUnreachable], state)
+
+-- | Lower a pre-test loop and route its body fallthrough to the condition.
+prepareWhile ::
+    PrepState ->
+    OpenBlock ->
+    CoreExpression ->
+    [CoreStatement] ->
+    ([CorePrepBlock], OpenBlock, PrepState)
+prepareWhile state incoming condition body =
+    let conditionId = nextBlock state
+        bodyId = conditionId + 1
+        exitId = bodyId + 1
+        reserved = state {nextBlock = exitId + 1}
+        entry = closeBlock incoming (CorePrepJump conditionId)
+        (conditionBlocks, conditionOpen, atom, afterCondition) =
+            atomize reserved (OpenBlock conditionId []) condition
+        (booleanOpen, predicate, afterBoolean) = booleanizeAtom afterCondition conditionOpen atom
+        branch = closeBlock booleanOpen (CorePrepBranch predicate bodyId exitId)
+        bodyState = afterBoolean {loopTargets = (exitId, conditionId) : loopTargets afterBoolean}
+        (bodyBlocks, afterBody) = prepareStatements bodyState (OpenBlock bodyId []) body
+        bodyEnd = jumpOpenBlocks conditionId bodyBlocks
+        finalState = afterBody {loopTargets = loopTargets state}
+     in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd, OpenBlock exitId [], finalState)
+
+-- | Lower a post-test loop so even its first entered body reaches the test.
+prepareDoWhile ::
+    PrepState ->
+    OpenBlock ->
+    [CoreStatement] ->
+    CoreExpression ->
+    ([CorePrepBlock], OpenBlock, PrepState)
+prepareDoWhile state incoming body condition =
+    let bodyId = nextBlock state
+        conditionId = bodyId + 1
+        exitId = conditionId + 1
+        reserved = state {nextBlock = exitId + 1}
+        entry = closeBlock incoming (CorePrepJump bodyId)
+        bodyState = reserved {loopTargets = (exitId, conditionId) : loopTargets state}
+        (bodyBlocks, afterBody) = prepareStatements bodyState (OpenBlock bodyId []) body
+        bodyEnd = jumpOpenBlocks conditionId bodyBlocks
+        (conditionBlocks, conditionOpen, atom, afterCondition) =
+            atomize afterBody (OpenBlock conditionId []) condition
+        (booleanOpen, predicate, afterBoolean) = booleanizeAtom afterCondition conditionOpen atom
+        branch = closeBlock booleanOpen (CorePrepBranch predicate bodyId exitId)
+        finalState = afterBoolean {loopTargets = loopTargets state}
+     in ([entry] ++ bodyEnd ++ conditionBlocks ++ [branch], OpenBlock exitId [], finalState)
+
+-- | Lower a classic loop with a dedicated update block used by `continue`.
+prepareFor ::
+    PrepState ->
+    OpenBlock ->
+    CoreExpression ->
+    [CoreStatement] ->
+    [CoreStatement] ->
+    ([CorePrepBlock], OpenBlock, PrepState)
+prepareFor state incoming condition body update =
+    let conditionId = nextBlock state
+        bodyId = conditionId + 1
+        updateId = bodyId + 1
+        exitId = updateId + 1
+        reserved = state {nextBlock = exitId + 1}
+        entry = closeBlock incoming (CorePrepJump conditionId)
+        (conditionBlocks, conditionOpen, atom, afterCondition) =
+            atomize reserved (OpenBlock conditionId []) condition
+        (booleanOpen, predicate, afterBoolean) = booleanizeAtom afterCondition conditionOpen atom
+        branch = closeBlock booleanOpen (CorePrepBranch predicate bodyId exitId)
+        bodyState = afterBoolean {loopTargets = (exitId, updateId) : loopTargets afterBoolean}
+        (bodyBlocks, afterBody) = prepareStatements bodyState (OpenBlock bodyId []) body
+        bodyEnd = jumpOpenBlocks updateId bodyBlocks
+        updateState = afterBody {loopTargets = (exitId, updateId) : loopTargets state}
+        (updateBlocks, afterUpdate) = prepareStatements updateState (OpenBlock updateId []) update
+        updateEnd = jumpOpenBlocks conditionId updateBlocks
+        finalState = afterUpdate {loopTargets = loopTargets state}
+     in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd ++ updateEnd, OpenBlock exitId [], finalState)
+
+jumpOpenBlocks :: Int -> [CorePrepBlock] -> [CorePrepBlock]
+jumpOpenBlocks target = map connect
+    where
+        connect block
+            | corePrepBlockTerminator block == CorePrepUnreachable =
+                block {corePrepBlockTerminator = CorePrepJump target}
+            | otherwise = block
 
 appendInstruction :: OpenBlock -> CorePrepInstruction -> OpenBlock
 appendInstruction open instruction =

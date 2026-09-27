@@ -1,0 +1,61 @@
+name: Diagnostic report
+description: Report a reproducible compiler, tool, build, or runtime failure.
+title: "[Diagnostic]: "
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Include the smallest reproducible input and complete diagnostic output. Remove credentials, access tokens,
+        private source, and other sensitive data before submitting.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Compiler
+        - Analyzer
+        - Formatter
+        - Linter
+        - Kotlin project DSL
+        - Documentation or examples
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Failure summary
+      description: State what failed and the first actionable diagnostic.
+      placeholder: Describe one failure in a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps and input
+      description: Include commands and a minimal source/configuration sample.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS/version, Visual X# version, and relevant compiler or toolchain versions.
+      placeholder: Windows 11; vxs 0.4.0; Clang 22; GHC 9.10
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Full diagnostics or logs
+      description: Preserve error codes and source positions; redact secrets.
+      render: text
+    validations:
+      required: true

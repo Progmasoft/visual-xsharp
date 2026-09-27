@@ -59,6 +59,8 @@ main = do
             "CorePrep"
             [ env (pure (CoreModules (preparedFixtures sizes))) $ \modules ->
                 bgroup "Prepare" [benchAt size prepareDigest (coreModuleAt size modules) | size <- sizes]
+            , env (pure (CoreModules (loopFixtures sizes))) $ \modules ->
+                bgroup "PrepareLoops" [benchAt size prepareDigest (coreModuleAt size modules) | size <- sizes]
             , env (CorePrepModules <$> traverse preparedFixture sizes) $ \modules ->
                 bgroup "Verify" [benchAt size verifyPrepDigest (corePrepModuleAt size modules) | size <- sizes]
             , env (CorePrepModules <$> traverse preparedFixture sizes) $ \modules ->
@@ -99,6 +101,47 @@ fixtures = map (\size -> (size, makeCoreModule size))
 
 preparedFixtures :: [Int] -> [(Int, CoreModule)]
 preparedFixtures = fixtures
+
+{- | This fixture isolates Core-to-CorePrep cost for structured loops, including
+nested conditionals and explicit transfers in the loop body.
+-}
+loopFixtures :: [Int] -> [(Int, CoreModule)]
+loopFixtures = map (\size -> (size, makeLoopModule size))
+
+makeLoopModule :: Int -> CoreModule
+makeLoopModule count =
+    CoreModule (QualifiedName [Identifier "LoopBenchmark"]) (map makeLoopFunction [0 .. count - 1])
+    where
+        makeLoopFunction index =
+            let base = index * 4 + 1
+                functionName = name base "LoopFunction"
+                valueName = name (base + 1) "value"
+                value = CoreVariable valueName intType
+                lessThan bound = CorePrimitive CoreLessThan [value, integer bound] boolType
+                increment = CorePrimitive CoreAdd [value, integer 1] intType
+                skippedValue = CorePrimitive CoreEqual [value, integer 2] boolType
+                stoppedValue = CorePrimitive CoreEqual [value, integer 7] boolType
+                body =
+                    [ CoreBind (CoreBinding valueName intType True (integer 0))
+                    , CoreWhile
+                        (lessThan 5)
+                        [ CoreAssign valueName increment
+                        , CoreIf skippedValue [CoreContinue] []
+                        ]
+                    , CoreDoWhile
+                        [ CoreAssign valueName increment
+                        , CoreIf stoppedValue [CoreBreak] []
+                        ]
+                        (lessThan 9)
+                    , CoreFor
+                        (lessThan 12)
+                        [ CoreAssign valueName increment
+                        , CoreIf skippedValue [CoreContinue] []
+                        ]
+                        [CoreAssign valueName increment]
+                    , CoreReturn value
+                    ]
+             in CoreFunction functionName [] intType body
 
 inlineFixtures :: [Int] -> [(Int, CoreModule)]
 inlineFixtures = map (\size -> (size, makeInlineModule size))
@@ -303,6 +346,15 @@ statementDigest statement = case statement of
     CoreIf condition whenTrue whenFalse ->
         1 + expressionDigest condition + sum (map statementDigest whenTrue) + sum (map statementDigest whenFalse)
     CoreEvaluate expression -> 1 + expressionDigest expression
+    CoreWhile condition body -> 1 + expressionDigest condition + sum (map statementDigest body)
+    CoreDoWhile body condition -> 1 + sum (map statementDigest body) + expressionDigest condition
+    CoreFor condition body update ->
+        1
+            + expressionDigest condition
+            + sum (map statementDigest body)
+            + sum (map statementDigest update)
+    CoreBreak -> 1
+    CoreContinue -> 1
 
 expressionDigest :: CoreExpression -> Int
 expressionDigest expression = case expression of

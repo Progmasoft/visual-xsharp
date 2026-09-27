@@ -14,6 +14,7 @@ type bootstrapFakeRunner struct {
 	paths       map[string]string
 	invocations [][]string
 	javaDetails string
+	installed   map[string]bool
 }
 
 func (runner *bootstrapFakeRunner) Run(name string, arguments ...string) error {
@@ -22,6 +23,20 @@ func (runner *bootstrapFakeRunner) Run(name string, arguments ...string) error {
 }
 
 func (runner *bootstrapFakeRunner) Output(name string, arguments ...string) (string, error) {
+	if name == "winget.exe" && len(arguments) >= 3 && arguments[0] == "list" {
+		packageID := arguments[2]
+		if runner.installed[packageID] {
+			return "Name  Id  Version\n" + packageID + "  1.0", nil
+		}
+		return "No installed package found", errors.New("not installed")
+	}
+	if name == "brew" && len(arguments) == 3 && arguments[0] == "list" {
+		formula := arguments[2]
+		if runner.installed[formula] {
+			return formula, nil
+		}
+		return "", errors.New("not installed")
+	}
 	if name == "java" && runner.javaDetails != "" {
 		return runner.javaDetails, nil
 	}
@@ -132,6 +147,32 @@ func TestWingetInstallUsesExactNonInteractivePackageIdentity(t *testing.T) {
 	}
 	if !reflect.DeepEqual(runner.invocations, [][]string{want}) {
 		t.Fatalf("winget invocation = %#v", runner.invocations)
+	}
+}
+
+func TestWingetInstallSkipsOnlyTheAlreadyInstalledPackage(t *testing.T) {
+	runner := &bootstrapFakeRunner{installed: map[string]bool{"LLVM.LLVM": true}}
+	if err := installWingetPackage(runner, "winget.exe", "LLVM.LLVM"); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.invocations) != 0 {
+		t.Fatalf("already installed package was invoked again: %#v", runner.invocations)
+	}
+	if err := installWingetPackage(runner, "winget.exe", "Bazel.Bazelisk"); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.invocations) != 1 || !strings.Contains(strings.Join(runner.invocations[0], " "), "Bazel.Bazelisk") {
+		t.Fatalf("a different missing package was not installed independently: %#v", runner.invocations)
+	}
+}
+
+func TestHomebrewInstalledCheckUsesFormulaAndCaskKinds(t *testing.T) {
+	runner := &bootstrapFakeRunner{installed: map[string]bool{"llvm": true, "temurin@25": true}}
+	if !homebrewPackageInstalled(runner, "brew", toolRequirement{name: "LLVM", homebrewFormula: "llvm"}) {
+		t.Fatal("installed Homebrew formula was not recognized")
+	}
+	if !homebrewPackageInstalled(runner, "brew", toolRequirement{name: "Temurin JDK 25", homebrewFormula: "temurin@25"}) {
+		t.Fatal("installed Homebrew cask was not recognized")
 	}
 }
 

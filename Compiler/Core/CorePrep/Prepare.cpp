@@ -20,6 +20,9 @@ namespace Visual::XSharp::Core::CorePrep
             Prepared::BlockId nextBlock{ 1U };
             SymbolId nextFunction{ 1U };
             std::vector<Function> pendingFunctions;
+            // Innermost first; every pair stores (break exit, continue target).
+            std::vector<std::pair<Prepared::BlockId, Prepared::BlockId>>
+                loopTargets;
         };
 
         struct Atomized final
@@ -239,6 +242,10 @@ namespace Visual::XSharp::Core::CorePrep
             for (const auto &nested : statement.trueBranch)
                 highest = std::max(highest, HighestStatementSymbol(nested));
             for (const auto &nested : statement.falseBranch)
+                highest = std::max(highest, HighestStatementSymbol(nested));
+            for (const auto &nested : statement.loopBody)
+                highest = std::max(highest, HighestStatementSymbol(nested));
+            for (const auto &nested : statement.loopUpdate)
                 highest = std::max(highest, HighestStatementSymbol(nested));
             return highest;
         }
@@ -500,6 +507,53 @@ namespace Visual::XSharp::Core::CorePrep
                           const std::vector<Statement> &statements,
                           std::size_t start = 0U) -> BlocksResult;
 
+        /**
+         * @brief Replace open-region fallthrough sentinels with a real edge.
+         *
+         * `PrepareStatements` uses `Unreachable` for the still-open tail of a
+         * nested region. Explicit `Return` and `Jump` terminators are closed
+         * paths and are deliberately not rewritten.
+         */
+        void
+        ConnectFallthrough(std::vector<Prepared::Block> &blocks,
+                           const Prepared::BlockId target)
+        {
+            for (auto &block : blocks)
+            {
+                if (block.terminator.kind
+                    == Prepared::Terminator::Kind::Unreachable)
+                {
+                    block.terminator.kind = Prepared::Terminator::Kind::Jump;
+                    block.terminator.true_target = target;
+                }
+            }
+        }
+
+        /**
+         * @brief Prepare a loop region with a scoped transfer-target stack.
+         *
+         * Nested regions inherit this loop's targets while they are built,
+         * then restore the enclosing stack. Thus an inner `break` or
+         * `continue` cannot accidentally target an outer loop. Only blocks
+         * still marked as fallthrough are connected to the continuation;
+         * explicit return and jump terminators remain untouched.
+         */
+        [[nodiscard]] auto
+        PrepareLoopRegion(State state,
+                          const Prepared::BlockId startId,
+                          const Prepared::BlockId breakTarget,
+                          const Prepared::BlockId continueTarget,
+                          const std::vector<Statement> &statements)
+            -> BlocksResult
+        {
+            auto enclosingTargets = state.loopTargets;
+            state.loopTargets.emplace_back(breakTarget, continueTarget);
+            auto result = PrepareStatements(state, startId, {}, statements);
+            ConnectFallthrough(result.blocks, continueTarget);
+            result.state.loopTargets = std::move(enclosingTargets);
+            return result;
+        }
+
         [[nodiscard]] auto
         PrepareBranch(State state,
                       Prepared::BlockId blockId,
@@ -604,6 +658,184 @@ namespace Visual::XSharp::Core::CorePrep
                              value.state };
                 }
 
+                if (statement.kind == Statement::Kind::Break
+                    || statement.kind == Statement::Kind::Continue)
+                {
+                    if (state.loopTargets.empty())
+                    {
+                        return { { { blockId,
+                                     std::move(instructions),
+                                     { Prepared::Terminator::Kind::Unreachable,
+                                       {},
+                                       0U,
+                                       0U } } },
+                                 state };
+                    }
+                    const auto targets = state.loopTargets.back();
+                    const auto target = statement.kind == Statement::Kind::Break
+                                            ? targets.first
+                                            : targets.second;
+                    return { { { blockId,
+                                 std::move(instructions),
+                                 { Prepared::Terminator::Kind::Jump,
+                                   {},
+                                   target,
+                                   0U } } },
+                             state };
+                }
+
+                if (statement.kind == Statement::Kind::While)
+                {
+                    auto condition = Atomize(state, statement.expression);
+                    auto boolean = Booleanize(std::move(condition.state),
+                                              std::move(condition.atom));
+                    condition.prefix.insert(
+                        condition.prefix.end(),
+                        std::make_move_iterator(boolean.prefix.begin()),
+                        std::make_move_iterator(boolean.prefix.end()));
+                    instructions.insert(
+                        instructions.end(),
+                        std::make_move_iterator(condition.prefix.begin()),
+                        std::make_move_iterator(condition.prefix.end()));
+
+                    const auto bodyId = boolean.state.nextBlock;
+                    const auto exitId = bodyId + 1U;
+                    boolean.state.nextBlock = exitId + 1U;
+                    auto body = PrepareLoopRegion(boolean.state,
+                                                  bodyId,
+                                                  exitId,
+                                                  blockId,
+                                                  statement.loopBody);
+                    auto tail = PrepareStatements(body.state,
+                                                  exitId,
+                                                  {},
+                                                  statements,
+                                                  index + 1U);
+                    std::vector<Prepared::Block> blocks;
+                    blocks.push_back({ blockId,
+                                       std::move(instructions),
+                                       { Prepared::Terminator::Kind::Branch,
+                                         std::move(boolean.atom),
+                                         bodyId,
+                                         exitId } });
+                    blocks.insert(blocks.end(),
+                                  std::make_move_iterator(body.blocks.begin()),
+                                  std::make_move_iterator(body.blocks.end()));
+                    blocks.insert(blocks.end(),
+                                  std::make_move_iterator(tail.blocks.begin()),
+                                  std::make_move_iterator(tail.blocks.end()));
+                    return { std::move(blocks), std::move(tail.state) };
+                }
+
+                if (statement.kind == Statement::Kind::DoWhile)
+                {
+                    const auto bodyId = state.nextBlock;
+                    const auto conditionId = bodyId + 1U;
+                    const auto exitId = conditionId + 1U;
+                    state.nextBlock = exitId + 1U;
+                    auto body = PrepareLoopRegion(state,
+                                                  bodyId,
+                                                  exitId,
+                                                  conditionId,
+                                                  statement.loopBody);
+                    auto condition = Atomize(body.state, statement.expression);
+                    auto boolean = Booleanize(std::move(condition.state),
+                                              std::move(condition.atom));
+                    condition.prefix.insert(
+                        condition.prefix.end(),
+                        std::make_move_iterator(boolean.prefix.begin()),
+                        std::make_move_iterator(boolean.prefix.end()));
+                    auto tail = PrepareStatements(boolean.state,
+                                                  exitId,
+                                                  {},
+                                                  statements,
+                                                  index + 1U);
+
+                    std::vector<Prepared::Block> blocks;
+                    blocks.push_back({ blockId,
+                                       std::move(instructions),
+                                       { Prepared::Terminator::Kind::Jump,
+                                         {},
+                                         bodyId,
+                                         0U } });
+                    blocks.insert(blocks.end(),
+                                  std::make_move_iterator(body.blocks.begin()),
+                                  std::make_move_iterator(body.blocks.end()));
+                    blocks.push_back({ conditionId,
+                                       std::move(condition.prefix),
+                                       { Prepared::Terminator::Kind::Branch,
+                                         std::move(boolean.atom),
+                                         bodyId,
+                                         exitId } });
+                    blocks.insert(blocks.end(),
+                                  std::make_move_iterator(tail.blocks.begin()),
+                                  std::make_move_iterator(tail.blocks.end()));
+                    return { std::move(blocks), std::move(tail.state) };
+                }
+
+                if (statement.kind == Statement::Kind::For)
+                {
+                    const auto conditionId = state.nextBlock;
+                    const auto bodyId = conditionId + 1U;
+                    const auto updateId = bodyId + 1U;
+                    const auto exitId = updateId + 1U;
+                    state.nextBlock = exitId + 1U;
+
+                    auto condition = Atomize(state, statement.expression);
+                    auto boolean = Booleanize(std::move(condition.state),
+                                              std::move(condition.atom));
+                    auto body = PrepareLoopRegion(boolean.state,
+                                                  bodyId,
+                                                  exitId,
+                                                  updateId,
+                                                  statement.loopBody);
+                    auto update = PrepareLoopRegion(body.state,
+                                                    updateId,
+                                                    exitId,
+                                                    updateId,
+                                                    statement.loopUpdate);
+                    auto tail = PrepareStatements(update.state,
+                                                  exitId,
+                                                  {},
+                                                  statements,
+                                                  index + 1U);
+
+                    std::vector<Prepared::Block> blocks;
+                    blocks.push_back({ blockId,
+                                       std::move(instructions),
+                                       { Prepared::Terminator::Kind::Jump,
+                                         {},
+                                         conditionId,
+                                         0U } });
+                    blocks.push_back({ conditionId,
+                                       std::move(condition.prefix),
+                                       { Prepared::Terminator::Kind::Branch,
+                                         std::move(boolean.atom),
+                                         bodyId,
+                                         exitId } });
+                    blocks.insert(blocks.end(),
+                                  std::make_move_iterator(body.blocks.begin()),
+                                  std::make_move_iterator(body.blocks.end()));
+                    blocks.insert(
+                        blocks.end(),
+                        std::make_move_iterator(update.blocks.begin()),
+                        std::make_move_iterator(update.blocks.end()));
+                    blocks.insert(blocks.end(),
+                                  std::make_move_iterator(tail.blocks.begin()),
+                                  std::make_move_iterator(tail.blocks.end()));
+                    return { std::move(blocks), std::move(tail.state) };
+                }
+
+                if (statement.kind != Statement::Kind::If)
+                {
+                    return { { { blockId,
+                                 std::move(instructions),
+                                 { Prepared::Terminator::Kind::Unreachable,
+                                   {},
+                                   0U,
+                                   0U } } },
+                             state };
+                }
                 auto condition = Atomize(state, statement.expression);
                 auto boolean = Booleanize(std::move(condition.state),
                                           std::move(condition.atom));
@@ -671,11 +903,11 @@ namespace Visual::XSharp::Core::CorePrep
             {
                 parameters.push_back({ parameter.symbol, parameter.type });
             }
-            auto body
-                = PrepareStatements(State{ highest + 1U, 1U, nextFunction, {} },
-                                    0U,
-                                    {},
-                                    function.body);
+            auto body = PrepareStatements(
+                State{ highest + 1U, 1U, nextFunction, {}, {} },
+                0U,
+                {},
+                function.body);
             return {
                 Prepared::Function{ function.symbol,
                                     std::move(parameters),

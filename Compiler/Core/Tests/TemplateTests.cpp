@@ -420,7 +420,7 @@ TEST_CASE("rendered identity length-prefixes qualified components")
     CHECK(second.find("1:") != std::string::npos);
 }
 
-TEST_CASE("Core v6 preserves ordered template arguments and source ownership")
+TEST_CASE("Core v7 preserves ordered template arguments and source ownership")
 {
     const auto type = Applied(U"Mix",
                               { TypeArgument(Model::Type::string()),
@@ -434,7 +434,7 @@ TEST_CASE("Core v6 preserves ordered template arguments and source ownership")
     const auto decoded = Core::Wire::Decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == module);
-    CHECK(Core::Wire::kCurrentVersion == 6U);
+    CHECK(Core::Wire::kCurrentVersion == 7U);
 }
 
 TEST_CASE(

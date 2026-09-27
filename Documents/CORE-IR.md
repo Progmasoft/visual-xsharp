@@ -140,7 +140,11 @@ no-result markers.
 
 ## Statements
 
-Core has five statement forms.
+Core has ten statement forms. The source frontend lowers structured iteration
+into Core without prematurely expanding it into backend blocks; CorePrep owns
+that control-flow conversion. Keeping loop shape here lets optimization and
+verification reason about conditions, body execution, update order, and loop
+control before basic-block construction.
 
 ### Bind
 
@@ -194,6 +198,48 @@ binding or branch wrapper.
 
 A pure `CoreEvaluate` can be deleted. Calls and closure construction are
 conservatively effectful and remain explicit.
+
+### While
+
+`CoreWhile` contains a condition followed by an ordered body. The condition is
+evaluated before each body execution, so the body may execute zero times. Its
+condition follows the same `bool` or numeric truth rule as `CoreIf`. The body
+has a nested binding scope; its declarations do not escape the loop.
+
+### Do/while
+
+`CoreDoWhile` contains an ordered body followed by a condition. The body runs
+before the first condition evaluation and therefore executes at least once
+unless control returns or leaves the function from inside it. Each normal body
+completion reaches the condition; `continue` reaches that same condition
+directly.
+
+### Classic for
+
+`CoreFor` stores a condition, body, and update list separately. The source
+initializer is lowered into the enclosing ordered statement stream before the
+loop node, while its binding remains scoped to the loop in source semantics.
+CorePrep emits the condition before the body, sends normal body completion and
+`continue` through the update list, and then branches back to the condition.
+The update list may be empty; it is still a distinct position in the
+control-flow model.
+
+### Break and continue
+
+`CoreBreak` exits the innermost active loop. `CoreContinue` skips the remainder
+of that iteration and reaches the loop's continuation point: the condition for
+`while`, the trailing condition for `do/while`, or the update list for classic
+`for`. These statements carry no source label or value. Core verification
+tracks loop nesting independently for each function and closure body and rejects
+either statement outside a loop. Nested loops push a new target pair, so an
+inner transfer cannot accidentally jump to an outer loop.
+
+Optimizer passes preserve the explicit loop form unless their rewrite proves
+the replacement semantics, including effects and transfer edges. In
+particular, a constant condition does not permit deleting an effectful body or
+moving evaluation across a `break`, `continue`, or return. CorePrep consumes
+the verified structure and materializes loop headers, exits, latches, and the
+distinct `for` update block.
 
 ## Expressions
 

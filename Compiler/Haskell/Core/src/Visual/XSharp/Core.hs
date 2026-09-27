@@ -68,13 +68,25 @@ data CoreCapture = CoreCapture
     , coreCaptureValue :: CoreExpression
     }
     deriving (Eq, Ord, Read, Show)
+
+{- | Structured, verified statements retained until CorePrep constructs the
+control-flow graph. Loop forms remain explicit so that optimizers can preserve
+condition, body, update, and innermost-transfer ordering without reconstructing
+source semantics from basic blocks.
+-}
 data CoreStatement
     = CoreBind CoreBinding
     | CoreAssign ResolvedName CoreExpression
     | CoreReturn CoreExpression
     | CoreIf CoreExpression [CoreStatement] [CoreStatement]
     | CoreEvaluate CoreExpression
+    | CoreWhile CoreExpression [CoreStatement]
+    | CoreDoWhile [CoreStatement] CoreExpression
+    | CoreFor CoreExpression [CoreStatement] [CoreStatement]
+    | CoreBreak
+    | CoreContinue
     deriving (Eq, Ord, Read, Show)
+
 data CoreBinding = CoreBinding
     { coreBindingName :: ResolvedName
     , coreBindingType :: Type

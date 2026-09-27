@@ -5,18 +5,21 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Visual X# comparative programs
 
-Each directory contains the same complete program in four languages:
+Each directory contains the same complete program in five languages:
 
 - Visual X#, written against the normative `Spec/` language and standard-library contracts;
 - C# 13;
 - C++20;
-- Java 21.
+- Java 21;
+- Rust.
 
 The examples are comparative source material, not a declaration that every forward-looking Visual X# feature is already
-implemented by the current compiler. C# and Java are example languages only. They are not compiler-development
-prerequisites and must not be added to the Visual X# compiler toolchain requirements.
+implemented by the current compiler. C#, Java, and Rust are comparison languages only. Rust examples and the comparative
+benchmark do not make Rust a Visual X# compiler implementation language or a mandatory compiler-development prerequisite.
+`optional_packages.go` can add `rustc` and `rust-std` components to an existing rustup toolchain; it never installs or
+selects a toolchain automatically.
 
-Every program is intentionally self-contained. The C++, C#, and Java variants use their own standard libraries rather
+Every program is intentionally self-contained. The C++, C#, Java, and Rust variants use their own standard libraries rather
 than imitating Visual X# APIs mechanically.
 
 | Program | Main Visual X# surface |
@@ -27,7 +30,20 @@ than imitating Visual X# APIs mechanically.
 | `WordFrequency` | `[T]` dynamic arrays and `[K to V]` dictionaries |
 | `BankAccount` | AARC class, constructor labels, fields, mutation |
 | `ShapeAreas` | data classes, inheritance, type patterns, `match` |
-| `GenericStack` | templates and the `System.Array<T>` operation surface |
-| `FileRoundTrip` | `Path`, `Files`, checked `IOException` propagation |
-| `ConcurrentMessages` | spawned threads, lambdas, MPSC channel |
-| `ExceptionRecovery` | `throw`, declared throwable flow, ordered `catch` |
+| `FileRoundTrip` | standard file APIs, UTF-8 text, resource cleanup |
+| `ConcurrentMessages` | MPSC channels, task spawning, message transfer |
+| `ExceptionRecovery` | declared throws, typed catch, per-item recovery |
+| `GenericStack` | generic classes, dynamic collections, LIFO operations |
+| `LoopControl` | `while`, `do/while`, classic `for`, `break`, and `continue` |
+| `PrimeNumbers` | nested loops, early returns, divisor bounds |
+| `CollatzTrace` | loop-carried state, parity, a bounded termination guard |
+| `MatrixTranspose` | flattened row-major storage and nested index loops |
+| `GCD` | Euclid's algorithm and loop-carried remainder state |
+
+## Comparing loop behavior
+
+`LoopControl`, `PrimeNumbers`, `CollatzTrace`, `MatrixTranspose`, and `GCD` put the loop forms under active compiler
+development into small, inspectable programs. In particular, `LoopControl` exercises all three loop statements and both
+loop-control transfers in one deterministic result. `MatrixTranspose` deliberately uses a flat buffer rather than
+assuming that nested arrays share the same layout across the five languages. `PrimeNumbers` uses trial division so the
+example demonstrates control flow instead of hiding it inside a library sieve.

@@ -150,10 +150,16 @@ calleeContinuesAtJoin = case preparedFunction (returning call) of
     Just function -> exactlyOneCall function && length (branchConditions (Just function)) == 1
     Nothing -> False
     where
-        left = CoreVariable (name 31 "leftFunction") nullaryBoolFunction
-        right = CoreVariable (name 32 "rightFunction") nullaryBoolFunction
-        selected = logicalWithType CoreLogicalOr left right nullaryBoolFunction
-        call = CoreApply selected [] boolType
+        argument = name 51 "argument"
+        callableType = FunctionType [boolType] boolType
+        callee =
+            CoreClosure
+                []
+                [(argument, boolType)]
+                boolType
+                [CoreReturn (CoreVariable argument boolType)]
+                callableType
+        call = CoreApply callee [logical CoreLogicalOr boolFalse boolTrue] boolType
 
 conditionComposesControlFlow :: Bool
 conditionComposesControlFlow = case preparedFunction statements of
@@ -282,6 +288,7 @@ testFunction statements = CoreFunction (name 1 "Evaluate") parameters returnType
             , (name 3 "floating", floatType)
             , (name 31 "leftFunction", nullaryBoolFunction)
             , (name 32 "rightFunction", nullaryBoolFunction)
+            , (name 50 "Predicate", FunctionType [boolType] boolType)
             ]
         returnType = case reverse statements of
             CoreReturn expression : _ -> expressionType expression

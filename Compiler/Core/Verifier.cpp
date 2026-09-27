@@ -181,15 +181,20 @@ namespace Visual::XSharp::Core
             void
             VerifyStatements(const llvm::ArrayRef<Statement> statements,
                              Environment &environment,
-                             const Type &expectedReturnType)
+                             const Type &expectedReturnType,
+                             const std::size_t loopDepth = 0U)
             {
                 for (const auto &statement : statements)
-                    VerifyStatement(statement, environment, expectedReturnType);
+                    VerifyStatement(statement,
+                                    environment,
+                                    expectedReturnType,
+                                    loopDepth);
             }
             void
             VerifyStatement(const Statement &statement,
                             Environment &environment,
-                            const Type &expectedReturnType)
+                            const Type &expectedReturnType,
+                            const std::size_t loopDepth)
             {
                 switch (statement.kind)
                 {
@@ -263,14 +268,48 @@ namespace Visual::XSharp::Core
                         auto falseEnvironment = environment;
                         VerifyStatements(statement.trueBranch,
                                          trueEnvironment,
-                                         expectedReturnType);
+                                         expectedReturnType,
+                                         loopDepth);
                         VerifyStatements(statement.falseBranch,
                                          falseEnvironment,
-                                         expectedReturnType);
+                                         expectedReturnType,
+                                         loopDepth);
                         return;
                     }
                     case Statement::Kind::Evaluate:
                         VerifyExpression(statement.expression, environment);
+                        return;
+                    case Statement::Kind::While:
+                    case Statement::Kind::DoWhile:
+                    case Statement::Kind::For:
+                    {
+                        VerifyExpression(statement.expression, environment);
+                        if (!accepts_boolean_context(statement.expression.type))
+                            Add("VXC1017",
+                                "Core loop condition must be bool or numeric");
+                        auto loopEnvironment = environment;
+                        VerifyStatements(statement.loopBody,
+                                         loopEnvironment,
+                                         expectedReturnType,
+                                         loopDepth + 1U);
+                        if (statement.kind == Statement::Kind::For)
+                        {
+                            auto updateEnvironment = environment;
+                            VerifyStatements(statement.loopUpdate,
+                                             updateEnvironment,
+                                             expectedReturnType,
+                                             loopDepth + 1U);
+                        }
+                        return;
+                    }
+                    case Statement::Kind::Break:
+                        if (loopDepth == 0U)
+                            Add("VXC1064", "Core break appears outside a loop");
+                        return;
+                    case Statement::Kind::Continue:
+                        if (loopDepth == 0U)
+                            Add("VXC1065",
+                                "Core continue appears outside a loop");
                         return;
                 }
             }
@@ -595,7 +634,8 @@ namespace Visual::XSharp::Core
                               "parameter and return types");
                 VerifyStatements(*expression.closureBody,
                                  closureEnvironment,
-                                 expression.closureReturnType);
+                                 expression.closureReturnType,
+                                 0U);
                 if (expression.closureReturnType != Type::unit()
                     && !AlwaysReturns(*expression.closureBody))
                     Add("VXC1042",

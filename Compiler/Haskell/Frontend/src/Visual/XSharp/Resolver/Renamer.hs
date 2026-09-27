@@ -162,9 +162,68 @@ renameStatement environment next statement = case statement of
             , afterFalse
             , conditionProblems ++ trueProblems ++ falseProblems
             )
+    WhileStatement spanValue condition body ->
+        let (renamedCondition, afterCondition, conditionProblems) = renameExpression environment next condition
+            (renamedBody, afterBody, bodyProblems) = renameBlock environment afterCondition body
+         in (WhileStatement spanValue renamedCondition renamedBody, environment, afterBody, conditionProblems ++ bodyProblems)
+    DoWhileStatement spanValue body condition ->
+        let (renamedBody, afterBody, bodyProblems) = renameBlock environment next body
+            (renamedCondition, afterCondition, conditionProblems) = renameExpression environment afterBody condition
+         in ( DoWhileStatement spanValue renamedBody renamedCondition
+            , environment
+            , afterCondition
+            , bodyProblems ++ conditionProblems
+            )
+    ForStatement spanValue initializer condition updates body ->
+        let (renamedInitializer, loopEnvironment, afterInitializer, initializerProblems) = case initializer of
+                Nothing -> (Nothing, environment, next, [])
+                Just value ->
+                    let (renamed, nested, after, problems) = renameStatement environment next value
+                     in (Just renamed, nested, after, problems)
+            (renamedCondition, afterCondition, conditionProblems) = case condition of
+                Nothing -> (Nothing, afterInitializer, [])
+                Just value ->
+                    let (renamed, after, problems) = renameExpression loopEnvironment afterInitializer value
+                     in (Just renamed, after, problems)
+            (renamedUpdates, afterUpdates, updateProblems) = renameStatementList loopEnvironment afterCondition updates
+            (renamedBody, afterBody, bodyProblems) = renameBlock loopEnvironment afterUpdates body
+         in ( ForStatement spanValue renamedInitializer renamedCondition renamedUpdates renamedBody
+            , environment
+            , afterBody
+            , initializerProblems ++ conditionProblems ++ updateProblems ++ bodyProblems
+            )
+    ForEachStatement spanValue kind syntax sourceName _ source body ->
+        let (renamedSource, afterSource, sourceProblems) = renameExpression environment next source
+            duplicate = any ((== sourceName) . fst) environment
+            renamedName = RenamedName sourceName afterSource
+            duplicateProblems =
+                if duplicate
+                    then [Diagnostic RenamerStage Error "VXR0003" (Just spanValue) ("duplicate loop binding " ++ identifierText sourceName)]
+                    else []
+            (renamedBody, afterBody, bodyProblems) =
+                renameBlock ((sourceName, renamedName) : environment) (afterSource + 1) body
+         in ( ForEachStatement spanValue kind syntax renamedName () renamedSource renamedBody
+            , environment
+            , afterBody
+            , sourceProblems ++ duplicateProblems ++ bodyProblems
+            )
+    IncrementStatement spanValue name _ direction ->
+        (IncrementStatement spanValue (valueOrMissing name environment) () direction, environment, next, [])
+    BreakStatement spanValue value ->
+        let (renamed, after, problems) = renameOptional environment next value
+         in (BreakStatement spanValue renamed, environment, after, problems)
+    ContinueStatement spanValue -> (ContinueStatement spanValue, environment, next, [])
     ExpressionStatement spanValue value terminated ->
         let (renamedValue, after, problems) = renameExpression environment next value
          in (ExpressionStatement spanValue renamedValue terminated, environment, after, problems)
+
+renameStatementList ::
+    Environment -> Int -> [Statement Identifier ()] -> ([Statement RenamedName ()], Int, [Diagnostic])
+renameStatementList _ next [] = ([], next, [])
+renameStatementList environment next (statement : remaining) =
+    let (renamed, nested, after, firstProblems) = renameStatement environment next statement
+        (later, final, laterProblems) = renameStatementList nested after remaining
+     in (renamed : later, final, firstProblems ++ laterProblems)
 
 renameOptional ::
     Environment -> Int -> Maybe (Expression Identifier ()) -> (Maybe (Expression RenamedName ()), Int, [Diagnostic])

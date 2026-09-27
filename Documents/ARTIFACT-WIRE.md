@@ -11,7 +11,7 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 
 | Contract | Magic | Current version | Producer | Consumer |
 | --- | --- | ---: | --- | --- |
-| Core | `VXCR` | 6 | Haskell frontend | native Core reader |
+| Core | `VXCR` | 7 | Haskell frontend | native Core reader |
 | CorePrep | `VXCP` | 6 | CorePrep adapter | native pipeline tools |
 | Xpp | `VXPP` | 5 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
 | Xmm | `VXMM` | 5 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
@@ -50,9 +50,10 @@ still fit its declared scalar width.
 
 ## Source ownership
 
-Version 6 of Core and CorePrep, and version 5 of Xpp and Xmm, carry the
-physical project source catalog and the source owner of each function. The
-catalog is ordered exactly like the frontend's deterministic project-relative
+Core v6 introduced, and Core v7 retains, the physical project source catalog
+and the source owner of each function. CorePrep v6 and Xpp/Xmm v5 also carry
+this provenance. The catalog is ordered exactly like the frontend's
+deterministic project-relative source set.
 source set. A source with no declarations remains in the catalog so project
 object and assembly builds still produce an output for that compilation unit.
 
@@ -79,7 +80,8 @@ source that caused its emission.
 
 Wire v5 introduced explicit tags for unit/no-result, boolean, string, function,
 named, variable, character, every signed and unsigned integer width, and every
-floating width. Wire v6 retains that scalar catalog and adds source ownership.
+floating width. Wire v6 added source ownership, and Core v7 retains both that
+metadata and the scalar catalog while adding loop statement tags.
 A decoder reconstructs the exact type; it does not infer width from the literal
 byte count.
 
@@ -89,7 +91,7 @@ the bit pattern is identical.
 
 ### Core scalar tags (introduced in v5)
 
-The native and Haskell Core codecs retain these assignments in version 6. This
+The native and Haskell Core codecs retain these assignments in version 7. This
 table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
@@ -137,7 +139,7 @@ type record is decoded.
 
 Core and CorePrep encode named-type arguments as typed values rather than
 treating every argument as another type. Their current format retains that
-ordered sum; Core v6 and CorePrep v6 also carry source provenance. Each argument
+ordered sum; Core v7 and CorePrep v6 also carry source provenance. Each argument
 starts with a kind tag and is decoded in source order:
 
 | Tag | Argument payload |
@@ -184,11 +186,36 @@ does not invent a `FixedArray` class name. The built-in `[]T` representation is
 not rewritten to `System.Array`, because the language specification gives it a
 different role.
 
+## Core loop statement tags
+
+Core wire v7 preserves the existing statement tags 0 through 4 and appends
+explicit loop-control records. The tag is followed by each field in the order
+shown; nested statement lists use the ordinary bounded statement-vector
+encoding.
+
+| Tag | Statement | Payload order |
+| ---: | --- | --- |
+| 5 | `CoreWhile` | condition, body |
+| 6 | `CoreDoWhile` | body, condition |
+| 7 | `CoreFor` | condition, body, update |
+| 8 | `CoreBreak` | none |
+| 9 | `CoreContinue` | none |
+
+These records preserve source control flow until CorePrep creates explicit
+blocks and edges. `break` and `continue` carry no value or target identifier:
+the enclosing loop nesting determines their target, and both the Haskell and
+native Core verifiers reject a control statement without an active loop.
+The `for` update list is separate from the body so `continue` reaches updates
+before the condition is evaluated again. A `do/while` condition follows the
+body because it is evaluated after every entered body, including on the first
+iteration.
+
 ### Version transition
 
-Versions are strict, not feature-negotiated. Core and CorePrep readers accept
-only version 6; Xpp and Xmm readers accept only version 5. Every older or future
-version fails at the version field before body decoding. The compiler does not
+Versions are strict, not feature-negotiated. Core readers accept only version
+7, CorePrep readers accept only version 6, and Xpp/Xmm readers accept only
+version 5. Every older or future version fails at the version field before
+body decoding. The compiler does not
 guess whether a document happens to contain only fields from an older schema.
 Recompile the owning source or regenerate the intermediate artifact with the
 current compiler.
@@ -392,9 +419,10 @@ verified again before serialization or forward lowering.
 
 ## Compatibility policy
 
-The version field describes the entire schema. Core/CorePrep version 6 adds
-project source catalogs and per-function ownership to the current scalar,
-template, closure, and control-flow models. Xpp/Xmm began independently at
+The version field describes the entire schema. Core v6 and CorePrep v6 added
+project source catalogs and per-function ownership; Core v7 additionally adds
+structured `while`, `do/while`, classic `for`, `break`, and `continue` records.
+Xpp/Xmm began independently at
 version 1; their current version 5 retains the explicit ownership operations,
 template values, and type-test operation, and adds source catalogs and function
 owners. The intermediate versions remain strict historical contracts; their

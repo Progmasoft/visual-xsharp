@@ -141,7 +141,12 @@ namespace Visual::XSharp::Core
             Assign,
             Return,
             If,
-            Evaluate
+            Evaluate,
+            While,
+            DoWhile,
+            For,
+            Break,
+            Continue
         };
 
         Kind kind{ Kind::Evaluate };
@@ -150,6 +155,8 @@ namespace Visual::XSharp::Core
         Expression expression{};
         std::vector<Statement> trueBranch;
         std::vector<Statement> falseBranch;
+        std::vector<Statement> loopBody;
+        std::vector<Statement> loopUpdate;
 
         [[nodiscard]] static auto
         Bind(Binding value) -> Statement;
@@ -163,6 +170,38 @@ namespace Visual::XSharp::Core
            std::vector<Statement> whenFalse) -> Statement;
         [[nodiscard]] static auto
         Evaluate(Expression value) -> Statement;
+        /**
+         * @brief Build a pre-test loop with an ordered, structured body.
+         *
+         * CorePrep evaluates the condition before each body entry and uses
+         * the innermost loop's header as the `continue` destination.
+         */
+        [[nodiscard]] static auto
+        While(Expression condition, std::vector<Statement> body) -> Statement;
+        /**
+         * @brief Build a post-test loop whose body executes before its test.
+         *
+         * `continue` transfers to the trailing condition, not to the body
+         * entry.
+         */
+        [[nodiscard]] static auto
+        DoWhile(std::vector<Statement> body, Expression condition) -> Statement;
+        /**
+         * @brief Build a classic loop with distinct body and update regions.
+         *
+         * Keeping updates separate ensures `continue` runs them before the
+         * next condition check.
+         */
+        [[nodiscard]] static auto
+        For(Expression condition,
+            std::vector<Statement> body,
+            std::vector<Statement> update) -> Statement;
+        /// @brief Exit the innermost active loop.
+        [[nodiscard]] static auto
+        Break() -> Statement;
+        /// @brief Continue at the innermost loop's language-defined target.
+        [[nodiscard]] static auto
+        Continue() -> Statement;
         [[nodiscard]] auto
         operator==(const Statement &) const -> bool = default;
     };

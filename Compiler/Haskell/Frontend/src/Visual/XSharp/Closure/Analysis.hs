@@ -121,6 +121,20 @@ walkStatement parent state statement = case statement of
         let afterCondition = walkExpression parent state condition
             afterTrue = walkBlock parent afterCondition trueBlock
          in maybe afterTrue (walkBlock parent afterTrue) falseBlock
+    WhileStatement _ condition body ->
+        walkBlock parent (walkExpression parent state condition) body
+    DoWhileStatement _ body condition ->
+        walkExpression parent (walkBlock parent state body) condition
+    ForStatement _ initializer condition updates body ->
+        let afterInitializer = maybe state (walkStatement parent state) initializer
+            afterCondition = maybe afterInitializer (walkExpression parent afterInitializer) condition
+            afterUpdates = foldl (walkStatement parent) afterCondition updates
+         in walkBlock parent afterUpdates body
+    ForEachStatement _ _ _ _ _ source body ->
+        walkBlock parent (walkExpression parent state source) body
+    IncrementStatement {} -> state
+    BreakStatement _ value -> maybe state (walkExpression parent state) value
+    ContinueStatement {} -> state
     ExpressionStatement _ value _ -> walkExpression parent state value
 
 walkExpression :: Maybe ClosureId -> WalkState -> Expression ResolvedName Type -> WalkState
@@ -217,6 +231,19 @@ statementFacts statement = case statement of
         expressionFacts condition
             `appendFacts` blockFacts trueBlock
             `appendFacts` maybe emptyFacts blockFacts falseBlock
+    WhileStatement _ condition body -> expressionFacts condition `appendFacts` blockFacts body
+    DoWhileStatement _ body condition -> blockFacts body `appendFacts` expressionFacts condition
+    ForStatement _ initializer condition updates body ->
+        maybe emptyFacts statementFacts initializer
+            `appendFacts` maybe emptyFacts expressionFacts condition
+            `appendFacts` foldl appendFacts emptyFacts (map statementFacts updates)
+            `appendFacts` blockFacts body
+    ForEachStatement _ _ _ name _ source body ->
+        let nested = expressionFacts source `appendFacts` blockFacts body
+         in nested {factLocals = name : factLocals nested, factWrites = name : factWrites nested}
+    IncrementStatement _ name annotation _ -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
+    BreakStatement _ value -> maybe emptyFacts expressionFacts value
+    ContinueStatement {} -> emptyFacts
     ExpressionStatement _ value _ -> expressionFacts value
 
 expressionFacts :: Expression ResolvedName Type -> BodyFacts
@@ -282,6 +309,14 @@ statementContainsReturn statement = case statement of
     IfStatement _ _ yes no ->
         any statementContainsReturn (blockStatements yes)
             || maybe False (any statementContainsReturn . blockStatements) no
+    WhileStatement _ _ body -> any statementContainsReturn (blockStatements body)
+    DoWhileStatement _ body _ -> any statementContainsReturn (blockStatements body)
+    ForStatement _ initializer _ updates body ->
+        maybe False statementContainsReturn initializer
+            || any statementContainsReturn updates
+            || any statementContainsReturn (blockStatements body)
+    ForEachStatement _ _ _ _ _ _ body -> any statementContainsReturn (blockStatements body)
+    BreakStatement _ value -> maybe False (const False) value
     _ -> False
 
 bodyContainsCall :: CallableBody name annotation -> Bool
@@ -297,6 +332,20 @@ statementContainsCall statement = case statement of
         expressionContainsCall condition
             || any statementContainsCall (blockStatements yes)
             || maybe False (any statementContainsCall . blockStatements) no
+    WhileStatement _ condition body ->
+        expressionContainsCall condition || any statementContainsCall (blockStatements body)
+    DoWhileStatement _ body condition ->
+        any statementContainsCall (blockStatements body) || expressionContainsCall condition
+    ForStatement _ initializer condition updates body ->
+        maybe False statementContainsCall initializer
+            || maybe False expressionContainsCall condition
+            || any statementContainsCall updates
+            || any statementContainsCall (blockStatements body)
+    ForEachStatement _ _ _ _ _ source body ->
+        expressionContainsCall source || any statementContainsCall (blockStatements body)
+    IncrementStatement {} -> False
+    BreakStatement _ value -> maybe False expressionContainsCall value
+    ContinueStatement {} -> False
     ExpressionStatement _ value _ -> expressionContainsCall value
 
 expressionContainsCall :: Expression name annotation -> Bool

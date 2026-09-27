@@ -586,6 +586,52 @@ namespace Visual::XSharp::Core::Wire
                     }
                     case 4:
                         return Statement::Evaluate(ReadExpression());
+                    case 5:
+                    {
+                        auto condition = ReadExpression();
+                        auto body
+                            = Vector<Statement>(limits_.maximumStatements,
+                                                "while body statement count",
+                                                [this] {
+                                                    return ReadStatement();
+                                                });
+                        return Statement::While(std::move(condition),
+                                                std::move(body));
+                    }
+                    case 6:
+                    {
+                        auto body
+                            = Vector<Statement>(limits_.maximumStatements,
+                                                "do/while body statement count",
+                                                [this] {
+                                                    return ReadStatement();
+                                                });
+                        return Statement::DoWhile(std::move(body),
+                                                  ReadExpression());
+                    }
+                    case 7:
+                    {
+                        auto condition = ReadExpression();
+                        auto body
+                            = Vector<Statement>(limits_.maximumStatements,
+                                                "for body statement count",
+                                                [this] {
+                                                    return ReadStatement();
+                                                });
+                        auto update
+                            = Vector<Statement>(limits_.maximumStatements,
+                                                "for update statement count",
+                                                [this] {
+                                                    return ReadStatement();
+                                                });
+                        return Statement::For(std::move(condition),
+                                              std::move(body),
+                                              std::move(update));
+                    }
+                    case 8:
+                        return Statement::Break();
+                    case 9:
+                        return Statement::Continue();
                     default:
                         Fail(ErrorKind::InvalidTag,
                              "statement tag",
@@ -1146,6 +1192,42 @@ namespace Visual::XSharp::Core::Wire
                         return;
                     case Statement::Kind::Evaluate:
                         WriteExpression(statement.expression);
+                        return;
+                    case Statement::Kind::While:
+                        WriteExpression(statement.expression);
+                        Vector(statement.loopBody,
+                               limits_.maximumStatements,
+                               "while body statement count",
+                               [this](const Statement &value) {
+                                   WriteStatement(value);
+                               });
+                        return;
+                    case Statement::Kind::DoWhile:
+                        Vector(statement.loopBody,
+                               limits_.maximumStatements,
+                               "do/while body statement count",
+                               [this](const Statement &value) {
+                                   WriteStatement(value);
+                               });
+                        WriteExpression(statement.expression);
+                        return;
+                    case Statement::Kind::For:
+                        WriteExpression(statement.expression);
+                        Vector(statement.loopBody,
+                               limits_.maximumStatements,
+                               "for body statement count",
+                               [this](const Statement &value) {
+                                   WriteStatement(value);
+                               });
+                        Vector(statement.loopUpdate,
+                               limits_.maximumStatements,
+                               "for update statement count",
+                               [this](const Statement &value) {
+                                   WriteStatement(value);
+                               });
+                        return;
+                    case Statement::Kind::Break:
+                    case Statement::Kind::Continue:
                         return;
                 }
             }

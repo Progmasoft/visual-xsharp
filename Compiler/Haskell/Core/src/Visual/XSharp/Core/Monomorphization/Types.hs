@@ -41,6 +41,8 @@ data DemandPathStep
     | StatementPath Int
     | TrueBranchPath
     | FalseBranchPath
+    | LoopBodyPath
+    | LoopUpdatePath
     | BindingTypePath
     | BindingValuePath
     | AssignmentValuePath
@@ -174,6 +176,8 @@ renderPathStep step = case step of
     StatementPath index -> ".statement[" ++ show index ++ "]"
     TrueBranchPath -> ".true"
     FalseBranchPath -> ".false"
+    LoopBodyPath -> ".loop-body"
+    LoopUpdatePath -> ".loop-update"
     BindingTypePath -> ".binding-type"
     BindingValuePath -> ".binding-value"
     AssignmentValuePath -> ".assignment-value"

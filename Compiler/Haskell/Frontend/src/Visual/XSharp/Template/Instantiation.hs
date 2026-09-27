@@ -120,6 +120,30 @@ instantiateStatement binding statement = case statement of
         closedTrue <- instantiateBlock binding trueBlock
         closedFalse <- traverse (instantiateBlock binding) falseBlock
         pure (IfStatement spanValue closedCondition closedTrue closedFalse)
+    WhileStatement spanValue condition body -> do
+        closedCondition <- instantiateExpression binding condition
+        closedBody <- instantiateBlock binding body
+        pure (WhileStatement spanValue closedCondition closedBody)
+    DoWhileStatement spanValue body condition -> do
+        closedBody <- instantiateBlock binding body
+        closedCondition <- instantiateExpression binding condition
+        pure (DoWhileStatement spanValue closedBody closedCondition)
+    ForStatement spanValue initializer condition updates body -> do
+        closedInitializer <- traverse (instantiateStatement binding) initializer
+        closedCondition <- traverse (instantiateExpression binding) condition
+        closedUpdates <- traverse (instantiateStatement binding) updates
+        closedBody <- instantiateBlock binding body
+        pure (ForStatement spanValue closedInitializer closedCondition closedUpdates closedBody)
+    ForEachStatement spanValue kind syntax name annotation source body -> do
+        closedAnnotation <- instantiateType binding annotation
+        closedSource <- instantiateExpression binding source
+        closedBody <- instantiateBlock binding body
+        pure (ForEachStatement spanValue kind syntax name closedAnnotation closedSource closedBody)
+    IncrementStatement spanValue name annotation direction ->
+        IncrementStatement spanValue name <$> instantiateType binding annotation <*> pure direction
+    BreakStatement spanValue value ->
+        BreakStatement spanValue <$> traverse (instantiateExpression binding) value
+    ContinueStatement spanValue -> pure (ContinueStatement spanValue)
     ExpressionStatement spanValue value terminated ->
         ExpressionStatement spanValue <$> instantiateExpression binding value <*> pure terminated
 

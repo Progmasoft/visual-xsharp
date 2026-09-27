@@ -84,6 +84,21 @@ simplifyStatement environment facts statement = case statement of
                     (True, True) -> emptyIntegerFacts
                     (False, False) -> joinIntegerFacts trueFacts falseFacts
          in (changed, nextConstants, nextFacts)
+    CoreWhile condition body ->
+        let rewrittenCondition = simplifyExpressionWithFacts environment facts condition
+            (rewrittenBody, _, _) = simplifyStatements Map.empty emptyIntegerFacts body
+         in (CoreWhile rewrittenCondition rewrittenBody, Map.empty, emptyIntegerFacts)
+    CoreDoWhile body condition ->
+        let (rewrittenBody, _, _) = simplifyStatements Map.empty emptyIntegerFacts body
+            rewrittenCondition = simplifyExpressionWithFacts Map.empty emptyIntegerFacts condition
+         in (CoreDoWhile rewrittenBody rewrittenCondition, Map.empty, emptyIntegerFacts)
+    CoreFor condition body update ->
+        let rewrittenCondition = simplifyExpressionWithFacts environment facts condition
+            (rewrittenBody, _, _) = simplifyStatements Map.empty emptyIntegerFacts body
+            (rewrittenUpdate, _, _) = simplifyStatements Map.empty emptyIntegerFacts update
+         in (CoreFor rewrittenCondition rewrittenBody rewrittenUpdate, Map.empty, emptyIntegerFacts)
+    CoreBreak -> (CoreBreak, environment, unreachableIntegerFacts)
+    CoreContinue -> (CoreContinue, environment, unreachableIntegerFacts)
 
 joinConstants :: ConstantEnvironment -> ConstantEnvironment -> ConstantEnvironment -> ConstantEnvironment
 joinConstants incoming whenTrue whenFalse =

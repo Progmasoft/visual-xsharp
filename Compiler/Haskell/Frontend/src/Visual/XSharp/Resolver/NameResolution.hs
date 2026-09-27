@@ -82,6 +82,38 @@ resolveStatement statement = case statement of
                 Nothing -> (Nothing, [])
                 Just value -> let (block, problems) = resolveBlock value in (Just block, problems)
          in (IfStatement spanValue resolvedCondition resolvedTrue resolvedFalse, conditionProblems ++ trueProblems ++ falseProblems)
+    WhileStatement spanValue condition body ->
+        let (resolvedCondition, conditionProblems) = resolveExpression condition
+            (resolvedBody, bodyProblems) = resolveBlock body
+         in (WhileStatement spanValue resolvedCondition resolvedBody, conditionProblems ++ bodyProblems)
+    DoWhileStatement spanValue body condition ->
+        let (resolvedBody, bodyProblems) = resolveBlock body
+            (resolvedCondition, conditionProblems) = resolveExpression condition
+         in (DoWhileStatement spanValue resolvedBody resolvedCondition, bodyProblems ++ conditionProblems)
+    ForStatement spanValue initializer condition updates body ->
+        let (resolvedInitializer, initializerProblems) = case initializer of
+                Nothing -> (Nothing, [])
+                Just value -> let (resolved, problems) = resolveStatement value in (Just resolved, problems)
+            (resolvedCondition, conditionProblems) = resolveOptional condition
+            resolvedUpdates = map resolveStatement updates
+            (resolvedBody, bodyProblems) = resolveBlock body
+         in ( ForStatement spanValue resolvedInitializer resolvedCondition (map fst resolvedUpdates) resolvedBody
+            , initializerProblems ++ conditionProblems ++ concatMap snd resolvedUpdates ++ bodyProblems
+            )
+    ForEachStatement spanValue kind syntax name annotation source body ->
+        let (resolvedName, nameProblems) = resolveName spanValue name
+            (resolvedSource, sourceProblems) = resolveExpression source
+            (resolvedBody, bodyProblems) = resolveBlock body
+         in ( ForEachStatement spanValue kind syntax resolvedName annotation resolvedSource resolvedBody
+            , nameProblems ++ sourceProblems ++ bodyProblems
+            )
+    IncrementStatement spanValue name annotation direction ->
+        let (resolvedName, problems) = resolveName spanValue name
+         in (IncrementStatement spanValue resolvedName annotation direction, problems)
+    BreakStatement spanValue value ->
+        let (resolvedValue, problems) = resolveOptional value
+         in (BreakStatement spanValue resolvedValue, problems)
+    ContinueStatement spanValue -> (ContinueStatement spanValue, [])
     ExpressionStatement spanValue value terminated -> let (resolved, problems) = resolveExpression value in (ExpressionStatement spanValue resolved terminated, problems)
 
 resolveOptional :: Maybe (Expression RenamedName ()) -> (Maybe (Expression ResolvedName ()), [Diagnostic])

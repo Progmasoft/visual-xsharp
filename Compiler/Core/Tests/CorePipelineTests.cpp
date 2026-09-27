@@ -200,7 +200,7 @@ namespace
     }
 
     [[nodiscard]] auto
-    ReadGoldenHex(std::string_view filename = "wire-v6.hex")
+    ReadGoldenHex(std::string_view filename = "wire-v7.hex")
         -> std::vector<std::uint8_t>
     {
         const auto path = std::filesystem::path(__FILE__).parent_path()
@@ -234,7 +234,7 @@ namespace
     }
 } // namespace
 
-TEST_CASE("native VXCR v6 codec matches the Haskell golden contract")
+TEST_CASE("native VXCR v7 codec matches the Haskell golden contract")
 {
     const auto expected = ReadGoldenHex();
     const auto encoded = Core::Wire::Encode(GoldenModule());
@@ -284,7 +284,7 @@ TEST_CASE("VXCR reader rejects malformed boundaries and configured limits")
     }
 }
 
-TEST_CASE("VXCR v6 carries Haskell Core closure and source-owner fields")
+TEST_CASE("VXCR v7 carries Haskell Core closure and source-owner fields")
 {
     const auto source = ClosureModule();
     REQUIRE(Core::Verify(source).empty());
@@ -309,7 +309,7 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     // This golden file is emitted from closure-boundary.vxs by vxs-frontend,
     // rather than re-encoded by the C++ model. It therefore locks the actual
     // cross-language expression tag and field order that production uses.
-    const auto bytes = ReadGoldenHex("wire-v6-closure.hex");
+    const auto bytes = ReadGoldenHex("wire-v7-closure.hex");
     const auto decoded = Core::Wire::Decode(bytes);
     REQUIRE(decoded);
     REQUIRE(Core::Verify(*decoded.module).empty());
@@ -359,7 +359,7 @@ TEST_CASE("native pipeline preserves non-empty Haskell source ownership bytes")
 {
     // Both owner fields are non-empty in this golden so field order cannot be
     // accidentally hidden by interchangeable zero-length encodings.
-    const auto bytes = ReadGoldenHex("wire-v6-project-source.hex");
+    const auto bytes = ReadGoldenHex("wire-v7-project-source.hex");
     const auto decoded = Core::Wire::Decode(bytes);
     REQUIRE(decoded);
     REQUIRE(Core::Verify(*decoded.module).empty());
@@ -543,6 +543,87 @@ TEST_CASE("Core adapter creates explicit CorePrep CFG and temporaries")
             == visual_xsharp::core::Terminator::Kind::Branch);
     REQUIRE(prepared.functions.at(1).blocks.at(1).instructions.size() == 2U);
     REQUIRE(visual_xsharp::core::verify(prepared).empty());
+}
+
+TEST_CASE("Core v7 loops round-trip and lower to explicit back-edges")
+{
+    const auto integer = [](std::int64_t value) {
+        return Core::Expression::Constant(value, Core::Type::int64());
+    };
+    const auto variable = [](std::uint64_t id, std::u32string spelling) {
+        return Core::Expression::Variable({ id, std::move(spelling) },
+                                          Core::Type::int64());
+    };
+    const auto comparison = [&](Core::Primitive operation,
+                                std::uint64_t symbol,
+                                std::u32string spelling) {
+        return Core::Expression::InvokePrimitive(
+            operation,
+            { variable(symbol, std::move(spelling)), integer(4) },
+            Core::Type::boolean());
+    };
+    const auto increment = [&](std::uint64_t symbol, std::u32string spelling) {
+        return Core::Statement::Assign(
+            { symbol, spelling },
+            Core::Expression::InvokePrimitive(
+                Core::Primitive::Add,
+                { variable(symbol, std::move(spelling)), integer(1) },
+                Core::Type::int64()));
+    };
+
+    Core::Function function{
+        { 1U, U"Main" },
+        {},
+        Core::Type::unit(),
+        { Core::Statement::Bind(
+              { { 2U, U"index" }, Core::Type::int64(), true, integer(0) }),
+          Core::Statement::While(
+              comparison(Core::Primitive::LessThan, 2U, U"index"),
+              { increment(2U, U"index"), Core::Statement::Continue() }),
+          Core::Statement::DoWhile(
+              { Core::Statement::Break() },
+              Core::Expression::Constant(false, Core::Type::boolean())),
+          Core::Statement::For(
+              comparison(Core::Primitive::LessThan, 2U, U"index"),
+              { Core::Statement::If(
+                  Core::Expression::Constant(true, Core::Type::boolean()),
+                  { Core::Statement::Continue() },
+                  { increment(2U, U"index") }) },
+              { increment(2U, U"index") }),
+          Core::Statement::Return(
+              Core::Expression::Constant(std::monostate{},
+                                         Core::Type::unit())) }
+    };
+    const Core::Module module{ { U"Iteration" }, { std::move(function) } };
+
+    CHECK(Core::Wire::kCurrentVersion == 7U);
+    REQUIRE(Core::Verify(module).empty());
+    const auto encoded = Core::Wire::Encode(module);
+    REQUIRE(encoded);
+    const auto decoded = Core::Wire::Decode(encoded.bytes);
+    REQUIRE(decoded);
+    REQUIRE(decoded.module == module);
+
+    const auto prepared = Core::CorePrep::Prepare(*decoded.module);
+    REQUIRE(visual_xsharp::core::verify(prepared).empty());
+    const auto &blocks = prepared.functions.front().blocks;
+    REQUIRE(blocks.size() >= 10U);
+    CHECK(std::ranges::any_of(blocks, [](const auto &block) {
+        return block.terminator.kind
+                   == visual_xsharp::core::Terminator::Kind::Jump
+               && block.terminator.true_target < block.id;
+    }));
+}
+
+TEST_CASE("Core verifier rejects break and continue outside loop regions")
+{
+    auto module = GoldenModule();
+    auto &body = module.functions.front().body;
+    body.insert(body.begin(), Core::Statement::Break());
+    CHECK(HasIssue(Core::Verify(module), "VXC1064"));
+
+    body.front() = Core::Statement::Continue();
+    CHECK(HasIssue(Core::Verify(module), "VXC1065"));
 }
 
 TEST_CASE("CorePrep canonicalizes numeric branch conditions before Xpp")

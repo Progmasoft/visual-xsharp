@@ -59,7 +59,7 @@ verifyFunction functionEnvironment function =
         ++ unresolvedType "VXC1003" "Core function has an unresolved return type" (coreFunctionReturnType function)
         ++ duplicates "VXC1004" "duplicate Core parameter symbol" parameterSymbols
         ++ concatMap (uncurry verifyParameter) (coreFunctionParameters function)
-        ++ fst (verifyStatements initialEnvironment (coreFunctionReturnType function) (coreFunctionBody function))
+        ++ fst (verifyStatements initialEnvironment (coreFunctionReturnType function) 0 (coreFunctionBody function))
         ++ missingReturn
     where
         parameterSymbols = map (resolvedSymbol . fst) (coreFunctionParameters function)
@@ -77,15 +77,15 @@ verifyParameter name valueType =
     invalidSymbol "VXC1006" "Core parameter symbol must be positive" name
         ++ unresolvedType "VXC1007" "Core parameter has an unresolved type" valueType
 
-verifyStatements :: Environment -> Type -> [CoreStatement] -> ([Diagnostic], Environment)
-verifyStatements environment _ [] = ([], environment)
-verifyStatements environment returnType (statement : remaining) =
-    let (currentProblems, nextEnvironment) = verifyStatement environment returnType statement
-        (remainingProblems, finalEnvironment) = verifyStatements nextEnvironment returnType remaining
+verifyStatements :: Environment -> Type -> Int -> [CoreStatement] -> ([Diagnostic], Environment)
+verifyStatements environment _ _ [] = ([], environment)
+verifyStatements environment returnType loopDepth (statement : remaining) =
+    let (currentProblems, nextEnvironment) = verifyStatement environment returnType loopDepth statement
+        (remainingProblems, finalEnvironment) = verifyStatements nextEnvironment returnType loopDepth remaining
      in (currentProblems ++ remainingProblems, finalEnvironment)
 
-verifyStatement :: Environment -> Type -> CoreStatement -> ([Diagnostic], Environment)
-verifyStatement environment returnType statement = case statement of
+verifyStatement :: Environment -> Type -> Int -> CoreStatement -> ([Diagnostic], Environment)
+verifyStatement environment returnType loopDepth statement = case statement of
     CoreBind binding ->
         let name = coreBindingName binding
             symbol = resolvedSymbol name
@@ -130,10 +130,38 @@ verifyStatement environment returnType statement = case statement of
                     ++ [ problem "VXC1017" "Core condition must be bool or numeric"
                        | expressionType condition /= boolType && not (isCoreNumericType (expressionType condition))
                        ]
-            (trueProblems, _) = verifyStatements environment returnType trueBranch
-            (falseProblems, _) = verifyStatements environment returnType falseBranch
+            (trueProblems, _) = verifyStatements environment returnType loopDepth trueBranch
+            (falseProblems, _) = verifyStatements environment returnType loopDepth falseBranch
          in (conditionProblems ++ trueProblems ++ falseProblems, environment)
     CoreEvaluate value -> (verifyExpression environment value, environment)
+    CoreWhile condition body ->
+        let conditionProblems = verifyLoopCondition environment "while" condition
+            (bodyProblems, _) = verifyStatements environment returnType (loopDepth + 1) body
+         in (conditionProblems ++ bodyProblems, environment)
+    CoreDoWhile body condition ->
+        let (bodyProblems, _) = verifyStatements environment returnType (loopDepth + 1) body
+            conditionProblems = verifyLoopCondition environment "do/while" condition
+         in (bodyProblems ++ conditionProblems, environment)
+    CoreFor condition body update ->
+        let conditionProblems = verifyLoopCondition environment "for" condition
+            (bodyProblems, _) = verifyStatements environment returnType (loopDepth + 1) body
+            (updateProblems, _) = verifyStatements environment returnType (loopDepth + 1) update
+         in (conditionProblems ++ bodyProblems ++ updateProblems, environment)
+    CoreBreak ->
+        ( [problem "VXC1045" "Core break is not nested in a loop" | loopDepth == 0]
+        , environment
+        )
+    CoreContinue ->
+        ( [problem "VXC1046" "Core continue is not nested in a loop" | loopDepth == 0]
+        , environment
+        )
+
+verifyLoopCondition :: Environment -> String -> CoreExpression -> [Diagnostic]
+verifyLoopCondition environment kind condition =
+    verifyExpression environment condition
+        ++ [ problem "VXC1047" ("Core " ++ kind ++ " condition must be bool or numeric")
+           | expressionType condition /= boolType && not (isCoreNumericType (expressionType condition))
+           ]
 
 verifyExpression :: Environment -> CoreExpression -> [Diagnostic]
 verifyExpression environment expression =
@@ -174,7 +202,7 @@ verifyClosure environment captures parameters returnType body valueType =
         ++ concatMap verifyCapture captures
         ++ concatMap (uncurry verifyParameter) parameters
         ++ callableTypeProblems
-        ++ fst (verifyStatements closureEnvironment returnType body)
+        ++ fst (verifyStatements closureEnvironment returnType 0 body)
         ++ [ problem "VXC1032" "non-void Core closure may complete without returning"
            | returnType /= unitType && not (statementsAlwaysReturn body)
            ]

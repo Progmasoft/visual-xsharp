@@ -1,0 +1,21 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+namespace Examples.MatrixTranspose;
+
+public class MatrixTranspose {
+    public static void Main() {
+        int rows = 2;
+        int columns = 3;
+        [int] matrix = [1, 2, 3, 4, 5, 6];
+
+        -- Store row-major data in one array so the example stays representation-neutral.
+        for (int outputRow = 0; outputRow < columns; outputRow++) {
+            for (int outputColumn = 0; outputColumn < rows; outputColumn++) {
+                int sourceIndex = outputColumn * columns + outputRow;
+                Console.Printfn("%d ", matrix[sourceIndex]);
+            }
+            Console.Println("");
+        }
+    }
+}

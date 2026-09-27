@@ -246,7 +246,7 @@ checkDeclarationWith context globals declaration@FunctionDeclaration {} =
             | parameter <- declarationParameters declaration
             ]
         expected = syntaxTypeIn context (declarationReturnSyntax declaration)
-        (body, _, explicitReturns, problems) = checkBlockWith context (parameters ++ globals) expected (declarationBody declaration)
+        (body, _, explicitReturns, problems) = checkBlockWith context (parameters ++ globals) expected 0 (declarationBody declaration)
         finalReturn = finalExpressionType body
         returns = explicitReturns ++ maybe [] (: []) finalReturn
         inferred = inferReturn expected returns
@@ -302,14 +302,15 @@ checkBlockWith ::
     TemplateContext ->
     TypeEnvironment ->
     Type ->
+    Int ->
     Block ResolvedName () ->
     (Block ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
-checkBlockWith context environment expected (Block statements) =
+checkBlockWith context environment expected loopDepth (Block statements) =
     let (checked, final, returns, problems) = go environment statements in (Block checked, final, returns, problems)
     where
         go env [] = ([], env, [], [])
         go env (statement : rest) =
-            let (typed, next, returned, firstProblems) = checkStatementWith context env expected statement
+            let (typed, next, returned, firstProblems) = checkStatementWith context env expected loopDepth statement
                 (remaining, final, laterReturns, laterProblems) = go next rest
              in (typed : remaining, final, returned ++ laterReturns, firstProblems ++ laterProblems)
 
@@ -317,9 +318,10 @@ checkStatementWith ::
     TemplateContext ->
     TypeEnvironment ->
     Type ->
+    Int ->
     Statement ResolvedName () ->
     (Statement ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
-checkStatementWith context environment expected statement = case statement of
+checkStatementWith context environment expected loopDepth statement = case statement of
     BindingStatement spanValue kind syntax name _ value ->
         let declared = syntaxTypeIn context syntax
             target = if declared == ErrorType then Nothing else Just declared
@@ -351,16 +353,103 @@ checkStatementWith context environment expected statement = case statement of
                 if booleanContextType conditionType
                     then []
                     else [problem spanValue "VXT0006" "if condition must be bool or numeric"]
-            (typedTrue, _, trueReturns, trueProblems) = checkBlockWith context environment expected trueBlock
+            (typedTrue, _, trueReturns, trueProblems) = checkBlockWith context environment expected loopDepth trueBlock
             (typedFalse, falseReturns, falseProblems) = case falseBlock of
                 Nothing -> (Nothing, [], [])
                 Just value ->
-                    let (block, _, returns, problems) = checkBlockWith context environment expected value in (Just block, returns, problems)
+                    let (block, _, returns, problems) = checkBlockWith context environment expected loopDepth value
+                     in (Just block, returns, problems)
          in ( IfStatement spanValue typedCondition typedTrue typedFalse
             , environment
             , trueReturns ++ falseReturns
             , conditionProblems ++ conditionMismatch ++ trueProblems ++ falseProblems
             )
+    WhileStatement spanValue condition body ->
+        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+            conditionProblems' =
+                if booleanContextType conditionType
+                    then []
+                    else [problem spanValue "VXT0020" "while condition must be bool or numeric"]
+            (typedBody, _, returns, bodyProblems) = checkBlockWith context environment expected (loopDepth + 1) body
+         in ( WhileStatement spanValue typedCondition typedBody
+            , environment
+            , returns
+            , conditionProblems ++ conditionProblems' ++ bodyProblems
+            )
+    DoWhileStatement spanValue body condition ->
+        let (typedBody, _, returns, bodyProblems) = checkBlockWith context environment expected (loopDepth + 1) body
+            (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+            conditionProblems' =
+                if booleanContextType conditionType
+                    then []
+                    else [problem spanValue "VXT0020" "do/while condition must be bool or numeric"]
+         in ( DoWhileStatement spanValue typedBody typedCondition
+            , environment
+            , returns
+            , bodyProblems ++ conditionProblems ++ conditionProblems'
+            )
+    ForStatement spanValue initializer condition updates body ->
+        let (typedInitializer, loopEnvironment, initializerProblems) = case initializer of
+                Nothing -> (Nothing, environment, [])
+                Just value ->
+                    let (typed, nested, _, problems) = checkStatementWith context environment expected loopDepth value
+                     in (Just typed, nested, problems)
+            (typedCondition, conditionType, conditionProblems) = case condition of
+                Nothing -> (Nothing, boolType, [])
+                Just value ->
+                    let (typed, valueType, problems) = checkExpressionWith context loopEnvironment value
+                     in (Just typed, valueType, problems)
+            conditionProblems' =
+                if booleanContextType conditionType
+                    then []
+                    else [problem spanValue "VXT0020" "for condition must be bool or numeric"]
+            (typedBody, _, returns, bodyProblems) = checkBlockWith context loopEnvironment expected (loopDepth + 1) body
+            (typedUpdates, updateProblems) = checkStatementsWith context loopEnvironment expected (loopDepth + 1) updates
+         in ( ForStatement spanValue typedInitializer typedCondition typedUpdates typedBody
+            , environment
+            , returns
+            , initializerProblems ++ conditionProblems ++ conditionProblems' ++ bodyProblems ++ updateProblems
+            )
+    ForEachStatement spanValue kind syntax name _ source body ->
+        let valueType = syntaxTypeIn context syntax
+            (typedSource, _, sourceProblems) = checkExpressionWith context environment source
+            (typedBody, _, returns, bodyProblems) =
+                checkBlockWith
+                    context
+                    ((resolvedSymbol name, (valueType, kind == MutableBinding)) : environment)
+                    expected
+                    (loopDepth + 1)
+                    body
+            unsupported = problem spanValue "VXT0021" "enumerable for loops require the generator and Enumerable ABI, which is not implemented"
+         in ( ForEachStatement spanValue kind syntax name valueType typedSource typedBody
+            , environment
+            , returns
+            , unsupported : typeSyntaxProblemsIn context syntax ++ sourceProblems ++ bodyProblems
+            )
+    IncrementStatement spanValue name _ direction ->
+        let target = lookup (resolvedSymbol name) environment
+            targetType = maybe ErrorType fst target
+            writableProblems = case target of
+                Just (_, False) -> [problem spanValue "VXT0022" "increment or decrement cannot modify an immutable binding"]
+                Nothing -> [problem spanValue "VXT0023" "increment or decrement target is not defined"]
+                _ -> []
+            numericProblems =
+                if isNumericType targetType && targetType /= boolType
+                    then []
+                    else [problem spanValue "VXT0024" "increment or decrement target must have a numeric type"]
+         in (IncrementStatement spanValue name targetType direction, environment, [], writableProblems ++ numericProblems)
+    BreakStatement spanValue value ->
+        let (typedValue, _, valueProblems) = checkOptionalWith context environment value
+            outsideProblems =
+                if loopDepth > 0 then [] else [problem spanValue "VXT0025" "break is only valid inside a loop"]
+            valueProblems' =
+                case value of
+                    Nothing -> []
+                    Just _ -> [problem spanValue "VXT0026" "value-carrying break requires loop-expression lowering, which is not implemented"]
+         in (BreakStatement spanValue typedValue, environment, [], outsideProblems ++ valueProblems ++ valueProblems')
+    ContinueStatement spanValue ->
+        let problems = if loopDepth > 0 then [] else [problem spanValue "VXT0027" "continue is only valid inside a loop"]
+         in (ContinueStatement spanValue, environment, [], problems)
     ExpressionStatement spanValue value terminated ->
         let (typedValue, _, problems) = checkExpressionWith context environment value
             effectProblems =
@@ -368,6 +457,21 @@ checkStatementWith context environment expected statement = case statement of
                     then [problem spanValue "VXT0013" "pure value expression cannot be used as a statement"]
                     else []
          in (ExpressionStatement spanValue typedValue terminated, environment, [], problems ++ effectProblems)
+
+checkStatementsWith ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Type ->
+    Int ->
+    [Statement ResolvedName ()] ->
+    ([Statement ResolvedName Type], [Diagnostic])
+checkStatementsWith context environment expected loopDepth = go environment
+    where
+        go _ [] = ([], [])
+        go current (statement : remaining) =
+            let (typed, next, _, problems) = checkStatementWith context current expected loopDepth statement
+                (later, laterProblems) = go next remaining
+             in (typed : later, problems ++ laterProblems)
 
 finalExpressionType :: Block ResolvedName Type -> Maybe Type
 finalExpressionType (Block statements) = case reverse statements of
@@ -631,7 +735,7 @@ checkCallableBodyWith context environment body = case body of
         let (typed, valueType, problems) = checkExpressionWith context environment expression
          in (CallableExpressionBody typed, valueType, problems)
     CallableBlockBody block ->
-        let (typed, _, returns, problems) = checkBlockWith context environment ErrorType block
+        let (typed, _, returns, problems) = checkBlockWith context environment ErrorType 0 block
             finalType = maybe (inferReturn ErrorType returns) id (finalExpressionType typed)
          in (CallableBlockBody typed, finalType, problems)
 

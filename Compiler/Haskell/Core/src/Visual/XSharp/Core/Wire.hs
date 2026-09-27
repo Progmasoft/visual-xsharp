@@ -25,7 +25,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 6
+currentCoreWireVersion = CoreWireVersion 7
 
 data CoreWireLimits = CoreWireLimits
     { maximumCoreWireBytes :: Int
@@ -167,6 +167,45 @@ encodeStatement limits statement = case statement of
                 falseBranch
         pure ([3] ++ encodedCondition ++ encodedTrue ++ encodedFalse)
     CoreEvaluate expression -> (4 :) <$> encodeExpression limits 0 expression
+    CoreWhile condition body -> do
+        encodedCondition <- encodeExpression limits 0 condition
+        encodedBody <-
+            encodeVector
+                limits
+                "while body statement count"
+                (maximumCoreStatements limits)
+                (encodeStatement limits)
+                body
+        pure ([5] ++ encodedCondition ++ encodedBody)
+    CoreDoWhile body condition -> do
+        encodedBody <-
+            encodeVector
+                limits
+                "do/while body statement count"
+                (maximumCoreStatements limits)
+                (encodeStatement limits)
+                body
+        encodedCondition <- encodeExpression limits 0 condition
+        pure ([6] ++ encodedBody ++ encodedCondition)
+    CoreFor condition body update -> do
+        encodedCondition <- encodeExpression limits 0 condition
+        encodedBody <-
+            encodeVector
+                limits
+                "for body statement count"
+                (maximumCoreStatements limits)
+                (encodeStatement limits)
+                body
+        encodedUpdate <-
+            encodeVector
+                limits
+                "for update statement count"
+                (maximumCoreStatements limits)
+                (encodeStatement limits)
+                update
+        pure ([7] ++ encodedCondition ++ encodedBody ++ encodedUpdate)
+    CoreBreak -> pure [8]
+    CoreContinue -> pure [9]
     where
         taggedExpression tag left right = [tag] ++ left ++ right
 
@@ -468,6 +507,18 @@ decodeStatement = do
                 <*> decodeVector "true branch statement count" maximumCoreStatements decodeStatement
                 <*> decodeVector "false branch statement count" maximumCoreStatements decodeStatement
         4 -> CoreEvaluate <$> decodeExpression 0
+        5 -> CoreWhile <$> decodeExpression 0 <*> decodeVector "while body statement count" maximumCoreStatements decodeStatement
+        6 ->
+            CoreDoWhile
+                <$> decodeVector "do/while body statement count" maximumCoreStatements decodeStatement
+                <*> decodeExpression 0
+        7 ->
+            CoreFor
+                <$> decodeExpression 0
+                <*> decodeVector "for body statement count" maximumCoreStatements decodeStatement
+                <*> decodeVector "for update statement count" maximumCoreStatements decodeStatement
+        8 -> pure CoreBreak
+        9 -> pure CoreContinue
         _ -> invalidTag "statement tag" tag
 
 decodeExpression :: Int -> Decoder CoreExpression

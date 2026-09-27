@@ -339,12 +339,12 @@ identityTests =
 
 wireTests :: [(String, Bool)]
 wireTests =
-    [ ("Core v6 round-trips fixed array type", coreTypeRoundTrip (fixed intType 4096))
-    , ("Core v6 round-trips Boolean template value", coreTypeRoundTrip (applied "Flag" [boolean True]))
-    , ("Core v6 round-trips character template value", coreTypeRoundTrip (applied "Code" [character 0x10ffff]))
-    , ("Core v6 round-trips template value parameter", coreTypeRoundTrip valueParameter)
+    [ ("Core v7 round-trips fixed array type", coreTypeRoundTrip (fixed intType 4096))
+    , ("Core v7 round-trips Boolean template value", coreTypeRoundTrip (applied "Flag" [boolean True]))
+    , ("Core v7 round-trips character template value", coreTypeRoundTrip (applied "Code" [character 0x10ffff]))
+    , ("Core v7 round-trips template value parameter", coreTypeRoundTrip valueParameter)
     ,
-        ( "Core v6 round-trips mixed arguments"
+        ( "Core v7 round-trips mixed arguments"
         , coreTypeRoundTrip (applied "Mix" [value (-3), typeArg stringType, boolean False])
         )
     , ("CorePrep v6 round-trips fixed array type", corePrepTypeRoundTrip (fixed intType 4096))

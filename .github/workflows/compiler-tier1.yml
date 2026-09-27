@@ -77,6 +77,11 @@ jobs:
         run: |
           go test scripts/develop.go scripts/develop_test.go
           go test scripts/githelper.go scripts/githelper_test.go
+          go test scripts/optional_packages.go scripts/optional_packages_test.go
+          go test scripts/verify_examples.go scripts/verify_examples_test.go
+          go test scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+          go run scripts/verify_examples.go
+          go run scripts/verify_benchmarks.go
 
       - name: Verify project C++ formatting
         shell: pwsh
@@ -173,6 +178,11 @@ jobs:
         run: |
           go test scripts/develop.go scripts/develop_test.go
           go test scripts/githelper.go scripts/githelper_test.go
+          go test scripts/optional_packages.go scripts/optional_packages_test.go
+          go test scripts/verify_examples.go scripts/verify_examples_test.go
+          go test scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+          go run scripts/verify_examples.go
+          go run scripts/verify_benchmarks.go
 
       - name: Test native compiler
         shell: bash

@@ -284,6 +284,18 @@ statementDefinitionSymbols statement = case statement of
         expressionDefinitionSymbols condition
             ++ blockDefinitionSymbols trueBlock
             ++ maybe [] blockDefinitionSymbols falseBlock
+    WhileStatement _ condition body -> expressionDefinitionSymbols condition ++ blockDefinitionSymbols body
+    DoWhileStatement _ body condition -> blockDefinitionSymbols body ++ expressionDefinitionSymbols condition
+    ForStatement _ initializer condition updates body ->
+        maybe [] statementDefinitionSymbols initializer
+            ++ maybe [] expressionDefinitionSymbols condition
+            ++ concatMap statementDefinitionSymbols updates
+            ++ blockDefinitionSymbols body
+    ForEachStatement _ _ _ name _ source body ->
+        resolvedSymbol name : expressionDefinitionSymbols source ++ blockDefinitionSymbols body
+    IncrementStatement _ name _ _ -> [resolvedSymbol name]
+    BreakStatement _ value -> maybe [] expressionDefinitionSymbols value
+    ContinueStatement {} -> []
     ExpressionStatement _ expression _ -> expressionDefinitionSymbols expression
 
 expressionDefinitionSymbols :: Expression ResolvedName Type -> [SymbolId]
@@ -328,6 +340,17 @@ statementTypes statement = case statement of
     ReturnStatement _ value -> maybe [] expressionTypes value
     IfStatement _ condition trueBlock falseBlock ->
         expressionTypes condition ++ blockTypes trueBlock ++ maybe [] blockTypes falseBlock
+    WhileStatement _ condition body -> expressionTypes condition ++ blockTypes body
+    DoWhileStatement _ body condition -> blockTypes body ++ expressionTypes condition
+    ForStatement _ initializer condition updates body ->
+        maybe [] statementTypes initializer
+            ++ maybe [] expressionTypes condition
+            ++ concatMap statementTypes updates
+            ++ blockTypes body
+    ForEachStatement _ _ _ _ annotation source body -> annotation : expressionTypes source ++ blockTypes body
+    IncrementStatement _ _ annotation _ -> [annotation]
+    BreakStatement _ value -> maybe [] expressionTypes value
+    ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionTypes value
 
 expressionTypes :: Expression ResolvedName Type -> [Type]

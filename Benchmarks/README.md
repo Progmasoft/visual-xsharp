@@ -55,6 +55,11 @@ statistical comparisons once it can provide fixed CPU frequency, warm-up policy,
 - `2026-09-13-Native-Liveness.md` records the Xpp/Xmm optimizer follow-up after native liveness integration.
 - `2026-09-14-Native-Dataflow.md` records the verifier/encoder follow-up after worklist scheduling and packed lattices.
 - `2026-09-14-Dense-Liveness.md` records dense backward-liveness and retention-only optimizer results.
+- `2026-09-20-Core-Linear-Inlining.md` records the first smoke and latency reference for capture-avoiding linear-body inlining.
 - `2026-09-20-Core-Verifier-Environment.md` records removal of the quadratic per-function global-environment copy.
+- `2026-09-23-Core-Floating-Folding.md` records the nested binary64 constant-folding workload.
+- `2026-09-24-Core-Integer-Folding.md` records the repeated 128-bit integer constant-folding workload.
+- `2026-09-24-Core-Integer-Flow.md` records guarded-division and contradictory-path integer-fact workloads.
 - `2026-09-24-VXSI-ORC.md` records the first Visual X# Interactive native-cell/JIT lifecycle baseline.
 - `2026-09-27-Project-Artifacts.md` records per-source planning and staged output costs on a Windows development host.
+- `2026-09-27-Loop-Comparisons.md` records the loop-unrolling comparison and a compiler-owned CorePrep loop workload.

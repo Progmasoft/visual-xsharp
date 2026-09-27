@@ -9,17 +9,17 @@ import Data.List (nub)
 import Data.Word (Word64)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
-import Visual.XSharp.Diagnostic (Diagnostic)
+import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
 
 newtype Desugarer = Desugarer {desugarTypedAST :: TypedAST -> Either [Diagnostic] CoreModule}
 runDesugarer :: Desugarer -> TypedAST -> Either [Diagnostic] CoreModule
 runDesugarer = desugarTypedAST
 defaultDesugarer :: Desugarer
-defaultDesugarer = Desugarer (Right . lowerTree)
+defaultDesugarer = Desugarer lowerTree
 
-lowerTree :: TypedAST -> CoreModule
+lowerTree :: TypedAST -> Either [Diagnostic] CoreModule
 lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
-    evalState lowerModule (1 + maximum (0 : syntaxSymbolIds tree))
+    evalStateT lowerModule (1 + maximum (0 : syntaxSymbolIds tree))
     where
         defaultName = QualifiedName [Identifier "Main"]
         sourceFiles = nub (map portableSourcePath (concatMap declarationSourceFiles declarations))
@@ -67,7 +67,7 @@ functionSources = concatMap declarationFunctionSources
                 )
             ]
 
-type Lower = State Int
+type Lower = StateT Int (Either [Diagnostic])
 
 freshPatternSubject :: Lower ResolvedName
 freshPatternSubject = do
@@ -101,27 +101,67 @@ lowerDeclaration TypeDeclaration {} = error "type declarations are lowered throu
 lowerDeclaration TemplateTypeDeclaration {} = error "template declarations require specialization before Core lowering"
 
 lowerBlock :: Block ResolvedName Type -> Lower [CoreStatement]
-lowerBlock (Block statements) = mapM lowerStatement statements
+lowerBlock (Block statements) = concat <$> mapM lowerStatement statements
 
 lowerFunctionBlock :: Type -> Block ResolvedName Type -> Lower [CoreStatement]
 lowerFunctionBlock returnType (Block statements) = case reverse statements of
     ExpressionStatement _ expression False : remaining
         | returnType /= unitType -> do
-            prefix <- mapM lowerStatement (reverse remaining)
+            prefix <- concat <$> mapM lowerStatement (reverse remaining)
             value <- lowerExpression expression
             pure (prefix ++ [CoreReturn value])
-    _ -> mapM lowerStatement statements
+    _ -> concat <$> mapM lowerStatement statements
 
-lowerStatement :: Statement ResolvedName Type -> Lower CoreStatement
+lowerStatement :: Statement ResolvedName Type -> Lower [CoreStatement]
 lowerStatement statement = case statement of
     BindingStatement _ kind _ name valueType value -> do
         lowered <- lowerExpression value
-        pure (CoreBind (CoreBinding name (lowerBoundaryType valueType) (kind == MutableBinding) lowered))
-    AssignmentStatement _ name _ value -> CoreAssign name <$> lowerExpression value
-    ReturnStatement _ value -> CoreReturn <$> maybe (pure (CoreLiteral CoreUnit unitType)) lowerExpression value
+        pure [CoreBind (CoreBinding name (lowerBoundaryType valueType) (kind == MutableBinding) lowered)]
+    AssignmentStatement _ name _ value -> (: []) . CoreAssign name <$> lowerExpression value
+    ReturnStatement _ value -> (: []) . CoreReturn <$> maybe (pure (CoreLiteral CoreUnit unitType)) lowerExpression value
     IfStatement _ condition trueBlock falseBlock ->
-        CoreIf <$> lowerExpression condition <*> lowerBlock trueBlock <*> maybe (pure []) lowerBlock falseBlock
-    ExpressionStatement _ value _ -> CoreEvaluate <$> lowerExpression value
+        (: []) <$> (CoreIf <$> lowerExpression condition <*> lowerBlock trueBlock <*> maybe (pure []) lowerBlock falseBlock)
+    WhileStatement _ condition body ->
+        (: []) <$> (CoreWhile <$> lowerExpression condition <*> lowerBlock body)
+    DoWhileStatement _ body condition ->
+        (: []) <$> (CoreDoWhile <$> lowerBlock body <*> lowerExpression condition)
+    ForStatement _ initializer condition updates body -> do
+        loweredInitializer <- maybe (pure []) lowerStatement initializer
+        loweredCondition <- maybe (pure (CoreLiteral (CoreBoolean True) boolType)) lowerExpression condition
+        loweredBody <- lowerBlock body
+        loweredUpdates <- concat <$> mapM lowerStatement updates
+        pure (loweredInitializer ++ [CoreFor loweredCondition loweredBody loweredUpdates])
+    ForEachStatement spanValue _ _ _ _ _ _ ->
+        lift
+            ( Left
+                [ Diagnostic
+                    DesugarerStage
+                    Error
+                    "VXD0001"
+                    (Just spanValue)
+                    "enumerable for loops cannot be lowered without the generator and Enumerable ABI"
+                ]
+            )
+    IncrementStatement _ name valueType isIncrement ->
+        let loweredType = lowerBoundaryType valueType
+            value = CoreVariable name loweredType
+            one = CoreLiteral (CoreInteger 1) loweredType
+            operation = if isIncrement then CoreAdd else CoreSubtract
+         in pure [CoreAssign name (CorePrimitive operation [value, one] loweredType)]
+    BreakStatement _ Nothing -> pure [CoreBreak]
+    BreakStatement spanValue (Just _) ->
+        lift
+            ( Left
+                [ Diagnostic
+                    DesugarerStage
+                    Error
+                    "VXD0002"
+                    (Just spanValue)
+                    "value-carrying break cannot be lowered until loop expressions are supported"
+                ]
+            )
+    ContinueStatement _ -> pure [CoreContinue]
+    ExpressionStatement _ value _ -> (: []) . CoreEvaluate <$> lowerExpression value
 
 lowerExpression :: Expression ResolvedName Type -> Lower CoreExpression
 lowerExpression expression = case expression of
@@ -262,6 +302,9 @@ localSymbols = concatMap collect
         collect statement = case statement of
             CoreBind binding -> [resolvedSymbol (coreBindingName binding)]
             CoreIf _ yes no -> localSymbols yes ++ localSymbols no
+            CoreWhile _ body -> localSymbols body
+            CoreDoWhile body _ -> localSymbols body
+            CoreFor _ body update -> localSymbols body ++ localSymbols update
             _ -> []
 
 statementReads :: [CoreStatement] -> [(ResolvedName, Type)]
@@ -272,7 +315,13 @@ statementReads = concatMap collect
             CoreAssign _ value -> expressionReads value
             CoreReturn value -> expressionReads value
             CoreIf condition yes no -> expressionReads condition ++ statementReads yes ++ statementReads no
+            CoreWhile condition body -> expressionReads condition ++ statementReads body
+            CoreDoWhile body condition -> statementReads body ++ expressionReads condition
+            CoreFor condition body update ->
+                expressionReads condition ++ statementReads body ++ statementReads update
             CoreEvaluate value -> expressionReads value
+            CoreBreak -> []
+            CoreContinue -> []
 
 expressionReads :: CoreExpression -> [(ResolvedName, Type)]
 expressionReads expression = case expression of
@@ -343,6 +392,18 @@ statementIds statement = case statement of
     AssignmentStatement _ name _ value -> symbolValue name : expressionIds value
     ReturnStatement _ value -> maybe [] expressionIds value
     IfStatement _ condition yes no -> expressionIds condition ++ blockSymbolIds yes ++ maybe [] blockSymbolIds no
+    WhileStatement _ condition body -> expressionIds condition ++ blockSymbolIds body
+    DoWhileStatement _ body condition -> blockSymbolIds body ++ expressionIds condition
+    ForStatement _ initializer condition updates body ->
+        maybe [] statementIds initializer
+            ++ maybe [] expressionIds condition
+            ++ concatMap statementIds updates
+            ++ blockSymbolIds body
+    ForEachStatement _ _ _ name _ source body ->
+        symbolValue name : expressionIds source ++ blockSymbolIds body
+    IncrementStatement _ name _ _ -> [symbolValue name]
+    BreakStatement _ value -> maybe [] expressionIds value
+    ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionIds value
 
 expressionIds :: Expression ResolvedName Type -> [Int]

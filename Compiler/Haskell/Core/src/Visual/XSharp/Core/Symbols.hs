@@ -50,6 +50,14 @@ coreStatementSymbols statement = case statement of
         coreExpressionSymbols condition
             ++ concatMap coreStatementSymbols whenTrue
             ++ concatMap coreStatementSymbols whenFalse
+    CoreWhile condition body -> coreExpressionSymbols condition ++ concatMap coreStatementSymbols body
+    CoreDoWhile body condition -> concatMap coreStatementSymbols body ++ coreExpressionSymbols condition
+    CoreFor condition body update ->
+        coreExpressionSymbols condition
+            ++ concatMap coreStatementSymbols body
+            ++ concatMap coreStatementSymbols update
+    CoreBreak -> []
+    CoreContinue -> []
 
 -- | Traverse all expression-owned scopes, including closure bodies.
 coreExpressionSymbols :: CoreExpression -> [ResolvedName]

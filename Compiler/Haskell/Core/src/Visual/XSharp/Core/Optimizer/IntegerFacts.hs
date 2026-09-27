@@ -301,6 +301,14 @@ transferStatementFacts facts statement = case statement of
                     (False, True) -> trueOutput
                     (True, True) -> UnreachableFacts
                     (False, False) -> joinIntegerFacts trueOutput falseOutput
+    -- Loop-carried values require a fixed-point analysis. Until that analysis
+    -- is active, forgetting incoming facts is conservative and prevents a
+    -- first-iteration constant from leaking across a backedge.
+    CoreWhile _ _ -> emptyIntegerFacts
+    CoreDoWhile _ _ -> emptyIntegerFacts
+    CoreFor _ _ _ -> emptyIntegerFacts
+    CoreBreak -> UnreachableFacts
+    CoreContinue -> UnreachableFacts
 
 -- | Transfer statements in source order until control terminates.
 transferStatementsFacts :: IntegerFacts -> [CoreStatement] -> IntegerFacts

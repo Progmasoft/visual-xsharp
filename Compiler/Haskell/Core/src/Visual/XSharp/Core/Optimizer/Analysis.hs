@@ -190,7 +190,13 @@ statementSymbols statement = case statement of
     CoreAssign _ value -> expressionSymbols value
     CoreReturn value -> expressionSymbols value
     CoreIf condition yes no -> Set.unions (expressionSymbols condition : map statementSymbols (yes ++ no))
+    CoreWhile condition body -> Set.union (expressionSymbols condition) (Set.unions (map statementSymbols body))
+    CoreDoWhile body condition -> Set.union (Set.unions (map statementSymbols body)) (expressionSymbols condition)
+    CoreFor condition body update ->
+        Set.unions (expressionSymbols condition : map statementSymbols (body ++ update))
     CoreEvaluate value -> expressionSymbols value
+    CoreBreak -> Set.empty
+    CoreContinue -> Set.empty
 
 statementsAlwaysReturn :: [CoreStatement] -> Bool
 statementsAlwaysReturn [] = False

@@ -207,6 +207,25 @@ data Statement name annotation
     | AssignmentStatement SourceSpan name annotation (Expression name annotation)
     | ReturnStatement SourceSpan (Maybe (Expression name annotation))
     | IfStatement SourceSpan (Expression name annotation) (Block name annotation) (Maybe (Block name annotation))
+    | WhileStatement SourceSpan (Expression name annotation) (Block name annotation)
+    | DoWhileStatement SourceSpan (Block name annotation) (Expression name annotation)
+    | ForStatement
+        SourceSpan
+        (Maybe (Statement name annotation))
+        (Maybe (Expression name annotation))
+        [Statement name annotation]
+        (Block name annotation)
+    | ForEachStatement
+        SourceSpan
+        BindingKind
+        TypeSyntax
+        name
+        annotation
+        (Expression name annotation)
+        (Block name annotation)
+    | IncrementStatement SourceSpan name annotation Bool
+    | BreakStatement SourceSpan (Maybe (Expression name annotation))
+    | ContinueStatement SourceSpan
     | ExpressionStatement SourceSpan (Expression name annotation) Bool
     deriving (Eq, Ord, Read, Show)
 

@@ -170,4 +170,55 @@ namespace Visual::XSharp::Core
         statement.expression = std::move(value);
         return statement;
     }
+
+    auto
+    Statement::While(Expression condition, std::vector<Statement> body)
+        -> Statement
+    {
+        Statement statement;
+        statement.kind = Kind::While;
+        statement.expression = std::move(condition);
+        statement.loopBody = std::move(body);
+        return statement;
+    }
+
+    auto
+    Statement::DoWhile(std::vector<Statement> body, Expression condition)
+        -> Statement
+    {
+        Statement statement;
+        statement.kind = Kind::DoWhile;
+        statement.expression = std::move(condition);
+        statement.loopBody = std::move(body);
+        return statement;
+    }
+
+    auto
+    Statement::For(Expression condition,
+                   std::vector<Statement> body,
+                   std::vector<Statement> update) -> Statement
+    {
+        Statement statement;
+        statement.kind = Kind::For;
+        statement.expression = std::move(condition);
+        statement.loopBody = std::move(body);
+        statement.loopUpdate = std::move(update);
+        return statement;
+    }
+
+    auto
+    Statement::Break() -> Statement
+    {
+        Statement statement;
+        statement.kind = Kind::Break;
+        return statement;
+    }
+
+    auto
+    Statement::Continue() -> Statement
+    {
+        Statement statement;
+        statement.kind = Kind::Continue;
+        return statement;
+    }
 } // namespace Visual::XSharp::Core

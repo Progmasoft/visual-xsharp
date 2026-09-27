@@ -62,7 +62,7 @@ closureTests =
     , ("Core verifier accepts a well-formed closure", coreVerifierAcceptsClosure)
     , ("Core verifier rejects mismatched closure type", coreVerifierRejectsTypeMismatch)
     , ("Core verifier rejects capture initializer mismatch", coreVerifierRejectsCaptureMismatch)
-    , ("Core wire v6 round-trips closure values and ownership", coreWireClosureRoundTrip)
+    , ("Core wire v7 round-trips closure values and ownership", coreWireClosureRoundTrip)
     , ("CorePrep wire v6 round-trips closure creation and ownership", corePrepWireClosureRoundTrip)
     , ("CorePrep verifier accepts converted closure", corePrepVerifierAcceptsClosure)
     , ("CorePrep verifier rejects primitive weak capture", corePrepVerifierRejectsWeakPrimitive)
@@ -342,6 +342,17 @@ statementCallable statement = case statement of
     ReturnStatement _ value -> value >>= expressionCallable
     IfStatement _ condition yes no ->
         expressionCallable condition `orElse` blockCallable yes `orElse` (no >>= blockCallable)
+    WhileStatement _ condition body -> expressionCallable condition `orElse` blockCallable body
+    DoWhileStatement _ body condition -> blockCallable body `orElse` expressionCallable condition
+    ForStatement _ initializer condition updates body ->
+        (initializer >>= statementCallable)
+            `orElse` (condition >>= expressionCallable)
+            `orElse` blockCallable body
+            `orElse` firstJust (map statementCallable updates)
+    ForEachStatement _ _ _ _ _ collection body -> expressionCallable collection `orElse` blockCallable body
+    IncrementStatement {} -> Nothing
+    BreakStatement _ value -> value >>= expressionCallable
+    ContinueStatement {} -> Nothing
     ExpressionStatement _ value _ -> expressionCallable value
 
 expressionCallable :: Expression name annotation -> Maybe (Expression name annotation)
@@ -406,6 +417,18 @@ statementSymbols statement = case statement of
     AssignmentStatement _ name _ value -> resolvedSymbol name : symbols value
     ReturnStatement _ value -> maybe [] symbols value
     IfStatement _ condition yes no -> symbols condition ++ blockSymbols yes ++ maybe [] blockSymbols no
+    WhileStatement _ condition body -> symbols condition ++ blockSymbols body
+    DoWhileStatement _ body condition -> blockSymbols body ++ symbols condition
+    ForStatement _ initializer condition updates body ->
+        maybe [] statementSymbols initializer
+            ++ maybe [] symbols condition
+            ++ blockSymbols body
+            ++ concatMap statementSymbols updates
+    ForEachStatement _ _ _ name _ collection body ->
+        resolvedSymbol name : symbols collection ++ blockSymbols body
+    IncrementStatement _ name _ _ -> [resolvedSymbol name]
+    BreakStatement _ value -> maybe [] symbols value
+    ContinueStatement {} -> []
     ExpressionStatement _ value _ -> symbols value
 
 coreClosure :: String -> Maybe CoreExpression
@@ -430,6 +453,15 @@ statementCoreClosure statement = case statement of
             `orElse` firstJust (map statementCoreClosure yes)
             `orElse` firstJust (map statementCoreClosure no)
     CoreEvaluate value -> expressionCoreClosure value
+    CoreWhile condition body -> expressionCoreClosure condition `orElse` firstJust (map statementCoreClosure body)
+    CoreDoWhile body condition ->
+        firstJust (map statementCoreClosure body) `orElse` expressionCoreClosure condition
+    CoreFor condition body update ->
+        expressionCoreClosure condition
+            `orElse` firstJust (map statementCoreClosure body)
+            `orElse` firstJust (map statementCoreClosure update)
+    CoreBreak -> Nothing
+    CoreContinue -> Nothing
 
 expressionCoreClosure :: CoreExpression -> Maybe CoreExpression
 expressionCoreClosure expression@CoreClosure {} = Just expression
@@ -561,7 +593,7 @@ invalidPreparedWeakCapture =
 -- Keep a textual assertion near the wire tests so failures caused by an
 -- accidental version rollback explain themselves in the test output.
 _wireVersionContext :: String
-_wireVersionContext = "closures require Core and CorePrep wire version 6"
+_wireVersionContext = "closures require Core wire version 7 and CorePrep wire version 6"
 
 _diagnosticContext :: Diagnostic -> Bool
 _diagnosticContext diagnostic = "closure" `isInfixOf` diagnosticMessage diagnostic

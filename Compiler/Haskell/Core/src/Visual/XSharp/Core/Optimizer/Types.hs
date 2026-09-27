@@ -112,7 +112,17 @@ measureStatement statement =
                 (addMetrics (measureExpression condition) (addMetrics (measureStatements yes) (measureStatements no)))
                     { metricBranches = 1
                     }
+            CoreWhile condition body ->
+                (addMetrics (measureExpression condition) (measureStatements body)) {metricBranches = 1}
+            CoreDoWhile body condition ->
+                (addMetrics (measureStatements body) (measureExpression condition)) {metricBranches = 1}
+            CoreFor condition body update ->
+                (addMetrics (measureExpression condition) (addMetrics (measureStatements body) (measureStatements update)))
+                    { metricBranches = 1
+                    }
             CoreEvaluate value -> measureExpression value
+            CoreBreak -> emptyMetrics
+            CoreContinue -> emptyMetrics
      in nested {metricStatements = metricStatements nested + 1}
 
 measureExpression :: CoreExpression -> OptimizationMetrics

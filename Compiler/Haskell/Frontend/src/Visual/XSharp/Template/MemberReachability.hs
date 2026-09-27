@@ -303,6 +303,17 @@ statementCalls owner statement = case statement of
         expressionCalls owner condition
             ++ blockCalls owner trueBlock
             ++ maybe [] (blockCalls owner) falseBlock
+    WhileStatement _ condition body -> expressionCalls owner condition ++ blockCalls owner body
+    DoWhileStatement _ body condition -> blockCalls owner body ++ expressionCalls owner condition
+    ForStatement _ initializer condition updates body ->
+        maybe [] (statementCalls owner) initializer
+            ++ maybe [] (expressionCalls owner) condition
+            ++ concatMap (statementCalls owner) updates
+            ++ blockCalls owner body
+    ForEachStatement _ _ _ _ _ source body -> expressionCalls owner source ++ blockCalls owner body
+    IncrementStatement {} -> []
+    BreakStatement _ value -> maybe [] (expressionCalls owner) value
+    ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionCalls owner value
 
 expressionCalls :: SymbolId -> Expression ResolvedName Type -> [TemplateMemberCall]

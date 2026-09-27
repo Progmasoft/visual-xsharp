@@ -167,6 +167,21 @@ rewriteStatements maximumNodes candidates = mapAccumulating rewrite
                     (rewrittenYes, afterYes) = rewriteStatements maximumNodes candidates afterCondition yes
                     (rewrittenNo, finalState) = rewriteStatements maximumNodes candidates afterYes no
                  in (CoreIf rewrittenCondition rewrittenYes rewrittenNo, finalState)
+            CoreWhile condition body ->
+                let (rewrittenCondition, afterCondition) = rewriteExpression maximumNodes candidates state condition
+                    (rewrittenBody, finalState) = rewriteStatements maximumNodes candidates afterCondition body
+                 in (CoreWhile rewrittenCondition rewrittenBody, finalState)
+            CoreDoWhile body condition ->
+                let (rewrittenBody, afterBody) = rewriteStatements maximumNodes candidates state body
+                    (rewrittenCondition, finalState) = rewriteExpression maximumNodes candidates afterBody condition
+                 in (CoreDoWhile rewrittenBody rewrittenCondition, finalState)
+            CoreFor condition body update ->
+                let (rewrittenCondition, afterCondition) = rewriteExpression maximumNodes candidates state condition
+                    (rewrittenBody, afterBody) = rewriteStatements maximumNodes candidates afterCondition body
+                    (rewrittenUpdate, finalState) = rewriteStatements maximumNodes candidates afterBody update
+                 in (CoreFor rewrittenCondition rewrittenBody rewrittenUpdate, finalState)
+            CoreBreak -> (CoreBreak, state)
+            CoreContinue -> (CoreContinue, state)
 
 rewriteExpression ::
     Int -> Map SymbolId InlineCandidate -> InlineState -> CoreExpression -> (CoreExpression, InlineState)
@@ -368,6 +383,21 @@ cloneStatement environment statement state = case statement of
             (clonedTrue, _, afterTrue) = cloneStatements environment whenTrue afterCondition
             (clonedFalse, _, afterFalse) = cloneStatements environment whenFalse afterTrue
          in (CoreIf clonedCondition clonedTrue clonedFalse, environment, afterFalse)
+    CoreWhile condition body ->
+        let (clonedCondition, afterCondition) = cloneExpression environment condition state
+            (clonedBody, _, finalState) = cloneStatements environment body afterCondition
+         in (CoreWhile clonedCondition clonedBody, environment, finalState)
+    CoreDoWhile body condition ->
+        let (clonedBody, _, afterBody) = cloneStatements environment body state
+            (clonedCondition, finalState) = cloneExpression environment condition afterBody
+         in (CoreDoWhile clonedBody clonedCondition, environment, finalState)
+    CoreFor condition body update ->
+        let (clonedCondition, afterCondition) = cloneExpression environment condition state
+            (clonedBody, _, afterBody) = cloneStatements environment body afterCondition
+            (clonedUpdate, _, finalState) = cloneStatements environment update afterBody
+         in (CoreFor clonedCondition clonedBody clonedUpdate, environment, finalState)
+    CoreBreak -> (CoreBreak, environment, state)
+    CoreContinue -> (CoreContinue, environment, state)
 
 freshName :: String -> ResolvedName -> InlineState -> (ResolvedName, InlineState)
 freshName role original state =
@@ -402,3 +432,8 @@ statementNodeCount statement = case statement of
     CoreReturn value -> 1 + expressionNodeCount value
     CoreEvaluate value -> 1 + expressionNodeCount value
     CoreIf condition yes no -> 1 + expressionNodeCount condition + sum (map statementNodeCount (yes ++ no))
+    CoreWhile condition body -> 1 + expressionNodeCount condition + sum (map statementNodeCount body)
+    CoreDoWhile body condition -> 1 + sum (map statementNodeCount body) + expressionNodeCount condition
+    CoreFor condition body update -> 1 + expressionNodeCount condition + sum (map statementNodeCount (body ++ update))
+    CoreBreak -> 1
+    CoreContinue -> 1

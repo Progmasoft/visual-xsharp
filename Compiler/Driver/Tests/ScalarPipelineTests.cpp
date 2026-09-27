@@ -426,10 +426,10 @@ TEST_CASE("CorePrep wire v6 round-trips every scalar family",
     }
 }
 
-TEST_CASE("Core wire v6 round-trips every scalar family",
+TEST_CASE("Core wire v7 round-trips every scalar family",
           "[scalar][wire][core]")
 {
-    CHECK(native_wire::kCurrentVersion == 6U);
+    CHECK(native_wire::kCurrentVersion == 7U);
     CHECK(native_wire_round_trips(core::Type::unit()));
     CHECK(native_wire_round_trips(core::Type::string()));
     for (const auto &entry : kScalarCases)

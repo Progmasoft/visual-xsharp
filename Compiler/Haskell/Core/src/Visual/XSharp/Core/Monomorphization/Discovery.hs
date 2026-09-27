@@ -71,7 +71,19 @@ discoverStatement location statement = case statement of
         discoverExpression (appendPath location ConditionPath) condition
             ++ discoverStatements (appendPath location TrueBranchPath) trueBranch
             ++ discoverStatements (appendPath location FalseBranchPath) falseBranch
+    CoreWhile condition body ->
+        discoverExpression (appendPath location ConditionPath) condition
+            ++ discoverStatements (appendPath location LoopBodyPath) body
+    CoreDoWhile body condition ->
+        discoverStatements (appendPath location LoopBodyPath) body
+            ++ discoverExpression (appendPath location ConditionPath) condition
+    CoreFor condition body update ->
+        discoverExpression (appendPath location ConditionPath) condition
+            ++ discoverStatements (appendPath location LoopBodyPath) body
+            ++ discoverStatements (appendPath location LoopUpdatePath) update
     CoreEvaluate value -> discoverExpression (appendPath location EvaluatedValuePath) value
+    CoreBreak -> []
+    CoreContinue -> []
 
 discoverExpression :: DemandLocation -> CoreExpression -> [TypeOccurrence]
 discoverExpression location expression =

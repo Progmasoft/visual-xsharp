@@ -415,18 +415,31 @@ statementSpan statement = case statement of
     AssignmentStatement value _ _ _ -> value
     ReturnStatement value _ -> value
     IfStatement value _ _ _ -> value
+    WhileStatement value _ _ -> value
+    DoWhileStatement value _ _ -> value
+    ForStatement value _ _ _ _ -> value
+    ForEachStatement value _ _ _ _ _ _ -> value
+    IncrementStatement value _ _ _ -> value
+    BreakStatement value _ -> value
+    ContinueStatement value -> value
     ExpressionStatement value _ _ -> value
 
 parseStatement :: Bool -> P (Statement Identifier ())
 parseStatement allowFinalExpression =
     do
-        tokens <- peekTokens 1
+        tokens <- peekTokens 3
         -- Compound types make a fixed token-count heuristic incorrect. Probe
         -- the complete declaration prefix without consuming it, then commit to
         -- that grammar branch so a later initializer error remains precise.
         case tokens of
             first : _ | tokenKind first == KeywordToken && tokenText first == "return" -> parseReturn
             first : _ | tokenKind first == KeywordToken && tokenText first == "if" -> parseIf
+            first : _ | tokenKind first == KeywordToken && tokenText first == "while" -> parseWhile
+            first : _ | tokenKind first == KeywordToken && tokenText first == "do" -> parseDoWhile
+            first : _ | tokenKind first == KeywordToken && tokenText first == "for" -> parseFor
+            first : _ | tokenKind first == KeywordToken && tokenText first == "break" -> parseBreak
+            first : _ | tokenKind first == KeywordToken && tokenText first == "continue" -> parseContinue
+            _ | startsIncrement tokens -> parseIncrementStatement
             first : _ | tokenKind first == KeywordToken && tokenText first == "final" -> parseBinding
             -- `unit` is forbidden specifically in type position. Commit here
             -- so declaration lookahead cannot hide VXP0013 behind an unrelated
@@ -461,6 +474,193 @@ parseIf = do
             if chained then Block . (: []) <$> parseIf else parseBlock False
         pure (condition, trueBlock, falseBlock)
     pure (IfStatement spanValue condition trueBlock falseBlock)
+
+-- Loops are retained as structured syntax until the Desugarer. Keeping their
+-- delimiters and header clauses explicit lets the type checker validate loop
+-- scope before CorePrep assigns basic-block identities.
+parseWhile :: P (Statement Identifier ())
+parseWhile = do
+    ((condition, body), spanValue) <- withSpan $ do
+        _ <- keyword "while"
+        _ <- symbol "("
+        condition <- parseExpression
+        _ <- symbol ")"
+        body <- parseBlock False
+        pure (condition, body)
+    pure (WhileStatement spanValue condition body)
+
+parseDoWhile :: P (Statement Identifier ())
+parseDoWhile = do
+    ((body, condition), spanValue) <- withSpan $ do
+        _ <- keyword "do"
+        body <- parseBlock False
+        _ <- keyword "while"
+        _ <- symbol "("
+        condition <- parseExpression
+        _ <- symbol ")"
+        _ <- symbol ";"
+        pure (body, condition)
+    pure (DoWhileStatement spanValue body condition)
+
+parseFor :: P (Statement Identifier ())
+parseFor = do
+    (header, spanValue) <- withSpan $ do
+        _ <- keyword "for"
+        _ <- symbol "("
+        emptyInitializer <- peekText ";"
+        if emptyInitializer
+            then parseForHeaderWithoutInitializer
+            else do
+                foreach <- matchesAhead (parseForBinding >> symbol ":")
+                if foreach then parseForEachHeader else parseClassicForHeader
+    pure $ case header of
+        ClassicHeader initializer condition updates body -> ForStatement spanValue initializer condition updates body
+        ForEachHeader binding source body ->
+            ForEachStatement spanValue (forBindingKind binding) (forBindingType binding) (forBindingName binding) () source body
+    where
+        parseForHeaderWithoutInitializer = do
+            _ <- symbol ";"
+            condition <- optionalUntil ";" parseExpression
+            _ <- symbol ";"
+            updates <- separatedUntil ")" "," parseForAction
+            _ <- symbol ")"
+            body <- parseBlock False
+            pure (ClassicHeader Nothing condition updates body)
+
+        parseForEachHeader = do
+            binding <- parseForBinding
+            _ <- symbol ":"
+            source <- parseExpression
+            _ <- symbol ")"
+            body <- parseBlock False
+            pure (ForEachHeader binding source body)
+
+        parseClassicForHeader = do
+            initializer <- parseForInitializer
+            _ <- symbol ";"
+            condition <- optionalUntil ";" parseExpression
+            _ <- symbol ";"
+            updates <- separatedUntil ")" "," parseForAction
+            _ <- symbol ")"
+            body <- parseBlock False
+            pure (ClassicHeader initializer condition updates body)
+
+data ForHeader
+    = ClassicHeader
+        (Maybe (Statement Identifier ()))
+        (Maybe (Expression Identifier ()))
+        [Statement Identifier ()]
+        (Block Identifier ())
+    | ForEachHeader ForBinding (Expression Identifier ()) (Block Identifier ())
+
+parseForInitializer :: P (Maybe (Statement Identifier ()))
+parseForInitializer = do
+    binding <- matchesAhead (optionalParser (keyword "final") >> parseTypeSyntax >> identifier >> symbol "=")
+    if binding
+        then do
+            start <- peekToken
+            finalToken <- optionalParser (keyword "final")
+            syntax <- parseTypeSyntax
+            (name, nameSpan) <- identifier
+            _ <- symbol "="
+            value <- parseExpression
+            let kind = maybe MutableBinding (const ImmutableBinding) finalToken
+                spanValue = maybe nameSpan tokenSpan start
+            pure (Just (BindingStatement spanValue kind syntax name () value))
+        else Just <$> parseForAction
+
+optionalUntil :: String -> P value -> P (Maybe value)
+optionalUntil closing parser = do
+    done <- peekText closing
+    if done then pure Nothing else Just <$> parser
+
+data ForBinding = ForBinding BindingKind TypeSyntax Identifier SourceSpan
+
+forBindingKind :: ForBinding -> BindingKind
+forBindingKind (ForBinding kind _ _ _) = kind
+
+forBindingType :: ForBinding -> TypeSyntax
+forBindingType (ForBinding _ syntax _ _) = syntax
+
+forBindingName :: ForBinding -> Identifier
+forBindingName (ForBinding _ _ name _) = name
+
+parseForBinding :: P ForBinding
+parseForBinding = do
+    finalToken <- optionalParser (keyword "final")
+    syntax <- parseTypeSyntax
+    (name, nameSpan) <- identifier
+    pure (ForBinding (maybe MutableBinding (const ImmutableBinding) finalToken) syntax name nameSpan)
+
+-- Assignment headers are represented with the same statement node used in a
+-- body. Prefix and postfix ++/-- have identical statement effects here; their
+-- value-producing expression forms remain a separate expression feature.
+parseForAction :: P (Statement Identifier ())
+parseForAction = do
+    tokens <- peekTokens 2
+    case tokens of
+        first : second : _
+            | tokenText first `elem` ["++", "--"] && tokenKind second == IdentifierToken ->
+                parseIncrement (tokenText first == "++") True
+        first : second : _
+            | tokenKind first == IdentifierToken && tokenText second `elem` ["++", "--"] ->
+                parseIncrement (tokenText second == "++") False
+        _ -> do
+            value <- parseExpression
+            assignment <- optionalSymbol "="
+            if assignment
+                then case value of
+                    NameExpression start name _ -> AssignmentStatement start name () <$> parseExpression
+                    _ -> failAt (expressionSpan value) "VXP0003" "assignment target must be a name"
+                else pure (ExpressionStatement (expressionSpan value) value True)
+
+startsIncrement :: [Token] -> Bool
+startsIncrement tokens = case tokens of
+    first : second : _ ->
+        (tokenText first `elem` ["++", "--"] && tokenKind second == IdentifierToken)
+            || (tokenKind first == IdentifierToken && tokenText second `elem` ["++", "--"])
+    _ -> False
+
+parseIncrementStatement :: P (Statement Identifier ())
+parseIncrementStatement = do
+    increment <- parseForAction
+    end <- symbol ";"
+    pure $ case increment of
+        IncrementStatement spanValue name annotation direction ->
+            IncrementStatement (mergeSpan spanValue (tokenSpan end)) name annotation direction
+        _ -> increment
+
+parseIncrement :: Bool -> Bool -> P (Statement Identifier ())
+parseIncrement isIncrement prefix = do
+    tokens <- peekTokens 2
+    case (prefix, tokens) of
+        (True, first : second : _)
+            | tokenText first == operator && tokenKind second == IdentifierToken -> do
+                _ <- symbol operator
+                (name, spanValue) <- identifier
+                pure (IncrementStatement (mergeSpan (tokenSpan first) spanValue) name () isIncrement)
+        (False, first : second : _)
+            | tokenKind first == IdentifierToken && tokenText second == operator -> do
+                (name, spanValue) <- identifier
+                finalOperator <- symbol operator
+                pure (IncrementStatement (mergeSpan spanValue (tokenSpan finalOperator)) name () isIncrement)
+        _ -> failCurrent "VXP0028" "increment and decrement statements require a named storage location"
+    where
+        operator = if isIncrement then "++" else "--"
+
+parseBreak :: P (Statement Identifier ())
+parseBreak = do
+    start <- keyword "break"
+    hasValue <- not <$> peekText ";"
+    value <- if hasValue then Just <$> parseExpression else pure Nothing
+    end <- symbol ";"
+    pure (BreakStatement (mergeSpan (tokenSpan start) (tokenSpan end)) value)
+
+parseContinue :: P (Statement Identifier ())
+parseContinue = do
+    start <- keyword "continue"
+    end <- symbol ";"
+    pure (ContinueStatement (mergeSpan (tokenSpan start) (tokenSpan end)))
 
 parseBinding :: P (Statement Identifier ())
 parseBinding = do

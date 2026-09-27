@@ -28,6 +28,33 @@ rg -n "d[o]cs/" README.md Documents Spec Compiler ProjectSystem Analyzer Formatt
 The second command is a migration/stale-link example rather than a permanent assertion that the text `docs` can never
 occur. External names such as `docs.rs` are unrelated and must not be rewritten.
 
+## Go repository checks
+
+The standalone tools in `scripts/` have standard-library-only test seams. Keep
+their behavior covered without building the compiler or downloading project
+dependencies. Run `gofmt` on changed Go files, then test and vet each tool from
+the repository root:
+
+```powershell
+gofmt -d scripts/verify_examples.go scripts/verify_examples_test.go
+gofmt -d scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+go test scripts/verify_examples.go scripts/verify_examples_test.go
+go test scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+go vet scripts/verify_examples.go scripts/verify_examples_test.go
+go vet scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+go run scripts/verify_examples.go -Root .
+go run scripts/verify_benchmarks.go -Root .
+```
+
+`verify_examples.go` checks that every program listed in `Examples/README.md`
+has its directory and the expected Visual X#, C#, C++, Java, and Rust source
+files, and that no unlisted program directory is left behind. `verify_benchmarks.go`
+checks that root-level benchmark reports are indexed exactly once in
+`Benchmarks/README.md`, with no missing, stale, or escaping paths. These are
+read-only repository-integrity checks and also run in the Compiler Tier 1/2/3
+workflows. A successful Go unit test is not a substitute for running each tool
+against the checkout, because only the repository scan catches stale catalogs.
+
 For a source change, inspect the diff and verify that no generated or local-only directory entered the index:
 
 ```powershell
@@ -81,9 +108,10 @@ go run scripts/develop.go doctor
 go run scripts/develop.go test
 ```
 
-The command executes 15 Catch3 binaries and one C11 ABI contract executable directly on Windows 10/11, macOS
-Sequoia/Tahoe, Ubuntu 26.04 LTS, and Fedora 43. Bazel selects the host configuration automatically; no public test
-instruction requires `--config`.
+The command executes 18 Catch3 binaries and one C11 ABI contract executable on
+Windows 10/11, macOS Sequoia/Tahoe, Ubuntu 26.04 LTS, and Fedora 43. Bazel
+selects the host configuration automatically; no public test instruction
+requires `--config`.
 
 Control-flow changes must exercise the stage that creates edges and every
 storage-oriented consumer of those edges. Three component-owned suites make

@@ -192,6 +192,27 @@ discoverStatement catalog namespace root index statement state = case statement 
             afterCondition = discoverExpression catalog namespace origin condition state
             afterTrue = discoverBlock catalog namespace origin trueBlock afterCondition
          in maybe afterTrue (\block -> discoverBlock catalog namespace origin block afterTrue) falseBlock
+    WhileStatement spanValue condition body ->
+        let origin = root {discoverySites = [ConditionTypeSite index], discoverySpan = spanValue}
+         in discoverBlock catalog namespace origin body (discoverExpression catalog namespace origin condition state)
+    DoWhileStatement spanValue body condition ->
+        let origin = root {discoverySites = [ConditionTypeSite index], discoverySpan = spanValue}
+            afterBody = discoverBlock catalog namespace origin body state
+         in discoverExpression catalog namespace origin condition afterBody
+    ForStatement spanValue initializer condition updates body ->
+        let origin = root {discoverySites = [ConditionTypeSite index], discoverySpan = spanValue}
+            afterInitializer = maybe state (\value -> discoverStatement catalog namespace origin index value state) initializer
+            afterCondition = maybe afterInitializer (\value -> discoverExpression catalog namespace origin value afterInitializer) condition
+            afterUpdates = foldl' (\current value -> discoverStatement catalog namespace origin index value current) afterCondition updates
+         in discoverBlock catalog namespace origin body afterUpdates
+    ForEachStatement spanValue _ _ _ annotation source body ->
+        let origin = root {discoverySites = [ConditionTypeSite index], discoverySpan = spanValue}
+            afterAnnotation = discoverType catalog namespace origin annotation state
+            afterSource = discoverExpression catalog namespace origin source afterAnnotation
+         in discoverBlock catalog namespace origin body afterSource
+    IncrementStatement _ _ annotation _ -> discoverType catalog namespace root annotation state
+    BreakStatement _ value -> maybe state (\expression -> discoverExpression catalog namespace root expression state) value
+    ContinueStatement {} -> state
     ExpressionStatement spanValue expression _ ->
         discoverExpression
             catalog

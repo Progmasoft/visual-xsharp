@@ -1,0 +1,31 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+namespace Examples.PrimeNumbers;
+
+public class PrimeNumbers {
+    private static bool IsPrime(int candidate) {
+        if (candidate < 2) {
+            return false;
+        }
+
+        int divisor = 2;
+        while (divisor * divisor <= candidate) {
+            if (candidate % divisor == 0) {
+                return false;
+            }
+            divisor++;
+        }
+        return true;
+    }
+
+    public static void Main() {
+        int candidate = 2;
+        while (candidate <= 50) {
+            if (IsPrime(candidate)) {
+                Console.Println(candidate);
+            }
+            candidate++;
+        }
+    }
+}

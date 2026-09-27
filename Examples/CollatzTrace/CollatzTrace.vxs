@@ -1,0 +1,26 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+namespace Examples.CollatzTrace;
+
+public class CollatzTrace {
+    public static void Main() {
+        int value = 19;
+        int steps = 0;
+        Console.Print(value);
+
+        -- The stopping rule is explicit: stop at one or after the safety bound.
+        while (value \= 1 && steps < 100) {
+            if (value % 2 == 0) {
+                value = value / 2;
+            }
+            else {
+                value = value * 3 + 1;
+            }
+            Console.Printfn(" -> %d", value);
+            steps++;
+        }
+        Console.Println("");
+        Console.Printfn("steps: %d", steps);
+    }
+}

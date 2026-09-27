@@ -94,6 +94,7 @@ test-suite visual-xsharp-compiler-tests
         FloatingOptimizerTests
         IntegerEvaluationTests
         IntegerFlowTests
+        IterationTests
         DiagnosticProtocolTests
         DiagnosticSideChannelTests
         NumericTests

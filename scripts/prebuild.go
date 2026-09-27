@@ -320,6 +320,10 @@ func installBootstrapTools(host bootstrapHost, runner bootstrapRunner) error {
 			}
 		}
 		for _, requirement := range missing {
+			if homebrewPackageInstalled(runner, brew, requirement) {
+				fmt.Printf("Skipping %s; Homebrew reports it is already installed.\n", requirement.name)
+				continue
+			}
 			fmt.Printf("Installing %s with Homebrew...\n", requirement.name)
 			arguments := homebrewInstallArguments(requirement)
 			if err := runner.Run(brew, arguments...); err != nil {
@@ -412,9 +416,30 @@ func installWingetPackage(runner bootstrapRunner, winget string, packageID strin
 	if packageID == "" {
 		return errors.New("package has no winget identifier")
 	}
+	if wingetPackageInstalled(runner, winget, packageID) {
+		fmt.Printf("Skipping %s; WinGet reports it is already installed.\n", packageID)
+		return nil
+	}
 	fmt.Printf("Installing %s with winget...\n", packageID)
 	return runner.Run(winget, "install", "--id", packageID, "--exact", "--source", "winget",
 		"--accept-package-agreements", "--accept-source-agreements", "--silent", "--disable-interactivity")
+}
+
+func wingetPackageInstalled(runner bootstrapRunner, winget string, packageID string) bool {
+	listing, err := runner.Output(winget, "list", "--id", packageID, "--exact", "--source", "winget", "--disable-interactivity")
+	return err == nil && strings.Contains(strings.ToLower(listing), strings.ToLower(packageID))
+}
+
+func homebrewPackageInstalled(runner bootstrapRunner, brew string, requirement toolRequirement) bool {
+	if requirement.homebrewFormula == "" {
+		return false
+	}
+	arguments := []string{"list", "--formula", requirement.homebrewFormula}
+	if requirement.name == "Temurin JDK 25" {
+		arguments[1] = "--cask"
+	}
+	_, err := runner.Output(brew, arguments...)
+	return err == nil
 }
 
 func installGHCupWindows(runner bootstrapRunner) error {

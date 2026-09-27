@@ -1,6 +1,6 @@
-# Visual X# Core wire v6 document emitted by the Haskell Core writer.
+# Visual X# Core wire v7 document emitted by the Haskell Core writer.
 # Module Demo; function Main belongs to Sources/Main.vxs.
-56 58 43 52 06 00 00 00 01 00 00 00
+56 58 43 52 07 00 00 00 01 00 00 00
 04 00 00 00 44 00 00 00 65 00 00 00
 6d 00 00 00 6f 00 00 00 01 00 00 00
 10 00 00 00 53 00 00 00 6f 00 00 00
