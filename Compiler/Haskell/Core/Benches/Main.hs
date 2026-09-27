@@ -364,7 +364,7 @@ terminatorDigest terminator = case terminator of
     CorePrepUnreachable -> 1
 
 makeCoreModule :: Int -> CoreModule
-makeCoreModule count = CoreModule (QualifiedName [Identifier "Benchmark"]) (map makeFunction [0 .. count - 1]) [] []
+makeCoreModule count = CoreModule (QualifiedName [Identifier "Benchmark"]) (map makeFunction [0 .. count - 1])
 
 -- Each call expands a two-binding linear helper. Function and local symbols are
 -- globally disjoint so the benchmark measures fresh allocation and cloning,
