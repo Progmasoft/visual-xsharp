@@ -541,6 +541,16 @@ statementContainsPrimitive primitive statement = case statement of
         expressionContainsPrimitive primitive condition
             || containsPrimitiveInStatements primitive whenTrue
             || containsPrimitiveInStatements primitive whenFalse
+    CoreWhile condition body ->
+        expressionContainsPrimitive primitive condition || containsPrimitiveInStatements primitive body
+    CoreDoWhile body condition ->
+        containsPrimitiveInStatements primitive body || expressionContainsPrimitive primitive condition
+    CoreFor condition updates body ->
+        expressionContainsPrimitive primitive condition
+            || containsPrimitiveInStatements primitive updates
+            || containsPrimitiveInStatements primitive body
+    CoreBreak -> False
+    CoreContinue -> False
 
 containsPrimitiveInStatements :: CorePrimitive -> [CoreStatement] -> Bool
 containsPrimitiveInStatements primitive = any (statementContainsPrimitive primitive)
@@ -567,6 +577,12 @@ statementContainsCall statement = case statement of
     CoreEvaluate value -> expressionContainsCall value
     CoreIf condition whenTrue whenFalse ->
         expressionContainsCall condition || any statementContainsCall (whenTrue ++ whenFalse)
+    CoreWhile condition body -> expressionContainsCall condition || any statementContainsCall body
+    CoreDoWhile body condition -> any statementContainsCall body || expressionContainsCall condition
+    CoreFor condition updates body ->
+        expressionContainsCall condition || any statementContainsCall updates || any statementContainsCall body
+    CoreBreak -> False
+    CoreContinue -> False
 
 expressionContainsCall :: CoreExpression -> Bool
 expressionContainsCall expression = case expression of

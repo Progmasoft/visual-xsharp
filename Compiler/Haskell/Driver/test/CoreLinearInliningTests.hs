@@ -549,6 +549,12 @@ countStatementLets statement = case statement of
     CoreReturn value -> countLets value
     CoreEvaluate value -> countLets value
     CoreIf condition yes no -> countLets condition + sum (map countStatementLets (yes ++ no))
+    CoreWhile condition body -> countLets condition + sum (map countStatementLets body)
+    CoreDoWhile body condition -> sum (map countStatementLets body) + countLets condition
+    CoreFor condition updates body ->
+        countLets condition + sum (map countStatementLets updates) + sum (map countStatementLets body)
+    CoreBreak -> 0
+    CoreContinue -> 0
 
 expressionUses :: SymbolId -> CoreExpression -> Bool
 expressionUses symbol = elem symbol . map resolvedSymbol . coreExpressionSymbols
@@ -572,6 +578,12 @@ definedExpressionSymbols expression = nub (go expression)
             CoreReturn value -> go value
             CoreEvaluate value -> go value
             CoreIf condition yes no -> go condition ++ concatMap statementDefinitions (yes ++ no)
+            CoreWhile condition body -> go condition ++ concatMap statementDefinitions body
+            CoreDoWhile body condition -> concatMap statementDefinitions body ++ go condition
+            CoreFor condition updates body ->
+                go condition ++ concatMap statementDefinitions updates ++ concatMap statementDefinitions body
+            CoreBreak -> []
+            CoreContinue -> []
 
 countExpression :: CoreExpression -> CoreExpression -> Int
 countExpression needle expression =
@@ -591,3 +603,9 @@ countExpression needle expression =
             CoreReturn value -> countExpression needle value
             CoreEvaluate value -> countExpression needle value
             CoreIf condition yes no -> countExpression needle condition + sum (map countStatement (yes ++ no))
+            CoreWhile condition body -> countExpression needle condition + sum (map countStatement body)
+            CoreDoWhile body condition -> sum (map countStatement body) + countExpression needle condition
+            CoreFor condition updates body ->
+                countExpression needle condition + sum (map countStatement updates) + sum (map countStatement body)
+            CoreBreak -> 0
+            CoreContinue -> 0

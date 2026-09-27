@@ -156,6 +156,10 @@ instantiateExpression binding expression = case expression of
         NameExpression spanValue name <$> instantiateType binding annotation
     LiteralExpression spanValue literal annotation ->
         LiteralExpression spanValue literal <$> instantiateType binding annotation
+    MemberAccessExpression spanValue receiver member annotation -> do
+        closedReceiver <- instantiateExpression binding receiver
+        closedAnnotation <- instantiateType binding annotation
+        pure (MemberAccessExpression spanValue closedReceiver member closedAnnotation)
     CallExpression spanValue callee arguments annotation -> do
         closedCallee <- instantiateExpression binding callee
         closedArguments <- traverse (instantiateExpression binding) arguments

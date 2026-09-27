@@ -169,6 +169,17 @@ lowerExpression expression = case expression of
     LiteralExpression _ literal valueType ->
         let loweredType = lowerBoundaryType valueType
          in pure (CoreLiteral (lowerLiteral loweredType literal) loweredType)
+    MemberAccessExpression spanValue _ _ _ ->
+        lift
+            ( Left
+                [ Diagnostic
+                    DesugarerStage
+                    Error
+                    "VXD0003"
+                    (Just spanValue)
+                    "an unresolved member selector reached Core lowering"
+                ]
+            )
     CallExpression _ callee arguments valueType ->
         CoreApply <$> lowerExpression callee <*> mapM lowerExpression arguments <*> pure (lowerBoundaryType valueType)
     UnaryExpression _ UnaryPlus value _ -> lowerExpression value
@@ -222,6 +233,7 @@ expressionAnnotation :: Expression name Type -> Type
 expressionAnnotation expression = case expression of
     NameExpression _ _ valueType -> valueType
     LiteralExpression _ _ valueType -> valueType
+    MemberAccessExpression _ _ _ valueType -> valueType
     CallExpression _ _ _ valueType -> valueType
     UnaryExpression _ _ _ valueType -> valueType
     BinaryExpression _ _ _ _ valueType -> valueType
@@ -410,6 +422,7 @@ expressionIds :: Expression ResolvedName Type -> [Int]
 expressionIds expression = case expression of
     NameExpression _ name _ -> [symbolValue name]
     LiteralExpression {} -> []
+    MemberAccessExpression _ receiver _ _ -> expressionIds receiver
     CallExpression _ callee arguments _ -> expressionIds callee ++ concatMap expressionIds arguments
     UnaryExpression _ _ value _ -> expressionIds value
     BinaryExpression _ _ left right _ -> expressionIds left ++ expressionIds right

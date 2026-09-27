@@ -300,6 +300,7 @@ statementDefinitionSymbols statement = case statement of
 
 expressionDefinitionSymbols :: Expression ResolvedName Type -> [SymbolId]
 expressionDefinitionSymbols expression = case expression of
+    MemberAccessExpression _ receiver _ _ -> expressionDefinitionSymbols receiver
     CallExpression _ callee arguments _ ->
         expressionDefinitionSymbols callee ++ concatMap expressionDefinitionSymbols arguments
     UnaryExpression _ _ value _ -> expressionDefinitionSymbols value
@@ -357,6 +358,7 @@ expressionTypes :: Expression ResolvedName Type -> [Type]
 expressionTypes expression = case expression of
     NameExpression _ _ annotation -> [annotation]
     LiteralExpression _ _ annotation -> [annotation]
+    MemberAccessExpression _ receiver _ annotation -> annotation : expressionTypes receiver
     CallExpression _ callee arguments annotation ->
         annotation : expressionTypes callee ++ concatMap expressionTypes arguments
     UnaryExpression _ _ value annotation -> annotation : expressionTypes value

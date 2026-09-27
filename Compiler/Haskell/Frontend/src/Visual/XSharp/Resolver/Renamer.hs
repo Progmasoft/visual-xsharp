@@ -37,51 +37,96 @@ declareMany stage code next environment ((name, spanValue) : remaining) =
         (final, after, problems) = declareMany stage code (next + 1) ((name, renamed) : environment) remaining
      in (final, after, duplicate ++ problems)
 
+-- Methods with one spelling are a single overload family. Other declarations
+-- still occupy that shared member namespace, so a method cannot coexist with
+-- a field-like or nested declaration of the same name. Each overload receives
+-- its own SymbolId; the type checker later validates signature uniqueness.
+declareMembers :: Int -> [Declaration Identifier ()] -> (Environment, [RenamedName], Int, [Diagnostic])
+declareMembers next declarations = go [] [] next declarations
+    where
+        go environment _ current [] = (environment, [], current, [])
+        go environment seen current (declaration : remaining) =
+            let name = declarationName declaration
+                isMethod = case declaration of FunctionDeclaration {} -> True; _ -> False
+                collision = case lookup name seen of
+                    Nothing -> []
+                    Just previousWasMethod
+                        | previousWasMethod && isMethod -> []
+                        | otherwise ->
+                            [ Diagnostic
+                                RenamerStage
+                                Error
+                                "VXR0004"
+                                (Just (declarationSpan declaration))
+                                ("duplicate declaration " ++ identifierText name ++ " in one type")
+                            ]
+                renamed = RenamedName name current
+                (finalEnvironment, laterNames, finalNext, laterProblems) =
+                    go ((name, renamed) : environment) ((name, isMethod) : seen) (current + 1) remaining
+             in (finalEnvironment, renamed : laterNames, finalNext, collision ++ laterProblems)
+
 renameDeclarations ::
     Environment -> Int -> [Declaration Identifier ()] -> ([Declaration RenamedName ()], Int, [Diagnostic])
-renameDeclarations _ next [] = ([], next, [])
-renameDeclarations globals next (declaration : remaining) =
+renameDeclarations globals next declarations =
+    renameDeclarationsWithBindings
+        globals
+        next
+        declarations
+        (map (\declaration -> valueOrMissing (declarationName declaration) globals) declarations)
+
+-- Declaration nodes need their own binding, not a name-only lookup. In an
+-- overload family every source spelling is equal, while each declared method
+-- must retain the SymbolId allocated for its exact source position.
+renameDeclarationsWithBindings ::
+    Environment ->
+    Int ->
+    [Declaration Identifier ()] ->
+    [RenamedName] ->
+    ([Declaration RenamedName ()], Int, [Diagnostic])
+renameDeclarationsWithBindings _ next [] [] = ([], next, [])
+renameDeclarationsWithBindings globals next (declaration : remaining) (assignedName : assignedRemaining) =
     case declaration of
-        TypeDeclaration spanValue sourceName _ members ->
-            let name = valueOrMissing sourceName globals
-                (declaredMembers, afterMembers, duplicateProblems) =
-                    declareMany
-                        RenamerStage
-                        "VXR0004"
-                        next
-                        []
-                        [(declarationName member, declarationSpan member) | member <- members]
-                (renamedMembers, afterBody, memberProblems) = renameDeclarations (declaredMembers ++ globals) afterMembers members
+        TypeDeclaration spanValue _ _ members ->
+            let name = assignedName
+                (declaredMembers, memberNames, afterMembers, duplicateProblems) = declareMembers next members
+                (renamedMembers, afterBody, memberProblems) =
+                    renameDeclarationsWithBindings (declaredMembers ++ globals) afterMembers members memberNames
                 renamed = TypeDeclaration spanValue name () renamedMembers
-                (rest, final, restProblems) = renameDeclarations globals afterBody remaining
+                (rest, final, restProblems) = renameDeclarationsWithBindings globals afterBody remaining assignedRemaining
              in (renamed : rest, final, duplicateProblems ++ memberProblems ++ restProblems)
-        TemplateTypeDeclaration spanValue sourceName _ sourceTemplateParameters members ->
-            let name = valueOrMissing sourceName globals
+        TemplateTypeDeclaration spanValue _ _ sourceTemplateParameters members ->
+            let name = assignedName
                 (templateParameters, templateEnvironment, afterTemplateParameters, templateProblems) =
                     renameTemplateParameters globals next sourceTemplateParameters
-                (declaredMembers, afterMembers, duplicateProblems) =
-                    declareMany
-                        RenamerStage
-                        "VXR0004"
-                        afterTemplateParameters
-                        []
-                        [(declarationName member, declarationSpan member) | member <- members]
+                (declaredMembers, memberNames, afterMembers, duplicateProblems) = declareMembers afterTemplateParameters members
                 memberEnvironment = declaredMembers ++ templateEnvironment
                 (renamedMembers, afterBody, memberProblems) =
-                    renameDeclarations memberEnvironment afterMembers members
+                    renameDeclarationsWithBindings memberEnvironment afterMembers members memberNames
                 renamed = TemplateTypeDeclaration spanValue name () templateParameters renamedMembers
-                (rest, final, restProblems) = renameDeclarations globals afterBody remaining
+                (rest, final, restProblems) = renameDeclarationsWithBindings globals afterBody remaining assignedRemaining
              in ( renamed : rest
                 , final
                 , templateProblems ++ duplicateProblems ++ memberProblems ++ restProblems
                 )
-        FunctionDeclaration spanValue sourceName _ returnSyntax sourceParameters sourceBody isStatic access ->
-            let name = valueOrMissing sourceName globals
+        FunctionDeclaration spanValue _ _ returnSyntax sourceParameters sourceBody isStatic access ->
+            let name = assignedName
                 (parameters, parameterEnvironment, afterParameters, parameterProblems) = renameParameters globals next sourceParameters
                 (body, afterBody, bodyProblems) = renameBlock parameterEnvironment afterParameters sourceBody
                 renamed = FunctionDeclaration spanValue name () returnSyntax parameters body isStatic access
-                (rest, final, restProblems) = renameDeclarations globals afterBody remaining
+                (rest, final, restProblems) = renameDeclarationsWithBindings globals afterBody remaining assignedRemaining
              in (renamed : rest, final, parameterProblems ++ bodyProblems ++ restProblems)
+renameDeclarationsWithBindings _ next declarations _ =
+    ( []
+    , next
+    ,
+        [ Diagnostic
+            RenamerStage
+            Error
+            "VXR0007"
+            (case declarations of declaration : _ -> Just (declarationSpan declaration); [] -> Nothing)
+            "declaration binding sequence does not match its syntax sequence"
+        ]
+    )
 
 -- All template parameters enter scope together.  This permits the documented
 -- default `T = U, U = int` while keeping source-order SymbolIds deterministic.
@@ -234,6 +279,9 @@ renameExpression :: Environment -> Int -> Expression Identifier () -> (Expressio
 renameExpression environment next expression = case expression of
     NameExpression spanValue name _ -> (NameExpression spanValue (valueOrMissing name environment) (), next, [])
     LiteralExpression spanValue literal _ -> (LiteralExpression spanValue literal (), next, [])
+    MemberAccessExpression spanValue receiver member _ ->
+        let (renamedReceiver, afterReceiver, problems) = renameExpression environment next receiver
+         in (MemberAccessExpression spanValue renamedReceiver member (), afterReceiver, problems)
     CallExpression spanValue callee arguments _ ->
         let (renamedCallee, afterCallee, firstProblems) = renameExpression environment next callee
             (renamedArguments, after, problems) = renameExpressions environment afterCallee arguments

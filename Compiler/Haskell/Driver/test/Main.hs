@@ -28,6 +28,11 @@ import ShortCircuitTests (shortCircuitTests)
 import SourceSetTests (sourceSetTests)
 import SourceTextTests (sourceTextTests)
 import SpecializationTests (specializationTests)
+import StaticMemberCoreTests (staticMemberCoreTests)
+import StaticMemberOverloadTests (staticMemberOverloadTests)
+import StaticMemberParserTests (staticMemberParserTests)
+import StaticMemberProjectTests (staticMemberProjectTests)
+import StaticMemberSemanticTests (staticMemberSemanticTests)
 import System.Directory (doesFileExist, getTemporaryDirectory, removeFile)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
@@ -120,6 +125,11 @@ main = do
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
     mapM_ (uncurry checkIO) sourceSetTests
     mapM_ (uncurry check) sourceTextTests
+    mapM_ (uncurry check) staticMemberParserTests
+    mapM_ (uncurry check) staticMemberSemanticTests
+    mapM_ (uncurry check) staticMemberCoreTests
+    mapM_ (uncurry check) staticMemberOverloadTests
+    mapM_ (uncurry checkIO) staticMemberProjectTests
     mapM_ (uncurry check) templateTests
     mapM_ (uncurry check) templateDeclarationTests
     mapM_ (uncurry check) templateDiscoveryTests

@@ -413,6 +413,12 @@ statementContainsCall statement = case statement of
     CoreReturn value -> containsCall value
     CoreEvaluate value -> containsCall value
     CoreIf condition yes no -> containsCall condition || any statementContainsCall (yes ++ no)
+    CoreWhile condition body -> containsCall condition || any statementContainsCall body
+    CoreDoWhile body condition -> any statementContainsCall body || containsCall condition
+    CoreFor condition updates body ->
+        containsCall condition || any statementContainsCall updates || any statementContainsCall body
+    CoreBreak -> False
+    CoreContinue -> False
 
 expressionLetSymbols :: CoreExpression -> [SymbolId]
 expressionLetSymbols expression = case expression of
@@ -431,6 +437,12 @@ statementLetSymbols statement = case statement of
     CoreReturn value -> expressionLetSymbols value
     CoreEvaluate value -> expressionLetSymbols value
     CoreIf condition yes no -> expressionLetSymbols condition ++ concatMap statementLetSymbols (yes ++ no)
+    CoreWhile condition body -> expressionLetSymbols condition ++ concatMap statementLetSymbols body
+    CoreDoWhile body condition -> concatMap statementLetSymbols body ++ expressionLetSymbols condition
+    CoreFor condition updates body ->
+        expressionLetSymbols condition ++ concatMap statementLetSymbols updates ++ concatMap statementLetSymbols body
+    CoreBreak -> []
+    CoreContinue -> []
 
 maximumModuleSymbol :: CoreModule -> Int
 maximumModuleSymbol moduleValue = maximum (0 : concatMap functionSymbols (coreModuleFunctions moduleValue))
@@ -445,6 +457,12 @@ maximumModuleSymbol moduleValue = maximum (0 : concatMap functionSymbols (coreMo
             CoreReturn value -> expressionSymbols value
             CoreEvaluate value -> expressionSymbols value
             CoreIf condition yes no -> expressionSymbols condition ++ concatMap statementSymbols (yes ++ no)
+            CoreWhile condition body -> expressionSymbols condition ++ concatMap statementSymbols body
+            CoreDoWhile body condition -> concatMap statementSymbols body ++ expressionSymbols condition
+            CoreFor condition updates body ->
+                expressionSymbols condition ++ concatMap statementSymbols updates ++ concatMap statementSymbols body
+            CoreBreak -> []
+            CoreContinue -> []
         expressionSymbols expression = map (symbolIdValue . resolvedSymbol) (expressionNames expression)
         expressionNames expression = case expression of
             CoreVariable name _ -> [name]
@@ -463,6 +481,12 @@ maximumModuleSymbol moduleValue = maximum (0 : concatMap functionSymbols (coreMo
             CoreReturn value -> expressionNames value
             CoreEvaluate value -> expressionNames value
             CoreIf condition yes no -> expressionNames condition ++ concatMap statementNames (yes ++ no)
+            CoreWhile condition body -> expressionNames condition ++ concatMap statementNames body
+            CoreDoWhile body condition -> concatMap statementNames body ++ expressionNames condition
+            CoreFor condition updates body ->
+                expressionNames condition ++ concatMap statementNames updates ++ concatMap statementNames body
+            CoreBreak -> []
+            CoreContinue -> []
 
 prepFunctionCalls :: CorePrep.CorePrepFunction -> Bool
 prepFunctionCalls value = any blockCalls (CorePrep.corePrepFunctionBlocks value)
@@ -689,6 +713,12 @@ statementHasDivision statement = case statement of
     CoreEvaluate expression -> expressionHasDivision expression
     CoreIf condition whenTrue whenFalse ->
         expressionHasDivision condition || containsIntegerDivision whenTrue || containsIntegerDivision whenFalse
+    CoreWhile condition body -> expressionHasDivision condition || containsIntegerDivision body
+    CoreDoWhile body condition -> containsIntegerDivision body || expressionHasDivision condition
+    CoreFor condition updates body ->
+        expressionHasDivision condition || containsIntegerDivision updates || containsIntegerDivision body
+    CoreBreak -> False
+    CoreContinue -> False
 
 expressionHasDivision :: CoreExpression -> Bool
 expressionHasDivision expression = case expression of

@@ -399,6 +399,7 @@ symbols :: Expression ResolvedName annotation -> [SymbolId]
 symbols expression = case expression of
     NameExpression _ name _ -> [resolvedSymbol name]
     LiteralExpression {} -> []
+    MemberAccessExpression _ receiver _ _ -> symbols receiver
     CallExpression _ callee arguments _ -> symbols callee ++ concatMap symbols arguments
     UnaryExpression _ _ value _ -> symbols value
     BinaryExpression _ _ left right _ -> symbols left ++ symbols right

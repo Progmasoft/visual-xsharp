@@ -161,6 +161,12 @@ statementCalls statement = case statement of
     CoreIf condition whenTrue whenFalse ->
         countCalls condition + sum (map statementCalls whenTrue) + sum (map statementCalls whenFalse)
     CoreEvaluate value -> countCalls value
+    CoreWhile condition body -> countCalls condition + sum (map statementCalls body)
+    CoreDoWhile body condition -> sum (map statementCalls body) + countCalls condition
+    CoreFor condition updates body ->
+        countCalls condition + sum (map statementCalls updates) + sum (map statementCalls body)
+    CoreBreak -> 0
+    CoreContinue -> 0
 
 expressionSymbols :: CoreExpression -> [SymbolId]
 expressionSymbols expression = case expression of
@@ -180,6 +186,12 @@ statementSymbols statement = case statement of
     CoreIf condition whenTrue whenFalse ->
         expressionSymbols condition ++ concatMap statementSymbols whenTrue ++ concatMap statementSymbols whenFalse
     CoreEvaluate value -> expressionSymbols value
+    CoreWhile condition body -> expressionSymbols condition ++ concatMap statementSymbols body
+    CoreDoWhile body condition -> concatMap statementSymbols body ++ expressionSymbols condition
+    CoreFor condition updates body ->
+        expressionSymbols condition ++ concatMap statementSymbols updates ++ concatMap statementSymbols body
+    CoreBreak -> []
+    CoreContinue -> []
 
 patternArtifacts :: Maybe FrontendArtifacts
 patternArtifacts = either (const Nothing) Just (compileSource effectfulSource)

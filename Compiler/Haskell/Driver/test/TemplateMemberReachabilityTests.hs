@@ -605,6 +605,17 @@ statementTargets statement = case statement of
     ReturnStatement _ value -> maybe [] expressionTargets value
     IfStatement _ condition trueBlock falseBlock ->
         expressionTargets condition ++ blockTargets trueBlock ++ maybe [] blockTargets falseBlock
+    WhileStatement _ condition body -> expressionTargets condition ++ blockTargets body
+    DoWhileStatement _ body condition -> blockTargets body ++ expressionTargets condition
+    ForStatement _ initializer condition updates body ->
+        maybe [] statementTargets initializer
+            ++ maybe [] expressionTargets condition
+            ++ concatMap statementTargets updates
+            ++ blockTargets body
+    ForEachStatement _ _ _ _ _ source body -> expressionTargets source ++ blockTargets body
+    IncrementStatement {} -> []
+    BreakStatement _ value -> maybe [] expressionTargets value
+    ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionTargets value
 
 blockTargets :: Block ResolvedName Type -> [SymbolId]

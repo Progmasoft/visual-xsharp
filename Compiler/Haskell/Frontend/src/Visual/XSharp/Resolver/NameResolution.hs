@@ -124,6 +124,9 @@ resolveExpression :: Expression RenamedName () -> (Expression ResolvedName (), [
 resolveExpression expression = case expression of
     NameExpression spanValue name _ -> let (resolved, problems) = resolveName spanValue name in (NameExpression spanValue resolved (), problems)
     LiteralExpression spanValue literal _ -> (LiteralExpression spanValue literal (), [])
+    MemberAccessExpression spanValue receiver member _ ->
+        let (resolvedReceiver, problems) = resolveExpression receiver
+         in (MemberAccessExpression spanValue resolvedReceiver member (), problems)
     CallExpression spanValue callee arguments _ ->
         let (resolvedCallee, firstProblems) = resolveExpression callee; values = map resolveExpression arguments
          in (CallExpression spanValue resolvedCallee (map fst values) (), firstProblems ++ concatMap snd values)

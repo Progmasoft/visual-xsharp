@@ -129,6 +129,11 @@ The Renamer owns:
 - preservation of source spans on renamed nodes; and
 - deterministic identity allocation for deterministic input order.
 
+Method declarations that form an overload set share source spelling but not identity. The Renamer keeps the
+source-ordered binding assigned to each declaration rather than looking it up again by spelling. This prevents a later
+overload from replacing every declaration's `SymbolId`; the Type Checker uses that stable identity to attach the selected
+candidate to each call.
+
 A later verifier must compare the same identity model. Reconstructing identities from display names would make shadowing,
 overloads, and cross-file namespace merging inconsistent.
 
@@ -144,6 +149,9 @@ must not silently fold unrelated namespaces into the entry namespace.
 Callable capture initializers resolve in the surrounding scope. Capture-private aliases become visible only in the callable
 body. Explicit capture mode forbids unlisted outer bindings.
 
+A member selector's receiver is resolved as an expression at this stage. The selector name remains source text until the
+Type Checker has the type catalog and overload signatures; Name Resolution does not guess whether the receiver is a type.
+
 ## 6. Type checking
 
 The Type Checker produces a typed AST. It owns declared/inferred local types, call signatures, return compatibility,
@@ -158,6 +166,17 @@ Important current invariants include:
 - numeric boolean context treats zero as false and nonzero as true;
 - two computed arithmetic operands must already have the same scalar type; and
 - range checks use unbounded compiler arithmetic before selecting a fixed-width representation.
+
+The first connected member-call slice follows the source forms in `Spec/Language/Decls.vxs` Examples 187–189. Direct
+`Type.Member(arguments)` calls resolve against top-level type declarations in the current semantic namespace. Method
+overloads are keyed by spelling and ordered parameter types; access, return type, and staticness do not distinguish a
+signature. Type-qualified calls consider only static candidates, filter access, and require one exact-type match. A
+successful call is rewritten to reference the selected method's `SymbolId`; no dynamic member lookup or implicit numeric
+conversion is inserted. Unqualified calls to the current type use its complete overload family.
+
+This does not connect instance field/property lookup, instance dispatch, nested types, namespace-qualified type paths,
+cross-namespace imports, extension lookup, inherited protected access, or native overload mangling. The implementation
+boundary and diagnostics are recorded in [Static member calls and method overloads](STATIC-MEMBER-RESOLUTION.md).
 
 The checker preserves normalized floating spelling until target-aware native conversion is available. Unsupported transport
 payloads fail explicitly instead of rounding through a host `Double`.

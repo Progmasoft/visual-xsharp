@@ -320,6 +320,7 @@ expressionCalls :: SymbolId -> Expression ResolvedName Type -> [TemplateMemberCa
 expressionCalls owner expression = case expression of
     NameExpression {} -> []
     LiteralExpression {} -> []
+    MemberAccessExpression _ receiver _ _ -> expressionCalls owner receiver
     CallExpression spanValue callee arguments _ ->
         directCall spanValue callee
             ++ expressionCalls owner callee

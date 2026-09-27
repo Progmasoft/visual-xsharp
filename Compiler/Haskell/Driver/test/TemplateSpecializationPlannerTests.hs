@@ -571,6 +571,7 @@ compilerBridgeMapsDiagnostics = case analyze boxSource of
         Left [problem] ->
             diagnosticStage problem == TypeCheckerStage
                 && "unknown template declaration Missing" `isInfixOf` diagnosticMessage problem
+        Left _ -> False
         Right _ -> False
     Nothing -> False
     where

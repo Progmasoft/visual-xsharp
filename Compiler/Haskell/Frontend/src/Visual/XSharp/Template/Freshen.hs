@@ -189,6 +189,8 @@ freshExpression expression = case expression of
         NameExpression spanValue <$> freshReference name <*> freshType annotation
     LiteralExpression spanValue literal annotation ->
         LiteralExpression spanValue literal <$> freshType annotation
+    MemberAccessExpression spanValue receiver member annotation ->
+        MemberAccessExpression spanValue <$> freshExpression receiver <*> pure member <*> freshType annotation
     CallExpression spanValue callee arguments annotation ->
         CallExpression spanValue
             <$> freshExpression callee
@@ -310,6 +312,7 @@ expressionSymbols :: Expression ResolvedName Type -> [Int]
 expressionSymbols expression = case expression of
     NameExpression _ name annotation -> nameSymbol name : typeSymbols annotation
     LiteralExpression _ _ annotation -> typeSymbols annotation
+    MemberAccessExpression _ receiver _ annotation -> expressionSymbols receiver ++ typeSymbols annotation
     CallExpression _ callee arguments annotation ->
         expressionSymbols callee ++ concatMap expressionSymbols arguments ++ typeSymbols annotation
     UnaryExpression _ _ value annotation -> expressionSymbols value ++ typeSymbols annotation

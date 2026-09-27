@@ -231,6 +231,8 @@ discoverExpression ::
 discoverExpression catalog namespace origin expression state = case expression of
     NameExpression _ _ annotation -> discoverType catalog namespace origin annotation state
     LiteralExpression _ _ annotation -> discoverType catalog namespace origin annotation state
+    MemberAccessExpression _ receiver _ annotation ->
+        discoverExpression catalog namespace origin receiver (discoverType catalog namespace origin annotation state)
     CallExpression _ callee arguments annotation ->
         let afterType = discoverType catalog namespace origin annotation state
             afterCallee = discoverExpression catalog namespace origin callee afterType

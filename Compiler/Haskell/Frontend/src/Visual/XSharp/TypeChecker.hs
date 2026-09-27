@@ -29,6 +29,19 @@ defaultTypeChecker = TypeChecker checkTree
 
 type TypeEnvironment = [(SymbolId, (Type, Bool))]
 
+-- The type checker owns a whole source-set catalog before it checks any body.
+-- That permits calls to later-declared classes without making parsing depend
+-- on declaration order or mutating the Renamer's lexical environment.
+data MethodCandidate = MethodCandidate
+    { candidateOwner :: SymbolId
+    , candidateDeclaration :: Declaration ResolvedName ()
+    }
+
+data TypeCatalog = TypeCatalog
+    { catalogTypes :: [(SymbolId, ResolvedName)]
+    , catalogMethods :: [MethodCandidate]
+    }
+
 -- Type syntax deliberately keeps source spellings.  This side environment is
 -- the bridge from those spellings to the SymbolIds assigned by the renamer.
 -- Type and value parameters are separate because `T` in a type position and
@@ -36,19 +49,43 @@ type TypeEnvironment = [(SymbolId, (Type, Bool))]
 data TemplateContext = TemplateContext
     { templateTypeNames :: [(Identifier, ResolvedName)]
     , templateValueNames :: [(Identifier, ResolvedName)]
+    , templateCatalog :: TypeCatalog
+    , templateCurrentType :: Maybe SymbolId
     }
 
-emptyTemplateContext :: TemplateContext
-emptyTemplateContext = TemplateContext [] []
+emptyTemplateContext :: TypeCatalog -> Maybe SymbolId -> TemplateContext
+emptyTemplateContext catalog owner = TemplateContext [] [] catalog owner
 
 {- | Type-check every top-level declaration and collect independent diagnostics.
 No partially typed AST escapes when any declaration has an error.
 -}
 checkTree :: ResolvedAST -> Either [Diagnostic] TypedAST
 checkTree (ResolvedAST (SyntaxTree namespace declarations)) =
-    let checked = map checkTopDeclaration declarations
+    let catalog = catalogDeclarations declarations
+        checked = map (checkTopDeclaration catalog) declarations
         problems = concatMap snd checked
      in if null problems then Right (TypedAST (SyntaxTree namespace (map fst checked))) else Left problems
+
+catalogDeclarations :: [Declaration ResolvedName ()] -> TypeCatalog
+catalogDeclarations declarations =
+    TypeCatalog
+        [ (resolvedSymbol (declarationName declaration), declarationName declaration)
+        | declaration <- declarations
+        , isTypeDeclaration declaration
+        ]
+        [ MethodCandidate (resolvedSymbol (declarationName owner)) member
+        | owner <- declarations
+        , isTypeDeclaration owner
+        , member <- typeMembersOf owner
+        , case member of FunctionDeclaration {} -> True; _ -> False
+        ]
+    where
+        isTypeDeclaration TypeDeclaration {} = True
+        isTypeDeclaration TemplateTypeDeclaration {} = True
+        isTypeDeclaration _ = False
+        typeMembersOf TypeDeclaration {typeMembers = members} = members
+        typeMembersOf TemplateTypeDeclaration {typeMembers = members} = members
+        typeMembersOf _ = []
 
 signature :: TemplateContext -> Declaration ResolvedName () -> Type
 signature context declaration = case declaration of
@@ -62,15 +99,19 @@ signature context declaration = case declaration of
             (QualifiedName [resolvedSpelling name])
             (map templateParameterAsArgument parameters)
 
-checkTopDeclaration :: Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
-checkTopDeclaration declaration = case declaration of
+checkTopDeclaration :: TypeCatalog -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
+checkTopDeclaration catalog declaration = case declaration of
     TypeDeclaration spanValue name _ members ->
-        let signatures = [(resolvedSymbol (declarationName member), (signature emptyTemplateContext member, False)) | member <- members]
-            checked = map (checkDeclarationWith emptyTemplateContext signatures) members
+        let owner = resolvedSymbol name
+            context = emptyTemplateContext catalog (Just owner)
+            signatures = [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
+            checked = map (checkDeclarationWith context signatures) members
+            overloadProblems = duplicateOverloadProblems context members
             valueType = NamedType (QualifiedName [resolvedSpelling name]) []
-         in (TypeDeclaration spanValue name valueType (map fst checked), concatMap snd checked)
+         in (TypeDeclaration spanValue name valueType (map fst checked), overloadProblems ++ concatMap snd checked)
     TemplateTypeDeclaration spanValue name _ parameters members ->
-        let context = templateContext parameters
+        let owner = resolvedSymbol name
+            context = (templateContext catalog (Just owner) parameters)
             typedTemplateParameters = map (typeTemplateParameter context) parameters
             templateValues =
                 [ (resolvedSymbol (templateParameterName parameter), (templateParameterAnnotation parameter, False))
@@ -80,20 +121,21 @@ checkTopDeclaration declaration = case declaration of
             signatures = [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
             checked = map (checkDeclarationWith context (templateValues ++ signatures)) members
             parameterProblems = validateTemplateParameters context parameters
+            overloadProblems = duplicateOverloadProblems context members
             valueType =
                 NamedType
                     (QualifiedName [resolvedSpelling name])
                     (map templateParameterAsArgument typedTemplateParameters)
          in ( TemplateTypeDeclaration spanValue name valueType typedTemplateParameters (map fst checked)
-            , parameterProblems ++ concatMap snd checked
+            , parameterProblems ++ overloadProblems ++ concatMap snd checked
             )
-    FunctionDeclaration {} -> checkDeclarationWith emptyTemplateContext [] declaration
+    FunctionDeclaration {} -> checkDeclarationWith (emptyTemplateContext catalog Nothing) [] declaration
 
 {- | Keep type and value parameters in separate lookup tables.
 Identical source spelling in the two categories must not collapse their roles.
 -}
-templateContext :: [TemplateParameter ResolvedName annotation] -> TemplateContext
-templateContext parameters =
+templateContext :: TypeCatalog -> Maybe SymbolId -> [TemplateParameter ResolvedName annotation] -> TemplateContext
+templateContext catalog owner parameters =
     TemplateContext
         [ (resolvedSpelling name, name)
         | parameter <- parameters
@@ -108,6 +150,8 @@ templateContext parameters =
         , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
         , let name = templateParameterName parameter
         ]
+        catalog
+        owner
 
 templateParameterAsArgument :: TemplateParameter ResolvedName annotation -> TemplateArgument
 templateParameterAsArgument parameter = case templateParameterKind parameter of
@@ -277,8 +321,37 @@ checkDeclarationWith context globals declaration@FunctionDeclaration {} =
             (declarationAccess declaration)
         , signatureProblems ++ problems ++ returnProblems
         )
-checkDeclarationWith _ _ declaration@TypeDeclaration {} = checkTopDeclaration declaration
-checkDeclarationWith _ _ declaration@TemplateTypeDeclaration {} = checkTopDeclaration declaration
+checkDeclarationWith context _ declaration@TypeDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
+checkDeclarationWith context _ declaration@TemplateTypeDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
+
+-- A method overload is distinguished only by its ordered parameter types.
+-- Access, return type, and static-ness intentionally do not rescue duplicate
+-- signatures; that matches the declaration rules in Spec/Language/Decls.vxs.
+duplicateOverloadProblems :: TemplateContext -> [Declaration ResolvedName ()] -> [Diagnostic]
+duplicateOverloadProblems context members = reverse problems
+    where
+        (_, problems) = foldl inspect ([], []) members
+        inspect (seen, diagnostics) declaration@FunctionDeclaration {} =
+            let duplicate = any (sameSignature declaration) seen
+                currentDiagnostics =
+                    if duplicate
+                        then
+                            [ problem
+                                (declarationSpan declaration)
+                                "VXT0028"
+                                ( "method overload has a duplicate parameter signature: "
+                                    ++ identifierText (resolvedSpelling (declarationName declaration))
+                                )
+                            ]
+                        else []
+             in (declaration : seen, reverse currentDiagnostics ++ diagnostics)
+        inspect state _ = state
+        sameSignature current previous =
+            resolvedSpelling (declarationName previous) == resolvedSpelling (declarationName current)
+                && methodParameterTypes context previous == methodParameterTypes context current
+        methodParameterTypes valueContext FunctionDeclaration {declarationParameters = parameters} =
+            map (syntaxTypeIn valueContext . parameterTypeSyntax) parameters
+        methodParameterTypes _ _ = []
 
 typeParameterWith :: TemplateContext -> Parameter ResolvedName () -> Parameter ResolvedName Type
 typeParameterWith context parameter =
@@ -482,6 +555,7 @@ typedExpressionType :: Expression name Type -> Type
 typedExpressionType expression = case expression of
     NameExpression _ _ valueType -> valueType
     LiteralExpression _ _ valueType -> valueType
+    MemberAccessExpression _ _ _ valueType -> valueType
     CallExpression _ _ _ valueType -> valueType
     UnaryExpression _ _ _ valueType -> valueType
     BinaryExpression _ _ _ _ valueType -> valueType
@@ -539,27 +613,27 @@ checkExpressionExpectedWith context environment expected expression = case expre
     LiteralExpression spanValue literal _ ->
         let (valueType, problems) = literalTypeInContext spanValue expected literal
          in (LiteralExpression spanValue literal valueType, valueType, problems)
+    MemberAccessExpression spanValue receiver member _ ->
+        let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
+            memberProblems = [problem spanValue "VXT0034" "member selection is currently supported only as a type-qualified method call"]
+         in (MemberAccessExpression spanValue typedReceiver member ErrorType, ErrorType, receiverProblems ++ memberProblems)
     CallExpression spanValue callee arguments _ ->
-        let (typedCallee, calleeType, calleeProblems) = checkExpressionWith context environment callee
-            parameterTypes = case calleeType of FunctionType parameters _ -> parameters; _ -> []
-            checkedArguments =
-                zipWith
-                    (\index argument -> checkExpressionExpectedWith context environment (safeIndex parameterTypes index) argument)
-                    [0 ..]
-                    arguments
-            argumentTypes = map (\(_, valueType, _) -> valueType) checkedArguments
-            (resultType, callProblems) = case calleeType of
-                FunctionType parameters result
-                    | length parameters /= length argumentTypes ->
-                        (result, [problem spanValue "VXT0008" "call argument count does not match"])
-                    | and (zipWith compatible parameters argumentTypes) -> (result, [])
-                    | otherwise -> (result, [problem spanValue "VXT0009" "call argument type does not match"])
-                ErrorType -> (ErrorType, [])
-                _ -> (ErrorType, [problem spanValue "VXT0010" "expression is not callable"])
-         in ( CallExpression spanValue typedCallee (map (\(value, _, _) -> value) checkedArguments) resultType
-            , resultType
-            , calleeProblems ++ concatMap (\(_, _, ps) -> ps) checkedArguments ++ callProblems
-            )
+        case callee of
+            MemberAccessExpression _ receiver member _ ->
+                checkTypeQualifiedCall context environment expected spanValue receiver member arguments
+            NameExpression calleeSpan name _
+                | Just owner <- memberOwnerForSymbol context (resolvedSymbol name)
+                , Just owner == templateCurrentType context ->
+                    checkMemberOverloadCall
+                        context
+                        environment
+                        expected
+                        spanValue
+                        calleeSpan
+                        (overloadsFor context owner (resolvedSpelling name))
+                        arguments
+                        False
+            _ -> checkOrdinaryCall context environment spanValue callee arguments
     UnaryExpression spanValue operator value _ ->
         let operandExpected = if operator == LogicalNot then Nothing else expected
             (typedValue, valueType, problems) = checkExpressionExpectedWith context environment operandExpected value
@@ -623,6 +697,193 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , callableType
             , captureProblems ++ parameterProblems ++ bodyProblems
             )
+
+checkOrdinaryCall ::
+    TemplateContext ->
+    TypeEnvironment ->
+    SourceSpan ->
+    Expression ResolvedName () ->
+    [Expression ResolvedName ()] ->
+    (Expression ResolvedName Type, Type, [Diagnostic])
+checkOrdinaryCall context environment spanValue callee arguments =
+    let (typedCallee, calleeType, calleeProblems) = checkExpressionExpectedWith context environment Nothing callee
+        parameterTypes = case calleeType of FunctionType parameters _ -> parameters; _ -> []
+        checkedArguments =
+            zipWith
+                (\index argument -> checkExpressionExpectedWith context environment (safeIndex parameterTypes index) argument)
+                [0 ..]
+                arguments
+        argumentTypes = map (\(_, valueType, _) -> valueType) checkedArguments
+        (resultType, callProblems) = case calleeType of
+            FunctionType parameters result
+                | length parameters /= length argumentTypes ->
+                    (result, [problem spanValue "VXT0008" "call argument count does not match"])
+                | and (zipWith compatible parameters argumentTypes) -> (result, [])
+                | otherwise -> (result, [problem spanValue "VXT0009" "call argument type does not match"])
+            ErrorType -> (ErrorType, [])
+            _ -> (ErrorType, [problem spanValue "VXT0010" "expression is not callable"])
+     in ( CallExpression spanValue typedCallee (map (\(value, _, _) -> value) checkedArguments) resultType
+        , resultType
+        , calleeProblems ++ concatMap (\(_, _, ps) -> ps) checkedArguments ++ callProblems
+        )
+
+typeQualifiedReceiver :: Expression ResolvedName () -> Maybe ResolvedName
+typeQualifiedReceiver (NameExpression _ name _) = Just name
+typeQualifiedReceiver _ = Nothing
+
+memberOwnerForSymbol :: TemplateContext -> SymbolId -> Maybe SymbolId
+memberOwnerForSymbol context symbol =
+    candidateOwner <$> firstMatch
+    where
+        firstMatch = findCandidate (catalogMethods (templateCatalog context))
+        findCandidate [] = Nothing
+        findCandidate (candidate : remaining)
+            | resolvedSymbol (declarationName (candidateDeclaration candidate)) == symbol = Just candidate
+            | otherwise = findCandidate remaining
+
+overloadsFor :: TemplateContext -> SymbolId -> Identifier -> [MethodCandidate]
+overloadsFor context owner name =
+    [ candidate
+    | candidate <- catalogMethods (templateCatalog context)
+    , candidateOwner candidate == owner
+    , resolvedSpelling (declarationName (candidateDeclaration candidate)) == name
+    ]
+
+checkTypeQualifiedCall ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Maybe Type ->
+    SourceSpan ->
+    Expression ResolvedName () ->
+    Identifier ->
+    [Expression ResolvedName ()] ->
+    (Expression ResolvedName Type, Type, [Diagnostic])
+checkTypeQualifiedCall context environment expected callSpan receiver member arguments =
+    case typeQualifiedReceiver receiver of
+        Just typeName
+            | let owner = resolvedSymbol typeName
+            , owner `elem` map fst (catalogTypes (templateCatalog context)) ->
+                checkMemberOverloadCall
+                    context
+                    environment
+                    expected
+                    callSpan
+                    (sourceSpanOf receiver)
+                    (overloadsFor context owner member)
+                    arguments
+                    True
+        _ ->
+            let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
+                argumentsChecked = map (checkExpressionWith context environment) arguments
+                typedArguments = [value | (value, _, _) <- argumentsChecked]
+                diagnostics =
+                    receiverProblems
+                        ++ concat [problems | (_, _, problems) <- argumentsChecked]
+                        ++ [problem callSpan "VXT0032" "the left side of a static member call must name a declared type"]
+             in ( CallExpression
+                    callSpan
+                    (MemberAccessExpression callSpan typedReceiver member ErrorType)
+                    typedArguments
+                    ErrorType
+                , ErrorType
+                , diagnostics
+                )
+
+sourceSpanOf :: Expression name annotation -> SourceSpan
+sourceSpanOf expression = case expression of
+    NameExpression spanValue _ _ -> spanValue
+    LiteralExpression spanValue _ _ -> spanValue
+    MemberAccessExpression spanValue _ _ _ -> spanValue
+    CallExpression spanValue _ _ _ -> spanValue
+    UnaryExpression spanValue _ _ _ -> spanValue
+    BinaryExpression spanValue _ _ _ _ -> spanValue
+    IsPatternExpression spanValue _ _ _ -> spanValue
+    CallableExpression spanValue _ _ _ _ _ -> spanValue
+
+checkMemberOverloadCall ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Maybe Type ->
+    SourceSpan ->
+    SourceSpan ->
+    [MethodCandidate] ->
+    [Expression ResolvedName ()] ->
+    Bool ->
+    (Expression ResolvedName Type, Type, [Diagnostic])
+checkMemberOverloadCall context environment _ callSpan calleeSpan candidates arguments requireStatic =
+    let callableCandidates = if requireStatic then filter candidateIsStatic candidates else candidates
+        visibleCandidates = filter (candidateVisibleFrom context) callableCandidates
+        candidateAttempts = map attempt visibleCandidates
+        viable = [value | value@(_, _, _, True) <- candidateAttempts]
+        arityMatches = filter candidateArityMatches visibleCandidates
+        failureCode
+            | null candidates = "VXT0029"
+            | requireStatic && null callableCandidates = "VXT0031"
+            | null visibleCandidates = "VXT0033"
+            | null arityMatches = "VXT0008"
+            | otherwise = "VXT0009"
+        failureMessage
+            | null candidates = "no method with this name is declared on the selected type"
+            | requireStatic && null callableCandidates = "an instance method cannot be called through a type name"
+            | null visibleCandidates = "the selected method is not accessible from this declaration"
+            | null arityMatches = "call argument count does not match any overload"
+            | otherwise = "call argument types do not match any overload"
+        (selected, resultType, typedArguments, diagnostics) = case viable of
+            [(candidate, valueType, checked, _)] -> (Just candidate, valueType, checked, [])
+            [] ->
+                ( Nothing
+                , ErrorType
+                , map (\argument -> fst3 (checkExpressionWith context environment argument)) arguments
+                , [problem callSpan failureCode failureMessage]
+                )
+            _ ->
+                ( Nothing
+                , ErrorType
+                , map (\argument -> fst3 (checkExpressionWith context environment argument)) arguments
+                , [problem callSpan "VXT0030" "the call is ambiguous between multiple equally viable overloads"]
+                )
+        typedCallee = case selected of
+            Just candidate ->
+                let declaration = candidateDeclaration candidate
+                 in NameExpression calleeSpan (declarationName declaration) (signature context declaration)
+            Nothing -> case visibleCandidates of
+                candidate : _ ->
+                    let declaration = candidateDeclaration candidate
+                     in NameExpression calleeSpan (declarationName declaration) (signature context declaration)
+                [] -> NameExpression calleeSpan (ResolvedName (SymbolId (-1)) (Identifier "<unresolved-member>")) ErrorType
+     in (CallExpression callSpan typedCallee typedArguments resultType, resultType, diagnostics)
+    where
+        attempt candidate =
+            let declaration = candidateDeclaration candidate
+                functionType = signature context declaration
+                (parameters, resultType) = case functionType of
+                    FunctionType types result -> (types, result)
+                    _ -> ([], ErrorType)
+                checkedArguments =
+                    zipWith
+                        (\index argument -> checkExpressionExpectedWith context environment (safeIndex parameters index) argument)
+                        [0 ..]
+                        arguments
+                argumentTypes = [valueType | (_, valueType, _) <- checkedArguments]
+                problems = concat [nested | (_, _, nested) <- checkedArguments]
+                matching = length parameters == length arguments && null problems && and (zipWith compatible parameters argumentTypes)
+             in (candidate, resultType, [value | (value, _, _) <- checkedArguments], matching)
+        candidateIsStatic (MethodCandidate _ FunctionDeclaration {declarationIsStatic = isStatic}) = isStatic
+        candidateIsStatic _ = False
+        candidateArityMatches candidate = case candidateDeclaration candidate of
+            FunctionDeclaration {declarationParameters = parameters} -> length parameters == length arguments
+            _ -> False
+
+candidateVisibleFrom :: TemplateContext -> MethodCandidate -> Bool
+candidateVisibleFrom context (MethodCandidate owner FunctionDeclaration {declarationAccess = access}) =
+    case access of
+        PrivateAccess -> templateCurrentType context == Just owner
+        ProtectedAccess -> templateCurrentType context == Just owner
+        _ -> True
+candidateVisibleFrom _ _ = False
+
+fst3 :: (a, b, c) -> a
+fst3 (first, _, _) = first
 
 -- A pattern is checked against the already typed subject. This keeps literal
 -- inference deterministic and makes the later decision-tree lowering free of

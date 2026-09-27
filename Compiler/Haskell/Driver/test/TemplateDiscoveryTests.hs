@@ -253,10 +253,36 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
             ReturnStatement spanValue value -> ReturnStatement spanValue (rewriteExpression <$> value)
             IfStatement spanValue condition yes no ->
                 IfStatement spanValue (rewriteExpression condition) (rewriteBlock yes) (rewriteBlock <$> no)
+            WhileStatement spanValue condition body ->
+                WhileStatement spanValue (rewriteExpression condition) (rewriteBlock body)
+            DoWhileStatement spanValue body condition ->
+                DoWhileStatement spanValue (rewriteBlock body) (rewriteExpression condition)
+            ForStatement spanValue initializer condition updates body ->
+                ForStatement
+                    spanValue
+                    (rewriteStatement <$> initializer)
+                    (rewriteExpression <$> condition)
+                    (map rewriteStatement updates)
+                    (rewriteBlock body)
+            ForEachStatement spanValue kind syntax name annotation source body ->
+                ForEachStatement
+                    spanValue
+                    kind
+                    syntax
+                    name
+                    (rewriteType annotation)
+                    (rewriteExpression source)
+                    (rewriteBlock body)
+            IncrementStatement spanValue name annotation isPrefix ->
+                IncrementStatement spanValue name (rewriteType annotation) isPrefix
+            BreakStatement spanValue value -> BreakStatement spanValue (rewriteExpression <$> value)
+            ContinueStatement {} -> statement
             ExpressionStatement spanValue value terminated -> ExpressionStatement spanValue (rewriteExpression value) terminated
         rewriteExpression expression = case expression of
             NameExpression spanValue name annotation -> NameExpression spanValue name (rewriteType annotation)
             LiteralExpression spanValue literal annotation -> LiteralExpression spanValue literal (rewriteType annotation)
+            MemberAccessExpression spanValue receiver member annotation ->
+                MemberAccessExpression spanValue (rewriteExpression receiver) member (rewriteType annotation)
             CallExpression spanValue callee arguments annotation ->
                 CallExpression spanValue (rewriteExpression callee) (map rewriteExpression arguments) (rewriteType annotation)
             UnaryExpression spanValue operator value annotation ->

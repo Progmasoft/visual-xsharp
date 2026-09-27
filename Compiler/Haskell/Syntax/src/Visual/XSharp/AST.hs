@@ -232,6 +232,10 @@ data Statement name annotation
 data Expression name annotation
     = NameExpression SourceSpan name annotation
     | LiteralExpression SourceSpan Literal annotation
+    | -- A member selector preserves the receiver and the member spelling until
+      -- the checker knows whether the receiver denotes a type or a value. The
+      -- current executable subset accepts only type-qualified method calls.
+      MemberAccessExpression SourceSpan (Expression name annotation) Identifier annotation
     | CallExpression SourceSpan (Expression name annotation) [Expression name annotation] annotation
     | UnaryExpression SourceSpan UnaryOperator (Expression name annotation) annotation
     | BinaryExpression SourceSpan BinaryOperator (Expression name annotation) (Expression name annotation) annotation
