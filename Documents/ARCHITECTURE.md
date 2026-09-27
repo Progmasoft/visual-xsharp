@@ -92,9 +92,11 @@ verification are owned by separate Xpp/Xmm translation units and remain independ
 Core has a shared versioned `VXCR` binary contract and equivalent semantic verifiers in Haskell and C++20. The native reader
 decodes a bounded `.core` document, verifies it, and applies a dedicated Core-to-CorePrep adapter before Xpp lowering. The
 adapter atomizes nested calls and primitive expressions, creates deterministic temporary symbols, and makes branches and
-joins explicit without optimizing or reconstructing types. CorePrep can also cross the in-process frontend boundary through
-the separate internal `VXCP` contract. Both transports enforce resource and Unicode-scalar limits. CorePrep exists only in
-RAM and has no file extension, artifact API, CLI input, or emit option.
+joins explicit without optimizing or reconstructing types. Core, CorePrep, Xpp, and Xmm retain the ordered project source
+catalog and the owner of each function, so project object and assembly builds can partition native definitions without
+guessing from symbol names. CorePrep can also cross the in-process frontend boundary through the separate internal `VXCP`
+contract. Both transports enforce resource and Unicode-scalar limits. CorePrep exists only in RAM and has no file
+extension, artifact API, CLI input, or emit option.
 
 ## Verification boundaries
 
@@ -162,7 +164,7 @@ The current public artifact names are:
 Normal compilation keeps these representations in memory. Haskell writes real `.core` artifacts and C++20 consumes them
 through the full verified pipeline. Explicit `.ll`, `.bc`, `.o`, and `.asm` emission is available after source or Core
 input. Binary emission adds the platform entry bridge, writes a temporary object, links one `.vxse`, and removes the
-temporary object. Bounded Xpp/Xmm v3 readers and writers support verified forward pipeline resumption.
+temporary object. Bounded Xpp/Xmm v5 readers and writers support verified forward pipeline resumption.
 
 ## Process and temporary-file model
 

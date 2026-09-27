@@ -293,11 +293,17 @@ Artifact ownership is explicit:
 `check` writes no artifact. Binary emission creates the required entry bridge, writes a temporary object, invokes LLD with a
 typed argument vector rather than a shell string, validates the resulting executable, and removes its temporary object.
 
-Project binary builds produce one executable. Project-wide object and assembly emission is currently rejected because Core
-does not retain the source-file ownership needed to produce one artifact per input. When connected, the declared project
-contract is to flatten source paths to stems (for example, `Sources/MyApp/Main.vxs` to `build/debug/Main.o`) and reject
-colliding stems before writing; the compiler must not merge the source set into one misleading object. Explicit single-file
-builds remain distinct from this disconnected project-source-set route.
+Project binary builds produce one executable. The entry namespace's Core v6
+preserves source ownership through CorePrep v6, Xpp v5, and Xmm v5. Project
+object and assembly emission lowers each source in that selected namespace's
+source catalog into a separate `.o` or `.asm` in the selected output directory.
+A source with no declarations still receives an output; functions defined by
+another source remain external declarations in the current partition. The
+compiler rejects flattened basename collisions before writing and commits the
+complete artifact set through a same-filesystem staging transaction. See
+[Project native artifacts](PROJECT-ARTIFACTS.md) for naming, replacement, and
+recovery semantics. Explicit single-file builds remain distinct and emit a
+sibling artifact.
 
 ## 14. Failure discipline
 
@@ -315,7 +321,6 @@ The major unfinished seams are:
 
 - cross-namespace import binding;
 - a multi-module Core link unit;
-- source ownership for project-wide per-file artifacts;
 - broader object, value, exception, ownership, and standard-library lowering; and
 - named test-suite execution through its framework runner.
 

@@ -4,12 +4,15 @@
 #include <algorithm>
 #include <unordered_set>
 
+#include "Compiler/Artifact/SourcePath.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier/Semantics.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace visual_xsharp::core
 {
+    namespace Artifact = ::Visual::XSharp::Artifact;
+
     namespace
     {
         auto
@@ -152,9 +155,35 @@ namespace visual_xsharp::core
     verify(const CorePrepModule &module) -> std::vector<VerificationIssue>
     {
         std::vector<VerificationIssue> issues;
+        std::unordered_set<std::u32string> source_files;
+        for (const auto &sourceFile : module.sourceFiles)
+        {
+            if (!Artifact::IsNormalizedSourcePath(sourceFile))
+                issues.push_back(issue("VXC1064",
+                                       "CorePrep source path must be a "
+                                       "normalized relative .vxs path",
+                                       0U));
+            if (!source_files.insert(sourceFile).second)
+                issues.push_back(issue("VXC1064",
+                                       "CorePrep source catalog contains an "
+                                       "duplicate path",
+                                       0U));
+        }
         std::unordered_set<SymbolId> function_ids;
         for (const auto &function : module.functions)
         {
+            if (!function.sourceFile.empty()
+                && !Artifact::IsNormalizedSourcePath(function.sourceFile))
+                issues.push_back(issue("VXC1065",
+                                       "CorePrep function owner must be a "
+                                       "normalized relative .vxs path",
+                                       function.symbol.id));
+            if (!module.sourceFiles.empty()
+                && !source_files.contains(function.sourceFile))
+                issues.push_back(issue("VXC1065",
+                                       "CorePrep function owner is absent "
+                                       "from the module source catalog",
+                                       function.symbol.id));
             if (function.symbol.id == 0
                 || !function_ids.insert(function.symbol.id).second)
                 issues.push_back(

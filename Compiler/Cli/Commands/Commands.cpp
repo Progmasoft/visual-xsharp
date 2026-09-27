@@ -1010,6 +1010,15 @@ namespace
                                 : effective.output;
         if (output == BuildOutput::kCore)
             return CopyCore(core.Path(), artifactBase) ? 0 : 1;
+        if (output == BuildOutput::kObject || output == BuildOutput::kAssembly)
+            return ProcessProjectCoreArtifacts(
+                       core.Path(),
+                       artifactBase.parent_path(),
+                       output,
+                       &effective.compiler,
+                       effective.target ? effective.target->c_str() : nullptr)
+                       ? 0
+                       : 1;
         if (!ProcessCoreArtifactAs(corePathText.c_str(),
                                    artifactBaseText.c_str(),
                                    options.command,
@@ -1074,21 +1083,6 @@ namespace
                 *effective.target);
             return 2;
         }
-        if (options.command == CliCommand::kBuild
-            && (effective.output == BuildOutput::kObject
-                || effective.output == BuildOutput::kAssembly))
-        {
-            // A project Core module intentionally combines declarations across
-            // files. Until Core carries source ownership, emitting one object
-            // and pretending it belongs to every source would violate the
-            // source-per-artifact naming contract.
-            fmt::print(stderr,
-                       "vxs: project object and assembly emission require "
-                       "source ownership in Core; binary emission is "
-                       "available now\n");
-            return 1;
-        }
-
         if (options.command != CliCommand::kBuild
             && options.command != CliCommand::kRun
             && options.command != CliCommand::kCheck)
@@ -1166,6 +1160,13 @@ Visual::XSharp::Cli::Run(int argc, char **argv) -> int
             "vxsi",
 #endif
             options.interactiveArguments);
+    if (options.emitHeader)
+    {
+        fmt::print(stderr,
+                   "vxs: -Header is reserved until the VXCI export and ABI "
+                   "contract is defined\n");
+        return 2;
+    }
     std::optional<Activity> activity;
     if (options.command == CliCommand::kBuild)
         activity.emplace("building compiler pipeline");

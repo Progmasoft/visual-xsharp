@@ -15,6 +15,8 @@ the Haskell frontend and C++20 native pipeline:
 - `Compiler/Codegen/Xmm/Benches` measures Xpp-to-Xmm lowering plus Xmm verification, optimization, and artifact codecs;
 - `Compiler/Haskell/Core/Benches` measures the equivalent Haskell Core and CorePrep operations with Criterion.
 - `Interactive/Benches` measures one production CorePrep-to-Xmm-to-LLVM lowering, ORC module-add/invoke, and resource-reset cycle.
+- `Compiler/Driver/Benches` measures project source-output planning and staged native-artifact replacement independently of
+  frontend and LLVM lowering.
 
 Run every benchmark from the repository root:
 
@@ -31,6 +33,7 @@ bazelisk run -c opt //Compiler/Core/Benches:core_benches -- --benchmark_filter=C
 bazelisk run -c opt //Compiler/Core/CorePrep/Benches:coreprep_benches -- --benchmark_filter=Decode
 bazelisk run -c opt //Compiler/Codegen/Xpp/Benches:xpp_benches -- --benchmark_filter=Optimize
 bazelisk run -c opt //Compiler/Codegen/Xmm/Benches:xmm_benches -- --benchmark_filter=Lower
+bazelisk run -c opt //Compiler/Driver/Benches:project_artifact_benches -- --benchmark_filter=PlanProjectSourceOutputs
 Set-Location Compiler
 cabal bench visual-xsharp-core:core-benches --enable-benchmarks --benchmark-options="--match Core/Encode"
 ```
@@ -54,3 +57,4 @@ statistical comparisons once it can provide fixed CPU frequency, warm-up policy,
 - `2026-09-14-Dense-Liveness.md` records dense backward-liveness and retention-only optimizer results.
 - `2026-09-20-Core-Verifier-Environment.md` records removal of the quadratic per-function global-environment copy.
 - `2026-09-24-VXSI-ORC.md` records the first Visual X# Interactive native-cell/JIT lifecycle baseline.
+- `2026-09-27-Project-Artifacts.md` records per-source planning and staged output costs on a Windows development host.

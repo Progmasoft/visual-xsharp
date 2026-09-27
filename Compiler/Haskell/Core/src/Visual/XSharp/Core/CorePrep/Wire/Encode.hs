@@ -26,6 +26,13 @@ encodeCorePrepWith limits moduleValue = do
 encodeModule :: WireLimits -> CorePrepModule -> Encoder
 encodeModule limits moduleValue = do
     name <- encodeQualifiedName limits (corePrepModuleName moduleValue)
+    sources <-
+        encodeVector
+            limits
+            "source file count"
+            (maximumFunctions limits)
+            (encodeText limits "source file")
+            (corePrepModuleSourceFiles moduleValue)
     functions <-
         encodeVector
             limits
@@ -33,11 +40,12 @@ encodeModule limits moduleValue = do
             (maximumFunctions limits)
             (encodeFunction limits)
             (corePrepModuleFunctions moduleValue)
-    pure (name ++ functions)
+    pure (name ++ sources ++ functions)
 
 encodeFunction :: WireLimits -> CorePrepFunction -> Encoder
 encodeFunction limits function = do
     name <- encodeResolvedName limits "function symbol" (corePrepFunctionName function)
+    source <- encodeText limits "function source file" (corePrepFunctionSourceFile function)
     parameters <-
         encodeVector
             limits
@@ -54,7 +62,7 @@ encodeFunction limits function = do
             (maximumBlocksPerFunction limits)
             (encodeBlock limits)
             (corePrepFunctionBlocks function)
-    pure (name ++ parameters ++ result ++ entry ++ blocks)
+    pure (name ++ source ++ parameters ++ result ++ entry ++ blocks)
 
 encodeParameter :: WireLimits -> (ResolvedName, Type) -> Encoder
 encodeParameter limits (name, valueType) = do

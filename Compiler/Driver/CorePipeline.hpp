@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <filesystem>
+
 #include "Compiler/Cli/Arguments/Options.hpp"
 
 // This internal C++20 boundary receives typed options; the artifact pipeline
@@ -20,6 +22,12 @@ ProcessCoreArtifactAs(const char *path,
                       BuildOutput output,
                       const CompilerSettings *settings,
                       const char *targetTriple);
+[[nodiscard]] bool
+ProcessProjectCoreArtifacts(const std::filesystem::path &corePath,
+                            const std::filesystem::path &outputDirectory,
+                            BuildOutput output,
+                            const CompilerSettings *settings,
+                            const char *targetTriple);
 [[nodiscard]] bool
 ProcessXppArtifactAs(const char *path,
                      const char *artifactBasePath,

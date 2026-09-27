@@ -9,12 +9,15 @@
 #include <fstream>
 #include <iterator>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "Compiler/Driver/CorePipeline.hpp"
+#include "Compiler/Driver/ProjectArtifacts.hpp"
 #include "Compiler/Linker/NativeLinker.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
+#include "Visual/XSharp/Xmm/IR.hpp"
 
 #ifdef _WIN32
 #    include <process.h>
@@ -77,6 +80,13 @@ namespace
             return std::nullopt;
         return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(stream),
                                          {});
+    }
+
+    [[nodiscard]] auto
+    PathText(const std::filesystem::path &path) -> std::string
+    {
+        const auto text = path.u8string();
+        return { reinterpret_cast<const char *>(text.data()), text.size() };
     }
 
     [[nodiscard]] auto
@@ -454,6 +464,114 @@ ProcessCoreArtifact(const char *path,
                                  output,
                                  settings,
                                  targetTriple);
+}
+
+bool
+ProcessProjectCoreArtifacts(const std::filesystem::path &corePath,
+                            const std::filesystem::path &outputDirectory,
+                            const BuildOutput output,
+                            const CompilerSettings *settings,
+                            const char *targetTriple)
+{
+    if (settings == nullptr
+        || (output != BuildOutput::kObject && output != BuildOutput::kAssembly))
+        return false;
+
+    std::error_code sizeError;
+    constexpr auto kMaximumArtifactBytes
+        = std::uintmax_t{ 64U * 1024U * 1024U };
+    const auto artifactSize = std::filesystem::file_size(corePath, sizeError);
+    if (!sizeError && artifactSize > kMaximumArtifactBytes)
+    {
+        fmt::print(stderr,
+                   "vxs: Core artifact '{}' exceeds the 64 MiB input limit\n",
+                   corePath.string());
+        return false;
+    }
+    const auto bytes = ReadFile(corePath);
+    if (!bytes)
+    {
+        fmt::print(stderr,
+                   "vxs: could not read project Core artifact '{}'\n",
+                   corePath.string());
+        return false;
+    }
+
+    visual_xsharp::PipelineOptions pipelineOptions;
+    pipelineOptions.optimize_xpp = settings->xppOptimizationPasses;
+    pipelineOptions.optimize_xmm = settings->xmmOptimizationPasses;
+    pipelineOptions.stop_after = visual_xsharp::PipelineStop::Xmm;
+    auto pipeline
+        = Visual::XSharp::Pipeline::ConsumeCore(*bytes, pipelineOptions);
+    if (!pipeline || !pipeline.xmm)
+    {
+        PrintFailure(pipeline);
+        return false;
+    }
+
+    namespace Project = Visual::XSharp::Driver::ProjectArtifacts;
+    const auto extension = output == BuildOutput::kObject ? ".o" : ".asm";
+    const auto plan
+        = Project::PlanSourceOutputs(pipeline.xmm->source_files, extension);
+    if (!plan)
+    {
+        fmt::print(stderr,
+                   "vxs: cannot plan per-source output: {}\n",
+                   plan.diagnostic);
+        return false;
+    }
+
+    const auto emission = output == BuildOutput::kObject
+                              ? Llvm::MachineCodeEmission::Object
+                              : Llvm::MachineCodeEmission::Assembly;
+    std::vector<Project::ArtifactFile> files;
+    files.reserve(plan.outputs.size());
+    for (const auto &sourceOutput : plan.outputs)
+    {
+        auto llvmOptions = pipelineOptions.llvm;
+        llvmOptions.optimization = Optimization(*settings);
+        llvmOptions.target_triple = targetTriple == nullptr ? "" : targetTriple;
+        llvmOptions.machineCode = emission;
+        llvmOptions.executableEntry = false;
+        llvmOptions.definition_source_file = sourceOutput.source_file;
+        const auto lowered = Llvm::Lower(*pipeline.xmm, llvmOptions);
+        if (!lowered)
+        {
+            fmt::print(stderr,
+                       "vxs: source '{}' could not be lowered: {}: {}\n",
+                       sourceOutput.file_name,
+                       lowered.error->code,
+                       lowered.error->message);
+            return false;
+        }
+
+        Project::ArtifactFile file;
+        file.file_name = sourceOutput.file_name;
+        if (emission == Llvm::MachineCodeEmission::Object)
+            file.bytes = lowered.artifact->object;
+        else
+        {
+            file.bytes.reserve(lowered.artifact->assembly.size());
+            for (const auto byte : lowered.artifact->assembly)
+                file.bytes.push_back(static_cast<std::uint8_t>(byte));
+        }
+        files.push_back(std::move(file));
+    }
+
+    if (const auto error = Project::CommitArtifactFiles(outputDirectory, files))
+    {
+        fmt::print(stderr,
+                   "vxs: project artifacts were not committed: {}\n",
+                   *error);
+        return false;
+    }
+    for (const auto &file : files)
+        fmt::print(stderr,
+                   "vxs: wrote verified {} artifact '{}'\n",
+                   output == BuildOutput::kObject ? "object" : "assembly",
+                   PathText(outputDirectory
+                            / std::filesystem::u8path(file.file_name)));
+    return true;
 }
 
 bool

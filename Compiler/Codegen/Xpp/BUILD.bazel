@@ -19,6 +19,7 @@ cc_library(
         "//Compiler/Analysis:liveness",
         "//Compiler/Analysis:ownership_flow",
         "//Compiler/Artifact:wire_support",
+        "//Compiler/Artifact:source_path",
         "//Compiler/Core:core",
         "//Compiler/Core/Callable:callable",
         "//Compiler/Core/Ownership:ownership",

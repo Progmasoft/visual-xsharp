@@ -733,7 +733,7 @@ isDependency (DependencyDemand _ _) = True
 isDependency _ = False
 
 moduleWith :: [CoreFunction] -> CoreModule
-moduleWith = CoreModule (QualifiedName [Identifier "Tests"])
+moduleWith functions = CoreModuleWithSources (QualifiedName [Identifier "Tests"]) functions [] []
 
 functionWith :: [(ResolvedName, Type)] -> Type -> [CoreStatement] -> CoreFunction
 functionWith = CoreFunction functionName

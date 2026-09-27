@@ -82,6 +82,7 @@ The repository contains:
 - a native Core semantic verifier and Core-to-CorePrep adapter that atomizes expressions and constructs explicit CFGs;
 - matching bounded Haskell and C++20 internal CorePrep wire codecs;
 - recursive type, symbol spelling, qualified-name, and UTF-32 string preservation;
+- canonical project source catalogs and per-function ownership validated from Core through Xmm;
 - RAM-only CorePrep transport; no CorePrep file extension, reader, writer, CLI input, or emit option exists;
 - structural and semantic native CorePrep verifiers;
 - CorePrep-to-Xpp lowering;
@@ -100,16 +101,18 @@ The repository contains:
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The production process boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
-contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v3 codecs now own public Xpp/Xmm disk
+contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v5 codecs now own public Xpp/Xmm disk
 artifacts and forward-only pipeline resumption. LLVM target-machine emission and typed C++20 LLD invocation produce `.o`,
-`.asm`, and `.vxse` artifacts. Remaining work includes cross-namespace Haskell name resolution, a multi-module Core link
-unit, and source ownership for project-wide per-file artifacts.
+`.asm`, and `.vxse` artifacts. Project object and assembly requests produce one flattened output per source in the selected
+entry namespace; each owner boundary verifies the source catalog, and the driver replaces the set through a recoverable
+same-filesystem transaction. Remaining work includes cross-namespace Haskell name resolution and a multi-module Core link
+unit.
 
 ### Native coverage matrix
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| bounded VXCR v5 decode | connected | C++20 Core reader, closure records, template arguments, and scalar payload validation |
+| bounded VXCR v6 decode | connected | C++20 Core reader, closure records, template arguments, source ownership, and scalar payload validation |
 | native Core semantic verification | connected | `Compiler/Core` |
 | Core-to-CorePrep atomization/CFG | connected | dedicated adapter |
 | CorePrep structural/semantic verification | connected | native CorePrep verifier |
@@ -121,8 +124,9 @@ unit, and source ownership for project-wide per-file artifacts.
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
 | closure object ABI | connected | Xpp/Xmm, LLVM, and AARC runtime boundary |
 | recursive constructed-type classification | Haskell/native semantic models complete, process connection pending | frontend and Core nominal catalogs |
-| Xpp/Xmm disk codecs | connected | bounded v3 `VXPP`/`VXMM` readers and writers |
-| project-wide per-source native outputs | registered contract, not connected | source ownership through Core |
+| Xpp/Xmm disk codecs | connected | bounded v5 `VXPP`/`VXMM` readers and writers |
+| project per-source object/assembly emission | connected for the selected namespace | source ownership through CorePrep, Xpp, and Xmm |
+| VXCI `-Header` | registered and rejected explicitly | export/ABI semantics and a header writer are not connected |
 
 ## Retired Rust and C implementations
 

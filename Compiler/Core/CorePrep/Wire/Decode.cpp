@@ -49,6 +49,12 @@ namespace visual_xsharp::core::wire
                     return result();
                 CorePrepModule module;
                 module.name = qualified_name("module name");
+                module.sourceFiles
+                    = vector<std::u32string>(limits_.maximum_functions,
+                                             "source file count",
+                                             [this] {
+                                                 return text("source file");
+                                             });
                 module.functions = vector<Function>(limits_.maximum_functions,
                                                     "function count",
                                                     [this] {
@@ -612,6 +618,7 @@ namespace visual_xsharp::core::wire
             {
                 Function value;
                 value.symbol = symbol("function symbol");
+                value.sourceFile = text("function source file");
                 value.parameters
                     = vector<Parameter>(limits_.maximum_parameters_per_function,
                                         "parameter count",

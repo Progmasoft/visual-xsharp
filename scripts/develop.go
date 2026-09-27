@@ -93,16 +93,19 @@ type systemRunner struct {
 }
 
 var nativeTargets = []string{
+	"//Compiler/Artifact/Tests:source_path_tests",
 	"//Compiler/ADTs/Tests:adt_tests",
 	"//Compiler/Analysis/Tests:definite_initialization_tests",
 	"//Compiler/Backend/LLVM/Tests:llvm_backend_tests",
 	"//Compiler/Cli/Tests:cli_parser_tests",
 	"//Compiler/Cli/Commands/Tests:execution_status_tests",
+	"//Compiler/Cli/Commands/Tests:cli_command_tests",
 	"//Compiler/Core/Tests:callable_contract_tests",
 	"//Compiler/Core/Tests:core_pipeline_tests",
 	"//Compiler/Diagnostic/Tests:diagnostic_protocol_tests",
 	"//Compiler/Driver/Tests:artifact_wire_tests",
 	"//Compiler/Driver/Tests:closure_pipeline_tests",
+	"//Compiler/Driver/Tests:project_artifact_tests",
 	"//Compiler/Driver/Tests:scalar_pipeline_tests",
 	"//Compiler/Codegen/Xmm/Tests:xmm_verifier_tests",
 	"//Compiler/Codegen/Xpp/Tests:xpp_verifier_tests",
@@ -112,16 +115,19 @@ var nativeTargets = []string{
 }
 
 var nativePrograms = []string{
+	"Compiler/Artifact/Tests/source_path_tests",
 	"Compiler/ADTs/Tests/adt_tests",
 	"Compiler/Analysis/Tests/definite_initialization_tests",
 	"Compiler/Backend/LLVM/Tests/llvm_backend_tests",
 	"Compiler/Cli/Tests/cli_parser_tests",
 	"Compiler/Cli/Commands/Tests/execution_status_tests",
+	"Compiler/Cli/Commands/Tests/cli_command_tests",
 	"Compiler/Core/Tests/callable_contract_tests",
 	"Compiler/Core/Tests/core_pipeline_tests",
 	"Compiler/Diagnostic/Tests/diagnostic_protocol_tests",
 	"Compiler/Driver/Tests/artifact_wire_tests",
 	"Compiler/Driver/Tests/closure_pipeline_tests",
+	"Compiler/Driver/Tests/project_artifact_tests",
 	"Compiler/Driver/Tests/scalar_pipeline_tests",
 	"Compiler/Codegen/Xmm/Tests/xmm_verifier_tests",
 	"Compiler/Codegen/Xpp/Tests/xpp_verifier_tests",
@@ -135,6 +141,7 @@ var nativeBenchmarkTargets = []string{
 	"//Compiler/Codegen/Xpp/Benches:xpp_benches",
 	"//Compiler/Core/Benches:core_benches",
 	"//Compiler/Core/CorePrep/Benches:coreprep_benches",
+	"//Compiler/Driver/Benches:project_artifact_benches",
 }
 
 var nativeBenchmarkPrograms = []string{
@@ -142,6 +149,7 @@ var nativeBenchmarkPrograms = []string{
 	"Compiler/Codegen/Xpp/Benches/xpp_benches",
 	"Compiler/Core/Benches/core_benches",
 	"Compiler/Core/CorePrep/Benches/coreprep_benches",
+	"Compiler/Driver/Benches/project_artifact_benches",
 }
 
 // bundleFiles is deliberately explicit. A release must not accidentally absorb

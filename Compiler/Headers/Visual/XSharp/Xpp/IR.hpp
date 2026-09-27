@@ -115,6 +115,7 @@ namespace visual_xsharp::xpp
         core::Type return_type{ core::Type::unit() };
         BlockId entry{};
         std::vector<Block> blocks;
+        std::u32string source_file{};
         [[nodiscard]] auto
         operator==(const Function &) const -> bool = default;
     };
@@ -122,6 +123,7 @@ namespace visual_xsharp::xpp
     {
         std::vector<std::u32string> name;
         std::vector<Function> functions;
+        std::vector<std::u32string> source_files{};
         [[nodiscard]] auto
         operator==(const Module &) const -> bool = default;
     };

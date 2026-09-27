@@ -11,3 +11,13 @@ cc_binary(
         "@catch3//src/Progmasoft:catch3",
     ],
 )
+
+cc_binary(
+    name = "cli_command_tests",
+    srcs = ["CliCommandTests.cpp"],
+    deps = [
+        "//Compiler/Cli/Commands:commands",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
+    ],
+)

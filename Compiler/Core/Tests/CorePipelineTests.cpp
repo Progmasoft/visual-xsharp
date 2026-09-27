@@ -3,6 +3,8 @@
 
 #include <Progmasoft/Catch3/Assertions.hpp>
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <ranges>
@@ -21,6 +23,52 @@
 namespace
 {
     namespace Core = Visual::XSharp::Core;
+
+    class TemporaryDirectory final
+    {
+    public:
+        TemporaryDirectory()
+        {
+            static std::atomic_uint64_t sequence{};
+            const auto clock
+                = std::chrono::steady_clock::now().time_since_epoch().count();
+            const auto serial
+                = sequence.fetch_add(1U, std::memory_order_relaxed);
+            path_ = std::filesystem::temp_directory_path()
+                    / ("visual-xsharp-project-pipeline-" + std::to_string(clock)
+                       + "-" + std::to_string(serial));
+            created_ = std::filesystem::create_directory(path_);
+        }
+
+        TemporaryDirectory(const TemporaryDirectory &) = delete;
+        auto
+        operator=(const TemporaryDirectory &) -> TemporaryDirectory & = delete;
+
+        ~TemporaryDirectory()
+        {
+            if (created_)
+            {
+                std::error_code ignored;
+                std::filesystem::remove_all(path_, ignored);
+            }
+        }
+
+        [[nodiscard]] auto
+        Path() const -> const std::filesystem::path &
+        {
+            return path_;
+        }
+
+        [[nodiscard]] explicit
+        operator bool() const noexcept
+        {
+            return created_;
+        }
+
+    private:
+        std::filesystem::path path_;
+        bool created_{};
+    };
 
     [[nodiscard]] auto
     GoldenModule() -> Core::Module
@@ -93,6 +141,18 @@ namespace
     }
 
     [[nodiscard]] auto
+    ProjectPartitionModule() -> Core::Module
+    {
+        auto module = PipelineModule();
+        module.sourceFiles = { U"Sources/Main.vxs",
+                               U"Sources/Math.vxs",
+                               U"Sources/Empty.vxs" };
+        module.functions[0].sourceFile = U"Sources/Math.vxs";
+        module.functions[1].sourceFile = U"Sources/Main.vxs";
+        return module;
+    }
+
+    [[nodiscard]] auto
     ClosureModule() -> Core::Module
     {
         const auto integer = [](std::int64_t value) {
@@ -140,7 +200,7 @@ namespace
     }
 
     [[nodiscard]] auto
-    ReadGoldenHex(std::string_view filename = "wire-v5.hex")
+    ReadGoldenHex(std::string_view filename = "wire-v6.hex")
         -> std::vector<std::uint8_t>
     {
         const auto path = std::filesystem::path(__FILE__).parent_path()
@@ -174,7 +234,7 @@ namespace
     }
 } // namespace
 
-TEST_CASE("native VXCR v5 codec matches the Haskell golden contract")
+TEST_CASE("native VXCR v6 codec matches the Haskell golden contract")
 {
     const auto expected = ReadGoldenHex();
     const auto encoded = Core::Wire::Encode(GoldenModule());
@@ -224,7 +284,7 @@ TEST_CASE("VXCR reader rejects malformed boundaries and configured limits")
     }
 }
 
-TEST_CASE("VXCR v5 carries Haskell Core closure fields into native Core")
+TEST_CASE("VXCR v6 carries Haskell Core closure and source-owner fields")
 {
     const auto source = ClosureModule();
     REQUIRE(Core::Verify(source).empty());
@@ -249,7 +309,7 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     // This golden file is emitted from closure-boundary.vxs by vxs-frontend,
     // rather than re-encoded by the C++ model. It therefore locks the actual
     // cross-language expression tag and field order that production uses.
-    const auto bytes = ReadGoldenHex("wire-v5-closure.hex");
+    const auto bytes = ReadGoldenHex("wire-v6-closure.hex");
     const auto decoded = Core::Wire::Decode(bytes);
     REQUIRE(decoded);
     REQUIRE(Core::Verify(*decoded.module).empty());
@@ -293,6 +353,37 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     REQUIRE(result.core_prep);
     CHECK(result.core_prep->functions.size() == 2U);
     CHECK(result.xmmVerificationIssues.empty());
+}
+
+TEST_CASE("native pipeline preserves non-empty Haskell source ownership bytes")
+{
+    // Both owner fields are non-empty in this golden so field order cannot be
+    // accidentally hidden by interchangeable zero-length encodings.
+    const auto bytes = ReadGoldenHex("wire-v6-project-source.hex");
+    const auto decoded = Core::Wire::Decode(bytes);
+    REQUIRE(decoded);
+    REQUIRE(Core::Verify(*decoded.module).empty());
+    REQUIRE(decoded.module->sourceFiles
+            == std::vector<std::u32string>{ U"Sources/Main.vxs" });
+    REQUIRE(decoded.module->functions.size() == 1U);
+    CHECK(decoded.module->functions.front().sourceFile == U"Sources/Main.vxs");
+
+    const auto reencoded = Core::Wire::Encode(*decoded.module);
+    REQUIRE(reencoded);
+    CHECK(reencoded.bytes == bytes);
+
+    Visual::XSharp::Pipeline::Options options;
+    options.stop_after = Visual::XSharp::Pipeline::Stop::Xmm;
+    const auto pipeline = Visual::XSharp::Pipeline::ConsumeCore(bytes, options);
+    REQUIRE(pipeline);
+    REQUIRE(pipeline.xpp);
+    REQUIRE(pipeline.xmm);
+    CHECK(pipeline.xpp->source_files == decoded.module->sourceFiles);
+    CHECK(pipeline.xmm->source_files == decoded.module->sourceFiles);
+    CHECK(pipeline.xpp->functions.front().source_file
+          == decoded.module->functions.front().sourceFile);
+    CHECK(pipeline.xmm->functions.front().source_file
+          == decoded.module->functions.front().sourceFile);
 }
 
 TEST_CASE(
@@ -615,4 +706,157 @@ TEST_CASE("Core artifact driver validates and emits LLVM and native artifacts")
     REQUIRE(_wspawnv(_P_WAIT, executablePath.c_str(), arguments.data()) == 0);
 #endif
     std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("project artifact driver emits one object and assembly per source")
+{
+    TemporaryDirectory temporary;
+    REQUIRE(temporary);
+
+    auto source = ProjectPartitionModule();
+    REQUIRE(Core::Verify(source).empty());
+    const auto encoded = Core::Wire::Encode(source);
+    REQUIRE(encoded);
+    const auto corePath = temporary.Path() / "Project.core";
+    {
+        std::ofstream stream(corePath, std::ios::binary | std::ios::trunc);
+        REQUIRE(stream);
+        stream.write(reinterpret_cast<const char *>(encoded.bytes.data()),
+                     static_cast<std::streamsize>(encoded.bytes.size()));
+        REQUIRE(stream.good());
+    }
+
+    // This is the actual Core-to-LLVM project driver boundary, not a test of
+    // the filename planner alone. The Math definition is called from Main,
+    // while Empty has no declarations but remains a requested compilation
+    // unit and therefore still receives an output artifact.
+    const auto settings = DefaultCompilerSettings();
+    const auto objectDirectory = temporary.Path() / "build" / "debug";
+    REQUIRE(ProcessProjectCoreArtifacts(corePath,
+                                        objectDirectory,
+                                        BuildOutput::kObject,
+                                        &settings,
+                                        nullptr));
+    for (const auto *name : { "Main.o", "Math.o", "Empty.o" })
+    {
+        const auto artifact = objectDirectory / name;
+        REQUIRE(std::filesystem::is_regular_file(artifact));
+        CHECK(std::filesystem::file_size(artifact) > 0U);
+    }
+
+    const auto assemblyDirectory = temporary.Path() / "build" / "assembly";
+    REQUIRE(ProcessProjectCoreArtifacts(corePath,
+                                        assemblyDirectory,
+                                        BuildOutput::kAssembly,
+                                        &settings,
+                                        nullptr));
+    for (const auto *name : { "Main.asm", "Math.asm", "Empty.asm" })
+    {
+        const auto artifact = assemblyDirectory / name;
+        REQUIRE(std::filesystem::is_regular_file(artifact));
+        CHECK(std::filesystem::file_size(artifact) > 0U);
+    }
+    for (const auto &entry :
+         std::filesystem::recursive_directory_iterator(temporary.Path()))
+        CHECK(entry.path().filename().string().find(".vxs-artifacts-")
+              == std::string::npos);
+}
+
+TEST_CASE("source catalog paths are revalidated at each native IR boundary")
+{
+    const auto hasCode = [](const auto &issues, const std::string_view code) {
+        return std::ranges::any_of(issues, [code](const auto &issue) {
+            return issue.code == code;
+        });
+    };
+
+    auto core = ProjectPartitionModule();
+    core.sourceFiles.front() = U"Sources/../Main.vxs";
+    CHECK(hasCode(Core::Verify(core), "VXC1060"));
+
+    auto prepared = Core::CorePrep::Prepare(ProjectPartitionModule());
+    prepared.sourceFiles.front() = U"Sources\\Main.vxs";
+    CHECK(hasCode(visual_xsharp::core::verify(prepared), "VXC1064"));
+
+    auto xpp = visual_xsharp::xpp::lower(
+        Core::CorePrep::Prepare(ProjectPartitionModule()));
+    xpp.source_files.front() = U"C:/outside/Main.vxs";
+    CHECK(hasCode(Visual::XSharp::Xpp::Verify(xpp), "VXP1020"));
+
+    auto xmm = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(
+        Core::CorePrep::Prepare(ProjectPartitionModule())));
+    xmm.source_files.front() = U"Sources//Main.vxs";
+    CHECK(hasCode(Visual::XSharp::Xmm::Verify(xmm), "VXL1020"));
+}
+
+TEST_CASE("function source owners cannot bypass the module path contract")
+{
+    const auto hasCode = [](const auto &issues, const std::string_view code) {
+        return std::ranges::any_of(issues, [code](const auto &issue) {
+            return issue.code == code;
+        });
+    };
+
+    auto core = ProjectPartitionModule();
+    core.functions.front().sourceFile = U"Sources/./Math.vxs";
+    CHECK(hasCode(Core::Verify(core), "VXC1062"));
+
+    auto prepared = Core::CorePrep::Prepare(ProjectPartitionModule());
+    prepared.functions.front().sourceFile = U"../Math.vxs";
+    CHECK(hasCode(visual_xsharp::core::verify(prepared), "VXC1065"));
+
+    auto xpp = visual_xsharp::xpp::lower(
+        Core::CorePrep::Prepare(ProjectPartitionModule()));
+    xpp.functions.front().source_file = U"Math.cpp";
+    CHECK(hasCode(Visual::XSharp::Xpp::Verify(xpp), "VXP1021"));
+
+    auto xmm = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(
+        Core::CorePrep::Prepare(ProjectPartitionModule())));
+    xmm.functions.front().source_file = U"\\absolute\\Main.vxs";
+    CHECK(hasCode(Visual::XSharp::Xmm::Verify(xmm), "VXL1021"));
+}
+
+TEST_CASE("project partition collision leaves previously built files intact")
+{
+    TemporaryDirectory temporary;
+    REQUIRE(temporary);
+
+    auto source = ProjectPartitionModule();
+    source.sourceFiles
+        = { U"Sources/First/Main.vxs", U"Sources/Second/Main.vxs" };
+    source.functions[0].sourceFile = source.sourceFiles[0];
+    source.functions[1].sourceFile = source.sourceFiles[1];
+    const auto encoded = Core::Wire::Encode(source);
+    REQUIRE(encoded);
+
+    const auto corePath = temporary.Path() / "Collision.core";
+    {
+        std::ofstream stream(corePath, std::ios::binary | std::ios::trunc);
+        REQUIRE(stream);
+        stream.write(reinterpret_cast<const char *>(encoded.bytes.data()),
+                     static_cast<std::streamsize>(encoded.bytes.size()));
+        REQUIRE(stream.good());
+    }
+    const auto outputDirectory = temporary.Path() / "build" / "debug";
+    std::filesystem::create_directories(outputDirectory);
+    {
+        std::ofstream stable(outputDirectory / "Main.o",
+                             std::ios::binary | std::ios::trunc);
+        stable << "previous successful build";
+        REQUIRE(stable.good());
+    }
+    const auto settings = DefaultCompilerSettings();
+
+    // Two distinct source paths flatten to one basename. Planning must reject
+    // the whole set before replacing Main.o or publishing a partial Math.o.
+    REQUIRE_FALSE(ProcessProjectCoreArtifacts(corePath,
+                                              outputDirectory,
+                                              BuildOutput::kObject,
+                                              &settings,
+                                              nullptr));
+    std::ifstream stable(outputDirectory / "Main.o", std::ios::binary);
+    const std::string contents{ std::istreambuf_iterator<char>(stable),
+                                std::istreambuf_iterator<char>() };
+    CHECK(contents == "previous successful build");
+    CHECK_FALSE(std::filesystem::exists(outputDirectory / "Math.o"));
 }

@@ -19,6 +19,7 @@ module Visual.XSharp.Core.CorePrep
     , prepareCore
     ) where
 
+import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Diagnostic
@@ -62,6 +63,7 @@ data CorePrepBlock = CorePrepBlock
 
 data CorePrepFunction = CorePrepFunction
     { corePrepFunctionName :: ResolvedName
+    , corePrepFunctionSourceFile :: FilePath
     , corePrepFunctionParameters :: [(ResolvedName, Type)]
     , corePrepFunctionReturnType :: Type
     , corePrepFunctionEntry :: Int
@@ -69,13 +71,17 @@ data CorePrepFunction = CorePrepFunction
     }
     deriving (Eq, Ord, Read, Show)
 data CorePrepModule = CorePrepModule
-    {corePrepModuleName :: QualifiedName, corePrepModuleFunctions :: [CorePrepFunction]}
+    { corePrepModuleName :: QualifiedName
+    , corePrepModuleFunctions :: [CorePrepFunction]
+    , corePrepModuleSourceFiles :: [FilePath]
+    }
     deriving (Eq, Ord, Read, Show)
 
 data PrepState = PrepState
     { nextTemporary :: Int
     , nextBlock :: Int
-    , pendingFunctions :: [CoreFunction]
+    , pendingFunctions :: [(CoreFunction, FilePath)]
+    , currentSourceFile :: FilePath
     }
 
 -- An OpenBlock is the current continuation while expressions are being
@@ -95,19 +101,26 @@ declarations, locals, parameters, or captures already present in the module.
 prepareCore :: CoreModule -> Either [Diagnostic] CorePrepModule
 prepareCore moduleValue =
     let seed = 1 + maximum (0 : concatMap symbolIds (coreModuleFunctions moduleValue))
-        initial = PrepState seed 1 []
-        (functions, _) = prepareFunctionQueue initial (coreModuleFunctions moduleValue)
-     in Right (CorePrepModule (coreModuleName moduleValue) functions)
+        sourceOwners = Map.fromList (coreModuleFunctionSources moduleValue)
+        sourceOf function =
+            Map.findWithDefault
+                ""
+                (symbolIdValue (resolvedSymbol (coreFunctionName function)))
+                sourceOwners
+        initial = PrepState seed 1 [] ""
+        work = [(function, sourceOf function) | function <- coreModuleFunctions moduleValue]
+        (functions, _) = prepareFunctionQueue initial work
+     in Right (CorePrepModule (coreModuleName moduleValue) functions (coreModuleSourceFiles moduleValue))
 
--- Closure conversion appends lifted functions to this work queue.  Processing
--- the queue to exhaustion also supports nested closures without a separate
--- whole-module mutation pass.
-prepareFunctionQueue :: PrepState -> [CoreFunction] -> ([CorePrepFunction], PrepState)
+-- Closure conversion appends lifted functions together with their source
+-- owner. Processing the queue to exhaustion also supports nested closures
+-- without a separate whole-module mutation pass or a filename guess.
+prepareFunctionQueue :: PrepState -> [(CoreFunction, FilePath)] -> ([CorePrepFunction], PrepState)
 prepareFunctionQueue state [] = case pendingFunctions state of
     [] -> ([], state)
     pending -> prepareFunctionQueue (state {pendingFunctions = []}) pending
-prepareFunctionQueue state (function : remaining) =
-    let (prepared, afterFunction) = prepareFunction (state {nextBlock = 1}) function
+prepareFunctionQueue state ((function, sourceFile) : remaining) =
+    let (prepared, afterFunction) = prepareFunction (state {nextBlock = 1, currentSourceFile = sourceFile}) function
         pending = pendingFunctions afterFunction
         nextState = afterFunction {pendingFunctions = []}
         (later, final) = prepareFunctionQueue nextState (remaining ++ pending)
@@ -118,6 +131,7 @@ prepareFunction state function =
     let (blocks, after) = prepareStatements state (OpenBlock 0 []) (coreFunctionBody function)
      in ( CorePrepFunction
             (coreFunctionName function)
+            (currentSourceFile state)
             (coreFunctionParameters function)
             (coreFunctionReturnType function)
             0
@@ -291,7 +305,7 @@ atomizeOperation state open expression = case expression of
             lifted = CoreFunction closureName (hiddenParameters ++ parameters) returnType body
             finalState =
                 afterCaptures
-                    { pendingFunctions = pendingFunctions afterCaptures ++ [lifted]
+                    { pendingFunctions = pendingFunctions afterCaptures ++ [(lifted, currentSourceFile afterCaptures)]
                     }
          in (captureBlocks, captureOpen, CorePrepMakeClosure closureName preparedCaptures, finalState)
 

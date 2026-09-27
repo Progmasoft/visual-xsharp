@@ -61,6 +61,10 @@ namespace Visual::XSharp::Backend::LLVM
         // symbol. The platform ABI bridge is therefore enabled only for final
         // executables.
         bool executableEntry{};
+        // When set, LLVM still declares the full module but defines only
+        // functions owned by this source. This permits separate native
+        // objects to link calls across source-file boundaries.
+        std::optional<std::u32string> definition_source_file;
     };
 
     using IssueKind = ::Visual::XSharp::Xmm::IssueKind;

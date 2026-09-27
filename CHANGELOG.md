@@ -5,6 +5,29 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## 0.4.0 - 2026-09-27
+
+### Compiler pipeline
+
+- Carried deterministic project-source provenance from the Haskell Core model
+  through CorePrep, Xpp, and Xmm, with independently verified ownership at
+  every artifact boundary. Core and CorePrep wire formats are now v6; Xpp and
+  Xmm are v5.
+- Added project `OBJECT` and `ASSEMBLY` emission as one artifact per source
+  file. Each LLVM partition emits only its owning function bodies and retains
+  cross-source declarations; all outputs are lowered and validated before a
+  rollback-capable batch replacement begins.
+- Added portable path, UTF-8 filename, device-name, collision, symlink,
+  replacement, and recovery handling, plus focused native tests and a Google
+  Benchmark suite for planning and batch output.
+- Made the parsed `-Header` option explicitly reserved until the VXCI export
+  and ABI contract is defined instead of silently accepting an ignored flag.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the CLI, Bazel module, Kotlin
+  project model, and compiler project version to 0.4.0.
+
 ## 0.3.9.5 - 2026-09-26
 
 ### Compiler and verification

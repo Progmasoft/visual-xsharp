@@ -267,7 +267,7 @@ preparedModule statements = case prepareCore moduleValue of
     Right prepared -> Right prepared
     Left _ -> error "prepareCore currently cannot fail after verified Core"
     where
-        moduleValue = CoreModule (QualifiedName [Identifier "ShortCircuit"]) [testFunction statements]
+        moduleValue = CoreModuleWithSources (QualifiedName [Identifier "ShortCircuit"]) [testFunction statements] [] []
 
 preparedFunctionFromModule :: CorePrepModule -> Maybe CorePrepFunction
 preparedFunctionFromModule moduleValue = case corePrepModuleFunctions moduleValue of
@@ -453,7 +453,7 @@ callIsSeparatedFromEntry primitive left = case preparedFunction (returning expre
         isCall _ = False
 
 singletonModule :: CorePrepFunction -> CorePrepModule
-singletonModule function = CorePrepModule (QualifiedName [Identifier "ShortCircuit"]) [function]
+singletonModule function = CorePrepModule (QualifiedName [Identifier "ShortCircuit"]) [function] []
 
 verifierAccepts :: CorePrepModule -> Bool
 verifierAccepts moduleValue = case verifyCorePrep moduleValue of

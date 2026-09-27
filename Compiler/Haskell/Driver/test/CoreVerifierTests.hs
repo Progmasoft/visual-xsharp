@@ -122,10 +122,10 @@ minimalUnitModule :: CoreModule
 minimalUnitModule = coreModule [unitFunction mainName []]
 
 emptyModuleName :: CoreModule
-emptyModuleName = CoreModule (QualifiedName []) [unitFunction mainName []]
+emptyModuleName = CoreModuleWithSources (QualifiedName []) [unitFunction mainName []] [] []
 
 emptyModuleSegment :: CoreModule
-emptyModuleSegment = CoreModule (QualifiedName [Identifier "Verifier", Identifier ""]) [unitFunction mainName []]
+emptyModuleSegment = CoreModuleWithSources (QualifiedName [Identifier "Verifier", Identifier ""]) [unitFunction mainName []] [] []
 
 duplicateFunctions :: CoreModule
 duplicateFunctions = coreModule [unitFunction mainName [], unitFunction mainName []]

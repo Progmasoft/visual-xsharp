@@ -208,7 +208,7 @@ namespace visual_xsharp::xmm
     auto
     lower(const xpp::Module &module) -> Module
     {
-        Module lowered{ module.name, {} };
+        Module lowered{ module.name, {}, module.source_files };
         lowered.functions.reserve(module.functions.size());
         std::unordered_set<xpp::SymbolId> directFunctions;
         directFunctions.reserve(module.functions.size());
@@ -221,6 +221,7 @@ namespace visual_xsharp::xmm
                 function.symbol, {}, {}, function.return_type,
                 function.entry,  {}
             };
+            loweredFunction.source_file = function.source_file;
             for (const auto &parameter : function.parameters)
             {
                 loweredFunction.parameter_registers.push_back(

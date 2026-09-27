@@ -16,6 +16,7 @@ import Data.Bits (Bits, shiftL, shiftR, (.&.), (.|.))
 import Data.Char (chr, ord)
 import Data.Int (Int64)
 import Data.List (unfoldr)
+import Data.Map.Strict qualified as Map
 import Data.Word (Word16, Word32, Word64, Word8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
@@ -24,7 +25,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 5
+currentCoreWireVersion = CoreWireVersion 6
 
 data CoreWireLimits = CoreWireLimits
     { maximumCoreWireBytes :: Int
@@ -88,18 +89,31 @@ encodeCore limits moduleValue = do
 encodeModule :: CoreWireLimits -> CoreModule -> Encoder
 encodeModule limits moduleValue = do
     name <- encodeQualifiedName limits (coreModuleName moduleValue)
+    sources <-
+        encodeVector
+            limits
+            "source file count"
+            (maximumCoreFunctions limits)
+            (encodeText limits "source file")
+            (coreModuleSourceFiles moduleValue)
+    let owners = Map.fromList (coreModuleFunctionSources moduleValue)
     functions <-
         encodeVector
             limits
             "function count"
             (maximumCoreFunctions limits)
-            (encodeFunction limits)
+            (encodeFunction limits owners)
             (coreModuleFunctions moduleValue)
-    pure (name ++ functions)
+    pure (name ++ sources ++ functions)
 
-encodeFunction :: CoreWireLimits -> CoreFunction -> Encoder
-encodeFunction limits function = do
+encodeFunction :: CoreWireLimits -> Map.Map Int FilePath -> CoreFunction -> Encoder
+encodeFunction limits owners function = do
     name <- encodeResolvedName limits "function symbol" (coreFunctionName function)
+    source <-
+        encodeText
+            limits
+            "function source file"
+            (Map.findWithDefault "" (symbolIdValue (resolvedSymbol (coreFunctionName function))) owners)
     parameters <-
         encodeVector
             limits
@@ -115,7 +129,7 @@ encodeFunction limits function = do
             (maximumCoreStatements limits)
             (encodeStatement limits)
             (coreFunctionBody function)
-    pure (name ++ parameters ++ result ++ body)
+    pure (name ++ source ++ parameters ++ result ++ body)
 
 encodeParameter :: CoreWireLimits -> (ResolvedName, Type) -> Encoder
 encodeParameter limits (name, valueType) =
@@ -411,15 +425,25 @@ decodeDocument = do
         "unsupported Core wire version"
     flags <- readWord16 "flags"
     requireDecode (flags == 0) CoreInvalidTag "flags" "reserved flags must be zero"
-    CoreModule <$> decodeQualifiedName <*> decodeVector "function count" maximumCoreFunctions decodeFunction
+    name <- decodeQualifiedName
+    sources <- decodeVector "source file count" maximumCoreFunctions (decodeText "source file")
+    functionsWithSources <- decodeVector "function count" maximumCoreFunctions decodeFunction
+    let functions = map fst functionsWithSources
+        owners =
+            [ (symbolIdValue (resolvedSymbol (coreFunctionName function)), source)
+            | (function, source) <- functionsWithSources
+            , not (null source)
+            ]
+    pure (CoreModuleWithSources name functions sources owners)
 
-decodeFunction :: Decoder CoreFunction
-decodeFunction =
-    CoreFunction
-        <$> decodeResolvedName "function symbol"
-        <*> decodeVector "parameter count" maximumCoreParameters decodeParameter
-        <*> decodeType 0
-        <*> decodeVector "statement count" maximumCoreStatements decodeStatement
+decodeFunction :: Decoder (CoreFunction, FilePath)
+decodeFunction = do
+    name <- decodeResolvedName "function symbol"
+    source <- decodeText "function source file"
+    parameters <- decodeVector "parameter count" maximumCoreParameters decodeParameter
+    result <- decodeType 0
+    body <- decodeVector "statement count" maximumCoreStatements decodeStatement
+    pure (CoreFunction name parameters result body, source)
 
 decodeParameter :: Decoder (ResolvedName, Type)
 decodeParameter = (,) <$> decodeResolvedName "parameter symbol" <*> decodeType 0

@@ -168,7 +168,7 @@ compileProject output root entry roots excludes = do
     case loaded of
         Left diagnostics -> failWithDiagnostics diagnostics
         Right documents ->
-            case compileProjectToCorePrep entry (map toCompilerInput documents) of
+            case compileProjectToCorePrep entry (map toProjectCompilerInput documents) of
                 Left diagnostics -> failWithDiagnostics diagnostics
                 Right artifacts -> writeArtifact output (projectEntryCore artifacts)
 
@@ -186,6 +186,12 @@ listProjectSources output root roots excludes = do
 
 toCompilerInput :: LoadedSource -> CompilerInput
 toCompilerInput source = CompilerInput (loadedSourcePath source) (loadedSourceText source)
+
+-- Project Core records portable project-relative origins.  Absolute canonical
+-- paths remain in the loader for containment checks and single-file
+-- diagnostics, but they must not leak into reusable project artifacts.
+toProjectCompilerInput :: LoadedSource -> CompilerInput
+toProjectCompilerInput source = CompilerInput (loadedSourceRelativePath source) (loadedSourceText source)
 
 writeArtifact :: FilePath -> CoreModule -> IO ()
 writeArtifact output core = do

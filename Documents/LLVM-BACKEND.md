@@ -30,7 +30,8 @@ AARC pointer representation. Unresolved type variables remain rejected. Nominal 
 backend never guesses fields from a name.
 
 Source scalar names do not inherit C widths. The frontend/Core contract selects the Visual X# width, and LLVM lowering
-constructs the corresponding integer or floating type explicitly. Core wire v5 transports the complete scalar catalog;
+constructs the corresponding integer or floating type explicitly. Core wire v6 transports the complete scalar catalog and
+source ownership;
 the backend preserves each declared width, including 128-bit integer and floating types, rather than narrowing values to
 host or C widths.
 

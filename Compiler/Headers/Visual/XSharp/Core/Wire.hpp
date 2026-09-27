@@ -21,7 +21,7 @@ namespace Visual::XSharp::Core::Wire
      *
      * artifacts from older revisions.
      */
-    inline constexpr std::uint16_t kCurrentVersion = 5;
+    inline constexpr std::uint16_t kCurrentVersion = 6;
 
     /**
      * @brief Per-call resource ceilings for encoding and decoding.

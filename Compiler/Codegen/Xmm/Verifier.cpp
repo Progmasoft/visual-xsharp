@@ -9,7 +9,9 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/Twine.h>
 #include <string>
+#include <unordered_set>
 
+#include "Compiler/Artifact/SourcePath.hpp"
 #include "Visual/XSharp/ADTs/DenseIdMap.hpp"
 #include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
@@ -754,6 +756,19 @@ namespace Visual::XSharp::Xmm
             context.add(IssueKind::InvalidModuleName,
                         "VXL1002",
                         "Xmm module name must contain non-empty components");
+        std::unordered_set<std::u32string> source_files;
+        for (const auto &source_file : module.source_files)
+        {
+            if (!Artifact::IsNormalizedSourcePath(source_file))
+                context.add(IssueKind::InvalidModuleName,
+                            "VXL1020",
+                            "Xmm source path must be a normalized relative "
+                            ".vxs path");
+            if (!source_files.insert(source_file).second)
+                context.add(IssueKind::InvalidModuleName,
+                            "VXL1020",
+                            "Xmm source catalog contains a duplicate path");
+        }
 
         FunctionCatalog functions;
         functions.Reserve(module.functions.size());
@@ -762,6 +777,24 @@ namespace Visual::XSharp::Xmm
         // declared earlier.
         for (const auto &function : module.functions)
         {
+            if (!function.source_file.empty()
+                && !Artifact::IsNormalizedSourcePath(function.source_file))
+            {
+                context.function = function.symbol.id;
+                context.add(IssueKind::InvalidFunction,
+                            "VXL1021",
+                            "Xmm function owner must be a normalized "
+                            "relative .vxs path");
+            }
+            if (!module.source_files.empty()
+                && !source_files.contains(function.source_file))
+            {
+                context.function = function.symbol.id;
+                context.add(IssueKind::InvalidFunction,
+                            "VXL1021",
+                            "Xmm function owner is absent from the source "
+                            "catalog");
+            }
             // Parameter types seed the register storage table. Instruction
             // results may add registers or rewrite them with the same type;
             // every later read is checked against this table before LLVM

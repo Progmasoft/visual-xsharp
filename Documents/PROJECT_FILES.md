@@ -310,9 +310,12 @@ flatten source stems inside the selected output directory: `Sources/MyApp/Main.v
 debug object build. The original source directory is not reproduced below `build/debug`; multiple sources produce multiple
 objects/assembly files, and equal stems are diagnosed as ambiguous instead of overwriting one another.
 
-That per-source project route is not connected yet: the current Core module does not preserve physical source ownership, so
-project-wide object and assembly requests fail before writing. The documented naming contract prevents a future route from
-incorrectly collapsing the source set into one object. Explicit `-File` builds currently emit a sibling artifact instead.
+The project route is connected: source ownership is retained through Xmm, then each source is lowered to its own object or
+assembly. All source outputs are planned and generated before existing destinations are replaced. A failure during parsing,
+verification, target lowering, or collision checking leaves the previous output set untouched. The compiler does not delete
+unrelated or stale sibling files; it replaces only artifacts named by the current source catalog. Explicit `-File` builds
+remain separate and emit a sibling artifact. See [Project native artifacts](PROJECT-ARTIFACTS.md) for the exact transaction
+and recovery behavior.
 
 ## Case sensitivity and paths
 

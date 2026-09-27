@@ -152,7 +152,7 @@ namespace visual_xsharp::xpp
     auto
     lower(const core::CorePrepModule &module) -> Module
     {
-        Module lowered{ module.name, {} };
+        Module lowered{ module.name, {}, module.sourceFiles };
         lowered.functions.reserve(module.functions.size());
         for (const auto &function : module.functions)
         {
@@ -161,6 +161,7 @@ namespace visual_xsharp::xpp
                                       function.return_type,
                                       function.entry,
                                       {} };
+            loweredFunction.source_file = function.sourceFile;
             loweredFunction.blocks.reserve(function.blocks.size());
             for (const auto &block : function.blocks)
             {

@@ -24,8 +24,8 @@ scalarWireTests =
 
 versionTests :: [(String, Bool)]
 versionTests =
-    [ ("Core wire current version is 5", currentCoreWireVersion == CoreWireVersion 5)
-    , ("CorePrep wire current version is 5", currentWireVersion == WireVersion 5)
+    [ ("Core wire current version is 6", currentCoreWireVersion == CoreWireVersion 6)
+    , ("CorePrep wire current version is 6", currentWireVersion == WireVersion 6)
     , ("Core numeric payload default is bounded", maximumCoreNumericBytes defaultCoreWireLimits == 4096)
     , ("CorePrep numeric payload default is bounded", maximumNumericBytes defaultWireLimits == 4096)
     ]
@@ -98,11 +98,13 @@ corePrepModuleFor valueType literal =
         (QualifiedName [Identifier "Scalar", Identifier "CorePrep"])
         [ CorePrepFunction
             (resolved 1 "Value")
+            ""
             []
             valueType
             1
             [CorePrepBlock 1 [] (CorePrepReturn (CorePrepLiteral literal valueType))]
         ]
+        []
 
 coreRoundTrip :: Type -> Bool
 coreRoundTrip valueType =
@@ -262,6 +264,7 @@ discardedFloorDivideModule leftType left rightType right =
         (QualifiedName [Identifier "Scalar", Identifier "DiscardedFloorDivide"])
         [ CorePrepFunction
             (resolved 1 "Run")
+            ""
             []
             unitType
             1
@@ -278,13 +281,14 @@ discardedFloorDivideModule leftType left rightType right =
                 (CorePrepReturn (CorePrepLiteral CoreUnit unitType))
             ]
         ]
+        []
 
 malformedWireTests :: [(String, Bool)]
 malformedWireTests =
     [ ("Core wire rejects v2 input", rejectsCoreVersion 2)
-    , ("Core wire rejects future input", rejectsCoreVersion 6)
+    , ("Core wire rejects future input", rejectsCoreVersion 7)
     , ("CorePrep wire rejects v2 input", rejectsCorePrepVersion 2)
-    , ("CorePrep wire rejects future input", rejectsCorePrepVersion 6)
+    , ("CorePrep wire rejects future input", rejectsCorePrepVersion 7)
     , ("Core wire enforces numeric byte limit", coreNumericLimit)
     , ("CorePrep wire enforces numeric byte limit", corePrepNumericLimit)
     ]

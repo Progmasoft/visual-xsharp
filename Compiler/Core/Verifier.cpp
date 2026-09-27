@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <llvm/ADT/ArrayRef.h>
+#include <unordered_set>
 
+#include "Compiler/Artifact/SourcePath.hpp"
 #include "Visual/XSharp/ADTs/DenseIdMap.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
@@ -617,10 +619,40 @@ namespace Visual::XSharp::Core
                   0U,
                   0U });
 
+        std::unordered_set<std::u32string> source_files;
+        for (const auto &sourceFile : module.sourceFiles)
+        {
+            if (!Artifact::IsNormalizedSourcePath(sourceFile))
+                issues.push_back({ "VXC1060",
+                                   "Core source file must be a normalized, "
+                                   "relative .vxs path",
+                                   0U,
+                                   0U });
+            if (!source_files.insert(sourceFile).second)
+                issues.push_back({ "VXC1061",
+                                   "Core source file is listed more than once",
+                                   0U,
+                                   0U });
+        }
+
         Environment functions;
         functions.Reserve(module.functions.size());
         for (const auto &function : module.functions)
         {
+            if (!function.sourceFile.empty()
+                && !Artifact::IsNormalizedSourcePath(function.sourceFile))
+                issues.push_back({ "VXC1062",
+                                   "Core function owner must be a normalized, "
+                                   "relative .vxs path",
+                                   function.symbol.id,
+                                   function.symbol.id });
+            if (!module.sourceFiles.empty()
+                && !source_files.contains(function.sourceFile))
+                issues.push_back({ "VXC1063",
+                                   "Core function owner is absent from the "
+                                   "module source catalog",
+                                   function.symbol.id,
+                                   function.symbol.id });
             if (function.symbol.id == 0U)
                 issues.push_back({ "VXC1006",
                                    "Core function symbol must be positive",

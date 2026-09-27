@@ -5,6 +5,7 @@ module SourceSetTests (sourceSetTests) where
 
 import Control.Exception (finally)
 import Data.ByteString qualified as ByteString
+import Data.List (sort)
 import System.Directory
     ( canonicalizePath
     , createDirectory
@@ -19,6 +20,8 @@ import System.Info (os)
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
+import Visual.XSharp.Core.CorePrep
+import Visual.XSharp.Core.Wire
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.SourceSet
 
@@ -36,6 +39,10 @@ sourceSetTests =
     , ("a configured source root cannot escape the project", escapingRoot)
     , ("an empty discovered source set is diagnosed", emptySourceSet)
     , ("project compiler merges files that declare one namespace", namespaceMerge)
+    , ("project Core keeps every source and one owner per function", sourceOwnership)
+    , ("source ownership survives the versioned Core wire round trip", sourceOwnershipWireRoundTrip)
+    , ("project source paths use portable relative spelling", portableProjectSourcePaths)
+    , ("empty namespace source files remain in the project catalog", emptyNamespaceSourceIsRetained)
     , ("project compiler selects entry by namespace and class", entrySelection)
     , ("project compiler validates every namespace", validatesEveryNamespace)
     , ("project compiler accumulates independent file diagnostics", accumulatesFileDiagnostics)
@@ -169,6 +176,74 @@ namespaceMerge = pure $ case compileProjectToCorePrep applicationEntry inputs of
         inputs =
             [ CompilerInput "main.vxs" applicationMain
             , CompilerInput "helper.vxs" applicationHelper
+            ]
+
+-- Physical source ownership is carried beside semantic symbols. It must stay
+-- deterministic as files are merged, lowered, and written to the Core wire.
+sourceOwnership :: IO Bool
+sourceOwnership = pure $ case compileProjectToCorePrep applicationEntry inputs of
+    Right project ->
+        let core = projectEntryCore project
+            prepared = artifactCorePrep (artifactFrontend (projectEntryNamespace project))
+            expectedSources = ["helper.vxs", "main.vxs"]
+            owners = map snd (coreModuleFunctionSources core)
+         in sort (coreModuleSourceFiles core) == expectedSources
+                && sort (corePrepModuleSourceFiles prepared) == expectedSources
+                && sort owners == expectedSources
+                && sort (map corePrepFunctionSourceFile (corePrepModuleFunctions prepared)) == expectedSources
+                && all (`elem` coreModuleSourceFiles core) owners
+    Left _ -> False
+    where
+        inputs =
+            [ CompilerInput "main.vxs" applicationMain
+            , CompilerInput "helper.vxs" applicationHelper
+            ]
+
+sourceOwnershipWireRoundTrip :: IO Bool
+sourceOwnershipWireRoundTrip = pure $ case compileProjectToCorePrep applicationEntry inputs of
+    Right project ->
+        let core = projectEntryCore project
+         in case encodeCore defaultCoreWireLimits core >>= decodeCore defaultCoreWireLimits of
+                Right decoded ->
+                    coreModuleSourceFiles decoded == coreModuleSourceFiles core
+                        && coreModuleFunctionSources decoded == coreModuleFunctionSources core
+                        && decoded == core
+                Left _ -> False
+    Left _ -> False
+    where
+        inputs =
+            [ CompilerInput "main.vxs" applicationMain
+            , CompilerInput "helper.vxs" applicationHelper
+            ]
+
+portableProjectSourcePaths :: IO Bool
+portableProjectSourcePaths = pure $ case compileProjectToCorePrep applicationEntry inputs of
+    Right project ->
+        let core = projectEntryCore project
+            paths = coreModuleSourceFiles core ++ map snd (coreModuleFunctionSources core)
+         in paths == ["Sources/helper.vxs", "Sources/main.vxs", "Sources/helper.vxs", "Sources/main.vxs"]
+                && all (not . any (== '\\')) paths
+    Left _ -> False
+    where
+        inputs =
+            [ CompilerInput "Sources\\main.vxs" applicationMain
+            , CompilerInput "Sources\\helper.vxs" applicationHelper
+            ]
+
+emptyNamespaceSourceIsRetained :: IO Bool
+emptyNamespaceSourceIsRetained = pure $ case compileProjectToCorePrep applicationEntry inputs of
+    Right project ->
+        let core = projectEntryCore project
+            prepared = artifactCorePrep (artifactFrontend (projectEntryNamespace project))
+         in sort (coreModuleSourceFiles core) == ["empty.vxs", "helper.vxs", "main.vxs"]
+                && sort (corePrepModuleSourceFiles prepared) == ["empty.vxs", "helper.vxs", "main.vxs"]
+                && length (coreModuleFunctions core) == 2
+    Left _ -> False
+    where
+        inputs =
+            [ CompilerInput "main.vxs" applicationMain
+            , CompilerInput "helper.vxs" applicationHelper
+            , CompilerInput "empty.vxs" "namespace Application;"
             ]
 
 entrySelection :: IO Bool

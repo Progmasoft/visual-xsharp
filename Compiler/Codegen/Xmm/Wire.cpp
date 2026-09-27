@@ -79,6 +79,7 @@ namespace Visual::XSharp::Xmm::Wire
                       const Limits &limits)
         {
             writer.Symbol(function.symbol, "Xmm function symbol");
+            writer.Text(function.source_file, "Xmm function source file");
             writer.Count(function.parameter_registers.size(),
                          limits.maximumParameters,
                          "Xmm parameter register count");
@@ -197,6 +198,7 @@ namespace Visual::XSharp::Xmm::Wire
         {
             IR::Function function;
             function.symbol = reader.Symbol("Xmm function symbol");
+            function.source_file = reader.Text("Xmm function source file");
             const auto registerCount
                 = reader.Count(limits.maximumParameters,
                                "Xmm parameter register count");
@@ -257,6 +259,11 @@ namespace Visual::XSharp::Xmm::Wire
         writer.U16(kCurrentVersion);
         writer.U16(0U);
         writer.QualifiedName(module.name, "Xmm module name");
+        writer.Count(module.source_files.size(),
+                     limits.maximumFunctions,
+                     "Xmm source file count");
+        for (const auto &sourceFile : module.source_files)
+            writer.Text(sourceFile, "Xmm source file");
         writer.Count(module.functions.size(),
                      limits.maximumFunctions,
                      "Xmm function count");
@@ -293,6 +300,12 @@ namespace Visual::XSharp::Xmm::Wire
 
         IR::Module module;
         module.name = reader.QualifiedName("Xmm module name");
+        const auto sourceCount
+            = reader.Count(limits.maximumFunctions, "Xmm source file count");
+        module.source_files.reserve(sourceCount);
+        for (std::size_t index = 0; index < sourceCount && !reader.Failure();
+             ++index)
+            module.source_files.push_back(reader.Text("Xmm source file"));
         const auto functionCount
             = reader.Count(limits.maximumFunctions, "Xmm function count");
         module.functions.reserve(functionCount);

@@ -63,12 +63,17 @@ decodeDocument = do
     decodeModule
 
 decodeModule :: Decoder CorePrepModule
-decodeModule = CorePrepModule <$> decodeQualifiedName <*> decodeVector "function count" maximumFunctions decodeFunction
+decodeModule = do
+    name <- decodeQualifiedName
+    sources <- decodeVector "source file count" maximumFunctions (decodeText "source file")
+    functions <- decodeVector "function count" maximumFunctions decodeFunction
+    pure (CorePrepModule name functions sources)
 
 decodeFunction :: Decoder CorePrepFunction
 decodeFunction =
     CorePrepFunction
         <$> decodeResolvedName "function symbol"
+        <*> decodeText "function source file"
         <*> decodeVector "parameter count" maximumParametersPerFunction decodeParameter
         <*> decodeType
         <*> decodeBlockId "entry block"

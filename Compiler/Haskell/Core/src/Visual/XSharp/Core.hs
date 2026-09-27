@@ -1,5 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+{-# LANGUAGE PatternSynonyms #-}
+
 module Visual.XSharp.Core
     ( CoreLiteral (..)
     , CorePrimitive (..)
@@ -9,6 +11,7 @@ module Visual.XSharp.Core
     , CoreBinding (..)
     , CoreFunction (..)
     , CoreModule (..)
+    , pattern CoreModule
     , expressionType
     ) where
 
@@ -86,8 +89,29 @@ data CoreFunction = CoreFunction
     , coreFunctionBody :: [CoreStatement]
     }
     deriving (Eq, Ord, Read, Show)
-data CoreModule = CoreModule {coreModuleName :: QualifiedName, coreModuleFunctions :: [CoreFunction]}
+
+{- | Source ownership is deliberately side metadata rather than syntax or
+semantics.  Function identities remain stable while the optimizer rewrites
+bodies, and the native backend can partition definitions without guessing
+from declaration spelling or filesystem layout.
+The named data constructor carries compiler provenance.  The two-argument
+pattern below preserves the long-standing source-level construction API for
+hand-written Core fixtures; project compilation uses CoreModuleWithSources.
+-}
+data CoreModule = CoreModuleWithSources
+    { coreModuleName :: QualifiedName
+    , coreModuleFunctions :: [CoreFunction]
+    , coreModuleSourceFiles :: [FilePath]
+    , coreModuleFunctionSources :: [(Int, FilePath)]
+    }
     deriving (Eq, Ord, Read, Show)
+
+pattern CoreModule :: QualifiedName -> [CoreFunction] -> CoreModule
+pattern CoreModule name functions <- CoreModuleWithSources name functions _ _
+    where
+        CoreModule name functions = CoreModuleWithSources name functions [] []
+
+{-# COMPLETE CoreModule #-}
 
 expressionType :: CoreExpression -> Type
 expressionType expression = case expression of

@@ -19,13 +19,25 @@ target registers, calling conventions, object layout, or linker directives.
 
 A `CoreModule` contains:
 
-- one qualified namespace name; and
-- an ordered list of Core functions.
+- one qualified namespace name;
+- the ordered, project-relative `.vxs` source catalog; and
+- an ordered list of Core functions, each retaining its physical source owner.
 
 The current source driver emits one module per compiled namespace and selects
-the configured entry namespace for the native boundary. Cross-namespace imports
-and a multi-module link unit are later semantic work. The optimizer does not
-merge namespaces or resolve an external name by spelling.
+the configured entry namespace for the native boundary. Each Core module
+retains the physical source units assigned to that namespace, even when a file
+contributes no declarations, and records the source file that owns each
+function. This is build provenance: it does not change the namespace-level
+semantic module or `SymbolId` identity. Cross-namespace imports and a
+multi-module link unit are later semantic work. The optimizer does not merge
+namespaces or resolve an external name by spelling.
+
+Source identities use canonical project-relative slash paths and the exact
+`.vxs` extension. They are validated at the Core boundary and then carried
+through CorePrep, Xpp, and Xmm. Closure lifting retains the enclosing source
+owner, so splitting native definitions never depends on reconstructing
+ownership from function names or namespace spellings. The wire field order and
+validation rules are specified in [Artifact wire contracts](ARTIFACT-WIRE.md).
 
 An empty module name or an empty name segment is invalid. Module order is
 deterministic and follows the frontend's stable declaration order.

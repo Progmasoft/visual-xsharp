@@ -4,6 +4,7 @@
 #include <Progmasoft/Catch3/Assertions.hpp>
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <concepts>
 #include <filesystem>
 #include <fstream>
@@ -61,54 +62,61 @@ namespace
               Parameter{ { 12, U"right" }, Type::int64() } },
             Type::int64(),
             0,
-            { Block{
-                0,
-                { Instruction{ Instruction::Kind::Bind,
-                               { 13, U"sum" },
-                               Type::int64(),
-                               false,
-                               Operation::Add,
-                               { Variable(11, Type::int64()),
-                                 Variable(12, Type::int64()) } },
-                  Instruction{ Instruction::Kind::Bind,
-                               { 14, U"quotient" },
-                               Type::int64(),
-                               false,
-                               Operation::FloorDivide,
-                               { Variable(13, Type::int64()), Literal(3) } } },
-                Terminator{ Terminator::Kind::Return,
-                            Variable(14, Type::int64()),
-                            0,
-                            0 } } }
+            { Block{ 0,
+                     { Instruction{ Instruction::Kind::Bind,
+                                    { 13, U"sum" },
+                                    Type::int64(),
+                                    false,
+                                    Operation::Add,
+                                    { Variable(11, Type::int64()),
+                                      Variable(12, Type::int64()) },
+                                    {},
+                                    {} },
+                       Instruction{ Instruction::Kind::Bind,
+                                    { 14, U"quotient" },
+                                    Type::int64(),
+                                    false,
+                                    Operation::FloorDivide,
+                                    { Variable(13, Type::int64()), Literal(3) },
+                                    {},
+                                    {} } },
+                     Terminator{ Terminator::Kind::Return,
+                                 Variable(14, Type::int64()),
+                                 0,
+                                 0 } } }
         };
         Function main{
             { 20, U"Main" },
             {},
             Type::unit(),
             0,
-            { Block{ 0,
-                     { Instruction{ Instruction::Kind::Bind,
-                                    { 21, U"answer" },
-                                    Type::int64(),
-                                    false,
-                                    Operation::Call,
-                                    { Variable(10,
-                                               Type::function({ Type::int64(),
-                                                                Type::int64() },
-                                                              Type::int64())),
-                                      Literal(40),
-                                      Literal(2) } },
-                       Instruction{
-                           Instruction::Kind::Bind,
-                           { 22, U"ok" },
-                           Type::boolean(),
-                           false,
-                           Operation::GreaterEqual,
-                           { Variable(21, Type::int64()), Literal(14) } } },
-                     Terminator{ Terminator::Kind::Branch,
-                                 Variable(22, Type::boolean()),
-                                 1,
-                                 2 } },
+            { Block{
+                  0,
+                  { Instruction{ Instruction::Kind::Bind,
+                                 { 21, U"answer" },
+                                 Type::int64(),
+                                 false,
+                                 Operation::Call,
+                                 { Variable(10,
+                                            Type::function({ Type::int64(),
+                                                             Type::int64() },
+                                                           Type::int64())),
+                                   Literal(40),
+                                   Literal(2) },
+                                 {},
+                                 {} },
+                    Instruction{ Instruction::Kind::Bind,
+                                 { 22, U"ok" },
+                                 Type::boolean(),
+                                 false,
+                                 Operation::GreaterEqual,
+                                 { Variable(21, Type::int64()), Literal(14) },
+                                 {},
+                                 {} } },
+                  Terminator{ Terminator::Kind::Branch,
+                              Variable(22, Type::boolean()),
+                              1,
+                              2 } },
               Block{ 1,
                      {},
                      Terminator{ Terminator::Kind::Return,
@@ -142,13 +150,62 @@ namespace
                                     Operation::Copy,
                                     { Atom::constant(
                                         std::u32string{ U"Merhaba \U0001f30d" },
-                                        Type::string()) } } },
+                                        Type::string()) },
+                                    {},
+                                    {} } },
                      Terminator{ Terminator::Kind::Return,
                                  Variable(31, Type::string()),
                                  0,
                                  0 } } }
         };
         return CorePrepModule{ { U"Unicode" }, { std::move(message) } };
+    }
+
+    CorePrepModule
+    SourcePartitionModule()
+    {
+        auto module = ArithmeticModule();
+        module.sourceFiles = { U"Sources/Arithmetic.vxs",
+                               U"Sources/Entry.vxs",
+                               U"Sources/Empty.vxs" };
+        module.functions[0].sourceFile = module.sourceFiles[0];
+        module.functions[1].sourceFile = module.sourceFiles[1];
+        return module;
+    }
+
+    [[nodiscard]] auto
+    HasLlvmFunctionKind(const std::string &llvmIr,
+                        const std::string_view suffix,
+                        const bool definition) -> bool
+    {
+        // LLVM's printer may wrap a long qualified identifier across lines.
+        // Compact only for inspecting declarations; assertions elsewhere keep
+        // the exact emitted IR intact for debugging.
+        std::string compact;
+        compact.reserve(llvmIr.size());
+        for (const auto character : llvmIr)
+            if (!std::isspace(static_cast<unsigned char>(character)))
+                compact.push_back(character);
+
+        auto symbol = compact.find(suffix);
+        while (symbol != std::string::npos)
+        {
+            const auto define = compact.rfind("define", symbol);
+            const auto declare = compact.rfind("declare", symbol);
+            const auto hasDefinitionHeader
+                = define != std::string::npos
+                  && (declare == std::string::npos || define > declare)
+                  && compact.find('{', define) > symbol;
+            const auto hasDeclarationHeader
+                = declare != std::string::npos
+                  && (define == std::string::npos || declare > define);
+            const auto matches
+                = definition ? hasDefinitionHeader : hasDeclarationHeader;
+            if (matches)
+                return true;
+            symbol = compact.find(suffix, symbol + suffix.size());
+        }
+        return false;
     }
 
     auto
@@ -275,7 +332,9 @@ namespace
                                                 false,
                                                 operation,
                                                 { Variable(103, type),
-                                                  Variable(104, type) } } },
+                                                  Variable(104, type) },
+                                                {},
+                                                {} } },
                                  Terminator{ Terminator::Kind::Return,
                                              Variable(102, resultType),
                                              0,
@@ -829,6 +888,97 @@ TEST_CASE(
                 "target triple = \"x86_64-pc-windows-msvc\"")
             != std::string::npos);
     REQUIRE(result.artifact->llvm_ir.find("C:/LLVM") == std::string::npos);
+}
+
+TEST_CASE("source ownership survives CorePrep Xpp and Xmm lowering")
+{
+    const auto prepared = SourcePartitionModule();
+    REQUIRE(visual_xsharp::core::verify(prepared).empty());
+
+    const auto xpp = visual_xsharp::xpp::lower(prepared);
+    REQUIRE(::Visual::XSharp::Xpp::Verify(xpp).empty());
+    REQUIRE(xpp.source_files == prepared.sourceFiles);
+    REQUIRE(xpp.functions.size() == prepared.functions.size());
+    for (std::size_t index = 0U; index < prepared.functions.size(); ++index)
+        REQUIRE(xpp.functions[index].source_file
+                == prepared.functions[index].sourceFile);
+
+    const auto xmm = visual_xsharp::xmm::lower(xpp);
+    REQUIRE(::Visual::XSharp::Xmm::Verify(xmm).empty());
+    REQUIRE(xmm.source_files == prepared.sourceFiles);
+    for (std::size_t index = 0U; index < prepared.functions.size(); ++index)
+        REQUIRE(xmm.functions[index].source_file
+                == prepared.functions[index].sourceFile);
+}
+
+TEST_CASE(
+    "LLVM source partition declares peers but defines only the selected file")
+{
+    const auto prepared = SourcePartitionModule();
+    const auto xmm
+        = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(prepared));
+    Llvm::Options options;
+    options.definition_source_file = prepared.sourceFiles[0];
+    const auto result = Llvm::Lower(xmm, options);
+
+    REQUIRE(result);
+    REQUIRE(result.artifact->function_count == 1U);
+    INFO(result.artifact->llvm_ir);
+    REQUIRE(
+        HasLlvmFunctionKind(result.artifact->llvm_ir, "Calculate.10", true));
+    CHECK_FALSE(HasLlvmFunctionKind(result.artifact->llvm_ir, "Main.20", true));
+}
+
+TEST_CASE("partitioned object files retain direct calls as linkable externals")
+{
+    const auto prepared = SourcePartitionModule();
+    const auto xmm
+        = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(prepared));
+    Llvm::Options options;
+    options.machineCode = Llvm::MachineCodeEmission::Object;
+    options.definition_source_file = prepared.sourceFiles[1];
+    const auto result = Llvm::Lower(xmm, options);
+
+    REQUIRE(result);
+    REQUIRE(result.artifact->function_count == 1U);
+    INFO(result.artifact->llvm_ir);
+    REQUIRE_FALSE(result.artifact->object.empty());
+    REQUIRE(HasLlvmFunctionKind(result.artifact->llvm_ir, "Main.20", true));
+    REQUIRE(
+        HasLlvmFunctionKind(result.artifact->llvm_ir, "Calculate.10", false));
+}
+
+TEST_CASE("source without declarations still emits an empty native object")
+{
+    const auto prepared = SourcePartitionModule();
+    const auto xmm
+        = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(prepared));
+    Llvm::Options options;
+    options.machineCode = Llvm::MachineCodeEmission::Object;
+    options.definition_source_file = prepared.sourceFiles[2];
+    const auto result = Llvm::Lower(xmm, options);
+
+    REQUIRE(result);
+    REQUIRE(result.artifact->function_count == 0U);
+    REQUIRE_FALSE(result.artifact->object.empty());
+}
+
+TEST_CASE("source partition rejects unknown owners and partial entry bridges")
+{
+    const auto prepared = SourcePartitionModule();
+    const auto xmm
+        = visual_xsharp::xmm::lower(visual_xsharp::xpp::lower(prepared));
+    Llvm::Options options;
+    options.definition_source_file = U"Sources/Unknown.vxs";
+    auto result = Llvm::Lower(xmm, options);
+    REQUIRE_FALSE(result);
+    REQUIRE(result.error->code == "VXL2021");
+
+    options.definition_source_file = prepared.sourceFiles[1];
+    options.executableEntry = true;
+    result = Llvm::Lower(xmm, options);
+    REQUIRE_FALSE(result);
+    REQUIRE(result.error->code == "VXL2020");
 }
 
 TEST_CASE("LLVM native target machine emits host object and assembly artifacts")

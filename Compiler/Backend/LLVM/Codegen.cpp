@@ -1174,6 +1174,19 @@ namespace Visual::XSharp::Backend::LLVM
                          std::move(issues) };
             return result;
         }
+        if (options.definition_source_file && options.executableEntry)
+            return Failure(ErrorKind::InvalidEntryPoint,
+                           "VXL2020",
+                           "source-partitioned lowering cannot synthesize an "
+                           "executable entry point");
+        if (options.definition_source_file && !source.source_files.empty()
+            && std::ranges::find(source.source_files,
+                                 *options.definition_source_file)
+                   == source.source_files.end())
+            return Failure(ErrorKind::InvalidXmm,
+                           "VXL2021",
+                           "selected source is absent from the Xmm source "
+                           "catalog");
 
         llvm::LLVMContext context;
         const auto name = ModuleName(source);
@@ -1209,12 +1222,20 @@ namespace Visual::XSharp::Backend::LLVM
         Generator generator(context, module);
         if (!generator.DeclareFunctions(source))
             return Result{ std::nullopt, std::move(generator.error) };
+        std::size_t definitionCount{};
         for (auto &[_, function] : generator.functions)
+        {
+            if (options.definition_source_file
+                && function.source->source_file
+                       != *options.definition_source_file)
+                continue;
             if (!generator.DefineFunction(function))
                 return Failure(
                     ErrorKind::LlvmConstruction,
                     "VXL2005",
                     "failed to lower an Xmm instruction or terminator");
+            ++definitionCount;
+        }
         if (options.executableEntry
             && !generator.CreateExecutableEntry(llvm::Triple(triple)))
             return Result{ std::nullopt, std::move(generator.error) };
@@ -1262,7 +1283,7 @@ namespace Visual::XSharp::Backend::LLVM
         // object header.
         artifact.objectFormat
             = ArtifactObjectFormat(llvm::Triple(artifact.target_triple));
-        artifact.function_count = source.functions.size();
+        artifact.function_count = definitionCount;
         if (targetMachine)
             if (auto error = EmitMachineCode(module,
                                              *targetMachine,

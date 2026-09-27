@@ -143,10 +143,11 @@ compileSemanticToCorePrep semantic = do
     ordinaryCore <- runDesugarer defaultDesugarer typed >>= verifyCore
     specializationCore <- runDesugarer defaultDesugarer (specializationTypedAST templatePlan) >>= verifyCore
     let core =
-            ordinaryCore
-                { coreModuleFunctions =
-                    coreModuleFunctions ordinaryCore ++ coreModuleFunctions specializationCore
-                }
+            CoreModuleWithSources
+                (coreModuleName ordinaryCore)
+                (coreModuleFunctions ordinaryCore ++ coreModuleFunctions specializationCore)
+                (unique (coreModuleSourceFiles ordinaryCore ++ coreModuleSourceFiles specializationCore))
+                (coreModuleFunctionSources ordinaryCore ++ coreModuleFunctionSources specializationCore)
     verifiedCore <- verifyCore core
     -- Demand discovery runs before optimization so dead-code elimination
     -- cannot silently erase a type required by the checked source contract.
@@ -241,12 +242,30 @@ compileNamespace :: ParsedNamespace -> Either [Diagnostic] NamespaceArtifacts
 compileNamespace parsed = do
     let syntaxTree = SyntaxTree (parsedNamespaceName parsed) (parsedNamespaceDeclarations parsed)
     artifacts <- compileParsedToCorePrep (ParsedAST syntaxTree)
+    let frontend = artifacts
+        sourceFiles = unique (map portablePath (parsedNamespaceFiles parsed))
+        attachSources core = core {coreModuleSourceFiles = unique (sourceFiles ++ coreModuleSourceFiles core)}
+        prepared =
+            (artifactCorePrep frontend)
+                { corePrepModuleSourceFiles = unique (sourceFiles ++ corePrepModuleSourceFiles (artifactCorePrep frontend))
+                }
+        updatedFrontend =
+            frontend
+                { artifactCore = attachSources (artifactCore frontend)
+                , artifactOptimizedCore = attachSources (artifactOptimizedCore frontend)
+                , artifactCorePrep = prepared
+                }
+    _ <- verifyCore (artifactOptimizedCore updatedFrontend)
+    _ <- verifyCorePrep prepared
     pure
         ( NamespaceArtifacts
             (parsedNamespaceName parsed)
-            (parsedNamespaceFiles parsed)
-            artifacts
+            sourceFiles
+            updatedFrontend
         )
+
+portablePath :: FilePath -> FilePath
+portablePath = map (\character -> if character == '\\' then '/' else character)
 
 selectNamespace :: QualifiedName -> [NamespaceArtifacts] -> Either [Diagnostic] NamespaceArtifacts
 selectNamespace namespaceName artifacts =
@@ -324,6 +343,13 @@ joinWithDot :: [String] -> String
 joinWithDot [] = ""
 joinWithDot [value] = value
 joinWithDot (value : remaining) = value ++ "." ++ joinWithDot remaining
+
+unique :: (Eq value) => [value] -> [value]
+unique = foldl add []
+    where
+        add values value
+            | value `elem` values = values
+            | otherwise = values ++ [value]
 
 collectResults :: [Either [Diagnostic] value] -> Either [Diagnostic] [value]
 collectResults values =

@@ -7,8 +7,10 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/Twine.h>
+#include <unordered_set>
 #include <utility>
 
+#include "Compiler/Artifact/SourcePath.hpp"
 #include "Visual/XSharp/ADTs/DenseIdMap.hpp"
 #include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
@@ -546,6 +548,17 @@ namespace Visual::XSharp::Xpp
                         "Xpp module name must contain non-empty components");
         if (module.functions.empty())
             context.Add("VXP1002", "Xpp module contains no functions");
+        std::unordered_set<std::u32string> sourceFiles;
+        for (const auto &sourceFile : module.source_files)
+        {
+            if (!Artifact::IsNormalizedSourcePath(sourceFile))
+                context.Add("VXP1020",
+                            "Xpp source path must be a normalized relative "
+                            ".vxs path");
+            if (!sourceFiles.insert(sourceFile).second)
+                context.Add("VXP1020",
+                            "Xpp source catalog contains a duplicate path");
+        }
 
         FunctionCatalog functions;
         functions.Reserve(module.functions.size());
@@ -562,6 +575,16 @@ namespace Visual::XSharp::Xpp
         for (const auto &function : module.functions)
         {
             context.function = function.symbol.id;
+            if (!function.source_file.empty()
+                && !Artifact::IsNormalizedSourcePath(function.source_file))
+                context.Add("VXP1021",
+                            "Xpp function owner must be a normalized "
+                            "relative .vxs path");
+            if (!module.source_files.empty()
+                && !sourceFiles.contains(function.source_file))
+                context.Add("VXP1021",
+                            "Xpp function owner is absent from the source "
+                            "catalog");
             BlockCatalog blocks;
             blocks.Reserve(function.blocks.size());
             for (const auto &block : function.blocks)

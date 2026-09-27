@@ -18,6 +18,7 @@ import FloatingOptimizerTests (floatingOptimizerTests)
 import IntegerEvaluationTests (integerEvaluationTests)
 import IntegerFlowTests (integerFlowTests)
 import MonomorphizationTests (monomorphizationTests)
+import Numeric (readHex)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
 import PatternTests (patternTests)
@@ -105,13 +106,14 @@ main = do
     check "Core wire rejects trailing bytes" coreWireRejectsTrailingInput
     check "Core wire rejects unresolved types" coreWireRejectsUnresolvedType
     check "Core wire preserves Unicode scalar values" coreWirePreservesUnicode
-    check "Core wire v5 golden bytes remain stable" coreWireGoldenDocument
+    check "Core wire v6 provenance fields remain stable" coreWireGoldenDocument
+    check "Core wire v6 preserves non-empty source-owner field order" coreWireProjectSourceGolden
     check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
     check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
     check "CorePrep wire codec rejects unsupported types" wireRejectsUnsupportedType
     check "CorePrep wire codec preserves Unicode scalar values" wirePreservesUnicode
-    check "CorePrep wire v5 golden bytes remain stable" wireGoldenDocument
+    check "CorePrep wire v6 provenance fields remain stable" wireGoldenDocument
     checkIO "real Core artifact round-trips through .core I/O" coreArtifactRoundTrip
     checkIO "Core artifact rejects an invalid Core module" coreArtifactRejectsInvalidModule
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
@@ -420,13 +422,13 @@ invalidCoreReference =
                 []
                 intType
                 [CoreReturn (CoreVariable name intType)]
-     in hasCode "VXC1020" (verifyCore (CoreModule (QualifiedName [Identifier "CoreTest"]) [function]))
+     in hasCode "VXC1020" (verifyCore (CoreModuleWithSources (QualifiedName [Identifier "CoreTest"]) [function] [] []))
 
 invalidCoreFunctionSymbol :: Bool
 invalidCoreFunctionSymbol =
     let name = ResolvedName (SymbolId 0) (Identifier "Invalid")
         function = CoreFunction name [] unitType [CoreReturn (CoreLiteral CoreUnit unitType)]
-     in hasCode "VXC1006" (verifyCore (CoreModule (QualifiedName [Identifier "CoreTest"]) [function]))
+     in hasCode "VXC1006" (verifyCore (CoreModuleWithSources (QualifiedName [Identifier "CoreTest"]) [function] [] []))
 
 invalidCoreMutation :: Bool
 invalidCoreMutation =
@@ -439,7 +441,7 @@ invalidCoreMutation =
                 []
                 intType
                 [CoreBind binding, CoreAssign name (literal 2), CoreReturn (CoreVariable name intType)]
-     in hasCode "VXC1013" (verifyCore (CoreModule (QualifiedName [Identifier "CoreTest"]) [function]))
+     in hasCode "VXC1013" (verifyCore (CoreModuleWithSources (QualifiedName [Identifier "CoreTest"]) [function] [] []))
 
 invalidCoreReturnPath :: Bool
 invalidCoreReturnPath =
@@ -451,7 +453,7 @@ invalidCoreReturnPath =
                 []
                 intType
                 [CoreIf condition [CoreReturn result] []]
-     in hasCode "VXC1005" (verifyCore (CoreModule (QualifiedName [Identifier "CoreTest"]) [function]))
+     in hasCode "VXC1005" (verifyCore (CoreModuleWithSources (QualifiedName [Identifier "CoreTest"]) [function] [] []))
 
 coreWireRoundTrip :: Bool
 coreWireRoundTrip = case compile sample of
@@ -488,7 +490,7 @@ coreWireRejectsTrailingInput = case compile sample of
 coreWireRejectsUnresolvedType :: Bool
 coreWireRejectsUnresolvedType =
     let function = CoreFunction (ResolvedName (SymbolId 1) (Identifier "Broken")) [] ErrorType []
-        moduleValue = CoreModule (QualifiedName [Identifier "CoreTest"]) [function]
+        moduleValue = CoreModuleWithSources (QualifiedName [Identifier "CoreTest"]) [function] [] []
      in case encodeCore defaultCoreWireLimits moduleValue of
             Left issue -> coreWireErrorKind issue == CoreUnsupportedType
             Right _ -> False
@@ -497,95 +499,157 @@ coreWirePreservesUnicode :: Bool
 coreWirePreservesUnicode =
     let functionName = ResolvedName (SymbolId 1) (Identifier "Metinλ")
         value = CoreLiteral (CoreString "Visual X# λ 😀") stringType
-        moduleValue = CoreModule (QualifiedName [Identifier "Unicode"]) [CoreFunction functionName [] stringType [CoreReturn value]]
+        moduleValue =
+            CoreModuleWithSources
+                (QualifiedName [Identifier "Unicode"])
+                [CoreFunction functionName [] stringType [CoreReturn value]]
+                []
+                []
      in (encodeCore defaultCoreWireLimits moduleValue >>= decodeCore defaultCoreWireLimits) == Right moduleValue
 
 coreWireGoldenDocument :: Bool
 coreWireGoldenDocument =
     let mainName = ResolvedName (SymbolId 1) (Identifier "Main")
         mainFunction = CoreFunction mainName [] unitType [CoreReturn (CoreLiteral CoreUnit unitType)]
-        moduleValue = CoreModule (QualifiedName [Identifier "Demo"]) [mainFunction]
+        moduleValue = CoreModuleWithSources (QualifiedName [Identifier "Demo"]) [mainFunction] [] []
         bytes =
-            [ 0x56
-            , 0x58
-            , 0x43
-            , 0x52
-            , 0x05
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x01
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x04
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x44
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x65
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x6d
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x6f
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x01
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x01
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x04
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x4d
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x61
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x69
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x6e
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x01
-            , 0x00
-            , 0x00
-            , 0x00
-            , 0x02
-            , 0x01
-            , 0x00
-            , 0x00
-            ]
+            upgradeSimpleV5
+                [ 0x56
+                , 0x58
+                , 0x43
+                , 0x52
+                , 0x05
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x01
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x04
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x44
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x65
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x6d
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x6f
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x01
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x01
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x04
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x4d
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x61
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x69
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x6e
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x01
+                , 0x00
+                , 0x00
+                , 0x00
+                , 0x02
+                , 0x01
+                , 0x00
+                , 0x00
+                ]
      in encodeCore defaultCoreWireLimits moduleValue == Right bytes
             && decodeCore defaultCoreWireLimits bytes == Right moduleValue
+
+coreWireProjectSourceGolden :: Bool
+coreWireProjectSourceGolden =
+    let source = "Sources/Main.vxs"
+        mainName = ResolvedName (SymbolId 1) (Identifier "Main")
+        mainFunction = CoreFunction mainName [] unitType [CoreReturn (CoreLiteral CoreUnit unitType)]
+        moduleValue =
+            CoreModuleWithSources
+                (QualifiedName [Identifier "Demo"])
+                [mainFunction]
+                [source]
+                [(symbolIdValue (resolvedSymbol mainName), source)]
+        goldenHex =
+            unwords
+                [ "56 58 43 52 06 00 00 00 01 00 00 00"
+                , "04 00 00 00 44 00 00 00 65 00 00 00"
+                , "6d 00 00 00 6f 00 00 00 01 00 00 00"
+                , "10 00 00 00 53 00 00 00 6f 00 00 00"
+                , "75 00 00 00 72 00 00 00 63 00 00 00"
+                , "65 00 00 00 73 00 00 00 2f 00 00 00"
+                , "4d 00 00 00 61 00 00 00 69 00 00 00"
+                , "6e 00 00 00 2e 00 00 00 76 00 00 00"
+                , "78 00 00 00 73 00 00 00 01 00 00 00"
+                , "01 00 00 00 00 00 00 00 04 00 00 00"
+                , "4d 00 00 00 61 00 00 00 69 00 00 00"
+                , "6e 00 00 00 10 00 00 00 53 00 00 00"
+                , "6f 00 00 00 75 00 00 00 72 00 00 00"
+                , "63 00 00 00 65 00 00 00 73 00 00 00"
+                , "2f 00 00 00 4d 00 00 00 61 00 00 00"
+                , "69 00 00 00 6e 00 00 00 2e 00 00 00"
+                , "76 00 00 00 78 00 00 00 73 00 00 00"
+                , "00 00 00 00 00 01 00 00 00 02 01 00 00"
+                ]
+        parsedExpectedBytes = traverse parseHexByte (words goldenHex)
+     in case parsedExpectedBytes of
+            Just expected ->
+                encodeCore defaultCoreWireLimits moduleValue == Right expected
+                    && decodeCore defaultCoreWireLimits expected == Right moduleValue
+            Nothing -> False
+    where
+        parseHexByte token = case readHex token of
+            [(value, "")] | value >= (0 :: Int) && value <= 255 -> Just (fromIntegral value)
+            _ -> Nothing
+
+-- Adding the empty source catalog and function owner to the compact v5 golden
+-- shape gives an independent byte-level v6 expectation. The owner follows the
+-- function symbol, before its parameter vector, matching the wire contract.
+upgradeSimpleV5 :: [Word8] -> [Word8]
+upgradeSimpleV5 v5Bytes =
+    replaceVersion
+        (insertAt 68 emptyText (insertAt 32 emptyVector v5Bytes))
+    where
+        emptyVector = [0, 0, 0, 0]
+        emptyText = [0, 0, 0, 0]
+        insertAt offset inserted bytes = take offset bytes ++ inserted ++ drop offset bytes
+        replaceVersion bytes = take 4 bytes ++ [0x06] ++ drop 5 bytes
 
 wireRoundTrip :: Bool
 wireRoundTrip = case compile sample of
@@ -629,8 +693,8 @@ wirePreservesUnicode :: Bool
 wirePreservesUnicode =
     let name = ResolvedName (SymbolId 1) (Identifier "Text")
         literal = CorePrepLiteral (CoreString "Visual X# λ 😀") stringType
-        function = CorePrepFunction name [] stringType 0 [CorePrepBlock 0 [] (CorePrepReturn literal)]
-        prepared = CorePrepModule (QualifiedName [Identifier "Unicode"]) [function]
+        function = CorePrepFunction name "" [] stringType 0 [CorePrepBlock 0 [] (CorePrepReturn literal)]
+        prepared = CorePrepModule (QualifiedName [Identifier "Unicode"]) [function] []
      in case encodeCorePrep prepared >>= decodeCorePrep of
             Right decoded -> decoded == prepared
             Left _ -> False
@@ -639,101 +703,102 @@ goldenModule :: CorePrepModule
 goldenModule =
     let mainName = ResolvedName (SymbolId 1) (Identifier "Main")
         mainBlock = CorePrepBlock 0 [] (CorePrepReturn (CorePrepLiteral CoreUnit unitType))
-        mainFunction = CorePrepFunction mainName [] unitType 0 [mainBlock]
-     in CorePrepModule (QualifiedName [Identifier "Demo"]) [mainFunction]
+        mainFunction = CorePrepFunction mainName "" [] unitType 0 [mainBlock]
+     in CorePrepModule (QualifiedName [Identifier "Demo"]) [mainFunction] []
 
 goldenBytes :: [Word8]
 goldenBytes =
-    [ 0x56
-    , 0x58
-    , 0x43
-    , 0x50
-    , 0x05
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x01
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x04
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x44
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x65
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x6d
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x6f
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x01
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x01
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x04
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x4d
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x61
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x69
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x6e
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x01
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x00
-    , 0x01
-    , 0x00
-    , 0x00
-    ]
+    upgradeSimpleV5
+        [ 0x56
+        , 0x58
+        , 0x43
+        , 0x50
+        , 0x05
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x01
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x04
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x44
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x65
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x6d
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x6f
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x01
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x01
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x04
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x4d
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x61
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x69
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x6e
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x01
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x00
+        , 0x01
+        , 0x00
+        , 0x00
+        ]
 
 wireGoldenDocument :: Bool
 wireGoldenDocument =
@@ -745,7 +810,7 @@ coreArtifactRoundTrip = case compile sample of
     Left _ -> pure False
     Right artifacts -> do
         temporary <- getTemporaryDirectory
-        let path = temporary </> "visual-xsharp-core-wire-v5.core"
+        let path = temporary </> "visual-xsharp-core-wire-v6.core"
             cleanup = doesFileExist path >>= \exists -> if exists then removeFile path else pure ()
             value = artifactOptimizedCore artifacts
         ( do
@@ -758,7 +823,7 @@ coreArtifactRoundTrip = case compile sample of
 coreArtifactRejectsInvalidModule :: IO Bool
 coreArtifactRejectsInvalidModule = do
     let function = CoreFunction (ResolvedName (SymbolId 1) (Identifier "Broken")) [] intType []
-        invalid = CoreModule (QualifiedName [Identifier "CoreTest"]) [function]
+        invalid = CoreModuleWithSources (QualifiedName [Identifier "CoreTest"]) [function] [] []
     result <- writeCoreArtifact "invalid-core.core" invalid
     pure $ case result of
         Left (CoreArtifactVerificationError messages) -> any (isInfixOf "VXC1005") messages
@@ -772,6 +837,6 @@ coreArtifactRejectsExtension = do
                 []
                 unitType
                 [CoreReturn (CoreLiteral CoreUnit unitType)]
-        moduleValue = CoreModule (QualifiedName [Identifier "CoreTest"]) [function]
+        moduleValue = CoreModuleWithSources (QualifiedName [Identifier "CoreTest"]) [function] [] []
     result <- writeCoreArtifact "invalid-core.xpp" moduleValue
     pure (result == Left (InvalidCoreArtifactPath "invalid-core.xpp"))

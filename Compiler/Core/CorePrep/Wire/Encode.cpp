@@ -37,6 +37,12 @@ namespace visual_xsharp::core::wire
                 unsigned_integer(current_version);
                 unsigned_integer<std::uint16_t>(0);
                 qualified_name(module.name, "module name");
+                vector(module.sourceFiles,
+                       limits_.maximum_functions,
+                       "source file count",
+                       [this](const std::u32string &sourceFile) {
+                           text(sourceFile, "source file");
+                       });
                 vector(module.functions,
                        limits_.maximum_functions,
                        "function count",
@@ -599,6 +605,7 @@ namespace visual_xsharp::core::wire
             function(const Function &value)
             {
                 symbol(value.symbol, "function symbol");
+                text(value.sourceFile, "function source file");
                 vector(value.parameters,
                        limits_.maximum_parameters_per_function,
                        "parameter count",

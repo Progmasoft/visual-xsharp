@@ -62,8 +62,8 @@ closureTests =
     , ("Core verifier accepts a well-formed closure", coreVerifierAcceptsClosure)
     , ("Core verifier rejects mismatched closure type", coreVerifierRejectsTypeMismatch)
     , ("Core verifier rejects capture initializer mismatch", coreVerifierRejectsCaptureMismatch)
-    , ("Core wire v5 round-trips closure values", coreWireClosureRoundTrip)
-    , ("CorePrep wire v5 round-trips closure creation", corePrepWireClosureRoundTrip)
+    , ("Core wire v6 round-trips closure values and ownership", coreWireClosureRoundTrip)
+    , ("CorePrep wire v6 round-trips closure creation and ownership", corePrepWireClosureRoundTrip)
     , ("CorePrep verifier accepts converted closure", corePrepVerifierAcceptsClosure)
     , ("CorePrep verifier rejects primitive weak capture", corePrepVerifierRejectsWeakPrimitive)
     ]
@@ -531,6 +531,7 @@ invalidPreparedWeakCapture =
         (QualifiedName [Identifier "ClosureTests"])
         [ CorePrepFunction
             (testName 1 "Main")
+            ""
             []
             unitType
             0
@@ -549,16 +550,18 @@ invalidPreparedWeakCapture =
             ]
         , CorePrepFunction
             (testName 3 "lifted")
+            ""
             [(testName 4 "value", intType)]
             intType
             0
             [CorePrepBlock 0 [] (CorePrepReturn (CorePrepVariable (testName 4 "value") intType))]
         ]
+        []
 
 -- Keep a textual assertion near the wire tests so failures caused by an
 -- accidental version rollback explain themselves in the test output.
 _wireVersionContext :: String
-_wireVersionContext = "closures require Core and CorePrep wire version 5"
+_wireVersionContext = "closures require Core and CorePrep wire version 6"
 
 _diagnosticContext :: Diagnostic -> Bool
 _diagnosticContext diagnostic = "closure" `isInfixOf` diagnosticMessage diagnostic

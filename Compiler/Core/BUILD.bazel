@@ -19,6 +19,7 @@ cc_library(
         "Wire.cpp",
     ],
     deps = [
+        "//Compiler/Artifact:source_path",
         "//Compiler/Headers/Visual/XSharp/ADTs:dense_id_map",
         "//Compiler/Headers/Visual/XSharp/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:coreprep",

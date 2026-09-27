@@ -181,6 +181,10 @@ namespace Visual::XSharp::Core
         std::vector<Parameter> parameters;
         Type returnType{ Type::unit() };
         std::vector<Statement> body;
+        // The portable project-relative owner is carried separately from the
+        // declaration so optimizers can rewrite bodies without losing which
+        // source file produces the native definition.
+        std::u32string sourceFile{};
         [[nodiscard]] auto
         operator==(const Function &) const -> bool = default;
     };
@@ -189,6 +193,10 @@ namespace Visual::XSharp::Core
     {
         std::vector<std::u32string> name;
         std::vector<Function> functions;
+        // Includes source units with no declarations; project OBJECT and
+        // ASSEMBLY emission still produces one deterministic artifact per
+        // selected source unit.
+        std::vector<std::u32string> sourceFiles{};
         [[nodiscard]] auto
         operator==(const Module &) const -> bool = default;
     };

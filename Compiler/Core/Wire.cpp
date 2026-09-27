@@ -53,6 +53,12 @@ namespace Visual::XSharp::Core::Wire
 
                 Module module;
                 module.name = QualifiedName("module name");
+                module.sourceFiles
+                    = Vector<std::u32string>(limits_.maximumFunctions,
+                                             "source file count",
+                                             [this] {
+                                                 return Text("source file");
+                                             });
                 module.functions = Vector<Function>(limits_.maximumFunctions,
                                                     "function count",
                                                     [this] {
@@ -597,6 +603,7 @@ namespace Visual::XSharp::Core::Wire
             {
                 Function function;
                 function.symbol = Symbol("function symbol");
+                function.sourceFile = Text("function source file");
                 function.parameters
                     = Vector<Parameter>(limits_.maximumParameters,
                                         "parameter count",
@@ -627,6 +634,12 @@ namespace Visual::XSharp::Core::Wire
                 Unsigned(kCurrentVersion);
                 Unsigned<std::uint16_t>(0U);
                 QualifiedName(module.name, "module name");
+                Vector(module.sourceFiles,
+                       limits_.maximumFunctions,
+                       "source file count",
+                       [this](const std::u32string &sourceFile) {
+                           Text(sourceFile, "source file");
+                       });
                 Vector(module.functions,
                        limits_.maximumFunctions,
                        "function count",
@@ -1140,6 +1153,7 @@ namespace Visual::XSharp::Core::Wire
             WriteFunction(const Function &function)
             {
                 Symbol(function.symbol, "function symbol");
+                Text(function.sourceFile, "function source file");
                 Vector(function.parameters,
                        limits_.maximumParameters,
                        "parameter count",

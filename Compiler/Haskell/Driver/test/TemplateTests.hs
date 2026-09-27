@@ -339,20 +339,20 @@ identityTests =
 
 wireTests :: [(String, Bool)]
 wireTests =
-    [ ("Core v5 round-trips fixed array type", coreTypeRoundTrip (fixed intType 4096))
-    , ("Core v5 round-trips Boolean template value", coreTypeRoundTrip (applied "Flag" [boolean True]))
-    , ("Core v5 round-trips character template value", coreTypeRoundTrip (applied "Code" [character 0x10ffff]))
-    , ("Core v5 round-trips template value parameter", coreTypeRoundTrip valueParameter)
+    [ ("Core v6 round-trips fixed array type", coreTypeRoundTrip (fixed intType 4096))
+    , ("Core v6 round-trips Boolean template value", coreTypeRoundTrip (applied "Flag" [boolean True]))
+    , ("Core v6 round-trips character template value", coreTypeRoundTrip (applied "Code" [character 0x10ffff]))
+    , ("Core v6 round-trips template value parameter", coreTypeRoundTrip valueParameter)
     ,
-        ( "Core v5 round-trips mixed arguments"
+        ( "Core v6 round-trips mixed arguments"
         , coreTypeRoundTrip (applied "Mix" [value (-3), typeArg stringType, boolean False])
         )
-    , ("CorePrep v5 round-trips fixed array type", corePrepTypeRoundTrip (fixed intType 4096))
-    , ("CorePrep v5 round-trips Boolean template value", corePrepTypeRoundTrip (applied "Flag" [boolean True]))
-    , ("CorePrep v5 round-trips character template value", corePrepTypeRoundTrip (applied "Code" [character 0x10ffff]))
-    , ("CorePrep v5 round-trips template value parameter", corePrepTypeRoundTrip valueParameter)
+    , ("CorePrep v6 round-trips fixed array type", corePrepTypeRoundTrip (fixed intType 4096))
+    , ("CorePrep v6 round-trips Boolean template value", corePrepTypeRoundTrip (applied "Flag" [boolean True]))
+    , ("CorePrep v6 round-trips character template value", corePrepTypeRoundTrip (applied "Code" [character 0x10ffff]))
+    , ("CorePrep v6 round-trips template value parameter", corePrepTypeRoundTrip valueParameter)
     ,
-        ( "CorePrep v5 round-trips mixed arguments"
+        ( "CorePrep v6 round-trips mixed arguments"
         , corePrepTypeRoundTrip (applied "Mix" [value (-3), typeArg stringType, boolean False])
         )
     ]
@@ -478,27 +478,27 @@ identityDifferent left right = renderTemplateIdentity left /= renderTemplateIden
 coreTypeRoundTrip :: Type -> Bool
 coreTypeRoundTrip valueType =
     let function = CoreFunction (parameter 1 "Value") [] valueType []
-        moduleValue = CoreModule (QualifiedName [Identifier "Template"]) [function]
+        moduleValue = CoreModuleWithSources (QualifiedName [Identifier "Template"]) [function] [] []
      in (encodeCore defaultCoreWireLimits moduleValue >>= decodeCore defaultCoreWireLimits) == Right moduleValue
 
 corePrepTypeRoundTrip :: Type -> Bool
 corePrepTypeRoundTrip valueType =
     let atom = CorePrepLiteral CoreUnit unitType
         block = CorePrepBlock 0 [] (CorePrepReturn atom)
-        function = CorePrepFunction (parameter 1 "Value") [] valueType 0 [block]
-        moduleValue = CorePrepModule (QualifiedName [Identifier "Template"]) [function]
+        function = CorePrepFunction (parameter 1 "Value") "" [] valueType 0 [block]
+        moduleValue = CorePrepModule (QualifiedName [Identifier "Template"]) [function] []
      in (encodeCorePrep moduleValue >>= decodeCorePrep) == Right moduleValue
 
 coreVerifierRejectsMalformed :: Bool
 coreVerifierRejectsMalformed =
     let function = CoreFunction (parameter 1 "Value") [] (fixed intType (-1)) []
-        moduleValue = CoreModule (QualifiedName [Identifier "Template"]) [function]
+        moduleValue = CoreModuleWithSources (QualifiedName [Identifier "Template"]) [function] [] []
      in hasCode (verifyCore moduleValue) "VXC1040"
 
 corePrepVerifierRejectsMalformed :: Bool
 corePrepVerifierRejectsMalformed =
     let atom = CorePrepLiteral CoreUnit unitType
         block = CorePrepBlock 0 [] (CorePrepReturn atom)
-        function = CorePrepFunction (parameter 1 "Value") [] (fixed intType (-1)) 0 [block]
-        moduleValue = CorePrepModule (QualifiedName [Identifier "Template"]) [function]
+        function = CorePrepFunction (parameter 1 "Value") "" [] (fixed intType (-1)) 0 [block]
+        moduleValue = CorePrepModule (QualifiedName [Identifier "Template"]) [function] []
      in hasCode (verifyCorePrep moduleValue) "VXC0024"

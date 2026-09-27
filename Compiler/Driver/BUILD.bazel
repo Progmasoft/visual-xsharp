@@ -16,11 +16,14 @@ cc_library(
 
 cc_library(
     name = "core_pipeline",
-    srcs = ["CorePipeline.cpp"],
-    hdrs = ["CorePipeline.hpp"],
+    srcs = ["CorePipeline.cpp", "ProjectArtifacts.cpp"],
+    hdrs = ["CorePipeline.hpp", "ProjectArtifacts.hpp"],
     deps = [
+        "//Compiler/Artifact:source_path",
         "//Compiler/Cli/Arguments:arguments",
         "//Compiler/Linker:native_linker",
+        "//Compiler/Codegen/Xmm:xmm",
+        "//Compiler/Backend/LLVM:llvm_backend",
         ":pipeline",
         "@fmt//:fmt",
     ],

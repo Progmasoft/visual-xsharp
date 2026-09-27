@@ -11,6 +11,7 @@ labels, fixtures, and review ownership aligned with production boundaries.
 
 | Component | Test root | Primary responsibility |
 | --- | --- | --- |
+| Artifact paths | `Compiler/Artifact/Tests` | normalized source identity and portable path validation |
 | CLI | `Compiler/Cli/Tests` | commands, options, precedence, diagnostics |
 | Core | `Compiler/Core/Tests` | Core model, verifier, artifacts, golden wire |
 | Driver | `Compiler/Driver/Tests` | connected stage and end-to-end compiler flow |
@@ -72,10 +73,13 @@ binaries do not become production dependencies.
 Representative labels are:
 
 ```text
+//Compiler/Artifact/Tests:source_path_tests
 //Compiler/Cli/Tests:cli_parser_tests
 //Compiler/Cli/Commands/Tests:execution_status_tests
+//Compiler/Cli/Commands/Tests:cli_command_tests
 //Compiler/Core/Tests:core_pipeline_tests
 //Compiler/Driver/Tests:closure_pipeline_tests
+//Compiler/Driver/Tests:project_artifact_tests
 //Compiler/Driver/Tests:scalar_pipeline_tests
 //Compiler/Backend/LLVM/Tests:llvm_backend_tests
 ```
@@ -112,7 +116,7 @@ For a wire change, cover at least:
 ## Test naming
 
 Names describe behavior and boundary, not implementation trivia. Prefer
-`Core wire v5 rejects a noncanonical integer magnitude` over `test decode 7`.
+`Core wire v6 rejects a noncanonical integer magnitude` over `test decode 7`.
 Use tags where the framework supports them so scalar, verifier, wire, and LLVM
 groups can be selected without changing ownership.
 

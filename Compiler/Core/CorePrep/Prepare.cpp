@@ -691,10 +691,15 @@ namespace Visual::XSharp::Core::CorePrep
     auto
     Prepare(const Module &module) -> ::visual_xsharp::core::CorePrepModule
     {
-        ::visual_xsharp::core::CorePrepModule prepared{ module.name, {} };
-        std::vector<Function> pending = module.functions;
+        ::visual_xsharp::core::CorePrepModule prepared{ module.name,
+                                                        {},
+                                                        module.sourceFiles };
+        std::vector<std::pair<Function, std::u32string>> pending;
+        pending.reserve(module.functions.size());
+        for (const auto &function : module.functions)
+            pending.emplace_back(function, function.sourceFile);
         SymbolId nextFunction = 1U;
-        for (const auto &function : pending)
+        for (const auto &[function, _] : pending)
             nextFunction
                 = std::max(nextFunction, HighestFunctionSymbol(function) + 1U);
 
@@ -703,13 +708,13 @@ namespace Visual::XSharp::Core::CorePrep
         // without adding a second, subtly different lowering implementation.
         for (std::size_t index = 0U; index < pending.size(); ++index)
         {
-            auto result = PrepareFunction(pending[index], nextFunction);
+            auto result = PrepareFunction(pending[index].first, nextFunction);
+            result.function.sourceFile = pending[index].second;
             prepared.functions.push_back(std::move(result.function));
             nextFunction = result.nextFunction;
-            pending.insert(
-                pending.end(),
-                std::make_move_iterator(result.pendingFunctions.begin()),
-                std::make_move_iterator(result.pendingFunctions.end()));
+            for (auto &function : result.pendingFunctions)
+                pending.emplace_back(std::move(function),
+                                     pending[index].second);
         }
         return prepared;
     }

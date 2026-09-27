@@ -239,10 +239,11 @@ remains pending.
 
 For an explicit `-File` source or artifact, the emitted file is a sibling with the selected extension. Project binary builds
 use the Kotlin DSL output directory (`build/debug` or `build/release` by default) and produce one `.vxse`. Project-wide
-object and assembly requests are currently rejected until Core preserves per-source ownership. When that route is connected,
-the output contract is to flatten source paths to stems (for example, `Sources/MyApp/Main.vxs` to `build/debug/Main.o`),
-produce one object or assembly per source, and reject colliding stems rather than overwrite. Successful rebuilds replace the
-selected artifact; failed builds must not leave a stale file looking newly produced.
+object and assembly requests produce one `.o` or `.asm` for every source owned by the selected entry namespace. Output paths
+flatten to stems (for example, `Sources/MyApp/Main.vxs` to `build/debug/Main.o`); duplicate stems are rejected before output
+replacement. The driver lowers the whole batch first, stages all bytes beside the destination files, and restores prior
+outputs if a later rename fails. It preserves unrelated and stale sibling files; pruning is a separate explicit clean
+operation. See [Project native artifacts](PROJECT-ARTIFACTS.md) for the exact boundary and recovery limits.
 
 ## Core input status
 
@@ -254,7 +255,7 @@ vxs build -Build core -Emit llvmll -File module.core
 vxs build -Build core -Emit llvmbc -File module.core
 ```
 
-The native C++20 route reads the Haskell `VXCR` v5 contract with byte, collection, text, type-depth, and expression-depth
+The native C++20 route reads the Haskell `VXCR` v6 contract with byte, collection, text, type-depth, and expression-depth
 limits. It verifies Core semantics before adapting nested expressions and source control flow to CorePrep, then runs the
 existing verified CorePrep → Xpp → Xmm → LLVM pipeline entirely in memory. `check` writes nothing. The two `build` examples
 write a sibling `.ll` or `.bc` file. A Core build can also write a sibling `.o` or `.asm`, or link a `.vxse`; binary is the
@@ -283,6 +284,8 @@ stage is permitted and replaces the artifact after successful verification.
 The CLI reserves the renewed artifact vocabulary before all routes are implemented:
 
 - `install` and `viget` report that the ViGet client is not linked into the compiler build.
+- `-Header` is recognized as a reserved build option but fails explicitly: VXCI export/ABI semantics and a header writer are
+  not implemented. It creates no output and does not begin project evaluation.
 - `-Llvm-Compiler orc` is recognized and stored in settings, but does not create an ORC LLJIT or change execution today;
   `run` remains the AOT build/link/run path. It is not a usable JIT switch yet.
 

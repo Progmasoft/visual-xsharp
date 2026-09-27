@@ -107,7 +107,7 @@ canonical. These rules make the representation independent of endianness and
 make equality deterministic.
 
 Compatibility alternatives for the historical signed 32-bit and 64-bit
-payloads remain readable in the in-memory variant. Current wire-v5 producers use
+payloads remain readable in the in-memory variant. Current wire-v6 producers use
 the structured representation for the complete scalar catalog.
 
 `FloatingLiteral` contains a validated ASCII spelling. Accepted finite forms
@@ -136,9 +136,10 @@ numeric types; CorePrep compares each numeric operand with a same-typed zero so
 Xpp, Xmm, and LLVM receive canonical booleans. Numeric branch conditions use
 the same conversion.
 
-## Core wire v5
+## Core wire v6
 
-Core wire v5 writes a distinct type tag for every catalog member. Integer
+Core wire v6 writes a distinct type tag for every catalog member and carries
+project source ownership. Integer
 payloads contain:
 
 1. a literal tag;
@@ -155,7 +156,7 @@ larger than all current scalar widths but protects decoders before semantic
 range checking. A decoder rejects unknown versions, unknown tags, invalid sign
 bytes, over-limit lengths, truncated payloads, and trailing bytes.
 
-The Core decoder accepts only version 5. Versions 2 through 4 are rejected
+The Core decoder accepts only version 6. Versions 2 through 5 are rejected
 before body decoding; no older tag is reinterpreted under the current schema.
 
 ## CorePrep adaptation
@@ -169,7 +170,7 @@ Numeric boolean context is lowered before or during CorePrep construction.
 The resulting branch receives a boolean atom rather than asking Xpp or LLVM to
 repeat source-language truthiness rules.
 
-CorePrep has its own verifier and wire-v5 codec. Its tags and payload rules
+CorePrep has its own verifier and wire-v6 codec. Its tags and payload rules
 match Core where the models overlap, but the magic and structural records are
 separate. This prevents a Core document from being accepted as CorePrep merely
 because both carry scalar constants.

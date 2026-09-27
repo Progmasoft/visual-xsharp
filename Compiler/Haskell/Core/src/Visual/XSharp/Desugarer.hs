@@ -5,6 +5,7 @@ module Visual.XSharp.Desugarer (Desugarer (..), defaultDesugarer, runDesugarer) 
 import Control.Monad.State.Strict
 import Data.Bits (xor)
 import Data.Char (ord)
+import Data.List (nub)
 import Data.Word (Word64)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
@@ -18,11 +19,53 @@ defaultDesugarer = Desugarer (Right . lowerTree)
 
 lowerTree :: TypedAST -> CoreModule
 lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
-    evalState
-        (CoreModule (maybe defaultName id namespace) . concat <$> mapM lowerTop declarations)
-        (1 + maximum (0 : syntaxSymbolIds tree))
+    evalState lowerModule (1 + maximum (0 : syntaxSymbolIds tree))
     where
         defaultName = QualifiedName [Identifier "Main"]
+        sourceFiles = nub (map portableSourcePath (concatMap declarationSourceFiles declarations))
+        lowerModule = do
+            functions <- concat <$> mapM lowerTop declarations
+            pure
+                ( CoreModuleWithSources
+                    (maybe defaultName id namespace)
+                    functions
+                    sourceFiles
+                    (functionSources declarations)
+                )
+
+-- Keep the physical file catalog even for a declaration that does not yet
+-- lower to executable code.  The project driver uses it to produce stable,
+-- one-source-per-artifact output names after optimization has removed dead
+-- functions.
+declarationSourceFiles :: Declaration name annotation -> [FilePath]
+declarationSourceFiles declaration = case declaration of
+    FunctionDeclaration {} -> [portableSpanSource declaration]
+    TypeDeclaration {typeMembers = members} ->
+        portableSpanSource declaration : concatMap declarationSourceFiles members
+    TemplateTypeDeclaration {typeMembers = members} ->
+        portableSpanSource declaration : concatMap declarationSourceFiles members
+
+-- Artifact paths always use portable separators, even when discovery ran on
+-- Windows; these names become stable wire and output identities.
+portableSourcePath :: FilePath -> FilePath
+portableSourcePath = map (\character -> if character == '\\' then '/' else character)
+
+portableSpanSource :: Declaration name annotation -> FilePath
+portableSpanSource = portableSourcePath . sourceFile . declarationSpan
+
+functionSources :: [Declaration ResolvedName Type] -> [(Int, FilePath)]
+functionSources = concatMap declarationFunctionSources
+    where
+        declarationFunctionSources declaration = case declaration of
+            FunctionDeclaration {} -> owner declaration
+            TypeDeclaration {typeMembers = members} -> concatMap declarationFunctionSources members
+            TemplateTypeDeclaration {typeMembers = members} -> concatMap declarationFunctionSources members
+        owner declaration =
+            [
+                ( symbolIdValue (resolvedSymbol (declarationName declaration))
+                , portableSpanSource declaration
+                )
+            ]
 
 type Lower = State Int
 

@@ -38,6 +38,7 @@ following vocabulary:
 | Use `vxs` | [CLI](CLI.md) |
 | Use or implement the REPL | [Visual X# Interactive](INTERACTIVE.md) |
 | Write `Visual.XSharp.kts` | [Project files](PROJECT_FILES.md) |
+| Understand per-source object and assembly outputs | [Project native artifacts](PROJECT-ARTIFACTS.md) |
 | Understand diagnostics and exit behavior | [Diagnostics](DIAGNOSTICS.md) |
 | Use Analyzer, Formatter, or Linter | [Ecosystem tools](ECOSYSTEM.md) |
 | Work on LLVM lowering | [LLVM backend](LLVM-BACKEND.md) |
@@ -67,7 +68,7 @@ following vocabulary:
 - [Template monomorphization](MONOMORPHIZATION.md) defines concrete specialization identity, placement, demand discovery, and current limits.
 - [Numeric types](NUMERIC-TYPES.md) records fixed scalar widths and the gap between frontend semantics and the current Core
   transport.
-- [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, Core wire v5, Xpp, Xmm, and LLVM.
+- [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, Core wire v6, Xpp, Xmm, and LLVM.
 - [Artifact wire](ARTIFACT-WIRE.md) defines the bounded internal Core and CorePrep transport contracts.
 - [Control-flow safety](CONTROL-FLOW-SAFETY.md) defines short-circuit lowering and the shared Xpp/Xmm
   definite-initialization contract.
@@ -83,6 +84,8 @@ following vocabulary:
 - [Visual X# Interactive](INTERACTIVE.md) defines the REPL command, cell lifecycle, ORC boundary, result support, and known limits.
 - [Project files](PROJECT_FILES.md) documents discovery, source policy, entry selection, compiler settings, plugins,
   dependencies, publishing metadata, test suites, and the SQLite lockfile.
+- [Project native artifacts](PROJECT-ARTIFACTS.md) documents source ownership, per-file native emission, flattened output
+  names, and safe batch replacement.
 - [Diagnostics](DIAGNOSTICS.md) describes error ownership, output streams, source positions, artifact safety, and exit status.
 - [Ecosystem tools](ECOSYSTEM.md) separates the compiler from Visual Analyzer, Visual Formatter, and Visual Linter.
 

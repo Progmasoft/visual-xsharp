@@ -14,7 +14,7 @@
 #include "Compiler/Cli/Arguments/Options.hpp"
 
 #ifndef VXS_PROJECT_VERSION
-#    define VXS_PROJECT_VERSION "0.3.9.5"
+#    define VXS_PROJECT_VERSION "0.4.0"
 #endif
 
 namespace
@@ -359,7 +359,8 @@ namespace
           Option::Header,
           Bit(CliCommand::kBuild),
           ValueDomain::None,
-          "emit a VXCI C header for exported C declarations" },
+          "reserved; VXCI export ABI and header generation are not "
+          "implemented" },
         { "-ViPkgType",
           Option::ViPkgType,
           Bit(CliCommand::kBuild),

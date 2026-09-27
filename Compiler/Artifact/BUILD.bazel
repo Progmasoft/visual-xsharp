@@ -3,6 +3,12 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 package(default_visibility = ["//visibility:public"])
 
 cc_library(
+    name = "source_path",
+    srcs = ["SourcePath.cpp"],
+    hdrs = ["SourcePath.hpp"],
+)
+
+cc_library(
     name = "wire_support",
     srcs = ["WireSupport.cpp"],
     deps = [

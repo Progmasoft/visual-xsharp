@@ -11,10 +11,10 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 
 | Contract | Magic | Current version | Producer | Consumer |
 | --- | --- | ---: | --- | --- |
-| Core | `VXCR` | 5 | Haskell frontend | native Core reader |
-| CorePrep | `VXCP` | 5 | CorePrep adapter | native pipeline tools |
-| Xpp | `VXPP` | 3 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
-| Xmm | `VXMM` | 3 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
+| Core | `VXCR` | 6 | Haskell frontend | native Core reader |
+| CorePrep | `VXCP` | 6 | CorePrep adapter | native pipeline tools |
+| Xpp | `VXPP` | 5 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
+| Xmm | `VXMM` | 5 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
 The contracts have related scalar encodings but separate structural schemas.
 Their magic values must never be treated as aliases.
@@ -48,21 +48,49 @@ Callers may reduce limits for a constrained context. Increasing a limit does
 not relax semantic checks: an integer that passes the byte-count bound must
 still fit its declared scalar width.
 
+## Source ownership
+
+Version 6 of Core and CorePrep, and version 5 of Xpp and Xmm, carry the
+physical project source catalog and the source owner of each function. The
+catalog is ordered exactly like the frontend's deterministic project-relative
+source set. A source with no declarations remains in the catalog so project
+object and assembly builds still produce an output for that compilation unit.
+
+Every source identity is a non-empty, slash-separated relative path ending in
+the exact lowercase `.vxs` extension. Empty segments, `.` and `..`, a leading
+separator, backslashes, colons, embedded NUL, and non-scalar Unicode values are
+rejected. Verifiers do not normalize malformed input: accepting an alias would
+let two different wire documents refer to the same source file.
+
+Each function owner must name one exact entry in the module catalog. Core,
+CorePrep, Xpp, and Xmm independently check this relationship because each
+representation can be decoded or embedded without having passed through its
+producer. Single-file and legacy in-memory clients may omit the catalog and
+function owner; the project output planner requires a complete catalog and
+rejects an incomplete project artifact before lowering or writing files.
+
+The metadata is diagnostic and build provenance, not part of `SymbolId` or
+function identity. Reordering or renaming a file changes its owner metadata but
+does not change semantic symbol identity. Closure lifting preserves the
+enclosing declaration's owner, and a compiler-generated helper inherits the
+source that caused its emission.
+
 ## Scalar type tags
 
-Wire v5 assigns an explicit tag to unit/no-result, boolean, string, function,
+Wire v5 introduced explicit tags for unit/no-result, boolean, string, function,
 named, variable, character, every signed and unsigned integer width, and every
-floating width. A decoder reconstructs the exact type; it does not infer width
-from the literal byte count.
+floating width. Wire v6 retains that scalar catalog and adds source ownership.
+A decoder reconstructs the exact type; it does not infer width from the literal
+byte count.
 
 That separation is required because the same magnitude can inhabit several
 types and because signedness affects native instruction selection even when
 the bit pattern is identical.
 
-### Core v5 scalar tag map
+### Core scalar tags (introduced in v5)
 
-The native and Haskell Core codecs use the following assignments for version
-5. This table is an implementation-maintenance aid, not a user extension API.
+The native and Haskell Core codecs retain these assignments in version 6. This
+table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
 | ---: | --- | ---: | --- |
@@ -82,10 +110,11 @@ The compatibility entry retains an in-memory historical slot. It does not
 create another source spelling, and new numeric values still carry their exact
 declared scalar type.
 
-### CorePrep v5 scalar tag map
+### CorePrep scalar tags (introduced in v5)
 
 CorePrep retains historical `int` and `long` positions before the extended
-catalog. Its assignments must therefore not be copied blindly from Core:
+catalog. Version 6 adds provenance without changing these tags; assignments
+must therefore not be copied blindly from Core:
 
 | Tag | Type | Tag | Type |
 | ---: | --- | ---: | --- |
@@ -106,9 +135,10 @@ type record is decoded.
 
 ## Ordered template arguments
 
-Since v4, Core and CorePrep encode named-type arguments as typed values rather
-than treating every argument as another type. Version 5 retains this format.
-Each argument starts with a kind tag and is decoded in source order:
+Core and CorePrep encode named-type arguments as typed values rather than
+treating every argument as another type. Their current format retains that
+ordered sum; Core v6 and CorePrep v6 also carry source provenance. Each argument
+starts with a kind tag and is decoded in source order:
 
 | Tag | Argument payload |
 | ---: | --- |
@@ -135,10 +165,9 @@ the numeric-byte budget, and its parameter spelling consumes the text-scalar
 budget.
 
 The Xpp and Xmm shared type encoder uses the same semantic model with its own
-stage-local record layout. Their versions moved to 3 because an older reader
-would otherwise interpret an argument-kind byte as a type tag. The formats are
-not byte aliases: only their validation rules and in-memory type model are
-shared.
+stage-local record layout. Version 5 adds source provenance while retaining
+the ordered template-argument representation. The formats are not byte
+aliases: only their validation rules and in-memory type model are shared.
 
 ### Array encodings
 
@@ -158,7 +187,7 @@ different role.
 ### Version transition
 
 Versions are strict, not feature-negotiated. Core and CorePrep readers accept
-only version 5; Xpp and Xmm readers accept only version 3. Every older or future
+only version 6; Xpp and Xmm readers accept only version 5. Every older or future
 version fails at the version field before body decoding. The compiler does not
 guess whether a document happens to contain only fields from an older schema.
 Recompile the owning source or regenerate the intermediate artifact with the
@@ -232,11 +261,12 @@ A Core document contains:
 
 1. magic and version;
 2. qualified module name;
-3. function count;
-4. each resolved function symbol;
-5. parameters and their types;
-6. return type; and
-7. ordered Core statements and expressions.
+3. ordered project-relative source catalog;
+4. function count;
+5. each resolved function symbol and its source owner;
+6. parameters and their types;
+7. return type; and
+8. ordered Core statements and expressions.
 
 Expression records include their result type. The verifier checks that the
 recorded type agrees with constants, variables, applications, and primitives.
@@ -254,7 +284,9 @@ A CorePrep document contains:
 7. one terminator per block.
 
 CorePrep serializes the adapter model after evaluation order and control flow
-are explicit. It must not be exposed as a stable package or CLI artifact.
+are explicit. It retains the ordered source catalog and a source owner on each
+function, including lifted closure functions. It must not be exposed as a
+stable package or CLI artifact.
 
 ## Xpp and Xmm common scalar records
 
@@ -296,16 +328,17 @@ when written; decoding never recreates a host-width alternative.
 
 ## Xpp document order
 
-An Xpp v3 document contains:
+An Xpp v5 document contains:
 
 1. `VXPP`, version, and zero reserved flags;
 2. qualified module name;
-3. ordered resolved functions;
-4. parameter symbols/types, return type, and entry block;
-5. ordered blocks and instructions;
-6. instruction effect, opcode, destination, result type, and operands;
-7. closure function identity and capture modes; and
-8. one typed terminator with explicit CFG targets per block.
+3. ordered source catalog;
+4. ordered resolved functions with their source owner;
+5. parameter symbols/types, return type, and entry block;
+6. ordered blocks and instructions;
+7. instruction effect, opcode, destination, result type, and operands;
+8. closure function identity and capture modes; and
+9. one typed terminator with explicit CFG targets per block.
 
 The instruction effect preserves definition, store, and discard as distinct
 operations. A destination of zero is therefore meaningful only for discard.
@@ -317,17 +350,18 @@ dedicated symbol field rather than an untyped extra operand.
 
 ## Xmm document order
 
-An Xmm v3 document contains:
+An Xmm v5 document contains:
 
 1. `VXMM`, version, and zero reserved flags;
 2. qualified module name;
-3. ordered functions and resolved function identity;
-4. parameter virtual registers and a parallel ordered type vector;
-5. return type and entry block;
-6. blocks and instructions;
-7. opcode, destination register, result type, explicit has-result bit, values,
+3. ordered source catalog;
+4. ordered functions, resolved function identity, and source owner;
+5. parameter virtual registers and a parallel ordered type vector;
+6. return type and entry block;
+7. blocks and instructions;
+8. opcode, destination register, result type, explicit has-result bit, values,
    closure function, and capture modes; and
-8. a typed terminator with CFG targets.
+9. a typed terminator with CFG targets.
 
 Xmm values have three disjoint tags: data register, immediate, and function.
 This prevents a direct function call from consuming a virtual register or an
@@ -358,14 +392,14 @@ verified again before serialization or forward lowering.
 
 ## Compatibility policy
 
-The version field describes the entire schema. Core/CorePrep version 3 was not
-a permissive extension of version 2: its scalar type and literal tag spaces
-changed. Version 4 adds ordered type/value template arguments to recursive
-type records, and version 5 adds closure values and their capture metadata.
-Xpp/Xmm began independently at version 1; version 2 added the explicit
-strong/weak/unowned opcode catalog used by AARC lowering, and version 3 adds the
-same ordered template-argument type records used at their stage boundary. Every
-current reader rejects earlier and future versions for its own magic.
+The version field describes the entire schema. Core/CorePrep version 6 adds
+project source catalogs and per-function ownership to the current scalar,
+template, closure, and control-flow models. Xpp/Xmm began independently at
+version 1; their current version 5 retains the explicit ownership operations,
+template values, and type-test operation, and adds source catalogs and function
+owners. The intermediate versions remain strict historical contracts; their
+documents are not guessed or accepted by the current readers. Every current
+reader rejects earlier and future versions for its own magic.
 
 If migration is needed later, it should be implemented as an explicit reader
 for the old version followed by model conversion. The current decoder must not

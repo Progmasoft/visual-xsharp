@@ -23,10 +23,28 @@ moduleProblems :: CoreModule -> [Diagnostic]
 moduleProblems moduleValue =
     emptyName (coreModuleName moduleValue)
         ++ duplicates "VXC1002" "duplicate Core function symbol" functionSymbols
+        ++ sourceCatalogProblems
         ++ concatMap (verifyFunction functionEnvironment) (coreModuleFunctions moduleValue)
     where
         functions = coreModuleFunctions moduleValue
         functionSymbols = map (resolvedSymbol . coreFunctionName) functions
+        sourceFiles = coreModuleSourceFiles moduleValue
+        sourceOwners = coreModuleFunctionSources moduleValue
+        sourceCatalogProblems =
+            duplicates "VXC1030" "duplicate Core source file" sourceFiles
+                ++ [problem "VXC1031" "Core source file path is empty or contains NUL" | any invalidPath sourceFiles]
+                ++ duplicates "VXC1032" "duplicate Core function source owner" (map fst sourceOwners)
+                ++ [ problem "VXC1033" "Core function source owner is absent from the module source catalog"
+                   | (_, path) <- sourceOwners
+                   , path `notElem` sourceFiles
+                   ]
+                ++ [ problem "VXC1034" "Core function has no source owner"
+                   | not (null sourceFiles)
+                   , function <- functions
+                   , let identifier = symbolIdValue (resolvedSymbol (coreFunctionName function))
+                   , identifier `notElem` map fst sourceOwners
+                   ]
+        invalidPath path = null path || '\0' `elem` path
         functionEnvironment =
             Map.fromList
                 [ ( resolvedSymbol (coreFunctionName function)
