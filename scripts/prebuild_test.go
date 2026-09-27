@@ -301,7 +301,7 @@ func TestBootstrapInstallersDoNotRunWhenVerificationFails(t *testing.T) {
 	if err := installGHCupWindowsWithLoader(runner, loadFailure); err == nil {
 		t.Fatal("Windows bootstrap accepted a verification failure")
 	}
-	if err := installGHCupUnixWithLoader(runner, loadFailure); err == nil {
+	if err := installGHCupUnixWithLoaderAs(runner, loadFailure, false); err == nil {
 		t.Fatal("Unix bootstrap accepted a verification failure")
 	}
 	if len(runner.invocations) != 0 {
@@ -339,7 +339,7 @@ func TestUnixGHCupExecutesVerifiedFileWithoutShellCommandString(t *testing.T) {
 			return nil
 		},
 	}
-	if err := installGHCupUnixWithLoader(runner, func() ([]byte, error) { return trustedScript, nil }); err != nil {
+	if err := installGHCupUnixWithLoaderAs(runner, func() ([]byte, error) { return trustedScript, nil }, false); err != nil {
 		t.Fatal(err)
 	}
 	path := runner.invocations[0][4]
