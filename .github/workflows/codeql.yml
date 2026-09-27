@@ -81,11 +81,9 @@ jobs:
         if: matrix.language == 'go'
         shell: pwsh
         run: |
-          foreach ($component in @('develop', 'githelper', 'prebuild')) {
-            go test "scripts/$component.go" "scripts/${component}_test.go"
-            if ($LASTEXITCODE -ne 0) {
-              throw "CodeQL Go extraction failed for $component"
-            }
+          go run scripts/verify_scripts.go
+          if ($LASTEXITCODE -ne 0) {
+            throw "CodeQL Go extraction failed while validating scripts/"
           }
 
       - name: Analyze

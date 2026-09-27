@@ -197,16 +197,31 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force coverage/go | Out-Null
-          foreach ($component in @('develop', 'githelper', 'prebuild')) {
-            go test -covermode=atomic "-coverprofile=coverage/go/$component.out" `
-              "scripts/$component.go" "scripts/${component}_test.go"
+          $coverageFiles = [System.Collections.Generic.List[string]]::new()
+          $scripts = @(Get-ChildItem -LiteralPath scripts -Filter '*.go' -File |
+            Where-Object { $_.Name -notlike '*_test.go' } |
+            Sort-Object -Property Name)
+          if ($scripts.Count -eq 0) {
+            throw "No Go command sources were found under scripts/"
+          }
+          foreach ($script in $scripts) {
+            $component = $script.BaseName
+            $testPath = Join-Path $script.DirectoryName "${component}_test.go"
+            if (-not (Test-Path -LiteralPath $testPath -PathType Leaf)) {
+              throw "Go command $($script.Name) has no paired test file"
+            }
+            $report = "coverage/go/$component.out"
+            go test -covermode=atomic "-coverprofile=$report" `
+              $script.FullName $testPath
             if ($LASTEXITCODE -ne 0) {
               throw "Go coverage tests failed for $component"
             }
-            if (-not (Test-Path -LiteralPath "coverage/go/$component.out")) {
+            if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
               throw "No Go coverage report was produced for $component"
             }
+            $coverageFiles.Add("./$report")
           }
+          "CODECOV_GO_FILES=$($coverageFiles -join ',')" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Upload Go helper coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
@@ -215,6 +230,6 @@ jobs:
           fail_ci_if_error: true
           disable_search: true
           plugins: noop
-          files: ./coverage/go/develop.out,./coverage/go/githelper.out,./coverage/go/prebuild.out
+          files: ${{ env.CODECOV_GO_FILES }}
           flags: go-tools
           name: go-tools

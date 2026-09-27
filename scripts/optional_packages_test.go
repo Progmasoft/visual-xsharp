@@ -117,11 +117,11 @@ func TestInstallUsesPackageManagerDefaultScopeAndDoesNotInstallRustToolchain(t *
 		activeToolchain: true,
 	}
 	for _, item := range optionalPackages[:2] {
-		if err := installOne(runner, item); err != nil {
+		if err := installOneForOS(runner, item, "windows"); err != nil {
 			t.Fatalf("install command orchestration failed for %s: %v", item.name, err)
 		}
 	}
-	if err := installRustComponents(runner, optionalPackages[len(optionalPackages)-1]); err != nil {
+	if err := installRustComponentsForOS(runner, optionalPackages[len(optionalPackages)-1], "windows"); err != nil {
 		t.Fatal(err)
 	}
 	if len(runner.commands) != 3 {
@@ -145,7 +145,7 @@ func TestInstallUsesPackageManagerDefaultScopeAndDoesNotInstallRustToolchain(t *
 
 func TestRustComponentInstallerRefusesToCreateToolchain(t *testing.T) {
 	runner := &fakePackageRunner{paths: map[string][]string{"rustup": {"rustup"}}}
-	err := installRustComponents(runner, optionalPackages[len(optionalPackages)-1])
+	err := installRustComponentsForOS(runner, optionalPackages[len(optionalPackages)-1], "windows")
 	if err == nil || !strings.Contains(err.Error(), "never installs toolchains") {
 		t.Fatalf("missing active toolchain was not explained: %v", err)
 	}
@@ -189,11 +189,35 @@ func TestOptionalInstallSkipsInstalledPackagesAndContinues(t *testing.T) {
 		"dotnet@10": true,
 		"gcc":       true,
 	}
-	if err := installOptionalPackages(runner); err != nil {
+	if err := installOptionalPackagesForOS(runner, "windows"); err != nil {
 		t.Fatalf("already-installed packages should be skipped without aborting install: %v", err)
 	}
 	if len(runner.commands) != 0 {
 		t.Fatalf("installer reran package commands for present packages: %#v", runner.commands)
+	}
+}
+
+func TestOptionalInstallRejectsUnsupportedOperatingSystem(t *testing.T) {
+	runner := readyPackageRunner()
+	err := installOptionalPackagesForOS(runner, "linux")
+	if err == nil || !strings.Contains(err.Error(), `unsupported operating system "linux"`) {
+		t.Fatalf("Linux install result = %v, want explicit unsupported-host error", err)
+	}
+	if len(runner.commands) != 0 {
+		t.Fatalf("unsupported host issued package-manager commands: %#v", runner.commands)
+	}
+}
+
+func TestInstallOneUsesHomebrewOnlyForMacOS(t *testing.T) {
+	runner := &fakePackageRunner{paths: map[string][]string{"brew": {"brew"}}}
+	if err := installOneForOS(runner, optionalPackages[0], "darwin"); err != nil {
+		t.Fatalf("macOS package install returned error: %v", err)
+	}
+	if len(runner.commands) != 1 || strings.Join(runner.commands[0], " ") != "brew install dotnet@10" {
+		t.Fatalf("macOS install commands = %#v, want Homebrew formula", runner.commands)
+	}
+	if err := installOneForOS(runner, optionalPackages[0], "linux"); err == nil {
+		t.Fatal("Linux unexpectedly selected a macOS package-manager command")
 	}
 }
 

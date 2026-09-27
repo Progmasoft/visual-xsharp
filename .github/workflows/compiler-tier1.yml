@@ -75,11 +75,7 @@ jobs:
       - name: Test repository Go helpers
         shell: pwsh
         run: |
-          go test scripts/develop.go scripts/develop_test.go
-          go test scripts/githelper.go scripts/githelper_test.go
-          go test scripts/optional_packages.go scripts/optional_packages_test.go
-          go test scripts/verify_examples.go scripts/verify_examples_test.go
-          go test scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+          go run scripts/verify_scripts.go
           go run scripts/verify_examples.go
           go run scripts/verify_benchmarks.go
 
@@ -176,11 +172,7 @@ jobs:
       - name: Test repository Go helpers
         shell: bash
         run: |
-          go test scripts/develop.go scripts/develop_test.go
-          go test scripts/githelper.go scripts/githelper_test.go
-          go test scripts/optional_packages.go scripts/optional_packages_test.go
-          go test scripts/verify_examples.go scripts/verify_examples_test.go
-          go test scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+          go run scripts/verify_scripts.go
           go run scripts/verify_examples.go
           go run scripts/verify_benchmarks.go
 

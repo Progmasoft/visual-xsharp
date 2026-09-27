@@ -256,8 +256,15 @@ func firstMatchingLine(output string, pattern *regexp.Regexp) string {
 }
 
 func installOptionalPackages(runner packageRunner) error {
-	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-		return fmt.Errorf("unsupported operating system %q; supported hosts are Windows and macOS", runtime.GOOS)
+	return installOptionalPackagesForOS(runner, runtime.GOOS)
+}
+
+// installOptionalPackagesForOS keeps platform selection explicit so the
+// package-manager workflow can be verified on every CI host without installing
+// software or pretending that Linux has a Windows/macOS installer.
+func installOptionalPackagesForOS(runner packageRunner, goos string) error {
+	if goos != "windows" && goos != "darwin" {
+		return fmt.Errorf("unsupported operating system %q; supported hosts are Windows and macOS", goos)
 	}
 
 	var failures []string
@@ -267,18 +274,18 @@ func installOptionalPackages(runner packageRunner) error {
 			continue
 		}
 		if len(item.requiredComponents) != 0 {
-			if err := installRustComponents(runner, item); err != nil {
+			if err := installRustComponentsForOS(runner, item, goos); err != nil {
 				failures = append(failures, fmt.Sprintf("%s: %v", item.name, err))
 			} else {
 				fmt.Printf("INSTALLED %s components on the selected toolchain\n", item.name)
 			}
 			continue
 		}
-		if installed := packageAlreadyInstalled(runner, item, runtime.GOOS); installed {
+		if installed := packageAlreadyInstalled(runner, item, goos); installed {
 			fmt.Printf("SKIP     %s package is already installed; leaving it unchanged\n", item.name)
 			continue
 		}
-		if err := installOne(runner, item); err != nil {
+		if err := installOneForOS(runner, item, goos); err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", item.name, err))
 		} else {
 			fmt.Printf("INSTALLED %s\n", item.name)
@@ -315,12 +322,19 @@ func packageAlreadyInstalled(runner packageRunner, item optionalPackage, goos st
 }
 
 func installRustComponents(runner packageRunner, item optionalPackage) error {
+	return installRustComponentsForOS(runner, item, runtime.GOOS)
+}
+
+func installRustComponentsForOS(runner packageRunner, item optionalPackage, goos string) error {
+	if goos != "windows" && goos != "darwin" {
+		return fmt.Errorf("unsupported operating system %q; supported hosts are Windows and macOS", goos)
+	}
 	paths := runner.lookPaths("rustup")
 	if len(paths) == 0 {
-		if packageAlreadyInstalled(runner, item, runtime.GOOS) {
+		if packageAlreadyInstalled(runner, item, goos) {
 			return errors.New("the rustup package is already installed but its command is not visible; repair PATH instead of reinstalling it")
 		}
-		if runtime.GOOS == "windows" {
+		if goos == "windows" {
 			if len(runner.lookPaths("winget")) == 0 {
 				return errors.New("winget is required to install the rustup manager")
 			}
@@ -329,16 +343,18 @@ func installRustComponents(runner packageRunner, item optionalPackage) error {
 			if err := runner.run("winget", rustupManagerWingetArguments(item.wingetID)...); err != nil {
 				return fmt.Errorf("cannot install rustup without selecting a toolchain: %w", err)
 			}
-		} else {
+		} else if goos == "darwin" {
 			if len(runner.lookPaths("brew")) == 0 {
 				return errors.New("Homebrew is required to install rustup")
 			}
 			if err := runner.run("brew", "install", item.homebrewFormula); err != nil {
 				return fmt.Errorf("cannot install the rustup manager: %w", err)
 			}
+		} else {
+			return fmt.Errorf("unsupported operating system %q; supported hosts are Windows and macOS", goos)
 		}
 		paths = runner.lookPaths("rustup")
-		if len(paths) == 0 && runtime.GOOS == "windows" {
+		if len(paths) == 0 && goos == "windows" {
 			if home, err := os.UserHomeDir(); err == nil {
 				candidate := filepath.Join(home, ".cargo", "bin", "rustup.exe")
 				if information, statErr := os.Stat(candidate); statErr == nil && !information.IsDir() {
@@ -366,7 +382,11 @@ func rustupManagerWingetArguments(packageID string) []string {
 }
 
 func installOne(runner packageRunner, item optionalPackage) error {
-	if runtime.GOOS == "windows" {
+	return installOneForOS(runner, item, runtime.GOOS)
+}
+
+func installOneForOS(runner packageRunner, item optionalPackage, goos string) error {
+	if goos == "windows" {
 		if len(runner.lookPaths("winget")) == 0 {
 			return errors.New("winget is required on Windows; install App Installer from Microsoft Store, then retry")
 		}
@@ -376,6 +396,8 @@ func installOne(runner packageRunner, item optionalPackage) error {
 			"--accept-package-agreements",
 		}
 		return runner.run("winget", args...)
+	} else if goos != "darwin" {
+		return fmt.Errorf("unsupported operating system %q; supported hosts are Windows and macOS", goos)
 	}
 	if len(runner.lookPaths("brew")) == 0 {
 		return errors.New("Homebrew is required on macOS; install it for your user, then retry")

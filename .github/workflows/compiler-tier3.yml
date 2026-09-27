@@ -52,10 +52,7 @@ jobs:
         shell: bash
         run: |
           go run scripts/develop.go doctor
-          go test scripts/develop.go scripts/develop_test.go
-          go test scripts/prebuild.go scripts/prebuild_test.go
-          go test scripts/verify_examples.go scripts/verify_examples_test.go
-          go test scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
+          go run scripts/verify_scripts.go
           go run scripts/verify_examples.go
           go run scripts/verify_benchmarks.go
 
