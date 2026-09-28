@@ -83,10 +83,9 @@ namespace visual_xsharp::xmm
         /// Selects a register, literal, or direct callable value.
         enum class Kind : std::uint8_t
         {
-            Register,    ///< Value currently held in reg.
-            Immediate    /**< Literal payload held in immediate. */
-                Function ///< Callable identity held in symbol, not a data
-                         ///< register.
+            Register,  ///< Value currently held in reg.
+            Immediate, ///< Literal payload held in immediate.
+            Function ///< Callable identity held in symbol, not a data register.
         };
         /// Active value category.
         Kind kind{ Kind::Immediate };
