@@ -195,6 +195,12 @@ jobs:
             }
             $coverageFiles.Add("./$report")
           }
+          # The thin developer entry point delegates to a package; file-list
+          # coverage alone would leave its actual implementation unmeasured.
+          $internalReport = "coverage/go/development.out"
+          go test -covermode=atomic "-coverprofile=$internalReport" ./scripts/internal/development
+          if ($LASTEXITCODE -ne 0) { throw "Internal developer coverage tests failed" }
+          $coverageFiles.Add("./$internalReport")
           "CODECOV_GO_FILES=$($coverageFiles -join ',')" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Preserve Go helper coverage for the isolated uploader

@@ -48,14 +48,6 @@ jobs:
           # versioned LLVM prefix is for llvm-config metadata, not PATH.
           test -f "$(clang -print-resource-dir)/include/stddef.h"
 
-      - name: Verify toolchain and Go helpers
-        shell: bash
-        run: |
-          go run scripts/develop.go doctor
-          go run scripts/verify_scripts.go
-          go run scripts/verify_examples.go
-          go run scripts/verify_benchmarks.go
-
       - name: Install GHC and Cabal
         uses: haskell/ghcup-setup@269e121e9e7528761aca5a606a53fe9d04cd6658 # ghcup-setup
         with:
@@ -65,6 +57,14 @@ jobs:
         shell: bash
         working-directory: Compiler
         run: cabal update
+
+      - name: Verify toolchain and Go helpers
+        shell: bash
+        run: |
+          go run scripts/develop.go doctor
+          go run scripts/verify_scripts.go
+          go run scripts/verify_examples.go
+          go run scripts/verify_benchmarks.go
 
       - name: Build and run native compiler suites
         shell: bash
