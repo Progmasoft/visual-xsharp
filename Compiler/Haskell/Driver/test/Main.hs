@@ -18,6 +18,8 @@ import FloatingOptimizerTests (floatingOptimizerTests)
 import IntegerEvaluationTests (integerEvaluationTests)
 import IntegerFlowTests (integerFlowTests)
 import IterationTests (iterationTests)
+import LoopFlowOracleTests (loopFlowOracleTests)
+import LoopFlowTests (loopFlowTests)
 import MonomorphizationTests (monomorphizationTests)
 import Numeric (readHex)
 import NumericTests (numericTests)
@@ -144,6 +146,8 @@ main = do
     mapM_ (uncurry check) closureTests
     mapM_ (uncurry check) coreOptimizerTests
     mapM_ (uncurry check) integerFlowTests
+    mapM_ (uncurry check) loopFlowTests
+    mapM_ (uncurry check) loopFlowOracleTests
     mapM_ (uncurry check) iterationTests
     mapM_ (uncurry check) floatingOptimizerTests
     mapM_ (uncurry check) coreInliningTests

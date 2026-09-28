@@ -54,6 +54,8 @@ main = do
                 bgroup "GuardedIntegerEffects" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- flowSizes]
             , env (pure (CoreModules (contradictoryPathFixtures flowSizes))) $ \modules ->
                 bgroup "ContradictoryIntegerPaths" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- flowSizes]
+            , env (pure (CoreModules (loopFixtures flowSizes))) $ \modules ->
+                bgroup "LoopIntegerFacts" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- flowSizes]
             ]
         , bgroup
             "CorePrep"

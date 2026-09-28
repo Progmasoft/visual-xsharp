@@ -6,6 +6,13 @@ contract for the Haskell Core optimizer, not a source-language specification.
 The source language's integer types, overflow behavior, and operator semantics
 remain defined by `Spec/`.
 
+The Haskell Core package exposes `Visual.XSharp.Core.Optimizer.IntegerFacts`
+so compiler tooling can inspect the same sound facts used by the optimizer.
+`LoopFactSummary` reports distinct header, condition, body, update, normal-exit,
+and return states; consumers should not reconstruct loop edges from statement
+syntax. Transfer helpers are conservative and are not an execution engine or
+a replacement for Core verification.
+
 The analysis answers deliberately narrow questions. Most importantly, it can
 prove that an integer divisor is nonzero on a reachable path, and it can prove
 that an integer condition is already true or false. It does not attempt to
@@ -311,6 +318,216 @@ The optimizer's Core verifier is responsible for structural validity, such as
 return completeness and symbol ownership. Integer flow does not excuse an
 invalid tree and does not synthesize a missing return.
 
+### Loop dataflow and widening
+
+Structured Core loops are solved before their facts are handed to optimizer
+clients. A pre-test `while` and `for` join the incoming state with the body
+back-edge at the condition header. A `do/while` instead analyzes its first
+body execution from the incoming state, then joins the true condition edge
+back at the body header. Consequently a post-test loop preserves the fact that
+its body executes at least once, while a pre-test loop preserves the possibility
+that its body executes zero times.
+
+The loop body transfer tracks four edge classes independently: normal
+completion, `break`, `continue`, and `return`. Branch joins merge matching
+classes only. The nearest loop consumes its own `break` and `continue`; nested
+loops return their normal exit facts to the enclosing body without allowing an
+inner transfer to escape. Returns remain separate and never enter the loop
+back-edge or the normal exit. This separation is required for cases such as a
+`break` that establishes zero: treating it as an induction edge would lose a
+real zero-valued exit, while treating a `continue` as an exit could invent one.
+
+For a `while`, `continue` rejoins at the condition. For a `do/while`, it also
+reaches the condition rather than skipping it. For a `for`, a body's normal
+completion or `continue` reaches the update sequence, and only the update's
+normal completion or `continue` returns to the condition. A body's `break`
+skips the update. Break exits from both the body and update are joined with the
+condition-false edge. These rules mirror the already-lowered Core shape; this
+analysis does not reconstruct source syntax or alter loop semantics.
+
+At each header, the analysis first forms an ascending join with the newly
+computed back-edge. Expanding lower and upper endpoints are widened to unknown;
+stable endpoints remain. A symbol absent from either side is forgotten, and
+zero exclusion remains only when both sides establish it. Therefore a counter
+such as `index = index + 1` does not require one compiler analysis round for
+each runtime iteration. The loop solver has a fixed transfer-round limit of
+eight. If it is reached, the solver recomputes the summary from the reachable
+top state, discarding path-specific constraints that may not have converged.
+That fallback is deliberately less precise, never a partially converged narrow
+answer.
+
+The exit state is the join of all reachable break edges and the condition's
+false edge. For example:
+
+```text
+int index = 0;
+while (index < 17) {
+    index = index + 1;
+}
+if (index < 17) {
+    return 24 / index;
+}
+```
+
+The widened header still lets the false edge establish `index >= 17`, so the
+post-loop branch is unreachable. The optimizer does not substitute an
+arbitrary interval endpoint for `index`; it only folds the predicate that the
+interval proves. A call in the loop condition or body invalidates mutable
+facts using the same call-boundary rule as non-loop code.
+
+All consumers use the same summary. Constant propagation receives separate
+condition, body, update, and exit facts. Effect inference inspects the loop's
+condition, body, and update at their corresponding inputs, and carries only
+normal exit facts to the following statement. Liveness uses the shared
+statement transfer, so its forward snapshots agree with the optimizer's
+condition and assignment reasoning. Loop divergence remains conservatively
+observable; proving an interval exit does not by itself prove that every
+concrete execution terminates.
+
+### Summary shape and solver equations
+
+`LoopFactSummary` deliberately exposes program points rather than one merged
+"loop fact". Its fields have distinct meanings:
+
+| Field | Program point | Unreachable representation |
+| --- | --- | --- |
+| `loopHeaderFacts` | Entry to a pre-test condition, or entry to a do-loop body, after widening | `UnreachableFacts` when no iteration can be entered |
+| `loopConditionFacts` | Immediately before a condition is evaluated | Bottom when every body path returns, breaks, or otherwise fails to reach the condition |
+| `loopBodyFacts` | Body input after the true condition edge; do-loops use their mandatory entry state | Bottom when a pre-test condition has no true edge |
+| `loopUpdateFacts` | `for` update input after body normal/continue paths are joined | Bottom when there is no update point or it has no incoming edge |
+| `loopExitFacts` | Normal completion after joining false-condition and break edges | Bottom when no concrete normal exit is represented |
+| `loopReturnFacts` | Return paths leaving the loop body or update | Bottom when no return edge exists |
+| `loopFixedPointIterations` | Number of transfer rounds used by the summary | Zero for an unreachable input |
+| `loopAnalysisWidened` | Whether the bounded conservative fallback was selected | False for an unreachable input |
+
+For `while` and `for`, let `H0` be the state before the first condition,
+`T(H)` and `F(H)` the condition's true and false refinements, and `Body(T)`
+the four-edge transfer of the body. A while loop's next back-edge is the join
+of body normal and continue states. A for loop sends that join through the
+update first, then uses update normal and continue as the back-edge. Each
+header round is:
+
+```text
+H0 = input
+Hn+1 = widen(Hn, join(Hn, backEdge(Hn)))
+```
+
+The condition's false edge is not sent around the loop. The stable summary's
+normal exit is:
+
+```text
+join(F(H), bodyBreak(H), updateBreak(H))
+```
+
+The update-break term is unreachable for a while loop and for an update that
+cannot break. Body returns and update returns are joined into the return field,
+never into the normal exit. For a while loop, `backEdge(H)` is body normal
+joined with body continue. For a for loop, it is update normal joined with
+update continue; update input is body normal joined with body continue.
+
+A do-loop has a different recurrence because the condition follows the body:
+
+```text
+B(H) = body transfer from H
+C(H) = join(B(H).normal, B(H).continue)
+Hn+1 = widen(Hn, join(Hn, refineTrue(condition, C(H))))
+exit = join(B(H).break, refineFalse(condition, C(H)))
+```
+
+`B(H).return` becomes the summary's return state. A body break bypasses the
+condition. A body continue reaches it. If all body paths return or break, the
+condition input is bottom and contributes neither a false exit nor a back-edge.
+
+These equations are intentionally stated in terms of the Core edge categories.
+They are also a review aid: when modifying transfer code, compare each record
+field with the exact equation instead of treating `join` as interchangeable
+across header, update, and exit points. In particular, `join(Unreachable, S)`
+is `S`; using bottom as an identity is correct only after a path is proven
+infeasible.
+
+Widening is applied after the ordinary path join. For each symbol that remains
+present on both sides, a lower bound is retained only if it has not expanded
+downward; an upper bound is retained only if it has not expanded upward. Zero
+exclusion is intersected across rounds. A missing symbol on either side means
+that no loop-wide fact is available for it. This order matters: widening only
+the most recently observed back-edge could discard the initial state, while
+returning an un-widened join after the round cap could expose a narrow state
+that omitted a later iteration.
+
+The cap fallback runs the loop transfer once from `emptyIntegerFacts`. That
+state is reachable top for this domain: it claims no path-specific interval or
+zero-exclusion fact. Any candidate that survives a subsequent condition or
+assignment transfer is established from the current loop's syntax and remains
+valid for all incoming values. The fallback is therefore safe for subsequent
+optimization, but it may miss facts that a more powerful convergent analysis
+could establish. It does not change the compiler's runtime loop limit because
+it is only an analysis iteration bound.
+
+### Review checklist for loop-transfer changes
+
+Before changing the recurrence or edge join, verify each of these cases
+independently rather than relying on one incrementing-counter example:
+
+1. A false first condition reaches the pre-test loop exit with the original
+   state; no body assignment may leak from an infeasible edge.
+2. A do-loop body executes even when its condition is a literal false value.
+3. A body break exits without executing the remaining body statements or a
+   for-update.
+4. A while continue returns to the while condition.
+5. A do-while continue still evaluates the do-while condition.
+6. A for continue executes the update before the next condition check.
+7. A break in an update exits after earlier update statements have run.
+8. Returns are observed by effect analysis but never joined into the normal
+   exit or the loop back-edge.
+9. A nested break or continue is consumed by the inner loop only.
+10. A call on one feasible condition path invalidates facts at the join, while
+    a short-circuited call on an infeasible path does not run.
+11. Arithmetic whose result may overflow drops the derived interval before it
+    can influence a later condition.
+12. Every concrete normal exit remains inside the reported interval, including
+    exits caused by `break` rather than the loop condition.
+
+Use different expected values on break, continue, update, and false-condition
+paths. If all paths assign the same value, an accidental join between edge
+classes may look correct. The hand-written fixtures use exact values for that
+reason; generated counter cases add breadth but do not replace those focused
+examples.
+
+Avoid asserting that the abstract exit equals one concrete result. Widening,
+interval hulls, and imprecise calls can legitimately retain values that no
+execution of a particular fixture reaches. The soundness direction is
+containment: a reachable concrete value must not be excluded by the abstract
+summary. Precision tests are separate and should name the exact property being
+preserved, such as an exact zero after a mandatory body assignment.
+
+### Cost model and benchmark cautions
+
+One solver round traverses the loop condition, body, and—when present—update.
+At each branch or loop exit, symbol maps are joined. For a map with `S` facts,
+the current ordered-map representation makes a join proportional to the
+represented symbols rather than the numeric width of their intervals. A
+changing interval typically widens after one expansion, but nested loops can
+cause their own solver to run during each outer transfer. The eight-round cap
+is a safety bound for analysis work, not an expected average.
+
+Optimizer passes call the shared analysis at different program points. This
+keeps the facts valid after each pass changes the tree, but it can repeat loop
+summary construction during constant propagation, effect inference, and
+liveness. Do not add a cross-pass cache keyed only by a loop's syntax: the same
+loop can receive different incoming facts after a preceding assignment, branch
+rewrite, or call. Any future memoization must include the complete input state
+and a tree identity valid for exactly one immutable pass snapshot.
+
+The Criterion `LoopIntegerFacts` group deliberately measures complete
+optimizer runs on functions containing three loop forms. Its result includes
+verification, the surrounding pipeline, and function-level bookkeeping; it is
+not a microbenchmark of `widenIntegerFacts` alone. A change to the abstract
+domain should also inspect guarded-division and contradictory-path groups so
+an apparent loop improvement does not hide a regression in non-loop facts.
+For noisy results, use repeated same-host process runs and preserve the exact
+toolchain/build metadata. Shared CI runners are compile/smoke checks, not
+statistical performance gates.
+
 ## Effect inference and dead-code elimination
 
 Integer division, floor division, and remainder over integer types can fail
@@ -385,8 +602,41 @@ The compiler test suite checks the abstract interpreter at several levels:
 - arithmetic result ranges and overflow fallback;
 - all failure-capable integer division primitives;
 - closure-body isolation;
+- loop-header convergence and widening for `while`, `do/while`, and `for`;
+- exact zero-iteration and mandatory-first-iteration behavior;
+- break, continue, return, and nested-loop edge ownership;
+- loop update ordering after normal body completion and `continue`;
+- calls and possibly overflowing induction arithmetic inside loops;
+- generated small counter loops checked through post-loop predicates;
 - source-to-Core regressions through the real frontend pipeline; and
 - optimized Core verifier acceptance and fixed-point behavior.
+
+The loop matrix has two complementary layers. `LoopFlowTests` observes
+optimizer output and direct summaries for named cases: mandatory do-loop entry,
+all three continue destinations, body/update breaks, call invalidation,
+overflow loss, return isolation, nested-loop ownership, and convergence bounds.
+`LoopFlowOracleTests` contains a deliberately small concrete executor for
+generated, side-effect-free Core programs. It checks 125 while, 125 do/while,
+and 125 for combinations over small counter starts, limits, and break points.
+The concrete final integer must be a member of the abstract exit interval; the
+test does not require equality, because sound interval analysis is allowed to
+over-approximate.
+
+The test executor models only integer and Boolean literals/locals, addition,
+integer comparisons, short-circuit Boolean operators, branches, nested
+structured loops, and explicit loop transfers. Its generated additions remain
+far inside the `int` range. A call, unsupported primitive, malformed Core
+expression, or exhausted execution fuel fails the oracle instead of being
+treated as a valid value. Separate return fixtures check `loopReturnFacts` so
+that a concrete return is not incorrectly required to appear in the normal
+exit. Non-terminating fixtures check the opposite boundary: a continue-only
+cycle must not manufacture a normal exit merely because the abstract header is
+reachable.
+
+This finite executor is a test oracle for transfer containment, not a second
+language runtime. It intentionally does not model overflow, call effects,
+closures, floating-point behavior, or external state. Those dimensions remain
+covered by optimizer-specific tests and the language/runtime test suites.
 
 Generated cases use an independent integer comparison oracle to decide whether
 the selected edge excludes zero. The oracle is intentionally simple and does
@@ -698,6 +948,13 @@ the production optimizer on an increasing number of guarded statements. One
 fixture proves a repeated divisor safe; the other supplies an impossible
 integer interval to a sequence of expressions.
 
+`LoopIntegerFacts` measures the production optimizer on functions containing
+pre-test, post-test, and `for` loops with changing integer locals, conditional
+`break`/`continue` edges, and update statements. It complements the CorePrep
+loop benchmark: this group measures abstract interpretation and optimizer
+convergence, while CorePrep measures CFG preparation. The fixture count grows
+by function, and construction stays outside the timed Criterion sample.
+
 Results describe one machine and one compiler build. They are useful for
 detecting asymptotic regressions and comparing revisions on the same host, but
 they are not portable latency promises. Fixture construction, terminal output,
@@ -720,7 +977,7 @@ The current domain does not represent:
 - floating-point ranges or NaN predicates;
 - array bounds, pointer provenance, or object identity;
 - call-specific mutation summaries;
-- loop fixed points or widening;
+- path-sensitive loop values beyond intervals and zero exclusion;
 - path probabilities or target-specific branch costs; or
 - proof facts across compilation units.
 

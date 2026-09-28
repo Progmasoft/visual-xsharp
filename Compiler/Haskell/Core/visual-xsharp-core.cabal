@@ -21,6 +21,7 @@ library
         Visual.XSharp.Core.CorePrep.Wire.Format
         Visual.XSharp.Core.Monomorphization
         Visual.XSharp.Core.Optimizer
+        Visual.XSharp.Core.Optimizer.IntegerFacts
         Visual.XSharp.Core.Scalar
         Visual.XSharp.Core.Specialization
         Visual.XSharp.Core.Symbols
@@ -35,7 +36,6 @@ library
         Visual.XSharp.Core.Optimizer.EffectInference
         Visual.XSharp.Core.Optimizer.Floating
         Visual.XSharp.Core.Optimizer.Inline
-        Visual.XSharp.Core.Optimizer.IntegerFacts
         Visual.XSharp.Core.Optimizer.Liveness
         Visual.XSharp.Core.Optimizer.Pipeline
         Visual.XSharp.Core.Optimizer.Types

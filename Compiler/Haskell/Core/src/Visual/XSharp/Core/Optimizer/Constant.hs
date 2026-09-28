@@ -85,18 +85,37 @@ simplifyStatement environment facts statement = case statement of
                     (False, False) -> joinIntegerFacts trueFacts falseFacts
          in (changed, nextConstants, nextFacts)
     CoreWhile condition body ->
-        let rewrittenCondition = simplifyExpressionWithFacts environment facts condition
-            (rewrittenBody, _, _) = simplifyStatements Map.empty emptyIntegerFacts body
-         in (CoreWhile rewrittenCondition rewrittenBody, Map.empty, emptyIntegerFacts)
+        let loop = CoreWhile condition body
+         in case loopFactSummary facts loop of
+                Nothing -> (loop, Map.empty, emptyIntegerFacts)
+                Just summary ->
+                    let rewrittenCondition =
+                            simplifyExpressionWithFacts environment (loopConditionFacts summary) condition
+                        (rewrittenBody, _, _) =
+                            simplifyStatements Map.empty (loopBodyFacts summary) body
+                     in (CoreWhile rewrittenCondition rewrittenBody, Map.empty, loopExitFacts summary)
     CoreDoWhile body condition ->
-        let (rewrittenBody, _, _) = simplifyStatements Map.empty emptyIntegerFacts body
-            rewrittenCondition = simplifyExpressionWithFacts Map.empty emptyIntegerFacts condition
-         in (CoreDoWhile rewrittenBody rewrittenCondition, Map.empty, emptyIntegerFacts)
+        let loop = CoreDoWhile body condition
+         in case loopFactSummary facts loop of
+                Nothing -> (loop, Map.empty, emptyIntegerFacts)
+                Just summary ->
+                    let (rewrittenBody, _, _) =
+                            simplifyStatements Map.empty (loopBodyFacts summary) body
+                        rewrittenCondition =
+                            simplifyExpressionWithFacts Map.empty (loopConditionFacts summary) condition
+                     in (CoreDoWhile rewrittenBody rewrittenCondition, Map.empty, loopExitFacts summary)
     CoreFor condition body update ->
-        let rewrittenCondition = simplifyExpressionWithFacts environment facts condition
-            (rewrittenBody, _, _) = simplifyStatements Map.empty emptyIntegerFacts body
-            (rewrittenUpdate, _, _) = simplifyStatements Map.empty emptyIntegerFacts update
-         in (CoreFor rewrittenCondition rewrittenBody rewrittenUpdate, Map.empty, emptyIntegerFacts)
+        let loop = CoreFor condition body update
+         in case loopFactSummary facts loop of
+                Nothing -> (loop, Map.empty, emptyIntegerFacts)
+                Just summary ->
+                    let rewrittenCondition =
+                            simplifyExpressionWithFacts environment (loopConditionFacts summary) condition
+                        (rewrittenBody, _, _) =
+                            simplifyStatements Map.empty (loopBodyFacts summary) body
+                        (rewrittenUpdate, _, _) =
+                            simplifyStatements Map.empty (loopUpdateFacts summary) update
+                     in (CoreFor rewrittenCondition rewrittenBody rewrittenUpdate, Map.empty, loopExitFacts summary)
     CoreBreak -> (CoreBreak, environment, unreachableIntegerFacts)
     CoreContinue -> (CoreContinue, environment, unreachableIntegerFacts)
 

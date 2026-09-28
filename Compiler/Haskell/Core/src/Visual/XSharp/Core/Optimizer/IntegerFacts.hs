@@ -23,6 +23,8 @@ module Visual.XSharp.Core.Optimizer.IntegerFacts
     , transferExpressionFacts
     , transferStatementFacts
     , transferStatementsFacts
+    , LoopFactSummary (..)
+    , loopFactSummary
     , refineConditionFacts
     , joinIntegerFacts
     , conditionTruthFromFacts
@@ -57,6 +59,35 @@ Missing symbol entries mean no path-specific refinement is stored.
 data IntegerFacts
     = ReachableFacts (Map SymbolId IntegerFact)
     | UnreachableFacts
+    deriving (Eq, Ord, Read, Show)
+
+{- | Fixed-point facts for one structured loop.
+
+The header is the state before a pre-test loop's condition (or before a
+post-test loop's first body execution). Condition, body, and update inputs are
+reported separately because a @continue@ reaches different program points in
+the three Core loop forms. Exit facts join the false-condition edge with every
+reachable @break@ edge. Return facts are retained for clients which need to
+account for effects in paths that do not leave the function normally.
+-}
+data LoopFactSummary = LoopFactSummary
+    { loopHeaderFacts :: IntegerFacts
+    -- ^ Widened input facts at the loop's back-edge join.
+    , loopConditionFacts :: IntegerFacts
+    -- ^ Facts immediately before evaluating the condition.
+    , loopBodyFacts :: IntegerFacts
+    -- ^ Facts on entry to the body after a true condition, or at do-loop entry.
+    , loopUpdateFacts :: IntegerFacts
+    -- ^ Facts at a @for@ update; unreachable for loops without an update.
+    , loopExitFacts :: IntegerFacts
+    -- ^ Facts valid after normal loop termination, including breaks.
+    , loopReturnFacts :: IntegerFacts
+    -- ^ Facts on function-returning paths inside the loop.
+    , loopFixedPointIterations :: Int
+    -- ^ Transfer rounds used to reach stability, or the configured cap.
+    , loopAnalysisWidened :: Bool
+    -- ^ True when the conservative cap fallback was needed.
+    }
     deriving (Eq, Ord, Read, Show)
 
 -- | Reachable input state with no path-specific symbol constraints.
@@ -267,10 +298,171 @@ expressionInvokesCallable expression = case expression of
     -- A closure body is deferred; only its capture initializers run now.
     CoreClosure captures _ _ _ _ -> any (expressionInvokesCallable . coreCaptureValue) captures
 
--- | Transfer one statement's effects and assignments to the next program point.
+{- | Transfer one statement's normal-completion facts to the next program point.
+Break, continue, and return edges are consumed by the nearest owning flow
+construct and therefore do not appear as normal continuation here.
+-}
 transferStatementFacts :: IntegerFacts -> CoreStatement -> IntegerFacts
-transferStatementFacts UnreachableFacts _ = UnreachableFacts
-transferStatementFacts facts statement = case statement of
+transferStatementFacts facts = flowNormalFacts . analyzeStatementFlow facts
+
+-- | Transfer statements in source order until no normal path remains.
+transferStatementsFacts :: IntegerFacts -> [CoreStatement] -> IntegerFacts
+transferStatementsFacts facts = flowNormalFacts . analyzeSequenceFlow facts
+
+{- | Summarize the data-flow behavior of a structured Core loop.  A bounded
+ascending iteration discovers loop-carried facts; interval widening prevents
+induction variables from requiring one analysis round per runtime iteration.
+If an unusual transfer shape does not stabilize within the cap, the pass
+recomputes one sound summary from the reachable top state rather than exposing
+the last, potentially under-approximating iteration.
+-}
+loopFactSummary :: IntegerFacts -> CoreStatement -> Maybe LoopFactSummary
+loopFactSummary input statement = case statement of
+    CoreWhile condition body ->
+        Just $ solveLoop input (whileStep condition body [])
+    CoreDoWhile body condition ->
+        Just $ solveLoop input (doWhileStep body condition)
+    CoreFor condition body update ->
+        Just $ solveLoop input (whileStep condition body update)
+    _ -> Nothing
+
+loopIterationLimit :: Int
+loopIterationLimit = 8
+
+data LoopStep = LoopStep
+    { stepConditionFacts :: IntegerFacts
+    , stepBodyFacts :: IntegerFacts
+    , stepUpdateFacts :: IntegerFacts
+    , stepBackEdgeFacts :: IntegerFacts
+    , stepExitFacts :: IntegerFacts
+    , stepReturnFacts :: IntegerFacts
+    }
+
+solveLoop :: IntegerFacts -> (IntegerFacts -> LoopStep) -> LoopFactSummary
+solveLoop UnreachableFacts step = summarize 0 False UnreachableFacts (step UnreachableFacts)
+solveLoop entry step = iterateHeader 0 entry
+    where
+        iterateHeader rounds header =
+            let current = step header
+                candidate = joinIntegerFacts header (stepBackEdgeFacts current)
+                widened = widenIntegerFacts header candidate
+                nextRound = rounds + 1
+             in if widened == header
+                    then summarize nextRound False header current
+                    else
+                        if nextRound >= loopIterationLimit
+                            then conservativeSummary nextRound
+                            else iterateHeader nextRound widened
+        conservativeSummary rounds =
+            let top = step emptyIntegerFacts
+             in summarize rounds True emptyIntegerFacts top
+
+summarize :: Int -> Bool -> IntegerFacts -> LoopStep -> LoopFactSummary
+summarize rounds widened header step =
+    LoopFactSummary
+        { loopHeaderFacts = header
+        , loopConditionFacts = stepConditionFacts step
+        , loopBodyFacts = stepBodyFacts step
+        , loopUpdateFacts = stepUpdateFacts step
+        , loopExitFacts = stepExitFacts step
+        , loopReturnFacts = stepReturnFacts step
+        , loopFixedPointIterations = rounds
+        , loopAnalysisWidened = widened
+        }
+
+whileStep :: CoreExpression -> [CoreStatement] -> [CoreStatement] -> IntegerFacts -> LoopStep
+whileStep condition body update header =
+    let conditionTrue = refineConditionFacts True condition header
+        conditionFalse = refineConditionFacts False condition header
+        bodyFlow = analyzeSequenceFlow conditionTrue body
+        updateInput = joinIntegerFacts (flowNormalFacts bodyFlow) (flowContinueFacts bodyFlow)
+        updateFlow = analyzeSequenceFlow updateInput update
+        loopBackEdge
+            | null update = updateInput
+            | otherwise = joinIntegerFacts (flowNormalFacts updateFlow) (flowContinueFacts updateFlow)
+        exits =
+            joinIntegerFacts
+                conditionFalse
+                ( joinIntegerFacts
+                    (flowBreakFacts bodyFlow)
+                    (flowBreakFacts updateFlow)
+                )
+        returns = joinIntegerFacts (flowReturnFacts bodyFlow) (flowReturnFacts updateFlow)
+     in LoopStep
+            { stepConditionFacts = header
+            , stepBodyFacts = conditionTrue
+            , stepUpdateFacts = if null update then unreachableIntegerFacts else updateInput
+            , stepBackEdgeFacts = loopBackEdge
+            , stepExitFacts = exits
+            , stepReturnFacts = returns
+            }
+
+doWhileStep :: [CoreStatement] -> CoreExpression -> IntegerFacts -> LoopStep
+doWhileStep body condition header =
+    let bodyFlow = analyzeSequenceFlow header body
+        conditionInput = joinIntegerFacts (flowNormalFacts bodyFlow) (flowContinueFacts bodyFlow)
+        conditionTrue = refineConditionFacts True condition conditionInput
+        conditionFalse = refineConditionFacts False condition conditionInput
+     in LoopStep
+            { stepConditionFacts = conditionInput
+            , stepBodyFacts = header
+            , stepUpdateFacts = unreachableIntegerFacts
+            , stepBackEdgeFacts = conditionTrue
+            , stepExitFacts = joinIntegerFacts (flowBreakFacts bodyFlow) conditionFalse
+            , stepReturnFacts = flowReturnFacts bodyFlow
+            }
+
+{- | Widen an ascending interval sequence.  A lower bound that moves down or
+an upper bound that moves up becomes unknown; stable and narrowing endpoints
+are retained.  A fact missing from either state is discarded, and zero
+exclusion survives only if both states prove it.  These rules guarantee the
+result contains both represented value sets and force expanding induction
+intervals to stabilize after at most one widening round.
+-}
+widenIntegerFacts :: IntegerFacts -> IntegerFacts -> IntegerFacts
+widenIntegerFacts UnreachableFacts next = next
+widenIntegerFacts previous UnreachableFacts = previous
+widenIntegerFacts (ReachableFacts previous) (ReachableFacts next) =
+    ReachableFacts (Map.mergeWithKey widenExisting (const Map.empty) (const Map.empty) previous next)
+    where
+        widenExisting _ old new = Just (widenIntegerFact old new)
+
+widenIntegerFact :: IntegerFact -> IntegerFact -> IntegerFact
+widenIntegerFact previous next =
+    IntegerFact
+        { integerMinimum = widenLower (integerMinimum previous) (integerMinimum next)
+        , integerMaximum = widenUpper (integerMaximum previous) (integerMaximum next)
+        , integerExcludesZero = integerExcludesZero previous && integerExcludesZero next
+        }
+    where
+        widenLower (Just old) (Just new)
+            | new >= old = Just old
+            | otherwise = Nothing
+        widenLower _ _ = Nothing
+        widenUpper (Just old) (Just new)
+            | new <= old = Just old
+            | otherwise = Nothing
+        widenUpper _ _ = Nothing
+
+data StatementFlowFacts = StatementFlowFacts
+    { flowNormalFacts :: IntegerFacts
+    , flowBreakFacts :: IntegerFacts
+    , flowContinueFacts :: IntegerFacts
+    , flowReturnFacts :: IntegerFacts
+    }
+
+unreachableFlow :: StatementFlowFacts
+unreachableFlow =
+    StatementFlowFacts
+        { flowNormalFacts = unreachableIntegerFacts
+        , flowBreakFacts = unreachableIntegerFacts
+        , flowContinueFacts = unreachableIntegerFacts
+        , flowReturnFacts = unreachableIntegerFacts
+        }
+
+analyzeStatementFlow :: IntegerFacts -> CoreStatement -> StatementFlowFacts
+analyzeStatementFlow UnreachableFacts _ = unreachableFlow
+analyzeStatementFlow facts statement = case statement of
     CoreBind binding ->
         let value = coreBindingValue binding
             afterValue = transferExpressionFacts facts value
@@ -278,47 +470,69 @@ transferStatementFacts facts statement = case statement of
                 | expressionInvokesCallable value = Nothing
                 | isCoreIntegerType (coreBindingType binding) = factOfIntegerExpression facts value
                 | otherwise = Nothing
-         in setIntegerFact afterValue (resolvedSymbol (coreBindingName binding)) known
+         in normalFlow (setIntegerFact afterValue (resolvedSymbol (coreBindingName binding)) known)
     CoreAssign name value ->
         let afterValue = transferExpressionFacts facts value
             known
                 | expressionInvokesCallable value = Nothing
                 | otherwise = factOfIntegerExpression facts value
-         in setIntegerFact afterValue (resolvedSymbol name) known
-    CoreReturn value -> transferExpressionFacts facts value
-    CoreEvaluate value -> transferExpressionFacts facts value
+         in normalFlow (setIntegerFact afterValue (resolvedSymbol name) known)
+    CoreReturn value ->
+        let afterValue = transferExpressionFacts facts value
+         in unreachableFlow {flowReturnFacts = afterValue}
+    CoreEvaluate value -> normalFlow (transferExpressionFacts facts value)
     CoreIf condition whenTrue whenFalse ->
         let trueInput = refineConditionFacts True condition facts
             falseInput = refineConditionFacts False condition facts
-            trueOutput = transferStatementsFacts trueInput whenTrue
-            falseOutput = transferStatementsFacts falseInput whenFalse
-         in case (isUnreachableFacts trueInput, isUnreachableFacts falseInput) of
-                (True, True) -> UnreachableFacts
-                (True, False) -> falseOutput
-                (False, True) -> trueOutput
-                (False, False) -> case (statementsAlwaysReturn whenTrue, statementsAlwaysReturn whenFalse) of
-                    (True, False) -> falseOutput
-                    (False, True) -> trueOutput
-                    (True, True) -> UnreachableFacts
-                    (False, False) -> joinIntegerFacts trueOutput falseOutput
-    -- Loop-carried values require a fixed-point analysis. Until that analysis
-    -- is active, forgetting incoming facts is conservative and prevents a
-    -- first-iteration constant from leaking across a backedge.
-    CoreWhile _ _ -> emptyIntegerFacts
-    CoreDoWhile _ _ -> emptyIntegerFacts
-    CoreFor _ _ _ -> emptyIntegerFacts
-    CoreBreak -> UnreachableFacts
-    CoreContinue -> UnreachableFacts
+            trueFlow = analyzeSequenceFlow trueInput whenTrue
+            falseFlow = analyzeSequenceFlow falseInput whenFalse
+         in joinFlowFacts trueFlow falseFlow
+    CoreWhile {} -> loopNormalFlow facts statement
+    CoreDoWhile {} -> loopNormalFlow facts statement
+    CoreFor {} -> loopNormalFlow facts statement
+    CoreBreak -> unreachableFlow {flowBreakFacts = facts}
+    CoreContinue -> unreachableFlow {flowContinueFacts = facts}
 
--- | Transfer statements in source order until control terminates.
-transferStatementsFacts :: IntegerFacts -> [CoreStatement] -> IntegerFacts
-transferStatementsFacts facts [] = facts
-transferStatementsFacts UnreachableFacts _ = UnreachableFacts
-transferStatementsFacts facts (statement : remaining) =
-    let after = transferStatementFacts facts statement
-     in if statementAlwaysReturns statement
-            then after
-            else transferStatementsFacts after remaining
+loopNormalFlow :: IntegerFacts -> CoreStatement -> StatementFlowFacts
+loopNormalFlow facts statement = case loopFactSummary facts statement of
+    Nothing -> normalFlow emptyIntegerFacts
+    Just summary ->
+        StatementFlowFacts
+            { flowNormalFacts = loopExitFacts summary
+            , flowBreakFacts = unreachableIntegerFacts
+            , flowContinueFacts = unreachableIntegerFacts
+            , flowReturnFacts = loopReturnFacts summary
+            }
+
+normalFlow :: IntegerFacts -> StatementFlowFacts
+normalFlow facts = unreachableFlow {flowNormalFacts = facts}
+
+joinFlowFacts :: StatementFlowFacts -> StatementFlowFacts -> StatementFlowFacts
+joinFlowFacts left right =
+    StatementFlowFacts
+        { flowNormalFacts = joinIntegerFacts (flowNormalFacts left) (flowNormalFacts right)
+        , flowBreakFacts = joinIntegerFacts (flowBreakFacts left) (flowBreakFacts right)
+        , flowContinueFacts = joinIntegerFacts (flowContinueFacts left) (flowContinueFacts right)
+        , flowReturnFacts = joinIntegerFacts (flowReturnFacts left) (flowReturnFacts right)
+        }
+
+{- | Sequence a block while carrying each abrupt edge independently.  In
+particular, a break or continue in one conditional arm is not accidentally
+joined with the normal state and mistaken for a loop exit or back-edge.
+-}
+analyzeSequenceFlow :: IntegerFacts -> [CoreStatement] -> StatementFlowFacts
+analyzeSequenceFlow input statements = sequenceFrom input statements
+    where
+        sequenceFrom facts [] = normalFlow facts
+        sequenceFrom facts (statement : remaining) =
+            let current = analyzeStatementFlow facts statement
+                later = sequenceFrom (flowNormalFacts current) remaining
+             in StatementFlowFacts
+                    { flowNormalFacts = flowNormalFacts later
+                    , flowBreakFacts = joinIntegerFacts (flowBreakFacts current) (flowBreakFacts later)
+                    , flowContinueFacts = joinIntegerFacts (flowContinueFacts current) (flowContinueFacts later)
+                    , flowReturnFacts = joinIntegerFacts (flowReturnFacts current) (flowReturnFacts later)
+                    }
 
 -- At control-flow joins, form an interval hull and retain zero exclusion only
 -- when every continuing path excludes zero. Unreachable arms are identities.
@@ -353,6 +567,12 @@ refineConditionFacts _ _ UnreachableFacts = UnreachableFacts
 refineConditionFacts desired expression facts = refine expression
     where
         refine value = case value of
+            CoreLiteral (CoreBoolean literal) _
+                | literal /= desired -> UnreachableFacts
+            CoreLiteral (CoreInteger literal) valueType
+                | isCoreIntegerType valueType
+                , (literal /= 0) /= desired ->
+                    UnreachableFacts
             CoreVariable name valueType
                 | isCoreIntegerType valueType ->
                     constrainVariable name valueType (if desired then nonzeroConstraint else zeroConstraint) facts
@@ -682,15 +902,3 @@ evaluateIntegerComparison primitive left right = case primitive of
     CoreGreaterThan -> Just (left > right)
     CoreGreaterEqual -> Just (left >= right)
     _ -> Nothing
-
-statementAlwaysReturns :: CoreStatement -> Bool
-statementAlwaysReturns statement = case statement of
-    CoreReturn _ -> True
-    CoreIf _ whenTrue whenFalse ->
-        not (null whenFalse) && statementsAlwaysReturn whenTrue && statementsAlwaysReturn whenFalse
-    _ -> False
-
-statementsAlwaysReturn :: [CoreStatement] -> Bool
-statementsAlwaysReturn [] = False
-statementsAlwaysReturn (statement : remaining) =
-    statementAlwaysReturns statement || statementsAlwaysReturn remaining

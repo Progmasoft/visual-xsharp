@@ -174,21 +174,34 @@ statementFacts knownSymbols pureKnown facts statement = case statement of
                         (False, False) -> joinIntegerFacts afterTrue afterFalse
          in (combineFacts conditionFacts branchFacts, continuationFacts)
     CoreWhile condition body ->
-        let (conditionFacts, _) = expressionFacts knownSymbols pureKnown facts condition
-            (bodyFacts, _) = statementsFacts knownSymbols pureKnown facts body
+        let summary = loopFactSummary facts statement
+            conditionInput = maybe emptyIntegerFacts loopConditionFacts summary
+            bodyInput = maybe emptyIntegerFacts loopBodyFacts summary
+            (conditionFacts, _) = expressionFacts knownSymbols pureKnown conditionInput condition
+            (bodyFacts, _) = statementsFacts knownSymbols pureKnown bodyInput body
             divergence = emptyDirectFacts {directLocalEffect = DivergenceEffect}
-         in (combineFacts divergence (combineFacts conditionFacts bodyFacts), emptyIntegerFacts)
+            afterLoop = maybe emptyIntegerFacts loopExitFacts summary
+         in (combineFacts divergence (combineFacts conditionFacts bodyFacts), afterLoop)
     CoreDoWhile body condition ->
-        let (bodyFacts, _) = statementsFacts knownSymbols pureKnown facts body
-            (conditionFacts, _) = expressionFacts knownSymbols pureKnown emptyIntegerFacts condition
+        let summary = loopFactSummary facts statement
+            bodyInput = maybe emptyIntegerFacts loopBodyFacts summary
+            conditionInput = maybe emptyIntegerFacts loopConditionFacts summary
+            (bodyFacts, _) = statementsFacts knownSymbols pureKnown bodyInput body
+            (conditionFacts, _) = expressionFacts knownSymbols pureKnown conditionInput condition
             divergence = emptyDirectFacts {directLocalEffect = DivergenceEffect}
-         in (combineFacts divergence (combineFacts bodyFacts conditionFacts), emptyIntegerFacts)
+            afterLoop = maybe emptyIntegerFacts loopExitFacts summary
+         in (combineFacts divergence (combineFacts bodyFacts conditionFacts), afterLoop)
     CoreFor condition body update ->
-        let (conditionFacts, _) = expressionFacts knownSymbols pureKnown facts condition
-            (bodyFacts, _) = statementsFacts knownSymbols pureKnown facts body
-            (updateFacts, _) = statementsFacts knownSymbols pureKnown facts update
+        let summary = loopFactSummary facts statement
+            conditionInput = maybe emptyIntegerFacts loopConditionFacts summary
+            bodyInput = maybe emptyIntegerFacts loopBodyFacts summary
+            updateInput = maybe emptyIntegerFacts loopUpdateFacts summary
+            (conditionFacts, _) = expressionFacts knownSymbols pureKnown conditionInput condition
+            (bodyFacts, _) = statementsFacts knownSymbols pureKnown bodyInput body
+            (updateFacts, _) = statementsFacts knownSymbols pureKnown updateInput update
             divergence = emptyDirectFacts {directLocalEffect = DivergenceEffect}
-         in (combineFacts divergence (combineFacts conditionFacts (combineFacts bodyFacts updateFacts)), emptyIntegerFacts)
+            afterLoop = maybe emptyIntegerFacts loopExitFacts summary
+         in (combineFacts divergence (combineFacts conditionFacts (combineFacts bodyFacts updateFacts)), afterLoop)
     CoreBreak -> (emptyDirectFacts, unreachableIntegerFacts)
     CoreContinue -> (emptyDirectFacts, unreachableIntegerFacts)
 

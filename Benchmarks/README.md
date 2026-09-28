@@ -63,3 +63,4 @@ statistical comparisons once it can provide fixed CPU frequency, warm-up policy,
 - `2026-09-24-VXSI-ORC.md` records the first Visual X# Interactive native-cell/JIT lifecycle baseline.
 - `2026-09-27-Project-Artifacts.md` records per-source planning and staged output costs on a Windows development host.
 - `2026-09-27-Loop-Comparisons.md` records the loop-unrolling comparison and a compiler-owned CorePrep loop workload.
+- `2026-09-28-Core-Loop-Integer-Flow.md` records loop-header widening and loop-carried Core fact costs.
