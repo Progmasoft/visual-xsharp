@@ -22,8 +22,6 @@ jobs:
     name: Windows ClangCL libFuzzer
     runs-on: windows-2025-vs2026
     timeout-minutes: 120
-    env:
-      VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -75,10 +73,14 @@ jobs:
 
       - name: Run bounded coverage-guided campaign
         shell: pwsh
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: pwsh
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
@@ -92,8 +94,6 @@ jobs:
     name: ${{ matrix.runner }} Clang libFuzzer
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
-    env:
-      VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
     strategy:
       fail-fast: false
       matrix:
@@ -138,10 +138,14 @@ jobs:
 
       - name: Run bounded coverage-guided campaign
         shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
@@ -155,8 +159,6 @@ jobs:
     name: Ubuntu 26.04 Clang libFuzzer
     runs-on: ubuntu-26.04
     timeout-minutes: 120
-    env:
-      VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -198,10 +200,14 @@ jobs:
 
       - name: Run bounded coverage-guided campaign
         shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
@@ -216,8 +222,6 @@ jobs:
     runs-on: ubuntu-26.04
     container: fedora:43
     timeout-minutes: 120
-    env:
-      VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
     steps:
       - name: Install checkout and compiler prerequisites
         shell: bash
@@ -259,10 +263,14 @@ jobs:
 
       - name: Run bounded coverage-guided campaign
         shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run scripts/develop.go fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
