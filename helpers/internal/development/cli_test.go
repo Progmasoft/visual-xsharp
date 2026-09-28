@@ -40,3 +40,40 @@ func TestCommandTreeRejectsInvalidInputsBeforeExecution(t *testing.T) {
 		}
 	}
 }
+
+func TestFuzzBuildPlansSeparateSmokeAndRuntimeMain(t *testing.T) {
+	for _, configuration := range []string{"fuzz-windows", "fuzz-macos", "fuzz-linux"} {
+		for _, sanitizer := range []string{"", "asan-test"} {
+			smoke, campaign := fuzzBuildArguments(configuration, sanitizer, "/llvm/fuzzer.a")
+			if len(smoke) < 3 || smoke[0] != "build" || campaign[1] != "--config="+configuration {
+				t.Fatalf("invalid build plans: %v / %v", smoke, campaign)
+			}
+			for _, argument := range smoke {
+				if strings.Contains(argument, "fuzzer") || argument == "--config="+configuration {
+					t.Fatalf("smoke unexpectedly links libFuzzer's main: %v", smoke)
+				}
+			}
+			for _, argument := range campaign {
+				if strings.HasSuffix(argument, "_smoke") {
+					t.Fatalf("campaign includes a program that already owns main: %v", campaign)
+				}
+			}
+			drivers := 0
+			for _, argument := range campaign {
+				if strings.HasPrefix(argument, "//Compiler/Fuzzing:") {
+					drivers++
+				}
+			}
+			if drivers != 4 {
+				t.Fatalf("expected four campaign drivers: %v", campaign)
+			}
+			if sanitizer != "" {
+				for _, plan := range [][]string{smoke, campaign} {
+					if !strings.Contains(strings.Join(plan, " "), "--config="+sanitizer) {
+						t.Fatalf("sanitizer missing from plan: %v", plan)
+					}
+				}
+			}
+		}
+	}
+}

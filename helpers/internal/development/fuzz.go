@@ -36,6 +36,28 @@ func macOSFuzzerRuntime(root string) (string, error) {
 	return matches[0], nil
 }
 
+// Smoke programs own main; only the four campaign drivers may link libFuzzer's
+// main. Sharing one global fuzz profile with both groups duplicates main on
+// Linux, where -fsanitize=fuzzer pulls the driver in unconditionally.
+func fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime string) ([]string, []string) {
+	smoke := []string{"build"}
+	campaign := []string{"build", "--config=" + configuration}
+	if sanitizerConfiguration != "" {
+		smoke = append(smoke, "--config="+sanitizerConfiguration)
+		campaign = append(campaign, "--config="+sanitizerConfiguration)
+	}
+	if macRuntime != "" {
+		campaign = append(campaign, "--linkopt="+macRuntime)
+	}
+	smoke = append(smoke, "//Compiler/Fuzzing:wire_fuzz_smoke", "//Compiler/Fuzzing:source_fuzz_smoke")
+	campaign = append(campaign,
+		"//Compiler/Fuzzing:wire_fuzzer",
+		"//Compiler/Fuzzing:lexer_fuzzer",
+		"//Compiler/Fuzzing:parser_fuzzer",
+		"//Compiler/Fuzzing:source_llvm_fuzzer")
+	return smoke, campaign
+}
+
 func runFuzzCampaign(repository string, currentHost host, runner commandRunner, stress bool, asan bool) error {
 	configuration, err := fuzzConfiguration(currentHost)
 	if err != nil {
@@ -82,34 +104,32 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	}
 	wireGenerated := filepath.Join(work, "generated-wire-corpus")
 	smoke := filepath.Join(repository, "bazel-bin", "Compiler", "Fuzzing", "wire_fuzz_smoke"+currentHost.executable)
-	buildTargets := []string{
-		"//Compiler/Fuzzing:wire_fuzz_smoke",
-		"//Compiler/Fuzzing:source_fuzz_smoke",
-		"//Compiler/Fuzzing:wire_fuzzer",
-		"//Compiler/Fuzzing:lexer_fuzzer",
-		"//Compiler/Fuzzing:parser_fuzzer",
-		"//Compiler/Fuzzing:source_llvm_fuzzer",
-	}
-	buildArguments := []string{"build", "--config=" + configuration}
+	sanitizerConfiguration := ""
+	selectedEnvironment := []string(nil)
 	if asan {
 		selected, err := selectSanitizer(currentHost, "address")
 		if err != nil {
 			return err
 		}
-		buildArguments = append(buildArguments, "--config="+selected.config)
+		sanitizerConfiguration = selected.config
+		selectedEnvironment, err = sanitizerEnvironment(currentHost, selected, runner)
+		if err != nil {
+			return err
+		}
 	}
+	macRuntime := ""
 	if currentHost.kind == hostMacOS {
 		runtime, err := macOSFuzzerRuntime(os.Getenv("LLVM_ROOT"))
 		if err != nil {
 			return fmt.Errorf("could not locate macOS libFuzzer runtime; preserved %q: %w", work, err)
 		}
-		buildArguments = append(buildArguments, "--linkopt="+runtime)
+		macRuntime = runtime
 	}
-	buildArguments = append(buildArguments, buildTargets...)
-	if err := runner.Run(repository, nil, bazel, buildArguments...); err != nil {
-		return fmt.Errorf("could not build instrumented fuzz targets; preserved %q: %w", work, err)
+	smokeArguments, campaignArguments := fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime)
+	if err := runner.Run(repository, nil, bazel, smokeArguments...); err != nil {
+		return fmt.Errorf("could not build standalone fuzz smoke targets; preserved %q: %w", work, err)
 	}
-	if err := runner.Run(repository, nil, smoke, "-Write-Corpus", wireGenerated); err != nil {
+	if err := runner.Run(repository, selectedEnvironment, smoke, "-Write-Corpus", wireGenerated); err != nil {
 		return fmt.Errorf("could not export valid wire seeds; preserved %q: %w", work, err)
 	}
 	if err := syncSeedCorpus(wireGenerated, filepath.Join(corpusRoot, "wire")); err != nil {
@@ -119,23 +139,17 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	if err := copyFile(frontendLibrary, filepath.Join(filepath.Dir(smokeSource), filepath.Base(frontendLibrary)), 0o755); err != nil {
 		return fmt.Errorf("could not stage Haskell frontend for source-fuzz smoke: %w", err)
 	}
-	if err := runner.Run(repository, nil, smokeSource); err != nil {
+	if err := runner.Run(repository, selectedEnvironment, smokeSource); err != nil {
 		return fmt.Errorf("source-to-LLVM differential smoke failed; preserved %q: %w", work, err)
+	}
+	// Run smoke tests before changing Bazel's instrumentation configuration and
+	// staging the campaign binaries into the same host output tree.
+	if err := runner.Run(repository, nil, bazel, campaignArguments...); err != nil {
+		return fmt.Errorf("could not build instrumented fuzz targets; preserved %q: %w", work, err)
 	}
 	duration := 30
 	if stress {
 		duration = 900
-	}
-	selectedEnvironment := []string(nil)
-	if asan {
-		selected, err := selectSanitizer(currentHost, "address")
-		if err != nil {
-			return err
-		}
-		selectedEnvironment, err = sanitizerEnvironment(currentHost, selected, runner)
-		if err != nil {
-			return err
-		}
 	}
 	targets := []struct {
 		binary    string
