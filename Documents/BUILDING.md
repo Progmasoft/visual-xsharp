@@ -39,13 +39,13 @@ which provide `xcrun` and the selected Apple SDK. Linux needs the distribution's
 Inspect a machine without changing it:
 
 ```powershell
-go run scripts/prebuild.go check
+go run ./helpers/cmd/prebuild check
 ```
 
 Install missing prerequisites on a supported host:
 
 ```powershell
-go run scripts/prebuild.go install
+go run ./helpers/cmd/prebuild install
 ```
 
 On Windows the bootstrap uses exact winget package identifiers for Git, Go, Bazelisk, LLVM, and Eclipse Temurin JDK 25. GHCup has no
@@ -78,7 +78,7 @@ distribution path rather than immediately under `LLVM_ROOT`.
 The preferred preflight is identical in PowerShell and Unix terminals:
 
 ```powershell
-go run scripts/develop.go doctor
+go run ./helpers/cmd/develop doctor
 ```
 
 Doctor recognizes `LLVM_ROOT/bin/llvm-config` even when that directory is intentionally absent from global `PATH`. On
@@ -100,8 +100,8 @@ The native CLI uses its own typed C++20 command schema. Catch3 is the native tes
 ## Production C++20 build and tests
 
 ```powershell
-go run scripts/develop.go build
-go run scripts/develop.go test
+go run ./helpers/cmd/develop build
+go run ./helpers/cmd/develop test
 ```
 
 `build` compiles `vxs`, `vxsi`, and 16 component-owned test targets (15 Catch3 suites plus the C11 AARC ABI contract).
@@ -112,7 +112,7 @@ suite set on macOS.
 Before creating release artifacts, validate the exact cross-build-system version:
 
 ```powershell
-go run scripts/develop.go version 0.4.0
+go run ./helpers/cmd/develop version 0.4.0
 ```
 
 The check compares `MODULE.bazel`, the changelog heading, the Haskell package, and the Kotlin project runtime using exact
@@ -181,7 +181,7 @@ synchronous callback copies output bytes into C++-owned memory before Haskell re
 Build and validate an install-shaped compiler directory with one command:
 
 ```powershell
-go run scripts/develop.go bundle
+go run ./helpers/cmd/develop bundle
 ```
 
 The command performs both build-system steps deliberately: Bazel produces the C++20 `vxs` driver and Cabal produces the
@@ -246,9 +246,9 @@ general third-party patches in the compiler tree; remove it when the selected up
 Do not memorize Bazel profile names or manually combine compile/link flags. Select the diagnostic by purpose:
 
 ```powershell
-go run scripts/develop.go sanitize address
-go run scripts/develop.go sanitize undefined
-go run scripts/develop.go sanitize thread
+go run ./helpers/cmd/develop sanitize address
+go run ./helpers/cmd/develop sanitize undefined
+go run ./helpers/cmd/develop sanitize thread
 ```
 
 AddressSanitizer is available on Windows, macOS, and Linux. UndefinedBehaviorSanitizer and ThreadSanitizer are exposed on
@@ -258,7 +258,7 @@ being executed, and returns a nonzero status at the first violation. It accepts 
 aliases.
 
 Advanced Bazel options may follow a `--` separator, for example
-`go run scripts/develop.go sanitize address -- --jobs=4`. Platform and sanitizer `--config` values are deliberately
+`go run ./helpers/cmd/develop sanitize address -- --jobs=4`. Platform and sanitizer `--config` values are deliberately
 owned by the command so compile and link instrumentation cannot accidentally diverge.
 
 ## Clean rebuilds
@@ -272,7 +272,7 @@ try { cabal clean } finally { Pop-Location }
 .\ProjectSystem\gradlew.bat -p ProjectSystem clean
 ```
 
-For the native-only cleanup, `go run scripts/develop.go clean` performs an expunging Bazel clean.
+For the native-only cleanup, `go run ./helpers/cmd/develop clean` performs an expunging Bazel clean.
 
 Do not commit `bazel-*`, Cabal `dist-newstyle`, Gradle `.gradle`/`build`, IDE caches, local service state, or compiler-emitted
 artifacts used only for smoke tests. Local compiler bundles below `dist/` are equally reproducible and disposable. Before
@@ -304,7 +304,7 @@ depend on a temporary directory.
 Build the Haskell workspace and confirm the frontend is placed in the layout expected by `vxs`. Installing a same-named
 command globally is not a supported fix because it could mismatch the Core wire contract.
 
-For an install-shaped local layout, prefer `go run scripts/develop.go bundle`; it stages the matching Bazel and Cabal
+For an install-shaped local layout, prefer `go run ./helpers/cmd/develop bundle`; it stages the matching Bazel and Cabal
 outputs together and exercises frontend discovery before reporting success.
 
 ### `xs_lil.dll` or another retired library is requested

@@ -38,10 +38,10 @@ var generatedPaths = []string{
 }
 
 const helpText = `usage:
-  go run scripts/githelper.go update "Commit message"
-  go run scripts/githelper.go clean
-  go run scripts/githelper.go uncom
-  go run scripts/githelper.go help
+  go run ./helpers/cmd/githelper update "Commit message"
+  go run ./helpers/cmd/githelper clean
+  go run ./helpers/cmd/githelper uncom
+  go run ./helpers/cmd/githelper help
 
 commands:
   clean    Stage Git hygiene fixes without committing: untrack generated/ignored files.
@@ -64,10 +64,10 @@ update push:
   git push -u origin <current-branch>
 
 examples:
-  go run scripts/githelper.go update "Fix parser"
-  go run scripts/githelper.go clean
-  go run scripts/githelper.go uncom
-  go run scripts/githelper.go help`
+  go run ./helpers/cmd/githelper update "Fix parser"
+  go run ./helpers/cmd/githelper clean
+  go run ./helpers/cmd/githelper uncom
+  go run ./helpers/cmd/githelper help`
 
 type helperCommand int
 

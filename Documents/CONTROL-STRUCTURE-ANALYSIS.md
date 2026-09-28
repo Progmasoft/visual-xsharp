@@ -240,7 +240,7 @@ The focused native suite covers:
 Run the portable native gate rather than invoking compiler-specific flags directly:
 
 ```powershell
-go run scripts/develop.go test
+go run ./helpers/cmd/develop test
 ```
 
 The gate builds the C++20 implementation with the supported standalone LLVM/ClangCL toolchain on Windows and the

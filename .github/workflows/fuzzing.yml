@@ -75,13 +75,13 @@ jobs:
         shell: pwsh
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz
+        run: go run ./helpers/cmd/develop fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: pwsh
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz-stress --asan
+        run: go run ./helpers/cmd/develop fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -140,13 +140,13 @@ jobs:
         shell: bash
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz
+        run: go run ./helpers/cmd/develop fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: bash
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz-stress --asan
+        run: go run ./helpers/cmd/develop fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -202,13 +202,13 @@ jobs:
         shell: bash
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz
+        run: go run ./helpers/cmd/develop fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: bash
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz-stress --asan
+        run: go run ./helpers/cmd/develop fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -265,13 +265,13 @@ jobs:
         shell: bash
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz
+        run: go run ./helpers/cmd/develop fuzz
       - name: Run nightly AddressSanitizer stress campaign
         if: github.event_name == 'schedule'
         shell: bash
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
-        run: go run scripts/develop.go fuzz-stress --asan
+        run: go run ./helpers/cmd/develop fuzz-stress --asan
       - name: Preserve crashing corpus
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

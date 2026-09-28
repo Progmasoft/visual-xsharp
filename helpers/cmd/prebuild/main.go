@@ -25,9 +25,9 @@ import (
 const prebuildUsage = `Visual X# development-host bootstrap
 
 Usage:
-  go run scripts/prebuild.go check
-  go run scripts/prebuild.go install
-  go run scripts/prebuild.go help
+  go run ./helpers/cmd/prebuild check
+  go run ./helpers/cmd/prebuild install
+  go run ./helpers/cmd/prebuild help
 
 Commands:
   check    Report missing host tools without changing the machine.
@@ -377,7 +377,7 @@ func reportBootstrapState(host bootstrapHost, runner bootstrapRunner) error {
 		fmt.Println("[ready]   Cabal")
 	}
 	if len(missing) != 0 {
-		return errors.New("development host is incomplete; run 'go run scripts/prebuild.go install'")
+		return errors.New("development host is incomplete; run 'go run ./helpers/cmd/prebuild install'")
 	}
 	fmt.Println("\nDevelopment host bootstrap is complete.")
 	return nil
@@ -388,11 +388,11 @@ func reportPostInstallState(host bootstrapHost, runner bootstrapRunner) error {
 	if err := reportBootstrapState(host, runner); err != nil {
 		fmt.Println("\nNew package-manager PATH entries may not be visible to this process yet.")
 		fmt.Println("Open a new terminal, then run:")
-		fmt.Println("  go run scripts/prebuild.go check")
-		fmt.Println("  go run scripts/develop.go doctor")
+		fmt.Println("  go run ./helpers/cmd/prebuild check")
+		fmt.Println("  go run ./helpers/cmd/develop doctor")
 		return errors.New("installation finished, but verification is incomplete in this process; open a new terminal and run prebuild check")
 	}
-	fmt.Println("Run 'go run scripts/develop.go doctor' before the first build.")
+	fmt.Println("Run 'go run ./helpers/cmd/develop doctor' before the first build.")
 	return nil
 }
 

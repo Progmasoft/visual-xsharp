@@ -27,8 +27,8 @@ func main() {
 		fmt.Fprintln(flag.CommandLine.Output(), `Verify the comparative Visual X# example catalogue.
 
 Usage:
-  go run scripts/verify_examples.go [-Root repository-path]
-  go run scripts/verify_examples.go -Help
+  go run ./helpers/cmd/verify-examples [-Root repository-path]
+  go run ./helpers/cmd/verify-examples -Help
 
 The check compares the program names in Examples/README.md with the immediate
 program directories under Examples/ and requires matching .vxs, .cs, .cpp,

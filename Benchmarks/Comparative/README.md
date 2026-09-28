@@ -19,7 +19,7 @@ Google Benchmark and Haskell Criterion suites. Keep compiler flags, CPU power st
 ## Build commands
 
 Run from the repository root after the toolchains are installed. On Windows,
-`go run scripts/optional_packages.go install` installs the .NET 10 SDK and GNU Fortran, and adds `rustc`/`rust-std` to
+`go run ./helpers/cmd/optional-packages install` installs the .NET 10 SDK and GNU Fortran, and adds `rustc`/`rust-std` to
 the active rustup toolchain when one is already installed. It can install the rustup manager with no default toolchain,
 but it never installs or selects a Rust toolchain. `check` reports whether those tools and components are available.
 The comparative benchmark requires Clang++, GHC, Rust, and GNU Fortran, not the .NET SDK.

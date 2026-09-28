@@ -112,8 +112,8 @@ Run the checks appropriate to the changed ownership boundary:
 - Haskell: keep every component on the repository-wide `GHC2024` edition, then run `cabal build all`, `cabal test all`,
   and `cabal check`.
 - Kotlin: `ProjectSystem\gradlew.bat -p ProjectSystem test`.
-- Native: `go run scripts/develop.go test` on an official Windows 10/11 or macOS Sequoia/Tahoe host.
-- Sanitizers: `go run scripts/develop.go sanitize address`; macOS also exposes `undefined` and `thread`.
+- Native: `go run ./helpers/cmd/develop test` on an official Windows 10/11 or macOS Sequoia/Tahoe host.
+- Sanitizers: `go run ./helpers/cmd/develop sanitize address`; macOS also exposes `undefined` and `thread`.
 - C/C++ style: LLVM 23.1.0 `clang-format --dry-run --Werror` over project-owned `.cpp`, `.hpp`, `.hh`, and `.h` files.
 - Documentation: link scan, spelling scan, and `git diff --check`.
 
@@ -125,7 +125,7 @@ configuration.
 Use the repository Go helper for normal updates:
 
 ```powershell
-go run scripts/githelper.go update "Detailed change description"
+go run ./helpers/cmd/githelper update "Detailed change description"
 ```
 
 The helper excludes generated and local-only paths, applies recursive submodule file-mode hygiene, commits, and pushes the

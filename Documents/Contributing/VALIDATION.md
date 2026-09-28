@@ -25,7 +25,7 @@ spelling, and claim checks against current source and public `Spec/` examples.
 
 ## Native C++20 and Interactive
 
-First run `go run scripts/develop.go doctor`; it checks the host and LLVM development tree. During implementation, use
+First run `go run ./helpers/cmd/develop doctor`; it checks the host and LLVM development tree. During implementation, use
 the smallest Bazel target that observes your change, for example:
 
 ```text
@@ -39,15 +39,15 @@ Bazel `build` compiles a test target; it does not execute that target. Before a 
 run the portable repository gate:
 
 ```text
-go run scripts/develop.go test
+go run ./helpers/cmd/develop test
 ```
 
 This builds the compiler and executes 16 native suites: 15 Catch3-based programs plus the C11 AARC ABI caller. Run
-`go run scripts/develop.go sanitize address` for ownership, lifetime, or unsafe-memory changes. On macOS, `undefined`
+`go run ./helpers/cmd/develop sanitize address` for ownership, lifetime, or unsafe-memory changes. On macOS, `undefined`
 and `thread` are additional supported sanitizer modes. If a test crosses Haskell Core into native Xpp/Xmm, run the
 Haskell gate too; native tests alone cannot validate frontend semantics. Decoder changes also need the separate
 [wire mutation smoke](../FUZZING.md), which is not part of the 16 `develop.go test` suites.
-For untrusted decoder changes, run `go run scripts/develop.go fuzz` as well; it exercises a real coverage-guided
+For untrusted decoder changes, run `go run ./helpers/cmd/develop fuzz` as well; it exercises a real coverage-guided
 libFuzzer driver with a temporary seed corpus and preserves crashes for regression tests.
 
 Use LLVM/Clang **23.1.0** `clang-format` on changed project-owned C/C++ files, then check them again:
@@ -98,8 +98,8 @@ Kotlin gate could not run locally; do not present an unverified macOS wrapper co
 For changes to repository Go commands, run the paired source-file tests:
 
 ```text
-go test scripts/develop.go scripts/develop_test.go
-go test scripts/githelper.go scripts/githelper_test.go
+go -C helpers test ./cmd/develop
+go -C helpers test ./cmd/githelper
 ```
 
 For documentation, verify repository-relative links, current command spelling, component ownership, and whether the

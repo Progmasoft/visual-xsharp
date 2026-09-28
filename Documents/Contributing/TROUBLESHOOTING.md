@@ -3,8 +3,8 @@
 
 # Troubleshooting a contributor checkout
 
-Start with the exact failing command and its first meaningful error. Run `go run scripts/prebuild.go check` and
-`go run scripts/develop.go doctor` before changing project files to work around a local installation problem. The
+Start with the exact failing command and its first meaningful error. Run `go run ./helpers/cmd/prebuild check` and
+`go run ./helpers/cmd/develop doctor` before changing project files to work around a local installation problem. The
 [building guide](../BUILDING.md) has the full toolchain contract; this page highlights common first-checkout failures.
 
 ## A submodule directory is empty or Bazel cannot resolve Catch3
@@ -46,13 +46,13 @@ error; do not commit a local binary or change the wrapper URL to an unreviewed m
 ## Bazel builds a test but does not run it
 
 `bazelisk build //...:some_tests` only produces the binary. On Windows, use
-`go run scripts/develop.go test` for the complete native suite; the helper executes binaries directly so a POSIX shell
+`go run ./helpers/cmd/develop test` for the complete native suite; the helper executes binaries directly so a POSIX shell
 is not required for Bazel's ordinary `cc_test` launcher. A green `build` line is not evidence that assertions passed.
 
 ## A stale artifact or generated output affects a result
 
 Check `git status --short`, the command's actual output path, and whether the artifact was produced by the current run.
-Do not make a test depend on an old `bazel-*`, `dist-newstyle`, or Gradle output. `go run scripts/develop.go clean`
+Do not make a test depend on an old `bazel-*`, `dist-newstyle`, or Gradle output. `go run ./helpers/cmd/develop clean`
 removes generated Bazel/Cabal/Gradle output; inspect its documented scope before running it, because it is not a Git
 reset and should not be used to erase unrelated local work. Never delete broad directories outside the checkout as a
 troubleshooting shortcut.

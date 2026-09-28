@@ -11,7 +11,7 @@ import (
 
 // Exercise the exact public invocation, not just the implementation package.
 func TestDeveloperEntrypointDelegatesHelp(t *testing.T) {
-	command := exec.Command("go", "run", "develop.go", "-Help")
+	command := exec.Command("go", "run", ".", "--help")
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("developer help failed: %v\n%s", err, output)

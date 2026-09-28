@@ -30,31 +30,31 @@ occur. External names such as `docs.rs` are unrelated and must not be rewritten.
 
 ## Go repository checks
 
-`scripts/develop.go` is a thin entry point. Its host detection, process execution,
-build/test/benchmark orchestration, cleanup, fuzzing, bundle staging, and release
-validation live in `scripts/internal/development/`. The root Go module contains
-only repository tooling and uses no external Go dependencies. The public command
-remains `go run scripts/develop.go <command>`.
+The independent module is `helpers/go.mod`, with module identity
+`github.com/Progmasoft/visual-xsharp/helpers`. A root `go.work` selects it for
+checkout commands; there is no root `go.mod`. Command entry points live under
+`helpers/cmd/`; reusable developer logic lives under `helpers/internal/`.
+Cobra provides the developer command tree and standard `--help` / `-h` behavior.
+Its exact version and transitive dependencies are recorded in `go.mod` and `go.sum`.
 
-`go run scripts/verify_scripts.go` checks both standalone command/test pairs and
-internal package formatting, line limits, license headers, vet, and unit tests.
-For focused feedback, run `go test ./scripts/internal/development`.
-
-The standalone tools in `scripts/` have standard-library-only test seams. Keep
-their behavior covered without building the compiler or downloading project
-dependencies. Run `gofmt` on changed Go files, then test and vet each tool from
-the repository root:
+`verify-helpers` checks every package's test presence, SPDX headers, file limits,
+formatting, downloaded module integrity, static analysis, and package tests.
+Tests inject process runners so they do not install tools or build the compiler.
 
 ```powershell
-gofmt -d scripts/verify_examples.go scripts/verify_examples_test.go
-gofmt -d scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
-go test scripts/verify_examples.go scripts/verify_examples_test.go
-go test scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
-go vet scripts/verify_examples.go scripts/verify_examples_test.go
-go vet scripts/verify_benchmarks.go scripts/verify_benchmarks_test.go
-go run scripts/verify_examples.go -Root .
-go run scripts/verify_benchmarks.go -Root .
+go run ./helpers/cmd/verify-helpers
+go -C helpers test ./...
+go -C helpers vet ./...
+go -C helpers test ./internal/development
+go run ./helpers/cmd/repo-info --json
+go run ./helpers/cmd/verify-examples -Root .
+go run ./helpers/cmd/verify-benchmarks -Root .
 ```
+
+For module-only validation without the workspace, set `GOWORK=off` and run
+`go -C helpers test ./...`. Module-wide coverage uses one profile containing
+command packages and internal implementation packages; it does not substitute
+entry-point file coverage for the developer implementation.
 
 `verify_examples.go` checks that every program listed in `Examples/README.md`
 has its directory and the expected Visual X#, C#, C++, Java, and Rust source
@@ -114,8 +114,8 @@ Initialize recursive submodules and make the standalone LLVM development environ
 
 ```powershell
 git submodule update --init --recursive
-go run scripts/develop.go doctor
-go run scripts/develop.go test
+go run ./helpers/cmd/develop doctor
+go run ./helpers/cmd/develop test
 ```
 
 The command executes 18 Catch3 binaries and one C11 ABI contract executable on
@@ -142,7 +142,7 @@ labels shorten iteration, but they do not replace the full native gate. See
 Run native memory diagnostics through the same entry point:
 
 ```powershell
-go run scripts/develop.go sanitize address
+go run ./helpers/cmd/develop sanitize address
 ```
 
 macOS and Linux additionally support `sanitize undefined` and `sanitize thread`. Each sanitizer instruments both compilation and
@@ -156,7 +156,7 @@ bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
 .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
 ```
 
-The separate `fuzzing.yml` workflow runs `go run scripts/develop.go fuzz`, a 30-second coverage-guided libFuzzer
+The separate `fuzzing.yml` workflow runs `go run ./helpers/cmd/develop fuzz`, a 30-second coverage-guided libFuzzer
 campaign on Windows, macOS, Ubuntu, and Fedora. See [Fuzzing](FUZZING.md) for the oracle, resource bounds, corpus,
 crash artifacts, and current limits.
 
@@ -405,7 +405,7 @@ additional failure mode: the public driver and its matching private frontend may
 that boundary with:
 
 ```powershell
-go run scripts/develop.go bundle
+go run ./helpers/cmd/develop bundle
 ```
 
 This is more than an archive or copy test. A passing run proves that the staged `vxs` reports the checkout's compiler
@@ -447,7 +447,7 @@ packages on every pull request and push. Doxygen warnings are errors; the Haddoc
 coverage and fails if any public declaration lacks documentation. Run the same check locally with:
 
 ```powershell
-go run scripts/verify_docs.go
+go run ./helpers/cmd/verify-docs
 ```
 
 For documentation-only changes:

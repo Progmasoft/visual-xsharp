@@ -20,8 +20,8 @@ import (
 const optionalPackagesUsage = `Optional Visual X# toolchains
 
 Usage:
-  go run scripts/optional_packages.go install
-  go run scripts/optional_packages.go check
+  go run ./helpers/cmd/optional-packages install
+  go run ./helpers/cmd/optional-packages check
 
 Commands:
   install  Install the .NET 10 SDK and GNU Fortran, plus rustup components.
@@ -200,7 +200,7 @@ func checkOptionalPackages(runner packageRunner) error {
 		fmt.Printf("READY    %s: %s [%s]\n", item.name, firstMatchingLine(version, item.versionPattern), path)
 	}
 	if len(missing) != 0 {
-		return fmt.Errorf("%d optional toolchain(s) missing; run `go run scripts/optional_packages.go install`", len(missing))
+		return fmt.Errorf("%d optional toolchain(s) missing; run `go run ./helpers/cmd/optional-packages install`", len(missing))
 	}
 	return nil
 }
@@ -294,7 +294,7 @@ func installOptionalPackagesForOS(runner packageRunner, goos string) error {
 	if len(failures) != 0 {
 		return fmt.Errorf("some installations failed:\n- %s", strings.Join(failures, "\n- "))
 	}
-	fmt.Println("Installation commands completed. Open a new terminal, then run `go run scripts/optional_packages.go check`.")
+	fmt.Println("Installation commands completed. Open a new terminal, then run `go run ./helpers/cmd/optional-packages check`.")
 	return nil
 }
 

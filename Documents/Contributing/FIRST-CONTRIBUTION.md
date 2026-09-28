@@ -43,12 +43,12 @@ Official development hosts are Windows 10/11 and macOS Sequoia/Tahoe. First insp
 anything:
 
 ```text
-go run scripts/prebuild.go check
-go run scripts/develop.go doctor
+go run ./helpers/cmd/prebuild check
+go run ./helpers/cmd/develop doctor
 ```
 
 The [building guide](../BUILDING.md) explains Bazelisk, standalone Clang/LLD, LLVM development files, GHC/Cabal, JDK 25,
-and platform SDK requirements. `go run scripts/prebuild.go install` can install missing tools on a supported host, but it
+and platform SDK requirements. `go run ./helpers/cmd/prebuild install` can install missing tools on a supported host, but it
 changes your machine; review its output and choose when to run it. Reopen the terminal after installation. Set `LLVM_ROOT`
 locally or put `llvm-config` on `PATH`; do not add your machine's absolute path to tracked build files.
 
@@ -81,6 +81,6 @@ Review the changed-file list for caches, generated artifacts, private notes, and
 English message and push your feature branch to your fork. Open a pull request against `Progmasoft/visual-xsharp:main`.
 The [PR guide](PULL-REQUESTS.md) explains the evidence reviewers need and how to handle CI or a missing local tool.
 
-The repository's `scripts/githelper.go update` command is a maintainer convenience: it stages, commits, and pushes the
+The repository's `helpers/cmd/githelper/main.go update` command is a maintainer convenience: it stages, commits, and pushes the
 *current branch* to `origin`. External contributors may use ordinary Git commands instead; never run the helper without
 checking which repository and branch `origin` names.

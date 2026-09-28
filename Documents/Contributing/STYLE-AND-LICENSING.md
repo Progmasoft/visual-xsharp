@@ -18,7 +18,7 @@ pattern. This page gives external contributors the high-impact rules that format
   `com.progmasoft.visual.xsharp.*`.
 - Tests and fixtures live next to their owning component, not in a new root `tests/` bucket. Build targets list their
   owned sources explicitly; do not add a broad recursive glob merely to avoid editing a BUILD file.
-- The repository's Go automation lives in `scripts/`. Do not add a second build graph or a new scripting language for
+- The repository's Go developer tooling lives in `helpers/`. Do not add a second build graph or a new scripting language for
   a routine project command.
 
 The checked-in `.clang-format` file requires LLVM/Clang 23.1.0, uses an 80-column limit, and controls mechanical C++

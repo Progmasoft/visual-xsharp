@@ -24,8 +24,8 @@ func main() {
 		fmt.Fprintln(flag.CommandLine.Output(), `Verify the committed benchmark-results index.
 
 Usage:
-  go run scripts/verify_benchmarks.go [-Root repository-path]
-  go run scripts/verify_benchmarks.go -Help
+  go run ./helpers/cmd/verify-benchmarks [-Root repository-path]
+  go run ./helpers/cmd/verify-benchmarks -Help
 
 Every root-level benchmark result Markdown file must be linked exactly once from
 Benchmarks/README.md, and every result link must resolve to a report file.`)

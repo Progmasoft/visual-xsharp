@@ -83,9 +83,11 @@ jobs:
         if: matrix.language == 'go'
         shell: pwsh
         run: |
-          go run scripts/verify_scripts.go
+          go -C helpers build -a ./...
+          if ($LASTEXITCODE -ne 0) { throw "CodeQL Go helper extraction build failed" }
+          go run ./helpers/cmd/verify-helpers
           if ($LASTEXITCODE -ne 0) {
-            throw "CodeQL Go extraction failed while validating scripts/"
+            throw "CodeQL Go extraction failed while validating helpers/"
           }
 
       - name: Analyze

@@ -60,14 +60,14 @@ Repository configuration does not contain a machine-specific LLVM installation p
 On a new supported machine, the Go bootstrap can report or install the host toolchain:
 
 ```powershell
-go run scripts/prebuild.go check
-go run scripts/prebuild.go install
+go run ./helpers/cmd/prebuild check
+go run ./helpers/cmd/prebuild install
 ```
 
 Windows installation uses exact winget package identities, including Temurin JDK 25, plus the official GHCup bootstrap. macOS uses Homebrew and the
 Xcode Command Line Tools installer. Ubuntu/Fedora use apt/dnf and GHCup; enable Adoptium's signed repository before
 installing Temurin 25 on Linux. The Windows SDK/CRT workload supplies link resources only; Visual X# still selects
-ClangCL and LLD. Open a new terminal after installation, then run `go run scripts/develop.go doctor`.
+ClangCL and LLD. Open a new terminal after installation, then run `go run ./helpers/cmd/develop doctor`.
 
 ## Build
 
@@ -81,12 +81,12 @@ The portable developer command detects the host, checks its toolchain, and keeps
 the normal workflow:
 
 ```powershell
-go run scripts/develop.go doctor
-go run scripts/develop.go version 0.4.0
-go run scripts/develop.go build
-go run scripts/develop.go test
-go run scripts/develop.go benchmark
-go run scripts/develop.go bundle
+go run ./helpers/cmd/develop doctor
+go run ./helpers/cmd/develop version 0.4.0
+go run ./helpers/cmd/develop build
+go run ./helpers/cmd/develop test
+go run ./helpers/cmd/develop benchmark
+go run ./helpers/cmd/develop bundle
 ```
 
 The same commands run from macOS and Linux terminals. Direct `bazelisk build //Compiler/...` remains supported and selects the host

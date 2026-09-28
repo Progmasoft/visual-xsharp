@@ -47,8 +47,8 @@ jobs:
 
       - name: Test documentation coverage gate
         shell: bash
-        run: go test scripts/verify_docs.go scripts/verify_docs_test.go
+        run: go -C helpers test ./cmd/verify-docs
 
       - name: Verify public API documentation
         shell: bash
-        run: go run scripts/verify_docs.go
+        run: go run ./helpers/cmd/verify-docs

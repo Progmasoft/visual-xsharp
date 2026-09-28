@@ -59,14 +59,14 @@ jobs:
       - name: Verify toolchain and Go helpers
         shell: bash
         run: |
-          go run scripts/develop.go doctor
-          go run scripts/verify_scripts.go
-          go run scripts/verify_examples.go
-          go run scripts/verify_benchmarks.go
+          go run ./helpers/cmd/develop doctor
+          go run ./helpers/cmd/verify-helpers
+          go run ./helpers/cmd/verify-examples
+          go run ./helpers/cmd/verify-benchmarks
 
       - name: Build and run native compiler suites
         shell: bash
-        run: go run scripts/develop.go test
+        run: go run ./helpers/cmd/develop test
 
       - name: Exercise wire decoder mutations
         shell: bash
@@ -76,4 +76,4 @@ jobs:
 
       - name: Test with AddressSanitizer
         shell: bash
-        run: go run scripts/develop.go sanitize address
+        run: go run ./helpers/cmd/develop sanitize address

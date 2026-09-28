@@ -210,7 +210,17 @@ namespace Visual::XSharp::Cli::Frontend
             ~SharedFrontend()
             {
                 if (initialized_ && shutdown_ != nullptr)
+                {
                     shutdown_();
+                    // This is a process-owned runtime, not a reloadable plugin.
+                    // Keep its DSO and dependencies mapped until process exit:
+                    // GHC/base retain process-lifetime allocator caches after
+                    // hs_exit. Unmapping their roots turns those bounded caches
+                    // into unreachable allocations at LeakSanitizer teardown.
+                    // The normal leak check stays enabled and can still inspect
+                    // the mapped allocator and any genuinely lost allocations.
+                    return;
+                }
                 Close();
             }
 

@@ -177,7 +177,7 @@ bazelisk build //Interactive:vxsi `
 ```
 
 On Windows, execute the generated test binaries directly from PowerShell rather than relying on Bazel's POSIX shell test
-launcher. The root `scripts/develop.go test` command includes the Interactive and ORC suites in the complete native matrix.
+launcher. The root `helpers/cmd/develop/main.go test` command includes the Interactive and ORC suites in the complete native matrix.
 The bundle command additionally builds the Cabal frontend, stages all three executables, and performs these integration
 checks:
 

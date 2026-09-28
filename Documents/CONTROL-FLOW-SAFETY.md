@@ -460,7 +460,7 @@ cabal test visual-xsharp-compiler-tests --test-show-details=direct
 
 Repository-wide verification remains required before publishing a compiler
 change. Focused commands shorten iteration; they do not replace the full gate.
-`go run scripts/develop.go test` builds and executes all three programs as part
+`go run ./helpers/cmd/develop test` builds and executes all three programs as part
 of the native repository gate.
 
 ## Review checklist

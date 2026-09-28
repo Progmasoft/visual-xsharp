@@ -6,34 +6,10 @@ package development
 import (
 	"errors"
 	"fmt"
+	"github.com/Progmasoft/visual-xsharp/helpers/internal/repository"
 	"os"
-	"path/filepath"
 	"strings"
 )
-
-const usage = `Visual X# native developer command
-
-Usage:
-  go run scripts/develop.go <command> [arguments] [-- <Bazel options>]
-
-Commands:
-  doctor    Explain whether this host has the required native toolchain.
-  build     Build the compiler and every native contract suite.
-  benchmark Build and run the native and Haskell compiler benchmarks.
-  bundle    Build, stage, checksum, and smoke-test a host distribution.
-  fuzz      Run short wire, lexer, parser, and LLVM-source fuzz campaigns.
-  fuzz-stress [--asan] Run long per-target fuzz campaigns; --asan instruments C++.
-  incremental-clean-build Clean Bazel outputs, preserve downloads, and rebuild.
-  cold-clean-build Expunge Bazel state and perform a cold compiler build.
-  version <major.minor.patch[.revision]> Validate release metadata and vxs.
-  test      Build and execute every native contract suite.
-  sanitize <address|undefined|thread> Rebuild and execute instrumented suites.
-  clean     Remove Bazel, Cabal, and Gradle generated build output.
-
-The supported hosts are Windows 10/11, macOS 15/26, Ubuntu 26.04 LTS, and
-Fedora 43 (the Fedora N-1 tier as of September 2026). Platform selection is
-automatic. Bazel options after -- are an escape
-hatch for diagnostics; ordinary development does not require --config.`
 
 // Main runs the developer command with the host process streams.
 func Main() {
@@ -44,12 +20,7 @@ func Main() {
 	}
 }
 
-func run(arguments []string, runner commandRunner) error {
-	if len(arguments) == 0 || isHelp(arguments[0]) {
-		fmt.Println(usage)
-		return nil
-	}
-
+func executeWorkflow(arguments []string, runner commandRunner) error {
 	commandArguments, bazelArguments, err := splitArguments(arguments[1:])
 	if err != nil {
 		return err
@@ -174,12 +145,7 @@ func run(arguments []string, runner commandRunner) error {
 }
 
 func isHelp(argument string) bool {
-	switch strings.ToLower(argument) {
-	case "help", "-help", "--help", "-h":
-		return true
-	default:
-		return false
-	}
+	return argument == "--help" || argument == "-h"
 }
 
 func splitArguments(arguments []string) ([]string, []string, error) {
@@ -202,14 +168,5 @@ func findRepositoryRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot read the current directory: %w", err)
 	}
-	for {
-		if _, err := os.Stat(filepath.Join(directory, "MODULE.bazel")); err == nil {
-			return directory, nil
-		}
-		parent := filepath.Dir(directory)
-		if parent == directory {
-			return "", errors.New("MODULE.bazel was not found; run this command inside the Visual X# checkout")
-		}
-		directory = parent
-	}
+	return repository.FindRoot(directory)
 }

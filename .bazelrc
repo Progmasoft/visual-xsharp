@@ -41,7 +41,7 @@ build:linux --cxxopt=-Wextra
 build:linux --cxxopt=-Wpedantic
 build:linux --host_cxxopt=-std=c++20
 
-# These profiles are implementation details of scripts/develop.go. Keeping the
+# These profiles are implementation details of helpers/cmd/develop. Keeping the
 # compiler and linker flags here makes sanitizer builds reproducible while the
 # command presents host-aware names and diagnostics to developers.
 build:asan-windows --copt=/fsanitize=address

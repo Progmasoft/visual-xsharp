@@ -21,7 +21,7 @@ the Haskell frontend and C++20 native pipeline:
 Run every benchmark from the repository root:
 
 ```powershell
-go run scripts/develop.go benchmark
+go run ./helpers/cmd/develop benchmark
 ```
 
 The command builds native benchmarks with Bazel's optimized configuration. Criterion uses the package's `-O2` benchmark

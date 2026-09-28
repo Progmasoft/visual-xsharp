@@ -211,13 +211,16 @@ func TestSuccessfulFuzzCleanupStaysInsideItsTemporaryRoot(t *testing.T) {
 }
 
 func TestHelpSpellingsAreAccepted(t *testing.T) {
-	for _, spelling := range []string{"help", "-Help", "--help", "-h"} {
+	for _, spelling := range []string{"--help", "-h"} {
 		if !isHelp(spelling) {
 			t.Fatalf("expected %q to be a help spelling", spelling)
 		}
 	}
 	if isHelp("doctor") {
 		t.Fatal("doctor is not a help spelling")
+	}
+	if isHelp("-Help") {
+		t.Fatal("Go helper help must not inherit the vxs flag spelling")
 	}
 }
 

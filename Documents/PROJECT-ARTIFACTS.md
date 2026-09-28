@@ -255,5 +255,5 @@ bazelisk build //Compiler/Artifact/Tests:source_path_tests `
 ```
 
 The Haskell ownership and wire tests are part of `cabal test all` from the
-`Compiler/` directory. The repository-wide `go run scripts/develop.go test`
+`Compiler/` directory. The repository-wide `go run ./helpers/cmd/develop test`
 also builds and runs the native owner suites on supported hosts.

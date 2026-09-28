@@ -63,9 +63,9 @@ jobs:
           mkdir -p "$report_dir"
           export LLVM_PROFILE_FILE="$report_dir/native-%p-%m.profraw"
 
-          # develop.go owns the exact 16 component suites. Only the build flags
+          # The developer helper owns the component suite matrix. Only build flags
           # differ from the normal native test gate.
-          go run scripts/develop.go test -- \
+          go run ./helpers/cmd/develop test -- \
             --copt=-fprofile-instr-generate \
             --copt=-fcoverage-mapping \
             --linkopt=-fprofile-instr-generate
@@ -171,37 +171,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force coverage/go | Out-Null
-          $coverageFiles = [System.Collections.Generic.List[string]]::new()
-          $scripts = @(Get-ChildItem -LiteralPath scripts -Filter '*.go' -File |
-            Where-Object { $_.Name -notlike '*_test.go' } |
-            Sort-Object -Property Name)
-          if ($scripts.Count -eq 0) {
-            throw "No Go command sources were found under scripts/"
+          $report = Join-Path $env:GITHUB_WORKSPACE "coverage/go/helpers.out"
+          go -C helpers test -covermode=atomic "-coverprofile=$report" ./...
+          if ($LASTEXITCODE -ne 0) { throw "Go helper module coverage failed" }
+          if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
+            throw "No Go helper module coverage report was produced"
           }
-          foreach ($script in $scripts) {
-            $component = $script.BaseName
-            $testPath = Join-Path $script.DirectoryName "${component}_test.go"
-            if (-not (Test-Path -LiteralPath $testPath -PathType Leaf)) {
-              throw "Go command $($script.Name) has no paired test file"
-            }
-            $report = "coverage/go/$component.out"
-            go test -covermode=atomic "-coverprofile=$report" `
-              $script.FullName $testPath
-            if ($LASTEXITCODE -ne 0) {
-              throw "Go coverage tests failed for $component"
-            }
-            if (-not (Test-Path -LiteralPath $report -PathType Leaf)) {
-              throw "No Go coverage report was produced for $component"
-            }
-            $coverageFiles.Add("./$report")
-          }
-          # The thin developer entry point delegates to a package; file-list
-          # coverage alone would leave its actual implementation unmeasured.
-          $internalReport = "coverage/go/development.out"
-          go test -covermode=atomic "-coverprofile=$internalReport" ./scripts/internal/development
-          if ($LASTEXITCODE -ne 0) { throw "Internal developer coverage tests failed" }
-          $coverageFiles.Add("./$internalReport")
-          "CODECOV_GO_FILES=$($coverageFiles -join ',')" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Preserve Go helper coverage for the isolated uploader
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

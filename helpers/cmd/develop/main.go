@@ -4,7 +4,7 @@
 // develop preserves the public script command; focused modules own its behavior.
 package main
 
-import "github.com/Progmasoft/visual-xsharp/scripts/internal/development"
+import "github.com/Progmasoft/visual-xsharp/helpers/internal/development"
 
 func main() {
 	development.Main()

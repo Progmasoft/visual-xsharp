@@ -315,10 +315,19 @@ The public command is `vxs`. A current local distribution also contains the priv
 which runs the lexer-through-Core stages in-process over a C11 ABI. It has no independent public CLI contract and is not a
 substitute for `vxs`.
 
-Keep the driver, shared library, and REPL executable in the layout produced by `go run scripts/develop.go bundle`. The
+Keep the driver, shared library, and REPL executable in the layout produced by `go run ./helpers/cmd/develop bundle`. The
 driver resolves the library relative to its own location rather than searching the current project or accepting an
 arbitrary same-named program from `PATH`. This pairing prevents a frontend with a different Core wire contract from being
 selected accidentally.
+
+The frontend runtime is initialized once and stopped at normal process teardown.
+After shutdown, its successfully loaded shared-library image remains mapped
+until the operating system releases the process. It is not a reloadable plugin:
+GHC/base retain process-lifetime allocator caches in dependent shared images.
+Unloading those images before LeakSanitizer's exit check removes the cache roots
+and prevents useful allocator symbolization. Initialization failures still
+release handles that never started a runtime. Leak detection is not disabled or
+suppressed by this lifetime policy.
 
 The bundle command validates this installed-path behavior by invoking the staged driver, compiling a real `.vxs` input to
 a `.vxse`, and running that output. `SHA256SUMS` and the staged legal files describe the complete local payload; they do not

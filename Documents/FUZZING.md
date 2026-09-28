@@ -40,7 +40,7 @@ that discover new coverage; comparison value profiling helps it cross binary fie
 [libFuzzer corpus and instrumentation model](https://llvm.org/docs/LibFuzzer.html).
 
 ```powershell
-go run scripts/develop.go fuzz
+go run ./helpers/cmd/develop fuzz
 ```
 
 `develop.go` selects the Windows ClangCL, macOS Clang, or Linux Clang profile, builds the corpus generator and instrumented binary,

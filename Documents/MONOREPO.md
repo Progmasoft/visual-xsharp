@@ -89,7 +89,7 @@ the others.
 
 ## Build ownership
 
-Bazel owns top-level native orchestration. `scripts/develop.go` is a thin, portable user interface over that graph for
+Bazel owns top-level native orchestration. `helpers/cmd/develop/main.go` is a thin, portable user interface over that graph for
 host discovery, suite execution, and sanitizers; it defines no targets or dependency edges of its own. Language-specific CI
 jobs call Cabal and Gradle directly, and the repository carries neither CMake configuration nor a second build graph such as
 `just`.
@@ -134,14 +134,16 @@ namespace-to-file mapping on the compiler.
 
 ## Repository boundaries
 
-The root index contains compiler, project system, ecosystem tools, specification, tests, shared headers, and scripts. Local
+The root index contains compiler, project system, ecosystem tools, specification, tests, shared headers, and helpers. Local
 website, IDE, and service directories may be nested beneath the checkout while remaining separate repositories or ignored
 deployment state. A root change must not assume that committing the root automatically commits or deploys those children.
 
-Go is the only language used for repository automation scripts. Portable helpers live directly under `scripts/`; their
-filenames state their purpose instead of introducing one-child language directories. Shell, PowerShell, Java source-file,
-and mixed-language script implementations are not added. Scripts do not become a parallel build orchestrator. Normal
-repository commits and pushes use `githelper.go`, while Bazel, Cabal, and Gradle retain build ownership.
+Go is the only implementation language for developer helpers. The independently
+buildable `helpers/` module owns `cmd/<tool>/` entry points and responsibility-based
+`internal/` packages. The root workspace selects this module without introducing
+a root module or another compiler build graph. Helpers use Cobra where typed
+subcommands and flags are needed. Bazel, Cabal, and Gradle retain build ownership.
+See [Developer helpers](../helpers/README.md) for commands and package boundaries.
 
 CMake may still appear as a project-system DSL plugin. That plugin integrates user projects with CMake; it is not the build
 system for the Visual X# compiler and therefore does not contradict Bazel ownership.
