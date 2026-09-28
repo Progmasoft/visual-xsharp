@@ -54,6 +54,16 @@ jobs:
           go run scripts/verify_examples.go
           go run scripts/verify_benchmarks.go
 
+      - name: Install GHC and Cabal
+        uses: haskell/ghcup-setup@269e121e9e7528761aca5a606a53fe9d04cd6658 # ghcup-setup
+        with:
+          ghc: 9.10.3
+          cabal: 3.16.1.0
+      - name: Resolve frontend package index
+        shell: bash
+        working-directory: Compiler
+        run: cabal update
+
       - name: Build and run native compiler suites
         shell: bash
         run: go run scripts/develop.go test

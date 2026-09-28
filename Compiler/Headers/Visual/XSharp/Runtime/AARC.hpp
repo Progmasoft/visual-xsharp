@@ -10,6 +10,7 @@
 
 namespace Visual::XSharp::Runtime::Aarc
 {
+    /// C ABI version shared by runtime implementation and clients.
     inline constexpr std::uint32_t kAbiVersion = VXS_AARC_ABI_VERSION;
 
     /** Hash a canonical, case-sensitive runtime type name into its stable
@@ -24,25 +25,27 @@ namespace Visual::XSharp::Runtime::Aarc
         return value;
     }
 
+    /// Payload destructor callback used by the stable runtime ABI.
     using Destructor = VxsAarcDestructor;
+    /// Stable C ABI layout describing an AARC-managed payload type.
     using TypeMetadata = VxsAarcTypeMetadata;
 
-    // The control header stays incomplete at the API boundary: C++ callers can
-    // own handles without depending on atomic layout or runtime-private
-    // offsets.
+    /// Opaque runtime control block shared by strong, weak, and unowned
+    /// handles.
     struct ObjectHeader;
 
+    /// C++ wrapper for one retained weak control-block reference.
     struct Weak final
     {
-        // Copying this value bitwise does not retain the control block; use
-        // CopyWeak.
+        /// Opaque block pointer; copy with CopyWeak and release exactly once.
         ObjectHeader *header{};
     };
 
+    /// C++ wrapper for one retained unowned control-block reference.
     struct Unowned final
     {
-        // Copying this value bitwise does not retain the control block; use
-        // CopyUnowned.
+        /// Opaque block pointer; copy with CopyUnowned and release exactly
+        /// once.
         ObjectHeader *header{};
     };
 

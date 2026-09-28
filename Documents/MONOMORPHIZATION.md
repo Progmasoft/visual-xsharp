@@ -329,7 +329,7 @@ arguments do not change this result. The native classifier implements this rule
 through an explicit nominal declaration catalog, and the Haskell frontend now has
 the matching typed classifier. Both scan all siblings so an unresolved parameter
 cannot hide a known reference merely by appearing first. The resolved catalog
-still has to cross the frontend/Core process boundary before ownership lowering
+still has to cross the versioned frontend/Core C ABI before ownership lowering
 can consume it.
 
 Callable templates receive concrete public signatures before closure conversion

@@ -9,14 +9,22 @@
 
 namespace visual_xsharp::core
 {
+    /// CorePrep verifier finding with a stable stage-specific code.
     struct VerificationIssue final
     {
+        /// Stable issue identifier for tooling and diagnostics.
         std::string code;
+        /// Human-readable explanation of the rejected CorePrep construct.
         std::string message;
+        /// Function containing the invalid construct, when applicable.
         SymbolId function{};
+        /// Block containing the invalid construct, when applicable.
         BlockId block{};
     };
 
+    /// Validate CorePrep invariants before adaptation to Xpp.
+    /// @param module CorePrep module to verify.
+    /// @return Ordered issues; an empty vector denotes valid CorePrep.
     [[nodiscard]] auto
     verify(const CorePrepModule &module) -> std::vector<VerificationIssue>;
 } // namespace visual_xsharp::core

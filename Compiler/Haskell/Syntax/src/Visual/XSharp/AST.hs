@@ -1,6 +1,11 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+{- | Public syntax and phase-indexed tree model shared by the Visual X#
+frontend. Parsed trees retain source spelling, renamed trees attach stable
+identities, resolved trees attach declarations, and typed trees attach
+semantic types without changing the syntax structure.
+-}
 module Visual.XSharp.AST
     ( Identifier (..)
     , QualifiedName (..)
@@ -48,19 +53,24 @@ module Visual.XSharp.AST
     , namedType
     ) where
 
+-- | One source-language identifier in its original spelling.
 newtype Identifier = Identifier {identifierText :: String}
     deriving (Eq, Ord, Read, Show)
 
+-- | Name split into ordered namespace, type, and member segments.
 newtype QualifiedName = QualifiedName {qualifiedNameParts :: [Identifier]}
     deriving (Eq, Ord, Read, Show)
 
+-- | Zero-based source coordinate used by parser and diagnostic spans.
 data SourcePosition = SourcePosition {sourceLine :: Int, sourceColumn :: Int}
     deriving (Eq, Ord, Read, Show)
 
+-- | Half-open source range with the identity of the source file.
 data SourceSpan = SourceSpan
     {sourceFile :: FilePath, sourceStart :: SourcePosition, sourceEnd :: SourcePosition}
     deriving (Eq, Ord, Read, Show)
 
+-- | Type expression written in source before semantic resolution.
 data TypeSyntax
     = ExplicitType Identifier
     | QualifiedTypeSyntax QualifiedName [TemplateArgumentSyntax]
@@ -72,10 +82,12 @@ data TypeSyntax
     | AutoType
     deriving (Eq, Ord, Read, Show)
 
--- Template values live in type syntax, but they are not types.  Keeping this
--- deliberately small expression tree prevents a call, closure, or other
--- runtime-only expression from leaking into a specialization identity.  The
--- type checker evaluates the tree exactly before Core is constructed.
+{- | Restricted compile-time expression used for generic value arguments.
+
+It deliberately excludes calls, closures, and other runtime expressions,
+preventing runtime behavior from leaking into a specialization identity.
+The type checker evaluates this tree before constructing Core.
+-}
 data TemplateValueSyntax
     = TemplateIntegerSyntax SourceSpan Integer
     | TemplateCharacterSyntax SourceSpan Integer
@@ -85,19 +97,24 @@ data TemplateValueSyntax
     | TemplateBinarySyntax SourceSpan BinaryOperator TemplateValueSyntax TemplateValueSyntax
     deriving (Eq, Ord, Read, Show)
 
+-- | One generic argument, preserving the distinction between types and values.
 data TemplateArgumentSyntax
     = TemplateTypeSyntax TypeSyntax
     | TemplateValueArgumentSyntax TemplateValueSyntax
     deriving (Eq, Ord, Read, Show)
+
+-- | Source access modifier recorded on a declaration.
 data Access = DefaultAccess | PublicAccess | InternalAccess | ProtectedAccess | PrivateAccess
     deriving (Eq, Ord, Read, Show)
 
+-- | Module-level namespace and ordered declarations, parameterized by phase.
 data SyntaxTree name annotation = SyntaxTree
     { syntaxNamespace :: Maybe QualifiedName
     , syntaxDeclarations :: [Declaration name annotation]
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Type, function, or generic type declaration in a syntax tree.
 data Declaration name annotation
     = TypeDeclaration
         { declarationSpan :: SourceSpan
@@ -124,10 +141,11 @@ data Declaration name annotation
         }
     deriving (Eq, Ord, Read, Show)
 
--- Template declarations retain parameter kind, pack status, and defaults all
--- the way through TypedAST.  They are semantic declarations rather than a
--- parser-only prefix: renaming gives every parameter a stable symbol and type
--- checking uses those symbols when a body mentions T or a fixed-array size N.
+{- | Generic parameter with its declaration span, category, pack flag, and default.
+
+Template metadata remains present through @TypedAST@: renaming assigns each
+parameter a stable symbol and type checking uses it in bodies and array sizes.
+-}
 data TemplateParameter name annotation = TemplateParameter
     { templateParameterSpan :: SourceSpan
     , templateParameterName :: name
@@ -138,32 +156,38 @@ data TemplateParameter name annotation = TemplateParameter
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Generic parameter category: type, value, or nested template signature.
 data TemplateParameterKind
     = TemplateTypeParameter
     | TemplateValueParameterKind TypeSyntax
     | TemplateTemplateParameter [TemplateParameterShape]
     deriving (Eq, Ord, Read, Show)
 
--- A nested template-template signature has no binding names in the source
--- examples.  Its shape therefore describes accepted argument categories
--- without manufacturing symbols that could accidentally enter lexical scope.
+{- | Anonymous shape of one parameter in a template-template signature.
+
+These shapes describe accepted argument categories without introducing
+artificial names into lexical scope.
+-}
 data TemplateParameterShape = TemplateParameterShape
     { templateParameterShapeKind :: TemplateParameterShapeKind
     , templateParameterShapeIsPack :: Bool
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Accepted argument category at one level of a template-template signature.
 data TemplateParameterShapeKind
     = TemplateTypeParameterShape
     | TemplateValueParameterShape TypeSyntax
     | TemplateTemplateParameterShape [TemplateParameterShape]
     deriving (Eq, Ord, Read, Show)
 
+-- | Default argument attached to a generic parameter.
 data TemplateDefault
     = TemplateTypeDefault TypeSyntax
     | TemplateValueDefault TemplateValueSyntax
     deriving (Eq, Ord, Read, Show)
 
+-- | Callable parameter with source location and unresolved type syntax.
 data Parameter name annotation = Parameter
     { parameterSpan :: SourceSpan
     , parameterName :: name
@@ -172,22 +196,27 @@ data Parameter name annotation = Parameter
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Ordered statement sequence representing a lexical block.
 newtype Block name annotation = Block {blockStatements :: [Statement name annotation]}
     deriving (Eq, Ord, Read, Show)
 
+-- | Mutability requested for a local or foreach binding.
 data BindingKind = ImmutableBinding | MutableBinding
     deriving (Eq, Ord, Read, Show)
 
--- Capture modes are source-level ownership requests.  StrongCapture is also
--- used for ordinary implicit and explicit captures; the type checker later
--- refines its storage behavior from the captured value category.
+{- | Ownership behavior requested for a callable capture.
+
+'StrongCapture' is also the default for ordinary captures; type checking
+refines storage according to the captured value category.
+-}
 data CaptureMode = StrongCapture | WeakCapture | UnownedCapture
     deriving (Eq, Ord, Read, Show)
 
--- A capture binding owns a name visible inside the callable and an optional
--- initializer evaluated in the surrounding scope.  During parsing the
--- initializer is absent for `[value]`; the renamer materializes the outer-name
--- read so later stages never need to recover lexical spelling.
+{- | Captured binding with an inner name and an optional outer-scope initializer.
+
+A shorthand capture initially has no initializer. The renamer materializes
+its outer-name read so later phases do not need to recover source spelling.
+-}
 data Capture name annotation = Capture
     { captureSpan :: SourceSpan
     , captureMode :: CaptureMode
@@ -197,11 +226,13 @@ data Capture name annotation = Capture
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Expression-bodied or block-bodied callable body.
 data CallableBody name annotation
     = CallableExpressionBody (Expression name annotation)
     | CallableBlockBody (Block name annotation)
     deriving (Eq, Ord, Read, Show)
 
+-- | Statement forms supported by the parsed and typed Visual X# trees.
 data Statement name annotation
     = BindingStatement SourceSpan BindingKind TypeSyntax name annotation (Expression name annotation)
     | AssignmentStatement SourceSpan name annotation (Expression name annotation)
@@ -229,6 +260,7 @@ data Statement name annotation
     | ExpressionStatement SourceSpan (Expression name annotation) Bool
     deriving (Eq, Ord, Read, Show)
 
+-- | Expression forms retained from parsing through type checking.
 data Expression name annotation
     = NameExpression SourceSpan name annotation
     | LiteralExpression SourceSpan Literal annotation
@@ -249,9 +281,11 @@ data Expression name annotation
         annotation
     deriving (Eq, Ord, Read, Show)
 
--- Patterns are a separate syntax category. In particular, `and` and `or`
--- compose tests below `is`; they are never alternate spellings for the eager
--- or short-circuit Boolean operators in Expression.
+{- | Pattern tested by an @is@ expression.
+
+Pattern @and@ and @or@ combine tests beneath @is@; they are distinct from
+both eager and short-circuit Boolean operators in 'Expression'.
+-}
 data Pattern name annotation
     = WildcardPattern SourceSpan annotation
     | NullPattern SourceSpan annotation
@@ -263,6 +297,7 @@ data Pattern name annotation
     | OrPattern SourceSpan (Pattern name annotation) (Pattern name annotation) annotation
     deriving (Eq, Ord, Read, Show)
 
+-- | Relational comparison used by a relational pattern.
 data RelationalPatternOperator
     = PatternLessThan
     | PatternLessEqual
@@ -272,6 +307,7 @@ data RelationalPatternOperator
     | PatternNotEqual
     deriving (Eq, Ord, Read, Show)
 
+-- | Literal token value after lexical escape decoding.
 data Literal
     = IntegerLiteral Integer
     | FloatingLiteral String
@@ -281,9 +317,11 @@ data Literal
     | UnitLiteral
     deriving (Eq, Ord, Read, Show)
 
+-- | Unary operator recognized by the parser.
 data UnaryOperator = UnaryPlus | UnaryNegate | LogicalNot | BitwiseNot
     deriving (Eq, Ord, Read, Show)
 
+-- | Binary arithmetic, comparison, bitwise, or Boolean operator.
 data BinaryOperator
     = Add
     | Subtract
@@ -307,27 +345,36 @@ data BinaryOperator
     | LogicalOr
     deriving (Eq, Ord, Read, Show)
 
+-- | Parser output with source identifiers and no semantic annotations.
 newtype ParsedAST = ParsedAST {parsedSyntaxTree :: SyntaxTree Identifier ()}
     deriving (Eq, Ord, Read, Show)
 
--- Zero is reserved as the wire/native "no symbol" sentinel.  The renamer
--- allocates positive identities; negative values exist only long enough for
--- name resolution to diagnose a missing source name.
+{- | Renamed source name carrying its preserved spelling and unique identity.
+
+Zero is reserved as the native/wire no-symbol sentinel. The renamer assigns
+positive identities; negative identities exist only to diagnose unresolved
+names during resolution.
+-}
 data RenamedName = RenamedName {renamedSpelling :: Identifier, renamedUnique :: Int}
     deriving (Eq, Ord, Read, Show)
 
+-- | Syntax tree after declarations and references receive unique identities.
 newtype RenamedAST = RenamedAST {renamedSyntaxTree :: SyntaxTree RenamedName ()}
     deriving (Eq, Ord, Read, Show)
 
+-- | Stable numeric symbol identity used by resolved and native representations.
 newtype SymbolId = SymbolId {symbolIdValue :: Int}
     deriving (Eq, Ord, Read, Show)
 
+-- | Reference to a resolved declaration with its original spelling.
 data ResolvedName = ResolvedName {resolvedSymbol :: SymbolId, resolvedSpelling :: Identifier}
     deriving (Eq, Ord, Read, Show)
 
+-- | Syntax tree whose names point to declarations but are not yet type-checked.
 newtype ResolvedAST = ResolvedAST {resolvedSyntaxTree :: SyntaxTree ResolvedName ()}
     deriving (Eq, Ord, Read, Show)
 
+-- | Semantic type attached to resolved expressions and declarations.
 data Type
     = NamedType QualifiedName [TemplateArgument]
     | FunctionType [Type] Type
@@ -335,18 +382,21 @@ data Type
     | ErrorType
     deriving (Eq, Ord, Read, Show)
 
--- A template argument is either a type or a compile-time value.  This is an
--- ordered sum rather than two parallel lists: `Example<int, 4, String>` and
--- `Example<int, String, 4>` must never acquire the same specialization key.
+{- | Evaluated generic argument, retaining its original position in the list.
+
+The ordered sum keeps @Example<int, 4, String>@ distinct from
+@Example<int, String, 4>@ when forming specialization identities.
+-}
 data TemplateArgument
     = TypeTemplateArgument Type
     | ValueTemplateArgument TemplateValue
     deriving (Eq, Ord, Read, Show)
 
--- Values reaching Core are already evaluated and canonical.  A parameter is
--- retained for future generic bodies; concrete fixed-array sugar currently
--- produces only IntegerTemplateValue.  Integer is intentionally unbounded so
--- the frontend does not inherit the host machine's word size.
+{- | Canonical value accepted as a generic argument after type checking.
+
+Integers are unbounded so specialization does not depend on host word size.
+Parameter references remain representable for generic bodies.
+-}
 data TemplateValue
     = IntegerTemplateValue Integer
     | BooleanTemplateValue Bool
@@ -354,15 +404,30 @@ data TemplateValue
     | TemplateValueParameter ResolvedName
     deriving (Eq, Ord, Read, Show)
 
+-- | Resolved syntax tree with semantic types attached to its annotations.
 newtype TypedAST = TypedAST {typedSyntaxTree :: SyntaxTree ResolvedName Type}
     deriving (Eq, Ord, Read, Show)
 
+-- | Construct a one-segment nominal type without generic arguments.
 namedType :: String -> Type
 namedType value = NamedType (QualifiedName [Identifier value]) []
 
-boolType, intType, unitType, voidType, stringType :: Type
+-- | Canonical built-in Boolean type.
+boolType :: Type
 boolType = namedType "bool"
+
+-- | Canonical built-in signed integer type used by the current frontend.
+intType :: Type
 intType = namedType "int"
+
+-- | Canonical unit type for expressions that produce no value.
+unitType :: Type
 unitType = namedType "unit"
+
+-- | Canonical void type for procedure declarations and return checking.
+voidType :: Type
 voidType = namedType "void"
+
+-- | Canonical standard string type.
+stringType :: Type
 stringType = namedType "String"

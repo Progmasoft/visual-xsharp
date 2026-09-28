@@ -30,13 +30,19 @@ extern "C"
      * implementation. */
     typedef struct VxsAarcTypeMetadata
     {
-        uint32_t abiVersion;
-        uint32_t flags;
-        uint64_t typeIdentity;
-        size_t instanceSize;
-        size_t instanceAlignment;
-        VxsAarcDestructor destructor;
-        const char *typeName;
+        uint32_t abiVersion; /**< Must equal VXS_AARC_ABI_VERSION. */
+        uint32_t flags; /**< Reserved layout flags; pass zero unless defined by
+                           this ABI. */
+        uint64_t typeIdentity; /**< Stable identity used for exact runtime type
+                                  tests. */
+        size_t instanceSize;   /**< Payload size in bytes, excluding the control
+                                  header. */
+        size_t instanceAlignment; /**< Required power-of-two alignment of the
+                                     payload. */
+        VxsAarcDestructor destructor; /**< Runs exactly once after the final
+                                         strong release. */
+        const char *typeName; /**< NUL-terminated diagnostic name valid for
+                                 metadata lifetime. */
     } VxsAarcTypeMetadata;
 
     /** Return the ABI version implemented by this runtime binary. */

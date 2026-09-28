@@ -25,35 +25,49 @@ import Visual.XSharp.Resolver.NameResolution
 import Visual.XSharp.Resolver.Renamer
 import Visual.XSharp.TypeChecker
 
+-- | Source identity and decoded text supplied to the frontend.
 data CompilerInput = CompilerInput
     { compilerSourceFile :: FilePath
+    -- ^ Path used in diagnostics and source spans.
     , compilerSourceText :: String
+    -- ^ Source characters after caller-owned decoding.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Shared lexer and parser products, before name or type analysis.
 data SyntaxArtifacts = SyntaxArtifacts
     { syntaxTokens :: [Token]
+    -- ^ Tokens, including trivia policy from the lexer.
     , syntaxParsedAST :: ParsedAST
+    -- ^ Parsed source tree with unresolved names.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Intermediate ASTs produced by the ordered semantic frontend passes.
 data SemanticArtifacts = SemanticArtifacts
     { semanticParsedAST :: ParsedAST
+    -- ^ Original parser output.
     , semanticRenamedAST :: RenamedAST
+    -- ^ AST with unique local/declaration IDs.
     , semanticResolvedAST :: ResolvedAST
+    -- ^ AST with references bound to symbols.
     , semanticTypedAST :: TypedAST
+    -- ^ Type-checked AST consumed by later tools.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Lex and parse source without invoking semantic analysis or Core lowering.
 analyzeSyntax :: CompilerInput -> Either [Diagnostic] SyntaxArtifacts
 analyzeSyntax input = do
     tokens <- runLexer defaultLexer (LexerInput (compilerSourceFile input) (compilerSourceText input))
     parsed <- runParser defaultParser (ParserInput (compilerSourceFile input) tokens)
     pure (SyntaxArtifacts tokens parsed)
 
+-- | Run syntax analysis followed by renaming, resolution, and type checking.
 analyzeSemantics :: CompilerInput -> Either [Diagnostic] SemanticArtifacts
 analyzeSemantics input = syntaxParsedAST <$> analyzeSyntax input >>= analyzeParsedSemantics
 
+-- | Run semantic passes on an existing parsed AST without lexing or parsing.
 analyzeParsedSemantics :: ParsedAST -> Either [Diagnostic] SemanticArtifacts
 analyzeParsedSemantics parsed = do
     renamed <- runRenamer defaultRenamer parsed

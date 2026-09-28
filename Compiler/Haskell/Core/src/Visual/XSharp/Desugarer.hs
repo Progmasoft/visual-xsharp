@@ -1,5 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+-- | Lower the typed source AST into target-independent, source-attributed Core.
 module Visual.XSharp.Desugarer (Desugarer (..), defaultDesugarer, runDesugarer) where
 
 import Control.Monad.State.Strict
@@ -11,9 +13,17 @@ import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
 
-newtype Desugarer = Desugarer {desugarTypedAST :: TypedAST -> Either [Diagnostic] CoreModule}
+-- | Pluggable desugaring pass from typed source semantics into Core IR.
+newtype Desugarer = Desugarer
+    { desugarTypedAST :: TypedAST -> Either [Diagnostic] CoreModule
+    -- ^ Lower a typed tree or return source-level lowering diagnostics.
+    }
+
+-- | Run a supplied desugaring implementation.
 runDesugarer :: Desugarer -> TypedAST -> Either [Diagnostic] CoreModule
 runDesugarer = desugarTypedAST
+
+-- | Default Core lowerer used by the compiler pipeline.
 defaultDesugarer :: Desugarer
 defaultDesugarer = Desugarer lowerTree
 

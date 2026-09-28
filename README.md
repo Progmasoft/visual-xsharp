@@ -94,7 +94,7 @@ configuration automatically; ordinary builds never need `--config`. The Bazel gr
 `llvm-config` and does not store a machine-specific installation path.
 
 `bundle` is the reproducible local path from a checkout to a usable compiler layout. It builds the C++20 `vxs` driver with
-Bazel, builds its private Haskell `vxs-frontend` companion with Cabal, stages both programs under
+Bazel, builds its private Haskell `vxs-frontend` shared library with Cabal, stages the driver, REPL, and library under
 `dist/visual-xsharp-<version>-<platform>-<arch>/`, and verifies that the staged pair can compile and run a real `.vxs`
 program as a `.vxse`. The ignored `dist/` tree also contains `LICENSE.txt`, `PATENTS`, the current Progmasoft exception and
 patent-grant texts, and `SHA256SUMS`. See [Building](Documents/BUILDING.md#local-compiler-bundle) for the layout and
@@ -113,9 +113,8 @@ default; `-Emit core|object|assembly|llvmll|llvmbc` selects another supported ar
 native binary. Public bounded Xpp/Xmm v3 readers and writers support verified forward pipeline resumption.
 CorePrep wire bytes are never accepted under the public `.core` extension.
 
-`vxs-frontend` is an implementation companion, not a second user-facing compiler command. Current packaged layouts contain
-two physical executables because the Haskell frontend is still a private process boundary. `vxs` locates that companion
-relative to itself and remains the command users invoke.
+`vxs-frontend` is an implementation library, not a second user-facing compiler command. The C++20 driver loads it beside
+`vxs` and calls through a versioned C11 ABI; no frontend child process or temporary Core handoff is involved.
 
 The reliable single-file validation form is:
 

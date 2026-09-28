@@ -30,6 +30,16 @@ occur. External names such as `docs.rs` are unrelated and must not be rewritten.
 
 ## Go repository checks
 
+`scripts/develop.go` is a thin entry point. Its host detection, process execution,
+build/test/benchmark orchestration, cleanup, fuzzing, bundle staging, and release
+validation live in `scripts/internal/development/`. The root Go module contains
+only repository tooling and uses no external Go dependencies. The public command
+remains `go run scripts/develop.go <command>`.
+
+`go run scripts/verify_scripts.go` checks both standalone command/test pairs and
+internal package formatting, line limits, license headers, vet, and unit tests.
+For focused feedback, run `go test ./scripts/internal/development`.
+
 The standalone tools in `scripts/` have standard-library-only test seams. Keep
 their behavior covered without building the compiler or downloading project
 dependencies. Run `gofmt` on changed Go files, then test and vet each tool from
@@ -399,7 +409,7 @@ go run scripts/develop.go bundle
 ```
 
 This is more than an archive or copy test. A passing run proves that the staged `vxs` reports the checkout's compiler
-version, finds the adjacent private `vxs-frontend`, compiles a real `.vxs` source into a `.vxse`, and executes the result
+version, loads the adjacent private `vxs-frontend` shared library in-process, compiles a real `.vxs` source into a `.vxse`, and executes the result
 successfully. It also proves that the bundle contains `LICENSE.txt`, `PATENTS`, the current `1.1` exception and patent-grant
 texts, and a `SHA256SUMS` manifest covering the other staged files.
 
@@ -426,11 +436,19 @@ bazelisk build //Compiler/Backend/LLVM/Tests:llvm_backend_tests `
 
 The LLVM suite checks native scalar-call ABI widths, invalid bitcode recovery, module lifetime, and reset; the AARC C11
 executable verifies C header compilation and calls into the C++ runtime; the CLI suite checks transparent child-argument
-forwarding; and the Interactive suite checks generated source isolation, scalar bindings, bounded history, input recovery,
-value formatting, and command parsing. The bundle test is the owning gate that starts the Haskell frontend process and
-proves a real source expression completes the entire Core-to-ORC route.
+forwarding; and the Interactive suite checks in-memory source construction, scalar bindings, bounded history, input
+recovery, value formatting, and command parsing. The bundle test is the owning gate that loads the Haskell frontend shared
+library and proves a real source expression completes the entire Core-to-ORC route without temporary source/Core files.
 
 ## Documentation verification
+
+The `API Documentation` workflow runs Doxygen over the public C++ headers and Haddock over the four public Haskell
+packages on every pull request and push. Doxygen warnings are errors; the Haddock gate checks each exported entity's
+coverage and fails if any public declaration lacks documentation. Run the same check locally with:
+
+```powershell
+go run scripts/verify_docs.go
+```
 
 For documentation-only changes:
 

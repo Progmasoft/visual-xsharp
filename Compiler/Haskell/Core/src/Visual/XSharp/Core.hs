@@ -2,6 +2,10 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 {-# LANGUAGE PatternSynonyms #-}
 
+{- | Target-independent, verified compiler IR retained before CorePrep.
+Expressions carry explicit result types and statements preserve source-level
+control flow so later passes can introduce blocks without re-parsing source.
+-}
 module Visual.XSharp.Core
     ( CoreLiteral (..)
     , CorePrimitive (..)
@@ -17,55 +21,109 @@ module Visual.XSharp.Core
 
 import Visual.XSharp.AST (CaptureMode, QualifiedName, ResolvedName, Type)
 
-data CoreLiteral = CoreInteger Integer | CoreFloating String | CoreString String | CoreBoolean Bool | CoreUnit | CoreNull
+-- | Literal values representable in the typed Core expression graph.
+data CoreLiteral
+    = -- | Exact arbitrary-precision integer value.
+      CoreInteger Integer
+    | -- | Canonical floating-point spelling.
+      CoreFloating String
+    | -- | Unicode scalar sequence.
+      CoreString String
+    | -- | Boolean value.
+      CoreBoolean Bool
+    | -- | The unique unit value.
+      CoreUnit
+    | -- | Null reference literal.
+      CoreNull
     deriving (Eq, Ord, Read, Show)
+
+-- | Primitive operations with explicit operand and result nodes in Core.
 data CorePrimitive
-    = CoreAdd
-    | CoreSubtract
-    | CoreMultiply
-    | CoreDivide
-    | CoreFloorDivide
-    | CoreRemainder
-    | CoreLessThan
-    | CoreLessEqual
-    | CoreGreaterThan
-    | CoreGreaterEqual
-    | CoreEqual
-    | CoreNotEqual
-    | CoreLogicalAnd
-    | CoreLogicalOr
-    | CoreNegate
-    | CoreLogicalNot
-    | CorePower
-    | CoreShiftLeft
-    | CoreShiftRight
-    | CoreBitwiseAnd
-    | CoreBitwiseXor
-    | CoreBitwiseOr
-    | CoreBitwiseNot
-    | CoreTypeIs
+    = -- | Numeric addition.
+      CoreAdd
+    | -- | Numeric subtraction.
+      CoreSubtract
+    | -- | Numeric multiplication.
+      CoreMultiply
+    | -- | Truncating division.
+      CoreDivide
+    | -- | Floor division.
+      CoreFloorDivide
+    | -- | Remainder operation.
+      CoreRemainder
+    | -- | Ordered less-than comparison.
+      CoreLessThan
+    | -- | Ordered less-than-or-equal comparison.
+      CoreLessEqual
+    | -- | Ordered greater-than comparison.
+      CoreGreaterThan
+    | -- | Ordered greater-than-or-equal comparison.
+      CoreGreaterEqual
+    | -- | Value equality comparison.
+      CoreEqual
+    | -- | Value inequality comparison.
+      CoreNotEqual
+    | -- | Short-circuit logical conjunction.
+      CoreLogicalAnd
+    | -- | Short-circuit logical disjunction.
+      CoreLogicalOr
+    | -- | Numeric unary negation.
+      CoreNegate
+    | -- | Logical Boolean negation.
+      CoreLogicalNot
+    | -- | Integer or floating power operation.
+      CorePower
+    | -- | Integer left shift.
+      CoreShiftLeft
+    | -- | Integer right shift as defined by operand type.
+      CoreShiftRight
+    | -- | Integer bitwise conjunction.
+      CoreBitwiseAnd
+    | -- | Integer bitwise exclusive-or.
+      CoreBitwiseXor
+    | -- | Integer bitwise disjunction.
+      CoreBitwiseOr
+    | -- | Integer bitwise complement.
+      CoreBitwiseNot
+    | -- | Runtime type-membership predicate.
+      CoreTypeIs
     deriving (Eq, Ord, Read, Show)
+
+-- | Typed expression graph consumed by Core verification and optimization.
 data CoreExpression
-    = CoreVariable ResolvedName Type
-    | CoreLiteral CoreLiteral Type
-    | CoreApply CoreExpression [CoreExpression] Type
-    | CorePrimitive CorePrimitive [CoreExpression] Type
+    = -- | Reference to a resolved local or function symbol.
+      CoreVariable ResolvedName Type
+    | -- | Literal payload with its semantic type.
+      CoreLiteral CoreLiteral Type
+    | -- | Callable application with ordered arguments.
+      CoreApply CoreExpression [CoreExpression] Type
+    | -- | Primitive operation and ordered operands.
+      CorePrimitive CorePrimitive [CoreExpression] Type
     | -- CoreLet is expression-local sequencing. Pattern lowering uses it to
       -- evaluate a potentially effectful subject exactly once before testing
       -- several alternatives.
+
+      -- | Bind one expression result before evaluating the continuation.
       CoreLet ResolvedName Type CoreExpression CoreExpression Type
-    | CoreClosure
+    | -- | Closure with captures, parameters, body, and callable type.
+      CoreClosure
         [CoreCapture]
         [(ResolvedName, Type)]
         Type
         [CoreStatement]
         Type
     deriving (Eq, Ord, Read, Show)
+
+-- | Captured source binding and the expression used to materialize its value.
 data CoreCapture = CoreCapture
     { coreCaptureMode :: CaptureMode
+    -- ^ Ownership mode selected by closure analysis.
     , coreCaptureName :: ResolvedName
+    -- ^ Resolved identity of the captured binding.
     , coreCaptureType :: Type
+    -- ^ Type expected by the closure environment.
     , coreCaptureValue :: CoreExpression
+    -- ^ Expression evaluated at closure creation.
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -87,18 +145,29 @@ data CoreStatement
     | CoreContinue
     deriving (Eq, Ord, Read, Show)
 
+-- | Local declaration with resolved identity, mutability, and initializer.
 data CoreBinding = CoreBinding
     { coreBindingName :: ResolvedName
+    -- ^ Symbol introduced by the binding.
     , coreBindingType :: Type
+    -- ^ Declared semantic type.
     , coreBindingMutable :: Bool
+    -- ^ Whether later assignment is permitted.
     , coreBindingValue :: CoreExpression
+    -- ^ Initial value expression.
     }
     deriving (Eq, Ord, Read, Show)
+
+-- | Top-level or member callable lowered into target-independent Core.
 data CoreFunction = CoreFunction
     { coreFunctionName :: ResolvedName
+    -- ^ Resolved function symbol.
     , coreFunctionParameters :: [(ResolvedName, Type)]
+    -- ^ Parameters in call order.
     , coreFunctionReturnType :: Type
+    -- ^ Declared result type.
     , coreFunctionBody :: [CoreStatement]
+    -- ^ Function statements in source order.
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -110,14 +179,21 @@ The named data constructor carries compiler provenance.  The two-argument
 pattern below preserves the long-standing source-level construction API for
 hand-written Core fixtures; project compilation uses CoreModuleWithSources.
 -}
+
+-- | Verified module plus source ownership metadata used by project builds.
 data CoreModule = CoreModuleWithSources
     { coreModuleName :: QualifiedName
+    -- ^ Fully qualified module name.
     , coreModuleFunctions :: [CoreFunction]
+    -- ^ Functions emitted by this unit.
     , coreModuleSourceFiles :: [FilePath]
+    -- ^ Source files included in the compilation.
     , coreModuleFunctionSources :: [(Int, FilePath)]
+    -- ^ Function indices mapped to their source file.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Construct or match a Core module without explicit source ownership data.
 pattern CoreModule :: QualifiedName -> [CoreFunction] -> CoreModule
 pattern CoreModule name functions <- CoreModuleWithSources name functions _ _
     where
@@ -125,6 +201,7 @@ pattern CoreModule name functions <- CoreModuleWithSources name functions _ _
 
 {-# COMPLETE CoreModule #-}
 
+-- | Read the explicit result type stored on any Core expression node.
 expressionType :: CoreExpression -> Type
 expressionType expression = case expression of
     CoreVariable _ value -> value

@@ -4,9 +4,13 @@
 #include <stdexcept>
 #include <utility>
 
+#include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
 #include "Visual/XSharp/Core/CorePrep/Wire.hpp"
+#include "Visual/XSharp/Core/Verifier.hpp"
 #include "Visual/XSharp/Core/Wire.hpp"
+#include "Visual/XSharp/Xmm/Verifier.hpp"
 #include "Visual/XSharp/Xmm/Wire.hpp"
+#include "Visual/XSharp/Xpp/Verifier.hpp"
 #include "Visual/XSharp/Xpp/Wire.hpp"
 #include "WireFuzz.hpp"
 
@@ -71,9 +75,14 @@ namespace Visual::XSharp::Fuzzing
             const auto decoded = Core::Wire::Decode(bytes, limits);
             if (!decoded)
                 return;
+            // Decoding proves only wire structure. Run the independent
+            // semantic verifier on every structurally valid model before the
+            // encoder and round-trip oracle see it.
+            if (!Core::Verify(*decoded.module).empty())
+                return;
             const auto encoded = Core::Wire::Encode(*decoded.module, limits);
             if (!encoded)
-                return; // A structural decode need not be semantically valid.
+                throw std::logic_error("verified Core model could not encode");
             const auto again = Core::Wire::Decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
                 throw std::logic_error(
@@ -88,10 +97,13 @@ namespace Visual::XSharp::Fuzzing
                 = ::visual_xsharp::core::wire::decode(bytes, limits);
             if (!decoded)
                 return;
+            if (!::visual_xsharp::core::verify(*decoded.module).empty())
+                return;
             const auto encoded
                 = ::visual_xsharp::core::wire::encode(*decoded.module, limits);
             if (!encoded)
-                return;
+                throw std::logic_error(
+                    "verified CorePrep model could not encode");
             const auto again
                 = ::visual_xsharp::core::wire::decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
@@ -106,9 +118,11 @@ namespace Visual::XSharp::Fuzzing
             const auto decoded = Xpp::Wire::Decode(bytes, limits);
             if (!decoded)
                 return;
+            if (!Xpp::Verify(*decoded.module).empty())
+                return;
             const auto encoded = Xpp::Wire::Encode(*decoded.module, limits);
             if (!encoded)
-                return;
+                throw std::logic_error("verified Xpp model could not encode");
             const auto again = Xpp::Wire::Decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
                 throw std::logic_error("Xpp wire round trip changed the model");
@@ -121,9 +135,11 @@ namespace Visual::XSharp::Fuzzing
             const auto decoded = Xmm::Wire::Decode(bytes, limits);
             if (!decoded)
                 return;
+            if (!Xmm::Verify(*decoded.module).empty())
+                return;
             const auto encoded = Xmm::Wire::Encode(*decoded.module, limits);
             if (!encoded)
-                return;
+                throw std::logic_error("verified Xmm model could not encode");
             const auto again = Xmm::Wire::Decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
                 throw std::logic_error("Xmm wire round trip changed the model");

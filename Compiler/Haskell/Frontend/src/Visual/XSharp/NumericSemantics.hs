@@ -22,32 +22,55 @@ module Visual.XSharp.NumericSemantics
 import Visual.XSharp.AST
 import Visual.XSharp.BuiltinTypes
 
+-- | Type context available while applying a literal or operator rule.
 data NumericContext
-    = NoNumericContext
-    | TargetNumericType Type
-    | BooleanNumericContext
+    = -- | No destination type constrains the expression.
+      NoNumericContext
+    | -- | A concrete expected scalar type is available.
+      TargetNumericType Type
+    | -- | The expression is consumed as a condition.
+      BooleanNumericContext
     deriving (Eq, Ord, Read, Show)
 
+-- | Specific reason that a contextual literal or numeric operator is invalid.
 data NumericRuleError
-    = IntegerLiteralOutsideTarget ScalarType Integer
-    | UntargetedIntegerOutsideInt Integer
-    | FloatingLiteralRequiresFloatingTarget Type
-    | UnaryRequiresNumeric UnaryOperator Type
-    | UnaryRequiresInteger UnaryOperator Type
-    | NegationRequiresSignedNumeric Type
-    | LogicalRequiresBooleanContext UnaryOperator Type
-    | BinaryRequiresMatchingTypes BinaryOperator Type Type
-    | BinaryRequiresNumericType BinaryOperator Type
-    | BinaryRequiresIntegerType BinaryOperator Type
-    | BinaryRequiresBooleanContext BinaryOperator Type Type
+    = -- | Integer does not fit its selected scalar type.
+      IntegerLiteralOutsideTarget ScalarType Integer
+    | -- | Uncontextualized literal exceeds the default @int@ range.
+      UntargetedIntegerOutsideInt Integer
+    | -- | Expected target is not a floating-point type.
+      FloatingLiteralRequiresFloatingTarget Type
+    | -- | Unary operator received a non-numeric operand.
+      UnaryRequiresNumeric UnaryOperator Type
+    | -- | Bitwise operator received a non-integer operand.
+      UnaryRequiresInteger UnaryOperator Type
+    | -- | Negation received an unsigned or non-numeric operand.
+      NegationRequiresSignedNumeric Type
+    | -- | Logical negation operand is not condition-compatible.
+      LogicalRequiresBooleanContext UnaryOperator Type
+    | -- | Binary operands have different types.
+      BinaryRequiresMatchingTypes BinaryOperator Type Type
+    | -- | Arithmetic operator received a non-numeric type.
+      BinaryRequiresNumericType BinaryOperator Type
+    | -- | Integer-only operator received a non-integer type.
+      BinaryRequiresIntegerType BinaryOperator Type
+    | -- | Logical operands are not condition-compatible.
+      BinaryRequiresBooleanContext BinaryOperator Type Type
     deriving (Eq, Ord, Read, Show)
 
+-- | Result type and optional validation error produced by a numeric rule.
 data NumericRuleResult = NumericRuleResult
     { numericRuleType :: Type
+    -- ^ Type to assign even when the rule reports an error.
     , numericRuleError :: Maybe NumericRuleError
+    -- ^ Failure details, or @Nothing@ on success.
     }
     deriving (Eq, Ord, Read, Show)
 
+{- | Select and range-check the type of an integer literal from its context.
+Boolean conditions retain the language's documented numeric condition rule;
+an unconstrained literal defaults to @int@ and must fit that exact range.
+-}
 integerLiteralRule :: NumericContext -> Integer -> NumericRuleResult
 integerLiteralRule context value = case context of
     BooleanNumericContext -> success boolType
@@ -65,6 +88,7 @@ integerLiteralRule context value = case context of
             | integerFits defaultIntegerScalar value = success (scalarTypeToType defaultIntegerScalar)
             | otherwise = failure (scalarTypeToType defaultIntegerScalar) (UntargetedIntegerOutsideInt value)
 
+-- | Select a floating literal type, requiring any explicit target to be float.
 floatingLiteralRule :: NumericContext -> NumericRuleResult
 floatingLiteralRule context = case context of
     TargetNumericType target -> case typeToScalarType target of
@@ -72,6 +96,7 @@ floatingLiteralRule context = case context of
         _ -> failure (scalarTypeToType defaultFloatingScalar) (FloatingLiteralRequiresFloatingTarget target)
     _ -> success (scalarTypeToType defaultFloatingScalar)
 
+-- | Apply the type rule for a unary numeric or logical operator.
 unaryNumericRule :: UnaryOperator -> Type -> NumericRuleResult
 unaryNumericRule operator operandType = case operator of
     LogicalNot
@@ -87,6 +112,7 @@ unaryNumericRule operator operandType = case operator of
         | isSignedIntegerType operandType || isFloatingType operandType -> success operandType
         | otherwise -> failure operandType (NegationRequiresSignedNumeric operandType)
 
+-- | Apply operand compatibility and result-type rules for a binary operator.
 binaryNumericRule :: BinaryOperator -> Type -> Type -> NumericRuleResult
 binaryNumericRule operator leftType rightType
     | operator `elem` [LogicalAnd, LogicalOr] =
@@ -105,6 +131,7 @@ binaryNumericRule operator leftType rightType
         failure (resultFor operator leftType) (BinaryRequiresNumericType operator leftType)
     | otherwise = success (resultFor operator leftType)
 
+-- | Test whether a type is accepted as a condition by the current language rules.
 acceptsBooleanContext :: Type -> Bool
 acceptsBooleanContext valueType = valueType == boolType || isNumericType valueType
 
@@ -120,6 +147,7 @@ success valueType = NumericRuleResult valueType Nothing
 failure :: Type -> NumericRuleError -> NumericRuleResult
 failure valueType issue = NumericRuleResult valueType (Just issue)
 
+-- | Render a numeric rule failure as concise user-facing diagnostic text.
 renderNumericRuleError :: NumericRuleError -> String
 renderNumericRuleError issue = case issue of
     IntegerLiteralOutsideTarget scalar value ->

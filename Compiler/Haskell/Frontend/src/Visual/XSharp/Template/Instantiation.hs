@@ -24,12 +24,17 @@ module Visual.XSharp.Template.Instantiation
 import Visual.XSharp.AST
 import Visual.XSharp.Template.Application
 
+-- | Failure to instantiate a typed template declaration or one of its nodes.
 data TemplateInstantiationError
-    = ExpectedTemplateTypeDeclaration
-    | TemplateBindingTargetsDifferentDeclaration SymbolId SymbolId
-    | TemplateTypeSubstitutionFailed TemplateApplicationError
+    = -- | The supplied declaration is not a template type.
+      ExpectedTemplateTypeDeclaration
+    | -- | Binding and declaration identities differ.
+      TemplateBindingTargetsDifferentDeclaration SymbolId SymbolId
+    | -- | A bound type or value could not be substituted.
+      TemplateTypeSubstitutionFailed TemplateApplicationError
     deriving (Eq, Ord, Read, Show)
 
+-- | Close a template type declaration using its previously validated binding.
 instantiateTemplateType ::
     TemplateBinding ->
     Declaration ResolvedName Type ->
@@ -50,6 +55,7 @@ instantiateTemplateType binding declaration = case declaration of
     where
         descriptor = templateBindingDeclaration binding
 
+-- | Substitute template variables in one member declaration recursively.
 instantiateMember ::
     TemplateBinding ->
     Declaration ResolvedName Type ->
@@ -80,6 +86,7 @@ instantiateMember binding declaration = case declaration of
         -- Nested instantiation will be selected independently by the planner.
         pure declaration
 
+-- | Instantiate one parameter annotation while preserving its source syntax.
 instantiateParameter ::
     TemplateBinding ->
     Parameter ResolvedName Type ->
@@ -94,12 +101,14 @@ instantiateParameter binding parameter = do
             (parameterTypeSyntax parameter)
         )
 
+-- | Instantiate every statement in a block without changing statement order.
 instantiateBlock ::
     TemplateBinding ->
     Block ResolvedName Type ->
     Either TemplateInstantiationError (Block ResolvedName Type)
 instantiateBlock binding (Block statements) = Block <$> traverse (instantiateStatement binding) statements
 
+-- | Substitute all types nested in one statement and its expressions.
 instantiateStatement ::
     TemplateBinding ->
     Statement ResolvedName Type ->
@@ -147,6 +156,7 @@ instantiateStatement binding statement = case statement of
     ExpressionStatement spanValue value terminated ->
         ExpressionStatement spanValue <$> instantiateExpression binding value <*> pure terminated
 
+-- | Substitute every type annotation in an expression tree.
 instantiateExpression ::
     TemplateBinding ->
     Expression ResolvedName Type ->
@@ -239,6 +249,7 @@ instantiateCapture binding capture = do
             closedInitializer
         )
 
+-- | Instantiate the expression or block body of a callable.
 instantiateCallableBody ::
     TemplateBinding ->
     CallableBody ResolvedName Type ->
@@ -253,6 +264,7 @@ instantiateType binding valueType = case substituteType binding valueType of
     Right closed -> Right closed
     Left issue -> Left (TemplateTypeSubstitutionFailed issue)
 
+-- | Render a declaration mismatch or template substitution failure.
 renderTemplateInstantiationError :: TemplateInstantiationError -> String
 renderTemplateInstantiationError issue = case issue of
     ExpectedTemplateTypeDeclaration -> "template instantiation requires a typed template type declaration"

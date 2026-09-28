@@ -93,6 +93,11 @@ go vet, and go test for every command/test pair.`)
 	for _, pair := range pairs {
 		files = append(files, pair.sourcePath, pair.testPath)
 	}
+	internalFiles, internalPackages, err := discoverInternalGoPackages(root)
+	if err != nil {
+		return err
+	}
+	files = append(files, internalFiles...)
 	fmt.Fprintf(output, "Verifying %d Go command/test pairs (maximum %d lines per file).\n", len(pairs), maximumGoScriptLines)
 	if outputBytes, runErr := runner.Run(root, "gofmt", append([]string{"-l"}, files...)...); runErr != nil {
 		return commandFailure("gofmt", outputBytes, runErr)
@@ -115,11 +120,75 @@ go vet, and go test for every command/test pair.`)
 			fmt.Fprintf(output, "PASS go test %s\n", pair.name)
 		}
 	}
+	for _, packagePath := range internalPackages {
+		for _, gate := range []string{"vet", "test"} {
+			if outputBytes, runErr := runner.Run(root, "go", gate, packagePath); runErr != nil {
+				failures = append(failures, commandFailureText("go "+gate+" "+packagePath, outputBytes, runErr))
+			} else {
+				fmt.Fprintf(output, "PASS go %s %s\n", gate, packagePath)
+			}
+		}
+	}
 	if len(failures) != 0 {
 		return errors.New("Go script quality verification failed:\n - " + strings.Join(failures, "\n - "))
 	}
 	fmt.Fprintf(output, "Verified %d Go commands and their unit tests.\n", len(pairs))
 	return nil
+}
+
+// Internal implementation packages share tests by responsibility rather than
+// requiring a separate test file for every small source module.
+func discoverInternalGoPackages(root string) ([]string, []string, error) {
+	directory := filepath.Join(root, "scripts", "internal")
+	if _, err := os.Stat(directory); errors.Is(err, os.ErrNotExist) {
+		return nil, nil, nil
+	} else if err != nil {
+		return nil, nil, err
+	}
+	var files []string
+	packages := make(map[string]bool)
+	err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".go" {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("internal Go source must be a regular file: %s", path)
+		}
+		lines, err := countFileLines(path)
+		if err != nil {
+			return err
+		}
+		if lines > maximumGoScriptLines {
+			return fmt.Errorf("%s has %d lines; the maximum is %d", path, lines, maximumGoScriptLines)
+		}
+		if err := verifyGoHeader(path); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, relative)
+		packagePath := "./" + filepath.ToSlash(filepath.Dir(relative))
+		packages[packagePath] = packages[packagePath] || strings.HasSuffix(path, "_test.go")
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	var packagePaths []string
+	for path, tested := range packages {
+		if !tested {
+			return nil, nil, fmt.Errorf("internal Go package has no unit tests: %s", path)
+		}
+		packagePaths = append(packagePaths, path)
+	}
+	sort.Strings(files)
+	sort.Strings(packagePaths)
+	return files, packagePaths, nil
 }
 
 func discoverGoScriptPairs(directory string, maximumLines int) ([]goScriptPair, error) {

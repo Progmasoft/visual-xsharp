@@ -24,6 +24,7 @@ import Data.List (stripPrefix)
 import Visual.XSharp.AST (SourcePosition (..), SourceSpan (..))
 import Visual.XSharp.Diagnostic
 
+-- | Kind of fragment retained by the lossless source scanner.
 data SourceFragmentKind
     = CodeFragment
     | LineCommentFragment
@@ -33,6 +34,7 @@ data SourceFragmentKind
     | RawStringLiteralFragment
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
+-- | Exact fragment text and its original half-open source span.
 data SourceFragment = SourceFragment
     { sourceFragmentKind :: SourceFragmentKind
     , sourceFragmentText :: String
@@ -206,6 +208,7 @@ advanceText position input =
 isLineBreak :: Char -> Bool
 isLineBreak character = character == '\r' || character == '\n'
 
+-- | Reassemble the original source by concatenating fragment text.
 reconstructSource :: [SourceFragment] -> String
 reconstructSource = concatMap sourceFragmentText
 

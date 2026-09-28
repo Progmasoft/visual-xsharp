@@ -22,36 +22,59 @@ module Visual.XSharp.Closure.Analysis
 import Data.List (nubBy)
 import Visual.XSharp.AST
 
+-- | Stable preorder identity of a closure within one analyzed typed AST.
 newtype ClosureId = ClosureId {closureIdValue :: Int}
     deriving (Eq, Ord, Read, Show)
 
+-- | Use and ownership facts for one closure capture.
 data CaptureUse = CaptureUse
     { captureUseName :: ResolvedName
+    -- ^ Resolved symbol captured by the closure.
     , captureUseType :: Type
+    -- ^ Type of the captured binding.
     , captureUseMode :: CaptureMode
+    -- ^ Explicit or inferred ownership mode.
     , captureUseOrder :: Int
+    -- ^ Source-order position in the capture environment.
     , captureUseExplicit :: Bool
+    -- ^ Whether source syntax explicitly listed it.
     , captureUseAlias :: Bool
+    -- ^ Whether the capture has an explicit alias.
     , captureUseRead :: Bool
+    -- ^ Whether this closure reads the captured value.
     , captureUseWritten :: Bool
+    -- ^ Whether this closure writes the captured binding.
     , captureUseReadByNestedClosure :: Bool
+    -- ^ Whether a descendant closure reads it.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Structural properties needed to analyze or lower one closure.
 data ClosureSummary = ClosureSummary
     { closureSummaryId :: ClosureId
+    -- ^ Unique identity assigned in source traversal order.
     , closureSummaryParent :: Maybe ClosureId
+    -- ^ Lexically enclosing closure, if nested.
     , closureSummarySpan :: SourceSpan
+    -- ^ Full source span of the closure expression.
     , closureSummaryType :: Type
+    -- ^ Resolved callable type.
     , closureSummaryExplicitCaptureMode :: Bool
+    -- ^ Whether capture policy was explicit.
     , closureSummaryParameters :: [(ResolvedName, Type)]
+    -- ^ Resolved parameter names and types.
     , closureSummaryCaptures :: [CaptureUse]
+    -- ^ Captures in source order.
     , closureSummaryChildren :: [ClosureId]
+    -- ^ Directly nested closure identities.
     , closureSummaryContainsReturn :: Bool
+    -- ^ Whether the body contains a return statement.
     , closureSummaryContainsCall :: Bool
+    -- ^ Whether the body contains a call expression.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Closure summaries for all closures in one typed syntax tree.
 newtype ClosureCatalog = ClosureCatalog {closureSummaries :: [ClosureSummary]}
     deriving (Eq, Ord, Read, Show)
 
@@ -60,15 +83,18 @@ data WalkState = WalkState
     , walkSummaries :: [ClosureSummary]
     }
 
+-- | Walk a typed AST and collect lexical nesting, captures, and use facts.
 analyzeClosures :: TypedAST -> ClosureCatalog
 analyzeClosures (TypedAST tree) =
     let final = walkTree (WalkState 1 []) tree
      in ClosureCatalog (walkSummaries final)
 
+-- | Look up a closure summary by its traversal-assigned identity.
 closureById :: ClosureId -> ClosureCatalog -> Maybe ClosureSummary
 closureById identifier (ClosureCatalog summaries) =
     findFirst ((== identifier) . closureSummaryId) summaries
 
+-- | Find closures whose capture environments contain the given symbol.
 closuresCapturing :: SymbolId -> ClosureCatalog -> [ClosureSummary]
 closuresCapturing symbol (ClosureCatalog summaries) =
     [ summary
@@ -76,9 +102,11 @@ closuresCapturing symbol (ClosureCatalog summaries) =
     , any ((== symbol) . resolvedSymbol . captureUseName) (closureSummaryCaptures summary)
     ]
 
+-- | Return unique symbols captured with strong ownership.
 stronglyCapturedSymbols :: ClosureCatalog -> [SymbolId]
 stronglyCapturedSymbols = capturedSymbolsByMode (== StrongCapture)
 
+-- | Return unique symbols captured without strong ownership.
 nonOwningCapturedSymbols :: ClosureCatalog -> [SymbolId]
 nonOwningCapturedSymbols = capturedSymbolsByMode (/= StrongCapture)
 

@@ -1,0 +1,299 @@
+// SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+#include <cstdint>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+#include "Compiler/Cli/Commands/Frontend.hpp"
+#include "SourceFuzz.hpp"
+#include "Visual/XSharp/Backend/LLVM.hpp"
+#include "Visual/XSharp/Pipeline.hpp"
+
+namespace Visual::XSharp::Fuzzing
+{
+    namespace
+    {
+        namespace Frontend = ::Visual::XSharp::Cli::Frontend;
+        namespace Llvm = ::Visual::XSharp::Backend::LLVM;
+        namespace Core = ::Visual::XSharp::Core;
+
+        constexpr std::size_t kMaximumFuzzInput = 64U * 1024U;
+        constexpr std::size_t kMaximumGeneratedDepth = 4U;
+
+        struct Expression final
+        {
+            std::string source;
+            std::int64_t value{};
+        };
+
+        [[nodiscard]] auto
+        NextByte(std::span<const std::uint8_t> bytes, std::size_t &cursor)
+            -> std::uint8_t
+        {
+            // Cycle a short seed deterministically; an empty corpus still has
+            // a defined path and never reads outside the supplied span.
+            if (bytes.empty())
+                return 0U;
+            const auto value = bytes[cursor % bytes.size()];
+            ++cursor;
+            return value;
+        }
+
+        [[nodiscard]] auto
+        GenerateExpression(std::span<const std::uint8_t> bytes,
+                           std::size_t &cursor,
+                           std::size_t depth) -> Expression
+        {
+            // The fixed depth bounds both source growth and the independent
+            // oracle's arithmetic range regardless of adversarial seed bytes.
+            const auto selector = NextByte(bytes, cursor);
+            if (depth == 0U || selector % 4U == 0U)
+            {
+                const auto value = static_cast<std::int64_t>(selector % 6U);
+                return { std::to_string(value), value };
+            }
+
+            auto left = GenerateExpression(bytes, cursor, depth - 1U);
+            auto right = GenerateExpression(bytes, cursor, depth - 1U);
+            const char operation = selector % 3U == 1U   ? '+'
+                                   : selector % 3U == 2U ? '-'
+                                                         : '*';
+            const auto value = operation == '+'   ? left.value + right.value
+                               : operation == '-' ? left.value - right.value
+                                                  : left.value * right.value;
+            return { "(" + left.source + " " + operation + " " + right.source
+                         + ")",
+                     value };
+        }
+
+        [[nodiscard]] auto
+        GeneratedProgram(std::span<const std::uint8_t> bytes,
+                         std::int64_t &expected) -> std::string
+        {
+            std::size_t cursor{};
+            const auto expression
+                = GenerateExpression(bytes, cursor, kMaximumGeneratedDepth);
+            expected = expression.value;
+            return "namespace Fuzz;\n"
+                   "class Program {\n"
+                   "    public static int Evaluate() {\n"
+                   "        return "
+                   + expression.source
+                   + ";\n"
+                     "    }\n"
+                     "}\n";
+        }
+
+        [[nodiscard]] auto
+        CompileSource(std::span<const std::uint8_t> source) -> Frontend::Result
+        {
+            if (source.size() > kMaximumFuzzInput)
+                return { Frontend::Status::InvalidRequest,
+                         Frontend::OutputKind::ErrorText,
+                         {},
+                         "source fuzz input exceeds 64 KiB" };
+            return Frontend::FuzzCompile(source);
+        }
+
+        [[nodiscard]] auto
+        PipelineFailure(const Visual::XSharp::Pipeline::Result &pipeline)
+            -> std::string
+        {
+            std::string details;
+            const auto append
+                = [&details](std::string_view stage, const auto &issues) {
+                      for (const auto &issue : issues)
+                      {
+                          if (!details.empty())
+                              details.append("; ");
+                          details.append(stage);
+                          details.push_back(' ');
+                          details.append(issue.code);
+                          details.append(": ");
+                          details.append(issue.message);
+                      }
+                  };
+            if (pipeline.coreWireError)
+                details = "Core wire: " + pipeline.coreWireError->message;
+            append("Core", pipeline.coreVerificationIssues);
+            append("CorePrep", pipeline.verification_issues);
+            append("Xpp", pipeline.xppVerificationIssues);
+            append("Xmm", pipeline.xmmVerificationIssues);
+            if (pipeline.llvm_error)
+            {
+                if (!details.empty())
+                    details.append("; ");
+                details.append("LLVM ");
+                details.append(pipeline.llvm_error->code);
+                details.append(": ");
+                details.append(pipeline.llvm_error->message);
+            }
+            if (details.empty())
+                details = "pipeline returned without an LLVM artifact";
+            return details;
+        }
+
+        [[nodiscard]] auto
+        IsExpectedEmptyModule(const Visual::XSharp::Pipeline::Result &pipeline)
+            -> bool
+        {
+            // The parser deliberately accepts an empty source unit, while the
+            // native Xpp IR requires at least one function. That known
+            // front-end-only module is a normal boundary result, not a
+            // compiler crash or a source-to-code miscompile.
+            return pipeline.xppVerificationIssues.size() == 1U
+                   && pipeline.xppVerificationIssues.front().code == "VXP1002";
+        }
+
+        [[nodiscard]] auto
+        ConsumeVerifiedCore(const Frontend::Result &compiled,
+                            std::string_view sourceDescription)
+            -> Visual::XSharp::Pipeline::Result
+        {
+            if (!compiled.succeeded()
+                || compiled.kind != Frontend::OutputKind::CoreWire)
+                throw std::runtime_error("valid fuzz source was rejected: "
+                                         + std::string(sourceDescription));
+            auto pipeline
+                = Visual::XSharp::Pipeline::ConsumeCore(compiled.bytes);
+            if (!pipeline || !pipeline.llvm)
+            {
+                if (IsExpectedEmptyModule(pipeline))
+                    return pipeline;
+                throw std::runtime_error(
+                    "verified Core failed Xpp/Xmm/LLVM lowering ("
+                    + PipelineFailure(pipeline) + ") for "
+                    + std::string(sourceDescription));
+            }
+            return pipeline;
+        }
+
+        [[nodiscard]] auto
+        CompileVariant(std::span<const std::uint8_t> source,
+                       bool optimizeXpp,
+                       bool optimizeXmm) -> Llvm::Artifact
+        {
+            const auto compiled = CompileSource(source);
+            if (!compiled.succeeded()
+                || compiled.kind != Frontend::OutputKind::CoreWire)
+                throw std::runtime_error(
+                    "generated arithmetic source was rejected by the frontend");
+
+            Visual::XSharp::Pipeline::Options options;
+            options.optimize_xpp = optimizeXpp;
+            options.optimize_xmm = optimizeXmm;
+            const auto pipeline
+                = Visual::XSharp::Pipeline::ConsumeCore(compiled.bytes,
+                                                        options);
+            if (!pipeline || !pipeline.llvm)
+                throw std::runtime_error(
+                    "differential source failed a verified compiler pipeline: "
+                    + PipelineFailure(pipeline));
+            return *pipeline.llvm;
+        }
+
+        [[nodiscard]] auto
+        EntrySymbol(const Llvm::Artifact &artifact) -> std::string
+        {
+            // Names are assigned by the compiler's symbol pass. Discover the
+            // one generated evaluator from LLVM IR instead of duplicating its
+            // private symbol-ID/mangling rules in this test harness.
+            const auto definition = artifact.llvm_ir.find("define ");
+            const auto symbol
+                = artifact.llvm_ir.find("@Fuzz.Evaluate.", definition);
+            if (definition == std::string::npos || symbol == std::string::npos)
+                throw std::runtime_error(
+                    "generated fuzz module has no Evaluate definition");
+            const auto end = artifact.llvm_ir.find('(', symbol);
+            if (end == std::string::npos)
+                throw std::runtime_error(
+                    "generated fuzz Evaluate symbol has no function signature");
+            return artifact.llvm_ir.substr(symbol + 1U, end - symbol - 1U);
+        }
+
+        [[nodiscard]] auto
+        Invoke(const Llvm::Artifact &artifact, std::string_view identifier)
+            -> std::int64_t
+        {
+            // Each oracle variant owns an isolated ORC session so equal source
+            // symbols in optimized and reference modules cannot collide.
+            Llvm::JitSession session;
+            const auto entrySymbol = EntrySymbol(artifact);
+            if (const auto error = session.AddModule(artifact.bitcode,
+                                                     identifier,
+                                                     entrySymbol,
+                                                     Core::Type::int64()))
+                throw std::runtime_error("ORC rejected verified bitcode: "
+                                         + error->code + ": " + error->message);
+            const auto result
+                = session.InvokeScalar(entrySymbol, Core::Type::int64());
+            if (!result)
+                throw std::runtime_error("ORC could not invoke the verified "
+                                         "fuzz expression: "
+                                         + result.error->message);
+            return std::get<std::int64_t>(result.value->payload);
+        }
+    } // namespace
+
+    void
+    ExerciseLexer(std::span<const std::uint8_t> input)
+    {
+        if (input.size() <= kMaximumFuzzInput
+            && !Frontend::FuzzSyntax(0U, input))
+            throw std::runtime_error("Haskell lexer fuzz ABI is unavailable");
+    }
+
+    void
+    ExerciseParser(std::span<const std::uint8_t> input)
+    {
+        if (input.size() <= kMaximumFuzzInput
+            && !Frontend::FuzzSyntax(1U, input))
+            throw std::runtime_error("Haskell parser fuzz ABI is unavailable");
+    }
+
+    void
+    ExerciseSourceToLlvm(std::span<const std::uint8_t> input)
+    {
+        if (input.size() > kMaximumFuzzInput)
+            return;
+        const auto compiled = CompileSource(input);
+        if (compiled.status == Frontend::Status::InternalError
+            || compiled.status == Frontend::Status::OutputRejected)
+            throw std::runtime_error("frontend failed internally while "
+                                     "compiling a source fuzz input");
+        if (!compiled.succeeded())
+            return; // Lexical, syntax, and semantic diagnostics are normal.
+        (void)ConsumeVerifiedCore(compiled, "arbitrary source fuzz input");
+    }
+
+    void
+    ExerciseDifferentialOracle(std::span<const std::uint8_t> input)
+    {
+        if (input.size() > kMaximumFuzzInput)
+            return;
+        std::int64_t expected{};
+        const auto source = GeneratedProgram(input, expected);
+        const auto bytes = std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t *>(source.data()),
+            source.size());
+        const auto unoptimized = CompileVariant(bytes, false, false);
+        const auto optimized = CompileVariant(bytes, true, true);
+        constexpr std::string_view kReferenceModule = "vxs-fuzz-reference";
+        constexpr std::string_view kOptimizedModule = "vxs-fuzz-optimized";
+        const auto referenceValue = Invoke(unoptimized, kReferenceModule);
+        const auto optimizedValue = Invoke(optimized, kOptimizedModule);
+        // Compare both compiler modes with a small independent evaluator; a
+        // shared optimizer/codegen defect cannot validate itself.
+        if (referenceValue != expected || optimizedValue != expected
+            || referenceValue != optimizedValue)
+            throw std::runtime_error(
+                "compiler differential oracle found a miscompile: expected "
+                + std::to_string(expected) + ", baseline "
+                + std::to_string(referenceValue) + ", optimized "
+                + std::to_string(optimizedValue) + "; generated source:\n"
+                + source);
+    }
+} // namespace Visual::XSharp::Fuzzing

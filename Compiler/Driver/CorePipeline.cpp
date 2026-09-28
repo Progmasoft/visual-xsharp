@@ -349,34 +349,25 @@ namespace
 
     [[nodiscard]] auto
     ProcessArtifact(InputStage inputStage,
-                    const char *path,
+                    std::span<const std::uint8_t> bytes,
+                    const char *sourceName,
                     const char *artifactBasePath,
                     CliCommand command,
                     BuildOutput output,
                     const CompilerSettings *settings,
                     const char *targetTriple) -> bool
     {
-        if (path == nullptr || artifactBasePath == nullptr
+        if (sourceName == nullptr || artifactBasePath == nullptr
             || settings == nullptr)
             return false;
-        std::error_code sizeError;
-        const auto artifactSize = std::filesystem::file_size(path, sizeError);
         constexpr auto kMaximumArtifactBytes
             = std::uintmax_t{ 64U * 1024U * 1024U };
-        if (!sizeError && artifactSize > kMaximumArtifactBytes)
+        if (bytes.size() > kMaximumArtifactBytes)
         {
             fmt::print(
                 stderr,
                 "vxs: compiler artifact '{}' exceeds the 64 MiB input limit\n",
-                path);
-            return false;
-        }
-        const auto bytes = ReadFile(path);
-        if (!bytes)
-        {
-            fmt::print(stderr,
-                       "vxs: could not read compiler artifact '{}'\n",
-                       path);
+                sourceName);
             return false;
         }
 
@@ -402,10 +393,10 @@ namespace
 
         auto result
             = inputStage == InputStage::Core
-                  ? Visual::XSharp::Pipeline::ConsumeCore(*bytes, options)
+                  ? Visual::XSharp::Pipeline::ConsumeCore(bytes, options)
               : inputStage == InputStage::Xpp
-                  ? Visual::XSharp::Pipeline::ConsumeXpp(*bytes, options)
-                  : Visual::XSharp::Pipeline::ConsumeXmm(*bytes, options);
+                  ? Visual::XSharp::Pipeline::ConsumeXpp(bytes, options)
+                  : Visual::XSharp::Pipeline::ConsumeXmm(bytes, options);
         if (!result)
         {
             PrintFailure(result);
@@ -416,7 +407,7 @@ namespace
             fmt::print(stderr,
                        "vxs: compiler artifact '{}' is valid through its "
                        "requested pipeline boundary\n",
-                       path);
+                       sourceName);
             return true;
         }
         if (output == BuildOutput::kXpp || output == BuildOutput::kXmm)
@@ -442,8 +433,48 @@ ProcessCoreArtifactAs(const char *path,
                       const CompilerSettings *settings,
                       const char *targetTriple)
 {
+    if (path == nullptr)
+        return false;
+    constexpr std::uintmax_t kMaximumArtifactBytes = 64U * 1024U * 1024U;
+    std::error_code sizeError;
+    const auto size = std::filesystem::file_size(path, sizeError);
+    if (!sizeError && size > kMaximumArtifactBytes)
+    {
+        fmt::print(
+            stderr,
+            "vxs: compiler artifact '{}' exceeds the 64 MiB input limit\n",
+            path);
+        return false;
+    }
+    const auto bytes = ReadFile(path);
+    if (!bytes)
+    {
+        fmt::print(stderr,
+                   "vxs: could not read compiler artifact '{}'\n",
+                   path);
+        return false;
+    }
+    return ProcessCoreBytesAs(*bytes,
+                              path,
+                              artifactBasePath,
+                              command,
+                              output,
+                              settings,
+                              targetTriple);
+}
+
+bool
+ProcessCoreBytesAs(std::span<const std::uint8_t> bytes,
+                   const char *sourceName,
+                   const char *artifactBasePath,
+                   CliCommand command,
+                   BuildOutput output,
+                   const CompilerSettings *settings,
+                   const char *targetTriple)
+{
     return ProcessArtifact(InputStage::Core,
-                           path,
+                           bytes,
+                           sourceName,
                            artifactBasePath,
                            command,
                            output,
@@ -473,13 +504,8 @@ ProcessProjectCoreArtifacts(const std::filesystem::path &corePath,
                             const CompilerSettings *settings,
                             const char *targetTriple)
 {
-    if (settings == nullptr
-        || (output != BuildOutput::kObject && output != BuildOutput::kAssembly))
-        return false;
-
+    constexpr std::uintmax_t kMaximumArtifactBytes = 64U * 1024U * 1024U;
     std::error_code sizeError;
-    constexpr auto kMaximumArtifactBytes
-        = std::uintmax_t{ 64U * 1024U * 1024U };
     const auto artifactSize = std::filesystem::file_size(corePath, sizeError);
     if (!sizeError && artifactSize > kMaximumArtifactBytes)
     {
@@ -497,12 +523,40 @@ ProcessProjectCoreArtifacts(const std::filesystem::path &corePath,
         return false;
     }
 
+    return ProcessProjectCoreBytes(*bytes,
+                                   corePath.string().c_str(),
+                                   outputDirectory,
+                                   output,
+                                   settings,
+                                   targetTriple);
+}
+
+bool
+ProcessProjectCoreBytes(std::span<const std::uint8_t> bytes,
+                        const char *sourceName,
+                        const std::filesystem::path &outputDirectory,
+                        const BuildOutput output,
+                        const CompilerSettings *settings,
+                        const char *targetTriple)
+{
+    if (settings == nullptr || sourceName == nullptr
+        || (output != BuildOutput::kObject && output != BuildOutput::kAssembly))
+        return false;
+    constexpr std::size_t kMaximumArtifactBytes = 64U * 1024U * 1024U;
+    if (bytes.size() > kMaximumArtifactBytes)
+    {
+        fmt::print(stderr,
+                   "vxs: Core artifact '{}' exceeds the 64 MiB input limit\n",
+                   sourceName);
+        return false;
+    }
+
     visual_xsharp::PipelineOptions pipelineOptions;
     pipelineOptions.optimize_xpp = settings->xppOptimizationPasses;
     pipelineOptions.optimize_xmm = settings->xmmOptimizationPasses;
     pipelineOptions.stop_after = visual_xsharp::PipelineStop::Xmm;
     auto pipeline
-        = Visual::XSharp::Pipeline::ConsumeCore(*bytes, pipelineOptions);
+        = Visual::XSharp::Pipeline::ConsumeCore(bytes, pipelineOptions);
     if (!pipeline || !pipeline.xmm)
     {
         PrintFailure(pipeline);
@@ -582,7 +636,18 @@ ProcessXppArtifactAs(const char *path,
                      const CompilerSettings *settings,
                      const char *targetTriple)
 {
+    if (path == nullptr)
+        return false;
+    const auto bytes = ReadFile(path);
+    if (!bytes)
+    {
+        fmt::print(stderr,
+                   "vxs: could not read compiler artifact '{}'\n",
+                   path);
+        return false;
+    }
     return ProcessArtifact(InputStage::Xpp,
+                           *bytes,
                            path,
                            artifactBasePath,
                            command,
@@ -599,7 +664,18 @@ ProcessXmmArtifactAs(const char *path,
                      const CompilerSettings *settings,
                      const char *targetTriple)
 {
+    if (path == nullptr)
+        return false;
+    const auto bytes = ReadFile(path);
+    if (!bytes)
+    {
+        fmt::print(stderr,
+                   "vxs: could not read compiler artifact '{}'\n",
+                   path);
+        return false;
+    }
     return ProcessArtifact(InputStage::Xmm,
+                           *bytes,
                            path,
                            artifactBasePath,
                            command,

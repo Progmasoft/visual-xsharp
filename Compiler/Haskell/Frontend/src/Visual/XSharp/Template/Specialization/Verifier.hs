@@ -20,6 +20,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Template.Mangling
 import Visual.XSharp.Template.Specialization
 
+-- | Independently checkable inconsistency in a specialization plan.
 data TemplatePlanIssue
     = InvalidPlanSpecializationId TemplateSpecializationId
     | DuplicatePlanSpecializationId TemplateSpecializationId
@@ -53,6 +54,7 @@ data TemplatePlanIssue
     | IncompletePlanEmissionOrder [TemplateSpecializationId] [TemplateSpecializationId]
     deriving (Eq, Ord, Read, Show)
 
+-- | Return a plan unchanged when every invariant holds, otherwise all issues.
 verifyTemplateSpecializationPlan ::
     TemplateSpecializationPlan ->
     Either [TemplatePlanIssue] TemplateSpecializationPlan
@@ -60,6 +62,7 @@ verifyTemplateSpecializationPlan plan = case templateSpecializationPlanIssues pl
     [] -> Right plan
     problems -> Left problems
 
+-- | Recompute plan invariants without trusting the planner that produced it.
 templateSpecializationPlanIssues :: TemplateSpecializationPlan -> [TemplatePlanIssue]
 templateSpecializationPlanIssues plan =
     idProblems
@@ -435,6 +438,7 @@ unique = foldl append []
             | value `elem` values = values
             | otherwise = values ++ [value]
 
+-- | Render one plan-verification issue as a diagnostic-ready message.
 renderTemplatePlanIssue :: TemplatePlanIssue -> String
 renderTemplatePlanIssue issue = case issue of
     InvalidPlanSpecializationId identifier -> prefix identifier ++ "has a non-positive id"

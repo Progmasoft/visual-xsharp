@@ -56,6 +56,7 @@ data FrontendArtifacts = FrontendArtifacts
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Frontend stages and source provenance for one merged semantic namespace.
 data NamespaceArtifacts = NamespaceArtifacts
     { artifactNamespace :: Maybe QualifiedName
     , artifactSourceFiles :: [FilePath]
@@ -75,9 +76,11 @@ data ProjectFrontendArtifacts = ProjectFrontendArtifacts
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Run the source pipeline through verified, optimized CorePrep for one file.
 compileToCorePrep :: CompilerInput -> Either [Diagnostic] FrontendArtifacts
 compileToCorePrep input = analyzeSemantics input >>= compileSemanticToCorePrep
 
+-- | Compile one source file and validate its namespace-qualified entry class.
 compileEntryToCorePrep :: QualifiedName -> CompilerInput -> Either [Diagnostic] FrontendArtifacts
 compileEntryToCorePrep entry input = do
     artifacts <- compileToCorePrep input
@@ -122,6 +125,7 @@ compileProjectToCorePrep entry inputs = do
             syntax <- analyzeSyntax input
             pure (compilerSourceFile input, syntaxParsedAST syntax)
 
+-- | Retrieve the selected namespace's optimized Core module for native lowering.
 projectEntryCore :: ProjectFrontendArtifacts -> CoreModule
 projectEntryCore = artifactOptimizedCore . artifactFrontend . projectEntryNamespace
 
@@ -277,6 +281,7 @@ selectNamespace namespaceName artifacts =
                 [ compilerProblem "VXE0012" Nothing ("entry namespace was produced more than once: " ++ renderQualifiedName namespaceName)
                 ]
 
+-- | Check that an entry path names a public static parameterless void Main method.
 validateEntryPoint :: QualifiedName -> TypedAST -> Either [Diagnostic] ()
 validateEntryPoint entry (TypedAST (SyntaxTree namespace declarations)) = do
     expectedNamespace <- entryNamespaceName entry

@@ -12,10 +12,15 @@
 
 namespace visual_xsharp::core::wire
 {
+    /// Encoded CorePrep bytes or the error that prevented serialization.
     struct EncodeResult final
     {
+        /// Complete versioned CorePrep wire document when encoding succeeds.
         std::vector<std::uint8_t> bytes;
+        /// Structured serialization failure, absent on success.
         std::optional<Error> error;
+        /// Test whether serialization completed without a wire error.
+        /// @return true when error is empty.
         [[nodiscard]] explicit
         operator bool() const noexcept
         {
@@ -23,10 +28,15 @@ namespace visual_xsharp::core::wire
         }
     };
 
+    /// Decoded CorePrep module or the error that rejected the document.
     struct DecodeResult final
     {
+        /// Module value when structural decoding succeeds.
         std::optional<CorePrepModule> module;
+        /// Structured decode failure, absent on success.
         std::optional<Error> error;
+        /// Test whether a module was successfully decoded.
+        /// @return true when module is present.
         [[nodiscard]] explicit
         operator bool() const noexcept
         {
@@ -34,9 +44,17 @@ namespace visual_xsharp::core::wire
         }
     };
 
+    /// Encode a CorePrep module with the versioned VXCP schema.
+    /// @param module Module to serialize.
+    /// @param limits Resource ceilings enforced by the writer.
+    /// @return Bytes on success or structured error details.
     [[nodiscard]] auto
     encode(const CorePrepModule &module, const Limits &limits = {})
         -> EncodeResult;
+    /// Decode bounded VXCP bytes into a structural CorePrep module.
+    /// @param bytes Complete encoded document.
+    /// @param limits Resource ceilings enforced before allocation.
+    /// @return Module on success or structured error details.
     [[nodiscard]] auto
     decode(std::span<const std::uint8_t> bytes, const Limits &limits = {})
         -> DecodeResult;

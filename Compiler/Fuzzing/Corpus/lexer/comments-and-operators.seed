@@ -1,0 +1,2 @@
+namespace Demo; class Program { public static long Evaluate() { -- ordinary comment
+return 1 + 2 * 3; } }

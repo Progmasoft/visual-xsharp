@@ -4,10 +4,12 @@
 #include <cstdint>
 #include <fmt/format.h>
 #include <iterator>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "Compiler/Cli/Commands/Frontend.hpp"
 #include "Source.hpp"
 #include "Value.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
@@ -88,21 +90,30 @@ namespace Visual::XSharp::Interactive
         if (expression.size() > 1024U * 1024U)
             return Error("one Visual X# expression cannot exceed 1 MiB");
 
-        Runtime::ScratchCell cell;
-        if (const auto issue
-            = Runtime::WriteCellSource(cell, nextCell_, expression, previous_))
-            return Error(*issue);
-        if (Runtime::RunFrontend(cell.SourcePath(), cell.CorePath()) != 0)
-            return Error("frontend rejected this input; the source diagnostic "
-                         "is shown above");
-        auto bytes = Runtime::ReadCore(cell.CorePath());
-        if (!bytes)
-            return Error("frontend did not produce a readable Core artifact");
+        const auto source
+            = Runtime::BuildCellSource(nextCell_, expression, previous_);
+        if (!source)
+            return Error("could not construct the bounded in-memory REPL cell");
+        const auto *sourceBegin
+            = reinterpret_cast<const std::uint8_t *>(source->data());
+        const auto sourceBytes
+            = std::span<const std::uint8_t>(sourceBegin, source->size());
+        const auto compiled
+            = Visual::XSharp::Cli::Frontend::CompileSource(sourceBytes);
+        if (!compiled.succeeded())
+            return Error(
+                compiled.error.empty()
+                    ? "frontend rejected this input without a diagnostic"
+                    : compiled.error);
+        if (compiled.kind
+            != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire)
+            return Error("frontend returned a non-Core result for a REPL cell");
 
         visual_xsharp::PipelineOptions options;
         if (!execute)
             options.stop_after = visual_xsharp::PipelineStop::Xmm;
-        auto pipeline = Visual::XSharp::Pipeline::ConsumeCore(*bytes, options);
+        auto pipeline
+            = Visual::XSharp::Pipeline::ConsumeCore(compiled.bytes, options);
         if (!pipeline)
         {
             if (pipeline.coreWireError)

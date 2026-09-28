@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
+#include <span>
 
 #include "Compiler/Cli/Arguments/Options.hpp"
 
@@ -23,11 +25,26 @@ ProcessCoreArtifactAs(const char *path,
                       const CompilerSettings *settings,
                       const char *targetTriple);
 [[nodiscard]] bool
+ProcessCoreBytesAs(std::span<const std::uint8_t> bytes,
+                   const char *sourceName,
+                   const char *artifactBasePath,
+                   CliCommand command,
+                   BuildOutput output,
+                   const CompilerSettings *settings,
+                   const char *targetTriple);
+[[nodiscard]] bool
 ProcessProjectCoreArtifacts(const std::filesystem::path &corePath,
                             const std::filesystem::path &outputDirectory,
                             BuildOutput output,
                             const CompilerSettings *settings,
                             const char *targetTriple);
+[[nodiscard]] bool
+ProcessProjectCoreBytes(std::span<const std::uint8_t> bytes,
+                        const char *sourceName,
+                        const std::filesystem::path &outputDirectory,
+                        BuildOutput output,
+                        const CompilerSettings *settings,
+                        const char *targetTriple);
 [[nodiscard]] bool
 ProcessXppArtifactAs(const char *path,
                      const char *artifactBasePath,

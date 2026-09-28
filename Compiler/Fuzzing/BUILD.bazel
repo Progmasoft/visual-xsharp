@@ -32,3 +32,41 @@ cc_binary(
     srcs = ["LibFuzzer.cpp"],
     deps = [":wire_fuzz_harness"],
 )
+
+cc_library(
+    name = "source_fuzz_harness",
+    srcs = ["SourceFuzz.cpp"],
+    hdrs = ["SourceFuzz.hpp"],
+    deps = [
+        "//Compiler/Backend/LLVM:llvm_backend",
+        "//Compiler/Cli/Commands:frontend",
+        "//Compiler/Driver:pipeline",
+    ],
+)
+
+cc_binary(
+    name = "source_fuzz_smoke",
+    srcs = ["SourceFuzzSmoke.cpp"],
+    deps = [":source_fuzz_harness"],
+)
+
+cc_binary(
+    name = "lexer_fuzzer",
+    srcs = ["SourceLibFuzzer.cpp"],
+    defines = ["VXS_SOURCE_FUZZ_STAGE=0"],
+    deps = [":source_fuzz_harness"],
+)
+
+cc_binary(
+    name = "parser_fuzzer",
+    srcs = ["SourceLibFuzzer.cpp"],
+    defines = ["VXS_SOURCE_FUZZ_STAGE=1"],
+    deps = [":source_fuzz_harness"],
+)
+
+cc_binary(
+    name = "source_llvm_fuzzer",
+    srcs = ["SourceLibFuzzer.cpp"],
+    defines = ["VXS_SOURCE_FUZZ_STAGE=2"],
+    deps = [":source_fuzz_harness"],
+)

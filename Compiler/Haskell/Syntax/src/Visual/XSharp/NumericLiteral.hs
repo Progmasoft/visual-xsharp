@@ -18,9 +18,11 @@ module Visual.XSharp.NumericLiteral
 
 import Data.Char (digitToInt, isAlphaNum, isDigit, isHexDigit)
 
+-- | Radix supported by a Visual X# integer literal.
 data IntegerRadix = BinaryRadix | DecimalRadix | HexadecimalRadix
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
+-- | Validated radix, mathematical value, and separator-free digit sequence.
 data ParsedInteger = ParsedInteger
     { parsedIntegerRadix :: IntegerRadix
     , parsedIntegerValue :: Integer
@@ -28,6 +30,7 @@ data ParsedInteger = ParsedInteger
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Failure reason for scanning or validating an integer spelling.
 data IntegerLiteralError
     = MissingDigits IntegerRadix
     | UnsupportedOctalPrefix
@@ -48,6 +51,7 @@ scanIntegerSpelling = span isCandidate
     where
         isCandidate character = isAlphaNum character || character == '\'' || character == '_'
 
+-- | Parse a complete integer spelling, rejecting octal and malformed separators.
 parseIntegerSpelling :: String -> Either IntegerLiteralError ParsedInteger
 parseIntegerSpelling spelling
     | hasPrefix "0o" spelling || hasPrefix "0O" spelling = Left UnsupportedOctalPrefix
@@ -111,6 +115,7 @@ radixValue BinaryRadix = 2
 radixValue DecimalRadix = 10
 radixValue HexadecimalRadix = 16
 
+-- | Render an integer-literal failure for a source diagnostic.
 renderIntegerLiteralError :: IntegerLiteralError -> String
 renderIntegerLiteralError issue = case issue of
     MissingDigits radix -> radixName radix ++ " literal requires at least one digit"

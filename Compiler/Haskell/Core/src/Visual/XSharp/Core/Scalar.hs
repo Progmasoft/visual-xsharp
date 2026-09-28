@@ -18,25 +18,32 @@ module Visual.XSharp.Core.Scalar
 
 import Visual.XSharp.AST
 
+-- | Extract the leaf spelling from a non-generic built-in type.
 coreTypeSpelling :: Type -> String
 coreTypeSpelling (NamedType (QualifiedName [Identifier name]) []) = name
 coreTypeSpelling _ = ""
 
+-- | Canonical integer type names, including signed and unsigned widths.
 coreIntegerTypeNames :: [String]
 coreIntegerTypeNames = map fst integerLayouts
 
+-- | Canonical floating-point type names in the language.
 coreFloatingTypeNames :: [String]
 coreFloatingTypeNames = ["sfloat", "lfloat", "float", "double"]
 
+-- | Integer and floating-point names accepted by Core numeric rules.
 coreNumericTypeNames :: [String]
 coreNumericTypeNames = coreIntegerTypeNames ++ coreFloatingTypeNames
 
+-- | Test whether a Core type is a built-in integer scalar.
 isCoreIntegerType :: Type -> Bool
 isCoreIntegerType valueType = coreTypeSpelling valueType `elem` coreIntegerTypeNames
 
+-- | Test whether a Core type is a built-in floating scalar.
 isCoreFloatingType :: Type -> Bool
 isCoreFloatingType valueType = coreTypeSpelling valueType `elem` coreFloatingTypeNames
 
+-- | Test whether a Core type is an integer or floating scalar.
 isCoreNumericType :: Type -> Bool
 isCoreNumericType valueType = coreTypeSpelling valueType `elem` coreNumericTypeNames
 
@@ -66,6 +73,7 @@ integerLayouts =
     , ("ulongint", (False, 128))
     ]
 
+-- | Test whether an exact integer value lies in a Core integer type's range.
 integerFitsCoreType :: Type -> Integer -> Bool
 integerFitsCoreType valueType value = case lookup (coreTypeSpelling valueType) integerLayouts of
     Just (isSigned, width) ->
@@ -75,6 +83,7 @@ integerFitsCoreType valueType value = case lookup (coreTypeSpelling valueType) i
          in value >= minimumValue && value <= maximumValue
     Nothing -> False
 
+-- | Validate a deterministic ASCII decimal or supported special float spelling.
 validCoreFloatingSpelling :: String -> Bool
 validCoreFloatingSpelling spelling
     | spelling `elem` ["nan", "+nan", "-nan", "inf", "+inf", "-inf"] = True

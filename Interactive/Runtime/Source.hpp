@@ -3,59 +3,32 @@
 #pragma once
 
 #include <cstdint>
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #include "Visual/XSharp/Backend/LLVM.hpp"
 #include "Visual/XSharp/Xmm/IR.hpp"
 
 namespace Visual::XSharp::Interactive::Runtime
 {
-    class ScratchCell final
-    {
-    public:
-        /** Reserve a private directory for one source/Core exchange with
-         * vxs-frontend. */
-        ScratchCell();
-        ScratchCell(const ScratchCell &) = delete;
-        auto
-        operator=(const ScratchCell &) -> ScratchCell & = delete;
-        ~ScratchCell();
-        ScratchCell(ScratchCell &&) = delete;
-        auto
-        operator=(ScratchCell &&) -> ScratchCell & = delete;
-
-        [[nodiscard]] auto
-        Valid() const noexcept -> bool;
-        [[nodiscard]] auto
-        SourcePath() const noexcept -> const std::filesystem::path &;
-        [[nodiscard]] auto
-        CorePath() const noexcept -> const std::filesystem::path &;
-
-    private:
-        std::filesystem::path directory_;
-        std::filesystem::path source_;
-        std::filesystem::path core_;
-    };
-
+    /// @brief Build a namespaced REPL compilation unit without touching disk.
+    /// @param cellNumber Unique session cell identity included in the
+    /// namespace.
+    /// @param expression User-entered Visual X# expression.
+    /// @param previous Prior scalar value when it has a lossless source
+    /// spelling.
+    /// @return Source text, or no value for invalid/oversize input.
     [[nodiscard]] auto
-    WriteCellSource(const ScratchCell &cell,
-                    std::uint64_t cellNumber,
+    BuildCellSource(std::uint64_t cellNumber,
                     std::string_view expression,
                     const std::optional<Backend::LLVM::JitValue> &previous)
         -> std::optional<std::string>;
 
-    [[nodiscard]] auto
-    RunFrontend(const std::filesystem::path &source,
-                const std::filesystem::path &core) -> int;
-
-    [[nodiscard]] auto
-    ReadCore(const std::filesystem::path &path)
-        -> std::optional<std::vector<std::uint8_t>>;
-
+    /// @brief Find the verified zero-argument cell evaluator's LLVM symbol.
+    /// @param module Xmm module produced by the cell's compiler pipeline.
+    /// @param cellNumber Namespace identity used to reject stale modules.
+    /// @return Mangled symbol when exactly one matching evaluator is present.
     [[nodiscard]] auto
     EvaluationSymbol(const visual_xsharp::xmm::Module &module,
                      std::uint64_t cellNumber) -> std::optional<std::string>;

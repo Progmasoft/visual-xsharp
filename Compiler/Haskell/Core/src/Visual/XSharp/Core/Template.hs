@@ -26,41 +26,65 @@ module Visual.XSharp.Core.Template
 import Data.List (intercalate, nub, sort)
 import Visual.XSharp.AST
 
+-- | Recognized form of the language's intrinsic or standard fixed array type.
 data ArrayShape
-    = BuiltinArrayShape Type
-    | DynamicArrayShape Type
-    | FixedArrayShape Type Integer
+    = -- | Legacy intrinsic array spelling with an element type.
+      BuiltinArrayShape Type
+    | -- | Dynamic @System.Array<T>@ form.
+      DynamicArrayShape Type
+    | -- | Fixed @System.Array<T, N>@ form.
+      FixedArrayShape Type Integer
     deriving (Eq, Ord, Read, Show)
 
+-- | Category of malformed template identity or unsupported type payload.
 data TemplateIssueKind
-    = TemplateDepthExceeded
-    | TemplateEmptyQualifiedName
-    | TemplateEmptyNamePart
-    | TemplateInvalidParameter
-    | TemplateInvalidCharacter
-    | TemplateNegativeArraySize
-    | TemplateMalformedArrayFamily
+    = -- | Type nesting exceeds the caller's maximum depth.
+      TemplateDepthExceeded
+    | -- | A named type has no name components.
+      TemplateEmptyQualifiedName
+    | -- | A qualified name contains an empty component.
+      TemplateEmptyNamePart
+    | -- | A template variable has an invalid identity or spelling.
+      TemplateInvalidParameter
+    | -- | Character value is not a Unicode scalar.
+      TemplateInvalidCharacter
+    | -- | Fixed array extent is negative.
+      TemplateNegativeArraySize
+    | -- | Built-in array arity or argument shape is invalid.
+      TemplateMalformedArrayFamily
     deriving (Eq, Ord, Read, Show)
 
+-- | One validation issue with the nested argument path that caused it.
 data TemplateIssue = TemplateIssue
     { templateIssueKind :: TemplateIssueKind
+    -- ^ Stable issue category.
     , templateIssuePath :: [Int]
+    -- ^ Zero-based indices through nested type arguments.
     , templateIssueMessage :: String
+    -- ^ Human-readable detail.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Structural counts used to estimate and bound template type complexity.
 data TemplateMetrics = TemplateMetrics
     { templateTypeNodes :: Int
+    -- ^ Named, function, or variable type nodes.
     , templateTypeArguments :: Int
+    -- ^ Type-valued template arguments.
     , templateValueArguments :: Int
+    -- ^ Compile-time value arguments.
     , templateParameterReferences :: Int
+    -- ^ References to open type/value parameters.
     , templateMaximumDepth :: Int
+    -- ^ Deepest nested node or argument encountered.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Zero-valued metric accumulator.
 emptyTemplateMetrics :: TemplateMetrics
 emptyTemplateMetrics = TemplateMetrics 0 0 0 0 0
 
+-- | Recognize the built-in and System.Array type encodings.
 classifyArrayType :: Type -> Maybe ArrayShape
 classifyArrayType valueType = case valueType of
     NamedType (QualifiedName [Identifier "[]"]) [TypeTemplateArgument element] ->
@@ -75,6 +99,7 @@ classifyArrayType valueType = case valueType of
             Just (FixedArrayShape element size)
     _ -> Nothing
 
+-- | Validate type names, open symbols, array forms, and nesting depth.
 validateTemplateType :: Int -> Type -> [TemplateIssue]
 validateTemplateType maximumDepth = validateType [] 0
     where
@@ -148,6 +173,7 @@ validUnicodeScalar scalar =
         && scalar <= 0x10ffff
         && not (scalar >= 0xd800 && scalar <= 0xdfff)
 
+-- | Count nested type/value arguments and open-parameter references.
 measureTemplateType :: Type -> TemplateMetrics
 measureTemplateType = measureType 0
     where
@@ -182,6 +208,7 @@ addMetrics left right =
         , templateMaximumDepth = max (templateMaximumDepth left) (templateMaximumDepth right)
         }
 
+-- | Collect distinct open type and value parameter identities in sorted order.
 collectTemplateParameters :: Type -> [SymbolId]
 collectTemplateParameters = sort . nub . collectType
     where
@@ -195,9 +222,11 @@ collectTemplateParameters = sort . nub . collectType
             ValueTemplateArgument (TemplateValueParameter name) -> [resolvedSymbol name]
             ValueTemplateArgument _ -> []
 
+-- | Test whether no type or value parameter remains anywhere in the type.
 concreteTemplateType :: Type -> Bool
 concreteTemplateType = null . collectTemplateParameters
 
+-- | Replace open type/value parameters recursively using explicit bindings.
 substituteTemplateType :: [(SymbolId, Type)] -> [(SymbolId, TemplateValue)] -> Type -> Type
 substituteTemplateType typeBindings valueBindings = substituteType
     where
@@ -212,6 +241,7 @@ substituteTemplateType typeBindings valueBindings = substituteType
                 ValueTemplateArgument (maybe (TemplateValueParameter name) id (lookup (resolvedSymbol name) valueBindings))
             ValueTemplateArgument value -> ValueTemplateArgument value
 
+-- | Render a deterministic, length-delimited identity for a template type.
 renderTemplateIdentity :: Type -> String
 renderTemplateIdentity valueType = case valueType of
     NamedType name arguments -> renderName name ++ renderArguments arguments

@@ -166,15 +166,15 @@ selects one coherent local package set:
 Push-Location Compiler
 try {
   cabal build all
-  cabal list-bin exe:vxs-frontend
 } finally {
   Pop-Location
 }
 ```
 
-The production/install layout places the frontend relative to `vxs`. The native driver does not search the current project
-directory or accept an arbitrary frontend command from `PATH`. When running directly from a build tree, keep the artifacts in
-the layout expected by the driver or use the repository's tested build targets rather than copying one binary alone.
+The Cabal package builds the Haskell frontend as `vxs-frontend.dll` on Windows, `libvxs-frontend.dylib` on macOS, and
+`libvxs-frontend.so` on Linux. The native driver loads only the matching library beside its executable; it does not search
+the project directory or accept an arbitrary library from `PATH`. The versioned C11 ABI is the only boundary, and a
+synchronous callback copies output bytes into C++-owned memory before Haskell releases them.
 
 ## Local compiler bundle
 
@@ -185,13 +185,14 @@ go run scripts/develop.go bundle
 ```
 
 The command performs both build-system steps deliberately: Bazel produces the C++20 `vxs` driver and Cabal produces the
-private Haskell `vxs-frontend` companion. It then stages a fresh directory with this shape:
+Haskell frontend shared library. It then stages a fresh directory with this shape:
 
 ```text
 dist/
 `-- visual-xsharp-<version>-<platform>-<arch>/
     |-- vxs[.exe]
-    |-- vxs-frontend[.exe]
+    |-- vxsi[.exe]
+    |-- vxs-frontend.dll | libvxs-frontend.dylib | libvxs-frontend.so
     |-- LICENSE.txt
     |-- PATENTS
     |-- LICENSES/
@@ -204,10 +205,9 @@ The brackets above describe the host suffix; they are not literal filename chara
 compiler version, host platform, and architecture so separately built bundles do not silently overwrite one another.
 `dist/` is ignored generated output and is not committed.
 
-The bundle contains three physical programs but exposes one compiler command. Users invoke `vxs`; `vxs-frontend` is the
-private lexer-through-Core process that the driver resolves beside itself, and `vxsi` is the REPL companion that
-`vxs interactive` locates on `PATH`. Do not move only `vxs`, place an unrelated `vxs-frontend` on `PATH`, or advertise the
-frontend companion as a second public compiler.
+The bundle contains two executables and one shared library. Users invoke `vxs`; the driver calls the adjacent
+`vxs-frontend` library in-process through the versioned C ABI, and `vxsi` is the REPL executable that `vxs interactive`
+locates on `PATH`. Do not move `vxs` without its matching library or place an unrelated library beside it.
 
 Staging is not considered successful merely because both build systems returned zero. The bundle command invokes the
 staged tools, checks the compiler version, compiles a real `.vxs` fixture to a `.vxse`, and executes that native program.

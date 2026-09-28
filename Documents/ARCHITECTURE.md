@@ -169,7 +169,7 @@ temporary object. Bounded Xpp/Xmm v5 readers and writers support verified forwar
 ## Process and temporary-file model
 
 The private frontend executable is located relative to `vxs` in the build or installed layout. The current working directory
-is project input, not an executable search mechanism. The driver owns temporary Core and link artifacts through scoped
+is project input, not an executable search mechanism. The driver owns in-memory Core buffers plus temporary link artifacts through scoped
 cleanup objects so partial runs do not leak files or accidentally reuse an older artifact.
 
 `vxs run` executes only the `.vxse` produced by its current successful build. A failed compile or link cannot fall through to

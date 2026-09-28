@@ -17,6 +17,7 @@ import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.Analysis (FunctionEffectReport)
 import Visual.XSharp.Core.Optimizer.Inline (InlineReport)
 
+-- | Controls fixed-point iterations and individually selectable Core passes.
 data OptimizerOptions = OptimizerOptions
     { optimizerMaximumIterations :: Int
     , optimizerConstantPropagation :: Bool
@@ -28,12 +29,15 @@ data OptimizerOptions = OptimizerOptions
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Default bounded optimization configuration used by the compiler pipeline.
 defaultOptimizerOptions :: OptimizerOptions
 defaultOptimizerOptions = OptimizerOptions 12 True True True True True 24
 
 -- Pass names are data rather than display strings so compiler drivers can
 -- render reports without parsing human-oriented output. The order of these
 -- constructors does not define execution order; Pipeline owns that policy.
+
+-- | Stable identifier for one transformation family in pass reports.
 data OptimizationPass
     = ConstantPropagationPass
     | InliningPass
@@ -41,6 +45,7 @@ data OptimizationPass
     | DeadCodeEliminationPass
     deriving (Eq, Ord, Read, Show)
 
+-- | Structural counts collected before and after optimization.
 data OptimizationMetrics = OptimizationMetrics
     { metricFunctions :: Int
     , metricStatements :: Int
@@ -53,6 +58,7 @@ data OptimizationMetrics = OptimizationMetrics
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Verified optimized Core and deterministic reports for all executed passes.
 data OptimizationResult = OptimizationResult
     { optimizedCore :: CoreModule
     , optimizationBefore :: OptimizationMetrics
@@ -68,6 +74,8 @@ data OptimizationResult = OptimizationResult
 -- A report describes one enabled pass invocation in one fixed-point
 -- iteration. Keeping the complete trace makes an optimizer decision
 -- inspectable without exposing an unstable textual dump as a public API.
+
+-- | Before/after measurements for one pass in one fixed-point iteration.
 data PassReport = PassReport
     { passReportIteration :: Int
     , passReportPass :: OptimizationPass

@@ -48,9 +48,11 @@ data PlanningState = PlanningState
     , planningCacheHits :: Int
     }
 
+-- | Plan demands using 'defaultMonomorphizationLimits'.
 planCoreMonomorphization :: CoreModule -> Either MonomorphizationError MonomorphizationPlan
 planCoreMonomorphization = planCoreMonomorphizationWith defaultMonomorphizationLimits
 
+-- | Plan and verify the full specialization graph under caller-supplied limits.
 planCoreMonomorphizationWith ::
     MonomorphizationLimits ->
     CoreModule ->
@@ -210,11 +212,13 @@ resolveDependencies state demand =
                 ]
         }
 
+-- | Look up a planned specialization by its stable demand identifier.
 findDemand :: DemandId -> MonomorphizationPlan -> Maybe MonomorphizationDemand
 findDemand demandId = lookup demandId . map pair . monomorphizationDemands
     where
         pair demand = (monomorphizationDemandId demand, demand)
 
+-- | Find the canonical planned specialization matching a concrete type.
 findDemandByType :: Type -> MonomorphizationPlan -> Maybe MonomorphizationDemand
 findDemandByType valueType =
     findByIdentity (renderTemplateIdentity valueType) . monomorphizationDemands

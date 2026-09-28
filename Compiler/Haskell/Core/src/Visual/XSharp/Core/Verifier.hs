@@ -1,6 +1,10 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+{- | Semantic trust boundary for target-independent Core.
+Decoded artifacts and generated Core trees must pass this verifier before
+CorePrep, optimization, or backend lowering consumes their identities and types.
+-}
 module Visual.XSharp.Core.Verifier (verifyCore) where
 
 import Data.List (group, sort)
@@ -13,6 +17,7 @@ import Visual.XSharp.Diagnostic
 
 type Environment = Map.Map SymbolId (Type, Bool)
 
+-- | Validate module, function, type, symbol, return, and source-ownership rules.
 verifyCore :: CoreModule -> Either [Diagnostic] CoreModule
 verifyCore moduleValue =
     case moduleProblems moduleValue of

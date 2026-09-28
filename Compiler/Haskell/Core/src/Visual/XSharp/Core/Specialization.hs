@@ -31,19 +31,28 @@ import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core.Template
 
+-- | Substitution environment mapping template symbols to concrete types.
 type TypeBindings = [(SymbolId, Type)]
+
+-- | Substitution environment mapping template symbols to constant values.
 type ValueBindings = [(SymbolId, TemplateValue)]
 
+-- | Monotonic identity assigned to an interned concrete specialization.
 newtype SpecializationId = SpecializationId {specializationIdValue :: Int}
     deriving (Eq, Ord, Read, Show)
 
+-- | A validated closed type stored in a specialization catalog.
 data Specialization = Specialization
     { specializationId :: SpecializationId
+    -- ^ Catalog-local stable identifier.
     , specializationIdentity :: String
+    -- ^ Canonical structural identity key.
     , specializationType :: Type
+    -- ^ Validated concrete type.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Persistent immutable index by canonical identity and catalog identifier.
 data SpecializationCatalog = SpecializationCatalog
     { catalogNextId :: SpecializationId
     , catalogByIdentity :: Map String Specialization
@@ -51,17 +60,25 @@ data SpecializationCatalog = SpecializationCatalog
     }
     deriving (Eq, Read, Show)
 
+-- | Rejected substitution, open type, or ambiguous binding environment.
 data SpecializationError
-    = InvalidSpecialization [TemplateIssue]
-    | OpenSpecialization [SymbolId]
-    | DuplicateTypeBinding [SymbolId]
-    | DuplicateValueBinding [SymbolId]
-    | ConflictingBindingKinds [SymbolId]
+    = -- | Concrete type failed structural validation.
+      InvalidSpecialization [TemplateIssue]
+    | -- | Type/value parameter identities remain unresolved.
+      OpenSpecialization [SymbolId]
+    | -- | A type binding key occurs more than once.
+      DuplicateTypeBinding [SymbolId]
+    | -- | A value binding key occurs more than once.
+      DuplicateValueBinding [SymbolId]
+    | -- | One identity is bound as both type and value.
+      ConflictingBindingKinds [SymbolId]
     deriving (Eq, Ord, Read, Show)
 
+-- | Create a catalog whose first assigned identity is one.
 emptyCatalog :: SpecializationCatalog
 emptyCatalog = SpecializationCatalog (SpecializationId 1) Map.empty Map.empty
 
+-- | Return the number of unique concrete types currently interned.
 catalogSize :: SpecializationCatalog -> Int
 catalogSize = Map.size . catalogById
 
@@ -69,6 +86,8 @@ catalogSize = Map.size . catalogById
 valid and closed. Binding diagnostics are deterministic and reported before
 structural issues, making build failures independent of map insertion order.
 -}
+
+-- | Apply bindings, validate structure, and reject any remaining open symbols.
 prepareSpecialization :: TypeBindings -> ValueBindings -> Type -> Either SpecializationError Type
 prepareSpecialization typeBindings valueBindings input = do
     validateBindings typeBindings valueBindings
@@ -85,6 +104,8 @@ prepareSpecialization typeBindings valueBindings input = do
 {- | Intern one already-concrete type. The Bool distinguishes a newly planned
 specialization from an existing cache hit without assigning a second id.
 -}
+
+-- | Validate and intern one concrete type; report whether it was newly added.
 internSpecialization ::
     Type ->
     SpecializationCatalog ->
@@ -108,6 +129,8 @@ internSpecialization input catalog = do
 Left naturally discards entries prepared earlier in the same batch. Repeated
 keys in one worklist share their first insertion-order id.
 -}
+
+-- | Intern a batch transactionally while preserving first-seen identity order.
 internSpecializations ::
     [Type] ->
     SpecializationCatalog ->
@@ -119,13 +142,16 @@ internSpecializations inputs initial = go [] initial inputs
             (entry, _, updated) <- internSpecialization input catalog
             go (entry : entries) updated remaining
 
+-- | Find a catalog entry by its assigned identifier.
 findSpecialization :: SpecializationId -> SpecializationCatalog -> Maybe Specialization
 findSpecialization key = Map.lookup key . catalogById
 
+-- | Find a previously interned entry by canonical type identity.
 findSpecializationByType :: Type -> SpecializationCatalog -> Maybe Specialization
 findSpecializationByType input catalog =
     Map.lookup (renderTemplateIdentity input) (catalogByIdentity catalog)
 
+-- | Snapshot catalog entries ordered by specialization identifier.
 specializationSnapshot :: SpecializationCatalog -> [Specialization]
 specializationSnapshot = Map.elems . catalogById
 

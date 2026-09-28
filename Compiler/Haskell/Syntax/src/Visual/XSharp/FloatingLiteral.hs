@@ -13,6 +13,7 @@ module Visual.XSharp.FloatingLiteral
 
 import Data.Char (isAlphaNum, isDigit)
 
+-- | Reason that a floating-point spelling is not valid in Visual X#.
 data FloatingLiteralError
     = MissingFractionDigits
     | MissingExponentDigits
@@ -26,6 +27,10 @@ data FloatingLiteralError
 
 -- The sign is consumed only immediately after e/E. This prevents 1+2 from
 -- becoming one malformed literal while retaining 2E-4 as one token.
+
+{- | Consume one source-shaped numeric candidate and return the remaining text.
+A sign belongs to the token only immediately after an exponent marker.
+-}
 scanNumericCandidate :: String -> (String, String)
 scanNumericCandidate = go [] False
     where
@@ -36,14 +41,19 @@ scanNumericCandidate = go [] False
             | afterExponent && character `elem` ['+', '-'] = go (character : output) False remaining
             | otherwise = (reverse output, character : remaining)
 
+{- | Decide whether a numeric candidate has a decimal or exponent marker.
+Radix-prefixed integer candidates are deliberately excluded.
+-}
 isFloatingCandidate :: String -> Bool
 isFloatingCandidate spelling
     | take 2 spelling `elem` ["0x", "0X", "0b", "0B", "0o", "0O"] = False
     | otherwise = any (`elem` spelling) ['.', 'e', 'E']
 
+-- | Remove digit separators without otherwise changing the spelling.
 normalizeFloatingSpelling :: String -> String
 normalizeFloatingSpelling = filter (/= '\'')
 
+-- | Validate a decimal floating spelling and return its normalized form.
 validateFloatingSpelling :: String -> Either FloatingLiteralError String
 validateFloatingSpelling spelling = do
     validateCharacters spelling
@@ -108,6 +118,7 @@ validateExponent (_ : remaining) =
     let digits = case remaining of sign : rest | sign `elem` ['+', '-'] -> rest; _ -> remaining
      in if null digits || any (not . isDigit) digits then Left MissingExponentDigits else Right ()
 
+-- | Render a floating-literal failure for a source diagnostic.
 renderFloatingLiteralError :: FloatingLiteralError -> String
 renderFloatingLiteralError issue = case issue of
     MissingFractionDigits -> "floating-point literal requires digits on both sides of the decimal point"

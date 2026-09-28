@@ -1,4 +1,5 @@
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -14,10 +15,24 @@ cc_binary(
 
 cc_binary(
     name = "cli_command_tests",
-    srcs = ["CliCommandTests.cpp"],
+    srcs = ["CliCommandTests.cpp", "FrontendHeaderC11Tests.cpp"],
     deps = [
+        ":frontend_header_c11_compile",
         "//Compiler/Cli/Commands:commands",
         "@catch3//:catch2_main",
         "@catch3//src/Progmasoft:catch3",
     ],
+)
+
+# Compile the ABI header with a real C11 frontend to keep C++ types outside the
+# boundary. This is a test-only C translation unit, never production code.
+cc_library(
+    name = "frontend_header_c11_compile",
+    srcs = ["FrontendHeaderC11.c"],
+    copts = select({
+        "@platforms//os:windows": ["/std:c11"],
+        "//conditions:default": ["-std=c11"],
+    }),
+    visibility = ["//visibility:private"],
+    deps = ["//Compiler/Headers/Visual/XSharp:frontend_abi"],
 )

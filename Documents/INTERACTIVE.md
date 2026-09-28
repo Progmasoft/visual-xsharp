@@ -19,9 +19,10 @@ vxs interactive -Help
 not search the current directory, derive a path beside `vxs`, parse `vxsi` flags itself, or add a shell layer. This permits
 the REPL to be installed or updated as a separate companion while preserving one public compiler command.
 
-The repository's native bundle stages `vxs`, `vxsi`, and the private `vxs-frontend` together. Add that directory to `PATH`
-before running the public invocation. `vxs-frontend` is resolved by each frontend host relative to that host's executable;
-it is not a user-facing compiler, and placing an unrelated frontend on `PATH` does not override the bundled one.
+The repository's native bundle stages `vxs`, `vxsi`, and the private `vxs-frontend` shared library together. Add that
+directory to `PATH` before running the public invocation. `vxs` discovers `vxsi` through `PATH`; `vxsi` loads the shared
+library beside its own executable. The library is not a user-facing compiler, and an unrelated copy on `PATH` cannot
+override it.
 
 For development or editor integration, `vxsi` can also be run directly. Its command-line grammar is deliberately small:
 
@@ -60,14 +61,14 @@ projects, entry-point execution, or input that requires more than one expression
 
 ## Cell compilation
 
-For each line, the host reserves an isolated temporary directory and writes a small source unit whose final expression is
-inside a class method. The generated namespace contains a monotonically increasing cell identity. This gives the ordinary
-resolver and Core symbol machinery a proper class/function identity without adding top-level functions or a parser special
-case for REPL input.
+For each line, the host constructs a small source unit in memory whose final expression is inside a class method. The
+generated namespace contains a monotonically increasing cell identity. This gives the ordinary resolver and Core symbol
+machinery a proper class/function identity without adding top-level functions or a parser special case for REPL input.
 
-The host invokes the private Haskell `vxs-frontend` executable with an argument vector, not a command string. The frontend
-parses, resolves, type-checks, and desugars the generated source and writes the normal bounded Core artifact. The host
-validates the artifact size, reads it, and runs the production C++ pipeline:
+The host calls the private Haskell `vxs-frontend` shared library through its versioned C11 ABI. The frontend parses,
+resolves, type-checks, and desugars the generated source, then lends verified Core bytes to a synchronous callback; the host
+copies them into owned memory before running the production C++ pipeline. Source and Core stay in memory, without a
+frontend child process or temporary source/Core file:
 
 ```text
 generated source
@@ -85,9 +86,8 @@ lowering, JIT loading errors, and unsupported invocation types fail through thei
 front end and type checker but stops at Xmm; it reports the return type without creating JIT code or executing the
 expression.
 
-The implementation launches the frontend once per cell. This keeps the compiler's existing language ownership and
-diagnostics intact, and avoids an embedded duplicate frontend. It does have process-startup cost; reducing that cost
-requires a supported long-lived frontend protocol, not a private parser or a shortcut around semantic analysis.
+The frontend is a shared library initialized once by the `vxsi` process. Every cell uses the same typed C11 callback
+boundary and maintained Haskell passes; no duplicate parser or shortcut around semantic analysis is embedded in the REPL.
 
 ## Session model
 
@@ -140,17 +140,16 @@ therefore invokes only a generated zero-parameter cell function with a supported
 objects, closures, strings, exceptions, or user-provided parameters requires a stable language ABI and ownership contract;
 passing a guessed C++ struct layout is not an acceptable shortcut.
 
-## Process and temporary-file safety
+## In-memory ownership and runtime safety
 
-Each cell's `.vxs` and `.core` files live in a unique temporary directory. POSIX builds reserve it with `mkdtemp` and
-mode `0700`; Windows builds use atomic directory creation under the user's temporary root. RAII removes the directory on
-all normal exits from the cell operation. The Core reader rejects empty files and artifacts larger than 256 MiB before
-allocation.
+Generated cell text is passed directly to the Haskell frontend. Its strict `ByteString` owns encoded Core until the
+synchronous callback returns; the C++ receiver copies that bounded buffer before the frontend call completes and passes
+the copy through the same Core wire verifier used by file-based compiler paths. Neither a temporary `.vxs` nor `.core` file
+is created.
 
-The executable path for `vxs-frontend` comes from the running `vxsi` image. Child arguments are passed without shell
-interpolation. Windows filesystem paths are encoded as UTF-8 at the interface and converted to UTF-16 for process launch;
-POSIX paths are passed directly. A missing frontend, invalid path encoding, spawn failure, abnormal child exit, invalid
-Core, failed module lookup, or unsupported ABI produces a diagnostic and never a success result.
+The shared-library path for `vxs-frontend` comes from the running `vxsi` image. Initialization happens outside loader-lock
+callbacks; shutdown occurs only after synchronous calls have finished. A missing frontend, malformed source, failed library
+load, invalid Core, failed module lookup, or unsupported ABI produces a diagnostic and never a success result.
 
 JIT execution runs in-process. As with any compiler REPL, evaluating untrusted programs can execute arbitrary native code
 with the current user's authority. `vxsi` intentionally does not claim to provide a sandbox, process isolation, memory

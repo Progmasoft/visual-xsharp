@@ -23,9 +23,12 @@ module Visual.XSharp.IntegerEvaluation
 import Data.Bits (countLeadingZeros, shiftL, shiftR)
 import Data.Word (Word64)
 
+-- | Failures returned by bounded compile-time integer operations.
 data CompileTimeIntegerError
-    = CompileTimeIntegerLimitExceeded
-    | CompileTimeNegativeExponent
+    = -- | The exact result exceeds the 65,536-bit bound.
+      CompileTimeIntegerLimitExceeded
+    | -- | Integer exponentiation was given a negative exponent.
+      CompileTimeNegativeExponent
     deriving (Eq, Ord, Read, Show)
 
 -- This is intentionally much wider than any built-in scalar (128 bits). A
@@ -38,6 +41,7 @@ maximumCompileTimeIntegerBits = 65536
 maximumCompileTimeMagnitude :: Integer
 maximumCompileTimeMagnitude = 1 `shiftL` maximumCompileTimeIntegerBits
 
+-- | Accept an integer strictly inside the module's symmetric magnitude bound.
 checkCompileTimeInteger :: Integer -> Either CompileTimeIntegerError Integer
 checkCompileTimeInteger value
     | value <= negate maximumCompileTimeMagnitude || value >= maximumCompileTimeMagnitude =
@@ -51,6 +55,8 @@ values makes the same proof valid for all four sign combinations. If the lower
 bound does not prove overflow, the exact product is constructed once and then
 checked against the half-open limit; this keeps the fast rejection conservative.
 -}
+
+-- | Multiply exact integers after checking operand and result resource bounds.
 multiplyCompileTimeIntegers :: Integer -> Integer -> Either CompileTimeIntegerError Integer
 multiplyCompileTimeIntegers left right = do
     boundedLeft <- checkCompileTimeInteger left
@@ -62,6 +68,7 @@ multiplyCompileTimeIntegers left right = do
                 then Left CompileTimeIntegerLimitExceeded
                 else checkCompileTimeInteger (boundedLeft * boundedRight)
 
+-- | Compute an exact non-negative integer power by bounded repeated squaring.
 evaluateCompileTimePower :: Integer -> Integer -> Either CompileTimeIntegerError Integer
 evaluateCompileTimePower base exponentValue
     | exponentValue < 0 = Left CompileTimeNegativeExponent
@@ -90,6 +97,7 @@ evaluateCompileTimePower base exponentValue
                         squaredFactor <- multiplyCompileTimeIntegers factor factor
                         powerLoop nextAccumulated squaredFactor nextRemaining
 
+-- | Shift an exact integer left, interpreting a negative count as right shift.
 evaluateCompileTimeShiftLeft :: Integer -> Integer -> Either CompileTimeIntegerError Integer
 evaluateCompileTimeShiftLeft value amount = do
     boundedValue <- checkCompileTimeInteger value
@@ -107,6 +115,7 @@ evaluateCompileTimeShiftLeft value amount = do
                     boundedAmount <- checkedShiftAmount amount
                     checkCompileTimeInteger (shiftL boundedValue boundedAmount)
 
+-- | Arithmetic-shift an exact integer right, interpreting a negative count as left shift.
 evaluateCompileTimeShiftRight :: Integer -> Integer -> Either CompileTimeIntegerError Integer
 evaluateCompileTimeShiftRight value amount = do
     boundedValue <- checkCompileTimeInteger value

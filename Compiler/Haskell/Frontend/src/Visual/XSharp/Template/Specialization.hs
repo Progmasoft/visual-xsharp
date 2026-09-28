@@ -45,76 +45,123 @@ select every overload carrying one of the requested spellings. Complete is
 reserved for an explicit whole-declaration request; it is never inferred.
 -}
 data TemplateDemandScope
-    = TemplateLayoutDemand
-    | TemplateMemberDemand [Identifier]
-    | TemplateCompleteDemand
+    = -- | Retain layout and signatures without method bodies.
+      TemplateLayoutDemand
+    | -- | Retain named methods and their call closure.
+      TemplateMemberDemand [Identifier]
+    | -- | Explicit request for the complete declaration.
+      TemplateCompleteDemand
     deriving (Eq, Ord, Read, Show)
 
+-- | One source or compiler request to materialize a template specialization.
 data TemplateSpecializationDemand = TemplateSpecializationDemand
     { specializationDemandApplication :: TemplateApplication
+    -- ^ Declaration and bound arguments requested.
     , specializationDemandScope :: TemplateDemandScope
+    -- ^ Portion of the declaration that must be retained.
     , specializationDemandOrigin :: String
+    -- ^ Stable provenance used in diagnostics and deduplication.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Resource ceilings preventing specialization requests from exhausting the compiler.
 data TemplateSpecializationLimits = TemplateSpecializationLimits
     { maximumTemplateSpecializations :: Int
+    -- ^ Maximum unique specializations in one plan.
     , maximumTemplateOrigins :: Int
+    -- ^ Maximum recorded request origins.
     , maximumMembersPerSpecialization :: Int
+    -- ^ Maximum materialized members per specialization.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Finite defaults suitable for normal compiler and project builds.
 defaultTemplateSpecializationLimits :: TemplateSpecializationLimits
 defaultTemplateSpecializationLimits = TemplateSpecializationLimits 4096 16384 4096
 
+-- | Stable ordinal identity within one specialization plan.
 newtype TemplateSpecializationId = TemplateSpecializationId
     { templateSpecializationIdValue :: Int
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | One closed specialization and all identities needed by later lowering.
 data TemplateSpecialization = TemplateSpecialization
     { templateSpecializationId :: TemplateSpecializationId
+    -- ^ Plan-local stable identity.
     , templateSpecializationIdentity :: String
+    -- ^ Canonical concrete-type identity key.
     , templateSpecializationType :: Type
+    -- ^ Closed concrete application type.
     , templateSpecializationScope :: TemplateDemandScope
+    -- ^ Strongest coalesced materialization scope.
     , templateSpecializationOrigins :: [String]
+    -- ^ All deduplicated request provenance strings.
     , templateSpecializationDependencies :: [TemplateSpecializationId]
+    -- ^ Specializations referenced by this body.
     , templateSpecializationDeclaration :: Declaration ResolvedName Type
+    -- ^ Instantiated and symbol-freshened declaration.
     , templateSpecializationSymbolMap :: [(SymbolId, SymbolId)]
+    -- ^ Original-to-fresh definition identities.
     , templateSpecializationMangledType :: MangledTemplateType
+    -- ^ Internal stable type symbol.
     , templateSpecializationMangledMembers :: [MangledTemplateMember]
+    -- ^ Internal member symbols in declaration order.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Demand, coalescing, materialization, and dependency counts.
 data TemplateSpecializationStatistics = TemplateSpecializationStatistics
     { requestedTemplateSpecializations :: Int
+    -- ^ Number of input demands.
     , uniqueTemplateSpecializations :: Int
+    -- ^ Number of retained concrete specializations.
     , coalescedTemplateSpecializations :: Int
+    -- ^ Requests merged into existing entries.
     , instantiatedTemplateMembers :: Int
+    -- ^ Total members materialized across entries.
     , retainedTemplateOrigins :: Int
+    -- ^ Provenance strings retained after merging.
     , templateDependencyEdges :: Int
+    -- ^ Number of specialization-to-specialization edges.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Immutable batch result consumed by dependency ordering and Core lowering.
 data TemplateSpecializationPlan = TemplateSpecializationPlan
     { plannedTemplateNamespace :: Maybe QualifiedName
+    -- ^ Namespace shared by source declarations.
     , plannedTemplateSpecializations :: [TemplateSpecialization]
+    -- ^ Closed specializations retained in the plan.
     , plannedTemplateStatistics :: TemplateSpecializationStatistics
+    -- ^ Aggregate counts for the plan.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Planning, binding, closure, resource, or internal-name generation failure.
 data TemplateSpecializationError
-    = InvalidTemplateSpecializationLimits String
-    | TemplateApplicationFailed String [TemplateApplicationError]
-    | TemplateInstantiationFailed String TemplateInstantiationError
-    | TemplateDeclarationSourceMissing QualifiedName SymbolId
-    | TemplateMemberNotFound QualifiedName Identifier
-    | TemplateSpecializationRemainsOpen String [SymbolId]
-    | TemplateSpecializationLimitExceeded Int String
-    | TemplateOriginLimitExceeded Int String
-    | TemplateMemberLimitExceeded QualifiedName Int Int
-    | TemplateMemberReachabilityFailed QualifiedName [TemplateMemberReachabilityError]
-    | TemplateMangleFailed String [TemplateMangleError]
+    = -- | A configured plan limit is invalid.
+      InvalidTemplateSpecializationLimits String
+    | -- | Binding failed for this demand.
+      TemplateApplicationFailed String [TemplateApplicationError]
+    | -- | Substitution failed during materialization.
+      TemplateInstantiationFailed String TemplateInstantiationError
+    | -- | Bound declaration has no matching source.
+      TemplateDeclarationSourceMissing QualifiedName SymbolId
+    | -- | Requested member spelling is absent.
+      TemplateMemberNotFound QualifiedName Identifier
+    | -- | Type/value variables remain after binding.
+      TemplateSpecializationRemainsOpen String [SymbolId]
+    | -- | Unique specialization count exceeded its ceiling.
+      TemplateSpecializationLimitExceeded Int String
+    | -- | Recorded provenance exceeded its ceiling.
+      TemplateOriginLimitExceeded Int String
+    | -- | Materialized member count exceeded its ceiling.
+      TemplateMemberLimitExceeded QualifiedName Int Int
+    | -- | Member call closure could not be computed.
+      TemplateMemberReachabilityFailed QualifiedName [TemplateMemberReachabilityError]
+    | -- | Concrete identity could not be encoded.
+      TemplateMangleFailed String [TemplateMangleError]
     deriving (Eq, Ord, Read, Show)
 
 data PreparedDemand = PreparedDemand
@@ -125,6 +172,7 @@ data PreparedDemand = PreparedDemand
     , preparedOrigins :: [String]
     }
 
+-- | Bind, coalesce, instantiate, freshen, and dependency-link explicit demands.
 planTemplateSpecializations ::
     TemplateSpecializationLimits ->
     TypedAST ->
@@ -395,6 +443,7 @@ attachDependencies specializations = map attach specializations
                         ]
                 }
 
+-- | Find a plan entry by its plan-local identity.
 findTemplateSpecialization ::
     TemplateSpecializationId ->
     TemplateSpecializationPlan ->
@@ -402,6 +451,7 @@ findTemplateSpecialization ::
 findTemplateSpecialization identifier =
     first ((== identifier) . templateSpecializationId) . plannedTemplateSpecializations
 
+-- | Find a plan entry by its canonical concrete-type identity string.
 findTemplateSpecializationByIdentity ::
     String ->
     TemplateSpecializationPlan ->
@@ -413,6 +463,8 @@ findTemplateSpecializationByIdentity identity =
 legal, so a grey node closes the current DFS edge instead of becoming an
 error. Every specialization still appears exactly once.
 -}
+
+-- | Return stable dependency-first IDs for specialization emission.
 specializationEmissionOrder :: TemplateSpecializationPlan -> [TemplateSpecializationId]
 specializationEmissionOrder plan = reverse completed
     where
@@ -439,6 +491,8 @@ visit table state@(active, completed) identifier
 {- | Build the exact closed TypedAST view consumed by declaration lowering.
 Open templates remain in the semantic artifacts but are not copied here.
 -}
+
+-- | Assemble the exact closed typed AST consumed by declaration lowering.
 specializationTypedAST :: TemplateSpecializationPlan -> TypedAST
 specializationTypedAST plan =
     TypedAST
@@ -559,6 +613,7 @@ renderName (QualifiedName parts) = intercalate "." (map renderPart parts)
     where
         renderPart (Identifier value) = show (length value) ++ ":" ++ value
 
+-- | Render a demand, resource, reachability, or mangling failure.
 renderTemplateSpecializationError :: TemplateSpecializationError -> String
 renderTemplateSpecializationError issue = case issue of
     InvalidTemplateSpecializationLimits message -> "invalid template specialization limits: " ++ message

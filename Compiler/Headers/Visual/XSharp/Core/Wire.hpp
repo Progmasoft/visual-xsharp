@@ -13,87 +13,72 @@
 
 namespace Visual::XSharp::Core::Wire
 {
-    /**
-     * @brief Current VXCR schema version.
-     *
-     * Decoders
-     * require an exact match; they do not negotiate or reinterpret
-     *
-     * artifacts from older revisions.
-     */
+    /// Current VXCR schema version. Decoders require an exact match.
     inline constexpr std::uint16_t kCurrentVersion = 7;
 
-    /**
-     * @brief Per-call resource ceilings for encoding and decoding.
- *
-
-     * * Decoding treats input bytes as untrusted and checks these bounds
-     * before
-     * reserving variable-sized containers or descending into
-     * recursive values.
-     */
+    /// Per-call resource ceilings for encoding and decoding.
+    /// Untrusted input is checked against these bounds before allocation.
     struct Limits final
     {
-        /// Total document size.
+        /// Maximum total document size in bytes.
         std::size_t maximumWireBytes{ 64U * 1024U * 1024U };
-        /// Unicode scalars in one text field.
+        /// Maximum Unicode scalar count in one text field.
         std::size_t maximumTextScalars{ 1024U * 1024U };
-        /// Functions in a module.
+        /// Maximum number of functions in one module.
         std::size_t maximumFunctions{ 65535U };
-        /// Parameters in one function or closure signature.
+        /// Maximum parameters in one function or closure signature.
         std::size_t maximumParameters{ 65535U };
-        /// Statements in one function, branch, or closure body list.
+        /// Maximum statements in a function, branch, or closure body.
         std::size_t maximumStatements{ 1048576U };
-        /// Values in one operand or template-argument list.
+        /// Maximum values in one operand or template-argument list.
         std::size_t maximumOperands{ 65535U };
-        /// Recursive type nesting.
+        /// Maximum recursive type nesting depth.
         std::size_t maximumTypeDepth{ 128U };
-        /// Recursive expression nesting.
+        /// Maximum recursive expression nesting depth.
         std::size_t maximumExpressionDepth{ 4096U };
-        /// Magnitude bytes in one numeric literal.
+        /// Maximum encoded magnitude bytes in one numeric literal.
         std::size_t maximumNumericBytes{ 4096U };
     };
 
-    /** @brief Stable categories for malformed or unrepresentable wire values.
-     */
+    /// Stable categories for malformed or unrepresentable wire values.
     enum class ErrorKind : std::uint8_t
     {
-        InvalidMagic,
-        UnsupportedVersion,
-        TruncatedInput,
-        TrailingInput,
-        InvalidTag,
-        InvalidBoolean,
-        InvalidScalar,
-        InvalidCount,
-        InvalidSymbol,
-        InvalidInteger,
-        UnsupportedType,
-        LimitExceeded
+        InvalidMagic,       ///< Header magic does not match VXCR.
+        UnsupportedVersion, ///< Header version is not supported.
+        TruncatedInput,     ///< Input ended before a field was complete.
+        TrailingInput,      ///< Bytes remain after one complete document.
+        InvalidTag,         ///< A discriminant is not defined by the schema.
+        InvalidBoolean,     ///< Boolean encoding is not zero or one.
+        InvalidScalar,      ///< Text contains a non-scalar Unicode value.
+        InvalidCount,       ///< A collection count is malformed.
+        InvalidSymbol,      ///< Symbol identity or spelling is invalid.
+        InvalidInteger,     ///< Integer representation is not canonical.
+        UnsupportedType,    ///< A Core type is not representable in VXCR.
+        LimitExceeded       ///< A configured resource ceiling was exceeded.
     };
 
-    /**
-     * @brief One encode/decode failure, with its byte offset and field
-     * context.
-     *
-     * The offset identifies the reader or writer
-     * position at which the
-     * contract violation was detected;
-     * presentation belongs to the caller.
-     */
+    /// Encode/decode failure with a byte offset and field context.
     struct Error final
     {
+        /// Failure category suitable for programmatic handling.
         ErrorKind kind{ ErrorKind::InvalidTag };
+        /// Reader or writer offset where the contract failed.
         std::size_t offset{};
+        /// Field path identifying the value being processed.
         std::string context;
+        /// Human-readable explanation; presentation belongs to the caller.
         std::string message;
     };
 
-    /** @brief Encoded bytes or the error that prevented serialization. */
+    /// Encoded bytes or the error that prevented serialization.
     struct EncodeResult final
     {
+        /// Complete VXCR bytes when encoding succeeds.
         std::vector<std::uint8_t> bytes;
+        /// Failure details when encoding does not succeed.
         std::optional<Error> error;
+        /// Test whether encoding completed without an error.
+        /// @return true when error is empty.
         [[nodiscard]] explicit
         operator bool() const noexcept
         {
@@ -101,11 +86,15 @@ namespace Visual::XSharp::Core::Wire
         }
     };
 
-    /** @brief A structurally decoded module or the error that rejected it. */
+    /// Structurally decoded module or the error that rejected it.
     struct DecodeResult final
     {
+        /// Decoded Core module when parsing succeeds.
         std::optional<Module> module;
+        /// Failure details when the payload is rejected.
         std::optional<Error> error;
+        /// Test whether a module was decoded successfully.
+        /// @return true when module exists and error is empty.
         [[nodiscard]] explicit
         operator bool() const noexcept
         {
@@ -113,21 +102,19 @@ namespace Visual::XSharp::Core::Wire
         }
     };
 
-    /**
-     * @brief Serialize a Core module using the current VXCR schema and
-     * limits.
-     * @note Successful encoding does not replace semantic
-     * verification.
-     */
+    /// Serialize a Core module using the current VXCR schema.
+    /// Successful encoding does not replace semantic verification.
+    /// @param module Module to encode.
+    /// @param limits Resource limits enforced before and during serialization.
+    /// @return Serialized document or a structured wire error.
     [[nodiscard]] auto
     Encode(const Module &module, const Limits &limits = {}) -> EncodeResult;
 
-    /**
-     * @brief Decode bounded VXCR bytes without granting them semantic
-     * trust.
-     * @note Call the Core verifier before optimization,
-     * adaptation, or lowering.
-     */
+    /// Decode bounded VXCR bytes without granting them semantic trust.
+    /// Call the Core verifier before optimization, adaptation, or lowering.
+    /// @param bytes Complete VXCR document to decode.
+    /// @param limits Resource ceilings enforced before allocation.
+    /// @return Decoded structural module or a wire error.
     [[nodiscard]] auto
     Decode(std::span<const std::uint8_t> bytes, const Limits &limits = {})
         -> DecodeResult;

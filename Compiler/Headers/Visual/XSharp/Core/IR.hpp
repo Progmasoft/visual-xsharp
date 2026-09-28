@@ -13,161 +13,263 @@
 
 namespace Visual::XSharp::Core
 {
+    /// Stable declaration identity used by the source-level Core tree.
     using SymbolId = ::visual_xsharp::core::SymbolId;
+    /// Resolved declaration identity together with its source spelling.
     using SymbolName = ::visual_xsharp::core::SymbolName;
+    /// Structural scalar, nominal, or callable type shared with CorePrep.
     using Type = ::visual_xsharp::core::Type;
+    /// Literal payload supported by source-level Core expressions.
     using Literal = ::visual_xsharp::core::Literal;
 
+    /// Built-in operation represented directly in a typed Core expression.
     enum class Primitive : std::uint8_t
     {
-        Add,
-        Subtract,
-        Multiply,
-        Divide,
-        FloorDivide,
-        Remainder,
-        LessThan,
-        LessEqual,
-        GreaterThan,
-        GreaterEqual,
-        Equal,
-        NotEqual,
-        LogicalAnd,
-        LogicalOr,
-        Negate,
-        LogicalNot,
-        Power,
-        ShiftLeft,
-        ShiftRight,
-        BitwiseAnd,
-        BitwiseXor,
-        BitwiseOr,
-        BitwiseNot,
-        TypeIs
+        Add,          ///< Arithmetic addition.
+        Subtract,     ///< Arithmetic subtraction.
+        Multiply,     ///< Arithmetic multiplication.
+        Divide,       ///< Truncating arithmetic division.
+        FloorDivide,  ///< Floor-rounded arithmetic division.
+        Remainder,    ///< Arithmetic remainder.
+        LessThan,     ///< Ordered less-than comparison.
+        LessEqual,    ///< Ordered less-than-or-equal comparison.
+        GreaterThan,  ///< Ordered greater-than comparison.
+        GreaterEqual, ///< Ordered greater-than-or-equal comparison.
+        Equal,        ///< Value equality comparison.
+        NotEqual,     ///< Value inequality comparison.
+        LogicalAnd,   ///< Boolean conjunction.
+        LogicalOr,    ///< Boolean disjunction.
+        Negate,       ///< Arithmetic negation.
+        LogicalNot,   ///< Boolean negation.
+        Power,        ///< Exponentiation.
+        ShiftLeft,    ///< Left bit shift.
+        ShiftRight,   ///< Right bit shift.
+        BitwiseAnd,   ///< Bitwise conjunction.
+        BitwiseXor,   ///< Bitwise exclusive disjunction.
+        BitwiseOr,    ///< Bitwise inclusive disjunction.
+        BitwiseNot,   ///< Bitwise complement.
+        TypeIs        ///< Runtime type test.
     };
 
+    /// Closure capture ownership contract shared with CorePrep.
     using CaptureMode = ::visual_xsharp::core::CaptureMode;
 
+    /// Forward declaration used by recursive closure capture expressions.
     struct Expression;
 
-    // The captured value belongs to the enclosing lexical environment, while
-    // symbol and type describe the binding visible inside the lifted closure.
-    // shared_ptr breaks the recursive Expression/Capture representation
-    // without assigning semantic meaning to pointer identity.
+    /// One lexical value captured by a closure expression.
+    ///
+    /// value is evaluated in the enclosing environment. symbol and type name
+    /// the corresponding binding in the lifted closure body.
     struct Capture final
     {
+        /// Retain, weakly observe, or unownedly reference the captured object.
         CaptureMode mode{ CaptureMode::Strong };
+        /// Binding identity exposed within the lifted closure.
         SymbolName symbol{};
+        /// Static type of the captured binding.
         Type type{ Type::unit() };
+        /// Source expression evaluated in the enclosing lexical scope.
         std::shared_ptr<Expression> value;
 
+        /// Compare capture semantics and the captured expression structurally.
+        /// @param other Capture to compare with this value.
+        /// @return true when all capture metadata and values are equal.
         [[nodiscard]] auto
         operator==(const Capture &other) const -> bool;
     };
 
+    /// Forward declaration used by nested structured statements.
     struct Statement;
 
+    /// Typed Core expression consumed by desugaring and CorePrep lowering.
     struct Expression final
     {
+        /// Selects the active expression payload fields.
         enum class Kind : std::uint8_t
         {
-            Variable,
-            Literal,
-            Apply,
-            Primitive,
-            Closure,
-            Let
+            Variable,  ///< Resolved local or parameter reference.
+            Literal,   ///< Constant literal value.
+            Apply,     ///< Function invocation.
+            Primitive, ///< Built-in operation application.
+            Closure,   ///< Anonymous function with explicit captures.
+            Let        ///< Lexical binding followed by a body expression.
         };
 
+        /// Active expression category.
         Kind kind{ Kind::Literal };
+        /// Statically inferred result type.
         Type type{ Type::unit() };
+        /// Referenced binding when kind is Variable or Let.
         SymbolName symbol{};
+        /// Constant payload when kind is Literal.
         Literal literal{};
+        /// Built-in operation when kind is Primitive.
         Core::Primitive primitive{ Core::Primitive::Add };
+        /// Called expression when kind is Apply.
         std::shared_ptr<Expression> callee;
+        /// Bound value when kind is Let.
         std::shared_ptr<Expression> letValue;
+        /// Body expression evaluated after the Let binding.
         std::shared_ptr<Expression> letBody;
+        /// Binding identity introduced by a Let expression.
         SymbolName letSymbol{};
+        /// Binding type for the Let expression.
         Type letType{ Type::unit() };
+        /// Ordered call or primitive arguments.
         std::vector<Expression> operands;
+        /// Lexical values captured by a closure.
         std::vector<Capture> captures;
+        /// Closure parameters in declaration order.
         std::vector<std::pair<SymbolName, Type>> closureParameters;
+        /// Declared closure result type.
         Type closureReturnType{ Type::unit() };
+        /// Structured closure body; null outside closure expressions.
         std::shared_ptr<std::vector<Statement>> closureBody;
 
+        /// Construct a typed reference to a resolved binding.
+        /// @param name Resolved binding identity.
+        /// @param valueType Static type of the binding.
+        /// @return A Variable expression with the given symbol and type.
         [[nodiscard]] static auto
         Variable(SymbolName name, Type valueType) -> Expression;
+        /// Construct a typed constant expression.
+        /// @param value Literal payload to retain.
+        /// @param valueType Static type assigned to the literal.
+        /// @return A Literal expression carrying the supplied value.
         [[nodiscard]] static auto
         Constant(Literal value, Type valueType) -> Expression;
+        /// Construct a function application expression.
+        /// @param target Callee expression.
+        /// @param arguments Arguments in source evaluation order.
+        /// @param resultType Statically resolved result type.
+        /// @return An Apply expression with owned child expressions.
         [[nodiscard]] static auto
         Apply(Expression target,
               std::vector<Expression> arguments,
               Type resultType) -> Expression;
+        /// Construct an application of a built-in primitive operation.
+        /// @param operation Primitive operation to execute.
+        /// @param arguments Operands in source evaluation order.
+        /// @param resultType Statically resolved result type.
+        /// @return A Primitive expression with the supplied operands.
         [[nodiscard]] static auto
         InvokePrimitive(Core::Primitive operation,
                         std::vector<Expression> arguments,
                         Type resultType) -> Expression;
+        /// Construct a closure with explicit captures, signature, and body.
+        /// @param captured Values captured from the enclosing lexical scope.
+        /// @param parameters Closure parameters and their declared types.
+        /// @param returnType Declared closure result type.
+        /// @param body Structured statements executed by the closure.
+        /// @param valueType Static function type of the closure expression.
+        /// @return A Closure expression retaining all closure metadata.
         [[nodiscard]] static auto
         Closure(std::vector<Capture> captured,
                 std::vector<std::pair<SymbolName, Type>> parameters,
                 Type returnType,
                 std::vector<Statement> body,
                 Type valueType) -> Expression;
+        /// Construct a lexical binding expression.
+        /// @param name Identity of the newly introduced binding.
+        /// @param bindingType Declared type of the bound value.
+        /// @param value Expression evaluated before entering the body.
+        /// @param body Expression evaluated with the new binding in scope.
+        /// @param resultType Static type of the body result.
+        /// @return A Let expression containing the binding and body.
         [[nodiscard]] static auto
         Let(SymbolName name,
             Type bindingType,
             Expression value,
             Expression body,
             Type resultType) -> Expression;
+        /// Compare kind-specific payloads and their child expressions.
+        /// @param other Expression to compare with this value.
+        /// @return true when both trees have identical structure and types.
         [[nodiscard]] auto
         operator==(const Expression &other) const -> bool;
     };
 
+    /// Local binding introduced by a statement or expression.
     struct Binding final
     {
+        /// Resolved identity of the local binding.
         SymbolName symbol{};
+        /// Declared type of the bound value.
         Type type{ Type::unit() };
+        /// Whether subsequent assignments may update this binding.
         bool mutableBinding{};
+        /// Initializer evaluated when the binding is introduced.
         Expression value{};
+        /// Compare binding identity, mutability, type, and initializer.
+        /// @return true when all binding properties match.
         [[nodiscard]] auto
         operator==(const Binding &) const -> bool = default;
     };
 
+    /// Structured statement in a Core function or closure body.
     struct Statement final
     {
+        /// Selects which statement-specific fields are active.
         enum class Kind : std::uint8_t
         {
-            Bind,
-            Assign,
-            Return,
-            If,
-            Evaluate,
-            While,
-            DoWhile,
-            For,
-            Break,
-            Continue
+            Bind,     ///< Introduces a local binding.
+            Assign,   ///< Updates an existing mutable binding.
+            Return,   ///< Returns an expression value from the function.
+            If,       ///< Selects between two structured statement branches.
+            Evaluate, ///< Evaluates an expression for its effects.
+            While,    ///< Pre-test loop.
+            DoWhile,  ///< Post-test loop.
+            For,      ///< Loop with condition, body, and update regions.
+            Break,    ///< Exits the innermost active loop.
+            Continue  ///< Continues at the innermost loop's next step.
         };
 
+        /// Active statement category.
         Kind kind{ Kind::Evaluate };
+        /// Binding payload when kind is Bind.
         Binding binding{};
+        /// Assignment destination when kind is Assign.
         SymbolName destination{};
+        /// Return value, condition, assignment value, or evaluated expression.
         Expression expression{};
+        /// Then branch statements of an If statement.
         std::vector<Statement> trueBranch;
+        /// Else branch statements of an If statement.
         std::vector<Statement> falseBranch;
+        /// Body of While, DoWhile, or For loops.
         std::vector<Statement> loopBody;
+        /// Update region executed after each For body iteration.
         std::vector<Statement> loopUpdate;
 
+        /// Introduce a local binding.
+        /// @param value Binding and initializer to add.
+        /// @return A Bind statement containing value.
         [[nodiscard]] static auto
         Bind(Binding value) -> Statement;
+        /// Assign a new value to a mutable local binding.
+        /// @param target Destination binding identity.
+        /// @param value Expression evaluated and assigned to target.
+        /// @return An Assign statement.
         [[nodiscard]] static auto
         Assign(SymbolName target, Expression value) -> Statement;
+        /// Return a value from the current function or closure.
+        /// @param value Expression evaluated as the return value.
+        /// @return A Return statement.
         [[nodiscard]] static auto
         Return(Expression value) -> Statement;
+        /// Select between two structured statement branches.
+        /// @param condition Boolean expression selecting the branch.
+        /// @param whenTrue Statements executed when condition is true.
+        /// @param whenFalse Statements executed when condition is false.
+        /// @return An If statement preserving both branch bodies.
         [[nodiscard]] static auto
         If(Expression condition,
            std::vector<Statement> whenTrue,
            std::vector<Statement> whenFalse) -> Statement;
+        /// Evaluate an expression while discarding its resulting value.
+        /// @param value Expression whose effects are preserved.
+        /// @return An Evaluate statement.
         [[nodiscard]] static auto
         Evaluate(Expression value) -> Statement;
         /**
@@ -175,6 +277,9 @@ namespace Visual::XSharp::Core
          *
          * CorePrep evaluates the condition before each body entry and uses
          * the innermost loop's header as the `continue` destination.
+         * @param condition Boolean expression tested before each iteration.
+         * @param body Statements executed while condition evaluates to true.
+         * @return A While statement with a pre-test control-flow shape.
          */
         [[nodiscard]] static auto
         While(Expression condition, std::vector<Statement> body) -> Statement;
@@ -183,6 +288,9 @@ namespace Visual::XSharp::Core
          *
          * `continue` transfers to the trailing condition, not to the body
          * entry.
+         * @param body Statements executed before each condition check.
+         * @param condition Boolean expression tested after each body pass.
+         * @return A DoWhile statement with a post-test control-flow shape.
          */
         [[nodiscard]] static auto
         DoWhile(std::vector<Statement> body, Expression condition) -> Statement;
@@ -191,51 +299,72 @@ namespace Visual::XSharp::Core
          *
          * Keeping updates separate ensures `continue` runs them before the
          * next condition check.
+         * @param condition Boolean expression tested before each body pass.
+         * @param body Statements executed for each successful condition test.
+         * @param update Statements run after the body, including on continue.
+         * @return A For statement with distinct body and update regions.
          */
         [[nodiscard]] static auto
         For(Expression condition,
             std::vector<Statement> body,
             std::vector<Statement> update) -> Statement;
-        /// @brief Exit the innermost active loop.
+        /// Exit the innermost active loop.
+        /// @return A Break statement.
         [[nodiscard]] static auto
         Break() -> Statement;
-        /// @brief Continue at the innermost loop's language-defined target.
+        /// Continue at the innermost loop's language-defined target.
+        /// @return A Continue statement.
         [[nodiscard]] static auto
         Continue() -> Statement;
+        /// Compare statement category and all active nested data.
+        /// @return true when both statements have equal structure.
         [[nodiscard]] auto
         operator==(const Statement &) const -> bool = default;
     };
 
+    /// Named parameter in a Core function signature.
     struct Parameter final
     {
+        /// Resolved parameter binding identity.
         SymbolName symbol{};
+        /// Declared parameter type.
         Type type{ Type::unit() };
+        /// Compare parameter identity and type.
+        /// @return true when both parameter fields match.
         [[nodiscard]] auto
         operator==(const Parameter &) const -> bool = default;
     };
 
+    /// Top-level Core function, including source ownership for emission.
     struct Function final
     {
+        /// Resolved function declaration.
         SymbolName symbol{};
+        /// Parameters in declaration order.
         std::vector<Parameter> parameters;
+        /// Declared result type.
         Type returnType{ Type::unit() };
+        /// Ordered function body.
         std::vector<Statement> body;
-        // The portable project-relative owner is carried separately from the
-        // declaration so optimizers can rewrite bodies without losing which
-        // source file produces the native definition.
+        /// Project-relative source path that owns the emitted definition.
         std::u32string sourceFile{};
+        /// Compare function identity, signature, source owner, and body.
+        /// @return true when all function fields match.
         [[nodiscard]] auto
         operator==(const Function &) const -> bool = default;
     };
 
+    /// Source module containing typed functions and the selected source set.
     struct Module final
     {
+        /// Qualified module name represented as Unicode path segments.
         std::vector<std::u32string> name;
+        /// Functions in deterministic declaration order.
         std::vector<Function> functions;
-        // Includes source units with no declarations; project OBJECT and
-        // ASSEMBLY emission still produces one deterministic artifact per
-        // selected source unit.
+        /// Project-relative sources, including files without declarations.
         std::vector<std::u32string> sourceFiles{};
+        /// Compare module name, source set, and contained functions.
+        /// @return true when all module fields match.
         [[nodiscard]] auto
         operator==(const Module &) const -> bool = default;
     };

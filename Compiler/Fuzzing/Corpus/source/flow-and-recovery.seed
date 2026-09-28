@@ -1,0 +1,1 @@
+namespace Fuzz; class Program { public static long Evaluate() { long result = 7; if (result > 3) { result = result - 2; } return result; } }

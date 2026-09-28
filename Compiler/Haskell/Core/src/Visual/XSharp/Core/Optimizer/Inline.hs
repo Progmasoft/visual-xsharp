@@ -41,6 +41,7 @@ data CandidateDiscovery = CandidateDiscovery
     , rejectedNonLinearBodies :: Int
     }
 
+-- | Counts describing candidate discovery and capture-avoiding rewrites.
 data InlineReport = InlineReport
     { inlineCandidateCount :: Int
     , inlineExpressionCandidateCount :: Int

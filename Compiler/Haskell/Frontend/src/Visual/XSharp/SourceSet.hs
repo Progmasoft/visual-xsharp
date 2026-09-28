@@ -40,6 +40,7 @@ import System.FilePath
     , normalise
     , splitDirectories
     , takeExtension
+    , takeFileName
     , (</>)
     )
 import System.Info (os)
@@ -99,7 +100,13 @@ loadSourceFile path = do
                 else
                     if takeExtension canonicalPath /= ".vxs"
                         then pure (Left [sourceProblem "VXS0003" ("source file must use the case-sensitive .vxs extension: " ++ canonicalPath)])
-                        else decodeSource canonicalPath (normalizeSourcePath canonicalPath)
+                        else do
+                            workingDirectory <- tryCanonical "."
+                            let sourceIdentity = case workingDirectory of
+                                    Right root
+                                        | isContainedBy root canonicalPath -> relativeTo root canonicalPath
+                                    _ -> takeFileName canonicalPath
+                            decodeSource canonicalPath sourceIdentity
 
 {- | Discover, validate, de-duplicate, sort, and decode a project source set.
 A failure in any configured root makes the whole source set invalid; silently
@@ -109,6 +116,10 @@ junction state, or traversal order.
 discoverSourceSet :: SourceSetRequest -> IO (Either [Diagnostic] [FilePath])
 discoverSourceSet request = fmap (fmap (map discoveredCanonicalPath)) (discoverSourceFiles request)
 
+{- | Discover project sources and strictly decode each file as UTF-8.
+Any discovery or decoding failure rejects the complete set rather than
+returning a partial compilation input.
+-}
 loadSourceSet :: SourceSetRequest -> IO (Either [Diagnostic] [LoadedSource])
 loadSourceSet request = do
     discovered <- discoverSourceFiles request
@@ -290,6 +301,9 @@ normalizePattern value =
     let normalized = dropCurrentPrefix (normalizeSourcePath value)
      in trimTrailingSlash normalized
 
+{- | Normalize separators and redundant path syntax to a stable slash form.
+Path comparison applies platform-specific case handling separately.
+-}
 normalizeSourcePath :: FilePath -> String
 normalizeSourcePath = collapseSlashes . map slash . normalise
     where

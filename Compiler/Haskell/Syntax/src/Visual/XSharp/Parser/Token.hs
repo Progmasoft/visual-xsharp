@@ -1,12 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+-- | Token types shared between the lexer, parser, and parser cursor.
 module Visual.XSharp.Parser.Token (TokenKind (..), Token (..)) where
 
 import Visual.XSharp.AST (SourceSpan)
 
--- Shared by the lexer and parser machinery without making the token cursor
--- depend on the concrete declaration grammar. Parser reexports this API.
+-- | Lexical category of one token emitted by the Visual X# scanner.
 data TokenKind
     = IdentifierToken
     | KeywordToken
@@ -18,6 +18,7 @@ data TokenKind
     | EndOfFileToken
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
+-- | Token spelling, category, and half-open source range.
 data Token = Token
     { tokenKind :: TokenKind
     , tokenText :: String

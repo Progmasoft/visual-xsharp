@@ -36,6 +36,7 @@ sourceSetTests =
     , ("tool source discovery does not impose compiler UTF-8", encodingNeutralDiscovery)
     , ("explicit file mode uses the strict source decoder", explicitFileDecoder)
     , ("explicit file mode requires the exact .vxs extension", explicitFileExtension)
+    , ("explicit file compilation uses a safe relative Core identity", explicitFileIdentity)
     , ("a configured source root cannot escape the project", escapingRoot)
     , ("an empty discovered source set is diagnosed", emptySourceSet)
     , ("project compiler merges files that declare one namespace", namespaceMerge)
@@ -147,6 +148,22 @@ explicitFileExtension = withTemporaryTree $ \root -> do
     writeFile path minimalSource
     result <- loadSourceFile path
     pure (hasDiagnostic "VXS0003" result)
+
+explicitFileIdentity :: IO Bool
+explicitFileIdentity = withTemporaryTree $ \root -> do
+    writeSource root "Sources/Main.vxs" minimalSource
+    let path = root </> "Sources" </> "Main.vxs"
+    loaded <- loadSourceFile path
+    pure $ case loaded of
+        Left _ -> False
+        Right source ->
+            loadedSourceRelativePath source == "Main.vxs"
+                && case compileToCorePrep
+                    (CompilerInput (loadedSourceRelativePath source) (loadedSourceText source)) of
+                    Left _ -> False
+                    Right artifacts ->
+                        let owners = map snd (coreModuleFunctionSources (artifactOptimizedCore artifacts))
+                         in not (null owners) && all (== "Main.vxs") owners
 
 escapingRoot :: IO Bool
 escapingRoot = withTemporaryTree $ \root -> do

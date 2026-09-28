@@ -35,6 +35,8 @@ import Visual.XSharp.Core.Scalar (isCoreFloatingType, isCoreIntegerType)
 -- The remaining constructors retain the strongest reason in diagnostics and
 -- reports without pretending that allocation, failure and divergence are
 -- interchangeable language effects.
+
+-- | Conservative effect class used to decide whether an expression may vanish.
 data Effect
     = PureEffect
     | FailureEffect
@@ -49,6 +51,7 @@ data Effect
 newtype EffectEnvironment = EffectEnvironment (Map SymbolId Effect)
     deriving (Eq, Ord, Read, Show)
 
+-- | Interprocedural effect facts and call-graph properties for one function.
 data FunctionEffectReport = FunctionEffectReport
     { effectFunctionName :: ResolvedName
     , effectClassification :: Effect

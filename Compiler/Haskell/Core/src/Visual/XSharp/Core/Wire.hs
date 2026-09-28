@@ -1,6 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+{- | Versioned, bounded binary codec for the compiler's private Core IR.
+
+Core artifacts are an internal stage boundary rather than a user-facing
+emission format. Decoding applies explicit resource limits before exposing a
+module to verification or native compilation.
+-}
 module Visual.XSharp.Core.Wire
     ( encodeCore
     , decodeCore
@@ -21,12 +27,15 @@ import Data.Word (Word16, Word32, Word64, Word8)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 
+-- | Unsigned schema version stored in a Core wire document header.
 newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
     deriving (Eq, Ord, Read, Show)
 
+-- | Schema version emitted by the current Core writer.
 currentCoreWireVersion :: CoreWireVersion
 currentCoreWireVersion = CoreWireVersion 7
 
+-- | Finite bounds for total bytes, recursion, and individual collections.
 data CoreWireLimits = CoreWireLimits
     { maximumCoreWireBytes :: Int
     , maximumCoreTextScalars :: Int
@@ -40,6 +49,7 @@ data CoreWireLimits = CoreWireLimits
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Default resource bounds shared by normal Core readers and writers.
 defaultCoreWireLimits :: CoreWireLimits
 defaultCoreWireLimits =
     CoreWireLimits
@@ -54,6 +64,7 @@ defaultCoreWireLimits =
         , maximumCoreNumericBytes = 4096
         }
 
+-- | Category of malformed input, unsupported schema data, or exceeded limit.
 data CoreWireErrorKind
     = CoreInvalidMagic
     | CoreUnsupportedVersion
@@ -69,6 +80,7 @@ data CoreWireErrorKind
     | CoreLimitExceeded
     deriving (Eq, Ord, Read, Show)
 
+-- | Structured wire error with byte offset and nested field context.
 data CoreWireError = CoreWireError
     { coreWireErrorKind :: CoreWireErrorKind
     , coreWireErrorOffset :: Int
@@ -79,6 +91,7 @@ data CoreWireError = CoreWireError
 
 type Encoder = Either CoreWireError [Word8]
 
+-- | Encode one Core module under explicit resource limits.
 encodeCore :: CoreWireLimits -> CoreModule -> Either CoreWireError [Word8]
 encodeCore limits moduleValue = do
     payload <- encodeModule limits moduleValue
@@ -442,6 +455,7 @@ instance Monad Decoder where
         (value, afterValue) <- runDecoder parser state
         runDecoder (nextParser value) afterValue
 
+-- | Decode and validate one Core document under explicit resource limits.
 decodeCore :: CoreWireLimits -> [Word8] -> Either CoreWireError CoreModule
 decodeCore limits bytes
     | length bytes > maximumCoreWireBytes limits =

@@ -26,44 +26,70 @@ import Data.Char (isAsciiLower, isAsciiUpper, isDigit, ord)
 import Numeric (showHex)
 import Visual.XSharp.AST
 
+-- | Resource bounds applied while producing deterministic internal names.
 data TemplateMangleLimits = TemplateMangleLimits
     { maximumMangledTypeDepth :: Int
+    -- ^ Maximum nested type-argument depth.
     , maximumMangledSymbolLength :: Int
+    -- ^ Maximum emitted ASCII symbol length.
     , maximumMangledNameParts :: Int
+    -- ^ Maximum qualified-name segment count.
     , maximumMangledArguments :: Int
+    -- ^ Maximum arguments or function parameters.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Conservative finite limits used by normal compiler specialization.
 defaultTemplateMangleLimits :: TemplateMangleLimits
 defaultTemplateMangleLimits = TemplateMangleLimits 128 65535 1024 4096
 
+-- | Failure while converting a closed template type or member to an ASCII name.
 data TemplateMangleError
-    = InvalidTemplateMangleLimits String
-    | OpenTypeCannotBeMangled ResolvedName
-    | ErrorTypeCannotBeMangled
-    | EmptyQualifiedNameCannotBeMangled
-    | EmptyIdentifierCannotBeMangled
-    | InvalidIdentifierScalar Integer
-    | InvalidCharacterTemplateValue Integer
-    | MangledTypeDepthExceeded Int
-    | MangledNamePartLimitExceeded Int Int
-    | MangledArgumentLimitExceeded Int Int
-    | MangledSymbolLengthExceeded Int Int
-    | ExpectedMangleableMemberDeclaration
+    = -- | One or more configured bounds are invalid.
+      InvalidTemplateMangleLimits String
+    | -- | An unresolved template variable remains.
+      OpenTypeCannotBeMangled ResolvedName
+    | -- | ErrorType has no stable concrete identity.
+      ErrorTypeCannotBeMangled
+    | -- | A nominal type has no name segments.
+      EmptyQualifiedNameCannotBeMangled
+    | -- | A name segment has no Unicode scalars.
+      EmptyIdentifierCannotBeMangled
+    | -- | A name contains a non-scalar code point.
+      InvalidIdentifierScalar Integer
+    | -- | A character argument is not a Unicode scalar.
+      InvalidCharacterTemplateValue Integer
+    | -- | Nested type structure exceeded its configured bound.
+      MangledTypeDepthExceeded Int
+    | -- | Qualified name exceeded its segment bound.
+      MangledNamePartLimitExceeded Int Int
+    | -- | Type argument or parameter list exceeded its bound.
+      MangledArgumentLimitExceeded Int Int
+    | -- | Final encoded name exceeded its length bound.
+      MangledSymbolLengthExceeded Int Int
+    | -- | The input is not a supported member declaration.
+      ExpectedMangleableMemberDeclaration
     deriving (Eq, Ord, Read, Show)
 
+-- | Encoded nominal template type identity used only at internal compiler boundaries.
 newtype MangledTemplateType = MangledTemplateType
     { mangledTemplateTypeText :: String
+    -- ^ Reversible, deterministic ASCII symbol spelling.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Encoded member identity paired with its original semantic identity.
 data MangledTemplateMember = MangledTemplateMember
     { mangledMemberSourceSymbol :: SymbolId
+    -- ^ Resolved source symbol for diagnostics and mapping.
     , mangledMemberSourceName :: Identifier
+    -- ^ Original source spelling.
     , mangledMemberText :: String
+    -- ^ Reversible internal ASCII name.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Mangle a closed type under explicit recursion and output-size limits.
 mangleTemplateType :: TemplateMangleLimits -> Type -> Either TemplateMangleError MangledTemplateType
 mangleTemplateType limits valueType = do
     validateLimits limits
@@ -72,6 +98,7 @@ mangleTemplateType limits valueType = do
     enforceLength limits symbol
     pure (MangledTemplateType symbol)
 
+-- | Mangle one method or nested type using its owner type as the namespace.
 mangleTemplateMember ::
     TemplateMangleLimits ->
     Type ->
@@ -113,6 +140,7 @@ mangleTemplateMember limits owner member = do
                     symbol
                 )
 
+-- | Mangle every direct member of a type declaration in source order.
 mangleTemplateMembers ::
     TemplateMangleLimits ->
     Type ->
@@ -216,6 +244,7 @@ enforceLength limits symbol
         Left (MangledSymbolLengthExceeded (maximumMangledSymbolLength limits) (length symbol))
     | otherwise = Right ()
 
+-- | Validate the emitted alphabet and framing invariants of a mangled symbol.
 validMangledTemplateSymbol :: String -> Bool
 validMangledTemplateSymbol symbol =
     "_VXT1_" `prefixOf` symbol
@@ -227,6 +256,7 @@ validMangledTemplateSymbol symbol =
                 || isDigit character
                 || character == '_'
 
+-- | Render a mangling failure without exposing internal encoding details.
 renderTemplateMangleError :: TemplateMangleError -> String
 renderTemplateMangleError issue = case issue of
     InvalidTemplateMangleLimits message -> "invalid template mangle limits: " ++ message

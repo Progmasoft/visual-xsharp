@@ -150,6 +150,31 @@ package main
 func value() int { return 1 }
 `
 
+func TestInternalPackagesParticipateInQualityGates(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "scripts", "internal", "development")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeGoFixtureFile(t, filepath.Join(root, "scripts"), "alpha.go", goFixtureSource)
+	writeGoFixtureFile(t, filepath.Join(root, "scripts"), "alpha_test.go", goFixtureTest)
+	writeGoFixtureFile(t, directory, "commands.go", strings.Replace(goFixtureSource, "package main", "package development", 1))
+	writeGoFixtureFile(t, directory, "commands_test.go", strings.Replace(goFixtureTest, "package main", "package development", 1))
+	runner := &fakeGoQualityRunner{}
+	if err := runScriptQuality([]string{"-Root", root}, &bytes.Buffer{}, &bytes.Buffer{}, runner); err != nil {
+		t.Fatal(err)
+	}
+	if len(runner.calls) != 5 || runner.calls[3].arguments[1] != "./scripts/internal/development" || runner.calls[4].arguments[0] != "test" {
+		t.Fatalf("internal package was not vetted and tested: %#v", runner.calls)
+	}
+	if err := os.Remove(filepath.Join(directory, "commands_test.go")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := discoverInternalGoPackages(root); err == nil || !strings.Contains(err.Error(), "no unit tests") {
+		t.Fatalf("untested internal package accepted: %v", err)
+	}
+}
+
 const goFixtureTest = `// SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 

@@ -11,6 +11,7 @@ module Visual.XSharp.CharacterLiteral
 
 import Data.Char (digitToInt, isHexDigit, ord)
 
+-- | Failure reason while scanning or decoding a character literal.
 data CharacterLiteralError
     = UnterminatedCharacterLiteral
     | EmptyCharacterLiteral
@@ -37,6 +38,9 @@ scanCharacterLiteral ('\'' : remaining) = go ['\''] False remaining
             | otherwise = go (character : prefix) False rest
 scanCharacterLiteral _ = Left UnterminatedCharacterLiteral
 
+{- | Decode a complete character token and pack its Unicode scalar values.
+The result uses the compiler's stable little-endian u32 character packing.
+-}
 parseCharacterLiteral :: String -> Either CharacterLiteralError Integer
 parseCharacterLiteral spelling = case spelling of
     '\'' : content -> case reverse content of
@@ -119,6 +123,7 @@ encodedByteWidth value
     | value <= 0xffffff = 3
     | otherwise = 4
 
+-- | Render a character-literal failure for a source diagnostic.
 renderCharacterLiteralError :: CharacterLiteralError -> String
 renderCharacterLiteralError issue = case issue of
     UnterminatedCharacterLiteral -> "unterminated character literal"

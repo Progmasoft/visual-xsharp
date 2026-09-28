@@ -3,9 +3,6 @@
 
 #include <Progmasoft/Catch3/Assertions.hpp>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -49,13 +46,6 @@ namespace
         Interactive::Request request_;
     };
 
-    auto
-    Read(const std::filesystem::path &path) -> std::string
-    {
-        std::ifstream input(path, std::ios::binary);
-        return std::string(std::istreambuf_iterator<char>(input),
-                           std::istreambuf_iterator<char>());
-    }
 } // namespace
 
 TEST_CASE(
@@ -97,42 +87,35 @@ TEST_CASE("generated REPL cells use a unique namespace and preserve a typed "
           "previous result",
           "[vxsi][source]")
 {
-    Runtime::ScratchCell first;
-    Runtime::ScratchCell second;
-    REQUIRE(first.Valid());
-    REQUIRE(second.Valid());
-    REQUIRE(first.SourcePath() != second.SourcePath());
-    REQUIRE(first.CorePath().extension() == ".core");
-
     const Llvm::JitValue previous{ Core::Type::int64(), std::int64_t{ 10 } };
-    REQUIRE_FALSE(
-        Runtime::WriteCellSource(first, 7U, "vxsiPrevious * 3", previous));
-    const auto source = Read(first.SourcePath());
-    REQUIRE(source.find("namespace VisualXSharp.Interactive.Cell7;")
+    const auto first
+        = Runtime::BuildCellSource(7U, "vxsiPrevious * 3", previous);
+    const auto second = Runtime::BuildCellSource(8U, "5 + 5", std::nullopt);
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    REQUIRE(first->find("namespace VisualXSharp.Interactive.Cell7;")
             != std::string::npos);
-    REQUIRE(source.find("class Session") != std::string::npos);
-    REQUIRE(source.find("public static auto Evaluate()") != std::string::npos);
-    REQUIRE(source.find("int vxsiPrevious = 10;") != std::string::npos);
-    REQUIRE(source.find("vxsiPrevious * 3") != std::string::npos);
-    REQUIRE(source.find(".vxs") == std::string::npos);
+    REQUIRE(second->find("namespace VisualXSharp.Interactive.Cell8;")
+            != std::string::npos);
+    REQUIRE(first->find("class Session") != std::string::npos);
+    REQUIRE(first->find("public static auto Evaluate()") != std::string::npos);
+    REQUIRE(first->find("int vxsiPrevious = 10;") != std::string::npos);
+    REQUIRE(first->find("vxsiPrevious * 3") != std::string::npos);
+    REQUIRE(first->find(".vxs") == std::string::npos);
 }
 
 TEST_CASE(
     "cell source omits uninitialized session state and enforces input limits",
     "[vxsi][source][limits]")
 {
-    Runtime::ScratchCell scratch;
-    REQUIRE(scratch.Valid());
-    REQUIRE_FALSE(Runtime::WriteCellSource(scratch, 0U, "5 + 5", std::nullopt));
-    const auto source = Read(scratch.SourcePath());
-    REQUIRE(source.find("_ =") == std::string::npos);
-    REQUIRE(source.find("5 + 5") != std::string::npos);
-
-    REQUIRE(Runtime::WriteCellSource(scratch, 1U, "", std::nullopt));
-    REQUIRE(Runtime::WriteCellSource(scratch,
-                                     1U,
-                                     std::string(1024U * 1024U + 1U, '1'),
-                                     std::nullopt));
+    const auto source = Runtime::BuildCellSource(0U, "5 + 5", std::nullopt);
+    REQUIRE(source.has_value());
+    REQUIRE(source->find("_ =") == std::string::npos);
+    REQUIRE(source->find("5 + 5") != std::string::npos);
+    REQUIRE_FALSE(Runtime::BuildCellSource(1U, "", std::nullopt));
+    REQUIRE_FALSE(Runtime::BuildCellSource(1U,
+                                           std::string(1024U * 1024U + 1U, '1'),
+                                           std::nullopt));
 }
 
 TEST_CASE("REPL scalar values have lossless Visual X# bindings",
@@ -223,14 +206,20 @@ TEST_CASE("REPL display retains source signedness, width, and scalar category",
     REQUIRE(Interactive::FormatType(Core::Type::unit()) == "void");
 }
 
-TEST_CASE("REPL cell symbol discovery honors the generated namespace and "
-          "overload ambiguity",
+TEST_CASE("REPL symbol discovery honors cell identity and unique signatures",
           "[vxsi][symbols]")
 {
-    // The name helper consumes real Xmm output in an end-to-end session. These
-    // checks pin the frontend's current id spelling separately from CLI state.
-    const Runtime::ScratchCell scratch;
-    REQUIRE(scratch.Valid());
-    REQUIRE(scratch.SourcePath().filename() == "Cell.vxs");
-    REQUIRE(scratch.CorePath().filename() == "Cell.core");
+    visual_xsharp::xmm::Module module;
+    module.name = { U"VisualXSharp", U"Interactive", U"Cell12" };
+    visual_xsharp::xmm::Function evaluate;
+    evaluate.symbol = { 24U, U"Evaluate" };
+    evaluate.return_type = Core::Type::int64();
+    module.functions.push_back(evaluate);
+
+    REQUIRE(Runtime::EvaluationSymbol(module, 12U)
+            == "VisualXSharp.Interactive.Cell12.Evaluate.24");
+    REQUIRE_FALSE(Runtime::EvaluationSymbol(module, 11U));
+
+    module.functions.push_back(evaluate);
+    REQUIRE_FALSE(Runtime::EvaluationSymbol(module, 12U));
 }

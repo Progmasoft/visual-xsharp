@@ -28,7 +28,7 @@ jobs:
         run: |
           dnf install -y git ca-certificates curl tar gzip unzip xz which findutils \
             clang lld llvm-devel llvm-static libzstd-devel libxml2-devel \
-            zlib-devel golang java-25-openjdk-devel
+            zlib-devel golang java-25-openjdk-devel gcc gcc-c++ make gmp-devel libffi-devel ncurses-devel perl
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -55,6 +55,16 @@ jobs:
           go run scripts/verify_scripts.go
           go run scripts/verify_examples.go
           go run scripts/verify_benchmarks.go
+
+      - name: Install GHC and Cabal
+        uses: haskell/ghcup-setup@269e121e9e7528761aca5a606a53fe9d04cd6658 # ghcup-setup
+        with:
+          ghc: 9.10.3
+          cabal: 3.16.1.0
+      - name: Resolve frontend package index
+        shell: bash
+        working-directory: Compiler
+        run: cabal update
 
       - name: Build and run native compiler suites
         shell: bash

@@ -17,18 +17,29 @@ module Visual.XSharp.Template.Verifier
 
 import Visual.XSharp.AST
 
+-- | Invalid declaration, parameter, default, or member invariant.
 data TemplateVerificationError
-    = TemplateDeclarationHasInvalidSymbol QualifiedName SymbolId
-    | TemplateParameterHasInvalidSymbol QualifiedName Identifier SymbolId
-    | TemplateParameterSymbolIsDuplicated QualifiedName SymbolId
-    | TemplateParameterSpellingIsDuplicated QualifiedName Identifier
-    | TemplateParameterHasErrorType QualifiedName ResolvedName
-    | TemplateParameterPackHasDefault QualifiedName ResolvedName
-    | TemplateParameterDefaultCategoryMismatch QualifiedName ResolvedName
-    | TemplateTemplateSignatureIsEmpty QualifiedName ResolvedName
-    | TemplateMemberHasInvalidSymbol QualifiedName ResolvedName
+    = -- | Declaration identity is reserved or non-positive.
+      TemplateDeclarationHasInvalidSymbol QualifiedName SymbolId
+    | -- | Parameter identity is invalid.
+      TemplateParameterHasInvalidSymbol QualifiedName Identifier SymbolId
+    | -- | Parameters reuse a semantic identity.
+      TemplateParameterSymbolIsDuplicated QualifiedName SymbolId
+    | -- | Parameters repeat a source spelling.
+      TemplateParameterSpellingIsDuplicated QualifiedName Identifier
+    | -- | Annotation contains ErrorType.
+      TemplateParameterHasErrorType QualifiedName ResolvedName
+    | -- | Parameter pack declares an unsupported default.
+      TemplateParameterPackHasDefault QualifiedName ResolvedName
+    | -- | Default does not match parameter kind.
+      TemplateParameterDefaultCategoryMismatch QualifiedName ResolvedName
+    | -- | Template-template parameter accepts no shapes.
+      TemplateTemplateSignatureIsEmpty QualifiedName ResolvedName
+    | -- | Member identity is reserved or non-positive.
+      TemplateMemberHasInvalidSymbol QualifiedName ResolvedName
     deriving (Eq, Ord, Read, Show)
 
+-- | Verify every open template declaration in one typed compilation unit.
 verifyTemplateDeclarations :: TypedAST -> Either [TemplateVerificationError] ()
 verifyTemplateDeclarations (TypedAST (SyntaxTree namespace declarations)) =
     finish (concatMap (verifyTop namespace) declarations)
@@ -37,6 +48,7 @@ verifyTemplateDeclarations (TypedAST (SyntaxTree namespace declarations)) =
             TemplateTypeDeclaration {} -> verifyTemplateDeclarationProblems owner declaration
             _ -> []
 
+-- | Verify a single declaration in its already-resolved owner namespace.
 verifyTemplateDeclaration ::
     Maybe QualifiedName ->
     Declaration ResolvedName Type ->
@@ -147,6 +159,7 @@ finish :: [problem] -> Either [problem] ()
 finish [] = Right ()
 finish problems = Left problems
 
+-- | Render one declaration or parameter verification error.
 renderTemplateVerificationError :: TemplateVerificationError -> String
 renderTemplateVerificationError issue = case issue of
     TemplateDeclarationHasInvalidSymbol name symbol ->

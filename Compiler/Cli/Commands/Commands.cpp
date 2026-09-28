@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <algorithm>
-#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -19,6 +18,7 @@
 #include "Compiler/Cli/Arguments/Options.hpp"
 #include "Compiler/Cli/Commands/Commands.hpp"
 #include "Compiler/Cli/Commands/ExecutionStatus.hpp"
+#include "Compiler/Cli/Commands/Frontend.hpp"
 #include "Compiler/Cli/Presentation/Activity.hpp"
 #include "Compiler/Driver/CorePipeline.hpp"
 #include "Compiler/Linker/NativeLinker.hpp"
@@ -36,107 +36,6 @@ extern char **environ;
 
 namespace
 {
-    class TemporaryCore final
-    {
-    public:
-        TemporaryCore()
-        {
-            // The frontend/backend hand-off is private and short-lived. A
-            // unique OS temporary file avoids exposing CorePrep or creating
-            // project artifacts during `check`, while the destructor provides
-            // one cleanup owner.
-            std::error_code error;
-            const auto directory = std::filesystem::temp_directory_path(error);
-            if (error)
-                return;
-#ifdef _WIN32
-            // GetTempFileName creates the candidate atomically. Rename that
-            // reserved file without MOVEFILE_REPLACE_EXISTING so the required
-            // .core suffix remains reserved throughout the hand-off.
-            for (unsigned attempt = 0U; attempt < 128U; ++attempt)
-            {
-                wchar_t candidate[MAX_PATH]{};
-                if (GetTempFileNameW(directory.c_str(), L"vxc", 0, candidate)
-                    == 0)
-                    return;
-                auto corePath
-                    = std::filesystem::path(candidate).replace_extension(
-                        L".core");
-                if (MoveFileExW(candidate,
-                                corePath.c_str(),
-                                MOVEFILE_WRITE_THROUGH)
-                    != 0)
-                {
-                    path_ = std::move(corePath);
-                    return;
-                }
-                std::filesystem::remove(candidate, error);
-                error.clear();
-            }
-#else
-            // mkstemps preserves the semantic suffix while providing O_EXCL
-            // creation. std::rand-based names allowed another user/process to
-            // pre-create the Core hand-off path between selection and write.
-            auto pattern = (directory / "vxs-XXXXXX.core").string();
-            std::vector<char> candidate(pattern.begin(), pattern.end());
-            candidate.push_back('\0');
-            const auto descriptor = mkstemps(candidate.data(), 5);
-            if (descriptor < 0)
-                return;
-            close(descriptor);
-            path_ = candidate.data();
-#endif
-        }
-
-        TemporaryCore(const TemporaryCore &) = delete;
-        TemporaryCore &
-        operator=(const TemporaryCore &) = delete;
-        ~TemporaryCore()
-        {
-            std::error_code ignored;
-            std::filesystem::remove(path_, ignored);
-        }
-
-        [[nodiscard]] const std::filesystem::path &
-        Path() const noexcept
-        {
-            return path_;
-        }
-        [[nodiscard]] explicit
-        operator bool() const noexcept
-        {
-            return !path_.empty();
-        }
-
-    private:
-        std::filesystem::path path_;
-    };
-
-    [[nodiscard]] std::optional<std::filesystem::path>
-    ExecutableDirectory()
-    {
-        // Installed and build-tree layouts place the private Haskell frontend
-        // next to vxs. Resolve from the running image, never from cwd or PATH,
-        // so a project cannot substitute a different compiler stage by dropping
-        // in an executable.
-#ifdef _WIN32
-        std::wstring buffer(32768, L'\0');
-        const DWORD length
-            = GetModuleFileNameW(nullptr,
-                                 buffer.data(),
-                                 static_cast<DWORD>(buffer.size()));
-        if (length == 0 || length >= buffer.size())
-            return std::nullopt;
-        buffer.resize(length);
-        return std::filesystem::path(buffer).parent_path();
-#else
-        std::error_code error;
-        const auto executable
-            = std::filesystem::read_symlink("/proc/self/exe", error);
-        return error ? std::nullopt : std::optional(executable.parent_path());
-#endif
-    }
-
     [[nodiscard]] std::string
     PathText(const std::filesystem::path &path)
     {
@@ -295,100 +194,18 @@ namespace
     }
 #endif
 
-    [[nodiscard]] int
-    RunFrontend(std::span<const std::string> commandArguments)
+    [[nodiscard]] auto
+    RunFileFrontend(const std::filesystem::path &source)
+        -> Visual::XSharp::Cli::Frontend::Result
     {
-        auto directory = ExecutableDirectory();
-        if (!directory)
-        {
-            fmt::print(
-                stderr,
-                "vxs: could not locate the compiler executable directory\n");
-            return -1;
-        }
-#ifdef _WIN32
-        // _wspawnv passes an argument vector directly; no shell quoting or glob
-        // expansion is involved. Convert the private UTF-8 protocol explicitly
-        // so namespace and filesystem characters do not depend on the active
-        // codepage.
-        const auto frontend = *directory / "vxs-frontend.exe";
-        std::vector<std::wstring> storage;
-        storage.reserve(commandArguments.size() + 1);
-        storage.push_back(frontend.wstring());
-        for (const auto &argument : commandArguments)
-        {
-            auto wide = Utf8ToWide(argument);
-            if (!wide)
-            {
-                fmt::print(
-                    stderr,
-                    "vxs: private frontend argument is not valid UTF-8\n");
-                return -1;
-            }
-            storage.push_back(std::move(*wide));
-        }
-        std::vector<const wchar_t *> arguments;
-        arguments.reserve(storage.size() + 1);
-        for (const auto &argument : storage)
-            arguments.push_back(argument.c_str());
-        arguments.push_back(nullptr);
-        const intptr_t status
-            = _wspawnv(_P_WAIT, frontend.c_str(), arguments.data());
-        if (status == -1)
-            fmt::print(
-                stderr,
-                "vxs: could not start Haskell frontend: {}\n",
-                std::error_code(errno, std::generic_category()).message());
-        return static_cast<int>(status);
-#else
-        const auto frontend = *directory / "vxs-frontend";
-        const std::string frontendText = frontend.string();
-        std::vector<std::string> storage;
-        storage.reserve(commandArguments.size() + 1);
-        storage.push_back(frontendText);
-        storage.insert(storage.end(),
-                       commandArguments.begin(),
-                       commandArguments.end());
-        std::vector<char *> arguments;
-        arguments.reserve(storage.size() + 1);
-        for (auto &argument : storage)
-            arguments.push_back(argument.data());
-        arguments.push_back(nullptr);
-        pid_t process{};
-        const int spawnStatus = posix_spawn(&process,
-                                            frontendText.c_str(),
-                                            nullptr,
-                                            nullptr,
-                                            arguments.data(),
-                                            environ);
-        if (spawnStatus != 0)
-        {
-            fmt::print(stderr,
-                       "vxs: could not start Haskell frontend: {}\n",
-                       std::strerror(spawnStatus));
-            return -1;
-        }
-        int status{};
-        if (waitpid(process, &status, 0) < 0)
-            return -1;
-        return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-#endif
-    }
-
-    [[nodiscard]] int
-    RunFileFrontend(const std::filesystem::path &output,
-                    const std::filesystem::path &source)
-    {
-        const std::vector<std::string> arguments{ "--output",
-                                                  PathText(output),
-                                                  "--source-file",
+        const std::vector<std::string> arguments{ "--source-file",
                                                   PathText(source) };
-        return RunFrontend(arguments);
+        return Visual::XSharp::Cli::Frontend::Execute(arguments);
     }
 
-    [[nodiscard]] int
-    RunProjectFrontend(const std::filesystem::path &output,
-                       const Visual::XSharp::Driver::ResolvedProject &project)
+    [[nodiscard]] auto
+    RunProjectFrontend(const Visual::XSharp::Driver::ResolvedProject &project)
+        -> Visual::XSharp::Cli::Frontend::Result
     {
         std::error_code error;
         const auto projectRoot = std::filesystem::current_path(error);
@@ -398,48 +215,15 @@ namespace
                 stderr,
                 "vxs: could not resolve the project working directory: {}\n",
                 error.message());
-            return -1;
+            return { Visual::XSharp::Cli::Frontend::Status::InternalError,
+                     Visual::XSharp::Cli::Frontend::OutputKind::ErrorText,
+                     {},
+                     error.message() };
         }
-        std::vector<std::string> arguments{
-            "--output",       PathText(output),
-            "--project-root", PathText(projectRoot),
-            "--entry",        project.entry
-        };
-        arguments.reserve(arguments.size() + project.sourceRoots.size() * 2
-                          + project.sourceExcludes.size() * 2);
-        for (const auto &root : project.sourceRoots)
-        {
-            arguments.push_back("--source-root");
-            arguments.push_back(PathText(root));
-        }
-        for (const auto &pattern : project.sourceExcludes)
-        {
-            arguments.push_back("--exclude");
-            arguments.push_back(pattern);
-        }
-        return RunFrontend(arguments);
-    }
-
-    [[nodiscard]] int
-    WriteProjectSourceList(
-        const std::filesystem::path &output,
-        const Visual::XSharp::Driver::ResolvedProject &project)
-    {
-        std::error_code error;
-        const auto projectRoot = std::filesystem::current_path(error);
-        if (error)
-        {
-            fmt::print(
-                stderr,
-                "vxs: could not resolve the project working directory: {}\n",
-                error.message());
-            return -1;
-        }
-        std::vector<std::string> arguments{ "--output",
-                                            PathText(output),
-                                            "--project-root",
+        std::vector<std::string> arguments{ "--project-root",
                                             PathText(projectRoot),
-                                            "--list-sources" };
+                                            "--entry",
+                                            project.entry };
         arguments.reserve(arguments.size() + project.sourceRoots.size() * 2
                           + project.sourceExcludes.size() * 2);
         for (const auto &root : project.sourceRoots)
@@ -452,25 +236,28 @@ namespace
             arguments.push_back("--exclude");
             arguments.push_back(pattern);
         }
-        return RunFrontend(arguments);
+        return Visual::XSharp::Cli::Frontend::Execute(arguments);
     }
 
-    [[nodiscard]] std::optional<std::vector<std::filesystem::path>>
-    ReadProjectSourceList(const std::filesystem::path &path)
+    [[nodiscard]] auto
+    ReadProjectSourceList(std::span<const std::uint8_t> bytes)
+        -> std::optional<std::vector<std::filesystem::path>>
     {
-        std::ifstream stream(path, std::ios::binary);
-        if (!stream)
-            return std::nullopt;
-        const std::string bytes{ std::istreambuf_iterator<char>(stream),
-                                 std::istreambuf_iterator<char>() };
         std::vector<std::filesystem::path> sources;
         std::size_t offset{};
         while (offset < bytes.size())
         {
-            const auto end = bytes.find('\0', offset);
-            if (end == std::string::npos)
+            const auto begin
+                = bytes.begin() + static_cast<std::ptrdiff_t>(offset);
+            const auto end = std::find(begin, bytes.end(), 0U);
+            if (end == bytes.end())
                 return std::nullopt;
-            const std::string_view encoded(bytes.data() + offset, end - offset);
+            const auto length = static_cast<std::size_t>(end - begin);
+            if (length == 0U)
+                return std::nullopt;
+            const std::string_view encoded(
+                reinterpret_cast<const char *>(bytes.data() + offset),
+                length);
 #ifdef _WIN32
             auto wide = Utf8ToWide(encoded);
             if (!wide)
@@ -479,9 +266,79 @@ namespace
 #else
             sources.emplace_back(encoded);
 #endif
-            offset = end + 1;
+            offset += length + 1U;
         }
         return sources;
+    }
+
+    [[nodiscard]] auto
+    ProjectSourceList(const Visual::XSharp::Driver::ResolvedProject &project)
+        -> Visual::XSharp::Cli::Frontend::Result
+    {
+        std::error_code error;
+        const auto projectRoot = std::filesystem::current_path(error);
+        if (error)
+            return { Visual::XSharp::Cli::Frontend::Status::InternalError,
+                     Visual::XSharp::Cli::Frontend::OutputKind::ErrorText,
+                     {},
+                     error.message() };
+        std::vector<std::string> arguments{ "--project-root",
+                                            PathText(projectRoot),
+                                            "--list-sources" };
+        for (const auto &root : project.sourceRoots)
+        {
+            arguments.push_back("--source-root");
+            arguments.push_back(PathText(root));
+        }
+        for (const auto &pattern : project.sourceExcludes)
+        {
+            arguments.push_back("--exclude");
+            arguments.push_back(pattern);
+        }
+        return Visual::XSharp::Cli::Frontend::Execute(arguments);
+    }
+
+    auto
+    FrontendSucceeded(const Visual::XSharp::Cli::Frontend::Result &result)
+        -> bool
+    {
+        if (result.succeeded())
+            return result.kind
+                   != Visual::XSharp::Cli::Frontend::OutputKind::ErrorText;
+        if (!result.bytes.empty())
+            fmt::print(stderr,
+                       "{}",
+                       fmt::string_view(
+                           reinterpret_cast<const char *>(result.bytes.data()),
+                           result.bytes.size()));
+        if (!result.error.empty())
+            fmt::print(stderr, "vxs: frontend: {}\n", result.error);
+        return false;
+    }
+
+    [[nodiscard]] auto
+    WriteCore(const std::filesystem::path &output,
+              std::span<const std::uint8_t> bytes) -> bool
+    {
+        std::ofstream stream(output, std::ios::binary | std::ios::trunc);
+        if (!stream)
+        {
+            fmt::print(stderr,
+                       "vxs: could not open Core artifact '{}' for writing\n",
+                       PathText(output));
+            return false;
+        }
+        stream.write(reinterpret_cast<const char *>(bytes.data()),
+                     static_cast<std::streamsize>(bytes.size()));
+        if (!stream)
+        {
+            fmt::print(stderr,
+                       "vxs: could not finish writing Core artifact '{}'\n",
+                       PathText(output));
+            return false;
+        }
+        fmt::print(stderr, "vxs: wrote '{}'\n", PathText(output));
+        return true;
     }
 
     [[nodiscard]] int
@@ -618,11 +475,13 @@ namespace
         auto project = Visual::XSharp::Driver::ResolveProject(true);
         if (!project)
             return 1;
-        TemporaryCore sourceList;
-        if (!sourceList
-            || WriteProjectSourceList(sourceList.Path(), *project) != 0)
+        const auto sourceList = ProjectSourceList(*project);
+        if (!FrontendSucceeded(sourceList)
+            || sourceList.kind
+                   != Visual::XSharp::Cli::Frontend::OutputKind::
+                       ProjectSourceList)
             return 1;
-        auto sources = ReadProjectSourceList(sourceList.Path());
+        auto sources = ReadProjectSourceList(sourceList.bytes);
         if (!sources)
         {
             fmt::print(stderr,
@@ -756,29 +615,6 @@ namespace
         return execute ? ExecuteNative(executable, {}) : 0;
     }
 
-    [[nodiscard]] bool
-    CopyCore(const std::filesystem::path &temporary,
-             const std::filesystem::path &source)
-    {
-        const auto output = OutputPath(source, ".core");
-        std::error_code error;
-        std::filesystem::copy_file(
-            temporary,
-            output,
-            std::filesystem::copy_options::overwrite_existing,
-            error);
-        if (error)
-        {
-            fmt::print(stderr,
-                       "vxs: could not write Core artifact '{}': {}\n",
-                       PathText(output),
-                       error.message());
-            return false;
-        }
-        fmt::print(stderr, "vxs: wrote '{}'\n", PathText(output));
-        return true;
-    }
-
     [[nodiscard]] int
     ProcessSource(const std::filesystem::path &source,
                   const CliOptions &options,
@@ -790,14 +626,9 @@ namespace
                        "vxs: Haskell frontend input must be a .vxs file\n");
             return 1;
         }
-        TemporaryCore core;
-        if (!core)
-        {
-            fmt::print(stderr,
-                       "vxs: could not allocate a temporary Core artifact\n");
-            return 1;
-        }
-        if (RunFileFrontend(core.Path(), source) != 0)
+        const auto core = RunFileFrontend(source);
+        if (!FrontendSucceeded(core)
+            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire)
             return 1;
         const auto sourceText = PathText(source);
         // Every source command crosses the same verified Core consumer. `check`
@@ -805,13 +636,14 @@ namespace
         // paths.
         if (options.command == CliCommand::kCheck)
             return Visual::XSharp::Cli::ExecutionStatus::Resolve({
-                ProcessCoreArtifactAs(
-                    core.Path().string().c_str(),
-                    sourceText.c_str(),
-                    options.command,
-                    effective.output,
-                    &effective.compiler,
-                    effective.target ? effective.target->c_str() : nullptr),
+                ProcessCoreBytesAs(core.bytes,
+                                   sourceText.c_str(),
+                                   sourceText.c_str(),
+                                   options.command,
+                                   effective.output,
+                                   &effective.compiler,
+                                   effective.target ? effective.target->c_str()
+                                                    : nullptr),
                 std::nullopt,
             });
         if (options.command != CliCommand::kBuild
@@ -827,9 +659,11 @@ namespace
                                 : effective.output;
         if (output == BuildOutput::kCore)
             return Visual::XSharp::Cli::ExecutionStatus::Resolve(
-                { CopyCore(core.Path(), source), std::nullopt });
-        const bool built = ProcessCoreArtifactAs(
-            core.Path().string().c_str(),
+                { WriteCore(OutputPath(source, ".core"), core.bytes),
+                  std::nullopt });
+        const bool built = ProcessCoreBytesAs(
+            core.bytes,
+            sourceText.c_str(),
             sourceText.c_str(),
             options.command,
             output,
@@ -960,14 +794,9 @@ namespace
         project.sourceRoots = { target.root };
         project.sourceExcludes = target.excludes;
 
-        TemporaryCore core;
-        if (!core)
-        {
-            fmt::print(stderr,
-                       "vxs: could not allocate a temporary Core artifact\n");
-            return 1;
-        }
-        if (RunProjectFrontend(core.Path(), project) != 0)
+        const auto core = RunProjectFrontend(project);
+        if (!FrontendSucceeded(core)
+            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire)
             return 1;
 
         std::error_code pathError;
@@ -982,11 +811,12 @@ namespace
         }
         const auto artifactBase
             = workingDirectory / project.outputDirectory / target.name;
-        const auto corePathText = core.Path().string();
+        const auto coreSourceText = PathText(workingDirectory);
         const auto artifactBaseText = artifactBase.string();
         if (options.command == CliCommand::kCheck)
-            return ProcessCoreArtifactAs(
-                       corePathText.c_str(),
+            return ProcessCoreBytesAs(
+                       core.bytes,
+                       coreSourceText.c_str(),
                        artifactBaseText.c_str(),
                        options.command,
                        effective.output,
@@ -1009,23 +839,26 @@ namespace
                                 ? BuildOutput::kBinary
                                 : effective.output;
         if (output == BuildOutput::kCore)
-            return CopyCore(core.Path(), artifactBase) ? 0 : 1;
+            return WriteCore(OutputPath(artifactBase, ".core"), core.bytes) ? 0
+                                                                            : 1;
         if (output == BuildOutput::kObject || output == BuildOutput::kAssembly)
-            return ProcessProjectCoreArtifacts(
-                       core.Path(),
+            return ProcessProjectCoreBytes(
+                       core.bytes,
+                       coreSourceText.c_str(),
                        artifactBase.parent_path(),
                        output,
                        &effective.compiler,
                        effective.target ? effective.target->c_str() : nullptr)
                        ? 0
                        : 1;
-        if (!ProcessCoreArtifactAs(corePathText.c_str(),
-                                   artifactBaseText.c_str(),
-                                   options.command,
-                                   output,
-                                   &effective.compiler,
-                                   effective.target ? effective.target->c_str()
-                                                    : nullptr))
+        if (!ProcessCoreBytesAs(core.bytes,
+                                coreSourceText.c_str(),
+                                artifactBaseText.c_str(),
+                                options.command,
+                                output,
+                                &effective.compiler,
+                                effective.target ? effective.target->c_str()
+                                                 : nullptr))
             return 1;
         return options.command == CliCommand::kRun
                    ? ExecuteNative(OutputPath(artifactBase, ".vxse"),

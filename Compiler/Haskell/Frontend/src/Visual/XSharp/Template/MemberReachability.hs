@@ -6,7 +6,7 @@ Semantic reachability for members of one template declaration.
 
 Template specialization is lazy at member granularity.  A request for one
 member must nevertheless retain every same-declaration member reached by a
-resolved call from its body.  The call graph is keyed by 'SymbolId', never by
+resolved call from its body.  The call graph is keyed by @SymbolId@, never by
 spelling: overloads can share a source name while remaining distinct semantic
 definitions.
 
@@ -43,8 +43,11 @@ when they later collapse to one graph edge.
 -}
 data TemplateMemberCall = TemplateMemberCall
     { templateCallOwner :: SymbolId
+    -- ^ Caller member identity.
     , templateCallTarget :: SymbolId
+    -- ^ Resolved direct callee identity.
     , templateCallSpan :: SourceSpan
+    -- ^ Source location of the call expression.
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -53,59 +56,99 @@ used only to make output deterministic; it never chooses an overload.
 -}
 data TemplateMemberNode = TemplateMemberNode
     { templateMemberIndex :: Int
+    -- ^ Source-order index within the declaration.
     , templateMemberSymbol :: SymbolId
+    -- ^ Unique resolved identity, not spelling.
     , templateMemberName :: Identifier
+    -- ^ Source name; overloads may share it.
     , templateMemberCallable :: Bool
+    -- ^ Whether the member has an executable body.
     , templateMemberCalls :: [TemplateMemberCall]
+    -- ^ Direct calls found in its body.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Direct-member call graph partitioned into internal and external calls.
 data TemplateMemberGraph = TemplateMemberGraph
     { templateGraphNodes :: [TemplateMemberNode]
+    -- ^ Nodes in declaration source order.
     , templateGraphInternalCalls :: [TemplateMemberCall]
+    -- ^ Calls whose target is another direct member.
     , templateGraphExternalCalls :: [TemplateMemberCall]
+    -- ^ Calls leaving this declaration's member set.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Counts describing graph construction and selected member closure.
 data TemplateMemberReachabilityStatistics = TemplateMemberReachabilityStatistics
     { totalTemplateMembers :: Int
+    -- ^ All direct members in the declaration.
     , callableTemplateMembers :: Int
+    -- ^ Members with callable bodies.
     , requestedTemplateMemberRoots :: Int
+    -- ^ Unique selected root symbols.
     , reachableTemplateMembers :: Int
+    -- ^ Members retained by transitive closure.
     , observedTemplateMemberCalls :: Int
+    -- ^ Internal and external call occurrences.
     , internalTemplateMemberCalls :: Int
+    -- ^ Calls with same-declaration targets.
     , externalTemplateMemberCalls :: Int
+    -- ^ Calls whose targets are outside the graph.
     , uniqueTemplateMemberEdges :: Int
+    -- ^ Distinct internal caller/callee pairs.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Root requests, transitively retained members, edges, and graph metrics.
 data TemplateMemberReachability = TemplateMemberReachability
     { memberReachabilityRoots :: [SymbolId]
+    -- ^ Selected root identities in source order.
     , memberReachabilitySymbols :: [SymbolId]
+    -- ^ Roots and all transitively reached members.
     , memberReachabilityMembers :: [Declaration ResolvedName Type]
+    -- ^ Original member declarations retained.
     , memberReachabilityEdges :: [(SymbolId, SymbolId)]
+    -- ^ Unique internal call edges among selected members.
     , memberReachabilityStatistics :: TemplateMemberReachabilityStatistics
+    -- ^ Counts for the analyzed graph.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Invalid root graph or request that cannot be resolved to a direct member.
 data TemplateMemberReachabilityError
-    = InvalidTemplateMemberSymbol Identifier SymbolId
-    | DuplicateTemplateMemberSymbol SymbolId [Identifier]
-    | MissingTemplateMemberName Identifier
-    | MissingTemplateMemberSymbol SymbolId
+    = -- | Member identity is reserved or invalid.
+      InvalidTemplateMemberSymbol Identifier SymbolId
+    | -- | Multiple member declarations share an identity.
+      DuplicateTemplateMemberSymbol SymbolId [Identifier]
+    | -- | Requested spelling has no member.
+      MissingTemplateMemberName Identifier
+    | -- | Requested semantic identity has no member.
+      MissingTemplateMemberSymbol SymbolId
     deriving (Eq, Ord, Read, Show)
 
+-- | Independently checkable inconsistency in a claimed reachability result.
 data TemplateMemberReachabilityIssue
-    = ReachabilityRootIsNotMember SymbolId
-    | ReachabilitySelectionIsNotMember SymbolId
-    | DuplicateReachabilityRoot SymbolId
-    | DuplicateReachabilitySelection SymbolId
-    | ReachabilityRootNotSelected SymbolId
-    | ReachabilityDependencyNotSelected SymbolId SymbolId
-    | UnexpectedReachabilityEdge SymbolId SymbolId
-    | MissingReachabilityEdge SymbolId SymbolId
-    | ReachabilityMembersDiffer [SymbolId] [SymbolId]
-    | IncorrectReachabilityStatistics TemplateMemberReachabilityStatistics TemplateMemberReachabilityStatistics
+    = -- | A requested root is not declared directly.
+      ReachabilityRootIsNotMember SymbolId
+    | -- | A selected identity is not in the graph.
+      ReachabilitySelectionIsNotMember SymbolId
+    | -- | The root list repeats a symbol.
+      DuplicateReachabilityRoot SymbolId
+    | -- | The selection repeats a symbol.
+      DuplicateReachabilitySelection SymbolId
+    | -- | A root is absent from the closure.
+      ReachabilityRootNotSelected SymbolId
+    | -- | A selected call omits its in-graph callee.
+      ReachabilityDependencyNotSelected SymbolId SymbolId
+    | -- | An edge is not supported by a recorded call.
+      UnexpectedReachabilityEdge SymbolId SymbolId
+    | -- | A recorded internal call has no reported edge.
+      MissingReachabilityEdge SymbolId SymbolId
+    | -- | Declaration and symbol lists disagree.
+      ReachabilityMembersDiffer [SymbolId] [SymbolId]
+    | -- | Reported counts differ from recomputation.
+      IncorrectReachabilityStatistics TemplateMemberReachabilityStatistics TemplateMemberReachabilityStatistics
     deriving (Eq, Ord, Read, Show)
 
 {- | Construct a declaration-local graph after semantic resolution.  Invalid
@@ -140,6 +183,7 @@ buildTemplateMemberGraph members = case validationProblems of
             ]
         validationProblems = invalid ++ duplicated
 
+-- | Select every overload with a requested spelling and follow internal calls.
 selectReachableMembersByName ::
     [Identifier] ->
     [Declaration ResolvedName Type] ->
@@ -158,6 +202,7 @@ selectReachableMembersByName requested members = do
         then Right (selectFromGraph roots members graph)
         else Left (map MissingTemplateMemberName missing)
 
+-- | Select exact semantic member identities and follow internal calls.
 selectReachableMembersBySymbol ::
     [SymbolId] ->
     [Declaration ResolvedName Type] ->
@@ -347,6 +392,7 @@ callEdge call = (templateCallOwner call, templateCallTarget call)
 declarationSymbol :: Declaration ResolvedName annotation -> SymbolId
 declarationSymbol = resolvedSymbol . declarationName
 
+-- | Render a graph-construction or root-selection failure.
 renderTemplateMemberReachabilityError :: TemplateMemberReachabilityError -> String
 renderTemplateMemberReachabilityError problem = case problem of
     InvalidTemplateMemberSymbol name symbol ->
@@ -358,6 +404,7 @@ renderTemplateMemberReachabilityError problem = case problem of
     MissingTemplateMemberName name -> "template declaration has no member named " ++ identifierText name
     MissingTemplateMemberSymbol symbol -> "template declaration has no member with " ++ renderSymbol symbol
 
+-- | Render a verifier issue from an inconsistent reachability result.
 renderTemplateMemberReachabilityIssue :: TemplateMemberReachabilityIssue -> String
 renderTemplateMemberReachabilityIssue problem = case problem of
     ReachabilityRootIsNotMember symbol -> "reachability root is not a declaration member: " ++ renderSymbol symbol

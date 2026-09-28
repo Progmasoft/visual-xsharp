@@ -25,12 +25,18 @@ import Visual.XSharp.IntegerEvaluation
     , multiplyCompileTimeIntegers
     )
 
+-- | Definite arithmetic failures detected during integer constant evaluation.
 data ConstantIntegerError
-    = ConstantDivisionByZero
-    | ConstantFloorDivisionByZero
-    | ConstantRemainderByZero
-    | ConstantNegativeExponent
-    | ConstantEvaluationLimitExceeded
+    = -- | Division used a zero divisor.
+      ConstantDivisionByZero
+    | -- | Floor division used a zero divisor.
+      ConstantFloorDivisionByZero
+    | -- | Remainder used a zero divisor.
+      ConstantRemainderByZero
+    | -- | Integer power used a negative exponent.
+      ConstantNegativeExponent
+    | -- | Exact evaluation exceeded its resource bound.
+      ConstantEvaluationLimitExceeded
     deriving (Eq, Ord, Read, Show)
 
 -- Non-constant expressions return Nothing. A definite arithmetic failure is
@@ -38,6 +44,11 @@ data ConstantIntegerError
 -- expression ceased to be constant.
 -- The resource error is likewise retained: treating an oversized expression
 -- as merely nonconstant would let it bypass the frontend's compile-time bound.
+
+{- | Evaluate a constant integer expression without executing user code.
+@Right Nothing@ means non-constant; @Left@ preserves a definite arithmetic
+error so callers can report it at the originating expression.
+-}
 evaluateConstantInteger :: Expression name Type -> Either ConstantIntegerError (Maybe Integer)
 evaluateConstantInteger expression = case expression of
     LiteralExpression _ literal _ -> case literal of
@@ -124,6 +135,7 @@ roundedIntegerDivision dividend divisor =
         adjustment = signum dividend * signum divisor
      in if 2 * abs remainder >= abs divisor then quotient + adjustment else quotient
 
+-- | Render a constant arithmetic failure for diagnostic presentation.
 renderConstantIntegerError :: ConstantIntegerError -> String
 renderConstantIntegerError issue = case issue of
     ConstantDivisionByZero -> "constant division by zero"

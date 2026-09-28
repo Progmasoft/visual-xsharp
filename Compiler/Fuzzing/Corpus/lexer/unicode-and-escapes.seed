@@ -1,0 +1,1 @@
+class Text { String value = "\u{1F642}"; char marker = '\u{03BB}'; }

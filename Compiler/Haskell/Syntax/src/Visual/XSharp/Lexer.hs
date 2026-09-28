@@ -1,6 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+-- | Configurable lexical scanner that returns source-positioned tokens.
 module Visual.XSharp.Lexer (LexerInput (..), Lexer (..), defaultLexer, runLexer) where
 
 import Data.Char (chr, digitToInt, isAlpha, isAlphaNum, isDigit, isHexDigit, isSpace)
@@ -12,14 +13,18 @@ import Visual.XSharp.FloatingLiteral
 import Visual.XSharp.NumericLiteral
 import Visual.XSharp.Parser (Token (..), TokenKind (..))
 
+-- | Source identity and complete text supplied to a lexer implementation.
 data LexerInput = LexerInput {lexerSourceFile :: FilePath, lexerSourceText :: String}
     deriving (Eq, Ord, Read, Show)
 
+-- | Lexer strategy whose failures are returned as structured diagnostics.
 newtype Lexer = Lexer {lexSource :: LexerInput -> Either [Diagnostic] [Token]}
 
+-- | Run a lexer over a source input.
 runLexer :: Lexer -> LexerInput -> Either [Diagnostic] [Token]
 runLexer = lexSource
 
+-- | Default Visual X# lexer implementation.
 defaultLexer :: Lexer
 defaultLexer = Lexer lexVisualXSharp
 

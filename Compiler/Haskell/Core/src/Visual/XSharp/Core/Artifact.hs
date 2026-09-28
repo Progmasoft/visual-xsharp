@@ -1,6 +1,10 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+{- | Bounded, verified persistence for standalone Core artifacts.
+Readers decode and semantically verify before returning a module; writers
+verify before encoding so invalid compiler state never becomes a trusted file.
+-}
 module Visual.XSharp.Core.Artifact
     ( CoreArtifactError (..)
     , readCoreArtifact
@@ -17,16 +21,23 @@ import Visual.XSharp.Core.Verifier
 import Visual.XSharp.Core.Wire
 import Visual.XSharp.Diagnostic (diagnosticCode, diagnosticMessage)
 
+-- | Path, wire, semantic, or filesystem failure while handling a Core file.
 data CoreArtifactError
-    = InvalidCoreArtifactPath FilePath
-    | CoreArtifactWireError CoreWireError
-    | CoreArtifactVerificationError [String]
-    | CoreArtifactIOError FilePath String
+    = -- | Artifact path does not use the required @.core@ extension.
+      InvalidCoreArtifactPath FilePath
+    | -- | The byte document failed wire decoding or encoding.
+      CoreArtifactWireError CoreWireError
+    | -- | Decoded Core failed semantic verification.
+      CoreArtifactVerificationError [String]
+    | -- | Filesystem operation failed at this path.
+      CoreArtifactIOError FilePath String
     deriving (Eq, Ord, Read, Show)
 
+-- | Read, decode, and verify a Core artifact using default wire ceilings.
 readCoreArtifact :: FilePath -> IO (Either CoreArtifactError CoreModule)
 readCoreArtifact = readCoreArtifactWith defaultCoreWireLimits
 
+-- | Read and verify a Core artifact under caller-selected resource limits.
 readCoreArtifactWith :: CoreWireLimits -> FilePath -> IO (Either CoreArtifactError CoreModule)
 readCoreArtifactWith limits path
     | takeExtension path /= ".core" = pure (Left (InvalidCoreArtifactPath path))
@@ -38,9 +49,11 @@ readCoreArtifactWith limits path
                 Left issue -> Left (CoreArtifactWireError issue)
                 Right moduleValue -> verify moduleValue
 
+-- | Verify and write a Core module using default wire ceilings.
 writeCoreArtifact :: FilePath -> CoreModule -> IO (Either CoreArtifactError ())
 writeCoreArtifact = writeCoreArtifactWith defaultCoreWireLimits
 
+-- | Verify and write a Core module under caller-selected resource limits.
 writeCoreArtifactWith :: CoreWireLimits -> FilePath -> CoreModule -> IO (Either CoreArtifactError ())
 writeCoreArtifactWith limits path moduleValue
     | takeExtension path /= ".core" = pure (Left (InvalidCoreArtifactPath path))

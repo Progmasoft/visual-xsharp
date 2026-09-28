@@ -26,15 +26,24 @@ import Visual.XSharp.IntegerEvaluation
     , multiplyCompileTimeIntegers
     )
 
+-- | Failure while evaluating a template constant or fixed-array extent.
 data TemplateValueError
-    = TemplateValueIsNotConstant QualifiedName
-    | TemplateValueDivisionByZero
-    | TemplateValueFloorDivisionByZero
-    | TemplateValueRemainderByZero
-    | TemplateValueNegativeExponent Integer
-    | TemplateValueEvaluationLimitExceeded
-    | TemplateValueRequiresInteger TemplateValue
-    | TemplateValueNegativeArraySize Integer
+    = -- | Name is not a compile-time constant.
+      TemplateValueIsNotConstant QualifiedName
+    | -- | Division has a zero divisor.
+      TemplateValueDivisionByZero
+    | -- | Floor division has a zero divisor.
+      TemplateValueFloorDivisionByZero
+    | -- | Remainder has a zero divisor.
+      TemplateValueRemainderByZero
+    | -- | Integer exponent is negative.
+      TemplateValueNegativeExponent Integer
+    | -- | Exact arithmetic exceeded its resource bound.
+      TemplateValueEvaluationLimitExceeded
+    | -- | Fixed-array extent is not integral.
+      TemplateValueRequiresInteger TemplateValue
+    | -- | Fixed-array extent is negative.
+      TemplateValueNegativeArraySize Integer
     deriving (Eq, Ord, Read, Show)
 
 data ExactValue
@@ -43,9 +52,11 @@ data ExactValue
     | ExactCharacter Integer
     deriving (Eq, Ord, Read, Show)
 
+-- | Evaluate type-syntax constants exactly, preserving their source-level kind.
 evaluateTemplateValue :: TemplateValueSyntax -> Either TemplateValueError TemplateValue
 evaluateTemplateValue syntax = exactToTemplate <$> evaluateExact syntax
 
+-- | Evaluate a fixed-array extent and reject negative or non-integer values.
 evaluateFixedArraySize :: TemplateValueSyntax -> Either TemplateValueError TemplateValue
 evaluateFixedArraySize syntax = do
     value <- evaluateTemplateValue syntax
@@ -167,6 +178,7 @@ exactToTemplate value = case value of
     ExactBoolean boolean -> BooleanTemplateValue boolean
     ExactCharacter scalar -> CharacterTemplateValue scalar
 
+-- | Return the source span enclosing one template-value syntax expression.
 templateValueSyntaxSpan :: TemplateValueSyntax -> SourceSpan
 templateValueSyntaxSpan syntax = case syntax of
     TemplateIntegerSyntax spanValue _ -> spanValue
@@ -176,6 +188,7 @@ templateValueSyntaxSpan syntax = case syntax of
     TemplateUnarySyntax spanValue _ _ -> spanValue
     TemplateBinarySyntax spanValue _ _ _ -> spanValue
 
+-- | Render a constant-evaluation failure for a source diagnostic.
 renderTemplateValueError :: TemplateValueError -> String
 renderTemplateValueError issue = case issue of
     TemplateValueIsNotConstant (QualifiedName parts) ->

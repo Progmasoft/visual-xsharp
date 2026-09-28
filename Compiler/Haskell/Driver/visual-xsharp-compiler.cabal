@@ -12,6 +12,7 @@ build-type: Simple
 library
     exposed-modules:
         Visual.XSharp.Compiler
+        Visual.XSharp.Driver.Command
         Visual.XSharp.Diagnostic.SideChannel
         Visual.XSharp.Pipeline.Stage
     reexported-modules:
@@ -66,14 +67,25 @@ library
     build-depends:
         base >=4.20 && <4.23,
         bytestring >=0.12 && <0.14,
+        text >=2.1 && <2.3,
         visual-xsharp-core,
         visual-xsharp-frontend,
         visual-xsharp-syntax
     default-language: GHC2024
 
-executable vxs-frontend
-    main-is: Main.hs
-    hs-source-dirs: app
+foreign-library vxs-frontend
+    type: native-shared
+    other-modules:
+        Visual.XSharp.Driver.FFI
+        Visual.XSharp.Compiler
+        Visual.XSharp.Diagnostic.SideChannel
+        Visual.XSharp.Driver.Command
+    hs-source-dirs: src
+    cxx-sources: ffi/FrontendRuntime.cpp
+    cxx-options: -std=c++20 -fno-exceptions
+    if os(windows)
+        options: standalone
+        mod-def-file: ffi/vxs-frontend.def
     build-depends:
         base >=4.20 && <4.23,
         bytestring >=0.12 && <0.14,

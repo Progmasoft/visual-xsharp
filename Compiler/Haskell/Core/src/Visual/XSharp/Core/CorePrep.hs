@@ -25,6 +25,7 @@ import Visual.XSharp.Core
 import Visual.XSharp.Core.Verifier (verifyCore)
 import Visual.XSharp.Diagnostic
 
+-- | A value already reduced to a symbol reference or a literal constant.
 data CorePrepAtom = CorePrepVariable ResolvedName Type | CorePrepLiteral CoreLiteral Type
     deriving (Eq, Ord, Read, Show)
 
@@ -36,6 +37,7 @@ data CorePrepOperation
     | CorePrepMakeClosure ResolvedName [CorePrepCapture]
     deriving (Eq, Ord, Read, Show)
 
+-- | Closure environment slot with its source ownership mode and initializer.
 data CorePrepCapture = CorePrepCapture CaptureMode ResolvedName Type CorePrepAtom
     deriving (Eq, Ord, Read, Show)
 
@@ -62,6 +64,7 @@ data CorePrepBlock = CorePrepBlock
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Function signature plus entry block and deterministic control-flow body.
 data CorePrepFunction = CorePrepFunction
     { corePrepFunctionName :: ResolvedName
     , corePrepFunctionSourceFile :: FilePath
@@ -71,6 +74,8 @@ data CorePrepFunction = CorePrepFunction
     , corePrepFunctionBlocks :: [CorePrepBlock]
     }
     deriving (Eq, Ord, Read, Show)
+
+-- | Module identity, prepared functions, and source files retained as provenance.
 data CorePrepModule = CorePrepModule
     { corePrepModuleName :: QualifiedName
     , corePrepModuleFunctions :: [CorePrepFunction]
@@ -84,7 +89,7 @@ data PrepState = PrepState
     , pendingFunctions :: [(CoreFunction, FilePath)]
     , currentSourceFile :: FilePath
     , loopTargets :: [(Int, Int)]
-    -- ^ Innermost first; each pair is the `break` exit and `continue` target.
+    -- ^ Innermost first; each pair is the @break@ exit and @continue@ target.
     }
 
 -- An OpenBlock is the current continuation while expressions are being
@@ -229,7 +234,7 @@ prepareStatements state open (statement : remaining) = case statement of
     CoreContinue -> closeLoopControl state open False
 
 {- | Close the current block at the innermost loop transfer destination.
-The Boolean selects `break` (exit) versus `continue` (continuation point);
+The Boolean selects @break@ (exit) versus @continue@ (continuation point);
 Core verification rejects either transfer when this stack is empty.
 -}
 closeLoopControl :: PrepState -> OpenBlock -> Bool -> ([CorePrepBlock], PrepState)
@@ -285,7 +290,7 @@ prepareDoWhile state incoming body condition =
         finalState = afterBoolean {loopTargets = loopTargets state}
      in ([entry] ++ bodyEnd ++ conditionBlocks ++ [branch], OpenBlock exitId [], finalState)
 
--- | Lower a classic loop with a dedicated update block used by `continue`.
+-- | Lower a classic loop with a dedicated update block used by @continue@.
 prepareFor ::
     PrepState ->
     OpenBlock ->

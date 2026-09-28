@@ -21,10 +21,14 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 
+-- | Freshened declaration and the old-to-new identities allocated for it.
 data FreshenResult = FreshenResult
     { freshenedDeclaration :: Declaration ResolvedName Type
+    -- ^ Cloned tree with definitions and references updated.
     , freshenedSymbols :: [(SymbolId, SymbolId)]
+    -- ^ Identity mapping in ascending old-symbol order.
     , nextFreshSymbol :: SymbolId
+    -- ^ First identity available to the next clone.
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -33,10 +37,12 @@ data FreshState = FreshState
     , freshMap :: Map SymbolId ResolvedName
     }
 
+-- | Find the greatest symbol identity present anywhere in a typed AST.
 maximumSymbolInTypedAST :: TypedAST -> SymbolId
 maximumSymbolInTypedAST (TypedAST tree) =
     SymbolId (maximum (0 : concatMap declarationSymbols (syntaxDeclarations tree)))
 
+-- | Alpha-rename one cloned declaration, preserving spelling and source spans.
 freshenDeclaration :: SymbolId -> Declaration ResolvedName Type -> FreshenResult
 freshenDeclaration (SymbolId first) declaration =
     let (closed, finalState) = runFresh (freshDeclaration declaration) (FreshState (max 1 first) Map.empty)

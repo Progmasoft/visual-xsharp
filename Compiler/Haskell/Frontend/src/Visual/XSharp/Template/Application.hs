@@ -32,61 +32,96 @@ module Visual.XSharp.Template.Application
 
 import Visual.XSharp.AST
 
+-- | Index of all typed template declarations in one compilation unit.
 newtype TemplateCatalog = TemplateCatalog
     { templateCatalogDeclarations :: [TemplateDeclarationDescriptor]
+    -- ^ Declarations retained in deterministic source order.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Resolved template declaration identity, parameters, and member signatures.
 data TemplateDeclarationDescriptor = TemplateDeclarationDescriptor
     { templateDeclarationName :: QualifiedName
+    -- ^ Fully qualified source name.
     , templateDeclarationSymbol :: SymbolId
+    -- ^ Unique symbol assigned by the renamer.
     , templateDeclarationParameters :: [TemplateParameterDescriptor]
+    -- ^ Parameters in declaration order.
     , templateDeclarationMembers :: [(ResolvedName, Type)]
+    -- ^ Direct members and their resolved types.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Semantic matching requirements for one template parameter.
 data TemplateParameterDescriptor = TemplateParameterDescriptor
     { templateDescriptorName :: ResolvedName
+    -- ^ Resolved parameter identity.
     , templateDescriptorCategory :: TemplateParameterCategory
+    -- ^ Accepted argument category and shape.
     , templateDescriptorIsPack :: Bool
+    -- ^ Whether the parameter captures remaining arguments.
     , templateDescriptorDefault :: Maybe TemplateDefault
+    -- ^ Source default, if declared.
     , templateDescriptorAnnotation :: Type
+    -- ^ Resolved value/type annotation.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Category expected for an explicit template argument.
 data TemplateParameterCategory
-    = TypeParameterCategory
-    | ValueParameterCategory Type
-    | TemplateParameterCategory [TemplateParameterShape]
+    = -- | A type-valued template parameter.
+      TypeParameterCategory
+    | -- | A compile-time value constrained by this type.
+      ValueParameterCategory Type
+    | -- | A template-template parameter with accepted shape.
+      TemplateParameterCategory [TemplateParameterShape]
     deriving (Eq, Ord, Read, Show)
 
+-- | One application request with an ordered list of supplied arguments.
 data TemplateApplication = TemplateApplication
     { templateApplicationTarget :: QualifiedName
+    -- ^ Fully qualified declaration to instantiate.
     , templateApplicationArguments :: [TemplateArgument]
+    -- ^ Explicit arguments in source order.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Complete parameter-to-argument environment after defaults and packs bind.
 data TemplateBinding = TemplateBinding
     { templateBindingDeclaration :: TemplateDeclarationDescriptor
+    -- ^ Declaration selected by name lookup.
     , templateBindingArguments :: [(ResolvedName, [BoundTemplateArgument])]
+    -- ^ Bound values grouped by parameter identity.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Argument together with whether it was supplied or came from a default.
 data BoundTemplateArgument
-    = ExplicitTemplateArgument TemplateArgument
-    | DefaultTemplateArgument TemplateArgument
+    = -- | Written by the source application.
+      ExplicitTemplateArgument TemplateArgument
+    | -- | Filled from the parameter declaration.
+      DefaultTemplateArgument TemplateArgument
     deriving (Eq, Ord, Read, Show)
 
+-- | Binding, lookup, or substitution failure for a template application.
 data TemplateApplicationError
-    = UnknownTemplateDeclaration QualifiedName
-    | TooFewTemplateArguments QualifiedName Int Int
-    | TooManyTemplateArguments QualifiedName Int Int
-    | TemplateArgumentCategoryMismatch QualifiedName ResolvedName Int TemplateParameterCategory TemplateArgument
-    | UnresolvedTemplateDefault QualifiedName ResolvedName TemplateDefault
-    | UnsupportedTemplatePackDefault QualifiedName ResolvedName
-    | AmbiguousTemplateDeclaration QualifiedName [SymbolId]
+    = -- | No declaration has this qualified name.
+      UnknownTemplateDeclaration QualifiedName
+    | -- | Required arity and supplied arity.
+      TooFewTemplateArguments QualifiedName Int Int
+    | -- | Maximum arity and supplied arity.
+      TooManyTemplateArguments QualifiedName Int Int
+    | -- | An argument does not match its parameter category.
+      TemplateArgumentCategoryMismatch QualifiedName ResolvedName Int TemplateParameterCategory TemplateArgument
+    | -- | A default references a parameter without a bound value.
+      UnresolvedTemplateDefault QualifiedName ResolvedName TemplateDefault
+    | -- | A parameter pack default cannot be represented.
+      UnsupportedTemplatePackDefault QualifiedName ResolvedName
+    | -- | Multiple declarations share the requested name.
+      AmbiguousTemplateDeclaration QualifiedName [SymbolId]
     deriving (Eq, Ord, Read, Show)
 
+-- | Build a source-ordered catalog from template declarations in a typed AST.
 buildTemplateCatalog :: TypedAST -> TemplateCatalog
 buildTemplateCatalog (TypedAST (SyntaxTree namespace declarations)) =
     TemplateCatalog (concatMap (describe namespace) declarations)
@@ -118,6 +153,7 @@ describeParameter parameter =
             TemplateValueParameterKind _ -> ValueParameterCategory (templateParameterAnnotation parameter)
             TemplateTemplateParameter shapes -> TemplateParameterCategory shapes
 
+-- | Resolve a qualified template name, rejecting missing or ambiguous matches.
 lookupTemplateDeclaration ::
     QualifiedName ->
     TemplateCatalog ->
@@ -129,6 +165,7 @@ lookupTemplateDeclaration name catalog = case matching of
     where
         matching = filter ((== name) . templateDeclarationName) (templateCatalogDeclarations catalog)
 
+-- | Count required explicit arguments after defaults and packs are considered.
 minimumTemplateArity :: TemplateDeclarationDescriptor -> Int
 minimumTemplateArity = length . filter required . templateDeclarationParameters
     where
@@ -136,6 +173,7 @@ minimumTemplateArity = length . filter required . templateDeclarationParameters
             not (templateDescriptorIsPack parameter)
                 && templateDescriptorDefault parameter == Nothing
 
+-- | Return the finite maximum argument count, or Nothing for a parameter pack.
 maximumTemplateArity :: TemplateDeclarationDescriptor -> Maybe Int
 maximumTemplateArity declaration
     | any templateDescriptorIsPack parameters = Nothing
@@ -143,6 +181,7 @@ maximumTemplateArity declaration
     where
         parameters = templateDeclarationParameters declaration
 
+-- | Bind explicit arguments, defaults, and packs to the selected declaration.
 bindTemplateApplication ::
     TemplateCatalog ->
     TemplateApplication ->
@@ -396,6 +435,7 @@ orElse :: Maybe a -> Maybe a -> Maybe a
 orElse (Just value) _ = Just value
 orElse Nothing fallback = fallback
 
+-- | Replace bound type variables recursively in a resolved type expression.
 substituteType :: TemplateBinding -> Type -> Either TemplateApplicationError Type
 substituteType binding valueType = case valueType of
     TypeVariable name -> case lookup (resolvedSymbol name) substitutions of
@@ -412,11 +452,13 @@ substituteType binding valueType = case valueType of
                 name
                 defaultValue
 
+-- | Substitute type or compile-time value variables inside one argument.
 substituteTemplateArgument :: TemplateBinding -> TemplateArgument -> Either TemplateApplicationError TemplateArgument
 substituteTemplateArgument binding argument = case argument of
     TypeTemplateArgument valueType -> TypeTemplateArgument <$> substituteType binding valueType
     ValueTemplateArgument value -> ValueTemplateArgument <$> substituteTemplateValue binding value
 
+-- | Substitute one value-parameter reference using the completed binding.
 substituteTemplateValue :: TemplateBinding -> TemplateValue -> Either TemplateApplicationError TemplateValue
 substituteTemplateValue binding value = case value of
     TemplateValueParameter name -> case lookup (resolvedSymbol name) (flattenedBindings binding) of
@@ -442,6 +484,7 @@ flattenedBindings binding =
 syntheticSpan :: SourceSpan
 syntheticSpan = SourceSpan "<template>" (SourcePosition 1 1) (SourcePosition 1 1)
 
+-- | Render a template lookup, arity, category, or substitution failure.
 renderTemplateApplicationError :: TemplateApplicationError -> String
 renderTemplateApplicationError issue = case issue of
     UnknownTemplateDeclaration name -> "unknown template declaration " ++ renderQualifiedName name

@@ -31,6 +31,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Core.Specialization
 import Visual.XSharp.Core.Template (TemplateIssue (..))
 
+-- | Stable, positive identifier for one canonical specialization in a plan.
 newtype DemandId = DemandId {demandIdValue :: Int}
     deriving (Eq, Ord, Read, Show)
 
@@ -61,6 +62,7 @@ data DemandPathStep
     | ClosureBodyPath
     deriving (Eq, Ord, Read, Show)
 
+-- | Core-level path identifying the occurrence that requested a specialization.
 data DemandLocation = DemandLocation
     { demandLocationFunction :: ResolvedName
     , demandLocationPath :: [DemandPathStep]
@@ -73,9 +75,11 @@ data DemandOrigin
     | DependencyDemand DemandId Int
     deriving (Eq, Ord, Read, Show)
 
+-- | Processing state retained in the finalized plan for invariant checking.
 data DemandState = DemandQueued | DemandComplete
     deriving (Eq, Ord, Read, Show)
 
+-- | One deduplicated concrete specialization and its provenance/dependencies.
 data MonomorphizationDemand = MonomorphizationDemand
     { monomorphizationDemandId :: DemandId
     , monomorphizationSpecialization :: Specialization
@@ -86,6 +90,7 @@ data MonomorphizationDemand = MonomorphizationDemand
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Finite resource bounds for demand count, dependency depth, and provenance.
 data MonomorphizationLimits = MonomorphizationLimits
     { maximumSpecializationDemands :: Int
     , maximumDemandDepth :: Int
@@ -93,9 +98,11 @@ data MonomorphizationLimits = MonomorphizationLimits
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Conservative default bounds used by ordinary Core planning.
 defaultMonomorphizationLimits :: MonomorphizationLimits
 defaultMonomorphizationLimits = MonomorphizationLimits 4096 128 16384
 
+-- | Deterministic counters describing discovery, deduplication, and graph size.
 data MonomorphizationStatistics = MonomorphizationStatistics
     { discoveredRootOccurrences :: Int
     , uniqueSpecializationDemands :: Int
@@ -105,15 +112,18 @@ data MonomorphizationStatistics = MonomorphizationStatistics
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Zero-valued statistics for a plan that has not discovered any demands.
 emptyMonomorphizationStatistics :: MonomorphizationStatistics
 emptyMonomorphizationStatistics = MonomorphizationStatistics 0 0 0 0 0
 
+-- | Completed root-first demand graph with aggregate planning statistics.
 data MonomorphizationPlan = MonomorphizationPlan
     { monomorphizationDemands :: [MonomorphizationDemand]
     , monomorphizationStatistics :: MonomorphizationStatistics
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Failure to bound, validate, or consistently construct a demand graph.
 data MonomorphizationError
     = InvalidMonomorphizationLimits String
     | InvalidDemandType DemandOrigin SpecializationError
@@ -124,11 +134,13 @@ data MonomorphizationError
     | InternalMissingDemand String
     deriving (Eq, Ord, Read, Show)
 
+-- | Render a stable semantic path from a function to a type occurrence.
 renderDemandLocation :: DemandLocation -> String
 renderDemandLocation location =
     renderResolvedName (demandLocationFunction location)
         ++ concatMap renderPathStep (demandLocationPath location)
 
+-- | Convert a planning failure into actionable diagnostic text.
 renderMonomorphizationError :: MonomorphizationError -> String
 renderMonomorphizationError failure = case failure of
     InvalidMonomorphizationLimits message -> "invalid monomorphization limits: " ++ message
@@ -195,6 +207,7 @@ renderPathStep step = case step of
     ClosureReturnPath -> ".closure-return"
     ClosureBodyPath -> ".closure-body"
 
+-- | Render the root occurrence or parent argument that introduced a demand.
 renderDemandOrigin :: DemandOrigin -> String
 renderDemandOrigin origin = case origin of
     RootDemand location -> renderDemandLocation location

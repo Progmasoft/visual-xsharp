@@ -31,17 +31,21 @@ import Visual.XSharp.Core.Optimizer.Types
 import Visual.XSharp.Core.Verifier (verifyCore)
 import Visual.XSharp.Diagnostic (Diagnostic)
 
+-- | Reusable verified-Core transformation supplied to compiler orchestration.
 newtype CoreOptimizer = CoreOptimizer
     { optimizeCore :: CoreModule -> Either [Diagnostic] CoreModule
     }
 
+-- | Apply an optimizer while preserving its diagnostic-based failure contract.
 runCoreOptimizer :: CoreOptimizer -> CoreModule -> Either [Diagnostic] CoreModule
 runCoreOptimizer = optimizeCore
 
+-- | Construct the production optimizer using 'defaultOptimizerOptions'.
 defaultCoreOptimizer :: CoreOptimizer
 defaultCoreOptimizer =
     CoreOptimizer $ \moduleValue -> optimizedCore <$> optimizeCoreWith defaultOptimizerOptions moduleValue
 
+-- | Verify input, run enabled passes, and verify the optimized result again.
 optimizeCoreWith :: OptimizerOptions -> CoreModule -> Either [Diagnostic] OptimizationResult
 optimizeCoreWith options moduleValue = do
     verified <- verifyCore moduleValue

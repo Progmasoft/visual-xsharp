@@ -1,6 +1,11 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+{- | Versioned, bounded binary representation of compiler diagnostics.
+
+The wire model is separate from the frontend's current Error/Warning model
+so native stages can also report informational messages and editor hints.
+-}
 module Visual.XSharp.Diagnostic.Protocol
     ( DiagnosticDocument (..)
     , DiagnosticRecord (..)
@@ -35,15 +40,14 @@ protocolVersion = 1
 magic :: [Word8]
 magic = map (fromIntegral . ord) "VXDG"
 
+-- | Named text value used to format a diagnostic message.
 data DiagnosticArgument = DiagnosticArgument
     { argumentName :: String
     , argumentValue :: String
     }
     deriving (Eq, Ord, Read, Show)
 
--- The frontend currently emits errors and warnings, while native stages may
--- also emit information and hints. Keeping the wire catalog distinct prevents
--- the syntax diagnostic API from acquiring severities it does not yet use.
+-- | Wire-level severity shared with native compiler and editor clients.
 data ProtocolSeverity
     = ProtocolError
     | ProtocolWarning
@@ -51,9 +55,11 @@ data ProtocolSeverity
     | ProtocolHint
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
--- Protocol positions are zero-based UTF-16-independent source coordinates.
--- The compiler currently counts Unicode scalar columns; consumers must not
--- reinterpret them as byte offsets or JVM UTF-16 offsets.
+{- | Source path and zero-based scalar coordinates for one diagnostic span.
+
+Columns count Unicode scalar values; clients must not reinterpret them as
+byte offsets or UTF-16 code-unit positions.
+-}
 data DiagnosticLocation = DiagnosticLocation
     { locationSource :: FilePath
     , locationStartLine :: Word32
@@ -63,24 +69,28 @@ data DiagnosticLocation = DiagnosticLocation
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Secondary location that explains a diagnostic's context.
 data DiagnosticRelatedLocation = DiagnosticRelatedLocation
     { relatedLocation :: DiagnosticLocation
     , relatedMessage :: String
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Replacement text for one source range in a code action.
 data DiagnosticTextEdit = DiagnosticTextEdit
     { editLocation :: DiagnosticLocation
     , editReplacement :: String
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Atomic editor action containing one or more source edits.
 data DiagnosticFix = DiagnosticFix
     { fixTitle :: String
     , fixEdits :: [DiagnosticTextEdit]
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | One versioned diagnostic, including related spans and suggested fixes.
 data DiagnosticRecord = DiagnosticRecord
     { recordStage :: DiagnosticStage
     , recordSeverity :: ProtocolSeverity
@@ -93,11 +103,13 @@ data DiagnosticRecord = DiagnosticRecord
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Ordered diagnostic records returned for a compiler operation.
 newtype DiagnosticDocument = DiagnosticDocument
     { documentRecords :: [DiagnosticRecord]
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Resource bounds enforced when encoding and decoding untrusted documents.
 data DiagnosticProtocolLimits = DiagnosticProtocolLimits
     { maximumWireBytes :: Int
     , maximumRecords :: Int
@@ -109,6 +121,7 @@ data DiagnosticProtocolLimits = DiagnosticProtocolLimits
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Conservative default allocation and complexity limits for the protocol.
 defaultDiagnosticProtocolLimits :: DiagnosticProtocolLimits
 defaultDiagnosticProtocolLimits =
     DiagnosticProtocolLimits
@@ -121,6 +134,7 @@ defaultDiagnosticProtocolLimits =
         , maximumEditsPerFix = 4096
         }
 
+-- | Error offset, field path, and explanation for a protocol failure.
 data DiagnosticProtocolError = DiagnosticProtocolError
     { protocolErrorOffset :: Int
     , protocolErrorContext :: String
@@ -128,6 +142,7 @@ data DiagnosticProtocolError = DiagnosticProtocolError
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Convert compiler diagnostics to the richer wire-level document model.
 diagnosticDocument :: [Diagnostic] -> Either DiagnosticProtocolError DiagnosticDocument
 diagnosticDocument diagnostics = DiagnosticDocument <$> traverse convert diagnostics
     where
@@ -166,6 +181,7 @@ sourceLocation spanValue = do
                 Left (modelError context "compiler source position exceeds the protocol range")
             | otherwise = Right (fromIntegral (value - 1))
 
+-- | Validate and encode a diagnostic document using the supplied limits.
 encodeDiagnosticDocument ::
     DiagnosticProtocolLimits ->
     DiagnosticDocument ->
@@ -380,6 +396,7 @@ instance Monad Decoder where
         (value, next) <- runDecoder parser state
         runDecoder (continuation value) next
 
+-- | Decode one complete document, rejecting unsupported versions and trailing bytes.
 decodeDiagnosticDocument ::
     DiagnosticProtocolLimits ->
     ByteString.ByteString ->

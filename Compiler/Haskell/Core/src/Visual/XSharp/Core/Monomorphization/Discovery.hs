@@ -5,7 +5,7 @@
 
 Discovery does not decide whether two occurrences need separate generated
 code.  It records every semantic site, while the planning layer canonicalizes
-types through 'SpecializationCatalog'.  Keeping those jobs separate makes the
+types through @SpecializationCatalog@. Keeping those jobs separate makes the
 source-to-Core boundary testable without depending on queue implementation.
 -}
 module Visual.XSharp.Core.Monomorphization.Discovery
@@ -19,6 +19,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Monomorphization.Types
 
+-- | One specialization candidate together with its exact semantic Core path.
 data TypeOccurrence = TypeOccurrence
     { occurrenceType :: Type
     , occurrenceLocation :: DemandLocation
@@ -37,6 +38,7 @@ specializationCandidate valueType = case valueType of
     TypeVariable _ -> False
     ErrorType -> False
 
+-- | Collect specialization candidates from signatures and nested Core nodes.
 discoverTypeOccurrences :: CoreModule -> [TypeOccurrence]
 discoverTypeOccurrences coreModule = concatMap discoverFunction (coreModuleFunctions coreModule)
 

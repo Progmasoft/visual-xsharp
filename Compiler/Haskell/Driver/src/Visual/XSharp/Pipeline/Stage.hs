@@ -1,6 +1,9 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+{- | Stage names shared by the compiler driver's internal pipeline reporting.
+Only Core, Xpp, and Xmm currently have explicit emission extensions.
+-}
 module Visual.XSharp.Pipeline.Stage
     ( Stage (..)
     , artifactExtension
@@ -18,8 +21,9 @@ data Stage
     | LlvmBitcode
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
--- | Public file extension for stages that may be explicitly emitted.
--- Other stages remain in-memory unless a later backend contract defines an artifact.
+{- | Public file extension for stages that may be explicitly emitted.
+Other stages remain in-memory unless a later backend contract defines an artifact.
+-}
 artifactExtension :: Stage -> Maybe String
 artifactExtension Core = Just ".core"
 artifactExtension Xpp = Just ".xpp"

@@ -10,17 +10,24 @@
 
 namespace Visual::XSharp::Xpp
 {
+    /// One Xpp structural or symbolic validation finding.
     struct VerificationIssue final
     {
+        /// Stable machine-readable issue identifier.
         std::string code;
+        /// Human-readable explanation of the invalid construct.
         std::string message;
+        /// Function identity containing the problem.
         ::visual_xsharp::xpp::SymbolId function{};
+        /// Block identity containing the problem, when available.
         ::visual_xsharp::xpp::BlockId block{};
+        /// Instruction ordinal for instruction-level issues.
         std::size_t instruction{};
     };
 
-    // Verify owns the Xpp boundary: optimizer output must remain structurally
-    // and symbolically valid before Xmm assigns storage or virtual registers.
+    /// Validate Xpp before storage assignment and Xmm lowering.
+    /// @param module Optimizer output or other candidate Xpp program.
+    /// @return Ordered verifier issues; empty means the Xpp module is valid.
     [[nodiscard]] auto
     Verify(const ::visual_xsharp::xpp::Module &module)
         -> std::vector<VerificationIssue>;

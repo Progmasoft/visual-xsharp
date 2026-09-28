@@ -1,13 +1,25 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | Convert renamed identifiers into stable symbol identities and diagnose
+unresolved or reserved names before type checking.
+-}
 module Visual.XSharp.Resolver.NameResolution (NameResolution (..), defaultNameResolution, runNameResolution) where
 
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
 
-newtype NameResolution = NameResolution {resolveRenamedAST :: RenamedAST -> Either [Diagnostic] ResolvedAST}
+-- | Pluggable name-resolution pass over a fully renamed syntax tree.
+newtype NameResolution = NameResolution
+    { resolveRenamedAST :: RenamedAST -> Either [Diagnostic] ResolvedAST
+    -- ^ Resolve every identifier or return all name-resolution diagnostics.
+    }
+
+-- | Execute a supplied name-resolution implementation.
 runNameResolution :: NameResolution -> RenamedAST -> Either [Diagnostic] ResolvedAST
 runNameResolution = resolveRenamedAST
+
+-- | Default compiler name resolver using the AST's assigned symbol identities.
 defaultNameResolution :: NameResolution
 defaultNameResolution = NameResolution resolveTree
 

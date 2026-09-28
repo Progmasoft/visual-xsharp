@@ -46,7 +46,7 @@ Compiler/
 ```
 
 The directory names are architectural seams even though `vxs` is the only public compiler command. The current distribution
-also stages the private Haskell `vxs-frontend` process beside it; splitting native components does not create additional
+also stages the private Haskell `vxs-frontend` shared library beside it; splitting native components does not create additional
 publicly installed frontend/backend tools.
 
 ### Allowed dependency direction

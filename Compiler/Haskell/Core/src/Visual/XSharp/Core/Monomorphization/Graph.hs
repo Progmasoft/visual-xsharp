@@ -27,6 +27,7 @@ import Data.Set qualified as Set
 import Visual.XSharp.Core.Monomorphization.Types
 import Visual.XSharp.Core.Specialization
 
+-- | Structural or accounting invariant violated by a completed demand graph.
 data DemandGraphIssue
     = DuplicateDemandIdentifier DemandId
     | NonPositiveDemandIdentifier DemandId
@@ -40,6 +41,7 @@ data DemandGraphIssue
     | StatisticsDepthMismatch Int Int
     deriving (Eq, Ord, Read, Show)
 
+-- | Check identifiers, edges, completion state, acyclicity, and statistics.
 validateDemandGraph :: MonomorphizationPlan -> [DemandGraphIssue]
 validateDemandGraph plan =
     identifierIssues
@@ -99,6 +101,7 @@ validateDependencies known demand =
         owner = monomorphizationDemandId demand
         dependencies = monomorphizationDependencies demand
 
+-- | Select demands that have at least one source/Core root occurrence.
 demandRoots :: MonomorphizationPlan -> [MonomorphizationDemand]
 demandRoots = filter hasRootOrigin . monomorphizationDemands
     where
@@ -106,13 +109,16 @@ demandRoots = filter hasRootOrigin . monomorphizationDemands
         isRoot (RootDemand _) = True
         isRoot (DependencyDemand _ _) = False
 
+-- | Select demands that introduce no further specialization dependencies.
 demandLeaves :: MonomorphizationPlan -> [MonomorphizationDemand]
 demandLeaves = filter (null . monomorphizationDependencies) . monomorphizationDemands
 
+-- | Find direct parents whose dependency list contains the requested demand.
 dependentDemands :: DemandId -> MonomorphizationPlan -> [MonomorphizationDemand]
 dependentDemands dependency =
     filter (elem dependency . monomorphizationDependencies) . monomorphizationDemands
 
+-- | Return the transitive dependencies reachable from one demand, excluding it.
 reachableDependencies :: DemandId -> MonomorphizationPlan -> [MonomorphizationDemand]
 reachableDependencies root plan =
     let table = demandTable plan
@@ -166,6 +172,7 @@ visitOne table complete active output demandId
             (childrenComplete, childrenOutput) <- visitMany table complete nextActive output dependencies
             pure (Set.insert demandId childrenComplete, demandId : childrenOutput)
 
+-- | Render one demand with its identity, depth, origins, and outgoing edges.
 renderDemandTrace :: MonomorphizationPlan -> DemandId -> String
 renderDemandTrace plan demandId = case Map.lookup demandId (demandTable plan) of
     Nothing -> "unknown demand " ++ renderDemandId demandId

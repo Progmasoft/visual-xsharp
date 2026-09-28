@@ -1,6 +1,11 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
+{- | Write validated frontend diagnostics to the private native-driver channel.
+
+The module never prints or chooses user-facing presentation; the C++ CLI owns
+that policy and supplies a fresh destination for each compilation request.
+-}
 module Visual.XSharp.Diagnostic.SideChannel
     ( SideChannelError (..)
     , writeDiagnosticFile
@@ -11,6 +16,7 @@ import Data.ByteString qualified as ByteString
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.Diagnostic.Protocol
 
+-- | Failure while validating, encoding, or writing a diagnostic document.
 data SideChannelError
     = SideChannelModelError DiagnosticProtocolError
     | SideChannelEncodingError DiagnosticProtocolError
@@ -22,6 +28,8 @@ data SideChannelError
 -- document in memory, and performs only one write after all validation passes.
 -- It returns failures instead of printing because the native driver owns the
 -- public presentation policy.
+
+-- | Encode a complete diagnostic document before performing one file write.
 writeDiagnosticFile :: FilePath -> [Diagnostic] -> IO (Either SideChannelError ())
 writeDiagnosticFile path diagnostics
     | null path = pure (Left (SideChannelWriteError path "diagnostic path is empty"))

@@ -10,6 +10,14 @@ cc_library(
     strip_include_prefix = "/Compiler/Headers",
 )
 
+# The Haskell frontend is loaded through a deliberately narrow C11 ABI.
+# Runtime implementation and ownership remain in C++20 and Haskell.
+cc_library(
+    name = "frontend_abi",
+    hdrs = ["Frontend.h"],
+    strip_include_prefix = "/Compiler/Headers",
+)
+
 cc_library(
     name = "pipeline_api",
     hdrs = ["Pipeline.hpp"],

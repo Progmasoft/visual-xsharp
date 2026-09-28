@@ -1,5 +1,12 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | Bounded encoder for the private CorePrep interchange document.
+
+The encoder validates collection and byte limits while constructing the
+complete document, so callers receive either one valid byte vector or a
+structured error without partial output.
+-}
 module Visual.XSharp.Core.CorePrep.Wire.Encode (encodeCorePrep, encodeCorePrepWith) where
 
 import Data.Bits (Bits, shiftR, (.&.))
@@ -13,9 +20,11 @@ import Visual.XSharp.Core.CorePrep.Wire.Format
 
 type Encoder = Either WireError [Word8]
 
+-- | Encode with the shared default resource bounds.
 encodeCorePrep :: CorePrepModule -> Either WireError [Word8]
 encodeCorePrep = encodeCorePrepWith defaultWireLimits
 
+-- | Encode under explicit limits, including the final serialized size.
 encodeCorePrepWith :: WireLimits -> CorePrepModule -> Either WireError [Word8]
 encodeCorePrepWith limits moduleValue = do
     payload <- encodeModule limits moduleValue

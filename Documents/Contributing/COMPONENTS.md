@@ -17,7 +17,7 @@ validator in a convenient downstream component merely because that is where a sy
   -> C++20 LLVM backend, linker, and native artifact
 ```
 
-The frontend's current process boundary uses a verified private Core transport. CorePrep adapts Core for native lowering;
+The frontend's current shared-library boundary uses a verified private Core transport. CorePrep adapts Core for native lowering;
 it is not a public `-Emit` format. User-visible artifact formats include `.core`, `.xpp`, `.xmm`, object, assembly, LLVM IR,
 and `.vxse` where the connected CLI supports them. [Pipeline](../COMPILER-PIPELINE.md) and [artifact wire](../ARTIFACT-WIRE.md)
 explain the contracts and implementation limits.

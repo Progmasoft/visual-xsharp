@@ -9,18 +9,23 @@
 
 namespace Visual::XSharp::Core
 {
+    /// Core verifier finding attached to a function or symbol.
     struct VerificationIssue final
     {
+        /// Stable identifier for the violated Core invariant.
         std::string code;
+        /// Human-readable explanation for diagnostics and tests.
         std::string message;
+        /// Function whose body or signature violates an invariant.
         SymbolId function{};
+        /// Symbol involved in the issue, when it is symbol-specific.
         SymbolId symbol{};
     };
 
-    // Verify applies the same semantic boundary as Visual.XSharp.Core.Verifier
-    // in the Haskell frontend. A decoded document is only structurally valid;
-    // no CorePrep or backend stage may consume it until this verifier returns
-    // an empty issue list.
+    /// Validate Core semantics before CorePrep or backend lowering.
+    /// Structural wire decoding alone is not a semantic trust boundary.
+    /// @param module Core module to verify.
+    /// @return Ordered semantic issues; empty means the module is verified.
     [[nodiscard]] auto
     Verify(const Module &module) -> std::vector<VerificationIssue>;
 } // namespace Visual::XSharp::Core

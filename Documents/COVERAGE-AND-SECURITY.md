@@ -28,8 +28,9 @@ completed, not that the code is free of vulnerabilities. Review alerts in the re
 ## Dependency and additional quality analysis
 
 [Dependabot](../.github/dependabot.yml) checks GitHub Actions, Bazel module dependencies, and all four Gradle builds
-weekly. It proposes reviewable pull requests; it does not auto-merge them. The Go helpers deliberately have no
-`go.mod`, and Cabal packages and pinned submodules need manual dependency review. Dependabot does not replace CodeQL.
+weekly. It proposes reviewable pull requests; it does not auto-merge them. The root Go module groups repository
+tooling without external Go dependencies. Cabal packages and pinned submodules need manual dependency review.
+Dependabot does not replace CodeQL.
 
 [Codacy configuration](../.codacy.yml) excludes third-party and generated output while retaining project-owned
 implementation, tests, and CI. Codacy's GitHub application must be connected to the Progmasoft organization and this

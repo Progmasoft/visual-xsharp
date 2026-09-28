@@ -9,6 +9,7 @@ cc_library(
     hdrs = ["Runtime/Source.hpp", "Runtime/Value.hpp"],
     deps = [
         "//Compiler/Backend/LLVM:llvm_backend",
+        "//Compiler/Cli/Commands:frontend",
         "//Compiler/Driver:pipeline",
         "//Interactive/Headers/Visual/XSharp/Interactive:session",
         "//Interactive/Headers/Visual/XSharp/Interactive:repl_input",

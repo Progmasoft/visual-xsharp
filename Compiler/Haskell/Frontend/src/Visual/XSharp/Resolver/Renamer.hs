@@ -1,13 +1,25 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | Assign stable symbol identities to declarations and references, detecting
+duplicate declarations while preserving overload-family semantics.
+-}
 module Visual.XSharp.Resolver.Renamer (Renamer (..), defaultRenamer, runRenamer) where
 
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
 
-newtype Renamer = Renamer {renameParsedAST :: ParsedAST -> Either [Diagnostic] RenamedAST}
+-- | Pluggable pass that assigns declaration and local-binding identities.
+newtype Renamer = Renamer
+    { renameParsedAST :: ParsedAST -> Either [Diagnostic] RenamedAST
+    -- ^ Rename a parsed tree or report declaration and binding errors.
+    }
+
+-- | Execute a supplied renaming implementation.
 runRenamer :: Renamer -> ParsedAST -> Either [Diagnostic] RenamedAST
 runRenamer = renameParsedAST
+
+-- | Default renamer with deterministic positive symbol IDs.
 defaultRenamer :: Renamer
 defaultRenamer = Renamer renameTree
 

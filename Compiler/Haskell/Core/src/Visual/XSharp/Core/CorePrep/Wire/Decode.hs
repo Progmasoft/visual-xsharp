@@ -1,5 +1,11 @@
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | Strict bounded decoder for untrusted CorePrep wire documents.
+
+Every count, scalar, nesting depth, version, and trailing byte is validated
+before the decoded module is returned to native compiler code.
+-}
 module Visual.XSharp.Core.CorePrep.Wire.Decode (decodeCorePrep, decodeCorePrepWith) where
 
 import Data.Bits (Bits, shiftL, (.|.))
@@ -35,9 +41,11 @@ instance Monad Decoder where
         (value, afterValue) <- runDecoder parser state
         runDecoder (nextParser value) afterValue
 
+-- | Decode using the standard finite wire limits.
 decodeCorePrep :: [Word8] -> Either WireError CorePrepModule
 decodeCorePrep = decodeCorePrepWith defaultWireLimits
 
+-- | Decode using caller-selected limits and reject incomplete or trailing data.
 decodeCorePrepWith :: WireLimits -> [Word8] -> Either WireError CorePrepModule
 decodeCorePrepWith limits bytes
     | length bytes > maximumWireBytes limits =

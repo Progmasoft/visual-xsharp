@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+PROJECT_NAME = Visual_XSharp
+PROJECT_BRIEF = Public C++20 and C11 ABI reference
+OUTPUT_DIRECTORY = Compiler/dist-newstyle/doxygen
+OUTPUT_LANGUAGE = English
+INPUT = Compiler/Headers/Visual/XSharp Compiler/Cli/Commands/Frontend.hpp
+RECURSIVE = YES
+FILE_PATTERNS = *.h *.hh *.hpp
+EXCLUDE_PATTERNS = */Tests/* */Benches/* */third_party/*
+EXTRACT_ALL = NO
+EXTRACT_PRIVATE = NO
+EXTRACT_STATIC = NO
+HIDE_UNDOC_MEMBERS = NO
+HIDE_UNDOC_CLASSES = NO
+WARNINGS = YES
+WARN_IF_UNDOCUMENTED = YES
+WARN_IF_DOC_ERROR = YES
+WARN_IF_INCOMPLETE_DOC = YES
+WARN_NO_PARAMDOC = YES
+WARN_IF_UNDOC_ENUM_VAL = YES
+WARN_AS_ERROR = FAIL_ON_WARNINGS
+WARN_LOGFILE = Compiler/dist-newstyle/doxygen-warnings.log
+QUIET = YES
+GENERATE_HTML = YES
+GENERATE_LATEX = NO
+GENERATE_XML = NO
+HAVE_DOT = NO
+INPUT_ENCODING = UTF-8
+CASE_SENSE_NAMES = NO

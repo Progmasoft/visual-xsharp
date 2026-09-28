@@ -24,42 +24,70 @@ import Visual.XSharp.AST
 import Visual.XSharp.Template.Application
 import Visual.XSharp.Template.Specialization
 
+-- | Syntactic/semantic position at which a concrete template application occurs.
 data TemplateTypeSite
-    = DeclarationTypeSite
-    | FunctionSignatureSite
-    | ParameterTypeSite Int
-    | BindingTypeSite Int
-    | AssignmentTypeSite Int
-    | ReturnTypeSite Int
-    | ConditionTypeSite Int
-    | ExpressionTypeSite Int
-    | CallableTypeSite Int
-    | CaptureTypeSite Int Int
-    | NestedTypeArgumentSite Int
-    | FunctionParameterTypeSite Int
-    | FunctionResultTypeSite
+    = -- | Type declaration annotation.
+      DeclarationTypeSite
+    | -- | Function's complete callable signature.
+      FunctionSignatureSite
+    | -- | Parameter index in a function signature.
+      ParameterTypeSite Int
+    | -- | Local binding annotation at statement index.
+      BindingTypeSite Int
+    | -- | Assignment target annotation at statement index.
+      AssignmentTypeSite Int
+    | -- | Return expression at statement index.
+      ReturnTypeSite Int
+    | -- | Conditional or loop condition at statement index.
+      ConditionTypeSite Int
+    | -- | General expression node at traversal index.
+      ExpressionTypeSite Int
+    | -- | Callable expression type at traversal index.
+      CallableTypeSite Int
+    | -- | Capture index nested in a callable expression.
+      CaptureTypeSite Int Int
+    | -- | Type argument nested at the indexed depth.
+      NestedTypeArgumentSite Int
+    | -- | Type inside a function-type parameter list.
+      FunctionParameterTypeSite Int
+    | -- | Result type nested inside a function type.
+      FunctionResultTypeSite
     deriving (Eq, Ord, Read, Show)
 
+-- | Source provenance explaining why one template application was discovered.
 data TemplateDiscoveryOrigin = TemplateDiscoveryOrigin
     { discoveryDeclaration :: ResolvedName
+    -- ^ Enclosing declaration that contains the use.
     , discoveryMember :: Maybe ResolvedName
+    -- ^ Enclosing member, when the use is within a type.
     , discoverySites :: [TemplateTypeSite]
+    -- ^ Nested sites traversed to reach the application.
     , discoverySpan :: SourceSpan
+    -- ^ Source location associated with the use.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Counters describing conservative demand discovery work.
 data TemplateDiscoveryStatistics = TemplateDiscoveryStatistics
     { visitedTemplateTypeNodes :: Int
+    -- ^ Type nodes visited during traversal.
     , discoveredTemplateApplications :: Int
+    -- ^ Concrete applications converted to demands.
     , ignoredOrdinaryNamedTypes :: Int
+    -- ^ Non-template named types skipped.
     , skippedOpenTemplateBodies :: Int
+    -- ^ Open declaration bodies deliberately not walked.
     }
     deriving (Eq, Ord, Read, Show)
 
+-- | Explicit specialization demands, their provenance, and work counters.
 data TemplateDemandDiscovery = TemplateDemandDiscovery
     { discoveredTemplateDemands :: [TemplateSpecializationDemand]
+    -- ^ Layout-only demands found in checked declarations.
     , discoveredTemplateOrigins :: [TemplateDiscoveryOrigin]
+    -- ^ Source sites corresponding to discovered uses.
     , templateDiscoveryStatistics :: TemplateDiscoveryStatistics
+    -- ^ Aggregate traversal counts.
     }
     deriving (Eq, Ord, Read, Show)
 
@@ -74,6 +102,7 @@ data DiscoveryState = DiscoveryState
 emptyState :: DiscoveryState
 emptyState = DiscoveryState [] [] 0 0 0
 
+-- | Find concrete template type uses without implicitly requesting method bodies.
 discoverTemplateDemands :: TypedAST -> TemplateDemandDiscovery
 discoverTemplateDemands typed@(TypedAST tree) =
     let catalog = buildTemplateCatalog typed
@@ -408,6 +437,7 @@ isClosedType valueType = case valueType of
         closedArgument (ValueTemplateArgument (TemplateValueParameter _)) = False
         closedArgument (ValueTemplateArgument _) = True
 
+-- | Render a stable human-readable provenance path for one discovered demand.
 renderTemplateDiscoveryOrigin :: TemplateDiscoveryOrigin -> String
 renderTemplateDiscoveryOrigin origin =
     sourceFile (discoverySpan origin)

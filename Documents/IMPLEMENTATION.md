@@ -60,7 +60,7 @@ mirror namespace segments.
 Every discovered namespace passes through Renamer, Name Resolution, Type Checker, Desugarer, Core verification,
 specialization-demand planning, Core optimization, Core
 verification, CorePrep, and CorePrep verification. The configured namespace-qualified class then selects the one Core module
-sent over the current private process boundary. Cross-namespace imports and a multi-module Core link unit remain later
+sent over the current private C ABI boundary. Cross-namespace imports and a multi-module Core link unit remain later
 semantic work; an unrelated namespace is validated but is not silently folded into the entry namespace.
 
 ### Frontend coverage boundaries
@@ -100,7 +100,7 @@ The repository contains:
 - AARC object headers, strong/weak/unowned runtime calls, and closure payload destructors; and
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
-The production process boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
+The production frontend boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
 contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v5 codecs now own public Xpp/Xmm disk
 artifacts and forward-only pipeline resumption. LLVM target-machine emission and typed C++20 LLD invocation produce `.o`,
 `.asm`, and `.vxse` artifacts. Project object and assembly requests produce one flattened output per source in the selected
