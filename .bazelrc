@@ -34,6 +34,9 @@ build:linux --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-isystemextern
 build:macos --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-isystemexternal/+llvm+llvm/include
 # Owned production, test, benchmark and fuzz translation units use explicit
 # result/error values. Dependencies retain their own exception policy.
+# rules_cc also passes /EHsc. clang-cl retains exceptions with that MSVC
+# option even when -fno-exceptions appears later; turn EH off explicitly.
+build:windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/EHs-c-
 build:windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fno-exceptions
 build:macos --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-fno-exceptions
 build:linux --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-fno-exceptions
