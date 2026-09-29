@@ -123,7 +123,7 @@ func TestClassifyLinuxHostAcceptsThePinnedTierReleases(t *testing.T) {
 }
 
 func TestSelectSanitizerExplainsUnsupportedWindowsKinds(t *testing.T) {
-	for _, kind := range []string{"undefined", "thread"} {
+	for _, kind := range []string{"thread"} {
 		_, err := selectSanitizer(host{kind: hostWindows}, kind)
 		if err == nil {
 			t.Fatalf("expected %s to be rejected on Windows", kind)

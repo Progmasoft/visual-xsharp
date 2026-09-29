@@ -111,14 +111,14 @@ lexerEmitsEllipsis = case lexTokens "template<typename... Types> class Tuple {}"
 
 parserPreservesTypeParameter :: Bool
 parserPreservesTypeParameter = case onlyParsedTemplate "template<typename T> class Box {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [TemplateParameter _ name _ TemplateTypeParameter False Nothing] -> name == identifier "T"
         _ -> False
     Nothing -> False
 
 parserPreservesValueParameter :: Bool
 parserPreservesValueParameter = case onlyParsedTemplate "template<int Size> class Buffer {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [TemplateParameter _ name _ (TemplateValueParameterKind valueType) False Nothing] ->
             name == identifier "Size" && valueType == ExplicitType (identifier "int")
         _ -> False
@@ -126,7 +126,7 @@ parserPreservesValueParameter = case onlyParsedTemplate "template<int Size> clas
 
 parserPreservesTemplateParameter :: Bool
 parserPreservesTemplateParameter = case onlyParsedTemplate "template<template<typename> class Container> class Wrapper {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [TemplateParameter _ name _ (TemplateTemplateParameter [shape]) False Nothing] ->
             name == identifier "Container"
                 && templateParameterShapeKind shape == TemplateTypeParameterShape
@@ -136,14 +136,14 @@ parserPreservesTemplateParameter = case onlyParsedTemplate "template<template<ty
 
 parserPreservesTypePack :: Bool
 parserPreservesTypePack = case onlyParsedTemplate "template<typename... Types> class Tuple {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> templateParameterKind parameter == TemplateTypeParameter && templateParameterIsPack parameter
         _ -> False
     Nothing -> False
 
 parserPreservesValuePack :: Bool
 parserPreservesValuePack = case onlyParsedTemplate "template<int... Values> class Integers {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] ->
             templateParameterKind parameter == TemplateValueParameterKind (ExplicitType (identifier "int"))
                 && templateParameterIsPack parameter
@@ -152,7 +152,7 @@ parserPreservesValuePack = case onlyParsedTemplate "template<int... Values> clas
 
 parserPreservesTemplatePack :: Bool
 parserPreservesTemplatePack = case onlyParsedTemplate "template<template<typename> class... Containers> class Wrapper {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterKind parameter of
             TemplateTemplateParameter [_] -> templateParameterIsPack parameter
             _ -> False
@@ -161,14 +161,14 @@ parserPreservesTemplatePack = case onlyParsedTemplate "template<template<typenam
 
 parserPreservesTypeDefault :: Bool
 parserPreservesTypeDefault = case onlyParsedTemplate "template<typename T = int> class Box {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> templateParameterDefault parameter == Just (TemplateTypeDefault (ExplicitType (identifier "int")))
         _ -> False
     Nothing -> False
 
 parserPreservesLaterDefault :: Bool
 parserPreservesLaterDefault = case onlyParsedTemplate "template<typename T = U, typename U = int> class Pair {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         first : second : [] ->
             templateParameterDefault first == Just (TemplateTypeDefault (ExplicitType (identifier "U")))
                 && templateParameterDefault second == Just (TemplateTypeDefault (ExplicitType (identifier "int")))
@@ -177,7 +177,7 @@ parserPreservesLaterDefault = case onlyParsedTemplate "template<typename T = U, 
 
 parserPreservesValueDefault :: Bool
 parserPreservesValueDefault = case onlyParsedTemplate "template<int Size = 64> class Buffer {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterDefault parameter of
             Just (TemplateValueDefault (TemplateIntegerSyntax _ 64)) -> True
             _ -> False
@@ -186,7 +186,7 @@ parserPreservesValueDefault = case onlyParsedTemplate "template<int Size = 64> c
 
 parserPreservesNamedValueDefault :: Bool
 parserPreservesNamedValueDefault = case onlyParsedTemplate "template<int N = M, int M = 4> class Buffer {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         first : _ -> case templateParameterDefault first of
             Just (TemplateValueDefault (TemplateNameSyntax _ (QualifiedName [name]))) -> name == identifier "M"
             _ -> False
@@ -195,7 +195,7 @@ parserPreservesNamedValueDefault = case onlyParsedTemplate "template<int N = M, 
 
 parserPreservesBooleanDefault :: Bool
 parserPreservesBooleanDefault = case onlyParsedTemplate "template<bool Enabled = true> class Feature {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterDefault parameter of
             Just (TemplateValueDefault (TemplateBooleanSyntax _ True)) -> True
             _ -> False
@@ -204,7 +204,7 @@ parserPreservesBooleanDefault = case onlyParsedTemplate "template<bool Enabled =
 
 parserPreservesCharacterDefault :: Bool
 parserPreservesCharacterDefault = case onlyParsedTemplate "template<char Separator = 'x'> class Text {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterDefault parameter of
             Just (TemplateValueDefault (TemplateCharacterSyntax _ value)) -> value == 120
             _ -> False
@@ -213,7 +213,7 @@ parserPreservesCharacterDefault = case onlyParsedTemplate "template<char Separat
 
 parserPreservesQualifiedDefault :: Bool
 parserPreservesQualifiedDefault = case onlyParsedTemplate "template<typename T = System.String> class Box {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] ->
             templateParameterDefault parameter
                 == Just (TemplateTypeDefault (QualifiedTypeSyntax (QualifiedName [identifier "System", identifier "String"]) []))
@@ -222,7 +222,7 @@ parserPreservesQualifiedDefault = case onlyParsedTemplate "template<typename T =
 
 parserPreservesGenericDefault :: Bool
 parserPreservesGenericDefault = case onlyParsedTemplate "template<typename T = System.Array<int>> class Box {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterDefault parameter of
             Just (TemplateTypeDefault (QualifiedTypeSyntax _ [TemplateTypeSyntax (ExplicitType name)])) -> name == identifier "int"
             _ -> False
@@ -231,7 +231,7 @@ parserPreservesGenericDefault = case onlyParsedTemplate "template<typename T = S
 
 parserPreservesNestedTemplateShape :: Bool
 parserPreservesNestedTemplateShape = case onlyParsedTemplate source of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterKind parameter of
             TemplateTemplateParameter [TemplateParameterShape (TemplateTemplateParameterShape [inner]) False] ->
                 templateParameterShapeKind inner == TemplateTypeParameterShape
@@ -313,7 +313,7 @@ resolverPreservesIdentities = case analyzeSource "template<typename T> class Box
 
 checkerBuildsTypeVariable :: Bool
 checkerBuildsTypeVariable = case onlyTypedTemplate source of
-    Just declaration -> case typeMembers declaration of
+    Just declaration -> case templateMembers declaration of
         [FunctionDeclaration {declarationAnnotation = FunctionType [TypeVariable input] (TypeVariable output)}] ->
             resolvedSymbol input == resolvedSymbol output
         _ -> False
@@ -332,7 +332,7 @@ checkerBuildsValueVariable = memberParameterMatches source expected
 
 checkerBuildsCallableType :: Bool
 checkerBuildsCallableType = case onlyTypedTemplate source of
-    Just declaration -> case typeMembers declaration of
+    Just declaration -> case templateMembers declaration of
         [FunctionDeclaration {declarationAnnotation = FunctionType [FunctionType [TypeVariable _] (TypeVariable _)] _}] -> True
         _ -> False
     Nothing -> False
@@ -370,28 +370,28 @@ checkerBuildsDictionaryType = memberParameterMatches source expected
 
 memberParameterMatches :: String -> (Type -> Bool) -> Bool
 memberParameterMatches source predicate = case onlyTypedTemplate source of
-    Just declaration -> case typeMembers declaration of
+    Just declaration -> case templateMembers declaration of
         [FunctionDeclaration {declarationParameters = [parameter]}] -> predicate (parameterAnnotation parameter)
         _ -> False
     Nothing -> False
 
 checkerAnnotatesValueParameter :: Bool
 checkerAnnotatesValueParameter = case onlyTypedTemplate "template<long N> class Buffer {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> templateParameterAnnotation parameter == namedType "long"
         _ -> False
     Nothing -> False
 
 checkerAnnotatesTypeParameter :: Bool
 checkerAnnotatesTypeParameter = case onlyTypedTemplate "template<typename T> class Box {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterAnnotation parameter of TypeVariable _ -> True; _ -> False
         _ -> False
     Nothing -> False
 
 checkerAnnotatesTemplateParameter :: Bool
 checkerAnnotatesTemplateParameter = case onlyTypedTemplate "template<template<typename> class C> class Box {}" of
-    Just declaration -> case declarationTemplateParameters declaration of
+    Just declaration -> case templateParameters declaration of
         [parameter] -> case templateParameterAnnotation parameter of TypeVariable _ -> True; _ -> False
         _ -> False
     Nothing -> False
@@ -434,3 +434,12 @@ identityMethodRetainsType = checkerBuildsTypeVariable
 
 fixedArrayMethodRetainsParameters :: Bool
 fixedArrayMethodRetainsParameters = checkerBuildsFixedArrayType
+
+-- Total projections keep negative parser fixtures from crashing the test runner.
+templateParameters :: Declaration name annotation -> [TemplateParameter name annotation]
+templateParameters TemplateTypeDeclaration {declarationTemplateParameters = parameters} = parameters
+templateParameters _ = []
+
+templateMembers :: Declaration name annotation -> [Declaration name annotation]
+templateMembers TemplateTypeDeclaration {typeMembers = members} = members
+templateMembers _ = []

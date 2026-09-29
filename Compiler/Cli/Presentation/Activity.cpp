@@ -4,7 +4,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
-#include <indicators/progress_spinner.hpp>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -12,6 +11,7 @@
 #include <vector>
 
 #include "Compiler/Cli/Presentation/Activity.hpp"
+#include "Compiler/Cli/Presentation/ProgressLibrary.hpp"
 
 #if defined(_WIN32)
 #    include <io.h>

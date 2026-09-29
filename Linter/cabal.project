@@ -10,5 +10,6 @@ packages:
     ../Compiler/Haskell/Driver/visual-xsharp-compiler.cabal
 
 tests: True
+import: ../Compiler/Build/Warnings.project
 documentation: False
 write-ghc-environment-files: never

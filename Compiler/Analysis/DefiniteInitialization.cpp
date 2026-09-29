@@ -213,7 +213,8 @@ namespace Visual::XSharp::Analysis
                     first = false;
                 }
                 else
-                    incoming.IntersectWith(predecessorFacts->second);
+                    llvm::cantFail(
+                        incoming.IntersectWith(predecessorFacts->second));
             }
             return incoming;
         }

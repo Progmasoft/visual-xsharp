@@ -5,7 +5,7 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "arguments",
     srcs = ["Options.cpp"],
-    hdrs = ["Options.hpp"],
+    hdrs = ["Options.hpp", "TableLibrary.hpp"],
     deps = [
         "@fmt//:fmt",
         "@tabulate//:tabulate",

@@ -456,7 +456,7 @@ TEST_CASE("UTF-8 object basenames are written as native filesystem paths")
 
     const auto error = Artifacts::CommitArtifactFiles(directory.Path(), files);
     REQUIRE_FALSE(error.has_value());
-    const auto output = directory.Path() / std::filesystem::u8path(u8"Örnek.o");
+    const auto output = directory.Path() / std::filesystem::path(u8"Örnek.o");
     CHECK(std::filesystem::is_regular_file(output));
     CHECK(ReadText(output) == "utf8 object");
 }

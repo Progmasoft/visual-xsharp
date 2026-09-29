@@ -63,7 +63,8 @@ namespace Visual::XSharp::Backend::LLVM
         MatchesInvocationType(const llvm::Function &function,
                               const Core::Type &type) -> bool
         {
-            if (function.isVarArg() || !function.arg_empty())
+            if (function.getCallingConv() != llvm::CallingConv::C
+                || function.isVarArg() || !function.arg_empty())
                 return false;
             const auto *llvmResult = function.getReturnType();
             if (type.kind == Core::Type::Kind::Unit)
@@ -98,6 +99,23 @@ namespace Visual::XSharp::Backend::LLVM
             return JitError{ kind, std::move(code), std::move(message) };
         }
 
+        // ORC machine code has no Clang function-sanitizer metadata prefix.
+        // That checker reads before the entry address, potentially outside the
+        // executable mapping. Only this foreign-code call skips that checker;
+        // ASan and all other UBSan checks remain enabled. InvokeScalar
+        // validates the LLVM signature and host calling convention before
+        // reaching here.
+        template<typename Native>
+#if defined(__clang__)
+        __attribute__((no_sanitize("function")))
+#endif
+        auto
+        InvokeMachineCode(llvm::orc::ExecutorAddr address) -> Native
+        {
+            using Function = Native (*)();
+            return address.toPtr<Function>()();
+        }
+
         [[nodiscard]] auto
         InvokeAddress(llvm::orc::ExecutorAddr address, const Core::Type &type)
             -> JitResult
@@ -107,8 +125,7 @@ namespace Visual::XSharp::Backend::LLVM
             // through a wider or signedness-incompatible type would be
             // undefined behavior.
             const auto invoke = [&]<typename Native>() -> Native {
-                using Function = Native (*)();
-                return address.toPtr<Function>()();
+                return InvokeMachineCode<Native>(address);
             };
             const auto integerResult = [&](auto value) {
                 return JitResult{ JitValue{ type,

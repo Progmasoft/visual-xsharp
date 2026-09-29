@@ -67,7 +67,7 @@ func TestCheckAcceptsAllRequiredOptionalToolchains(t *testing.T) {
 func TestCheckReportsEveryMissingToolchain(t *testing.T) {
 	runner := &fakePackageRunner{paths: map[string][]string{}, versions: map[string]string{}}
 	err := checkOptionalPackages(runner)
-	if err == nil || !strings.Contains(err.Error(), "3 optional toolchain(s) missing") {
+	if err == nil || !strings.Contains(err.Error(), "6 optional toolchain(s) missing") {
 		t.Fatalf("expected one aggregate error for all missing tools, got %v", err)
 	}
 }
@@ -221,6 +221,41 @@ func TestInstallOneUsesHomebrewOnlyForMacOS(t *testing.T) {
 	}
 }
 
+func TestDeveloperUtilityPackageManagers(t *testing.T) {
+	for _, item := range optionalPackages[2:5] {
+		t.Run(item.executable, func(t *testing.T) {
+			for _, goos := range []string{"windows", "darwin"} {
+				runner := &fakePackageRunner{paths: map[string][]string{
+					"winget": {"winget"}, "brew": {"brew"},
+				}}
+				if err := installOneForOS(runner, item, goos); err != nil {
+					t.Fatal(err)
+				}
+				if len(runner.commands) != 1 {
+					t.Fatalf("expected exactly one installation: %#v", runner.commands)
+				}
+				command := strings.Join(runner.commands[0], " ")
+				if goos == "windows" && !strings.Contains(command, "--id "+item.wingetID+" --exact") {
+					t.Fatalf("wrong exact WinGet identity: %s", command)
+				}
+				if goos == "darwin" && command != "brew install "+item.homebrewFormula {
+					t.Fatalf("wrong Homebrew formula: %s", command)
+				}
+			}
+		})
+	}
+}
+
+func TestDeveloperUtilitiesRejectUnrelatedVersionOutput(t *testing.T) {
+	for _, item := range optionalPackages[2:5] {
+		runner := readyPackageRunner()
+		runner.versions[item.executable] = "unrelated program 1.0.0"
+		if _, _, ready := findReadyTool(runner, item); ready {
+			t.Fatalf("accepted unrelated version output for %s", item.executable)
+		}
+	}
+}
+
 func readyPackageRunner() *fakePackageRunner {
 	return &fakePackageRunner{
 		paths: map[string][]string{
@@ -228,11 +263,17 @@ func readyPackageRunner() *fakePackageRunner {
 			"gfortran": {"gfortran"},
 			"rustup":   {"rustup"},
 			"rustc":    {"rustc"},
+			"just":     {"just"},
+			"rg":       {"rg"},
+			"jq":       {"jq"},
 		},
 		versions: map[string]string{
 			"dotnet":   "10.0.401 [C:\\dotnet]",
 			"gfortran": "GNU Fortran (GCC) 16.1.0",
 			"rustup":   "rustup 1.29.1",
+			"just":     "just 1.46.0",
+			"rg":       "ripgrep 15.1.0\nfeatures:+pcre2",
+			"jq":       "jq-1.8.1",
 		},
 		components:      "rustc-x86_64-pc-windows-msvc\nrust-std-x86_64-pc-windows-msvc\n",
 		activeToolchain: true,

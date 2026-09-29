@@ -3,7 +3,8 @@
 
 #include <benchmark/benchmark.h>
 #include <cstdint>
-#include <stdexcept>
+#include <llvm/ADT/Twine.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -147,7 +148,8 @@ namespace
     RequireValid(const Core::Module &module)
     {
         if (!Core::Verify(module).empty())
-            throw std::runtime_error("Core benchmark fixture is not valid");
+            llvm::report_fatal_error(
+                llvm::Twine("Core benchmark fixture is not valid"));
     }
 
     void
@@ -190,7 +192,8 @@ namespace
         RequireValid(module);
         const auto encoded = Core::Wire::Encode(module);
         if (!encoded)
-            throw std::runtime_error("benchmark fixture could not be encoded");
+            llvm::report_fatal_error(
+                llvm::Twine("benchmark fixture could not be encoded"));
         for (auto _ : state)
         {
             const auto decoded = Core::Wire::Decode(encoded.bytes);

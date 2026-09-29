@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
-#include <stdexcept>
+#include <llvm/ADT/Twine.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <utility>
 
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
@@ -82,11 +83,12 @@ namespace Visual::XSharp::Fuzzing
                 return;
             const auto encoded = Core::Wire::Encode(*decoded.module, limits);
             if (!encoded)
-                throw std::logic_error("verified Core model could not encode");
+                llvm::report_fatal_error(
+                    llvm::Twine("verified Core model could not encode"));
             const auto again = Core::Wire::Decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
-                throw std::logic_error(
-                    "Core wire round trip changed the model");
+                llvm::report_fatal_error(
+                    llvm::Twine("Core wire round trip changed the model"));
         }
 
         void
@@ -102,13 +104,13 @@ namespace Visual::XSharp::Fuzzing
             const auto encoded
                 = ::visual_xsharp::core::wire::encode(*decoded.module, limits);
             if (!encoded)
-                throw std::logic_error(
-                    "verified CorePrep model could not encode");
+                llvm::report_fatal_error(
+                    llvm::Twine("verified CorePrep model could not encode"));
             const auto again
                 = ::visual_xsharp::core::wire::decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
-                throw std::logic_error(
-                    "CorePrep wire round trip changed the model");
+                llvm::report_fatal_error(
+                    llvm::Twine("CorePrep wire round trip changed the model"));
         }
 
         void
@@ -122,10 +124,12 @@ namespace Visual::XSharp::Fuzzing
                 return;
             const auto encoded = Xpp::Wire::Encode(*decoded.module, limits);
             if (!encoded)
-                throw std::logic_error("verified Xpp model could not encode");
+                llvm::report_fatal_error(
+                    llvm::Twine("verified Xpp model could not encode"));
             const auto again = Xpp::Wire::Decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
-                throw std::logic_error("Xpp wire round trip changed the model");
+                llvm::report_fatal_error(
+                    llvm::Twine("Xpp wire round trip changed the model"));
         }
 
         void
@@ -139,10 +143,12 @@ namespace Visual::XSharp::Fuzzing
                 return;
             const auto encoded = Xmm::Wire::Encode(*decoded.module, limits);
             if (!encoded)
-                throw std::logic_error("verified Xmm model could not encode");
+                llvm::report_fatal_error(
+                    llvm::Twine("verified Xmm model could not encode"));
             const auto again = Xmm::Wire::Decode(encoded.bytes, limits);
             if (!again || *again.module != *decoded.module)
-                throw std::logic_error("Xmm wire round trip changed the model");
+                llvm::report_fatal_error(
+                    llvm::Twine("Xmm wire round trip changed the model"));
         }
 
         [[nodiscard]] auto
@@ -216,17 +222,21 @@ namespace Visual::XSharp::Fuzzing
         const auto xppBytes = Xpp::Wire::Encode(xpp, ArtifactLimits());
         const auto xmmBytes = Xmm::Wire::Encode(xmm, ArtifactLimits());
         if (!coreBytes)
-            throw std::logic_error("Could not create Core wire fuzz seed: "
-                                   + coreBytes.error->message);
+            llvm::report_fatal_error(
+                llvm::Twine("Could not create Core wire fuzz seed: "
+                            + coreBytes.error->message));
         if (!corePrepBytes)
-            throw std::logic_error("Could not create CorePrep wire fuzz seed: "
-                                   + corePrepBytes.error->message);
+            llvm::report_fatal_error(
+                llvm::Twine("Could not create CorePrep wire fuzz seed: "
+                            + corePrepBytes.error->message));
         if (!xppBytes)
-            throw std::logic_error("Could not create Xpp wire fuzz seed: "
-                                   + xppBytes.error->message);
+            llvm::report_fatal_error(
+                llvm::Twine("Could not create Xpp wire fuzz seed: "
+                            + xppBytes.error->message));
         if (!xmmBytes)
-            throw std::logic_error("Could not create Xmm wire fuzz seed: "
-                                   + xmmBytes.error->message);
+            llvm::report_fatal_error(
+                llvm::Twine("Could not create Xmm wire fuzz seed: "
+                            + xmmBytes.error->message));
         return { WithSelector(0U, coreBytes.bytes),
                  WithSelector(1U, corePrepBytes.bytes),
                  WithSelector(2U, xppBytes.bytes),

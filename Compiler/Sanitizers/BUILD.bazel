@@ -1,0 +1,11 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:private"])
+
+# Never install this executable. The helper requires an expected sanitizer
+# diagnostic as well as failure, so a missing runtime cannot pass the gate.
+cc_binary(
+    name = "sanitizer_probe",
+    srcs = ["SanitizerProbe.cpp"],
+    deps = ["@llvm//:llvm"],
+)

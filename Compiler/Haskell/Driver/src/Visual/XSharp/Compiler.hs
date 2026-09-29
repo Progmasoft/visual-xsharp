@@ -304,13 +304,19 @@ validateEntryMethod :: Declaration ResolvedName Type -> Either [Diagnostic] ()
 validateEntryMethod TypeDeclaration {typeMembers = members} =
     case matchingMethods of
         [] -> Left [entryProblem "VXE0004" Nothing "entry class must declare Main"]
-        [method]
-            | declarationAccess method /= PublicAccess -> failure method "VXE0005" "entry Main must be public"
-            | not (declarationIsStatic method) -> failure method "VXE0006" "entry Main must be static"
-            | not (null (declarationParameters method)) -> failure method "VXE0007" "entry Main must not declare parameters"
-            | not (syntaxSpellsVoid (declarationReturnSyntax method)) ->
-                failure method "VXE0008" "entry Main must return void"
-            | otherwise -> Right ()
+        [ method@FunctionDeclaration
+                { declarationAccess = access
+                , declarationIsStatic = isStatic
+                , declarationParameters = parameters
+                , declarationReturnSyntax = returnSyntax
+                }
+            ]
+                | access /= PublicAccess -> failure method "VXE0005" "entry Main must be public"
+                | not isStatic -> failure method "VXE0006" "entry Main must be static"
+                | not (null parameters) -> failure method "VXE0007" "entry Main must not declare parameters"
+                | not (syntaxSpellsVoid returnSyntax) ->
+                    failure method "VXE0008" "entry Main must return void"
+                | otherwise -> Right ()
         _ -> Left [entryProblem "VXE0014" (declarationSpan <$> firstMethod) "entry class must declare exactly one Main method"]
     where
         matchingMethods =

@@ -126,6 +126,10 @@ jobs:
         shell: pwsh
         run: go run ./helpers/cmd/develop test
 
+      - name: Verify ASan and UBSan runtimes and native suites
+        shell: pwsh
+        run: go run ./helpers/cmd/develop sanitize address-undefined
+
       - name: Exercise native wire decoder mutations
         shell: pwsh
         run: |
@@ -144,10 +148,10 @@ jobs:
         include:
           - name: macOS Sequoia
             runner: macos-15
-            sanitizer: address
+            sanitizer: address-undefined
           - name: macOS Tahoe
             runner: macos-26
-            sanitizer: undefined
+            sanitizer: address-undefined
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -208,3 +212,18 @@ jobs:
       - name: Test native compiler with ${{ matrix.sanitizer }} sanitizer
         shell: bash
         run: go run ./helpers/cmd/develop sanitize ${{ matrix.sanitizer }}
+
+      - name: Verify separate ThreadSanitizer runtime and native suites
+        shell: bash
+        run: go run ./helpers/cmd/develop sanitize thread
+
+  required:
+    name: Compiler Tier 1 Required
+    runs-on: ubuntu-26.04
+    if: always()
+    needs: [windows-clangcl, macos-clang]
+    steps:
+      - name: Require every native and sanitizer host
+        run: |
+          test '${{ needs.windows-clangcl.result }}' = success
+          test '${{ needs.macos-clang.result }}' = success

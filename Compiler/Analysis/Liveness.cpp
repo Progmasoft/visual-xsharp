@@ -142,7 +142,7 @@ namespace Visual::XSharp::Analysis::Liveness
             for (const auto successor : block.successors)
                 if (const auto found = incoming.find(successor);
                     found != incoming.end())
-                    live.UnionWith(found->second);
+                    llvm::cantFail(live.UnionWith(found->second));
             return live;
         }
 

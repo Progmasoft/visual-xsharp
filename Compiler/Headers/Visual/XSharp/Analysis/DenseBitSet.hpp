@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <llvm/ADT/BitVector.h>
+#include <llvm/Support/Error.h>
 #include <vector>
 
 namespace Visual::XSharp::Analysis
@@ -21,6 +22,14 @@ namespace Visual::XSharp::Analysis
         /// @param bitCount Number of valid bit indices in the universe.
         /// @param value Initial state assigned to every bit.
         explicit DenseBitSet(std::size_t bitCount, bool value = false);
+
+        /// Validate an externally supplied universe before allocating storage.
+        /// @param bitCount Number of valid bit indices in the universe.
+        /// @param value Initial state assigned to every bit.
+        /// @return A set, or an error when LLVM cannot represent the size.
+        [[nodiscard]] static auto
+        Create(std::size_t bitCount, bool value = false)
+            -> llvm::Expected<DenseBitSet>;
 
         /// Return the number of bit positions in the universe.
         /// @return The fixed universe size.
@@ -79,18 +88,21 @@ namespace Visual::XSharp::Analysis
 
         /// Add every bit set in another equal-sized set.
         /// @param other Set whose bits are unioned into this set.
-        void
-        UnionWith(const DenseBitSet &other);
+        /// @return Success, or an error without mutation for unequal sizes.
+        [[nodiscard]] auto
+        UnionWith(const DenseBitSet &other) -> llvm::Error;
 
         /// Retain only bits also present in another equal-sized set.
         /// @param other Set whose bits form the intersection mask.
-        void
-        IntersectWith(const DenseBitSet &other);
+        /// @return Success, or an error without mutation for unequal sizes.
+        [[nodiscard]] auto
+        IntersectWith(const DenseBitSet &other) -> llvm::Error;
 
         /// Remove bits present in another equal-sized set.
         /// @param other Set whose bits are subtracted from this set.
-        void
-        Subtract(const DenseBitSet &other);
+        /// @return Success, or an error without mutation for unequal sizes.
+        [[nodiscard]] auto
+        Subtract(const DenseBitSet &other) -> llvm::Error;
 
         /// Return set-bit indices in ascending order.
         /// @return Vector containing every set index exactly once.

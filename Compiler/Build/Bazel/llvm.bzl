@@ -17,6 +17,57 @@ _COMPONENTS = [
 def _quote(value):
     return "\"{}\"".format(value.replace("\\", "/"))
 
+def _sanitizer_support_archive(repository_ctx, config, library_dir, library_names):
+    """Exclude an optional CRT allocator override from a generated import copy.
+
+    No upstream source, compiler flags or installed archives are changed.
+    Removing this member is allowed only when no imported component references
+    its private rpmalloc API; otherwise selecting a compatible LLVM is required.
+    """
+    tool_dir = repository_ctx.path(config).dirname
+    ar = tool_dir.get_child("llvm-ar.exe")
+    lib = tool_dir.get_child("llvm-lib.exe")
+    nm = tool_dir.get_child("llvm-nm.exe")
+    for tool in [ar, lib, nm]:
+        if not tool.exists:
+            fail("Windows sanitizer import requires the LLVM archive tools: {}".format(tool))
+    support = library_dir.get_child("LLVMSupport.lib")
+    members = repository_ctx.execute([ar, "t", support], quiet = True)
+    if members.return_code != 0:
+        fail("Could not inspect LLVM's allocator members:\n{}".format(members.stderr))
+    overrides = [
+        member.strip()
+        for member in members.stdout.splitlines()
+        if member.strip().replace("\\", "/").split("/")[-1] == "rpmalloc.c.obj"
+    ]
+    if not overrides:
+        return "lib/LLVMSupport.lib"
+    if len(overrides) != 1:
+        fail("Expected at most one optional LLVM CRT allocator override")
+
+    undefined = repository_ctx.execute(
+        [nm, "--undefined-only", "--format=posix"] + [library_dir.get_child(name) for name in library_names],
+        quiet = True,
+    )
+    if undefined.return_code != 0:
+        fail("Could not verify LLVM allocator references:\n{}".format(undefined.stderr))
+    for line in undefined.stdout.splitlines():
+        fields = [field for field in line.replace("\t", " ").split(" ") if field]
+        if len(fields) >= 2 and fields[1] == "U" and fields[0].startswith("rp"):
+            fail("LLVM directly references rpmalloc; use an ASan-compatible development package: {}".format(fields[0]))
+
+    repository_ctx.file("sanitizer-import/README.txt", "Generated sanitizer-only import; the installed LLVM archive is unchanged.\n")
+    destination = repository_ctx.path("sanitizer-import/LLVMSupport.lib")
+    copied = repository_ctx.execute([lib, "/out:{}".format(destination), support], quiet = True)
+    if copied.return_code != 0:
+        fail("Could not create a sanitizer-compatible LLVM import copy:\n{}".format(copied.stderr))
+    removed = repository_ctx.execute([ar, "dP", destination, overrides[0]], quiet = True)
+    checked = repository_ctx.execute([ar, "t", destination], quiet = True)
+    remaining = [member for member in checked.stdout.splitlines() if member.strip().replace("\\", "/").split("/")[-1] == "rpmalloc.c.obj"]
+    if removed.return_code != 0 or checked.return_code != 0 or remaining:
+        fail("Could not exclude the optional allocator override from the generated import")
+    return "sanitizer-import/LLVMSupport.lib"
+
 def _llvm_repository_impl(repository_ctx):
     root = repository_ctx.os.environ.get("LLVM_ROOT")
     is_windows = repository_ctx.os.name.lower().startswith("windows")
@@ -111,13 +162,17 @@ def _llvm_repository_impl(repository_ctx):
     repository_ctx.symlink(include_dir, "include")
     repository_ctx.symlink(library_dir, "lib")
 
+    support_archive = "lib/LLVMSupport.lib"
+    if is_windows and repository_ctx.os.environ.get("VXS_LLVM_SYSTEM_ALLOCATOR") == "1":
+        support_archive = _sanitizer_support_archive(repository_ctx, config, library_dir, library_names)
+
     imports = []
     dependencies = [":headers"]
     for index, library_name in enumerate(library_names):
         target = "component_{}".format(index)
         imports.append("cc_import(name = {}, static_library = {})".format(
             _quote(target),
-            _quote("lib/{}".format(library_name)),
+            _quote(support_archive if library_name == "LLVMSupport.lib" else "lib/{}".format(library_name)),
         ))
         dependencies.append(":{}".format(target))
 
@@ -144,7 +199,7 @@ cc_library(
 
 _llvm_repository = repository_rule(
     implementation = _llvm_repository_impl,
-    environ = ["LLVM_ROOT", "PATH"],
+    environ = ["LLVM_ROOT", "PATH", "VXS_LLVM_SYSTEM_ALLOCATOR"],
     local = True,
 )
 

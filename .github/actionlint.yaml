@@ -1,0 +1,7 @@
+# Hosted labels newer than actionlint's bundled runner inventory. These labels
+# have already executed successfully; do not disable runner validation globally.
+self-hosted-runner:
+  labels:
+    - windows-2025-vs2026
+    - macos-26
+    - ubuntu-26.04

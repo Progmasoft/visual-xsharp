@@ -4,6 +4,10 @@
 #include <Progmasoft/Catch3/Assertions.hpp>
 #include <array>
 #include <cstdint>
+#include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Support/raw_ostream.h>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -64,6 +68,34 @@ namespace
         return session.InvokeScalar(symbol, type);
     }
 } // namespace
+
+TEST_CASE("ORC rejects a non-host calling convention before invocation",
+          "[llvm][orc][abi][sanitizer]")
+{
+    llvm::LLVMContext context;
+    llvm::Module module("foreign-convention", context);
+    const auto functionType
+        = llvm::FunctionType::get(llvm::Type::getInt64Ty(context), false);
+    auto *function = llvm::Function::Create(functionType,
+                                            llvm::Function::ExternalLinkage,
+                                            "foreign_entry",
+                                            module);
+    function->setCallingConv(llvm::CallingConv::Fast);
+    llvm::IRBuilder<> builder(
+        llvm::BasicBlock::Create(context, "entry", function));
+    builder.CreateRet(builder.getInt64(42));
+    llvm::SmallVector<char, 0> bytes;
+    llvm::raw_svector_ostream stream(bytes);
+    llvm::WriteBitcodeToFile(module, stream);
+    const auto *data = reinterpret_cast<const std::uint8_t *>(bytes.data());
+    Llvm::JitSession session;
+    const auto error = session.AddModule({ data, bytes.size() },
+                                         "foreign-convention",
+                                         "foreign_entry",
+                                         Core::Type::int64());
+    REQUIRE(error);
+    REQUIRE(error->kind == Llvm::JitErrorKind::SignatureMismatch);
+}
 
 TEST_CASE(
     "ORC JIT invokes verified integer constants with their exact host widths",

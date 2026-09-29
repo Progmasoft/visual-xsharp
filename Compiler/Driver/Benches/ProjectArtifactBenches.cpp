@@ -6,7 +6,6 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
-#include <stdexcept>
 #include <string>
 #include <vector>
 

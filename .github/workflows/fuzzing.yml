@@ -7,8 +7,17 @@ on:
   pull_request:
   push:
   workflow_dispatch:
+    inputs:
+      seconds:
+        description: Per-target manual campaign seconds (1-3600)
+        type: number
+        default: 90
+        required: false
   schedule:
     - cron: '17 2 * * *'
+
+env:
+  VXS_FUZZ_SECONDS: ${{ inputs.seconds || '90' }}
 
 permissions:
   contents: read
@@ -21,7 +30,7 @@ jobs:
   windows:
     name: Windows ClangCL libFuzzer
     runs-on: windows-2025-vs2026
-    timeout-minutes: 120
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -76,24 +85,26 @@ jobs:
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz
-      - name: Run nightly AddressSanitizer stress campaign
+      - name: Run nightly ASan and UBSan stress campaign
         if: github.event_name == 'schedule'
         shell: pwsh
         env:
+          VXS_FUZZ_SECONDS: '900'
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz-stress --asan
-      - name: Preserve crashing corpus
-        if: failure()
+      - name: Preserve campaign reports and crashing corpus
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: fuzz-windows-${{ github.run_id }}
           path: ${{ runner.temp }}/vxs-fuzz-*/
-          if-no-files-found: ignore
+          if-no-files-found: warn
+          retention-days: 14
 
   macos:
     name: ${{ matrix.runner }} Clang libFuzzer
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -141,24 +152,26 @@ jobs:
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz
-      - name: Run nightly AddressSanitizer stress campaign
+      - name: Run nightly ASan and UBSan stress campaign
         if: github.event_name == 'schedule'
         shell: bash
         env:
+          VXS_FUZZ_SECONDS: '900'
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz-stress --asan
-      - name: Preserve crashing corpus
-        if: failure()
+      - name: Preserve campaign reports and crashing corpus
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: fuzz-${{ matrix.runner }}-${{ github.run_id }}
           path: ${{ runner.temp }}/vxs-fuzz-*/
-          if-no-files-found: ignore
+          if-no-files-found: warn
+          retention-days: 14
 
   ubuntu:
     name: Ubuntu 26.04 Clang libFuzzer
     runs-on: ubuntu-26.04
-    timeout-minutes: 120
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -203,25 +216,27 @@ jobs:
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz
-      - name: Run nightly AddressSanitizer stress campaign
+      - name: Run nightly ASan and UBSan stress campaign
         if: github.event_name == 'schedule'
         shell: bash
         env:
+          VXS_FUZZ_SECONDS: '900'
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz-stress --asan
-      - name: Preserve crashing corpus
-        if: failure()
+      - name: Preserve campaign reports and crashing corpus
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: fuzz-ubuntu-${{ github.run_id }}
           path: ${{ runner.temp }}/vxs-fuzz-*/
-          if-no-files-found: ignore
+          if-no-files-found: warn
+          retention-days: 14
 
   fedora:
     name: Fedora 43 Clang libFuzzer
     runs-on: ubuntu-26.04
     container: fedora:43
-    timeout-minutes: 120
+    timeout-minutes: 300
     steps:
       - name: Install checkout and compiler prerequisites
         shell: bash
@@ -266,16 +281,31 @@ jobs:
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz
-      - name: Run nightly AddressSanitizer stress campaign
+      - name: Run nightly ASan and UBSan stress campaign
         if: github.event_name == 'schedule'
         shell: bash
         env:
+          VXS_FUZZ_SECONDS: '900'
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz-stress --asan
-      - name: Preserve crashing corpus
-        if: failure()
+      - name: Preserve campaign reports and crashing corpus
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: fuzz-fedora-${{ github.run_id }}
           path: ${{ runner.temp }}/vxs-fuzz-*/
-          if-no-files-found: ignore
+          if-no-files-found: warn
+          retention-days: 14
+
+  required:
+    name: Fuzzing Required
+    runs-on: ubuntu-26.04
+    if: always()
+    needs: [windows, macos, ubuntu, fedora]
+    steps:
+      - name: Require every bounded fuzz host
+        run: |
+          test '${{ needs.windows.result }}' = success
+          test '${{ needs.macos.result }}' = success
+          test '${{ needs.ubuntu.result }}' = success
+          test '${{ needs.fedora.result }}' = success

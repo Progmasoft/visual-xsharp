@@ -15,7 +15,7 @@ module Visual.XSharp.Driver.FFI
     , frontendFuzzCompile
     ) where
 
-import Control.Exception (SomeException, displayException, try)
+import Control.Exception (SomeException, displayException, evaluate, try)
 import Data.ByteString qualified as ByteString
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -105,23 +105,28 @@ frontendFuzzSyntax :: Word32 -> Ptr Word8 -> CSize -> IO CInt
 frontendFuzzSyntax stage sourcePointer sourceSize
     | stage > 1 = pure (CInt 2)
     | otherwise = do
-        copied <- readSource sourcePointer sourceSize
-        case copied of
-            Left _ -> pure (CInt 0)
-            Right source -> case Text.decodeUtf8' source of
+        -- Never let a lazy AST exception escape a foreign export into C++.
+        -- Force the complete result, not just the Either constructor/list spine.
+        outcome <- try syntaxAction :: IO (Either SomeException CInt)
+        pure (either (const (CInt 3)) id outcome)
+    where
+        syntaxAction = do
+            copied <- readSource sourcePointer sourceSize
+            case copied of
                 Left _ -> pure (CInt 0)
-                Right decoded -> do
-                    let text = Text.unpack decoded
-                        input = CompilerInput "<fuzz>.vxs" text
-                    case stage of
-                        0 -> do
-                            let tokenized = runLexer defaultLexer (LexerInput "<fuzz>.vxs" text)
-                            pure $ case tokenized of
-                                Left _ -> CInt 0
-                                Right tokens -> length tokens `seq` CInt 0
-                        _ -> case analyzeSyntax input of
-                            Left _ -> pure (CInt 0)
-                            Right _ -> pure (CInt 0)
+                Right source -> case Text.decodeUtf8' source of
+                    Left _ -> pure (CInt 0)
+                    Right decoded -> do
+                        let text = Text.unpack decoded
+                            input = CompilerInput "<fuzz>.vxs" text
+                        case stage of
+                            0 -> do
+                                let tokenized = runLexer defaultLexer (LexerInput "<fuzz>.vxs" text)
+                                _ <- evaluate (length (show tokenized))
+                                pure (CInt 0)
+                            _ -> do
+                                _ <- evaluate (length (show (analyzeSyntax input)))
+                                pure (CInt 0)
 
 frontendFuzzCompile :: Ptr Word8 -> CSize -> FunPtr OutputCallback -> Ptr () -> IO CInt
 frontendFuzzCompile = frontendCompileSource

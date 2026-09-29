@@ -5,6 +5,6 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "presentation",
     srcs = ["Activity.cpp"],
-    hdrs = ["Activity.hpp"],
+    hdrs = ["Activity.hpp", "ProgressLibrary.hpp"],
     deps = ["@indicators//:indicators"],
 )

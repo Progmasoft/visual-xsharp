@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <limits>
-#include <stdexcept>
 #include <vector>
 
 #include "Visual/XSharp/Analysis/DenseBitSet.hpp"
@@ -34,7 +33,10 @@ TEST_CASE("a dense bit set rejects universes outside LLVM's index domain")
         const auto oversized
             = static_cast<std::size_t>(std::numeric_limits<unsigned>::max())
               + 1U;
-        CHECK_THROWS_AS(DenseBitSet(oversized), std::length_error);
+        auto result = DenseBitSet::Create(oversized);
+        REQUIRE_FALSE(result);
+        CHECK(llvm::toString(result.takeError()).find("index domain")
+              != std::string::npos);
     }
 }
 
@@ -116,7 +118,7 @@ TEST_CASE("union combines set membership")
     right.Set(2U);
     right.Set(129U);
 
-    left.UnionWith(right);
+    REQUIRE_FALSE(static_cast<bool>(left.UnionWith(right)));
     CHECK(left.SetIndices() == std::vector<std::size_t>{ 1U, 2U, 129U });
 }
 
@@ -131,7 +133,7 @@ TEST_CASE("intersection retains common set membership")
     right.Set(64U);
     right.Set(129U);
 
-    left.IntersectWith(right);
+    REQUIRE_FALSE(static_cast<bool>(left.IntersectWith(right)));
     CHECK(left.SetIndices() == std::vector<std::size_t>{ 2U, 129U });
 }
 
@@ -143,7 +145,7 @@ TEST_CASE("subtract removes every matching membership")
     right.Set(64U);
     right.Set(129U);
 
-    left.Subtract(right);
+    REQUIRE_FALSE(static_cast<bool>(left.Subtract(right)));
     CHECK(left.Count() == 127U);
     CHECK_FALSE(left.Test(0U));
     CHECK_FALSE(left.Test(64U));
@@ -154,9 +156,14 @@ TEST_CASE("binary operations reject incompatible universes")
 {
     DenseBitSet small(4U);
     const DenseBitSet large(5U);
-    CHECK_THROWS_AS(small.UnionWith(large), std::invalid_argument);
-    CHECK_THROWS_AS(small.IntersectWith(large), std::invalid_argument);
-    CHECK_THROWS_AS(small.Subtract(large), std::invalid_argument);
+    small.Set(1U);
+    CHECK(llvm::toString(small.UnionWith(large)).find("different sizes")
+          != std::string::npos);
+    CHECK(llvm::toString(small.IntersectWith(large)).find("different sizes")
+          != std::string::npos);
+    CHECK(llvm::toString(small.Subtract(large)).find("different sizes")
+          != std::string::npos);
+    CHECK(small.SetIndices() == std::vector<std::size_t>{ 1U });
 }
 
 TEST_CASE("copying a dense bit set preserves value semantics")

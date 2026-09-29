@@ -55,20 +55,20 @@ module Visual.XSharp.AST
 
 -- | One source-language identifier in its original spelling.
 newtype Identifier = Identifier {identifierText :: String}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Name split into ordered namespace, type, and member segments.
 newtype QualifiedName = QualifiedName {qualifiedNameParts :: [Identifier]}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Zero-based source coordinate used by parser and diagnostic spans.
 data SourcePosition = SourcePosition {sourceLine :: Int, sourceColumn :: Int}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Half-open source range with the identity of the source file.
 data SourceSpan = SourceSpan
     {sourceFile :: FilePath, sourceStart :: SourcePosition, sourceEnd :: SourcePosition}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Type expression written in source before semantic resolution.
 data TypeSyntax
@@ -80,7 +80,7 @@ data TypeSyntax
     | DictionaryTypeSyntax TypeSyntax TypeSyntax
     | CallableTypeSyntax [TypeSyntax] TypeSyntax
     | AutoType
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Restricted compile-time expression used for generic value arguments.
 
@@ -95,24 +95,24 @@ data TemplateValueSyntax
     | TemplateNameSyntax SourceSpan QualifiedName
     | TemplateUnarySyntax SourceSpan UnaryOperator TemplateValueSyntax
     | TemplateBinarySyntax SourceSpan BinaryOperator TemplateValueSyntax TemplateValueSyntax
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | One generic argument, preserving the distinction between types and values.
 data TemplateArgumentSyntax
     = TemplateTypeSyntax TypeSyntax
     | TemplateValueArgumentSyntax TemplateValueSyntax
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Source access modifier recorded on a declaration.
 data Access = DefaultAccess | PublicAccess | InternalAccess | ProtectedAccess | PrivateAccess
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Module-level namespace and ordered declarations, parameterized by phase.
 data SyntaxTree name annotation = SyntaxTree
     { syntaxNamespace :: Maybe QualifiedName
     , syntaxDeclarations :: [Declaration name annotation]
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Type, function, or generic type declaration in a syntax tree.
 data Declaration name annotation
@@ -139,7 +139,7 @@ data Declaration name annotation
         , declarationTemplateParameters :: [TemplateParameter name annotation]
         , typeMembers :: [Declaration name annotation]
         }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Generic parameter with its declaration span, category, pack flag, and default.
 
@@ -154,14 +154,14 @@ data TemplateParameter name annotation = TemplateParameter
     , templateParameterIsPack :: Bool
     , templateParameterDefault :: Maybe TemplateDefault
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Generic parameter category: type, value, or nested template signature.
 data TemplateParameterKind
     = TemplateTypeParameter
     | TemplateValueParameterKind TypeSyntax
     | TemplateTemplateParameter [TemplateParameterShape]
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Anonymous shape of one parameter in a template-template signature.
 
@@ -172,20 +172,20 @@ data TemplateParameterShape = TemplateParameterShape
     { templateParameterShapeKind :: TemplateParameterShapeKind
     , templateParameterShapeIsPack :: Bool
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Accepted argument category at one level of a template-template signature.
 data TemplateParameterShapeKind
     = TemplateTypeParameterShape
     | TemplateValueParameterShape TypeSyntax
     | TemplateTemplateParameterShape [TemplateParameterShape]
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Default argument attached to a generic parameter.
 data TemplateDefault
     = TemplateTypeDefault TypeSyntax
     | TemplateValueDefault TemplateValueSyntax
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Callable parameter with source location and unresolved type syntax.
 data Parameter name annotation = Parameter
@@ -194,15 +194,15 @@ data Parameter name annotation = Parameter
     , parameterAnnotation :: annotation
     , parameterTypeSyntax :: TypeSyntax
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Ordered statement sequence representing a lexical block.
 newtype Block name annotation = Block {blockStatements :: [Statement name annotation]}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Mutability requested for a local or foreach binding.
 data BindingKind = ImmutableBinding | MutableBinding
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Ownership behavior requested for a callable capture.
 
@@ -210,7 +210,7 @@ data BindingKind = ImmutableBinding | MutableBinding
 refines storage according to the captured value category.
 -}
 data CaptureMode = StrongCapture | WeakCapture | UnownedCapture
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Captured binding with an inner name and an optional outer-scope initializer.
 
@@ -224,13 +224,13 @@ data Capture name annotation = Capture
     , captureAnnotation :: annotation
     , captureInitializer :: Maybe (Expression name annotation)
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Expression-bodied or block-bodied callable body.
 data CallableBody name annotation
     = CallableExpressionBody (Expression name annotation)
     | CallableBlockBody (Block name annotation)
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Statement forms supported by the parsed and typed Visual X# trees.
 data Statement name annotation
@@ -258,7 +258,7 @@ data Statement name annotation
     | BreakStatement SourceSpan (Maybe (Expression name annotation))
     | ContinueStatement SourceSpan
     | ExpressionStatement SourceSpan (Expression name annotation) Bool
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Expression forms retained from parsing through type checking.
 data Expression name annotation
@@ -279,7 +279,7 @@ data Expression name annotation
         [Parameter name annotation]
         (CallableBody name annotation)
         annotation
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Pattern tested by an @is@ expression.
 
@@ -295,7 +295,7 @@ data Pattern name annotation
     | NotPattern SourceSpan (Pattern name annotation) annotation
     | AndPattern SourceSpan (Pattern name annotation) (Pattern name annotation) annotation
     | OrPattern SourceSpan (Pattern name annotation) (Pattern name annotation) annotation
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Relational comparison used by a relational pattern.
 data RelationalPatternOperator
@@ -305,7 +305,7 @@ data RelationalPatternOperator
     | PatternGreaterEqual
     | PatternEqual
     | PatternNotEqual
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Literal token value after lexical escape decoding.
 data Literal
@@ -315,11 +315,11 @@ data Literal
     | BooleanLiteral Bool
     | StringLiteral String
     | UnitLiteral
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Unary operator recognized by the parser.
 data UnaryOperator = UnaryPlus | UnaryNegate | LogicalNot | BitwiseNot
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Binary arithmetic, comparison, bitwise, or Boolean operator.
 data BinaryOperator
@@ -343,11 +343,11 @@ data BinaryOperator
     | NotEqual
     | LogicalAnd
     | LogicalOr
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Parser output with source identifiers and no semantic annotations.
 newtype ParsedAST = ParsedAST {parsedSyntaxTree :: SyntaxTree Identifier ()}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Renamed source name carrying its preserved spelling and unique identity.
 
@@ -356,23 +356,23 @@ positive identities; negative identities exist only to diagnose unresolved
 names during resolution.
 -}
 data RenamedName = RenamedName {renamedSpelling :: Identifier, renamedUnique :: Int}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Syntax tree after declarations and references receive unique identities.
 newtype RenamedAST = RenamedAST {renamedSyntaxTree :: SyntaxTree RenamedName ()}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Stable numeric symbol identity used by resolved and native representations.
 newtype SymbolId = SymbolId {symbolIdValue :: Int}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Reference to a resolved declaration with its original spelling.
 data ResolvedName = ResolvedName {resolvedSymbol :: SymbolId, resolvedSpelling :: Identifier}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Syntax tree whose names point to declarations but are not yet type-checked.
 newtype ResolvedAST = ResolvedAST {resolvedSyntaxTree :: SyntaxTree ResolvedName ()}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Semantic type attached to resolved expressions and declarations.
 data Type
@@ -380,7 +380,7 @@ data Type
     | FunctionType [Type] Type
     | TypeVariable ResolvedName
     | ErrorType
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Evaluated generic argument, retaining its original position in the list.
 
@@ -390,7 +390,7 @@ The ordered sum keeps @Example<int, 4, String>@ distinct from
 data TemplateArgument
     = TypeTemplateArgument Type
     | ValueTemplateArgument TemplateValue
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Canonical value accepted as a generic argument after type checking.
 
@@ -402,11 +402,11 @@ data TemplateValue
     | BooleanTemplateValue Bool
     | CharacterTemplateValue Integer
     | TemplateValueParameter ResolvedName
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Resolved syntax tree with semantic types attached to its annotations.
 newtype TypedAST = TypedAST {typedSyntaxTree :: SyntaxTree ResolvedName Type}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Construct a one-segment nominal type without generic arguments.
 namedType :: String -> Type

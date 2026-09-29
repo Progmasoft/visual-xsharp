@@ -32,7 +32,7 @@ data SourceFragmentKind
     | StringLiteralFragment
     | CharacterLiteralFragment
     | RawStringLiteralFragment
-    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+    deriving stock (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | Exact fragment text and its original half-open source span.
 data SourceFragment = SourceFragment
@@ -40,7 +40,7 @@ data SourceFragment = SourceFragment
     , sourceFragmentText :: String
     , sourceFragmentSpan :: SourceSpan
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Split source without normalizing or decoding any character.
 scanSourceFragments :: FilePath -> String -> Either [Diagnostic] [SourceFragment]

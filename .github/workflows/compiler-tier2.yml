@@ -74,6 +74,19 @@ jobs:
           bazel build //Compiler/Fuzzing:wire_fuzz_smoke
           ./bazel-bin/Compiler/Fuzzing/wire_fuzz_smoke
 
-      - name: Test with AddressSanitizer
+      - name: Verify ASan and UBSan runtimes and native suites
         shell: bash
-        run: go run ./helpers/cmd/develop sanitize address
+        run: go run ./helpers/cmd/develop sanitize address-undefined
+
+      - name: Verify separate ThreadSanitizer runtime and native suites
+        shell: bash
+        run: go run ./helpers/cmd/develop sanitize thread
+
+  required:
+    name: Compiler Tier 2 Required
+    runs-on: ubuntu-26.04
+    if: always()
+    needs: [ubuntu-clang]
+    steps:
+      - name: Require the native and sanitizer host
+        run: test '${{ needs.ubuntu-clang.result }}' = success

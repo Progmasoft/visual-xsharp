@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <limits>
-#include <stdexcept>
+#include <llvm/Support/ErrorHandling.h>
 
 #include "Visual/XSharp/Analysis/DenseBitSet.hpp"
 
@@ -14,7 +14,7 @@ namespace Visual::XSharp::Analysis
         CheckedBitCount(const std::size_t bitCount) -> unsigned
         {
             if (bitCount > std::numeric_limits<unsigned>::max())
-                throw std::length_error(
+                llvm::report_fatal_error(
                     "dense bit set exceeds LLVM BitVector's index domain");
             return static_cast<unsigned>(bitCount);
         }
@@ -23,6 +23,17 @@ namespace Visual::XSharp::Analysis
     DenseBitSet::DenseBitSet(const std::size_t bitCount, const bool value)
         : bits_(CheckedBitCount(bitCount), value)
     {}
+
+    auto
+    DenseBitSet::Create(const std::size_t bitCount, const bool value)
+        -> llvm::Expected<DenseBitSet>
+    {
+        if (bitCount > std::numeric_limits<unsigned>::max())
+            return llvm::createStringError(
+                llvm::inconvertibleErrorCode(),
+                "dense bit set exceeds LLVM BitVector's index domain");
+        return DenseBitSet(bitCount, value);
+    }
 
     auto
     DenseBitSet::Size() const noexcept -> std::size_t
@@ -95,31 +106,37 @@ namespace Visual::XSharp::Analysis
         bits_.set();
     }
 
-    void
-    DenseBitSet::UnionWith(const DenseBitSet &other)
+    auto
+    DenseBitSet::UnionWith(const DenseBitSet &other) -> llvm::Error
     {
         if (!Compatible(other))
-            throw std::invalid_argument(
+            return llvm::createStringError(
+                llvm::inconvertibleErrorCode(),
                 "cannot union dense bit sets with different sizes");
         bits_ |= other.bits_;
+        return llvm::Error::success();
     }
 
-    void
-    DenseBitSet::IntersectWith(const DenseBitSet &other)
+    auto
+    DenseBitSet::IntersectWith(const DenseBitSet &other) -> llvm::Error
     {
         if (!Compatible(other))
-            throw std::invalid_argument(
+            return llvm::createStringError(
+                llvm::inconvertibleErrorCode(),
                 "cannot intersect dense bit sets with different sizes");
         bits_ &= other.bits_;
+        return llvm::Error::success();
     }
 
-    void
-    DenseBitSet::Subtract(const DenseBitSet &other)
+    auto
+    DenseBitSet::Subtract(const DenseBitSet &other) -> llvm::Error
     {
         if (!Compatible(other))
-            throw std::invalid_argument(
+            return llvm::createStringError(
+                llvm::inconvertibleErrorCode(),
                 "cannot subtract dense bit sets with different sizes");
         bits_.reset(other.bits_);
+        return llvm::Error::success();
     }
 
     auto

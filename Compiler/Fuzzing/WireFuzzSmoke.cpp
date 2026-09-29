@@ -5,9 +5,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <stdexcept>
+#include <llvm/Support/Error.h>
 #include <string_view>
 #include <vector>
 
@@ -84,92 +83,87 @@ namespace
         }
     }
 
-    void
-    ShowFailure(const std::vector<std::uint8_t> &bytes,
-                std::size_t seed,
-                std::size_t iteration)
-    {
-        std::cerr << "wire fuzz failure: seed=" << seed
-                  << " iteration=" << iteration << " input=";
-        for (const auto byte : bytes)
-            std::cerr << std::hex << std::setw(2) << std::setfill('0')
-                      << static_cast<unsigned>(byte);
-        std::cerr << std::dec << '\n';
-    }
-
-    void
+    // Corpus I/O is a recoverable command error, unlike an oracle invariant.
+    // Use error_code overloads so filesystem failures do not throw either.
+    [[nodiscard]] auto
     WriteCorpus(const std::vector<std::vector<std::uint8_t>> &seeds,
-                const std::filesystem::path &directory)
+                const std::filesystem::path &directory) -> llvm::Error
     {
         constexpr std::string_view names[]{ "core", "coreprep", "xpp", "xmm" };
-        std::filesystem::create_directories(directory);
-        if (!std::filesystem::is_empty(directory))
-            throw std::logic_error("Fuzz corpus destination must be empty");
+        std::error_code error;
+        std::filesystem::create_directories(directory, error);
+        if (error)
+            return llvm::errorCodeToError(error);
+        const auto empty = std::filesystem::is_empty(directory, error);
+        if (error)
+            return llvm::errorCodeToError(error);
+        if (!empty)
+            return llvm::createStringError(
+                llvm::inconvertibleErrorCode(),
+                "Fuzz corpus destination must be empty");
         for (std::size_t index = 0U; index < seeds.size(); ++index)
         {
             std::ofstream output(directory / names[index], std::ios::binary);
             if (!output)
-                throw std::runtime_error("Could not create fuzz corpus seed");
+                return llvm::createStringError(
+                    llvm::inconvertibleErrorCode(),
+                    "Could not create fuzz corpus seed");
             for (const auto byte : seeds[index])
                 output.put(static_cast<char>(byte));
             if (!output)
-                throw std::runtime_error("Could not finish fuzz corpus seed");
+                return llvm::createStringError(
+                    llvm::inconvertibleErrorCode(),
+                    "Could not finish fuzz corpus seed");
         }
+        return llvm::Error::success();
     }
 } // namespace
 
 int
 main(int argc, char **argv)
 {
-    try
+    if (argc != 1
+        && (argc != 3 || argv[1] != std::string_view("-Write-Corpus")))
     {
-        if (argc != 1
-            && (argc != 3 || argv[1] != std::string_view("-Write-Corpus")))
-            throw std::invalid_argument(
-                "Use wire_fuzz_smoke [-Write-Corpus EMPTY_DIRECTORY]");
-        const auto seeds = Visual::XSharp::Fuzzing::WireSeeds();
-        if (seeds.size() != 4U)
-            throw std::logic_error("Expected one valid seed per wire stage");
-        if (argc == 3)
-        {
-            WriteCorpus(seeds, argv[2]);
-            std::cout << "Wrote four valid wire corpus seeds\n";
-            return 0;
-        }
-
-        std::size_t cases = 0U;
-        for (std::size_t seedIndex = 0U; seedIndex < seeds.size(); ++seedIndex)
-        {
-            Random random(0x56'58'53'46'55'5a'5a'31ULL + seedIndex);
-            for (std::size_t iteration = 0U; iteration < 1024U; ++iteration)
-            {
-                auto bytes = seeds[seedIndex];
-                if (iteration != 0U)
-                {
-                    const auto mutations = 1U + random.Index(4U);
-                    for (std::size_t index = 0U; index < mutations; ++index)
-                        Mutate(bytes, random);
-                }
-                try
-                {
-                    Visual::XSharp::Fuzzing::ExerciseWire(bytes);
-                }
-                catch (...)
-                {
-                    ShowFailure(bytes, seedIndex, iteration);
-                    throw;
-                }
-                ++cases;
-            }
-        }
-        std::cout << "Wire mutation smoke: " << cases
-                  << " deterministic cases across Core, CorePrep, Xpp, "
-                     "and Xmm\n";
-        return 0;
+        std::cerr << "Use wire_fuzz_smoke [-Write-Corpus EMPTY_DIRECTORY]\n";
+        return 2;
     }
-    catch (const std::exception &error)
+    const auto seeds = Visual::XSharp::Fuzzing::WireSeeds();
+    if (seeds.size() != 4U)
     {
-        std::cerr << error.what() << '\n';
+        std::cerr << "Expected one valid seed per wire stage\n";
         return 1;
     }
+    if (argc == 3)
+    {
+        if (auto error = WriteCorpus(seeds, argv[2]))
+        {
+            std::cerr << llvm::toString(std::move(error)) << '\n';
+            return 1;
+        }
+        std::cout << "Wrote four valid wire corpus seeds\n";
+        return 0;
+    }
+
+    std::size_t cases = 0U;
+    for (std::size_t seedIndex = 0U; seedIndex < seeds.size(); ++seedIndex)
+    {
+        Random random(0x56'58'53'46'55'5a'5a'31ULL + seedIndex);
+        for (std::size_t iteration = 0U; iteration < 1024U; ++iteration)
+        {
+            auto bytes = seeds[seedIndex];
+            if (iteration != 0U)
+            {
+                const auto mutations = 1U + random.Index(4U);
+                for (std::size_t index = 0U; index < mutations; ++index)
+                    Mutate(bytes, random);
+            }
+            Visual::XSharp::Fuzzing::ExerciseWire(bytes);
+            ++cases;
+        }
+    }
+    std::cout << "Wire mutation smoke: " << cases
+              << " deterministic cases across Core, CorePrep, Xpp, "
+                 "and Xmm\n";
+    return 0;
 }

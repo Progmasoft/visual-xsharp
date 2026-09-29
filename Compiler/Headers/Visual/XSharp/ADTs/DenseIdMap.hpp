@@ -5,8 +5,10 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/Hashing.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <utility>
 
 namespace Visual::XSharp::ADTs
@@ -107,7 +109,29 @@ namespace Visual::XSharp::ADTs
         void
         Reserve(const std::size_t count)
         {
-            values_.reserve(count);
+            // Reserve remains the programmer-contract API; untrusted sizes
+            // use TryReserve so rejecting a limit never needs an exception.
+            if (!TryReserve(count))
+                llvm::report_fatal_error(
+                    "DenseIdMap reserve exceeds its index domain");
+        }
+
+        /// Reserve capacity only if LLVM's bucket domain can represent it.
+        /// @param count Requested minimum capacity.
+        /// @return false before mutation/allocation for an excessive count.
+        [[nodiscard]] auto
+        TryReserve(const std::size_t count) -> bool
+        {
+            // DenseMap's bucket arithmetic uses a narrower unsigned count.
+            // Leave headroom for its load factor/power-of-two growth instead
+            // of truncating a caller's size_t or overflowing bucket arithmetic.
+            constexpr auto kMaximumEntries
+                = static_cast<std::size_t>(std::numeric_limits<unsigned>::max())
+                  / 4U;
+            if (count > kMaximumEntries)
+                return false;
+            values_.reserve(static_cast<unsigned>(count));
+            return true;
         }
 
         /// Test whether an identifier is present.

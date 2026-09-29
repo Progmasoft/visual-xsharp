@@ -24,7 +24,7 @@ data ParserInput = ParserInput
     , parserTokens :: [Token]
     -- ^ Lexer tokens, including the end-of-file token.
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | A parser implementation that returns a complete AST or diagnostics.
 newtype Parser = Parser {parseTokens :: ParserInput -> Either [Diagnostic] ParsedAST}

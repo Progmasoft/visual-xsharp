@@ -22,7 +22,7 @@ data CharacterLiteralError
     | InvalidUnicodeEscapeDigit Char
     | InvalidUnicodeScalar Integer
     | CharacterLiteralOverflow
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Scan through the closing quote while respecting escaped quotes. The
 opening quote is supplied as part of the input and retained in the token.

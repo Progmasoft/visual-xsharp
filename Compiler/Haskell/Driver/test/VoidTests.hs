@@ -67,7 +67,7 @@ typedCallResult = do
     artifacts <- either (const Nothing) Just (compileSource callSource)
     declarations <- case artifactTypedAST artifacts of TypedAST tree -> Just (syntaxDeclarations tree)
     case declarations of
-        [TypeDeclaration {typeMembers = [_save, run]}] -> findTypedCall (declarationBody run)
+        [TypeDeclaration {typeMembers = [_save, FunctionDeclaration {declarationBody = body}]}] -> findTypedCall body
         _ -> Nothing
 
 coreCallResult :: Maybe Type

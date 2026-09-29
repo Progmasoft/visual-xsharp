@@ -45,7 +45,7 @@ data DiagnosticArgument = DiagnosticArgument
     { argumentName :: String
     , argumentValue :: String
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Wire-level severity shared with native compiler and editor clients.
 data ProtocolSeverity
@@ -53,7 +53,7 @@ data ProtocolSeverity
     | ProtocolWarning
     | ProtocolInformation
     | ProtocolHint
-    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+    deriving stock (Bounded, Enum, Eq, Ord, Read, Show)
 
 {- | Source path and zero-based scalar coordinates for one diagnostic span.
 
@@ -67,28 +67,28 @@ data DiagnosticLocation = DiagnosticLocation
     , locationEndLine :: Word32
     , locationEndColumn :: Word32
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Secondary location that explains a diagnostic's context.
 data DiagnosticRelatedLocation = DiagnosticRelatedLocation
     { relatedLocation :: DiagnosticLocation
     , relatedMessage :: String
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Replacement text for one source range in a code action.
 data DiagnosticTextEdit = DiagnosticTextEdit
     { editLocation :: DiagnosticLocation
     , editReplacement :: String
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Atomic editor action containing one or more source edits.
 data DiagnosticFix = DiagnosticFix
     { fixTitle :: String
     , fixEdits :: [DiagnosticTextEdit]
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | One versioned diagnostic, including related spans and suggested fixes.
 data DiagnosticRecord = DiagnosticRecord
@@ -101,13 +101,13 @@ data DiagnosticRecord = DiagnosticRecord
     , recordRelated :: [DiagnosticRelatedLocation]
     , recordFixes :: [DiagnosticFix]
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Ordered diagnostic records returned for a compiler operation.
 newtype DiagnosticDocument = DiagnosticDocument
     { documentRecords :: [DiagnosticRecord]
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Resource bounds enforced when encoding and decoding untrusted documents.
 data DiagnosticProtocolLimits = DiagnosticProtocolLimits
@@ -119,7 +119,7 @@ data DiagnosticProtocolLimits = DiagnosticProtocolLimits
     , maximumFixes :: Int
     , maximumEditsPerFix :: Int
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Conservative default allocation and complexity limits for the protocol.
 defaultDiagnosticProtocolLimits :: DiagnosticProtocolLimits
@@ -140,7 +140,7 @@ data DiagnosticProtocolError = DiagnosticProtocolError
     , protocolErrorContext :: String
     , protocolErrorMessage :: String
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Convert compiler diagnostics to the richer wire-level document model.
 diagnosticDocument :: [Diagnostic] -> Either DiagnosticProtocolError DiagnosticDocument

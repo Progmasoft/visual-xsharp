@@ -27,11 +27,11 @@ data DiagnosticStage
     | XmmLoweringStage
     | XmmOptimizerStage
     | LlvmBackendStage
-    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+    deriving stock (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | User-facing severity currently emitted by the Haskell frontend.
 data DiagnosticSeverity = Error | Warning
-    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+    deriving stock (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | Stable diagnostic code, message, source location, and severity.
 data Diagnostic = Diagnostic
@@ -41,4 +41,4 @@ data Diagnostic = Diagnostic
     , diagnosticSpan :: Maybe SourceSpan
     , diagnosticMessage :: String
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)

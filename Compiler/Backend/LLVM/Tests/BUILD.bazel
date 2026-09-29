@@ -14,5 +14,6 @@ cc_binary(
         "//Compiler/Driver:core_pipeline",
         "@catch3//:catch2_main",
         "@catch3//src/Progmasoft:catch3",
+        "@llvm//:llvm",
     ],
 )

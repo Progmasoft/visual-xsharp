@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
-// optional_packages installs or checks optional native toolchains used for
-// examples and comparative benchmarks. It deliberately does not change the
+// optional_packages installs or checks optional developer tools and toolchains
+// used for examples and comparative benchmarks. It deliberately does not change the
 // repository's core compiler requirements.
 package main
 
@@ -17,15 +17,15 @@ import (
 	"strings"
 )
 
-const optionalPackagesUsage = `Optional Visual X# toolchains
+const optionalPackagesUsage = `Optional Visual X# developer packages
 
 Usage:
   go run ./helpers/cmd/optional-packages install
   go run ./helpers/cmd/optional-packages check
 
 Commands:
-  install  Install the .NET 10 SDK and GNU Fortran, plus rustup components.
-  check    Check the .NET SDK, GNU Fortran, rustup, rustc, and rust-std.
+  install  Install missing .NET 10, GNU Fortran, just, ripgrep, jq, and rustup components.
+  check    Check those tools, including rustc and rust-std on the active toolchain.
 
 Windows uses WinGet defaults. macOS uses Homebrew. Package managers choose
 their recommended installation scope. Rustup may manage components only for
@@ -59,6 +59,27 @@ var optionalPackages = []optionalPackage{
 		versionArgs:     []string{"--version"},
 		versionPattern:  regexp.MustCompile(`(?i)GNU Fortran.*(14\.[1-9]|14\.[1-9][0-9]+|1[5-9]\.[0-9]+|[2-9][0-9]\.[0-9]+)`),
 		versionNote:     "GNU Fortran 14.1+ with Fortran 2023 mode",
+	},
+	{
+		name: "just", executable: "just",
+		wingetID: "Casey.Just", homebrewFormula: "just",
+		versionArgs:    []string{"--version"},
+		versionPattern: regexp.MustCompile(`(?m)^just\s+[0-9]+\.[0-9]+\.[0-9]+`),
+		versionNote:    "just recipe runner",
+	},
+	{
+		name: "ripgrep", executable: "rg",
+		wingetID: "BurntSushi.ripgrep.MSVC", homebrewFormula: "ripgrep",
+		versionArgs:    []string{"--version"},
+		versionPattern: regexp.MustCompile(`(?m)^ripgrep\s+[0-9]+\.[0-9]+\.[0-9]+`),
+		versionNote:    "ripgrep search tool",
+	},
+	{
+		name: "jq", executable: "jq",
+		wingetID: "jqlang.jq", homebrewFormula: "jq",
+		versionArgs:    []string{"--version"},
+		versionPattern: regexp.MustCompile(`(?m)^jq-[0-9]+\.[0-9]+(?:\.[0-9]+)?`),
+		versionNote:    "jq JSON processor",
 	},
 	{
 		name: "rustup, rustc, and rust-std", executable: "rustup",

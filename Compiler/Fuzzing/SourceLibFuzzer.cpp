@@ -3,9 +3,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <exception>
 #include <span>
 
 #include "SourceFuzz.hpp"
@@ -18,29 +15,17 @@ extern "C" int
 LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
 {
     const std::span<const std::uint8_t> input(data, size);
-    try
-    {
 #if VXS_SOURCE_FUZZ_STAGE == 0
-        Visual::XSharp::Fuzzing::ExerciseLexer(input);
+    Visual::XSharp::Fuzzing::ExerciseLexer(input);
 #elif VXS_SOURCE_FUZZ_STAGE == 1
-        Visual::XSharp::Fuzzing::ExerciseParser(input);
+    Visual::XSharp::Fuzzing::ExerciseParser(input);
 #elif VXS_SOURCE_FUZZ_STAGE == 2
-        Visual::XSharp::Fuzzing::ExerciseSourceToLlvm(input);
-        Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(input);
+    Visual::XSharp::Fuzzing::ExerciseSourceToLlvm(input);
+    Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(input);
 #else
 #    error Unsupported VXS_SOURCE_FUZZ_STAGE
 #endif
-        return 0;
-    }
-    catch (const std::exception &exception)
-    {
-        // A C++ exception must never unwind through libFuzzer's C ABI. Print
-        // the oracle diagnostic before turning it into a sanitizer-visible
-        // failure that preserves the exact reproducing input.
-        std::fputs("Visual X# source fuzz failure: ", stderr);
-        std::fputs(exception.what(), stderr);
-        std::fputc('\n', stderr);
-        std::fflush(stderr);
-        std::abort();
-    }
+    // Oracle invariant failures terminate directly. No exception can unwind
+    // through the C ABI, and libFuzzer retains the reproducing input.
+    return 0;
 }

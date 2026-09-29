@@ -8,10 +8,10 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <tabulate/table.hpp>
 #include <utility>
 
 #include "Compiler/Cli/Arguments/Options.hpp"
+#include "TableLibrary.hpp"
 
 #ifndef VXS_PROJECT_VERSION
 #    define VXS_PROJECT_VERSION "0.4.0"

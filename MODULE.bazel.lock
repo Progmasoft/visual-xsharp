@@ -178,7 +178,7 @@
   "moduleExtensions": {
     "//Compiler/Build/Bazel:llvm.bzl%llvm": {
       "general": {
-        "bzlTransitiveDigest": "jr/PTzsDwh4SGy/4Om1ujGR0GWMOJxa1oJp51Gy2b+I=",
+        "bzlTransitiveDigest": "d5n0dYsk+AgFJkyvMPDSSOLLwOjjLGJVSC3ypF4EO2w=",
         "usagesDigest": "aKx9tihBcVg0UaVzFLRNevn8+nJMzDK4s1eETQo3uac=",
         "recordedInputs": [],
         "generatedRepoSpecs": {

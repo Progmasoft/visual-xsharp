@@ -16,7 +16,7 @@ data TokenKind
     | CharacterToken
     | StringToken
     | EndOfFileToken
-    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+    deriving stock (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | Token spelling, category, and half-open source range.
 data Token = Token
@@ -24,4 +24,4 @@ data Token = Token
     , tokenText :: String
     , tokenSpan :: SourceSpan
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)

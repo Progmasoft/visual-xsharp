@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <cstdint>
+#include <llvm/ADT/Twine.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -155,18 +156,19 @@ namespace Visual::XSharp::Fuzzing
         {
             if (!compiled.succeeded()
                 || compiled.kind != Frontend::OutputKind::CoreWire)
-                throw std::runtime_error("valid fuzz source was rejected: "
-                                         + std::string(sourceDescription));
+                llvm::report_fatal_error(
+                    llvm::Twine("valid fuzz source was rejected: "
+                                + std::string(sourceDescription)));
             auto pipeline
                 = Visual::XSharp::Pipeline::ConsumeCore(compiled.bytes);
             if (!pipeline || !pipeline.llvm)
             {
                 if (IsExpectedEmptyModule(pipeline))
                     return pipeline;
-                throw std::runtime_error(
-                    "verified Core failed Xpp/Xmm/LLVM lowering ("
-                    + PipelineFailure(pipeline) + ") for "
-                    + std::string(sourceDescription));
+                llvm::report_fatal_error(
+                    llvm::Twine("verified Core failed Xpp/Xmm/LLVM lowering ("
+                                + PipelineFailure(pipeline) + ") for "
+                                + std::string(sourceDescription)));
             }
             return pipeline;
         }
@@ -179,8 +181,9 @@ namespace Visual::XSharp::Fuzzing
             const auto compiled = CompileSource(source);
             if (!compiled.succeeded()
                 || compiled.kind != Frontend::OutputKind::CoreWire)
-                throw std::runtime_error(
-                    "generated arithmetic source was rejected by the frontend");
+                llvm::report_fatal_error(
+                    llvm::Twine("generated arithmetic source was rejected by "
+                                "the frontend"));
 
             Visual::XSharp::Pipeline::Options options;
             options.optimize_xpp = optimizeXpp;
@@ -189,9 +192,9 @@ namespace Visual::XSharp::Fuzzing
                 = Visual::XSharp::Pipeline::ConsumeCore(compiled.bytes,
                                                         options);
             if (!pipeline || !pipeline.llvm)
-                throw std::runtime_error(
+                llvm::report_fatal_error(llvm::Twine(
                     "differential source failed a verified compiler pipeline: "
-                    + PipelineFailure(pipeline));
+                    + PipelineFailure(pipeline)));
             return *pipeline.llvm;
         }
 
@@ -205,12 +208,13 @@ namespace Visual::XSharp::Fuzzing
             const auto symbol
                 = artifact.llvm_ir.find("@Fuzz.Evaluate.", definition);
             if (definition == std::string::npos || symbol == std::string::npos)
-                throw std::runtime_error(
-                    "generated fuzz module has no Evaluate definition");
+                llvm::report_fatal_error(llvm::Twine(
+                    "generated fuzz module has no Evaluate definition"));
             const auto end = artifact.llvm_ir.find('(', symbol);
             if (end == std::string::npos)
-                throw std::runtime_error(
-                    "generated fuzz Evaluate symbol has no function signature");
+                llvm::report_fatal_error(
+                    llvm::Twine("generated fuzz Evaluate symbol has no "
+                                "function signature"));
             return artifact.llvm_ir.substr(symbol + 1U, end - symbol - 1U);
         }
 
@@ -226,14 +230,16 @@ namespace Visual::XSharp::Fuzzing
                                                      identifier,
                                                      entrySymbol,
                                                      Core::Type::int64()))
-                throw std::runtime_error("ORC rejected verified bitcode: "
-                                         + error->code + ": " + error->message);
+                llvm::report_fatal_error(
+                    llvm::Twine("ORC rejected verified bitcode: " + error->code
+                                + ": " + error->message));
             const auto result
                 = session.InvokeScalar(entrySymbol, Core::Type::int64());
             if (!result)
-                throw std::runtime_error("ORC could not invoke the verified "
-                                         "fuzz expression: "
-                                         + result.error->message);
+                llvm::report_fatal_error(
+                    llvm::Twine("ORC could not invoke the verified "
+                                "fuzz expression: "
+                                + result.error->message));
             return std::get<std::int64_t>(result.value->payload);
         }
     } // namespace
@@ -243,7 +249,8 @@ namespace Visual::XSharp::Fuzzing
     {
         if (input.size() <= kMaximumFuzzInput
             && !Frontend::FuzzSyntax(0U, input))
-            throw std::runtime_error("Haskell lexer fuzz ABI is unavailable");
+            llvm::report_fatal_error(
+                llvm::Twine("Haskell lexer fuzz ABI is unavailable"));
     }
 
     void
@@ -251,7 +258,8 @@ namespace Visual::XSharp::Fuzzing
     {
         if (input.size() <= kMaximumFuzzInput
             && !Frontend::FuzzSyntax(1U, input))
-            throw std::runtime_error("Haskell parser fuzz ABI is unavailable");
+            llvm::report_fatal_error(
+                llvm::Twine("Haskell parser fuzz ABI is unavailable"));
     }
 
     void
@@ -262,8 +270,9 @@ namespace Visual::XSharp::Fuzzing
         const auto compiled = CompileSource(input);
         if (compiled.status == Frontend::Status::InternalError
             || compiled.status == Frontend::Status::OutputRejected)
-            throw std::runtime_error("frontend failed internally while "
-                                     "compiling a source fuzz input");
+            llvm::report_fatal_error(
+                llvm::Twine("frontend failed internally while "
+                            "compiling a source fuzz input"));
         if (!compiled.succeeded())
             return; // Lexical, syntax, and semantic diagnostics are normal.
         (void)ConsumeVerifiedCore(compiled, "arbitrary source fuzz input");
@@ -289,11 +298,11 @@ namespace Visual::XSharp::Fuzzing
         // shared optimizer/codegen defect cannot validate itself.
         if (referenceValue != expected || optimizedValue != expected
             || referenceValue != optimizedValue)
-            throw std::runtime_error(
+            llvm::report_fatal_error(llvm::Twine(
                 "compiler differential oracle found a miscompile: expected "
                 + std::to_string(expected) + ", baseline "
                 + std::to_string(referenceValue) + ", optimized "
                 + std::to_string(optimizedValue) + "; generated source:\n"
-                + source);
+                + source));
     }
 } // namespace Visual::XSharp::Fuzzing

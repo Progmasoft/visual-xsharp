@@ -80,6 +80,16 @@ TEST_CASE("DenseIdSet preserves boundary identities and duplicate semantics")
     CHECK(values.Size() == 3U);
 }
 
+TEST_CASE("DenseIdMap rejects capacity narrowing before allocation")
+{
+    ADTs::DenseIdMap<Id, Id> values;
+    REQUIRE(values.TryEmplace(7U, 11U).inserted);
+    CHECK_FALSE(values.TryReserve(std::numeric_limits<std::size_t>::max()));
+    CHECK(values.Size() == 1U);
+    REQUIRE(values.Find(7U) != nullptr);
+    CHECK(*values.Find(7U) == 11U);
+}
+
 TEST_CASE(
     "DenseIdMap preserves lookup and duplicate semantics for generated ids")
 {

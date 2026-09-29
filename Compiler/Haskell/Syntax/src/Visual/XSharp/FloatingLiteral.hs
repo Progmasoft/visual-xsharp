@@ -23,7 +23,7 @@ data FloatingLiteralError
     | MultipleExponents
     | InvalidFloatingCharacter Char
     | FloatingSuffixNotSupported
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- The sign is consumed only immediately after e/E. This prevents 1+2 from
 -- becoming one malformed literal while retaining 2E-4 as one token.

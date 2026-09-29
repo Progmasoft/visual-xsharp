@@ -15,7 +15,7 @@ import Visual.XSharp.Parser (Token (..), TokenKind (..))
 
 -- | Source identity and complete text supplied to a lexer implementation.
 data LexerInput = LexerInput {lexerSourceFile :: FilePath, lexerSourceText :: String}
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Lexer strategy whose failures are returned as structured diagnostics.
 newtype Lexer = Lexer {lexSource :: LexerInput -> Either [Diagnostic] [Token]}

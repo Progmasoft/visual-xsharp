@@ -3,7 +3,8 @@
 
 #include <benchmark/benchmark.h>
 #include <cstdint>
-#include <stdexcept>
+#include <llvm/ADT/Twine.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <utility>
 #include <vector>
 
@@ -93,7 +94,8 @@ namespace
     RequireValid(const IR::Module &module)
     {
         if (!Xpp::Verify(module).empty())
-            throw std::runtime_error("Xpp benchmark fixture is not valid");
+            llvm::report_fatal_error(
+                llvm::Twine("Xpp benchmark fixture is not valid"));
     }
 
     void
@@ -154,8 +156,8 @@ namespace
         RequireValid(module);
         const auto encoded = Xpp::Wire::Encode(module);
         if (!encoded)
-            throw std::runtime_error(
-                "Xpp benchmark fixture could not be encoded");
+            llvm::report_fatal_error(
+                llvm::Twine("Xpp benchmark fixture could not be encoded"));
         for (auto _ : state)
         {
             const auto decoded = Xpp::Wire::Decode(encoded.bytes);

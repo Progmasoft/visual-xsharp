@@ -77,7 +77,7 @@ func executeWorkflow(arguments []string, runner commandRunner) error {
 		if err := requireBuildTools(currentHost, runner); err != nil {
 			return err
 		}
-		return runFuzzCampaign(repository, currentHost, runner, false, false)
+		return runFuzzCampaign(repository, currentHost, runner, false, true)
 	case "fuzz-stress":
 		if len(bazelArguments) != 0 || (len(commandArguments) != 0 && !(len(commandArguments) == 1 && strings.EqualFold(commandArguments[0], "--asan"))) {
 			return errors.New("fuzz-stress accepts only the optional --asan flag")
@@ -85,7 +85,7 @@ func executeWorkflow(arguments []string, runner commandRunner) error {
 		if err := requireBuildTools(currentHost, runner); err != nil {
 			return err
 		}
-		return runFuzzCampaign(repository, currentHost, runner, true, len(commandArguments) == 1)
+		return runFuzzCampaign(repository, currentHost, runner, true, true)
 	case "version":
 		if len(commandArguments) != 1 || len(bazelArguments) != 0 {
 			return errors.New("version requires exactly one major.minor.patch[.revision] argument")
@@ -104,7 +104,7 @@ func executeWorkflow(arguments []string, runner commandRunner) error {
 		return runTests(repository, currentHost, runner, nil)
 	case "sanitize":
 		if len(commandArguments) != 1 {
-			return errors.New("sanitize requires exactly one kind: address, undefined, or thread")
+			return errors.New("sanitize requires exactly one kind: address, undefined, address-undefined, or thread")
 		}
 		if err := requireBuildTools(currentHost, runner); err != nil {
 			return err
@@ -119,6 +119,9 @@ func executeWorkflow(arguments []string, runner commandRunner) error {
 		}
 		selected.environment, err = sanitizerEnvironment(currentHost, selected, runner)
 		if err != nil {
+			return err
+		}
+		if err := verifySanitizerRuntime(repository, currentHost, runner, selected); err != nil {
 			return err
 		}
 		if err := runTests(repository, currentHost, runner, selected.environment); err != nil {

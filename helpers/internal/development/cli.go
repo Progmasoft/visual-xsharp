@@ -37,7 +37,7 @@ func newCommand(runner commandRunner, output, errorOutput io.Writer) *cobra.Comm
 		{"benchmark", "Run native and Haskell compiler benchmarks.", 0, true},
 		{"bundle", "Stage, checksum, and smoke-test a host distribution.", 0, true},
 		{"test", "Build and execute every native contract suite.", 0, true},
-		{"sanitize", "Run address, undefined, or thread sanitizer suites.", 1, true},
+		{"sanitize", "Run address, undefined, address-undefined, or thread sanitizer suites.", 1, true},
 		{"version", "Validate major.minor.patch[.revision] release metadata.", 1, false},
 		{"fuzz", "Run short wire, lexer, parser, and LLVM-source campaigns.", 0, false},
 		{"incremental-clean-build", "Rebuild while preserving downloaded dependencies.", 0, false},
@@ -80,7 +80,7 @@ func newCommand(runner commandRunner, output, errorOutput io.Writer) *cobra.Comm
 	var asan bool
 	stress := &cobra.Command{
 		Use:   "fuzz-stress",
-		Short: "Run long per-target fuzz campaigns with optional ASan.",
+		Short: "Run long per-target fuzz campaigns with ASan and UBSan.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			arguments := []string{"fuzz-stress"}
@@ -90,7 +90,7 @@ func newCommand(runner commandRunner, output, errorOutput io.Writer) *cobra.Comm
 			return executeWorkflow(arguments, runner)
 		},
 	}
-	stress.Flags().BoolVar(&asan, "asan", false, "instrument native targets with AddressSanitizer")
+	stress.Flags().BoolVar(&asan, "asan", false, "compatibility flag; ASan and UBSan are always enabled")
 	root.AddCommand(stress)
 	return root
 }

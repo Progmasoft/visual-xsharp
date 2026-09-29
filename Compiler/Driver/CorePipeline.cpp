@@ -624,7 +624,9 @@ ProcessProjectCoreBytes(std::span<const std::uint8_t> bytes,
                    "vxs: wrote verified {} artifact '{}'\n",
                    output == BuildOutput::kObject ? "object" : "assembly",
                    PathText(outputDirectory
-                            / std::filesystem::u8path(file.file_name)));
+                            / std::filesystem::path(
+                                std::u8string(file.file_name.begin(),
+                                              file.file_name.end()))));
     return true;
 }
 

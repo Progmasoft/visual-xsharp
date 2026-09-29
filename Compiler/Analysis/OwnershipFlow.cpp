@@ -85,7 +85,7 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
             UnionWith(const PackedState &other)
             {
                 for (std::size_t bit = 0U; bit < states_.size(); ++bit)
-                    states_[bit].UnionWith(other.states_[bit]);
+                    llvm::cantFail(states_[bit].UnionWith(other.states_[bit]));
             }
 
             [[nodiscard]] auto

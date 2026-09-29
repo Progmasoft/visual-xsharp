@@ -43,7 +43,7 @@ type releaseCheck struct {
 
 func sanitizerEnvironment(currentHost host, selected sanitizer, runner commandRunner) ([]string, error) {
 	environment := append([]string(nil), selected.environment...)
-	if currentHost.kind != hostWindows || selected.name != "AddressSanitizer" {
+	if currentHost.kind != hostWindows || !strings.Contains(selected.config, "asan") {
 		return environment, nil
 	}
 	resourceDirectory, err := runner.Output("clang-cl", "/clang:-print-resource-dir")
@@ -133,7 +133,7 @@ func selectSanitizer(currentHost host, requested string) (sanitizer, error) {
 		}, nil
 	case "undefined", "ubsan":
 		if currentHost.kind == hostWindows {
-			return sanitizer{}, errors.New("UndefinedBehaviorSanitizer is not exposed on Windows; use address, or run undefined on macOS/Linux")
+			return sanitizer{name: "UndefinedBehaviorSanitizer", config: "ubsan-windows", environment: []string{"UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"}}, nil
 		}
 		if currentHost.kind == hostLinux {
 			return sanitizer{name: "UndefinedBehaviorSanitizer", config: "ubsan-linux", environment: []string{"UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1"}}, nil
@@ -145,7 +145,7 @@ func selectSanitizer(currentHost host, requested string) (sanitizer, error) {
 		}, nil
 	case "thread", "tsan":
 		if currentHost.kind == hostWindows {
-			return sanitizer{}, errors.New("ThreadSanitizer is not exposed on Windows; run thread on macOS/Linux")
+			return sanitizer{}, errors.New("Clang compiler-rt does not support Windows ThreadSanitizer; use address-undefined here and run thread on macOS/Linux")
 		}
 		if currentHost.kind == hostLinux {
 			return sanitizer{name: "ThreadSanitizer", config: "tsan-linux", environment: []string{"TSAN_OPTIONS=halt_on_error=1"}}, nil
@@ -155,8 +155,18 @@ func selectSanitizer(currentHost host, requested string) (sanitizer, error) {
 			config:      "tsan-macos",
 			environment: []string{"TSAN_OPTIONS=halt_on_error=1"},
 		}, nil
+	case "address-undefined", "asan-ubsan":
+		address, err := selectSanitizer(currentHost, "address")
+		if err != nil {
+			return sanitizer{}, err
+		}
+		undefined, err := selectSanitizer(currentHost, "undefined")
+		if err != nil {
+			return sanitizer{}, err
+		}
+		return sanitizer{name: "AddressSanitizer + UndefinedBehaviorSanitizer", config: strings.Replace(address.config, "asan-", "asan-ubsan-", 1), environment: append(address.environment, undefined.environment...)}, nil
 	default:
-		return sanitizer{}, fmt.Errorf("unknown sanitizer %q; choose address, undefined, or thread", requested)
+		return sanitizer{}, fmt.Errorf("unknown sanitizer %q; choose address, undefined, address-undefined, or thread", requested)
 	}
 }
 

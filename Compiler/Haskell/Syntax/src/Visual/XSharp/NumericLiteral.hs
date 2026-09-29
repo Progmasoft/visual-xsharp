@@ -20,7 +20,7 @@ import Data.Char (digitToInt, isAlphaNum, isDigit, isHexDigit)
 
 -- | Radix supported by a Visual X# integer literal.
 data IntegerRadix = BinaryRadix | DecimalRadix | HexadecimalRadix
-    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+    deriving stock (Bounded, Enum, Eq, Ord, Read, Show)
 
 -- | Validated radix, mathematical value, and separator-free digit sequence.
 data ParsedInteger = ParsedInteger
@@ -28,7 +28,7 @@ data ParsedInteger = ParsedInteger
     , parsedIntegerValue :: Integer
     , parsedIntegerDigits :: String
     }
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 -- | Failure reason for scanning or validating an integer spelling.
 data IntegerLiteralError
@@ -40,7 +40,7 @@ data IntegerLiteralError
     | ConsecutiveSeparators IntegerRadix
     | SeparatorTouchesInvalidDigit IntegerRadix
     | IntegerLiteralContinuesWithIdentifier
-    deriving (Eq, Ord, Read, Show)
+    deriving stock (Eq, Ord, Read, Show)
 
 {- | Consume the entire source-shaped candidate.  Invalid radix digits and
 identifier tails remain attached so the lexer emits one useful diagnostic

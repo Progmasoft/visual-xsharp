@@ -985,11 +985,12 @@ namespace Visual::XSharp::Core::Wire
                     Byte(3);
                     Text(*string, "string literal");
                 }
-                else if (const auto *integer
+                else if (const auto *wideInteger
                          = std::get_if<::visual_xsharp::core::IntegerLiteral>(
                              &literal))
                 {
-                    if (!::visual_xsharp::core::integer_is_canonical(*integer))
+                    if (!::visual_xsharp::core::integer_is_canonical(
+                            *wideInteger))
                     {
                         Fail(ErrorKind::InvalidInteger,
                              "integer literal",
@@ -997,8 +998,8 @@ namespace Visual::XSharp::Core::Wire
                         return;
                     }
                     Byte(4);
-                    Byte(integer->negative ? 1U : 0U);
-                    Vector(integer->magnitude,
+                    Byte(wideInteger->negative ? 1U : 0U);
+                    Vector(wideInteger->magnitude,
                            limits_.maximumNumericBytes,
                            "integer magnitude",
                            [this](const std::uint8_t octet) {
@@ -1024,12 +1025,13 @@ namespace Visual::XSharp::Core::Wire
                     for (const auto character : floating->spelling)
                         Byte(static_cast<std::uint8_t>(character));
                 }
-                else if (const auto *integer
+                else if (const auto *narrowInteger
                          = std::get_if<std::int32_t>(&literal))
                 {
                     Byte(4);
                     const auto normalized
-                        = ::visual_xsharp::core::integer_from_signed(*integer);
+                        = ::visual_xsharp::core::integer_from_signed(
+                            *narrowInteger);
                     Byte(normalized.negative ? 1U : 0U);
                     Vector(normalized.magnitude,
                            limits_.maximumNumericBytes,

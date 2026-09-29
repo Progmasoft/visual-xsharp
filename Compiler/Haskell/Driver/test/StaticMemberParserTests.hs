@@ -364,7 +364,7 @@ firstExpression source = do
 
 firstMember :: [Declaration name annotation] -> Maybe (Declaration name annotation)
 firstMember declarations =
-    firstJust [firstMember (typeMembers declaration) | declaration@TypeDeclaration {} <- declarations]
+    firstJust [firstMember members | TypeDeclaration {typeMembers = members} <- declarations]
         `orElse` firstFunction declarations
     where
         firstFunction values = firstJust [Just declaration | declaration@FunctionDeclaration {} <- values]
@@ -396,7 +396,10 @@ bindingInitializer source = do
     where
         findBinding declarations =
             firstJust
-                [findBlock (declarationBody declaration) | declaration@FunctionDeclaration {} <- concatMap typeMembers declarations]
+                [ findBlock body
+                | TypeDeclaration {typeMembers = members} <- declarations
+                , FunctionDeclaration {declarationBody = body} <- members
+                ]
         findBlock (Block statements) = firstJust [Just value | BindingStatement _ _ _ _ _ value <- statements] `orElse` firstJust (map nested statements)
         nested (IfStatement _ _ yes no) = findBlock (Block (blockStatements yes ++ maybe [] blockStatements no))
         nested _ = Nothing

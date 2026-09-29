@@ -17,14 +17,4 @@ benchmarks: False
 documentation: False
 write-ghc-environment-files: never
 
-package *
-    ghc-options:
-        -Wall
-        -Wcompat
-        -Widentities
-        -Wincomplete-record-updates
-        -Wincomplete-uni-patterns
-        -Wmissing-export-lists
-        -Wmissing-home-modules
-        -Wpartial-fields
-        -Wredundant-constraints
+import: Build/Warnings.project

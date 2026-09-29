@@ -4,6 +4,9 @@
 package development
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -58,7 +61,24 @@ func fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime string
 	return smoke, campaign
 }
 
+// CI OOM reports showed 245 MiB quarantined versus 35 MiB live memory. Keep
+// a nonzero UAF detection window without consuming the target's RSS budget
+// predominantly with ASan's intentionally retained freed-allocation cache.
+func fuzzSanitizerEnvironment(environment []string) []string {
+	result := append([]string(nil), environment...)
+	for index, setting := range result {
+		if strings.HasPrefix(setting, "ASAN_OPTIONS=") {
+			result[index] = setting + ":quarantine_size_mb=64:thread_local_quarantine_size_kb=256"
+		}
+	}
+	return result
+}
+
 func runFuzzCampaign(repository string, currentHost host, runner commandRunner, stress bool, asan bool) error {
+	duration, err := fuzzDuration(stress, os.Getenv("VXS_FUZZ_SECONDS"))
+	if err != nil {
+		return err
+	}
 	configuration, err := fuzzConfiguration(currentHost)
 	if err != nil {
 		return err
@@ -94,6 +114,11 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 		if err := os.MkdirAll(corpus, 0o700); err != nil {
 			return fmt.Errorf("could not prepare %s corpus; preserved %q: %w", stage, work, err)
 		}
+		// Wire seeds are encoded by the production writers below; unlike
+		// source seeds, no hand-maintained versioned wire directory exists.
+		if stage == "wire" {
+			continue
+		}
 		seedName := stage
 		if stage == "source" {
 			seedName = "source"
@@ -107,7 +132,7 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	sanitizerConfiguration := ""
 	selectedEnvironment := []string(nil)
 	if asan {
-		selected, err := selectSanitizer(currentHost, "address")
+		selected, err := selectSanitizer(currentHost, "address-undefined")
 		if err != nil {
 			return err
 		}
@@ -116,6 +141,11 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 		if err != nil {
 			return err
 		}
+		selected.environment = selectedEnvironment
+		if err := verifySanitizerRuntime(repository, currentHost, runner, selected); err != nil {
+			return err
+		}
+		selectedEnvironment = fuzzSanitizerEnvironment(selectedEnvironment)
 	}
 	macRuntime := ""
 	if currentHost.kind == hostMacOS {
@@ -147,10 +177,6 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	if err := runner.Run(repository, nil, bazel, campaignArguments...); err != nil {
 		return fmt.Errorf("could not build instrumented fuzz targets; preserved %q: %w", work, err)
 	}
-	duration := 30
-	if stress {
-		duration = 900
-	}
 	targets := []struct {
 		binary    string
 		corpus    string
@@ -162,6 +188,7 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 		{"parser_fuzzer", "parser", "65536", "1536"},
 		{"source_llvm_fuzzer", "source", "65536", "4096"},
 	}
+	var records []map[string]any
 	for _, target := range targets {
 		fuzzer := filepath.Join(repository, "bazel-bin", "Compiler", "Fuzzing", target.binary+currentHost.executable)
 		if strings.Contains(target.binary, "lexer") || strings.Contains(target.binary, "parser") || strings.Contains(target.binary, "source_llvm") {
@@ -184,10 +211,27 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 			"-print_final_stats=1",
 			"-artifact_prefix=" + campaignArtifacts + string(os.PathSeparator),
 		}
-		if err := runner.Run(repository, selectedEnvironment, fuzzer, arguments...); err != nil {
-			return fmt.Errorf("%s campaign failed; corpus and crash artifacts preserved in %q: %w", target.binary, work, err)
+		output, runErr := runner.RunWithInput(repository, selectedEnvironment, "", fuzzer, arguments...)
+		if err := os.WriteFile(filepath.Join(artifacts, target.binary+".log"), []byte(output), 0o600); err != nil {
+			return fmt.Errorf("could not preserve campaign log: %w", err)
+		}
+		fmt.Print(output)
+		records = append(records, map[string]any{"target": target.binary, "seconds": duration, "rss_limit_mb": target.rssLimit, "sanitizer": sanitizerConfiguration, "native_coverage": true, "haskell_native_coverage": false, "success": runErr == nil})
+		report, err := json.MarshalIndent(records, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(artifacts, "campaigns.json"), report, 0o600); err != nil {
+			return err
+		}
+		if runErr != nil {
+			return fmt.Errorf("%s campaign failed; corpus and crash artifacts preserved in %q: %w", target.binary, work, runErr)
 		}
 		fmt.Printf("%s campaign completed (%d seconds; RSS <= %s MiB).\n", target.binary, duration, target.rssLimit)
+	}
+	if os.Getenv("CI") == "true" {
+		fmt.Printf("Campaign logs and coverage limits preserved in %s.\n", work)
+		return nil
 	}
 	if persistentCorpus != "" {
 		if err := removeSuccessfulFuzzWork(temporaryRoot, work); err != nil {
@@ -205,12 +249,23 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	return nil
 }
 
+func fuzzDuration(stress bool, configured string) (int, error) {
+	if configured == "" {
+		if stress {
+			return 900, nil
+		}
+		return 30, nil
+	}
+	duration, err := strconv.Atoi(configured)
+	if err != nil || duration < 1 || duration > 3600 {
+		return 0, errors.New("VXS_FUZZ_SECONDS must be an integer in [1, 3600]")
+	}
+	return duration, nil
+}
+
 func syncSeedCorpus(source string, destination string) error {
 	entries, err := os.ReadDir(source)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		return err
 	}
 	for _, entry := range entries {
@@ -225,16 +280,61 @@ func syncSeedCorpus(source string, destination string) error {
 			continue
 		}
 		target := filepath.Join(destination, entry.Name())
-		if _, err := os.Stat(target); err == nil {
-			continue
+		if info, err := os.Lstat(target); err == nil && !info.Mode().IsRegular() {
+			return fmt.Errorf("cached corpus entry is not a regular file: %q", target)
+		} else if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		seed, err := os.ReadFile(filepath.Join(source, entry.Name()))
+		if err != nil {
+			return err
+		}
+		existing, err := os.ReadFile(target)
+		if err == nil {
+			if bytes.Equal(existing, seed) {
+				continue
+			}
+			// Preserve both a learned/replaced cached seed and the current
+			// versioned seed; a filename collision must not discard either.
+			digest := sha256.Sum256(seed)
+			target = fmt.Sprintf("%s-%x", target, digest)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
-		if err := copyFile(filepath.Join(source, entry.Name()), target, 0o600); err != nil {
+		if err := writeSeedExclusive(target, seed); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Exclusive creation prevents a cached path from being overwritten, including
+// a symlink inserted after the initial directory inspection.
+func writeSeedExclusive(target string, seed []byte) error {
+	output, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if os.IsExist(err) {
+		info, statErr := os.Lstat(target)
+		if statErr != nil {
+			return statErr
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("cached corpus entry is not a regular file: %q", target)
+		}
+		existing, readErr := os.ReadFile(target)
+		if readErr != nil {
+			return readErr
+		}
+		if !bytes.Equal(existing, seed) {
+			return fmt.Errorf("content-addressed corpus entry has different contents: %q", target)
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, writeErr := output.Write(seed)
+	closeErr := output.Close()
+	return errors.Join(writeErr, closeErr)
 }
 
 func removeSuccessfulFuzzWork(temporaryRoot string, work string) error {

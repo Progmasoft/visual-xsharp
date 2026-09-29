@@ -203,12 +203,12 @@ preservesDeclarationName = case typeFixture of
 
 preservesParameterName :: Bool
 preservesParameterName = case typeFixture >>= closedMember of
-    Just closed -> case fixtureOpen <$> typeFixture of
-        Just TemplateTypeDeclaration {typeMembers = [FunctionDeclaration {declarationParameters = [openParameter]}]} -> case declarationParameters closed of
+    Just FunctionDeclaration {declarationParameters = closedParameters} -> case fixtureOpen <$> typeFixture of
+        Just TemplateTypeDeclaration {typeMembers = [FunctionDeclaration {declarationParameters = [openParameter]}]} -> case closedParameters of
             [closedParameter] -> parameterName openParameter == parameterName closedParameter
             _ -> False
         _ -> False
-    Nothing -> False
+    _ -> False
 
 preservesSourceTypeSyntax :: Bool
 preservesSourceTypeSyntax = case typeFixture >>= closedMember of
@@ -219,8 +219,8 @@ preservesMemberFlags :: Bool
 preservesMemberFlags =
     let source = "template<typename T> class Box { public static T Read(_ T value) { return value; } }"
      in case makeFixture source "Box" [TypeTemplateArgument stringType] >>= closedMember of
-            Just member -> declarationIsStatic member && declarationAccess member == PublicAccess
-            Nothing -> False
+            Just FunctionDeclaration {declarationIsStatic = isStatic, declarationAccess = access} -> isStatic && access == PublicAccess
+            _ -> False
 
 preservesReturnStructure :: Bool
 preservesReturnStructure = case typeFixture >>= closedMember of
