@@ -27,6 +27,11 @@ build:windows --features=static_link_msvcrt
 # unit. clang-cl requires /imsvc to classify this existing include root as
 # system headers; this option is never applied to dependency translation units.
 build:windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/imsvcexternal/+llvm+llvm/include
+# Some native rules_cc toolchains expand dependency includes with -I rather
+# than -isystem. Classify only the imported LLVM root for owned compilation;
+# keep every owned warning enabled and never change vendor translation flags.
+build:linux --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-isystemexternal/+llvm+llvm/include
+build:macos --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-isystemexternal/+llvm+llvm/include
 # Owned production, test, benchmark and fuzz translation units use explicit
 # result/error values. Dependencies retain their own exception policy.
 build:windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fno-exceptions
