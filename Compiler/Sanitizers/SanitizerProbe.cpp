@@ -15,6 +15,7 @@
 namespace
 {
     volatile int sink{};
+    volatile int raceValue{};
 
     void
     ExerciseAddress()
@@ -40,20 +41,20 @@ namespace
     void
     ExerciseThread()
     {
-        int raced{};
+        raceValue = 0;
         std::atomic<bool> start{ false };
         auto writer = [&]() {
             while (!start.load(std::memory_order_acquire))
                 std::this_thread::yield();
             for (int iteration = 0; iteration < 10000; ++iteration)
-                raced = iteration;
+                raceValue = iteration;
         };
         std::thread first(writer);
         std::thread second(writer);
         start.store(true, std::memory_order_release);
         first.join();
         second.join();
-        sink = raced;
+        sink = raceValue;
     }
 } // namespace
 
