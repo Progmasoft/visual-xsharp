@@ -156,8 +156,8 @@ bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
 .\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
 ```
 
-The separate `fuzzing.yml` workflow runs `go run ./helpers/cmd/develop fuzz`, a 30-second coverage-guided libFuzzer
-campaign on Windows, macOS, Ubuntu, and Fedora. See [Fuzzing](FUZZING.md) for the oracle, resource bounds, corpus,
+The separate `fuzzing.yml` workflow runs `go run ./helpers/cmd/develop fuzz`, a 90-second-per-target CI campaign with
+ASan/UBSan on Windows, macOS, Ubuntu, and Fedora; scheduled stress runs use 900 seconds per target. See [Fuzzing](FUZZING.md) for coverage ownership, oracles, resource bounds, corpus,
 crash artifacts, and current limits.
 
 Use Bazel target boundaries to keep iteration focused:

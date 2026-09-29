@@ -14,8 +14,7 @@ module Visual.XSharp.Core
     , CoreStatement (..)
     , CoreBinding (..)
     , CoreFunction (..)
-    , CoreModule (..)
-    , pattern CoreModule
+    , CoreModule (.., CoreModule)
     , expressionType
     ) where
 

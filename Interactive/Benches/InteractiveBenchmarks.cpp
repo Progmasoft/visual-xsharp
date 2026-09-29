@@ -63,7 +63,7 @@ namespace
                 state.SkipWithError(issue->message.c_str());
                 return;
             }
-            const auto value = session.InvokeScalar(name, Core::Type::int64());
+            auto value = session.InvokeScalar(name, Core::Type::int64());
             if (!value)
             {
                 state.SkipWithError(value.error->message.c_str());

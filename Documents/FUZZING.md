@@ -1,68 +1,113 @@
 <!-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com> -->
 <!-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1 -->
 
-# Fuzzing the compiler
+# Compiler fuzzing and sanitizer campaigns
 
-Fuzzing complements specification examples and component-owned tests. The first connected campaign targets four
-untrusted binary input boundaries: Core (`.core`), private CorePrep transport, Xpp (`.xpp`), and Xmm (`.xmm`). These
-decoders must reject malformed input without crashing, excessive allocation, or silently changing a successfully decoded
-model. A structural decode is not proof that a module passes its semantic verifier.
+Fuzzing complements specification examples, component tests and IR verifiers.
+A passing campaign is evidence about its inputs and duration, not a proof of
+memory safety or complete language coverage.
 
-## What runs in CI
+## Independent targets and oracles
 
-`//Compiler/Fuzzing:wire_fuzz_smoke` generates one valid, version-current seed for each format, then runs 1,024
-deterministic mutations per seed. Mutations include bit flips, byte replacement, truncation, insertion, deletion, and
-all-one count/scalar bytes. Each case has explicit input, depth, count, and text limits. A successful decode is encoded
-and decoded again when the encoder accepts that model; the resulting model must equal the first one. This catches
-reader/writer asymmetry as well as crashes. An encoder's semantic rejection is not treated as a decoder failure.
+| Target | Input and checks | Coverage ownership |
+| --- | --- | --- |
+| `wire_fuzzer` | Core, private CorePrep transport, Xpp and Xmm; bounded decoding, semantic verification and equal encode/decode round trips | First-party C++ codecs and verifiers |
+| `lexer_fuzzer` | Arbitrary bytes through the frontend lexer ABI; complete token/diagnostic evaluation | Native ABI bridge, not GHC-generated lexer branches |
+| `parser_fuzzer` | Arbitrary bytes through syntax analysis; complete AST/diagnostic evaluation | Native ABI bridge, not GHC-generated parser branches |
+| `source_llvm_fuzzer` | Source through Core/CorePrep, Xpp/Xmm verification and LLVM lowering; generated arithmetic differential oracle | First-party C++ pipeline and JIT bridge |
+
+The source oracle independently evaluates bounded generated arithmetic, compiles
+it with Xpp/Xmm optimizations both disabled and enabled, executes both verified
+artifacts through ORC, and compares all three results. This detects miscompiles
+within that generated subset; it is not an oracle for arbitrary Visual X#
+programs. Invalid source is a normal rejection, whereas internal failures and
+verified-model inconsistencies fail the campaign.
+
+GHC frontend code and prebuilt LLVM dependencies do not receive Clang native
+coverage instrumentation. Lexer/parser execution must not be presented as
+coverage-guided exploration of their Haskell implementation. Haskell tests and
+HPC coverage remain complementary gates, not substitutes for a frontend-specific
+feedback-guided engine.
+
+## Run a campaign
 
 From the repository root:
 
 ```powershell
-bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
-.\bazel-bin\Compiler\Fuzzing\wire_fuzz_smoke.exe
+go run ./helpers/cmd/develop fuzz
+go run ./helpers/cmd/develop fuzz-stress
 ```
 
-On macOS and Linux, use `./bazel-bin/Compiler/Fuzzing/wire_fuzz_smoke` for the second command. All three compiler tiers
-run this target. The program prints the seed number, iteration, and hex input before reporting a caught invariant
-failure. Preserve that input in a focused regression test at the owning codec; do not make a random seed the only proof of
-a fixed bug.
+Both commands use combined ASan/UBSan on owned native code and verify that the
+runtime can start a clean process and diagnose intentional use-after-free and
+signed-overflow violations. Merely linking a sanitizer is insufficient.
+Dependencies retain their own compile flags. `fuzz` defaults to 30 seconds per
+target; `fuzz-stress` defaults to 900. Set `VXS_FUZZ_SECONDS` to an integer from
+1 through 3600 to override either duration. CI uses 90 seconds per target for
+bounded campaigns and 900 for scheduled stress campaigns.
 
-This smoke is **not** coverage-guided; its 4,096 cases are fast enough for every PR, but cannot establish a coverage
-percentage or prove the absence of decoder vulnerabilities.
+Each campaign has a 30-second per-input timeout and a finite input length:
 
-## Coverage-guided campaign
+| Target | Maximum input bytes | RSS limit (MiB) |
+| --- | ---: | ---: |
+| Wire | 16384 | 768 |
+| Lexer | 65536 | 1024 |
+| Parser | 65536 | 1536 |
+| Source/LLVM | 65536 | 4096 |
 
-The same four-stage `LLVMFuzzerTestOneInput` harness is also linked into a real libFuzzer executable. The host-specific
-Bazel profile instruments transitive project code with SanitizerCoverage and links libFuzzer's `main`. A fresh temporary
-corpus starts with four valid serialized documents, one per stage. During the 30-second CI run, libFuzzer retains inputs
-that discover new coverage; comparison value profiling helps it cross binary fields. This follows the LLVM
-[libFuzzer corpus and instrumentation model](https://llvm.org/docs/LibFuzzer.html).
+ASan intentionally retains freed allocations in quarantine. Fuzz-only settings
+bound this cache to 64 MiB, with a 256 KiB thread-local cache; the nonzero
+use-after-free detection window remains active. These settings do not disable
+the RSS limit or make an OOM successful. Ordinary sanitizer suites keep their
+normal quarantine settings.
+
+## Corpus synchronization and reports
+
+Wire seeds come from production writers, so format-version changes do not leave
+handwritten supposedly valid documents behind. Lexer, parser and source seeds
+come from `Compiler/Fuzzing/Corpus/`. Set `VXS_FUZZ_CORPUS` to retain mutation
+corpora across local runs. Updated versioned seeds are added without overwriting
+older discovered inputs; conflicting contents under a stable hash fail closed.
+
+GitHub Actions restores a per-platform corpus cache and saves a unique cache
+version for each run. It also uploads campaign artifacts on success or failure.
+Reports contain the target, duration, RSS limit, selected sanitizer, native
+coverage ownership and result. Logs include execution counts and peak RSS.
+Failed work directories are preserved for diagnosis; successful CI reports
+are retained for artifact upload.
+
+Keep the exact failing input, compiler version, command and report. Replay a
+single input with the same instrumented executable, for example:
 
 ```powershell
-go run ./helpers/cmd/develop fuzz
+.\bazel-bin\Compiler\Fuzzing\wire_fuzzer.exe -runs=1000 PATH_TO_FAILURE
 ```
 
-`develop.go` selects the Windows ClangCL, macOS Clang, or Linux Clang profile, builds the corpus generator and instrumented binary,
-runs the campaign, and removes **only its own generated temporary directory** after success. On a crash, timeout, or
-invariant exception, it preserves that directory and prints its path; GitHub Actions uploads it as a failure artifact.
-Keep a minimized failure in the owning component's regression suite before fixing the decoder. The separate
-`fuzzing.yml` workflow runs this coverage-guided step on Windows, macOS Sequoia/Tahoe, Ubuntu 26.04, and Fedora 43;
-the compiler tiers retain the deterministic smoke target.
+Use the matching Clang runtime environment, as the developer helper does. A
+fixed-input replay is not a new fuzz campaign. Minimize a reproducible defect,
+then add a focused regression at the owning component before changing the
+implementation. A campaign-level RSS failure may require investigating the
+whole corpus and sanitizer cache rather than just the final input.
 
-The 30-second duration is a continuous regression signal, not a security proof or complete coverage claim. For a longer
-local campaign, export a fresh corpus with `wire_fuzz_smoke -Write-Corpus EMPTY_DIRECTORY`, build
-`//Compiler/Fuzzing:wire_fuzzer` with the relevant private Bazel fuzz profile, then invoke the binary with that corpus
-and a larger `-max_total_time`. Never report a bare instrumented build as a completed fuzz campaign.
+## Deterministic smoke and merge gates
 
-## Next campaigns
+`wire_fuzz_smoke` exercises 1024 deterministic mutations of each of four valid
+documents. It runs independently of libFuzzer and does not claim guided
+coverage. `source_fuzz_smoke` checks valid-source lowering and the differential
+oracle before mutation campaigns begin.
 
-The current seed corpus starts from small valid documents, so it reaches framing and basic body fields but does not deeply
-exercise nested expressions, CFGs, ownership operations, or large numeric literals. Expand with independently generated
-function-bearing seeds and known-version golden artifacts before increasing random iteration counts. Keep malformed
-wire regression cases in the owning Core, CorePrep, Xpp, or Xmm test package.
+Compiler Tier 1/2/3 run complete native suites with ASan/UBSan, plus separate
+TSan runs on supported macOS/Linux hosts. Windows does not have a supported
+Clang TSan runtime; it is not represented by a fabricated passing TSan job.
+Stable aggregate required checks reject failed, cancelled or skipped host jobs.
+The scheduled long campaign supplements rather than replaces the bounded PR
+gate. Workflow declarations alone do not enforce merging: repository branch
+protection must require these actual checks.
 
-The next distinct inputs are lexer/parser source text, project file/lockfile decoding, CLI argument sequences, REPL
-session commands, and artifact/LLVM ingestion. They should have separate harnesses and oracles: a source parser crash is
-not equivalent to a wire codec mismatch, and neither should be hidden behind one catch-all success counter. Run memory
-sanitizers for campaigns that handle pointers or ownership and keep minimized crash inputs as permanent regressions.
+## Remaining coverage boundaries
+
+CLI argument generation, project/lockfile inputs, persistent REPL sessions and
+broader generated language programs need independent oracles. Deep semantic
+cases, ownership concurrency and frontend feedback-guided coverage are not
+established by the four existing targets. Expand these deliberately instead of
+equating a green workflow with completion of the entire security program.
