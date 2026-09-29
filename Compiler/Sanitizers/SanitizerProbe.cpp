@@ -9,7 +9,7 @@
 #include <thread>
 
 #if defined(__cpp_exceptions) || defined(_CPPUNWIND)
-#error "owned compiler translation units must have C++ exceptions disabled"
+#    error "owned compiler translation units must have C++ exceptions disabled"
 #endif
 
 namespace
