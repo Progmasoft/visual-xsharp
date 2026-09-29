@@ -96,9 +96,13 @@ documents. It runs independently of libFuzzer and does not claim guided
 coverage. `source_fuzz_smoke` checks valid-source lowering and the differential
 oracle before mutation campaigns begin.
 
-Compiler Tier 1/2/3 run complete native suites with ASan/UBSan, plus separate
-TSan runs on supported macOS/Linux hosts. Windows does not have a supported
-Clang TSan runtime; it is not represented by a fabricated passing TSan job.
+Compiler Tier 1/2/3 run complete native suites with ASan/UBSan. Tier 1 macOS
+and Tier 2 native Ubuntu additionally run separate TSan suites. Fedora Tier 3
+runs inside a GitHub Actions container; the current TSan runtime cannot reserve
+its shadow memory under that host/container ASLR layout, so Fedora does not
+claim TSan coverage. The native Linux TSan gate remains required in Tier 2.
+Windows does not have a supported Clang TSan runtime; it is not represented by
+a fabricated passing TSan job.
 Stable aggregate required checks reject failed, cancelled or skipped host jobs.
 The scheduled long campaign supplements rather than replaces the bounded PR
 gate. Workflow declarations alone do not enforce merging: repository branch

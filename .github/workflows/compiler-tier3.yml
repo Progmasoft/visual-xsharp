@@ -80,9 +80,9 @@ jobs:
         shell: bash
         run: go run ./helpers/cmd/develop sanitize address-undefined
 
-      - name: Verify separate ThreadSanitizer runtime and native suites
-        shell: bash
-        run: go run ./helpers/cmd/develop sanitize thread
+      # Fedora runs in a container on GitHub's Ubuntu host. Its TSan runtime
+      # cannot reserve shadow memory under that container's host ASLR layout;
+      # Tier 2 exercises the separate Linux TSan gate on the native host.
 
   required:
     name: Compiler Tier 3 Required
