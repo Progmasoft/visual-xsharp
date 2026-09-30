@@ -64,8 +64,8 @@ func TestFuzzBuildPlansSeparateSmokeAndRuntimeMain(t *testing.T) {
 					drivers++
 				}
 			}
-			if drivers != 4 {
-				t.Fatalf("expected four campaign drivers: %v", campaign)
+			if drivers != 5 {
+				t.Fatalf("expected five campaign drivers: %v", campaign)
 			}
 			if sanitizer != "" {
 				for _, plan := range [][]string{smoke, campaign} {

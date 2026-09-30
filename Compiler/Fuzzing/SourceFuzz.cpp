@@ -174,23 +174,15 @@ namespace Visual::XSharp::Fuzzing
         }
 
         [[nodiscard]] auto
-        CompileVariant(std::span<const std::uint8_t> source,
+        CompileVariant(std::span<const std::uint8_t> coreBytes,
                        bool optimizeXpp,
                        bool optimizeXmm) -> Llvm::Artifact
         {
-            const auto compiled = CompileSource(source);
-            if (!compiled.succeeded()
-                || compiled.kind != Frontend::OutputKind::CoreWire)
-                llvm::report_fatal_error(
-                    llvm::Twine("generated arithmetic source was rejected by "
-                                "the frontend"));
-
             Visual::XSharp::Pipeline::Options options;
             options.optimize_xpp = optimizeXpp;
             options.optimize_xmm = optimizeXmm;
             const auto pipeline
-                = Visual::XSharp::Pipeline::ConsumeCore(compiled.bytes,
-                                                        options);
+                = Visual::XSharp::Pipeline::ConsumeCore(coreBytes, options);
             if (!pipeline || !pipeline.llvm)
                 llvm::report_fatal_error(llvm::Twine(
                     "differential source failed a verified compiler pipeline: "
@@ -288,8 +280,17 @@ namespace Visual::XSharp::Fuzzing
         const auto bytes = std::span<const std::uint8_t>(
             reinterpret_cast<const std::uint8_t *>(source.data()),
             source.size());
-        const auto unoptimized = CompileVariant(bytes, false, false);
-        const auto optimized = CompileVariant(bytes, true, true);
+        const auto compiled = CompileSource(bytes);
+        if (!compiled.succeeded()
+            || compiled.kind != Frontend::OutputKind::CoreWire)
+            llvm::report_fatal_error(
+                llvm::Twine("generated arithmetic source was rejected by "
+                            "the frontend"));
+        // The comparison varies native optimizers, so both paths start from
+        // the same frontend result. Recompiling identical source adds no
+        // independent evidence and repeats work in the expensive oracle.
+        const auto unoptimized = CompileVariant(compiled.bytes, false, false);
+        const auto optimized = CompileVariant(compiled.bytes, true, true);
         constexpr std::string_view kReferenceModule = "vxs-fuzz-reference";
         constexpr std::string_view kOptimizedModule = "vxs-fuzz-optimized";
         const auto referenceValue = Invoke(unoptimized, kReferenceModule);

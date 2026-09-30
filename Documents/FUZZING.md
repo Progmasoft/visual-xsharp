@@ -14,14 +14,22 @@ memory safety or complete language coverage.
 | `wire_fuzzer` | Core, private CorePrep transport, Xpp and Xmm; bounded decoding, semantic verification and equal encode/decode round trips | First-party C++ codecs and verifiers |
 | `lexer_fuzzer` | Arbitrary bytes through the frontend lexer ABI; complete token/diagnostic evaluation | Native ABI bridge, not GHC-generated lexer branches |
 | `parser_fuzzer` | Arbitrary bytes through syntax analysis; complete AST/diagnostic evaluation | Native ABI bridge, not GHC-generated parser branches |
-| `source_llvm_fuzzer` | Source through Core/CorePrep, Xpp/Xmm verification and LLVM lowering; generated arithmetic differential oracle | First-party C++ pipeline and JIT bridge |
+| `source_llvm_fuzzer` | Arbitrary source through Core/CorePrep, Xpp/Xmm verification and LLVM lowering | First-party C++ pipeline |
+| `differential_fuzzer` | Generated arithmetic compiled with native optimizers disabled/enabled and compared with an independent evaluator | First-party C++ pipeline and JIT bridge |
 
-The source oracle independently evaluates bounded generated arithmetic, compiles
-it with Xpp/Xmm optimizations both disabled and enabled, executes both verified
+The differential oracle independently evaluates bounded generated arithmetic,
+compiles its source once, lowers the same verified Core with Xpp/Xmm
+optimizations both disabled and enabled, executes both verified
 artifacts through ORC, and compares all three results. This detects miscompiles
 within that generated subset; it is not an oracle for arbitrary Visual X#
 programs. Invalid source is a normal rejection, whereas internal failures and
 verified-model inconsistencies fail the campaign.
+
+Arbitrary source and generated arithmetic use separate corpora and equal
+per-target time budgets. This lets source mutations reach native lowering
+without repeatedly creating two ORC sessions for unrelated generated code.
+The differential generator consumes at most 31 selector bytes; its 64-byte
+input limit keeps mutations near the bytes that influence the program.
 
 GHC frontend code and prebuilt LLVM dependencies do not receive Clang native
 coverage instrumentation. Lexer/parser execution must not be presented as
@@ -54,6 +62,7 @@ Each campaign has a 30-second per-input timeout and a finite input length:
 | Lexer | 65536 | 1024 |
 | Parser | 65536 | 1536 |
 | Source/LLVM | 65536 | 4096 |
+| Differential arithmetic | 64 | 4096 |
 
 ASan intentionally retains freed allocations in quarantine. Fuzz-only settings
 bound this cache to 64 MiB, with a 256 KiB thread-local cache; the nonzero
@@ -64,7 +73,7 @@ normal quarantine settings.
 ## Corpus synchronization and reports
 
 Wire seeds come from production writers, so format-version changes do not leave
-handwritten supposedly valid documents behind. Lexer, parser and source seeds
+handwritten supposedly valid documents behind. Lexer, parser, source and differential seeds
 come from `Compiler/Fuzzing/Corpus/`. Set `VXS_FUZZ_CORPUS` to retain mutation
 corpora across local runs. Updated versioned seeds are added without overwriting
 older discovered inputs; conflicting contents under a stable hash fail closed.
@@ -72,7 +81,11 @@ older discovered inputs; conflicting contents under a stable hash fail closed.
 GitHub Actions restores a per-platform corpus cache and saves a unique cache
 version for each run. It also uploads campaign artifacts on success or failure.
 Reports contain the target, duration, RSS limit, selected sanitizer, native
-coverage ownership and result. Logs include execution counts and peak RSS.
+coverage ownership and result. Structured reports also include executed inputs,
+average executions per second, new corpus entries, slowest input time and peak
+RSS from libFuzzer's final counters. A successful process without a complete
+final report or with zero executed inputs fails the campaign gate. Failed
+processes retain their original logs even if final counters are unavailable.
 Failed work directories are preserved for diagnosis; successful CI reports
 are retained for artifact upload.
 
@@ -113,5 +126,5 @@ protection must require these actual checks.
 CLI argument generation, project/lockfile inputs, persistent REPL sessions and
 broader generated language programs need independent oracles. Deep semantic
 cases, ownership concurrency and frontend feedback-guided coverage are not
-established by the four existing targets. Expand these deliberately instead of
+established by the five existing targets. Expand these deliberately instead of
 equating a green workflow with completion of the entire security program.

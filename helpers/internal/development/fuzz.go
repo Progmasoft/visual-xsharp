@@ -39,7 +39,7 @@ func macOSFuzzerRuntime(root string) (string, error) {
 	return matches[0], nil
 }
 
-// Smoke programs own main; only the four campaign drivers may link libFuzzer's
+// Smoke programs own main; only campaign drivers may link libFuzzer's
 // main. Sharing one global fuzz profile with both groups duplicates main on
 // Linux, where -fsanitize=fuzzer pulls the driver in unconditionally.
 func fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime string) ([]string, []string) {
@@ -57,7 +57,8 @@ func fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime string
 		"//Compiler/Fuzzing:wire_fuzzer",
 		"//Compiler/Fuzzing:lexer_fuzzer",
 		"//Compiler/Fuzzing:parser_fuzzer",
-		"//Compiler/Fuzzing:source_llvm_fuzzer")
+		"//Compiler/Fuzzing:source_llvm_fuzzer",
+		"//Compiler/Fuzzing:differential_fuzzer")
 	return smoke, campaign
 }
 
@@ -108,7 +109,7 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	if err := os.Mkdir(artifacts, 0o700); err != nil {
 		return fmt.Errorf("could not create fuzz artifact directory %q: %w", work, err)
 	}
-	stageNames := []string{"wire", "lexer", "parser", "source"}
+	stageNames := []string{"wire", "lexer", "parser", "source", "differential"}
 	for _, stage := range stageNames {
 		corpus := filepath.Join(corpusRoot, stage)
 		if err := os.MkdirAll(corpus, 0o700); err != nil {
@@ -119,11 +120,7 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 		if stage == "wire" {
 			continue
 		}
-		seedName := stage
-		if stage == "source" {
-			seedName = "source"
-		}
-		if err := syncSeedCorpus(filepath.Join(repository, "Compiler", "Fuzzing", "Corpus", seedName), corpus); err != nil {
+		if err := syncSeedCorpus(filepath.Join(repository, "Compiler", "Fuzzing", "Corpus", stage), corpus); err != nil {
 			return fmt.Errorf("could not synchronize the versioned %s seed corpus: %w", stage, err)
 		}
 	}
@@ -187,11 +184,15 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 		{"lexer_fuzzer", "lexer", "65536", "1024"},
 		{"parser_fuzzer", "parser", "65536", "1536"},
 		{"source_llvm_fuzzer", "source", "65536", "4096"},
+		// The depth-four generator consumes at most 31 selector bytes. Bound
+		// mutations close to this semantic input rather than evolving unused
+		// tails alongside the expensive two-module execution oracle.
+		{"differential_fuzzer", "differential", "64", "4096"},
 	}
 	var records []map[string]any
 	for _, target := range targets {
 		fuzzer := filepath.Join(repository, "bazel-bin", "Compiler", "Fuzzing", target.binary+currentHost.executable)
-		if strings.Contains(target.binary, "lexer") || strings.Contains(target.binary, "parser") || strings.Contains(target.binary, "source_llvm") {
+		if target.binary != "wire_fuzzer" {
 			if err := copyFile(frontendLibrary, filepath.Join(filepath.Dir(fuzzer), filepath.Base(frontendLibrary)), 0o755); err != nil {
 				return fmt.Errorf("could not stage frontend for %s; preserved %q: %w", target.binary, work, err)
 			}
@@ -216,7 +217,11 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 			return fmt.Errorf("could not preserve campaign log: %w", err)
 		}
 		fmt.Print(output)
-		records = append(records, map[string]any{"target": target.binary, "seconds": duration, "rss_limit_mb": target.rssLimit, "sanitizer": sanitizerConfiguration, "native_coverage": true, "haskell_native_coverage": false, "success": runErr == nil})
+		statistics, statisticsErr := parseFuzzStatistics(output)
+		if runErr == nil && statisticsErr != nil {
+			runErr = statisticsErr
+		}
+		records = append(records, map[string]any{"target": target.binary, "seconds": duration, "rss_limit_mb": target.rssLimit, "sanitizer": sanitizerConfiguration, "native_coverage": true, "haskell_native_coverage": false, "statistics": statistics, "success": runErr == nil})
 		report, err := json.MarshalIndent(records, "", "  ")
 		if err != nil {
 			return err

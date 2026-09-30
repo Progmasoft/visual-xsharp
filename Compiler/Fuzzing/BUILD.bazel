@@ -70,3 +70,10 @@ cc_binary(
     defines = ["VXS_SOURCE_FUZZ_STAGE=2"],
     deps = [":source_fuzz_harness"],
 )
+
+cc_binary(
+    name = "differential_fuzzer",
+    srcs = ["SourceLibFuzzer.cpp"],
+    defines = ["VXS_SOURCE_FUZZ_STAGE=3"],
+    deps = [":source_fuzz_harness"],
+)

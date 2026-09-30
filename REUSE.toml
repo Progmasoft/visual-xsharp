@@ -8,3 +8,9 @@ path = [".bazelversion", "MODULE.bazel.lock", ".github/brand/visual-xsharp-socia
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Progmasoft <support@progmasoft.com>"
 SPDX-License-Identifier = "MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1"
+
+[[annotations]]
+path = ["Compiler/Fuzzing/Corpus/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Progmasoft <support@progmasoft.com>"
+SPDX-License-Identifier = "MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1"
