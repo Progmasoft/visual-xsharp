@@ -7,7 +7,9 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -15,6 +17,8 @@
 #include <llvm/Support/Error.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/TargetParser/Host.h>
+#include <llvm/TargetParser/Triple.h>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -262,7 +266,37 @@ namespace Visual::XSharp::Backend::LLVM
                 return;
             }
 
-            auto created = llvm::orc::LLJITBuilder().create();
+            llvm::orc::LLJITBuilder builder;
+            if (llvm::Triple(llvm::sys::getProcessTriple()).isOSBinFormatCOFF())
+            {
+                // Win64 unwind tables use image-relative relocations, which
+                // RuntimeDyld can only apply when no section of an object
+                // lies below the lowest one it has already seen. The default
+                // memory manager maps code and data sections separately, so
+                // the host decides their order and some address layouts
+                // abort linking with "relocation requires an ordered section
+                // layout". Reserving one contiguous block per object fixes
+                // the order: every section is carved from that reservation.
+                builder.setObjectLinkingLayerCreator(
+                    [](llvm::orc::ExecutionSession &session)
+                        -> llvm::Expected<
+                            std::unique_ptr<llvm::orc::ObjectLayer>> {
+                        auto layer = std::make_unique<
+                            llvm::orc::RTDyldObjectLinkingLayer>(
+                            session,
+                            [](const llvm::MemoryBuffer &) {
+                                return std::make_unique<
+                                    llvm::SectionMemoryManager>(nullptr, true);
+                            });
+                        // Same COFF symbol-flag handling as LLJIT's default
+                        // linking layer.
+                        layer->setOverrideObjectFlagsWithResponsibilityFlags(
+                            true);
+                        layer->setAutoClaimResponsibilityForObjectSymbols(true);
+                        return layer;
+                    });
+            }
+            auto created = builder.create();
             if (!created)
             {
                 initializationError

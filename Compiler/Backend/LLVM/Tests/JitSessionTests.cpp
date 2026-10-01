@@ -467,3 +467,21 @@ TEST_CASE(
     REQUIRE(after);
     REQUIRE(std::get<std::int64_t>(after.value->payload) == 73);
 }
+
+TEST_CASE("ORC sessions link unwind metadata regardless of section placement",
+          "[llvm][orc][layout]")
+{
+    // Win64 objects carry image-relative unwind relocations that are only
+    // valid when every section of the object lies above its lowest one. The
+    // host places separately mapped sections at arbitrary addresses, so a
+    // linker that maps each section on its own fails for some layouts only.
+    // Many independent sessions sample those layouts; each must link and run.
+    constexpr int kSessions = 400;
+    for (int index = 0; index < kSessions; ++index)
+    {
+        const auto result
+            = InvokeConstant(std::int64_t{ index }, Core::Type::int64());
+        REQUIRE(result);
+        REQUIRE(std::get<std::int64_t>(result.value->payload) == index);
+    }
+}

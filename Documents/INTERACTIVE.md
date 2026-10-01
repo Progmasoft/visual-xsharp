@@ -155,6 +155,13 @@ JIT execution runs in-process. As with any compiler REPL, evaluating untrusted p
 with the current user's authority. `vxsi` intentionally does not claim to provide a sandbox, process isolation, memory
 quota, or security boundary.
 
+On Windows the ORC session links each object into one contiguous memory reservation. Win64 unwind tables use
+image-relative relocations that the runtime linker can apply only when no section of an object lies below the lowest one;
+with separately mapped sections the operating system chooses that order, and some address layouts abort linking with
+"relocation requires an ordered section layout". The failure is layout dependent and was observed once in a hosted
+AddressSanitizer run; it has not been reproduced locally, so the reservation removes the cause rather than a
+demonstrated repeatable failure. Other hosts keep LLJIT's default linking layer.
+
 ## Build and verify
 
 The native targets belong to the repository root, matching the feature's ownership tree:
