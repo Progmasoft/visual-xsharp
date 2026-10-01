@@ -8,6 +8,8 @@ cc_binary(
         "CallableInvocationTests.cpp",
         "LLVMBackendTests.cpp",
         "JitSessionTests.cpp",
+        "LoopExecutionTests.cpp",
+        "ShortCircuitExecutionTests.cpp",
     ],
     deps = [
         "//Compiler/Backend/LLVM:llvm_backend",

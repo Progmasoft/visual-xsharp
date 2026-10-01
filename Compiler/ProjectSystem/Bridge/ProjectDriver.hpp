@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,8 @@ namespace Visual::XSharp::Driver
         std::optional<std::string> framework;
         std::filesystem::path root;
         std::vector<std::string> excludes;
+        bool
+        operator==(const ResolvedTestSuite &) const = default;
     };
 
     struct ResolvedSourceTarget final
@@ -28,6 +31,8 @@ namespace Visual::XSharp::Driver
         std::filesystem::path root;
         std::vector<std::string> excludes;
         std::vector<ViPkgType> viPkgTypes;
+        bool
+        operator==(const ResolvedSourceTarget &) const = default;
     };
 
     struct ResolvedProject final
@@ -44,10 +49,16 @@ namespace Visual::XSharp::Driver
         std::filesystem::path outputDirectory;
         BuildOutput output{};
         CompilerSettings settings{};
+        bool
+        operator==(const ResolvedProject &) const = default;
     };
 
     [[nodiscard]] std::optional<ResolvedProject>
     ResolveProject(bool requireSources);
+    // Decode borrowed evaluator records without spawning a process. Every
+    // accepted field is copied into the returned project before bytes expire.
+    [[nodiscard]] std::optional<ResolvedProject>
+    ParseProjectRegistry(std::span<const char> bytes, bool requireSources);
     [[nodiscard]] bool
     RefreshProjectLock();
 } // namespace Visual::XSharp::Driver

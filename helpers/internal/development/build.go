@@ -33,6 +33,7 @@ var nativeTargets = []string{
 	"//Compiler/Runtime/AARC/Tests:aarc_runtime_tests",
 	"//Compiler/Runtime/AARC/Tests:aarc_c_abi_tests",
 	"//Compiler/Fuzzing:source_fuzz_smoke",
+	"//Compiler/ProjectSystem/Bridge/Tests:project_registry_tests",
 	"//Interactive/Tests:interactive_tests",
 }
 

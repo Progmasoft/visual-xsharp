@@ -17,6 +17,7 @@ just test
 just benchmark
 just fuzz
 just fuzz-stress
+just fuzz-thread             # TSan run of threaded fuzz targets on a supported host
 just sanitize                # ASan + UBSan
 just sanitize-thread         # Separate TSan run on a supported host
 just verify-helpers

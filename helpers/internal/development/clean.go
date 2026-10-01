@@ -12,6 +12,7 @@ import (
 
 var generatedBuildPaths = []string{
 	"Compiler/dist-newstyle",
+	"Compiler/dist-fuzz-coverage",
 	"ProjectSystem/.gradle",
 	"ProjectSystem/build",
 	"Analyzer/.gradle",

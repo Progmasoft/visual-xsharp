@@ -78,6 +78,14 @@ func executeWorkflow(arguments []string, runner commandRunner) error {
 			return err
 		}
 		return runFuzzCampaign(repository, currentHost, runner, false, true)
+	case "fuzz-thread":
+		if len(commandArguments) != 0 || len(bazelArguments) != 0 {
+			return errors.New("fuzz-thread does not accept arguments")
+		}
+		if err := requireBuildTools(currentHost, runner); err != nil {
+			return err
+		}
+		return runThreadFuzzCampaign(repository, currentHost, runner)
 	case "fuzz-stress":
 		if len(bazelArguments) != 0 || (len(commandArguments) != 0 && !(len(commandArguments) == 1 && strings.EqualFold(commandArguments[0], "--asan"))) {
 			return errors.New("fuzz-stress accepts only the optional --asan flag")

@@ -25,29 +25,6 @@ namespace Visual::XSharp::Core::CorePrep
                 loopTargets;
         };
 
-        struct Atomized final
-        {
-            std::vector<Prepared::Instruction> prefix;
-            Prepared::Atom atom;
-            State state;
-        };
-
-        struct OperationResult final
-        {
-            std::vector<Prepared::Instruction> prefix;
-            Prepared::Operation operation{ Prepared::Operation::Copy };
-            std::vector<Prepared::Atom> operands;
-            SymbolName closureFunction{};
-            std::vector<Prepared::Capture> captures;
-            State state;
-        };
-
-        struct BlocksResult final
-        {
-            std::vector<Prepared::Block> blocks;
-            State state;
-        };
-
         [[nodiscard]] auto
         LowerLiteral(const Expression &expression) -> Prepared::Atom
         {
@@ -118,27 +95,95 @@ namespace Visual::XSharp::Core::CorePrep
             std::abort();
         }
 
-        [[nodiscard]] auto
-        Atomize(State state, const Expression &expression) -> Atomized;
+        /**
+         * @brief The block receiving instructions plus every finished block.
+         *
+         * Expression atomization is not confined to one block: a
+         * short-circuit operator ends the current block with a branch and
+         * continues in a join block. Threading one cursor through both
+         * expressions and statements lets either of them close and reopen
+         * blocks without a second lowering path.
+         */
+        struct Cursor final
+        {
+            State state;
+            Prepared::BlockId block{};
+            std::vector<Prepared::Instruction> instructions;
+            std::vector<Prepared::Block> closed;
+            /// False after a return, break or continue ended the region.
+            bool open{ true };
+
+            void
+            Emit(Prepared::Instruction instruction)
+            {
+                instructions.push_back(std::move(instruction));
+            }
+
+            /// End the current block; no block is open until Open is called.
+            void
+            Close(Prepared::Terminator terminator)
+            {
+                closed.push_back(
+                    { block, std::move(instructions), std::move(terminator) });
+                instructions.clear();
+                open = false;
+            }
+
+            void
+            Open(const Prepared::BlockId id)
+            {
+                block = id;
+                instructions.clear();
+                open = true;
+            }
+
+            void
+            Jump(const Prepared::BlockId target)
+            {
+                Close({ Prepared::Terminator::Kind::Jump, {}, target, 0U });
+            }
+
+            void
+            Branch(Prepared::Atom condition,
+                   const Prepared::BlockId whenTrue,
+                   const Prepared::BlockId whenFalse)
+            {
+                Close({ Prepared::Terminator::Kind::Branch,
+                        std::move(condition),
+                        whenTrue,
+                        whenFalse });
+            }
+
+            [[nodiscard]] auto
+            Temporary(std::u32string prefix) -> SymbolName
+            {
+                const auto id = state.nextTemporary++;
+                const auto digits = std::to_string(id);
+                prefix.append(digits.begin(), digits.end());
+                return SymbolName{ id, std::move(prefix) };
+            }
+        };
+
+        struct OperationResult final
+        {
+            Prepared::Operation operation{ Prepared::Operation::Copy };
+            std::vector<Prepared::Atom> operands;
+            SymbolName closureFunction{};
+            std::vector<Prepared::Capture> captures;
+        };
 
         [[nodiscard]] auto
-        AtomizeMany(State state, const std::vector<Expression> &expressions)
-            -> std::pair<std::vector<Prepared::Instruction>,
-                         std::pair<std::vector<Prepared::Atom>, State>>
+        Atomize(Cursor &cursor, const Expression &expression) -> Prepared::Atom;
+
+        [[nodiscard]] auto
+        AtomizeMany(Cursor &cursor, const std::vector<Expression> &expressions)
+            -> std::vector<Prepared::Atom>
         {
-            std::vector<Prepared::Instruction> prefix;
             std::vector<Prepared::Atom> atoms;
             atoms.reserve(expressions.size());
             for (const auto &expression : expressions)
-            {
-                auto atomized = Atomize(state, expression);
-                prefix.insert(prefix.end(),
-                              std::make_move_iterator(atomized.prefix.begin()),
-                              std::make_move_iterator(atomized.prefix.end()));
-                atoms.push_back(std::move(atomized.atom));
-                state = atomized.state;
-            }
-            return { std::move(prefix), { std::move(atoms), state } };
+                atoms.push_back(Atomize(cursor, expression));
+            return atoms;
         }
 
         [[nodiscard]] auto
@@ -152,20 +197,18 @@ namespace Visual::XSharp::Core::CorePrep
                                             type);
         }
 
+        /// Canonicalize a numeric truth value to `value != 0` in the open
+        /// block; a Boolean atom is returned unchanged.
         [[nodiscard]] auto
-        Booleanize(State state, Prepared::Atom atom) -> Atomized
+        Booleanize(Cursor &cursor, Prepared::Atom atom) -> Prepared::Atom
         {
             if (atom.type == Type::boolean())
-                return { {}, std::move(atom), std::move(state) };
-            const auto id = state.nextTemporary++;
-            const auto digits = std::to_string(id);
-            std::u32string spelling = U"$condition";
-            spelling.append(digits.begin(), digits.end());
-            auto temporary = SymbolName{ id, std::move(spelling) };
+                return atom;
+            auto temporary = cursor.Temporary(U"$condition");
             std::vector<Prepared::Atom> operands;
             operands.push_back(std::move(atom));
             operands.push_back(ZeroForBooleanContext(operands.front().type));
-            Prepared::Instruction comparison{
+            cursor.Emit(Prepared::Instruction{
                 Prepared::Instruction::Kind::Bind,
                 temporary,
                 Type::boolean(),
@@ -174,41 +217,78 @@ namespace Visual::XSharp::Core::CorePrep
                 std::move(operands),
                 {},
                 {},
-            };
-            return {
-                { std::move(comparison) },
-                Prepared::Atom::variable(std::move(temporary), Type::boolean()),
-                std::move(state),
-            };
+            });
+            return Prepared::Atom::variable(std::move(temporary),
+                                            Type::boolean());
         }
 
         [[nodiscard]] auto
-        BooleanizeMany(State state, std::vector<Prepared::Atom> atoms)
-            -> std::pair<std::vector<Prepared::Instruction>,
-                         std::pair<std::vector<Prepared::Atom>, State>>
+        IsShortCircuit(const Expression &expression) -> bool
         {
-            std::vector<Prepared::Instruction> prefix;
-            std::vector<Prepared::Atom> booleans;
-            booleans.reserve(atoms.size());
-            for (auto &atom : atoms)
-            {
-                auto boolean = Booleanize(std::move(state), std::move(atom));
-                prefix.insert(prefix.end(),
-                              std::make_move_iterator(boolean.prefix.begin()),
-                              std::make_move_iterator(boolean.prefix.end()));
-                booleans.push_back(std::move(boolean.atom));
-                state = std::move(boolean.state);
-            }
-            return { std::move(prefix),
-                     { std::move(booleans), std::move(state) } };
+            return expression.kind == Expression::Kind::Primitive
+                   && (expression.primitive == Primitive::LogicalAnd
+                       || expression.primitive == Primitive::LogicalOr)
+                   && expression.operands.size() == 2U;
         }
 
-        struct CapturesResult final
+        /**
+         * @brief Lower `&&` and `||` as control flow, not as an eager operator.
+         *
+         * The right operand is evaluated only on the path that needs it, so
+         * its calls, traps and non-termination stay conditional exactly as
+         * the source wrote them. The result slot is initialized with the
+         * short-circuit value before the branch and overwritten only on the
+         * path that evaluates the right operand; every predecessor of the
+         * join therefore carries an initialized Boolean without a phi node
+         * in CorePrep's storage-oriented form. This matches the Haskell
+         * CorePrep lowering.
+         */
+        [[nodiscard]] auto
+        AtomizeShortCircuit(Cursor &cursor, const Expression &expression)
+            -> Prepared::Atom
         {
-            std::vector<Prepared::Instruction> prefix;
-            std::vector<Prepared::Capture> captures;
-            State state;
-        };
+            const auto isOr = expression.primitive == Primitive::LogicalOr;
+            auto condition
+                = Booleanize(cursor,
+                             Atomize(cursor, expression.operands.front()));
+            auto result = cursor.Temporary(U"$shortcircuit");
+            cursor.Emit(Prepared::Instruction{
+                Prepared::Instruction::Kind::Bind,
+                result,
+                Type::boolean(),
+                true,
+                Prepared::Operation::Copy,
+                { Prepared::Atom::constant(Prepared::Literal{ isOr },
+                                           Type::boolean()) },
+                {},
+                {},
+            });
+            const auto rightId = cursor.state.nextBlock;
+            const auto joinId = rightId + 1U;
+            cursor.state.nextBlock = joinId + 1U;
+            if (isOr)
+                cursor.Branch(std::move(condition), joinId, rightId);
+            else
+                cursor.Branch(std::move(condition), rightId, joinId);
+
+            cursor.Open(rightId);
+            auto right
+                = Booleanize(cursor,
+                             Atomize(cursor, expression.operands.back()));
+            cursor.Emit(Prepared::Instruction{
+                Prepared::Instruction::Kind::Assign,
+                result,
+                Type::boolean(),
+                false,
+                Prepared::Operation::Copy,
+                { std::move(right) },
+                {},
+                {},
+            });
+            cursor.Jump(joinId);
+            cursor.Open(joinId);
+            return Prepared::Atom::variable(std::move(result), Type::boolean());
+        }
 
         struct PreparedFunctionResult final
         {
@@ -304,10 +384,9 @@ namespace Visual::XSharp::Core::CorePrep
         }
 
         [[nodiscard]] auto
-        AtomizeCaptures(State state, const std::vector<Capture> &captures)
-            -> CapturesResult
+        AtomizeCaptures(Cursor &cursor, const std::vector<Capture> &captures)
+            -> std::vector<Prepared::Capture>
         {
-            std::vector<Prepared::Instruction> prefix;
             std::vector<Prepared::Capture> prepared;
             prepared.reserve(captures.size());
             for (const auto &capture : captures)
@@ -316,84 +395,60 @@ namespace Visual::XSharp::Core::CorePrep
                 // for direct native API callers as well.
                 if (!capture.value)
                     std::abort();
-                auto value = Atomize(state, *capture.value);
-                prefix.insert(prefix.end(),
-                              std::make_move_iterator(value.prefix.begin()),
-                              std::make_move_iterator(value.prefix.end()));
                 prepared.push_back(Prepared::Capture{
                     capture.mode,
                     capture.symbol,
                     capture.type,
-                    std::move(value.atom),
+                    Atomize(cursor, *capture.value),
                 });
-                state = std::move(value.state);
             }
-            return { std::move(prefix), std::move(prepared), std::move(state) };
+            return prepared;
         }
 
         [[nodiscard]] auto
-        AtomizeOperation(State state, const Expression &expression)
+        AtomizeOperation(Cursor &cursor, const Expression &expression)
             -> OperationResult
         {
-            if (expression.kind == Expression::Kind::Let)
-            {
-                auto atomized = Atomize(std::move(state), expression);
-                return { std::move(atomized.prefix),
-                         Prepared::Operation::Copy,
-                         { std::move(atomized.atom) },
+            if (expression.kind == Expression::Kind::Let
+                || IsShortCircuit(expression))
+                return { Prepared::Operation::Copy,
+                         { Atomize(cursor, expression) },
                          {},
-                         {},
-                         std::move(atomized.state) };
-            }
+                         {} };
             if (expression.kind == Expression::Kind::Variable)
-                return { {},
-                         Prepared::Operation::Copy,
+                return { Prepared::Operation::Copy,
                          { Prepared::Atom::variable(expression.symbol,
                                                     expression.type) },
                          {},
-                         {},
-                         state };
+                         {} };
             if (expression.kind == Expression::Kind::Literal)
-                return { {},
-                         Prepared::Operation::Copy,
+                return { Prepared::Operation::Copy,
                          { LowerLiteral(expression) },
                          {},
-                         {},
-                         state };
+                         {} };
             if (expression.kind == Expression::Kind::Apply)
             {
-                auto callee = Atomize(state, *expression.callee);
-                auto arguments = AtomizeMany(callee.state, expression.operands);
-                callee.prefix.insert(
-                    callee.prefix.end(),
-                    std::make_move_iterator(arguments.first.begin()),
-                    std::make_move_iterator(arguments.first.end()));
                 std::vector<Prepared::Atom> operands;
-                operands.reserve(arguments.second.first.size() + 1U);
-                operands.push_back(std::move(callee.atom));
-                operands.insert(
-                    operands.end(),
-                    std::make_move_iterator(arguments.second.first.begin()),
-                    std::make_move_iterator(arguments.second.first.end()));
-                return { std::move(callee.prefix),
-                         Prepared::Operation::Call,
+                operands.reserve(expression.operands.size() + 1U);
+                operands.push_back(Atomize(cursor, *expression.callee));
+                for (const auto &argument : expression.operands)
+                    operands.push_back(Atomize(cursor, argument));
+                return { Prepared::Operation::Call,
                          std::move(operands),
                          {},
-                         {},
-                         arguments.second.second };
+                         {} };
             }
             if (expression.kind == Expression::Kind::Closure)
             {
                 if (!expression.closureBody)
                     std::abort();
-                const auto closureId = state.nextFunction++;
+                const auto closureId = cursor.state.nextFunction++;
                 const auto digits = std::to_string(closureId);
                 std::u32string spelling = U"$closure";
                 spelling.append(digits.begin(), digits.end());
                 SymbolName closureName{ closureId, std::move(spelling) };
 
-                auto captures
-                    = AtomizeCaptures(std::move(state), expression.captures);
+                auto captures = AtomizeCaptures(cursor, expression.captures);
                 std::vector<Parameter> parameters;
                 parameters.reserve(expression.captures.size()
                                    + expression.closureParameters.size());
@@ -402,494 +457,322 @@ namespace Visual::XSharp::Core::CorePrep
                         Parameter{ capture.symbol, capture.type });
                 for (const auto &[symbol, type] : expression.closureParameters)
                     parameters.push_back(Parameter{ symbol, type });
-                captures.state.pendingFunctions.push_back(Function{
+                cursor.state.pendingFunctions.push_back(Function{
                     closureName,
                     std::move(parameters),
                     expression.closureReturnType,
                     *expression.closureBody,
                 });
-                return {
-                    std::move(captures.prefix),
-                    Prepared::Operation::MakeClosure,
-                    {},
-                    std::move(closureName),
-                    std::move(captures.captures),
-                    std::move(captures.state),
-                };
+                return { Prepared::Operation::MakeClosure,
+                         {},
+                         std::move(closureName),
+                         std::move(captures) };
             }
-            auto arguments = AtomizeMany(state, expression.operands);
+            auto operands = AtomizeMany(cursor, expression.operands);
             if (expression.primitive == Primitive::LogicalAnd
                 || expression.primitive == Primitive::LogicalOr
                 || expression.primitive == Primitive::LogicalNot)
-            {
-                auto booleans
-                    = BooleanizeMany(std::move(arguments.second.second),
-                                     std::move(arguments.second.first));
-                arguments.first.insert(
-                    arguments.first.end(),
-                    std::make_move_iterator(booleans.first.begin()),
-                    std::make_move_iterator(booleans.first.end()));
-                return { std::move(arguments.first),
-                         LowerPrimitive(expression.primitive),
-                         std::move(booleans.second.first),
-                         {},
-                         {},
-                         std::move(booleans.second.second) };
-            }
-            return { std::move(arguments.first),
-                     LowerPrimitive(expression.primitive),
-                     std::move(arguments.second.first),
+                for (auto &operand : operands)
+                    operand = Booleanize(cursor, std::move(operand));
+            return { LowerPrimitive(expression.primitive),
+                     std::move(operands),
                      {},
-                     {},
-                     arguments.second.second };
+                     {} };
         }
 
         [[nodiscard]] auto
-        Atomize(State state, const Expression &expression) -> Atomized
+        Atomize(Cursor &cursor, const Expression &expression) -> Prepared::Atom
         {
             if (expression.kind == Expression::Kind::Variable)
-                return { {},
-                         Prepared::Atom::variable(expression.symbol,
-                                                  expression.type),
-                         state };
+                return Prepared::Atom::variable(expression.symbol,
+                                                expression.type);
             if (expression.kind == Expression::Kind::Literal)
-                return { {}, LowerLiteral(expression), state };
+                return LowerLiteral(expression);
             if (expression.kind == Expression::Kind::Let)
             {
                 if (!expression.letValue || !expression.letBody)
                     std::abort();
-                auto value = Atomize(std::move(state), *expression.letValue);
-                value.prefix.push_back(
+                auto value = Atomize(cursor, *expression.letValue);
+                cursor.Emit(
                     Prepared::Instruction{ Prepared::Instruction::Kind::Bind,
                                            expression.letSymbol,
                                            expression.letType,
                                            false,
                                            Prepared::Operation::Copy,
-                                           { std::move(value.atom) },
+                                           { std::move(value) },
                                            {},
                                            {} });
-                auto body
-                    = Atomize(std::move(value.state), *expression.letBody);
-                value.prefix.insert(
-                    value.prefix.end(),
-                    std::make_move_iterator(body.prefix.begin()),
-                    std::make_move_iterator(body.prefix.end()));
-                return { std::move(value.prefix),
-                         std::move(body.atom),
-                         std::move(body.state) };
+                return Atomize(cursor, *expression.letBody);
             }
+            if (IsShortCircuit(expression))
+                return AtomizeShortCircuit(cursor, expression);
 
-            auto operation = AtomizeOperation(state, expression);
-            const auto id = operation.state.nextTemporary++;
-            const auto digits = std::to_string(id);
-            std::u32string spelling = U"$coreprep";
-            spelling.append(digits.begin(), digits.end());
-            auto temporary = SymbolName{ id, std::move(spelling) };
-            Prepared::Instruction binding{ Prepared::Instruction::Kind::Bind,
-                                           temporary,
-                                           expression.type,
-                                           false,
-                                           operation.operation,
-                                           std::move(operation.operands),
-                                           std::move(operation.closureFunction),
-                                           std::move(operation.captures) };
-            operation.prefix.push_back(std::move(binding));
-            return { std::move(operation.prefix),
-                     Prepared::Atom::variable(std::move(temporary),
-                                              expression.type),
-                     operation.state };
+            auto operation = AtomizeOperation(cursor, expression);
+            auto temporary = cursor.Temporary(U"$coreprep");
+            cursor.Emit(
+                Prepared::Instruction{ Prepared::Instruction::Kind::Bind,
+                                       temporary,
+                                       expression.type,
+                                       false,
+                                       operation.operation,
+                                       std::move(operation.operands),
+                                       std::move(operation.closureFunction),
+                                       std::move(operation.captures) });
+            return Prepared::Atom::variable(std::move(temporary),
+                                            expression.type);
         }
 
-        [[nodiscard]] auto
-        PrepareStatements(State state,
-                          Prepared::BlockId blockId,
-                          std::vector<Prepared::Instruction> instructions,
-                          const std::vector<Statement> &statements,
-                          std::size_t start = 0U) -> BlocksResult;
+        void
+        PrepareStatements(Cursor &cursor,
+                          const std::vector<Statement> &statements);
 
         /**
-         * @brief Replace open-region fallthrough sentinels with a real edge.
+         * @brief Prepare one loop region with a scoped transfer-target pair.
          *
-         * `PrepareStatements` uses `Unreachable` for the still-open tail of a
-         * nested region. Explicit `Return` and `Jump` terminators are closed
-         * paths and are deliberately not rewritten.
+         * The region starts in a fresh block. While it is built, `break`
+         * jumps to breakTarget and `continue` to continueTarget; the
+         * enclosing pair is restored afterwards, so an inner transfer
+         * cannot target an outer loop. A region that is still open at its
+         * end jumps to fallthroughTarget.
+         *
+         * The fallthrough successor is a separate argument because it is
+         * not always the `continue` target: a for-loop update region is
+         * entered by `continue` but must fall through to the condition.
+         * Reusing the continue target there makes the region branch to
+         * itself and never re-test the loop condition.
          */
         void
-        ConnectFallthrough(std::vector<Prepared::Block> &blocks,
-                           const Prepared::BlockId target)
-        {
-            for (auto &block : blocks)
-            {
-                if (block.terminator.kind
-                    == Prepared::Terminator::Kind::Unreachable)
-                {
-                    block.terminator.kind = Prepared::Terminator::Kind::Jump;
-                    block.terminator.true_target = target;
-                }
-            }
-        }
-
-        /**
-         * @brief Prepare a loop region with a scoped transfer-target stack.
-         *
-         * Nested regions inherit this loop's targets while they are built,
-         * then restore the enclosing stack. Thus an inner `break` or
-         * `continue` cannot accidentally target an outer loop. Only blocks
-         * still marked as fallthrough are connected to the continuation;
-         * explicit return and jump terminators remain untouched.
-         */
-        [[nodiscard]] auto
-        PrepareLoopRegion(State state,
+        PrepareLoopRegion(Cursor &cursor,
                           const Prepared::BlockId startId,
                           const Prepared::BlockId breakTarget,
                           const Prepared::BlockId continueTarget,
+                          const Prepared::BlockId fallthroughTarget,
                           const std::vector<Statement> &statements)
-            -> BlocksResult
         {
-            auto enclosingTargets = state.loopTargets;
-            state.loopTargets.emplace_back(breakTarget, continueTarget);
-            auto result = PrepareStatements(state, startId, {}, statements);
-            ConnectFallthrough(result.blocks, continueTarget);
-            result.state.loopTargets = std::move(enclosingTargets);
-            return result;
+            cursor.state.loopTargets.emplace_back(breakTarget, continueTarget);
+            cursor.Open(startId);
+            PrepareStatements(cursor, statements);
+            if (cursor.open)
+                cursor.Jump(fallthroughTarget);
+            cursor.state.loopTargets.pop_back();
         }
 
+        /// Evaluate a loop or branch condition in the open block and return
+        /// its Boolean atom. Short-circuit operands may leave a different
+        /// block open than the one the condition started in.
         [[nodiscard]] auto
-        PrepareBranch(State state,
-                      Prepared::BlockId blockId,
-                      Prepared::BlockId joinId,
-                      const std::vector<Statement> &statements) -> BlocksResult
+        PrepareCondition(Cursor &cursor, const Expression &condition)
+            -> Prepared::Atom
         {
-            auto result = PrepareStatements(state, blockId, {}, statements);
-            for (auto &block : result.blocks)
-            {
-                if (block.terminator.kind
-                    == Prepared::Terminator::Kind::Unreachable)
-                {
-                    block.terminator.kind = Prepared::Terminator::Kind::Jump;
-                    block.terminator.true_target = joinId;
-                }
-            }
-            return result;
+            return Booleanize(cursor, Atomize(cursor, condition));
         }
 
-        [[nodiscard]] auto
-        PrepareStatements(State state,
-                          Prepared::BlockId blockId,
-                          std::vector<Prepared::Instruction> instructions,
-                          const std::vector<Statement> &statements,
-                          std::size_t start) -> BlocksResult
+        void
+        PrepareBranchRegion(Cursor &cursor,
+                            const Prepared::BlockId startId,
+                            const Prepared::BlockId joinId,
+                            const std::vector<Statement> &statements)
         {
-            for (std::size_t index = start; index < statements.size(); ++index)
-            {
-                const auto &statement = statements[index];
-                if (statement.kind == Statement::Kind::Bind)
-                {
-                    auto operation
-                        = AtomizeOperation(state, statement.binding.value);
-                    instructions.insert(
-                        instructions.end(),
-                        std::make_move_iterator(operation.prefix.begin()),
-                        std::make_move_iterator(operation.prefix.end()));
-                    instructions.push_back(Prepared::Instruction{
-                        Prepared::Instruction::Kind::Bind,
-                        statement.binding.symbol,
-                        statement.binding.type,
-                        statement.binding.mutableBinding,
-                        operation.operation,
-                        std::move(operation.operands),
-                        std::move(operation.closureFunction),
-                        std::move(operation.captures) });
-                    state = operation.state;
-                    continue;
-                }
-                if (statement.kind == Statement::Kind::Assign)
-                {
-                    auto value = Atomize(state, statement.expression);
-                    instructions.insert(
-                        instructions.end(),
-                        std::make_move_iterator(value.prefix.begin()),
-                        std::make_move_iterator(value.prefix.end()));
-                    instructions.push_back(Prepared::Instruction{
-                        Prepared::Instruction::Kind::Assign,
-                        statement.destination,
-                        statement.expression.type,
-                        false,
-                        Prepared::Operation::Copy,
-                        { std::move(value.atom) },
-                        {},
-                        {} });
-                    state = value.state;
-                    continue;
-                }
-                if (statement.kind == Statement::Kind::Evaluate)
-                {
-                    auto operation
-                        = AtomizeOperation(state, statement.expression);
-                    instructions.insert(
-                        instructions.end(),
-                        std::make_move_iterator(operation.prefix.begin()),
-                        std::make_move_iterator(operation.prefix.end()));
-                    instructions.push_back(Prepared::Instruction{
-                        Prepared::Instruction::Kind::Evaluate,
-                        {},
-                        statement.expression.type,
-                        false,
-                        operation.operation,
-                        std::move(operation.operands),
-                        std::move(operation.closureFunction),
-                        std::move(operation.captures) });
-                    state = operation.state;
-                    continue;
-                }
-                if (statement.kind == Statement::Kind::Return)
-                {
-                    auto value = Atomize(state, statement.expression);
-                    instructions.insert(
-                        instructions.end(),
-                        std::make_move_iterator(value.prefix.begin()),
-                        std::make_move_iterator(value.prefix.end()));
-                    return { { { blockId,
-                                 std::move(instructions),
-                                 { Prepared::Terminator::Kind::Return,
-                                   std::move(value.atom),
-                                   0U,
-                                   0U } } },
-                             value.state };
-                }
+            cursor.Open(startId);
+            PrepareStatements(cursor, statements);
+            if (cursor.open)
+                cursor.Jump(joinId);
+        }
 
-                if (statement.kind == Statement::Kind::Break
-                    || statement.kind == Statement::Kind::Continue)
+        /**
+         * @brief Append structured statements to the cursor's open block.
+         *
+         * On return the cursor is either still open, meaning control falls
+         * through to whatever the caller places next, or closed by a
+         * return, break or continue, after which the remaining statements
+         * of the region are unreachable and are not lowered.
+         */
+        void
+        PrepareStatements(Cursor &cursor,
+                          const std::vector<Statement> &statements)
+        {
+            for (const auto &statement : statements)
+            {
+                switch (statement.kind)
                 {
-                    if (state.loopTargets.empty())
+                    case Statement::Kind::Bind:
                     {
-                        return { { { blockId,
-                                     std::move(instructions),
-                                     { Prepared::Terminator::Kind::Unreachable,
-                                       {},
-                                       0U,
-                                       0U } } },
-                                 state };
+                        auto operation
+                            = AtomizeOperation(cursor, statement.binding.value);
+                        cursor.Emit(Prepared::Instruction{
+                            Prepared::Instruction::Kind::Bind,
+                            statement.binding.symbol,
+                            statement.binding.type,
+                            statement.binding.mutableBinding,
+                            operation.operation,
+                            std::move(operation.operands),
+                            std::move(operation.closureFunction),
+                            std::move(operation.captures) });
+                        break;
                     }
-                    const auto targets = state.loopTargets.back();
-                    const auto target = statement.kind == Statement::Kind::Break
-                                            ? targets.first
-                                            : targets.second;
-                    return { { { blockId,
-                                 std::move(instructions),
-                                 { Prepared::Terminator::Kind::Jump,
-                                   {},
-                                   target,
-                                   0U } } },
-                             state };
+                    case Statement::Kind::Assign:
+                    {
+                        auto value = Atomize(cursor, statement.expression);
+                        cursor.Emit(Prepared::Instruction{
+                            Prepared::Instruction::Kind::Assign,
+                            statement.destination,
+                            statement.expression.type,
+                            false,
+                            Prepared::Operation::Copy,
+                            { std::move(value) },
+                            {},
+                            {} });
+                        break;
+                    }
+                    case Statement::Kind::Evaluate:
+                    {
+                        auto operation
+                            = AtomizeOperation(cursor, statement.expression);
+                        cursor.Emit(Prepared::Instruction{
+                            Prepared::Instruction::Kind::Evaluate,
+                            {},
+                            statement.expression.type,
+                            false,
+                            operation.operation,
+                            std::move(operation.operands),
+                            std::move(operation.closureFunction),
+                            std::move(operation.captures) });
+                        break;
+                    }
+                    case Statement::Kind::Return:
+                    {
+                        auto value = Atomize(cursor, statement.expression);
+                        cursor.Close({ Prepared::Terminator::Kind::Return,
+                                       std::move(value),
+                                       0U,
+                                       0U });
+                        return;
+                    }
+                    case Statement::Kind::Break:
+                    case Statement::Kind::Continue:
+                    {
+                        // Core verification rejects a transfer outside a
+                        // loop; stay total for direct native API callers.
+                        if (cursor.state.loopTargets.empty())
+                        {
+                            cursor.Close(
+                                { Prepared::Terminator::Kind::Unreachable,
+                                  {},
+                                  0U,
+                                  0U });
+                            return;
+                        }
+                        const auto targets = cursor.state.loopTargets.back();
+                        cursor.Jump(statement.kind == Statement::Kind::Break
+                                        ? targets.first
+                                        : targets.second);
+                        return;
+                    }
+                    case Statement::Kind::While:
+                    {
+                        // The condition owns a dedicated header block.
+                        // Folding it into the incoming block would make the
+                        // back-edge re-execute every straight-line statement
+                        // that precedes the loop, including the initializers
+                        // it tests.
+                        const auto conditionId = cursor.state.nextBlock;
+                        const auto bodyId = conditionId + 1U;
+                        const auto exitId = bodyId + 1U;
+                        cursor.state.nextBlock = exitId + 1U;
+
+                        cursor.Jump(conditionId);
+                        cursor.Open(conditionId);
+                        cursor.Branch(
+                            PrepareCondition(cursor, statement.expression),
+                            bodyId,
+                            exitId);
+                        PrepareLoopRegion(cursor,
+                                          bodyId,
+                                          exitId,
+                                          conditionId,
+                                          conditionId,
+                                          statement.loopBody);
+                        cursor.Open(exitId);
+                        break;
+                    }
+                    case Statement::Kind::DoWhile:
+                    {
+                        const auto bodyId = cursor.state.nextBlock;
+                        const auto conditionId = bodyId + 1U;
+                        const auto exitId = conditionId + 1U;
+                        cursor.state.nextBlock = exitId + 1U;
+
+                        cursor.Jump(bodyId);
+                        PrepareLoopRegion(cursor,
+                                          bodyId,
+                                          exitId,
+                                          conditionId,
+                                          conditionId,
+                                          statement.loopBody);
+                        cursor.Open(conditionId);
+                        cursor.Branch(
+                            PrepareCondition(cursor, statement.expression),
+                            bodyId,
+                            exitId);
+                        cursor.Open(exitId);
+                        break;
+                    }
+                    case Statement::Kind::For:
+                    {
+                        const auto conditionId = cursor.state.nextBlock;
+                        const auto bodyId = conditionId + 1U;
+                        const auto updateId = bodyId + 1U;
+                        const auto exitId = updateId + 1U;
+                        cursor.state.nextBlock = exitId + 1U;
+
+                        cursor.Jump(conditionId);
+                        cursor.Open(conditionId);
+                        // A numeric condition's canonicalizing comparison is
+                        // part of the header and is re-evaluated each pass.
+                        cursor.Branch(
+                            PrepareCondition(cursor, statement.expression),
+                            bodyId,
+                            exitId);
+                        PrepareLoopRegion(cursor,
+                                          bodyId,
+                                          exitId,
+                                          updateId,
+                                          updateId,
+                                          statement.loopBody);
+                        // `continue` enters the update region; the region
+                        // itself then returns to the condition, never to its
+                        // own entry.
+                        PrepareLoopRegion(cursor,
+                                          updateId,
+                                          exitId,
+                                          updateId,
+                                          conditionId,
+                                          statement.loopUpdate);
+                        cursor.Open(exitId);
+                        break;
+                    }
+                    case Statement::Kind::If:
+                    {
+                        auto condition
+                            = PrepareCondition(cursor, statement.expression);
+                        const auto trueId = cursor.state.nextBlock;
+                        const auto falseId = trueId + 1U;
+                        const auto joinId = falseId + 1U;
+                        cursor.state.nextBlock = joinId + 1U;
+                        cursor.Branch(std::move(condition), trueId, falseId);
+                        PrepareBranchRegion(cursor,
+                                            trueId,
+                                            joinId,
+                                            statement.trueBranch);
+                        PrepareBranchRegion(cursor,
+                                            falseId,
+                                            joinId,
+                                            statement.falseBranch);
+                        cursor.Open(joinId);
+                        break;
+                    }
                 }
-
-                if (statement.kind == Statement::Kind::While)
-                {
-                    auto condition = Atomize(state, statement.expression);
-                    auto boolean = Booleanize(std::move(condition.state),
-                                              std::move(condition.atom));
-                    condition.prefix.insert(
-                        condition.prefix.end(),
-                        std::make_move_iterator(boolean.prefix.begin()),
-                        std::make_move_iterator(boolean.prefix.end()));
-                    instructions.insert(
-                        instructions.end(),
-                        std::make_move_iterator(condition.prefix.begin()),
-                        std::make_move_iterator(condition.prefix.end()));
-
-                    const auto bodyId = boolean.state.nextBlock;
-                    const auto exitId = bodyId + 1U;
-                    boolean.state.nextBlock = exitId + 1U;
-                    auto body = PrepareLoopRegion(boolean.state,
-                                                  bodyId,
-                                                  exitId,
-                                                  blockId,
-                                                  statement.loopBody);
-                    auto tail = PrepareStatements(body.state,
-                                                  exitId,
-                                                  {},
-                                                  statements,
-                                                  index + 1U);
-                    std::vector<Prepared::Block> blocks;
-                    blocks.push_back({ blockId,
-                                       std::move(instructions),
-                                       { Prepared::Terminator::Kind::Branch,
-                                         std::move(boolean.atom),
-                                         bodyId,
-                                         exitId } });
-                    blocks.insert(blocks.end(),
-                                  std::make_move_iterator(body.blocks.begin()),
-                                  std::make_move_iterator(body.blocks.end()));
-                    blocks.insert(blocks.end(),
-                                  std::make_move_iterator(tail.blocks.begin()),
-                                  std::make_move_iterator(tail.blocks.end()));
-                    return { std::move(blocks), std::move(tail.state) };
-                }
-
-                if (statement.kind == Statement::Kind::DoWhile)
-                {
-                    const auto bodyId = state.nextBlock;
-                    const auto conditionId = bodyId + 1U;
-                    const auto exitId = conditionId + 1U;
-                    state.nextBlock = exitId + 1U;
-                    auto body = PrepareLoopRegion(state,
-                                                  bodyId,
-                                                  exitId,
-                                                  conditionId,
-                                                  statement.loopBody);
-                    auto condition = Atomize(body.state, statement.expression);
-                    auto boolean = Booleanize(std::move(condition.state),
-                                              std::move(condition.atom));
-                    condition.prefix.insert(
-                        condition.prefix.end(),
-                        std::make_move_iterator(boolean.prefix.begin()),
-                        std::make_move_iterator(boolean.prefix.end()));
-                    auto tail = PrepareStatements(boolean.state,
-                                                  exitId,
-                                                  {},
-                                                  statements,
-                                                  index + 1U);
-
-                    std::vector<Prepared::Block> blocks;
-                    blocks.push_back({ blockId,
-                                       std::move(instructions),
-                                       { Prepared::Terminator::Kind::Jump,
-                                         {},
-                                         bodyId,
-                                         0U } });
-                    blocks.insert(blocks.end(),
-                                  std::make_move_iterator(body.blocks.begin()),
-                                  std::make_move_iterator(body.blocks.end()));
-                    blocks.push_back({ conditionId,
-                                       std::move(condition.prefix),
-                                       { Prepared::Terminator::Kind::Branch,
-                                         std::move(boolean.atom),
-                                         bodyId,
-                                         exitId } });
-                    blocks.insert(blocks.end(),
-                                  std::make_move_iterator(tail.blocks.begin()),
-                                  std::make_move_iterator(tail.blocks.end()));
-                    return { std::move(blocks), std::move(tail.state) };
-                }
-
-                if (statement.kind == Statement::Kind::For)
-                {
-                    const auto conditionId = state.nextBlock;
-                    const auto bodyId = conditionId + 1U;
-                    const auto updateId = bodyId + 1U;
-                    const auto exitId = updateId + 1U;
-                    state.nextBlock = exitId + 1U;
-
-                    auto condition = Atomize(state, statement.expression);
-                    auto boolean = Booleanize(std::move(condition.state),
-                                              std::move(condition.atom));
-                    auto body = PrepareLoopRegion(boolean.state,
-                                                  bodyId,
-                                                  exitId,
-                                                  updateId,
-                                                  statement.loopBody);
-                    auto update = PrepareLoopRegion(body.state,
-                                                    updateId,
-                                                    exitId,
-                                                    updateId,
-                                                    statement.loopUpdate);
-                    auto tail = PrepareStatements(update.state,
-                                                  exitId,
-                                                  {},
-                                                  statements,
-                                                  index + 1U);
-
-                    std::vector<Prepared::Block> blocks;
-                    blocks.push_back({ blockId,
-                                       std::move(instructions),
-                                       { Prepared::Terminator::Kind::Jump,
-                                         {},
-                                         conditionId,
-                                         0U } });
-                    blocks.push_back({ conditionId,
-                                       std::move(condition.prefix),
-                                       { Prepared::Terminator::Kind::Branch,
-                                         std::move(boolean.atom),
-                                         bodyId,
-                                         exitId } });
-                    blocks.insert(blocks.end(),
-                                  std::make_move_iterator(body.blocks.begin()),
-                                  std::make_move_iterator(body.blocks.end()));
-                    blocks.insert(
-                        blocks.end(),
-                        std::make_move_iterator(update.blocks.begin()),
-                        std::make_move_iterator(update.blocks.end()));
-                    blocks.insert(blocks.end(),
-                                  std::make_move_iterator(tail.blocks.begin()),
-                                  std::make_move_iterator(tail.blocks.end()));
-                    return { std::move(blocks), std::move(tail.state) };
-                }
-
-                if (statement.kind != Statement::Kind::If)
-                {
-                    return { { { blockId,
-                                 std::move(instructions),
-                                 { Prepared::Terminator::Kind::Unreachable,
-                                   {},
-                                   0U,
-                                   0U } } },
-                             state };
-                }
-                auto condition = Atomize(state, statement.expression);
-                auto boolean = Booleanize(std::move(condition.state),
-                                          std::move(condition.atom));
-                instructions.insert(
-                    instructions.end(),
-                    std::make_move_iterator(condition.prefix.begin()),
-                    std::make_move_iterator(condition.prefix.end()));
-                instructions.insert(
-                    instructions.end(),
-                    std::make_move_iterator(boolean.prefix.begin()),
-                    std::make_move_iterator(boolean.prefix.end()));
-                const auto trueId = boolean.state.nextBlock;
-                const auto falseId = trueId + 1U;
-                const auto joinId = falseId + 1U;
-                boolean.state.nextBlock = joinId + 1U;
-                auto trueBlocks = PrepareBranch(boolean.state,
-                                                trueId,
-                                                joinId,
-                                                statement.trueBranch);
-                auto falseBlocks = PrepareBranch(trueBlocks.state,
-                                                 falseId,
-                                                 joinId,
-                                                 statement.falseBranch);
-                auto tail = PrepareStatements(falseBlocks.state,
-                                              joinId,
-                                              {},
-                                              statements,
-                                              index + 1U);
-                std::vector<Prepared::Block> blocks;
-                blocks.push_back({ blockId,
-                                   std::move(instructions),
-                                   { Prepared::Terminator::Kind::Branch,
-                                     std::move(boolean.atom),
-                                     trueId,
-                                     falseId } });
-                blocks.insert(
-                    blocks.end(),
-                    std::make_move_iterator(trueBlocks.blocks.begin()),
-                    std::make_move_iterator(trueBlocks.blocks.end()));
-                blocks.insert(
-                    blocks.end(),
-                    std::make_move_iterator(falseBlocks.blocks.begin()),
-                    std::make_move_iterator(falseBlocks.blocks.end()));
-                blocks.insert(blocks.end(),
-                              std::make_move_iterator(tail.blocks.begin()),
-                              std::make_move_iterator(tail.blocks.end()));
-                return { std::move(blocks), tail.state };
             }
-            return {
-                { { blockId,
-                    std::move(instructions),
-                    { Prepared::Terminator::Kind::Unreachable, {}, 0U, 0U } } },
-                state
-            };
         }
 
         [[nodiscard]] auto
@@ -903,19 +786,25 @@ namespace Visual::XSharp::Core::CorePrep
             {
                 parameters.push_back({ parameter.symbol, parameter.type });
             }
-            auto body = PrepareStatements(
-                State{ highest + 1U, 1U, nextFunction, {}, {} },
-                0U,
-                {},
-                function.body);
+            Cursor cursor{ State{ highest + 1U, 1U, nextFunction, {}, {} },
+                           0U,
+                           {},
+                           {},
+                           true };
+            PrepareStatements(cursor, function.body);
+            // Core verification proves every path returns. A body that still
+            // falls off its end is marked instead of given an invented value.
+            if (cursor.open)
+                cursor.Close(
+                    { Prepared::Terminator::Kind::Unreachable, {}, 0U, 0U });
             return {
                 Prepared::Function{ function.symbol,
                                     std::move(parameters),
                                     function.returnType,
                                     0U,
-                                    std::move(body.blocks) },
-                std::move(body.state.pendingFunctions),
-                body.state.nextFunction,
+                                    std::move(cursor.closed) },
+                std::move(cursor.state.pendingFunctions),
+                cursor.state.nextFunction,
             };
         }
     } // namespace

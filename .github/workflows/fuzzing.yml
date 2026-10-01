@@ -152,6 +152,11 @@ jobs:
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz
+      - name: Run bounded ThreadSanitizer ownership campaign
+        shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
+        run: go run ./helpers/cmd/develop fuzz-thread
       - name: Run nightly ASan and UBSan stress campaign
         if: github.event_name == 'schedule'
         shell: bash
@@ -216,6 +221,11 @@ jobs:
         env:
           VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
         run: go run ./helpers/cmd/develop fuzz
+      - name: Run bounded ThreadSanitizer ownership campaign
+        shell: bash
+        env:
+          VXS_FUZZ_CORPUS: ${{ runner.temp }}/vxs-fuzz-corpus
+        run: go run ./helpers/cmd/develop fuzz-thread
       - name: Run nightly ASan and UBSan stress campaign
         if: github.event_name == 'schedule'
         shell: bash

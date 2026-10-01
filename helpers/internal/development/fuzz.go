@@ -53,12 +53,9 @@ func fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime string
 		campaign = append(campaign, "--linkopt="+macRuntime)
 	}
 	smoke = append(smoke, "//Compiler/Fuzzing:wire_fuzz_smoke", "//Compiler/Fuzzing:source_fuzz_smoke")
-	campaign = append(campaign,
-		"//Compiler/Fuzzing:wire_fuzzer",
-		"//Compiler/Fuzzing:lexer_fuzzer",
-		"//Compiler/Fuzzing:parser_fuzzer",
-		"//Compiler/Fuzzing:source_llvm_fuzzer",
-		"//Compiler/Fuzzing:differential_fuzzer")
+	for _, target := range nativeFuzzTargets() {
+		campaign = append(campaign, target.label)
+	}
 	return smoke, campaign
 }
 
@@ -109,8 +106,8 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	if err := os.Mkdir(artifacts, 0o700); err != nil {
 		return fmt.Errorf("could not create fuzz artifact directory %q: %w", work, err)
 	}
-	stageNames := []string{"wire", "lexer", "parser", "source", "differential"}
-	for _, stage := range stageNames {
+	for _, target := range nativeFuzzTargets() {
+		stage := target.corpus
 		corpus := filepath.Join(corpusRoot, stage)
 		if err := os.MkdirAll(corpus, 0o700); err != nil {
 			return fmt.Errorf("could not prepare %s corpus; preserved %q: %w", stage, work, err)
@@ -174,65 +171,24 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	if err := runner.Run(repository, nil, bazel, campaignArguments...); err != nil {
 		return fmt.Errorf("could not build instrumented fuzz targets; preserved %q: %w", work, err)
 	}
-	targets := []struct {
-		binary    string
-		corpus    string
-		maxLength string
-		rssLimit  string
-	}{
-		{"wire_fuzzer", "wire", "16384", "768"},
-		{"lexer_fuzzer", "lexer", "65536", "1024"},
-		{"parser_fuzzer", "parser", "65536", "1536"},
-		{"source_llvm_fuzzer", "source", "65536", "4096"},
-		// The depth-four generator consumes at most 31 selector bytes. Bound
-		// mutations close to this semantic input rather than evolving unused
-		// tails alongside the expensive two-module execution oracle.
-		{"differential_fuzzer", "differential", "64", "4096"},
+	campaign := fuzzCampaign{
+		repository:  repository,
+		corpusRoot:  corpusRoot,
+		artifacts:   artifacts,
+		work:        work,
+		report:      "campaigns.json",
+		duration:    duration,
+		environment: selectedEnvironment,
+		sanitizer:   sanitizerConfiguration,
+		executable:  currentHost.executable,
 	}
-	var records []map[string]any
-	for _, target := range targets {
-		fuzzer := filepath.Join(repository, "bazel-bin", "Compiler", "Fuzzing", target.binary+currentHost.executable)
-		if target.binary != "wire_fuzzer" {
-			if err := copyFile(frontendLibrary, filepath.Join(filepath.Dir(fuzzer), filepath.Base(frontendLibrary)), 0o755); err != nil {
-				return fmt.Errorf("could not stage frontend for %s; preserved %q: %w", target.binary, work, err)
-			}
-		}
-		campaignArtifacts := filepath.Join(artifacts, target.binary)
-		if err := os.MkdirAll(campaignArtifacts, 0o700); err != nil {
-			return fmt.Errorf("could not create %s artifact directory: %w", target.binary, err)
-		}
-		arguments := []string{
-			filepath.Join(corpusRoot, target.corpus),
-			"-max_total_time=" + strconv.Itoa(duration),
-			"-max_len=" + target.maxLength,
-			"-timeout=30",
-			"-rss_limit_mb=" + target.rssLimit,
-			"-use_value_profile=1",
-			"-verbosity=0",
-			"-print_final_stats=1",
-			"-artifact_prefix=" + campaignArtifacts + string(os.PathSeparator),
-		}
-		output, runErr := runner.RunWithInput(repository, selectedEnvironment, "", fuzzer, arguments...)
-		if err := os.WriteFile(filepath.Join(artifacts, target.binary+".log"), []byte(output), 0o600); err != nil {
-			return fmt.Errorf("could not preserve campaign log: %w", err)
-		}
-		fmt.Print(output)
-		statistics, statisticsErr := parseFuzzStatistics(output)
-		if runErr == nil && statisticsErr != nil {
-			runErr = statisticsErr
-		}
-		records = append(records, map[string]any{"target": target.binary, "seconds": duration, "rss_limit_mb": target.rssLimit, "sanitizer": sanitizerConfiguration, "native_coverage": true, "haskell_native_coverage": false, "statistics": statistics, "success": runErr == nil})
-		report, err := json.MarshalIndent(records, "", "  ")
-		if err != nil {
+	for _, target := range nativeFuzzTargets() {
+		if err := campaign.run(runner, target, frontendLibrary); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(artifacts, "campaigns.json"), report, 0o600); err != nil {
-			return err
-		}
-		if runErr != nil {
-			return fmt.Errorf("%s campaign failed; corpus and crash artifacts preserved in %q: %w", target.binary, work, runErr)
-		}
-		fmt.Printf("%s campaign completed (%d seconds; RSS <= %s MiB).\n", target.binary, duration, target.rssLimit)
+	}
+	if err := runHaskellFuzz(repository, corpusRoot, artifacts, duration, runner); err != nil {
+		return fmt.Errorf("Haskell feedback campaign failed; preserved %q: %w", work, err)
 	}
 	if os.Getenv("CI") == "true" {
 		fmt.Printf("Campaign logs and coverage limits preserved in %s.\n", work)
@@ -251,6 +207,67 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 		return err
 	}
 	fmt.Println("All coverage-guided compiler fuzz targets completed without a reported failure.")
+	return nil
+}
+
+// fuzzCampaign carries the settings shared by every libFuzzer target of one
+// helper invocation and accumulates their structured report.
+type fuzzCampaign struct {
+	repository, corpusRoot, artifacts, work, report string
+	duration                                        int
+	environment                                     []string
+	sanitizer, executable                           string
+	records                                         []map[string]any
+}
+
+// run executes one instrumented target against its persistent corpus. The
+// report is rewritten after every target so a later failure still leaves the
+// earlier measurements, and a process that exits zero without libFuzzer's final
+// counters is a failure rather than an unexplained success.
+func (campaign *fuzzCampaign) run(runner commandRunner, target fuzzTarget, frontendLibrary string) error {
+	packagePath, _, _ := strings.Cut(strings.TrimPrefix(target.label, "//"), ":")
+	fuzzer := filepath.Join(campaign.repository, "bazel-bin", filepath.FromSlash(packagePath), target.binary+campaign.executable)
+	if target.frontend {
+		if err := copyFile(frontendLibrary, filepath.Join(filepath.Dir(fuzzer), filepath.Base(frontendLibrary)), 0o755); err != nil {
+			return fmt.Errorf("could not stage frontend for %s; preserved %q: %w", target.binary, campaign.work, err)
+		}
+	}
+	campaignArtifacts := filepath.Join(campaign.artifacts, target.binary)
+	if err := os.MkdirAll(campaignArtifacts, 0o700); err != nil {
+		return fmt.Errorf("could not create %s artifact directory: %w", target.binary, err)
+	}
+	arguments := []string{
+		filepath.Join(campaign.corpusRoot, target.corpus),
+		"-max_total_time=" + strconv.Itoa(campaign.duration),
+		"-max_len=" + target.maxLength,
+		"-timeout=30",
+		"-rss_limit_mb=" + target.rssLimit,
+		"-use_value_profile=1",
+		"-verbosity=0",
+		"-print_final_stats=1",
+		"-artifact_prefix=" + campaignArtifacts + string(os.PathSeparator),
+	}
+	output, runErr := runner.RunWithInput(campaign.repository, campaign.environment, "", fuzzer, arguments...)
+	if err := os.WriteFile(filepath.Join(campaign.artifacts, target.binary+".log"), []byte(output), 0o600); err != nil {
+		return fmt.Errorf("could not preserve campaign log: %w", err)
+	}
+	fmt.Print(output)
+	statistics, statisticsErr := parseFuzzStatistics(output)
+	if runErr == nil && statisticsErr != nil {
+		runErr = statisticsErr
+	}
+	campaign.records = append(campaign.records, map[string]any{"target": target.binary, "seconds": campaign.duration, "rss_limit_mb": target.rssLimit, "sanitizer": campaign.sanitizer, "native_coverage": true, "haskell_native_coverage": false, "statistics": statistics, "success": runErr == nil})
+	report, err := json.MarshalIndent(campaign.records, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(campaign.artifacts, campaign.report), report, 0o600); err != nil {
+		return err
+	}
+	if runErr != nil {
+		return fmt.Errorf("%s campaign failed; corpus and crash artifacts preserved in %q: %w", target.binary, campaign.work, runErr)
+	}
+	fmt.Printf("%s campaign completed (%d seconds; RSS <= %s MiB; %s).\n", target.binary, campaign.duration, target.rssLimit, campaign.sanitizer)
 	return nil
 }
 

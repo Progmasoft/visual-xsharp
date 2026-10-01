@@ -16,6 +16,8 @@ cc_binary(
     name = "core_pipeline_tests",
     srcs = [
         "CorePipelineTests.cpp",
+        "LoopLoweringTests.cpp",
+        "ShortCircuitLoweringTests.cpp",
         "TemplateTests.cpp",
     ],
     deps = [

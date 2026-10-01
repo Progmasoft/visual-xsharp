@@ -60,12 +60,12 @@ func TestFuzzBuildPlansSeparateSmokeAndRuntimeMain(t *testing.T) {
 			}
 			drivers := 0
 			for _, argument := range campaign {
-				if strings.HasPrefix(argument, "//Compiler/Fuzzing:") {
+				if strings.HasPrefix(argument, "//") {
 					drivers++
 				}
 			}
-			if drivers != 5 {
-				t.Fatalf("expected five campaign drivers: %v", campaign)
+			if drivers != 9 {
+				t.Fatalf("expected nine campaign drivers: %v", campaign)
 			}
 			if sanitizer != "" {
 				for _, plan := range [][]string{smoke, campaign} {

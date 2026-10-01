@@ -54,6 +54,11 @@ jobs:
         working-directory: Compiler
         run: cabal test visual-xsharp-compiler-tests
 
+      - name: Test frontend fuzz feedback and mutation policy
+        shell: pwsh
+        working-directory: Compiler
+        run: cabal test fuzz-feedback-tests
+
       - name: Check Haskell package metadata
         shell: pwsh
         run: |
