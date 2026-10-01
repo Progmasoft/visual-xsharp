@@ -10,12 +10,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // The native C ABI wrapper cannot feed back GHC branches. This executable is
 // rebuilt in an isolated HPC tree and retains inputs that hit new production
 // ticks, rather than pretending native callback coverage represents Haskell.
-func runHaskellFuzz(repository, corpusRoot, artifacts string, duration int, runner commandRunner) error {
+func runHaskellFuzz(repository, corpusRoot, artifacts string, duration, jobs int, runner commandRunner) error {
 	directory := filepath.Join(repository, "Compiler")
 	options := []string{"--enable-coverage", "--disable-tests", "--builddir=dist-fuzz-coverage"}
 	build := append([]string{"build", "exe:frontend-fuzz"}, options...)
@@ -27,53 +28,63 @@ func runHaskellFuzz(repository, corpusRoot, artifacts string, duration int, runn
 	if err != nil || !filepath.IsAbs(binary) || strings.ContainsAny(binary, "\r\n") {
 		return fmt.Errorf("could not resolve HPC frontend executable: %q (%v)", binary, err)
 	}
-	for _, stage := range []string{"lexer", "parser", "source"} {
-		corpus := filepath.Join(corpusRoot, "haskell-"+stage)
-		resultPath := filepath.Join(artifacts, "haskell-"+stage)
-		for _, path := range []string{corpus, resultPath} {
-			if err := os.MkdirAll(path, 0o700); err != nil {
+	// Stages share only the read-only executable: each has its own corpus,
+	// tick file, report and artifact directory, so they may run together.
+	var console sync.Mutex
+	stages := []string{"lexer", "parser", "source"}
+	tasks := make([]fuzzTask, 0, len(stages))
+	for _, stage := range stages {
+		tasks = append(tasks, fuzzTask{run: func() error {
+			corpus := filepath.Join(corpusRoot, "haskell-"+stage)
+			resultPath := filepath.Join(artifacts, "haskell-"+stage)
+			for _, path := range []string{corpus, resultPath} {
+				if err := os.MkdirAll(path, 0o700); err != nil {
+					return err
+				}
+			}
+			if err := syncSeedCorpus(filepath.Join(repository, "Compiler", "Fuzzing", "Corpus", stage), corpus); err != nil {
 				return err
 			}
-		}
-		if err := syncSeedCorpus(filepath.Join(repository, "Compiler", "Fuzzing", "Corpus", stage), corpus); err != nil {
-			return err
-		}
-		// An HPC executable loads an existing tick file at startup and aborts
-		// when its module hashes belong to an earlier build. Give every stage a
-		// fresh file beside its report instead of the default one in the
-		// working directory, which would also leave output in the source tree.
-		tickFile := filepath.Join(resultPath, "frontend-fuzz.tix")
-		if err := os.Remove(tickFile); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("could not reset the HPC tick file: %w", err)
-		}
-		// The engine writes its report to this file only after a completed
-		// campaign. Remove an earlier one so a crashed run cannot inherit it.
-		reportFile := filepath.Join(resultPath, "campaign.txt")
-		if err := os.Remove(reportFile); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("could not reset the HPC campaign report: %w", err)
-		}
-		output, runErr := runner.RunWithInput(directory, []string{"HPCTIXFILE=" + tickFile}, "", binary, stage, strconv.Itoa(duration), corpus, resultPath, "12345")
-		fmt.Print(output)
-		if err := os.WriteFile(filepath.Join(resultPath, "output.log"), []byte(output), 0o600); err != nil {
-			return err
-		}
-		stats, statsErr := readHaskellFuzzReport(reportFile, output, stage)
-		record := map[string]any{"stage": stage, "seconds": duration, "coverage_engine": "ghc-hpc", "asan_instrumented": false, "heap_limit_mib": 512, "statistics": stats, "success": runErr == nil && statsErr == nil}
-		report, err := json.MarshalIndent(record, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(resultPath, "campaign.json"), report, 0o600); err != nil {
-			return err
-		}
-		if runErr != nil {
-			return fmt.Errorf("HPC %s campaign failed; artifacts in %q: %w", stage, resultPath, runErr)
-		}
-		if statsErr != nil {
-			return statsErr
-		}
+			// An HPC executable loads an existing tick file at startup and aborts
+			// when its module hashes belong to an earlier build. Give every stage a
+			// fresh file beside its report instead of the default one in the
+			// working directory, which would also leave output in the source tree.
+			tickFile := filepath.Join(resultPath, "frontend-fuzz.tix")
+			if err := os.Remove(tickFile); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("could not reset the HPC tick file: %w", err)
+			}
+			// The engine writes its report to this file only after a completed
+			// campaign. Remove an earlier one so a crashed run cannot inherit it.
+			reportFile := filepath.Join(resultPath, "campaign.txt")
+			if err := os.Remove(reportFile); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("could not reset the HPC campaign report: %w", err)
+			}
+			output, runErr := runner.RunWithInput(directory, []string{"HPCTIXFILE=" + tickFile}, "", binary, stage, strconv.Itoa(duration), corpus, resultPath, "12345")
+			console.Lock()
+			fmt.Print(output)
+			console.Unlock()
+			if err := os.WriteFile(filepath.Join(resultPath, "output.log"), []byte(output), 0o600); err != nil {
+				return err
+			}
+			stats, statsErr := readHaskellFuzzReport(reportFile, output, stage)
+			record := map[string]any{"stage": stage, "seconds": duration, "coverage_engine": "ghc-hpc", "asan_instrumented": false, "heap_limit_mib": 512, "statistics": stats, "success": runErr == nil && statsErr == nil}
+			report, err := json.MarshalIndent(record, "", "  ")
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(resultPath, "campaign.json"), report, 0o600); err != nil {
+				return err
+			}
+			if runErr != nil {
+				return fmt.Errorf("HPC %s campaign failed; artifacts in %q: %w", stage, resultPath, runErr)
+			}
+			if statsErr != nil {
+				return statsErr
+			}
+			return nil
+		}})
 	}
-	return nil
+	return runFuzzTasks(jobs, tasks)
 }
 
 // readHaskellFuzzReport validates the report file the engine wrote for this

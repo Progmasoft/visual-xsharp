@@ -89,7 +89,7 @@ func runThreadFuzzCampaign(repository string, currentHost host, runner commandRu
 			return fmt.Errorf("could not locate macOS libFuzzer runtime; preserved %q: %w", work, err)
 		}
 	}
-	if err := runner.Run(repository, nil, bazel, threadFuzzBuildArguments(configuration, selected.config, macRuntime)...); err != nil {
+	if err := runner.Run(repository, nil, bazel, cachedBuild(threadFuzzBuildArguments(configuration, selected.config, macRuntime))...); err != nil {
 		return fmt.Errorf("could not build ThreadSanitizer fuzz targets; preserved %q: %w", work, err)
 	}
 	campaign := fuzzCampaign{
@@ -109,9 +109,11 @@ func runThreadFuzzCampaign(repository string, currentHost host, runner commandRu
 			// target here would report races this campaign cannot attribute.
 			return fmt.Errorf("threaded fuzz target %s must not depend on the Haskell frontend", target.binary)
 		}
-		if err := campaign.run(runner, target, ""); err != nil {
-			return err
-		}
+	}
+	// Threaded targets already occupy several cores each and their findings
+	// depend on scheduling, so they run one at a time.
+	if err := campaign.runAll(runner, targets, "", 1); err != nil {
+		return err
 	}
 	if os.Getenv("CI") == "true" {
 		fmt.Printf("ThreadSanitizer campaign logs preserved in %s.\n", work)

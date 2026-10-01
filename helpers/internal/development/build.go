@@ -79,7 +79,7 @@ func buildTargets(repository string, runner commandRunner, config string, extra 
 	arguments = append(arguments, nativeTargets...)
 	arguments = append(arguments, extra...)
 	fmt.Printf("Building compiler and %d native suites...\n", len(nativeTargets))
-	if err := runner.Run(repository, nil, bazel, arguments...); err != nil {
+	if err := runner.Run(repository, nil, bazel, cachedBuild(arguments)...); err != nil {
 		return fmt.Errorf("Bazel build failed: %w", err)
 	}
 	if err := stageFrontendForBuildOutputs(repository, frontendLibrary); err != nil {
@@ -184,7 +184,7 @@ func runBenchmarks(repository string, currentHost host, runner commandRunner, ba
 	arguments := append([]string{"build", "-c", "opt"}, nativeBenchmarkTargets...)
 	arguments = append(arguments, bazelArguments...)
 	fmt.Printf("Building %d native benchmark programs...\n", len(nativeBenchmarkTargets))
-	if err := runner.Run(repository, nil, bazel, arguments...); err != nil {
+	if err := runner.Run(repository, nil, bazel, cachedBuild(arguments)...); err != nil {
 		return fmt.Errorf("native benchmark build failed: %w", err)
 	}
 	for index, program := range nativeBenchmarkPrograms {

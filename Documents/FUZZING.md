@@ -79,6 +79,28 @@ target; `fuzz-stress` defaults to 900. Set `VXS_FUZZ_SECONDS` to an integer from
 1 through 3600 to override either duration. CI uses 90 seconds per target for
 bounded campaigns and 900 for scheduled stress campaigns.
 
+Targets are independent processes with their own corpus, artifact directory
+and report entry, so the helper can run several at once. Concurrency is not
+free evidence: a campaign is worth the inputs it executes inside its time
+budget, and on a two-core, four-thread host two concurrent targets executed
+40 to 90 percent fewer inputs each. The default is therefore one job per four
+logical processors, at most four, which is one target at a time on such a host
+and on four-vCPU CI runners. Set `VXS_FUZZ_JOBS` to an integer from 1 through
+64 on a host with spare cores. Two targets with a 4096 MiB RSS limit never
+overlap, the three HPC stages follow the same setting, and the ThreadSanitizer
+campaign always runs one target at a time because its targets start their own
+threads. Time budgets, RSS limits, per-input timeouts and watchdogs are
+identical at every job count.
+
+Most local wall-clock time is compilation, not fuzzing. The plain, sanitizer
+and fuzz configurations share one Bazel output tree, and each switch would
+otherwise recompile every owned translation unit. Outside CI the helper adds a
+persistent content-addressed Bazel disk cache under the user cache directory
+(`visual-xsharp/bazel-disk-cache`, limited to 8 GiB). It is keyed by each
+action's full command line and inputs, so no instrumentation or check changes.
+`VXS_BAZEL_DISK_CACHE` selects another absolute directory, or `off` for a cold
+measurement.
+
 Each campaign has a 30-second per-input timeout and a finite input length:
 
 | Target | Maximum input bytes | RSS limit (MiB) |

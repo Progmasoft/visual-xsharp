@@ -52,7 +52,9 @@ LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
         = size == 0U ? 2U : 1U + static_cast<unsigned>(data[0] % 4U);
     const auto iterations
         = size < 2U ? 8U : 1U + static_cast<unsigned>(data[1] % 64U);
-    std::vector<std::jthread> workers;
+    // std::jthread is unavailable in Apple libc++; join explicitly below.
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
     for (unsigned worker = 0U; worker < workerCount; ++worker)
     {
         const auto localWeak = Aarc::CopyWeak(weak);
@@ -84,7 +86,9 @@ LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
     }
     start.store(true, std::memory_order_release);
     Aarc::ReleaseStrong(payload);
-    workers.clear(); // jthread joins before the independent destructor oracle.
+    // Every worker finishes before the independent destructor oracle runs.
+    for (auto &worker : workers)
+        worker.join();
     if (corrupt.load() || destructions.load() != 1U
         || Aarc::LockWeak(weak) != nullptr
         || Aarc::LoadUnowned(unowned) != nullptr)
