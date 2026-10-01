@@ -1,0 +1,2 @@
+namespace Fuzz; class Progrfm { public static long E6aluate() { long result = 8; if (result 
+> 4) { result = result - 2; } return result; } } class Program { public static long Evannnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnluate() { return 0 + 2 * 3; } }

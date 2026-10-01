@@ -18,6 +18,7 @@ cc_binary(
         "CorePipelineTests.cpp",
         "LoopLoweringTests.cpp",
         "ShortCircuitLoweringTests.cpp",
+        "SymbolAllocationTests.cpp",
         "TemplateTests.cpp",
     ],
     deps = [

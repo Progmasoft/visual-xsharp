@@ -61,6 +61,15 @@ verifier require one condition shape.
 
 ## Calls and entry bridge
 
+A function's LLVM symbol is its dotted module name, its source spelling, and
+its symbol identity, for example `Demo.Main.7`. LLVM reserves every
+global name that begins with `llvm.` for intrinsics and rejects a module that
+defines one, while `llvm` is an ordinary namespace name in source. Such a
+symbol is emitted with a leading `$`, which cannot occur in a source
+identifier, for example `$llvm.Main.7`. Declarations in other
+per-source objects use the same rule, so cross-object references still
+resolve.
+
 Direct calls resolve a stable function symbol to a declared function. Parameter count/types and result type are checked in
 Xmm before LLVM call construction. A function symbol is not encoded as an integer or ordinary virtual register.
 

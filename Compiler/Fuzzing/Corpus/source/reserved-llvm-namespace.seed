@@ -1,0 +1,1 @@
+namespace llvm.FLLLLLLLQQQQ1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQLLLLuzz; class Program { public static long Evaluate() { long result = 6; if (result  >3) { result = result - 2; } return result; } }

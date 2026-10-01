@@ -271,6 +271,15 @@ same Boolean. A CorePrep, Xpp,
 or Xmm verifier cannot reject a wrong back-edge by itself: a block that jumps
 to itself is a well-formed control-flow graph.
 
+Both lowerings also allocate generated symbols the same way. Temporaries,
+condition and short-circuit slots, and lifted closure names come from one
+counter that starts above every symbol identity in the whole module and is
+never reset between functions. Identities are module-wide and CorePrep
+verification rejects one identity with two spellings, so a counter seeded
+from a single function would reuse another function's symbols.
+`SymbolAllocationTests.cpp` covers this for multi-function modules and
+closures.
+
 ## Expressions
 
 Every Core expression has a statically queryable type.

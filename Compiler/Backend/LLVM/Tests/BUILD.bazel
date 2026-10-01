@@ -9,6 +9,7 @@ cc_binary(
         "LLVMBackendTests.cpp",
         "JitSessionTests.cpp",
         "LoopExecutionTests.cpp",
+        "ReservedSymbolTests.cpp",
         "ShortCircuitExecutionTests.cpp",
     ],
     deps = [
