@@ -25,6 +25,7 @@ import Foreign.Ptr (FunPtr, Ptr, castPtr, nullPtr)
 import System.Environment (lookupEnv)
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
+import Visual.XSharp.Core.CorePrep.Wire (encodeCorePrep)
 import Visual.XSharp.Core.Wire
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.Diagnostic.SideChannel
@@ -128,8 +129,37 @@ frontendFuzzSyntax stage sourcePointer sourceSize
                                 _ <- evaluate (length (show (analyzeSyntax input)))
                                 pure (CInt 0)
 
+{- | Testing entry: compile like the in-memory source route and additionally
+hand out the frontend's own CorePrep lowering of the same optimized Core. The
+native pipeline derives CorePrep from Core with its own adapter; delivering both
+artifacts of one compilation lets a harness compare the two lowerings instead
+of trusting either. Core is delivered first and CorePrep second; a rejected
+callback stops the sequence. Production entries never emit CorePrep.
+-}
 frontendFuzzCompile :: Ptr Word8 -> CSize -> FunPtr OutputCallback -> Ptr () -> IO CInt
-frontendFuzzCompile = frontendCompileSource
+frontendFuzzCompile sourcePointer sourceSize callback context =
+    withCaughtFailure callback context $ do
+        copied <- readSource sourcePointer sourceSize
+        case copied of
+            Left message -> emitResult callback context (CInt 2) message
+            Right source -> case Text.decodeUtf8' source of
+                Left _ -> emitResult callback context (CInt 1) "source is not valid UTF-8"
+                Right decoded ->
+                    case compileToCorePrep (CompilerInput "<memory>.vxs" (Text.unpack decoded)) of
+                        Left diagnostics -> emitBytesResult callback context (CInt 1) 3 (renderDiagnostics diagnostics)
+                        Right artifacts ->
+                            case ( encodeCore defaultCoreWireLimits (artifactOptimizedCore artifacts)
+                                 , encodeCorePrep (artifactCorePrep artifacts)
+                                 ) of
+                                (Left issue, _) -> emitBytesResult callback context (CInt 3) 3 (show issue)
+                                (_, Left issue) -> emitBytesResult callback context (CInt 3) 3 (show issue)
+                                (Right core, Right corePrep) -> do
+                                    coreDelivered <- emitBytes callback context 0 (ByteString.pack core)
+                                    prepDelivered <-
+                                        if coreDelivered
+                                            then emitBytes callback context 4 (ByteString.pack corePrep)
+                                            else pure False
+                                    pure (if prepDelivered then CInt 0 else CInt 4)
 
 emitResult :: FunPtr OutputCallback -> Ptr () -> CInt -> String -> IO CInt
 emitResult callback context status message =

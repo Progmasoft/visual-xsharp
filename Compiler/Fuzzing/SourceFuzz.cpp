@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "Compiler/Cli/Commands/Frontend.hpp"
+#include "CorePrepParity.hpp"
 #include "SourceFuzz.hpp"
 #include "Visual/XSharp/Backend/LLVM.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
@@ -167,6 +168,17 @@ namespace Visual::XSharp::Fuzzing
                      "}\n";
         }
 
+        /**
+         * @brief Compile once and require both CorePrep lowerings to agree.
+         *
+         * The frontend lowers its optimized Core to CorePrep, and the native
+         * pipeline lowers the same Core again with its own adapter. Only
+         * the native result reaches Xpp, so a divergence is a miscompile
+         * that no later verifier can see: both lowerings are well formed.
+         * This check decodes the Core and CorePrep buffers of one
+         * compilation, runs the native adapter, and fails on the first
+         * structural difference.
+         */
         [[nodiscard]] auto
         CompileSource(std::span<const std::uint8_t> source) -> Frontend::Result
         {
@@ -175,7 +187,34 @@ namespace Visual::XSharp::Fuzzing
                          Frontend::OutputKind::ErrorText,
                          {},
                          "source fuzz input exceeds 64 KiB" };
-            return Frontend::FuzzCompile(source);
+            auto stages = Frontend::FuzzCompileStages(source);
+            if (!stages.core.succeeded()
+                || stages.core.kind != Frontend::OutputKind::CoreWire)
+                return std::move(stages.core);
+
+            const auto core = Core::Wire::Decode(stages.core.bytes);
+            if (!core)
+                llvm::report_fatal_error(llvm::Twine(
+                    "native Core reader rejected frontend Core wire"));
+            // Unverified Core is rejected by the pipeline with its own
+            // report; lowering it here would compare undefined shapes.
+            if (!Core::Verify(*core.module).empty())
+                return std::move(stages.core);
+            const auto frontendCorePrep
+                = ::visual_xsharp::core::wire::decode(stages.corePrep);
+            if (!frontendCorePrep)
+                llvm::report_fatal_error(llvm::Twine(
+                    "native CorePrep reader rejected frontend CorePrep wire"));
+            const auto difference
+                = CompareCorePrep(*frontendCorePrep.module,
+                                  Core::CorePrep::Prepare(*core.module));
+            if (difference)
+                llvm::report_fatal_error(llvm::Twine(
+                    "frontend and native CorePrep lowerings differ: "
+                    + *difference + "; source:\n"
+                    + std::string(reinterpret_cast<const char *>(source.data()),
+                                  source.size())));
+            return std::move(stages.core);
         }
 
         [[nodiscard]] auto
@@ -350,6 +389,13 @@ namespace Visual::XSharp::Fuzzing
         if (!compiled.succeeded())
             return; // Lexical, syntax, and semantic diagnostics are normal.
         (void)ConsumeVerifiedCore(compiled, "arbitrary source fuzz input");
+    }
+
+    void
+    ExerciseAcceptedSource(std::span<const std::uint8_t> input)
+    {
+        const auto compiled = CompileSource(input);
+        (void)ConsumeVerifiedCore(compiled, "source that must be accepted");
     }
 
     void

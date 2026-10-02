@@ -118,7 +118,7 @@ go run ./helpers/cmd/develop doctor
 go run ./helpers/cmd/develop test
 ```
 
-The command executes 19 Catch3 binaries, one C11 ABI contract executable and
+The command executes 20 Catch3 binaries, one C11 ABI contract executable and
 one source/differential fuzz smoke executable on
 Windows 10/11, macOS Sequoia/Tahoe, Ubuntu 26.04 LTS, and Fedora 43. Bazel
 selects the host configuration automatically; no public test instruction
