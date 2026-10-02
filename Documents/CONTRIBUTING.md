@@ -125,11 +125,26 @@ configuration.
 Use the repository Go helper for normal updates:
 
 ```powershell
+go run ./helpers/cmd/githelper start feature/name
 go run ./helpers/cmd/githelper update "Detailed change description"
+go run ./helpers/cmd/githelper sync
+go run ./helpers/cmd/githelper push
 ```
 
-The helper excludes generated and local-only paths, applies recursive submodule file-mode hygiene, commits, and pushes the
-current branch without force. It is a maintainer convenience, not a requirement for external contributors.
+| Command | Effect |
+| --- | --- |
+| `start <branch>` | create a topic branch from the remote default branch; needs a clean work tree |
+| `update [message]` | stage every change, commit, and push the current branch; `--message-file` reads the message from a file, `--dry-run` only reports the scope, `--no-push` only commits |
+| `push` | push existing commits, such as a merge, without creating a commit |
+| `sync` | fetch and merge the remote default branch into the current branch; it does not push, so the merged tree can be tested first |
+| `status` | show the upstream and default-branch distance and the uncommitted changes |
+| `clean` | remove generated and ignored files from the index without committing |
+
+The helper excludes generated and local-only paths, applies recursive submodule file-mode hygiene, and never forces a push.
+`update` refuses to commit on the default branch unless `--allow-default-branch` is given, and prints the staged scope by
+top-level directory before it commits. When a co-author is configured with `--co-author` or the `VXS_GITHELPER_CO_AUTHOR`
+environment variable, the `Co-Authored-By` trailer is added only to a commit that changes documentation alone or `helpers/`
+alone. It is a maintainer convenience, not a requirement for external contributors.
 
 The commit message should state the user-visible or architectural outcome and the verification performed, not merely “update
 files.” Generated output, caches, local credentials, internal service state, and ignored nested-repository content remain out
