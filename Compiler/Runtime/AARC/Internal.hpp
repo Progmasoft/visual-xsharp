@@ -9,6 +9,9 @@
 
 namespace Visual::XSharp::Runtime::Aarc
 {
+    // The state shares one 32-bit atomic word with the header layout the
+    // runtime owns; a narrower base type would change that layout.
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class ObjectState : std::uint32_t
     {
         Alive = 0U,

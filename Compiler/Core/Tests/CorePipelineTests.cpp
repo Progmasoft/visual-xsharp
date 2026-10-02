@@ -455,7 +455,9 @@ TEST_CASE(
     SECTION("invalid capture ownership mode")
     {
         auto module = ClosureModule();
+        // The out-of-catalog value is the input under test.
         module.functions.front().body.at(1).binding.value.captures.front().mode
+            // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
             = static_cast<Core::CaptureMode>(255U);
         CHECK(HasIssue(Core::Verify(module), "VXC1043"));
         CHECK_FALSE(Core::Wire::Encode(module));
@@ -562,14 +564,15 @@ TEST_CASE("Core v7 loops round-trip and lower to explicit back-edges")
             { variable(symbol, std::move(spelling)), integer(4) },
             Core::Type::boolean());
     };
-    const auto increment = [&](std::uint64_t symbol, std::u32string spelling) {
-        return Core::Statement::Assign(
-            { symbol, spelling },
-            Core::Expression::InvokePrimitive(
-                Core::Primitive::Add,
-                { variable(symbol, std::move(spelling)), integer(1) },
-                Core::Type::int64()));
-    };
+    const auto increment
+        = [&](std::uint64_t symbol, const std::u32string &spelling) {
+              return Core::Statement::Assign(
+                  { symbol, spelling },
+                  Core::Expression::InvokePrimitive(
+                      Core::Primitive::Add,
+                      { variable(symbol, spelling), integer(1) },
+                      Core::Type::int64()));
+          };
 
     Core::Function function{
         { 1U, U"Main" },

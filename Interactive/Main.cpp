@@ -12,7 +12,7 @@
 
 namespace
 {
-    constexpr std::size_t kMaximumInputLineBytes = 1024U * 1024U;
+    constexpr std::size_t kMaximumInputLineBytes = std::size_t{ 1024U } * 1024U;
 
     [[nodiscard]] auto
     Repl() -> int

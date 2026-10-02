@@ -65,6 +65,7 @@ namespace
     Retained(const Live::BlockFacts &facts) -> std::vector<bool>
     {
         std::vector<bool> retained;
+        retained.reserve(facts.accesses.size());
         for (const auto &access : facts.accesses)
             retained.push_back(access.retained);
         return retained;

@@ -28,10 +28,14 @@ namespace Visual::XSharp::Cli::Frontend
 {
     namespace
     {
-        constexpr std::size_t kMaximumArgumentBytes = 1024U * 1024U;
-        constexpr std::size_t kMaximumCoreBytes = 64U * 1024U * 1024U;
-        constexpr std::size_t kMaximumDiagnosticBytes = 16U * 1024U * 1024U;
-        constexpr std::size_t kMaximumSourceListBytes = 64U * 1024U * 1024U;
+        constexpr std::size_t kMaximumArgumentBytes
+            = std::size_t{ 1024U } * 1024U;
+        constexpr std::size_t kMaximumCoreBytes
+            = std::size_t{ 64U } * 1024U * 1024U;
+        constexpr std::size_t kMaximumDiagnosticBytes
+            = std::size_t{ 16U } * 1024U * 1024U;
+        constexpr std::size_t kMaximumSourceListBytes
+            = std::size_t{ 64U } * 1024U * 1024U;
 
         using AbiVersionFunction = std::uint32_t (*)();
         using InitializeFunction = std::int32_t (*)();

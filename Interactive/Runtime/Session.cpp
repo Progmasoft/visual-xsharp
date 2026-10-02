@@ -87,7 +87,7 @@ namespace Visual::XSharp::Interactive
         if (expression.empty())
             return Error(
                 "enter a Visual X# expression, or use :help for REPL commands");
-        if (expression.size() > 1024U * 1024U)
+        if (expression.size() > std::size_t{ 1024U } * 1024U)
             return Error("one Visual X# expression cannot exceed 1 MiB");
 
         const auto source
@@ -175,8 +175,11 @@ namespace Visual::XSharp::Interactive
             return Error(BackendError(*issue));
 
         auto invocation = jit_.InvokeScalar(*symbol, function->return_type);
-        if (!invocation)
-            return Error(BackendError(*invocation.error));
+        if (!invocation.value)
+            return Error(invocation.error
+                             ? BackendError(*invocation.error)
+                             : std::string("the JIT returned neither a value "
+                                           "nor an error"));
 
         if (std::holds_alternative<std::monostate>(invocation.value->payload))
         {

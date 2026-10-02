@@ -24,7 +24,7 @@ namespace Visual::XSharp::Fuzzing
         namespace Llvm = ::Visual::XSharp::Backend::LLVM;
         namespace Core = ::Visual::XSharp::Core;
 
-        constexpr std::size_t kMaximumFuzzInput = 64U * 1024U;
+        constexpr std::size_t kMaximumFuzzInput = std::size_t{ 64U } * 1024U;
         constexpr std::size_t kMaximumGeneratedDepth = 4U;
 
         struct Expression final
@@ -348,11 +348,13 @@ namespace Visual::XSharp::Fuzzing
                                 + ": " + error->message));
             const auto result
                 = session.InvokeScalar(entrySymbol, Core::Type::int64());
-            if (!result)
-                llvm::report_fatal_error(
-                    llvm::Twine("ORC could not invoke the verified "
-                                "fuzz expression: "
-                                + result.error->message));
+            if (!result.value)
+                llvm::report_fatal_error(llvm::Twine(
+                    "ORC could not invoke the verified "
+                    "fuzz expression: "
+                    + (result.error ? result.error->message
+                                    : std::string("no error "
+                                                  "was reported"))));
             return std::get<std::int64_t>(result.value->payload);
         }
     } // namespace
@@ -419,6 +421,8 @@ namespace Visual::XSharp::Fuzzing
         // independent evidence and repeats work in the expensive oracle.
         const auto unoptimized = CompileVariant(compiled.bytes, false, false);
         const auto optimized = CompileVariant(compiled.bytes, true, true);
+        // The harness never modifies its environment.
+        // NOLINTNEXTLINE(concurrency-mt-unsafe)
         if (std::getenv("VXS_FUZZ_TRACE") != nullptr)
             llvm::errs() << source << "\nReference LLVM:\n"
                          << unoptimized.llvm_ir << "\nOptimized LLVM:\n"

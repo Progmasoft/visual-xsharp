@@ -273,7 +273,7 @@ namespace
         if (output == BuildOutput::kXpp && result.xpp)
         {
             auto encoded = Visual::XSharp::Xpp::Wire::Encode(*result.xpp);
-            if (!encoded)
+            if (encoded.error)
             {
                 fmt::print(stderr,
                            "vxs: Xpp encode error at byte {} ({}): {}\n",
@@ -289,7 +289,7 @@ namespace
         if (output == BuildOutput::kXmm && result.xmm)
         {
             auto encoded = Visual::XSharp::Xmm::Wire::Encode(*result.xmm);
-            if (!encoded)
+            if (encoded.error)
             {
                 fmt::print(stderr,
                            "vxs: Xmm encode error at byte {} ({}): {}\n",
@@ -361,7 +361,7 @@ namespace
             || settings == nullptr)
             return false;
         constexpr auto kMaximumArtifactBytes
-            = std::uintmax_t{ 64U * 1024U * 1024U };
+            = std::uintmax_t{ 64U } * 1024U * 1024U;
         if (bytes.size() > kMaximumArtifactBytes)
         {
             fmt::print(
@@ -435,7 +435,8 @@ ProcessCoreArtifactAs(const char *path,
 {
     if (path == nullptr)
         return false;
-    constexpr std::uintmax_t kMaximumArtifactBytes = 64U * 1024U * 1024U;
+    constexpr std::uintmax_t kMaximumArtifactBytes
+        = std::uintmax_t{ 64U } * 1024U * 1024U;
     std::error_code sizeError;
     const auto size = std::filesystem::file_size(path, sizeError);
     if (!sizeError && size > kMaximumArtifactBytes)
@@ -504,7 +505,8 @@ ProcessProjectCoreArtifacts(const std::filesystem::path &corePath,
                             const CompilerSettings *settings,
                             const char *targetTriple)
 {
-    constexpr std::uintmax_t kMaximumArtifactBytes = 64U * 1024U * 1024U;
+    constexpr std::uintmax_t kMaximumArtifactBytes
+        = std::uintmax_t{ 64U } * 1024U * 1024U;
     std::error_code sizeError;
     const auto artifactSize = std::filesystem::file_size(corePath, sizeError);
     if (!sizeError && artifactSize > kMaximumArtifactBytes)
@@ -542,7 +544,8 @@ ProcessProjectCoreBytes(std::span<const std::uint8_t> bytes,
     if (settings == nullptr || sourceName == nullptr
         || (output != BuildOutput::kObject && output != BuildOutput::kAssembly))
         return false;
-    constexpr std::size_t kMaximumArtifactBytes = 64U * 1024U * 1024U;
+    constexpr std::size_t kMaximumArtifactBytes
+        = std::size_t{ 64U } * 1024U * 1024U;
     if (bytes.size() > kMaximumArtifactBytes)
     {
         fmt::print(stderr,
@@ -589,13 +592,17 @@ ProcessProjectCoreBytes(std::span<const std::uint8_t> bytes,
         llvmOptions.executableEntry = false;
         llvmOptions.definition_source_file = sourceOutput.source_file;
         const auto lowered = Llvm::Lower(*pipeline.xmm, llvmOptions);
-        if (!lowered)
+        if (!lowered.artifact)
         {
+            // A result without an artifact carries the error that explains
+            // it; the fallback keeps this report total if one ever does not.
             fmt::print(stderr,
                        "vxs: source '{}' could not be lowered: {}: {}\n",
                        sourceOutput.file_name,
-                       lowered.error->code,
-                       lowered.error->message);
+                       lowered.error ? lowered.error->code : "internal",
+                       lowered.error ? lowered.error->message
+                                     : "the backend returned neither an "
+                                       "artifact nor an error");
             return false;
         }
 

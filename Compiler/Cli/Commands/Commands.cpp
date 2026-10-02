@@ -112,9 +112,8 @@ namespace
             if (!directory.empty())
             {
                 std::error_code error;
-                const auto candidate
-                    = std::filesystem::path(std::wstring(directory))
-                      / std::wstring(executable);
+                auto candidate = std::filesystem::path(std::wstring(directory))
+                                 / std::wstring(executable);
                 if (std::filesystem::is_regular_file(candidate, error)
                     && !error)
                     return candidate;
