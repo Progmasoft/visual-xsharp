@@ -202,10 +202,19 @@ prepareStatements state open (statement : remaining) = case statement of
         let (closed, continued, atom, after) = atomize state open value
             (later, final) = prepareStatements after (appendInstruction continued (CorePrepAssign name atom)) remaining
          in (closed ++ later, final)
-    CoreEvaluate value ->
-        let (closed, continued, operation, after) = atomizeOperation state open value
-            (later, final) = prepareStatements after (appendInstruction continued (CorePrepEvaluate operation)) remaining
-         in (closed ++ later, final)
+    CoreEvaluate value
+        | discardsItsOperation value ->
+            let (closed, continued, operation, after) = atomizeOperation state open value
+                (later, final) = prepareStatements after (appendInstruction continued (CorePrepEvaluate operation)) remaining
+             in (closed ++ later, final)
+        | otherwise ->
+            -- Only a call or a closure creation may be an instruction whose
+            -- result is dropped. Any other value is computed into an
+            -- ordinary temporary, so its operands still run and may trap,
+            -- and the unused atom is ignored.
+            let (closed, continued, _, after) = atomize state open value
+                (later, final) = prepareStatements after continued remaining
+             in (closed ++ later, final)
     CoreReturn value ->
         let (closed, continued, atom, after) = atomize state open value
          in (closed ++ [closeBlock continued (CorePrepReturn atom)], after)
@@ -320,6 +329,14 @@ prepareFor state incoming condition body update =
         updateEnd = jumpOpenBlocks conditionId updateBlocks
         finalState = afterUpdate {loopTargets = loopTargets state}
      in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd ++ updateEnd, OpenBlock exitId [], finalState)
+
+-- | Whether an evaluated expression lowers to one result-discarding
+-- instruction. Later stages accept a dropped result only for these two.
+discardsItsOperation :: CoreExpression -> Bool
+discardsItsOperation expression = case expression of
+    CoreApply {} -> True
+    CoreClosure {} -> True
+    _ -> False
 
 jumpOpenBlocks :: Int -> [CorePrepBlock] -> [CorePrepBlock]
 jumpOpenBlocks target = map connect

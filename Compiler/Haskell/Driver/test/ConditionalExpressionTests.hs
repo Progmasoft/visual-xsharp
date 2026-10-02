@@ -723,6 +723,10 @@ corePrepTests =
     , ("every generated block id is unique", all blockIdsAreUnique (preparedFunctions allFormsSource))
     , ("every branch and jump target exists", all targetsExist (preparedFunctions allFormsSource))
     , ("CorePrep of the conditional forms survives its verifier", preparedVerifies)
+    , ("a discarded call stays one result-dropping instruction", discardedCallIsEvaluated)
+    , ("a discarded non-call value is computed into a temporary", discardedOperatorIsBound)
+    , ("a discarded division still executes", discardedDivisionIsBound)
+    , ("a conditional statement leaves no result-dropping copy", conditionalStatementHasNoEvaluate)
     ]
 
 preparedFunctions :: String -> [CorePrepFunction]
@@ -860,6 +864,36 @@ conditionalInLoopCondition =
             CorePrepJump target -> target < corePrepBlockId block
             _ -> False
      in branches blocks == 2 && length (filter backward blocks) == 1
+
+evaluations :: [CorePrepInstruction] -> [CorePrepOperation]
+evaluations instructions = [operation | CorePrepEvaluate operation <- instructions]
+
+discardedCallIsEvaluated :: Bool
+discardedCallIsEvaluated =
+    case evaluations (instructionsOf (body "_ = Countdown(left); return 0;")) of
+        [CorePrepCall {}] -> True
+        _ -> False
+
+-- `_ = !Countdown(left);` once reached later stages as a discarded bitwise
+-- instruction, which only calls and closure creations may be.
+discardedOperatorIsBound :: Bool
+discardedOperatorIsBound =
+    let instructions = instructionsOf (body "_ = !Countdown(left); return 0;")
+     in null (evaluations instructions)
+            && length [() | CorePrepBind _ _ _ (CorePrepPrimitive CoreBitwiseNot _) <- instructions] == 1
+            && length (filter isCall instructions) == 1
+
+discardedDivisionIsBound :: Bool
+discardedDivisionIsBound =
+    let instructions = instructionsOf (body "_ = 12 / left; return 0;")
+     in null (evaluations instructions)
+            && length [() | CorePrepBind _ _ _ (CorePrepPrimitive CoreDivide _) <- instructions] == 1
+
+conditionalStatementHasNoEvaluate :: Bool
+conditionalStatementHasNoEvaluate =
+    let blocks = blocksOf (body "flag ? Countdown(left) : 0; return 0;")
+        instructions = concatMap corePrepBlockInstructions blocks
+     in null (evaluations instructions) && branches blocks == 1 && length (filter isCall instructions) == 1
 
 blockIdsAreUnique :: CorePrepFunction -> Bool
 blockIdsAreUnique function =

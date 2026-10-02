@@ -710,6 +710,19 @@ namespace Visual::XSharp::Core::CorePrep
                     }
                     case Statement::Kind::Evaluate:
                     {
+                        // Only a call or a closure creation may be an
+                        // instruction whose result is dropped. Any other
+                        // value is computed into an ordinary temporary, so
+                        // its operands still run and may trap, and the
+                        // unused atom is ignored.
+                        if (statement.expression.kind != Expression::Kind::Apply
+                            && statement.expression.kind
+                                   != Expression::Kind::Closure)
+                        {
+                            static_cast<void>(
+                                Atomize(cursor, statement.expression));
+                            break;
+                        }
                         auto operation
                             = AtomizeOperation(cursor, statement.expression);
                         cursor.Emit(Prepared::Instruction{

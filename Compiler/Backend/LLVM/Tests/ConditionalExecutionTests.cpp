@@ -567,3 +567,61 @@ TEST_CASE("compound assignment lowering reads the target it writes",
                            expected);
     }
 }
+
+TEST_CASE("a discarded non-call value lowers through every stage",
+          "[llvm][conditional][execution]")
+{
+    // `_ = value;` evaluates an arbitrary expression and drops the result.
+    // Later stages accept a dropped result only from a call or a closure
+    // creation, so any other value has to be computed into a temporary.
+    // Each program below was rejected by the Xmm verifier before that.
+    const auto discard = [](Core::Expression value) {
+        return Core::Statement::Evaluate(std::move(value));
+    };
+    SECTION("an arithmetic primitive")
+    {
+        CheckBothPipelines({ Evaluate(4,
+                                      { discard(Binary(Core::Primitive::Divide,
+                                                       Integer(12),
+                                                       Value())),
+                                        SetTotal(Integer(3)) }) },
+                           3);
+    }
+    SECTION("a conditional expression")
+    {
+        CheckBothPipelines(
+            { Evaluate(
+                4,
+                { discard(Choose(
+                      Compare(Core::Primitive::GreaterThan,
+                              Value(),
+                              Integer(1)),
+                      Binary(Core::Primitive::Divide, Integer(12), Value()),
+                      Integer(0))),
+                  SetTotal(Integer(5)) }) },
+            5);
+    }
+    SECTION("a plain variable and a literal")
+    {
+        CheckBothPipelines({ Evaluate(4,
+                                      { discard(Value()),
+                                        discard(Integer(9)),
+                                        SetTotal(Integer(7)) }) },
+                           7);
+    }
+    SECTION("a comparison of a let-bound value")
+    {
+        CheckBothPipelines(
+            { Evaluate(4,
+                       { discard(Core::Expression::Let(
+                             { kLocal, U"subject" },
+                             Core::Type::int64(),
+                             Binary(Core::Primitive::Add, Value(), Integer(1)),
+                             Compare(Core::Primitive::GreaterThan,
+                                     Variable(kLocal, U"subject"),
+                                     Integer(3)),
+                             Core::Type::boolean())),
+                         SetTotal(Integer(11)) }) },
+            11);
+    }
+}
