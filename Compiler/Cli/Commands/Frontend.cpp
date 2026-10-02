@@ -59,6 +59,11 @@ namespace Visual::XSharp::Cli::Frontend
             std::optional<OutputKind> kind;
             std::vector<std::uint8_t> bytes;
             std::string error;
+            // Only the testing route sets this. It lets one CorePrep payload
+            // follow a Core payload; every other route keeps the
+            // single-payload contract.
+            bool acceptCorePrep{};
+            std::optional<std::vector<std::uint8_t>> corePrep;
         };
 
         auto
@@ -313,10 +318,26 @@ namespace Visual::XSharp::Cli::Frontend
                       const std::uint8_t *bytes,
                       std::size_t size) noexcept -> std::int32_t
         {
-            if (context == nullptr || rawKind > 3U
+            if (context == nullptr || rawKind > 4U
                 || (size != 0U && bytes == nullptr))
                 return 1;
             auto &captured = *static_cast<CapturedOutput *>(context);
+            if (static_cast<OutputKind>(rawKind) == OutputKind::CorePrepWire)
+            {
+                // CorePrep is accepted once, only after Core, and only on
+                // the route that asked for it.
+                if (!captured.acceptCorePrep
+                    || captured.kind != OutputKind::CoreWire
+                    || captured.corePrep.has_value()
+                    || size > kMaximumCoreBytes)
+                {
+                    captured.error = "frontend emitted an unexpected CorePrep "
+                                     "payload";
+                    return 1;
+                }
+                captured.corePrep.emplace(bytes, bytes + size);
+                return 0;
+            }
             if (captured.kind.has_value())
             {
                 captured.error
@@ -450,8 +471,39 @@ namespace Visual::XSharp::Cli::Frontend
                      {},
                      frontend.Error() };
         CapturedOutput output;
+        output.acceptCorePrep = true;
         const auto status
             = frontend.FuzzCompile(source.data(), source.size(), output);
         return MakeResult(status, std::move(output));
+    }
+
+    auto
+    FuzzCompileStages(std::span<const std::uint8_t> source) -> StageResult
+    {
+        auto &frontend = GetFrontend();
+        if (!frontend.IsReady())
+            return { { Status::InternalError,
+                       OutputKind::ErrorText,
+                       {},
+                       frontend.Error() },
+                     {} };
+        CapturedOutput output;
+        output.acceptCorePrep = true;
+        const auto status
+            = frontend.FuzzCompile(source.data(), source.size(), output);
+        auto corePrep = std::move(output.corePrep);
+        StageResult result{ MakeResult(status, std::move(output)), {} };
+        if (result.core.succeeded() && result.core.kind == OutputKind::CoreWire)
+        {
+            if (!corePrep)
+            {
+                result.core.status = Status::InternalError;
+                result.core.error
+                    = "frontend delivered Core without its CorePrep lowering";
+                return result;
+            }
+            result.corePrep = std::move(*corePrep);
+        }
+        return result;
     }
 } // namespace Visual::XSharp::Cli::Frontend

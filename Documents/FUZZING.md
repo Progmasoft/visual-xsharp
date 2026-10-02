@@ -38,6 +38,29 @@ subset; it is not an oracle for arbitrary Visual X#
 programs. Invalid source is a normal rejection, whereas internal failures and
 verified-model inconsistencies fail the campaign.
 
+### CorePrep parity
+
+The frontend lowers its optimized Core to CorePrep, and the native pipeline
+lowers the same Core again with its own adapter. Only the native result
+reaches Xpp, and both lowerings are well formed, so a divergence is a
+miscompile that no later verifier can see. Every source that the frontend
+accepts in `source_llvm_fuzzer`, `differential_fuzzer` and `source_fuzz_smoke`
+is therefore checked for parity: the testing entry of the frontend delivers
+the Core and CorePrep buffers of one compilation, the harness runs the native
+adapter on that Core, and the two CorePrep modules must be structurally equal.
+
+Both modules are compared in a canonical form. Reachable blocks are ordered
+depth first from the entry, true edge before false edge, and `$`-prefixed
+generated symbols are renamed in first-use order while keeping their kind.
+Source symbols, types, literals, operations, operand and instruction order,
+and edge roles are compared exactly; blocks unreachable from the entry are
+ignored. `Compiler/Fuzzing/Tests/coreprep_parity_tests` pins what the
+comparison may and may not ignore. Reintroducing the for-loop update defect
+makes the smoke fail in this check before any generated code runs.
+
+Parity proves that the two lowerings agree, not that either is correct. The
+executable oracle below remains the check against an independent expectation.
+
 Arbitrary source and generated arithmetic use separate corpora and equal
 per-target time budgets. This lets source mutations reach native lowering
 without repeatedly creating two ORC sessions for unrelated generated code.
@@ -213,6 +236,9 @@ The harnesses above are evidence about the inputs they ran, not proofs:
 - HPC feedback is expression-tick coverage of the frontend, without
   memory-safety instrumentation, and its mutator is byte- and token-level, not
   grammar-aware;
+- CorePrep parity only covers programs the mutators and the fixed smoke
+  sources reach. Closures and templates have no deterministic parity source
+  yet, and parity cannot detect a defect both lowerings share;
 - prebuilt LLVM and the GHC runtime are not instrumented by any campaign.
 
 Expand these deliberately instead of equating a green workflow with completion
