@@ -95,7 +95,10 @@ namespace Visual::XSharp::Core
             Apply,     ///< Function invocation.
             Primitive, ///< Built-in operation application.
             Closure,   ///< Anonymous function with explicit captures.
-            Let        ///< Lexical binding followed by a body expression.
+            Let,       ///< Lexical binding followed by a body expression.
+            /// Two-way selection that evaluates exactly one of two arms.
+            /// operands holds the test, the first arm and the second arm.
+            Conditional
         };
 
         /// Active expression category.
@@ -118,7 +121,8 @@ namespace Visual::XSharp::Core
         SymbolName letSymbol{};
         /// Binding type for the Let expression.
         Type letType{ Type::unit() };
-        /// Ordered call or primitive arguments.
+        /// Ordered call or primitive arguments; for Conditional, the test
+        /// followed by the first and the second arm.
         std::vector<Expression> operands;
         /// Lexical values captured by a closure.
         std::vector<Capture> captures;
@@ -185,6 +189,17 @@ namespace Visual::XSharp::Core
             Expression value,
             Expression body,
             Type resultType) -> Expression;
+        /// Construct a selection between two lazily evaluated arms.
+        /// @param test Value tested in Boolean context.
+        /// @param whenTrue Arm evaluated when the test is true.
+        /// @param whenFalse Arm evaluated when the test is false.
+        /// @param resultType Static type shared by both arms.
+        /// @return A Conditional expression owning the three children.
+        [[nodiscard]] static auto
+        Conditional(Expression test,
+                    Expression whenTrue,
+                    Expression whenFalse,
+                    Type resultType) -> Expression;
         /// Compare kind-specific payloads and their child expressions.
         /// @param other Expression to compare with this value.
         /// @return true when both trees have identical structure and types.

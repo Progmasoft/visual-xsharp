@@ -1,0 +1,1 @@
+class Program { public static int Evaluate(_ bool flag, _ int left) { int value = flag ? left : ; value += ; _ = ; value ??= 1; left() -= 2; return flag ? left ?: 1 : flag ? 2 ; } }

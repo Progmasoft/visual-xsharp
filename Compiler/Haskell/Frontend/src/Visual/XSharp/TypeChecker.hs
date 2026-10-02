@@ -511,6 +511,32 @@ checkStatementWith context environment expected loopDepth statement = case state
                     then []
                     else [problem spanValue "VXT0024" "increment or decrement target must have a numeric type"]
          in (IncrementStatement spanValue name targetType direction, environment, [], writableProblems ++ numericProblems)
+    CompoundAssignmentStatement spanValue operator name _ value ->
+        -- `target op= value` has the typing of `target = target op value`:
+        -- the operator rule is applied to the target type and the result
+        -- must be storable without a conversion.
+        let target = lookup (resolvedSymbol name) environment
+            targetType = maybe ErrorType fst target
+            operandExpected = if targetType == ErrorType then Nothing else Just targetType
+            (typedValue, valueType, problems) = checkExpressionExpectedWith context environment operandExpected value
+            immutable = case target of
+                Just (_, False) -> [problem spanValue "VXT0003" "cannot assign to an immutable binding"]
+                _ -> []
+            rule = binaryNumericRule operator targetType valueType
+            known = targetType /= ErrorType && valueType /= ErrorType
+            operatorProblems = if known then ruleProblems spanValue "VXT0012" rule else []
+            resultProblems =
+                if known && null operatorProblems && numericRuleType rule /= targetType
+                    then [problem spanValue "VXT0035" "compound assignment result does not have the target type"]
+                    else []
+         in ( CompoundAssignmentStatement spanValue operator name targetType typedValue
+            , environment
+            , []
+            , problems ++ immutable ++ operatorProblems ++ resultProblems
+            )
+    DiscardStatement spanValue value ->
+        let (typedValue, _, problems) = checkExpressionWith context environment value
+         in (DiscardStatement spanValue typedValue, environment, [], problems)
     BreakStatement spanValue value ->
         let (typedValue, _, valueProblems) = checkOptionalWith context environment value
             outsideProblems =
@@ -560,11 +586,15 @@ typedExpressionType expression = case expression of
     UnaryExpression _ _ _ valueType -> valueType
     BinaryExpression _ _ _ _ valueType -> valueType
     IsPatternExpression _ _ _ valueType -> valueType
+    ConditionalExpression _ _ _ _ valueType -> valueType
+    CoalesceExpression _ _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
 effectCapable :: Expression name annotation -> Bool
 effectCapable CallExpression {} = True
 effectCapable (IsPatternExpression _ subject _ _) = effectCapable subject
+effectCapable (ConditionalExpression _ condition first second _) = any effectCapable [condition, first, second]
+effectCapable (CoalesceExpression _ left fallback _) = effectCapable left || effectCapable fallback
 effectCapable CallableExpression {} = False
 effectCapable _ = False
 
@@ -671,6 +701,35 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , boolType
             , subjectProblems ++ patternProblems
             )
+    ConditionalExpression spanValue condition first second _ ->
+        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+            conditionMismatch =
+                [ problem (sourceSpanOf condition) "VXT0036" "conditional test must be bool or numeric"
+                | conditionType /= ErrorType
+                , not (booleanContextType conditionType)
+                ]
+            ((typedFirst, firstType, firstProblems), (typedSecond, secondType, secondProblems)) =
+                checkOperandPair context environment expected first second
+            (resultType, resultProblems) =
+                selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
+         in ( ConditionalExpression spanValue typedCondition typedFirst typedSecond resultType
+            , resultType
+            , conditionProblems ++ conditionMismatch ++ firstProblems ++ secondProblems ++ resultProblems
+            )
+    CoalesceExpression spanValue left fallback _ ->
+        let ((typedLeft, leftType, leftProblems), (typedFallback, fallbackType, fallbackProblems)) =
+                checkOperandPair context environment expected left fallback
+            (resultType, resultProblems) =
+                selectedValueType
+                    spanValue
+                    "VXT0038"
+                    "truthy coalescing operands must have the same type"
+                    leftType
+                    fallbackType
+         in ( CoalesceExpression spanValue typedLeft typedFallback resultType
+            , resultType
+            , leftProblems ++ fallbackProblems ++ resultProblems
+            )
     CallableExpression spanValue explicit captures parameters body _ ->
         let checkedCaptures = checkCapturesWith context environment captures
             captureEnvironment =
@@ -697,6 +756,61 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , callableType
             , captureProblems ++ parameterProblems ++ bodyProblems
             )
+
+{- | Check the two value operands of a conditional form exactly once each.
+
+An operand made only of untyped numeric literals takes its type from the
+other operand, in either direction, so @flag ? 1 : wide@ selects the type of
+@wide@ just as @flag ? wide : 1@ does. The order is chosen from syntax
+before either operand is checked; checking an operand twice would make the
+cost exponential in the nesting depth of chained conditionals.
+-}
+checkOperandPair ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Maybe Type ->
+    Expression ResolvedName () ->
+    Expression ResolvedName () ->
+    ( (Expression ResolvedName Type, Type, [Diagnostic])
+    , (Expression ResolvedName Type, Type, [Diagnostic])
+    )
+checkOperandPair context environment expected first second
+    | expected == Nothing && takesContextualType first && not (takesContextualType second) =
+        let secondResult@(_, secondType, _) = checkExpressionWith context environment second
+         in (checkExpressionExpectedWith context environment (contextFrom secondType) first, secondResult)
+    | otherwise =
+        let firstResult@(_, firstType, _) = checkExpressionExpectedWith context environment expected first
+            secondExpected = maybe (contextFrom firstType) Just expected
+         in (firstResult, checkExpressionExpectedWith context environment secondExpected second)
+    where
+        contextFrom valueType = if valueType == ErrorType then Nothing else Just valueType
+
+-- | Whether an expression consists only of numeric literals and arithmetic.
+takesContextualType :: Expression name annotation -> Bool
+takesContextualType expression = case expression of
+    LiteralExpression _ (IntegerLiteral _) _ -> True
+    LiteralExpression _ (FloatingLiteral _) _ -> True
+    UnaryExpression _ operator value _ -> operator /= LogicalNot && takesContextualType value
+    BinaryExpression _ operator left right _ ->
+        not (booleanResult operator) && takesContextualType left && takesContextualType right
+    _ -> False
+
+{- | Result type shared by the two value operands of a conditional form.
+
+The result is materialized in one storage slot, so both operands must have
+the same type. Only bool and numeric results are lowered today; owned values
+need move and release rules for the slot that the backend does not have yet.
+-}
+selectedValueType :: SourceSpan -> String -> String -> Type -> Type -> (Type, [Diagnostic])
+selectedValueType spanValue mismatchCode mismatchMessage firstType secondType
+    | firstType == ErrorType = (secondType, [])
+    | secondType == ErrorType = (firstType, [])
+    | firstType /= secondType = (firstType, [problem spanValue mismatchCode mismatchMessage])
+    | not (booleanContextType firstType) =
+        ( firstType
+        , [problem spanValue "VXT0039" "conditional expressions currently support only bool and numeric results"]
+        )
+    | otherwise = (firstType, [])
 
 checkOrdinaryCall ::
     TemplateContext ->
@@ -798,6 +912,8 @@ sourceSpanOf expression = case expression of
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue
     IsPatternExpression spanValue _ _ _ -> spanValue
+    ConditionalExpression spanValue _ _ _ _ -> spanValue
+    CoalesceExpression spanValue _ _ _ -> spanValue
     CallableExpression spanValue _ _ _ _ _ -> spanValue
 
 checkMemberOverloadCall ::

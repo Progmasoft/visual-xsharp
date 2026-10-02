@@ -536,6 +536,8 @@ statementCalls statement = case statement of
             ++ blockCalls body
     ForEachStatement _ _ _ _ _ source body -> expressionCalls source ++ blockCalls body
     IncrementStatement {} -> []
+    CompoundAssignmentStatement _ _ _ _ value -> expressionCalls value
+    DiscardStatement _ value -> expressionCalls value
     BreakStatement _ value -> maybe [] expressionCalls value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionCalls value
@@ -550,6 +552,8 @@ expressionCalls expression = case expression of
     UnaryExpression _ _ value _ -> expressionCalls value
     BinaryExpression _ _ left right _ -> expressionCalls left ++ expressionCalls right
     IsPatternExpression _ subject _ _ -> expressionCalls subject
+    ConditionalExpression _ condition whenTrue whenFalse _ -> concatMap expressionCalls [condition, whenTrue, whenFalse]
+    CoalesceExpression _ left fallback _ -> expressionCalls left ++ expressionCalls fallback
     CallableExpression _ _ _ _ body _ -> callableBodyCalls body
     where
         isCall CallExpression {} = True
@@ -583,6 +587,7 @@ expressionTargets expression = case expression of
     CoreApply callee arguments _ -> calledTarget callee ++ expressionTargets callee ++ concatMap expressionTargets arguments
     CorePrimitive _ arguments _ -> concatMap expressionTargets arguments
     CoreLet _ _ value body _ -> expressionTargets value ++ expressionTargets body
+    CoreConditional condition whenTrue whenFalse _ -> concatMap expressionTargets [condition, whenTrue, whenFalse]
     CoreClosure _ _ _ statements _ -> concatMap statementTargets statements
     where
         calledTarget (CoreVariable name _) = [name]

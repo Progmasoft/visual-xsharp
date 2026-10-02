@@ -538,6 +538,8 @@ statementTypes statement = case statement of
             ++ blockTypes body
     ForEachStatement _ _ _ _ annotation source body -> annotation : expressionTypes source ++ blockTypes body
     IncrementStatement _ _ annotation _ -> [annotation]
+    CompoundAssignmentStatement _ _ _ annotation value -> annotation : expressionTypes value
+    DiscardStatement _ value -> expressionTypes value
     BreakStatement _ value -> maybe [] expressionTypes value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionTypes value
@@ -553,6 +555,10 @@ expressionTypes expression = case expression of
     BinaryExpression _ _ left right annotation -> annotation : expressionTypes left ++ expressionTypes right
     IsPatternExpression _ subject patternValue annotation ->
         annotation : expressionTypes subject ++ patternTypes patternValue
+    ConditionalExpression _ condition whenTrue whenFalse annotation ->
+        annotation : concatMap expressionTypes [condition, whenTrue, whenFalse]
+    CoalesceExpression _ left fallback annotation ->
+        annotation : expressionTypes left ++ expressionTypes fallback
     CallableExpression _ _ captures parameters body annotation ->
         annotation
             : concatMap captureTypes captures

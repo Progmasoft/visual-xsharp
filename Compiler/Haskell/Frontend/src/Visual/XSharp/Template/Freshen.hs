@@ -184,6 +184,12 @@ freshStatement statement = case statement of
         pure (ForEachStatement spanValue kind syntax closedName closedAnnotation closedSource closedBody)
     IncrementStatement spanValue name annotation direction ->
         IncrementStatement spanValue <$> freshReference name <*> freshType annotation <*> pure direction
+    CompoundAssignmentStatement spanValue operator name annotation value ->
+        CompoundAssignmentStatement spanValue operator
+            <$> freshReference name
+            <*> freshType annotation
+            <*> freshExpression value
+    DiscardStatement spanValue value -> DiscardStatement spanValue <$> freshExpression value
     BreakStatement spanValue value -> BreakStatement spanValue <$> traverse freshExpression value
     ContinueStatement spanValue -> pure (ContinueStatement spanValue)
     ExpressionStatement spanValue value terminated ->
@@ -213,6 +219,17 @@ freshExpression expression = case expression of
         IsPatternExpression spanValue
             <$> freshExpression subject
             <*> freshPattern patternValue
+            <*> freshType annotation
+    ConditionalExpression spanValue condition first second annotation ->
+        ConditionalExpression spanValue
+            <$> freshExpression condition
+            <*> freshExpression first
+            <*> freshExpression second
+            <*> freshType annotation
+    CoalesceExpression spanValue left fallback annotation ->
+        CoalesceExpression spanValue
+            <$> freshExpression left
+            <*> freshExpression fallback
             <*> freshType annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse freshCaptureDefinition captures
@@ -310,6 +327,9 @@ statementSymbols statement = case statement of
     ForEachStatement _ _ _ name annotation source body ->
         nameSymbol name : typeSymbols annotation ++ expressionSymbols source ++ blockSymbols body
     IncrementStatement _ name annotation _ -> nameSymbol name : typeSymbols annotation
+    CompoundAssignmentStatement _ _ name annotation value ->
+        nameSymbol name : typeSymbols annotation ++ expressionSymbols value
+    DiscardStatement _ value -> expressionSymbols value
     BreakStatement _ value -> maybe [] expressionSymbols value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionSymbols value
@@ -326,6 +346,10 @@ expressionSymbols expression = case expression of
         expressionSymbols left ++ expressionSymbols right ++ typeSymbols annotation
     IsPatternExpression _ subject patternValue annotation ->
         expressionSymbols subject ++ patternSymbols patternValue ++ typeSymbols annotation
+    ConditionalExpression _ condition first second annotation ->
+        concatMap expressionSymbols [condition, first, second] ++ typeSymbols annotation
+    CoalesceExpression _ left fallback annotation ->
+        expressionSymbols left ++ expressionSymbols fallback ++ typeSymbols annotation
     CallableExpression _ _ captures parameters body annotation ->
         concatMap captureSymbols captures
             ++ concatMap parameterSymbols parameters

@@ -106,6 +106,14 @@ data CoreExpression
 
       -- | Bind one expression result before evaluating the continuation.
       CoreLet ResolvedName Type CoreExpression CoreExpression Type
+    | {- | Conditional expression: test the condition in Boolean context, then
+      evaluate exactly one of the two arms and yield its value. The arm that
+      is not selected is never evaluated, so its calls, failures and
+      non-termination do not happen. Both arms have the result type. This is
+      the Core form of source @condition ? first : second@ and, combined
+      with 'CoreLet', of @left ?: fallback@.
+      -}
+      CoreConditional CoreExpression CoreExpression CoreExpression Type
     | -- | Closure with captures, parameters, body, and callable type.
       CoreClosure
         [CoreCapture]
@@ -210,4 +218,5 @@ expressionType expression = case expression of
     CoreApply _ _ value -> value
     CorePrimitive _ _ value -> value
     CoreLet _ _ _ _ value -> value
+    CoreConditional _ _ _ value -> value
     CoreClosure _ _ _ _ value -> value

@@ -38,7 +38,10 @@ The Haskell package exposes separate modules for:
 - pipeline diagnostics and orchestration.
 
 The current language slice covers namespace and class declarations, member methods, typed and inferred local bindings,
-assignments, calls, returns, conditionals, core operator precedence, entry-point validation, and basic CorePrep control flow.
+assignments, compound assignments, the discard statement, calls, returns, conditionals, conditional and truthy-coalescing
+expressions over `bool` and numeric values, core operator precedence, entry-point validation, and basic CorePrep control flow.
+Assignment is a statement: the value-producing forms `a = b = 10` and `(value += 5)`, null coalescing `??`, and `??=` are not
+implemented.
 It does not yet implement the complete language catalog in `Spec/`.
 
 Core optimization is connected, verifier-guarded, and fixed-point driven. It performs immutable literal propagation,

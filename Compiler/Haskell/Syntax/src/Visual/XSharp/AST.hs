@@ -255,6 +255,13 @@ data Statement name annotation
         (Expression name annotation)
         (Block name annotation)
     | IncrementStatement SourceSpan name annotation Bool
+    | -- @target op= value@ reads and writes one named storage location. The
+      -- annotation is the target type; the operator is the binary operation
+      -- whose result is stored back.
+      CompoundAssignmentStatement SourceSpan BinaryOperator name annotation (Expression name annotation)
+    | -- @_ = value;@ evaluates its operand and drops the result. It is a
+      -- statement of its own, not an assignment to a binding named @_@.
+      DiscardStatement SourceSpan (Expression name annotation)
     | BreakStatement SourceSpan (Maybe (Expression name annotation))
     | ContinueStatement SourceSpan
     | ExpressionStatement SourceSpan (Expression name annotation) Bool
@@ -272,6 +279,17 @@ data Expression name annotation
     | UnaryExpression SourceSpan UnaryOperator (Expression name annotation) annotation
     | BinaryExpression SourceSpan BinaryOperator (Expression name annotation) (Expression name annotation) annotation
     | IsPatternExpression SourceSpan (Expression name annotation) (Pattern name annotation) annotation
+    | -- @condition ? first : second@ evaluates exactly one arm.
+      ConditionalExpression
+        SourceSpan
+        (Expression name annotation)
+        (Expression name annotation)
+        (Expression name annotation)
+        annotation
+    | -- @left ?: fallback@ yields the left value when it is true in Boolean
+      -- context and evaluates the fallback only otherwise. The left operand
+      -- is evaluated once.
+      CoalesceExpression SourceSpan (Expression name annotation) (Expression name annotation) annotation
     | CallableExpression
         SourceSpan
         Bool

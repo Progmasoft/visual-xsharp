@@ -295,6 +295,74 @@ namespace Visual::XSharp::Core::CorePrep
             return Prepared::Atom::variable(std::move(result), Type::boolean());
         }
 
+        [[nodiscard]] auto
+        IsConditional(const Expression &expression) -> bool
+        {
+            return expression.kind == Expression::Kind::Conditional
+                   && expression.operands.size() == 3U;
+        }
+
+        /**
+         * @brief Lower a conditional expression to a branch over a slot.
+         *
+         * Exactly one arm is evaluated. The result slot is bound before
+         * the branch with the neutral literal of its type and each arm
+         * overwrites it on its own path, so the join block reads an
+         * initialized value from either predecessor without a phi node.
+         * The neutral value is never observable: no path reaches the join
+         * without passing through one of the two assignments.
+         *
+         * The symbol and block allocation order matches the Haskell
+         * CorePrep lowering.
+         */
+        [[nodiscard]] auto
+        AtomizeConditional(Cursor &cursor, const Expression &expression)
+            -> Prepared::Atom
+        {
+            auto condition
+                = Booleanize(cursor, Atomize(cursor, expression.operands[0]));
+            auto result = cursor.Temporary(U"$conditional");
+            cursor.Emit(Prepared::Instruction{
+                Prepared::Instruction::Kind::Bind,
+                result,
+                expression.type,
+                true,
+                Prepared::Operation::Copy,
+                { expression.type == Type::boolean()
+                      ? Prepared::Atom::constant(Prepared::Literal{ false },
+                                                 Type::boolean())
+                      : ZeroForBooleanContext(expression.type) },
+                {},
+                {},
+            });
+            const auto trueId = cursor.state.nextBlock;
+            const auto falseId = trueId + 1U;
+            const auto joinId = falseId + 1U;
+            cursor.state.nextBlock = joinId + 1U;
+            cursor.Branch(std::move(condition), trueId, falseId);
+
+            const auto prepareArm
+                = [&](const Prepared::BlockId armId, const Expression &arm) {
+                      cursor.Open(armId);
+                      auto value = Atomize(cursor, arm);
+                      cursor.Emit(Prepared::Instruction{
+                          Prepared::Instruction::Kind::Assign,
+                          result,
+                          expression.type,
+                          false,
+                          Prepared::Operation::Copy,
+                          { std::move(value) },
+                          {},
+                          {},
+                      });
+                      cursor.Jump(joinId);
+                  };
+            prepareArm(trueId, expression.operands[1]);
+            prepareArm(falseId, expression.operands[2]);
+            cursor.Open(joinId);
+            return Prepared::Atom::variable(std::move(result), expression.type);
+        }
+
         struct PreparedFunctionResult final
         {
             Prepared::Function function;
@@ -415,7 +483,7 @@ namespace Visual::XSharp::Core::CorePrep
             -> OperationResult
         {
             if (expression.kind == Expression::Kind::Let
-                || IsShortCircuit(expression))
+                || IsShortCircuit(expression) || IsConditional(expression))
                 return { Prepared::Operation::Copy,
                          { Atomize(cursor, expression) },
                          {},
@@ -497,20 +565,31 @@ namespace Visual::XSharp::Core::CorePrep
             {
                 if (!expression.letValue || !expression.letBody)
                     std::abort();
-                auto value = Atomize(cursor, *expression.letValue);
+                // The bound value keeps its own operation, as in the
+                // Haskell lowering; an intermediate temporary would make
+                // the two adapters disagree on every non-atomic value.
+                auto value = AtomizeOperation(cursor, *expression.letValue);
                 cursor.Emit(
                     Prepared::Instruction{ Prepared::Instruction::Kind::Bind,
                                            expression.letSymbol,
                                            expression.letType,
                                            false,
-                                           Prepared::Operation::Copy,
-                                           { std::move(value) },
-                                           {},
-                                           {} });
+                                           value.operation,
+                                           std::move(value.operands),
+                                           std::move(value.closureFunction),
+                                           std::move(value.captures) });
                 return Atomize(cursor, *expression.letBody);
             }
             if (IsShortCircuit(expression))
                 return AtomizeShortCircuit(cursor, expression);
+            if (expression.kind == Expression::Kind::Conditional)
+            {
+                // Core verification requires three operands, but keep this
+                // total for direct native API callers as well.
+                if (!IsConditional(expression))
+                    std::abort();
+                return AtomizeConditional(cursor, expression);
+            }
 
             auto operation = AtomizeOperation(cursor, expression);
             auto temporary = cursor.Temporary(U"$coreprep");
@@ -631,6 +710,19 @@ namespace Visual::XSharp::Core::CorePrep
                     }
                     case Statement::Kind::Evaluate:
                     {
+                        // Only a call may be an instruction whose result is
+                        // dropped: the record has no result type on the
+                        // wire, and a reader recovers it from the callee.
+                        // Any other value is computed into an ordinary
+                        // temporary, so its operands still run and may
+                        // trap, and the unused atom is ignored.
+                        if (statement.expression.kind
+                            != Expression::Kind::Apply)
+                        {
+                            static_cast<void>(
+                                Atomize(cursor, statement.expression));
+                            break;
+                        }
                         auto operation
                             = AtomizeOperation(cursor, statement.expression);
                         cursor.Emit(Prepared::Instruction{

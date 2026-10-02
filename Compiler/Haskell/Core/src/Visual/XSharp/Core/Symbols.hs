@@ -69,6 +69,8 @@ coreExpressionSymbols expression = case expression of
     CorePrimitive _ arguments _ -> concatMap coreExpressionSymbols arguments
     CoreLet name _ value body _ ->
         name : coreExpressionSymbols value ++ coreExpressionSymbols body
+    CoreConditional condition whenTrue whenFalse _ ->
+        coreExpressionSymbols condition ++ coreExpressionSymbols whenTrue ++ coreExpressionSymbols whenFalse
     CoreClosure captures parameters _ body _ ->
         map coreCaptureName captures
             ++ map fst parameters

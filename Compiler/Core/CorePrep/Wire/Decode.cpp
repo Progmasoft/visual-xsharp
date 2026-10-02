@@ -551,6 +551,18 @@ namespace visual_xsharp::core::wire
                         break;
                     case Instruction::Kind::Evaluate:
                         operation(value);
+                        // The record carries no result type. A discarded
+                        // call still produces its callee's result, and Xpp
+                        // checks that type against the signature, so it is
+                        // recovered from the callee atom rather than left
+                        // as Unit.
+                        if (value.operation == Operation::Call
+                            && !value.operands.empty()
+                            && value.operands.front().type.kind
+                                   == Type::Kind::Function
+                            && !value.operands.front().type.components.empty())
+                            value.type
+                                = value.operands.front().type.components.back();
                         break;
                 }
                 return value;
