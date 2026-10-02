@@ -242,7 +242,10 @@ the verified structure and materializes loop headers, exits, latches, and the
 distinct `for` update block.
 
 The Haskell CorePrep lowering and the native Core-to-CorePrep adapter must
-build the same loop shape:
+build the same program. The source fuzz harness enforces this for every
+accepted source by comparing both lowerings of one compilation in a canonical
+form; see [Fuzzing](FUZZING.md#coreprep-parity). In particular they must build
+the same loop shape:
 
 - a `while` or `for` condition owns a dedicated header block. The statements
   that precede the loop stay in the incoming block, which jumps to the header

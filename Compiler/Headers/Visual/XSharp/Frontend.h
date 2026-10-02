@@ -41,7 +41,9 @@ extern "C"
         /** Structured diagnostics encoded by the diagnostic wire protocol. */
         VXS_FRONTEND_DIAGNOSTIC_WIRE = 2,
         /** Human-readable UTF-8 failure text. */
-        VXS_FRONTEND_ERROR_TEXT = 3
+        VXS_FRONTEND_ERROR_TEXT = 3,
+        /** The frontend's own CorePrep lowering; testing entries only. */
+        VXS_FRONTEND_COREPREP_WIRE = 4
     };
 
     /** @brief Stable result codes returned by frontend ABI entry points. */
@@ -139,16 +141,21 @@ extern "C"
                              const uint8_t *source,
                              size_t source_size);
 
-    /** @brief Parse and compile a source fuzz input, delivering verified Core.
+    /** @brief Parse and compile a source fuzz input, delivering verified Core
+     * and the frontend's CorePrep lowering of that Core.
      *
      * Lexical, syntax, and semantic diagnostics are expected for arbitrary fuzz
-     * bytes. The native consumer receives Core only through @p output.
+     * bytes. On success this testing entry invokes @p output twice: first with
+     * `VXS_FRONTEND_CORE_WIRE`, then with `VXS_FRONTEND_COREPREP_WIRE`. Both
+     * buffers come from one compilation, so a harness can compare the native
+     * Core-to-CorePrep adapter with the frontend's lowering. Every other entry
+     * point delivers exactly one buffer and never emits CorePrep.
      * @param source Candidate source bytes; malformed UTF-8 is permitted.
      * @param source_size Number of bytes in @p source.
-     * @param output Synchronous receiver for a successful Core wire buffer.
+     * @param output Synchronous receiver for the Core and CorePrep buffers.
      * @param context Opaque state passed to @p output.
-     * @return `VXS_FRONTEND_DIAGNOSTICS` for rejected source, zero on Core
-     * output, or a negative value for an internal/ABI failure.
+     * @return `VXS_FRONTEND_DIAGNOSTICS` for rejected source, zero when both
+     * buffers were delivered, or another `vxs_frontend_status` on failure.
      */
     int32_t
     vxs_frontend_fuzz_compile(const uint8_t *source,
