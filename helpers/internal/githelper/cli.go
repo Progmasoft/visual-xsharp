@@ -67,8 +67,9 @@ index before and after staging. The commit message is the argument or the
 content of --message-file. The push never forces.
 
 When a co-author is configured, its Co-Authored-By trailer is added only to a
-commit that changes documentation alone or helpers/ alone; a commit that
-contains code never carries it.`,
+commit that contains no code. Code is programming-language source such as
+C++, Haskell, C#, Kotlin or TypeScript; documentation, configuration and the
+Go helpers under helpers/ are not.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: inRepository(func(_ *cobra.Command, arguments []string) error {
 			message, err := resolveMessage(arguments, messageFile)

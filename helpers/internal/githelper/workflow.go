@@ -15,7 +15,7 @@ type updateOptions struct {
 	// rule may add.
 	message string
 	// coAuthor is "Name <address>". When set, a Co-Authored-By trailer is
-	// added only to a documentation-only or helpers-only commit.
+	// added only to a commit that contains no code.
 	coAuthor string
 	// dryRun reports what would be committed and changes nothing.
 	dryRun bool
@@ -112,10 +112,10 @@ func reportTrailer(output io.Writer, coAuthor string, scope commitScope) {
 	if coAuthor == "" {
 		return
 	}
-	if scope == scopeDocumentation || scope == scopeHelpers {
-		fmt.Fprintf(output, "co-author trailer added: the commit is %s\n", scope)
+	if scope == scopeWithoutCode {
+		fmt.Fprintln(output, "co-author trailer added: the commit contains no code")
 	} else {
-		fmt.Fprintf(output, "co-author trailer withheld: the commit contains %s\n", scope)
+		fmt.Fprintln(output, "co-author trailer withheld: the commit contains code")
 	}
 }
 

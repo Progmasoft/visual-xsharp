@@ -91,25 +91,30 @@ func exitCode(err error) int {
 	return -1
 }
 
-func TestClassifyAppliesTheTrailerRuleClasses(t *testing.T) {
+func TestClassifyTreatsOnlyLanguageSourceOutsideHelpersAsCode(t *testing.T) {
 	cases := []struct {
 		paths []string
 		want  commitScope
 	}{
 		{nil, scopeEmpty},
-		{[]string{"Documents/CORE-IR.md", "README.md", "CHANGELOG.md"}, scopeDocumentation},
-		{[]string{"Documents/Images/diagram.svg"}, scopeDocumentation},
-		{[]string{"helpers/internal/githelper/cli.go", "helpers/go.mod"}, scopeHelpers},
-		{[]string{"helpers/README.md"}, scopeHelpers},
+		{[]string{"Documents/CORE-IR.md", "README.md", "CHANGELOG.md"}, scopeWithoutCode},
+		{[]string{"helpers/internal/githelper/cli.go", "helpers/go.mod"}, scopeWithoutCode},
+		{[]string{"helpers/cmd/githelper/main.go", "Documents/BUILDING.md"}, scopeWithoutCode},
+		{[]string{".github/workflows/ci.yml", "justfile", "MODULE.bazel", "Compiler/Core/BUILD.bazel"}, scopeWithoutCode},
+		{[]string{"Compiler/Fuzzing/Corpus/differential/arithmetic.seed", "fourmolu.yaml"}, scopeWithoutCode},
 		{[]string{"Compiler/Core/IR.cpp"}, scopeCode},
+		{[]string{"Compiler/Headers/Visual/XSharp/Core/IR.hpp"}, scopeCode},
+		{[]string{"Compiler/Haskell/Core/src/Visual/XSharp/Core.hs"}, scopeCode},
+		{[]string{"Tools/Example.cs"}, scopeCode},
+		{[]string{"xide/modules/app/Main.kt"}, scopeCode},
+		{[]string{"build.gradle.kts"}, scopeCode},
+		{[]string{"Analyzer/client/extension.ts"}, scopeCode},
+		{[]string{"Spec/Language/Operators.vxs"}, scopeCode},
+		{[]string{"tools/other/main.go"}, scopeCode},
+		{[]string{"Compiler/Core/IR.CPP"}, scopeCode},
+		// One code file decides, whatever accompanies it.
 		{[]string{"Documents/CORE-IR.md", "Compiler/Core/IR.cpp"}, scopeCode},
 		{[]string{"helpers/cmd/githelper/main.go", "Compiler/Core/IR.cpp"}, scopeCode},
-		// Neither class alone: the rule names each class separately.
-		{[]string{"helpers/cmd/githelper/main.go", "Documents/BUILDING.md"}, scopeCode},
-		// Normative language examples and build files are not documentation.
-		{[]string{"Spec/Language/Operators.vxs"}, scopeCode},
-		{[]string{".github/workflows/ci.yml"}, scopeCode},
-		{[]string{"justfile"}, scopeCode},
 	}
 	for _, test := range cases {
 		if actual := classify(test.paths); actual != test.want {
@@ -118,21 +123,18 @@ func TestClassifyAppliesTheTrailerRuleClasses(t *testing.T) {
 	}
 }
 
-func TestComposeMessageAddsTheTrailerOnlyForItsClasses(t *testing.T) {
+func TestComposeMessageAddsTheTrailerOnlyWithoutCode(t *testing.T) {
 	const author = "Example Author <author@example.invalid>"
 	const trailer = "Co-Authored-By: " + author
 	body := "Subject\n\nBody text."
 
-	for _, scope := range []commitScope{scopeDocumentation, scopeHelpers} {
-		message := composeMessage(body, author, scope)
-		if message != body+"\n\n"+trailer+"\n" {
-			t.Errorf("%v message = %q", scope, message)
-		}
+	if message := composeMessage(body, author, scopeWithoutCode); message != body+"\n\n"+trailer+"\n" {
+		t.Errorf("message without code = %q", message)
 	}
 	if message := composeMessage(body, author, scopeCode); message != body+"\n" {
 		t.Errorf("code message = %q", message)
 	}
-	if message := composeMessage(body, "", scopeHelpers); message != body+"\n" {
+	if message := composeMessage(body, "", scopeWithoutCode); message != body+"\n" {
 		t.Errorf("message without a configured co-author = %q", message)
 	}
 }
@@ -145,7 +147,7 @@ func TestComposeMessageNeverKeepsOrDuplicatesAWrittenTrailer(t *testing.T) {
 	if message := composeMessage(written, author, scopeCode); strings.Contains(message, trailer) {
 		t.Errorf("a code commit kept the trailer: %q", message)
 	}
-	message := composeMessage(written, author, scopeDocumentation)
+	message := composeMessage(written, author, scopeWithoutCode)
 	if strings.Count(message, trailer) != 1 || strings.Contains(message, "\r") {
 		t.Errorf("documentation message = %q", message)
 	}
@@ -331,7 +333,7 @@ func TestUpdateDryRunChangesNothing(t *testing.T) {
 	if len(git.runs) != 0 {
 		t.Fatalf("a dry run issued commands: %#v", git.runs)
 	}
-	for _, expected := range []string{"4 staged path(s), documentation only", "Documents/A.md", "Documents/B.md", "co-author trailer added", "dry run"} {
+	for _, expected := range []string{"4 staged path(s), no code", "Documents/A.md", "Documents/B.md", "co-author trailer added", "dry run"} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("output lacks %q:\n%s", expected, output)
 		}

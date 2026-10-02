@@ -10,18 +10,18 @@ import (
 	"strings"
 )
 
-// commitScope classifies what one commit touches. The classes decide whether
+// commitScope classifies what one commit touches. The class decides whether
 // a configured co-author trailer applies.
 type commitScope int
 
 const (
 	// scopeEmpty has no staged path.
 	scopeEmpty commitScope = iota
-	// scopeDocumentation changes documentation files only.
-	scopeDocumentation
-	// scopeHelpers changes files under helpers/ only.
-	scopeHelpers
-	// scopeCode changes anything else, alone or mixed with the other classes.
+	// scopeWithoutCode changes no programming-language source outside
+	// helpers/: documentation, the Go helpers, configuration, data.
+	scopeWithoutCode
+	// scopeCode changes at least one programming-language source file
+	// outside helpers/, alone or together with anything else.
 	scopeCode
 )
 
@@ -29,58 +29,52 @@ func (scope commitScope) String() string {
 	switch scope {
 	case scopeEmpty:
 		return "nothing"
-	case scopeDocumentation:
-		return "documentation only"
-	case scopeHelpers:
-		return "helpers only"
+	case scopeWithoutCode:
+		return "no code"
 	default:
 		return "code"
 	}
 }
 
-var documentationExtensions = map[string]struct{}{".md": {}, ".markdown": {}, ".rst": {}, ".adoc": {}}
-
-// isDocumentation reports whether a repository path is prose documentation:
-// anything under Documents/, or a documentation file format anywhere else.
-// Language examples under Spec/ are normative source, not documentation.
-func isDocumentation(repositoryPath string) bool {
-	if strings.HasPrefix(repositoryPath, "Documents/") {
-		return true
-	}
-	_, known := documentationExtensions[strings.ToLower(path.Ext(repositoryPath))]
-	return known
+// codeExtensions are the source files of programming languages. A file with
+// one of these extensions is code wherever it lives, except the Go helpers.
+var codeExtensions = map[string]struct{}{
+	".c": {}, ".h": {}, ".cc": {}, ".cpp": {}, ".cxx": {}, ".hh": {}, ".hpp": {}, ".hxx": {}, ".inc": {}, ".ipp": {},
+	".m": {}, ".mm": {}, ".hs": {}, ".lhs": {}, ".cs": {}, ".fs": {}, ".vb": {}, ".kt": {}, ".kts": {},
+	".java": {}, ".groovy": {}, ".gradle": {}, ".scala": {}, ".ts": {}, ".tsx": {}, ".mts": {}, ".cts": {},
+	".js": {}, ".jsx": {}, ".mjs": {}, ".cjs": {}, ".go": {}, ".rs": {}, ".swift": {}, ".py": {}, ".rb": {},
+	".lua": {}, ".php": {}, ".vxs": {}, ".ll": {}, ".s": {}, ".asm": {}, ".sh": {}, ".bash": {}, ".ps1": {},
+	".psm1": {}, ".bat": {}, ".cmd": {},
 }
 
 func isHelper(repositoryPath string) bool {
 	return strings.HasPrefix(repositoryPath, "helpers/")
 }
 
-// classify returns the scope of a set of staged paths. A commit that mixes
-// documentation with helpers is neither class alone and counts as code, so a
-// trailer is only ever added to a commit of exactly one of the two classes.
+// isCode reports whether a repository path is programming-language source
+// that counts as code for the co-author rule. Everything under helpers/ is
+// exempt: the Go helpers are the one place where source may carry the
+// trailer.
+func isCode(repositoryPath string) bool {
+	if isHelper(repositoryPath) {
+		return false
+	}
+	_, known := codeExtensions[strings.ToLower(path.Ext(repositoryPath))]
+	return known
+}
+
+// classify returns the scope of a set of staged paths: code as soon as one
+// path is code, whatever else the commit contains.
 func classify(paths []string) commitScope {
 	if len(paths) == 0 {
 		return scopeEmpty
 	}
-	documentation, helpers := 0, 0
 	for _, stagedPath := range paths {
-		switch {
-		case isHelper(stagedPath):
-			helpers++
-		case isDocumentation(stagedPath):
-			documentation++
-		default:
+		if isCode(stagedPath) {
 			return scopeCode
 		}
 	}
-	switch {
-	case helpers == len(paths):
-		return scopeHelpers
-	case documentation == len(paths):
-		return scopeDocumentation
-	default:
-		return scopeCode
-	}
+	return scopeWithoutCode
 }
 
 // stagedPaths lists every path the index changes relative to HEAD, including
@@ -122,10 +116,10 @@ func describeScope(paths []string) string {
 const coAuthorTrailer = "Co-Authored-By: "
 
 // composeMessage returns the commit message with the co-author trailer
-// applied or withheld according to the scope rule: the trailer belongs only
-// on a commit that changes documentation alone or helpers alone. A trailer
-// for the same co-author that the caller already wrote is removed from a code
-// commit and not duplicated on the others.
+// applied or withheld according to the scope rule: the trailer belongs on a
+// commit that contains no code and never on one that does. A trailer for the
+// same co-author that the caller already wrote is removed from a code commit
+// and not duplicated on the others.
 func composeMessage(message string, coAuthor string, scope commitScope) string {
 	body := strings.TrimRight(strings.ReplaceAll(message, "\r\n", "\n"), "\n ")
 	if coAuthor == "" {
@@ -140,7 +134,7 @@ func composeMessage(message string, coAuthor string, scope commitScope) string {
 		}
 	}
 	body = strings.TrimRight(strings.Join(kept, "\n"), "\n ")
-	if scope != scopeDocumentation && scope != scopeHelpers {
+	if scope != scopeWithoutCode {
 		return body + "\n"
 	}
 	return body + "\n\n" + trailer + "\n"
