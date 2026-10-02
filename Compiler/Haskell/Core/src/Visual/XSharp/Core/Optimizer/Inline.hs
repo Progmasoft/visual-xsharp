@@ -196,6 +196,13 @@ rewriteExpression maximumNodes candidates state expression = case expression of
         let (rewrittenValue, afterValue) = rewriteExpression maximumNodes candidates state value
             (rewrittenBody, afterBody) = rewriteExpression maximumNodes candidates afterValue body
          in (CoreLet name bindingType rewrittenValue rewrittenBody valueType, afterBody)
+    -- Inlined bodies stay nested inside the arm that contained the call, so
+    -- an unselected arm still evaluates nothing.
+    CoreConditional condition whenTrue whenFalse valueType ->
+        let (rewrittenCondition, afterCondition) = rewriteExpression maximumNodes candidates state condition
+            (rewrittenTrue, afterTrue) = rewriteExpression maximumNodes candidates afterCondition whenTrue
+            (rewrittenFalse, afterFalse) = rewriteExpression maximumNodes candidates afterTrue whenFalse
+         in (CoreConditional rewrittenCondition rewrittenTrue rewrittenFalse valueType, afterFalse)
     CoreClosure captures parameters returnType body valueType ->
         let (rewrittenCaptures, afterCaptures) = mapAccumulating rewriteCapture state captures
             (rewrittenBody, finalState) = rewriteStatements maximumNodes candidates afterCaptures body
@@ -318,6 +325,11 @@ cloneExpression environment expression state = case expression of
             bodyEnvironment = Map.insert (resolvedSymbol oldName) (CoreVariable fresh bindingType) environment
             (clonedBody, afterBody) = cloneExpression bodyEnvironment body afterName
          in (CoreLet fresh bindingType clonedValue clonedBody valueType, afterBody)
+    CoreConditional condition whenTrue whenFalse valueType ->
+        let (clonedCondition, afterCondition) = cloneExpression environment condition state
+            (clonedTrue, afterTrue) = cloneExpression environment whenTrue afterCondition
+            (clonedFalse, afterFalse) = cloneExpression environment whenFalse afterTrue
+         in (CoreConditional clonedCondition clonedTrue clonedFalse valueType, afterFalse)
     CoreClosure captures parameters returnType body valueType ->
         let (clonedValues, afterValues) = mapAccumulating cloneCaptureValue state captures
             (captureEnvironment, clonedCaptures, afterCaptures) = cloneCaptureNames environment clonedValues afterValues
@@ -424,6 +436,8 @@ expressionNodeCount expression = case expression of
     CoreApply callee arguments _ -> 1 + sum (map expressionNodeCount (callee : arguments))
     CorePrimitive _ arguments _ -> 1 + sum (map expressionNodeCount arguments)
     CoreLet _ _ value body _ -> 1 + expressionNodeCount value + expressionNodeCount body
+    CoreConditional condition whenTrue whenFalse _ ->
+        1 + sum (map expressionNodeCount [condition, whenTrue, whenFalse])
     CoreClosure captures _ _ body _ -> 1 + sum (map (expressionNodeCount . coreCaptureValue) captures) + sum (map statementNodeCount body)
 
 statementNodeCount :: CoreStatement -> Int

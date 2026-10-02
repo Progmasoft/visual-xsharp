@@ -470,6 +470,7 @@ maximumModuleSymbol moduleValue = maximum (0 : concatMap functionSymbols (coreMo
             CoreApply callee arguments _ -> concatMap expressionNames (callee : arguments)
             CorePrimitive _ arguments _ -> concatMap expressionNames arguments
             CoreLet name _ value body _ -> name : expressionNames value ++ expressionNames body
+            CoreConditional condition whenTrue whenFalse _ -> concatMap expressionNames [condition, whenTrue, whenFalse]
             CoreClosure captures parameters _ body _ ->
                 map coreCaptureName captures
                     ++ map fst parameters
@@ -729,5 +730,6 @@ expressionHasDivision expression = case expression of
         (elem operator [CoreDivide, CoreFloorDivide, CoreRemainder] && elem valueType (map namedType coreIntegerTypeNames))
             || any expressionHasDivision arguments
     CoreLet _ _ value body _ -> expressionHasDivision value || expressionHasDivision body
+    CoreConditional condition whenTrue whenFalse _ -> any expressionHasDivision [condition, whenTrue, whenFalse]
     CoreClosure captures _ _ body _ ->
         any (expressionHasDivision . coreCaptureValue) captures || containsIntegerDivision body

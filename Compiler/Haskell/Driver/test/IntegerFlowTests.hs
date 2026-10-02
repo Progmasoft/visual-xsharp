@@ -565,6 +565,7 @@ expressionContainsPrimitive primitive expression = case expression of
         current == primitive || any (expressionContainsPrimitive primitive) arguments
     CoreLet _ _ value body _ ->
         expressionContainsPrimitive primitive value || expressionContainsPrimitive primitive body
+    CoreConditional condition whenTrue whenFalse _ -> any (expressionContainsPrimitive primitive) [condition, whenTrue, whenFalse]
     CoreClosure captures _ _ body _ ->
         any (expressionContainsPrimitive primitive . coreCaptureValue) captures
             || containsPrimitiveInStatements primitive body
@@ -591,6 +592,7 @@ expressionContainsCall expression = case expression of
     CoreApply {} -> True
     CorePrimitive _ arguments _ -> any expressionContainsCall arguments
     CoreLet _ _ value body _ -> expressionContainsCall value || expressionContainsCall body
+    CoreConditional condition whenTrue whenFalse _ -> any expressionContainsCall [condition, whenTrue, whenFalse]
     CoreClosure captures _ _ body _ ->
         any (expressionContainsCall . coreCaptureValue) captures
             || any statementContainsCall body

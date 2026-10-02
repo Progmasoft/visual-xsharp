@@ -108,6 +108,10 @@ discoverExpression location expression =
                 discoverTypeAt (appendPath location BindingTypePath) bindingType
                     ++ discoverExpression (appendPath location BindingValuePath) value
                     ++ discoverExpression (appendPath location EvaluatedValuePath) body
+            CoreConditional condition whenTrue whenFalse _ ->
+                discoverExpression (appendPath location ConditionPath) condition
+                    ++ discoverExpression (appendPath location TrueBranchPath) whenTrue
+                    ++ discoverExpression (appendPath location FalseBranchPath) whenFalse
             CoreClosure captures parameters returnType body _ ->
                 concat
                     [ discoverCapture (appendPath location (ClosureCapturePath index)) capture

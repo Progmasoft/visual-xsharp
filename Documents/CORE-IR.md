@@ -272,21 +272,33 @@ the same loop shape:
   the right operand and overwrites the slot. Calls, traps, and non-termination
   in the right operand therefore stay conditional. A short-circuit condition
   of a loop is evaluated starting at the loop header, so the loop's own
-  body/exit branch may sit in the operator's join block.
+  body/exit branch may sit in the operator's join block;
+- a conditional expression is control flow as well. Its result slot is bound
+  before the branch with the neutral literal of its type (`false`, an integer
+  zero, or a floating zero), the test selects one of two arm blocks, each arm
+  block computes only its own operand and assigns the slot, and both jump to
+  one join block that continues the surrounding expression. No path reaches
+  the join without one of the two assignments, so the neutral value is never
+  observable.
 
-`LoopLoweringTests.cpp` and `ShortCircuitLoweringTests.cpp` under
-`Compiler/Core/Tests/` assert these edges exactly on the native adapter.
-`LoopExecutionTests.cpp` and `ShortCircuitExecutionTests.cpp` under
+`LoopLoweringTests.cpp`, `ShortCircuitLoweringTests.cpp`, and
+`ConditionalLoweringTests.cpp` under `Compiler/Core/Tests/` assert these edges
+exactly on the native adapter. `LoopExecutionTests.cpp`,
+`ShortCircuitExecutionTests.cpp`, and `ConditionalExecutionTests.cpp` under
 `Compiler/Backend/LLVM/Tests/` execute each form through CorePrep, Xpp, Xmm,
 and LLVM with both native optimizer settings and compare the result with host
-code; the short-circuit programs guard a division or a recursive call, so an
-eager right operand traps or never returns instead of merely producing the
-same Boolean. A CorePrep, Xpp,
+code; the short-circuit and conditional programs guard a division or a
+recursive call, so an eagerly evaluated operand traps or never returns instead
+of merely producing the same value. A CorePrep, Xpp,
 or Xmm verifier cannot reject a wrong back-edge by itself: a block that jumps
 to itself is a well-formed control-flow graph.
 
+Both lowerings bind a `CoreLet` value with the value's own operation rather
+than through an extra copied temporary, so a let over a call is one call
+instruction in either adapter.
+
 Both lowerings also allocate generated symbols the same way. Temporaries,
-condition and short-circuit slots, and lifted closure names come from one
+condition, short-circuit and conditional slots, and lifted closure names come from one
 counter that starts above every symbol identity in the whole module and is
 never reset between functions. Identities are module-wide and CorePrep
 verification rejects one identity with two spellings, so a counter seeded
@@ -339,6 +351,57 @@ must already be complete.
 Arithmetic operands must be numeric and use the same type. Comparisons return
 `bool`. Logical operands accept bool or numeric context and return `bool`.
 Unary primitives take one operand; other primitives take two.
+
+### Let
+
+`CoreLet` binds one immutable symbol to a value and evaluates a body with that
+symbol in scope. The value is evaluated exactly once, before the body. The
+binding is visible only in the body; the verifier rejects a read of the symbol
+anywhere else, including the other arm of an enclosing conditional. Lowering
+uses it wherever a source operand is read more than once but must be evaluated
+once: pattern subjects, inlined call arguments, and the left operand of truthy
+coalescing.
+
+### Conditional
+
+`CoreConditional` contains a test, a first arm, a second arm, and a result
+type. The test is evaluated in Boolean context; then exactly one arm is
+evaluated and becomes the value. The other arm is not evaluated at all: its
+calls, traps, and non-termination do not happen.
+
+The verifier requires:
+
+- a test of `bool` or numeric type (`VXC1067`);
+- both arms to have exactly the result type (`VXC1068`, `VXC1069`); and
+- a `bool` or numeric result type (`VXC1070`).
+
+The last rule is a storage rule, not a language rule. CorePrep materializes the
+result in one slot that both arms assign; a slot that held an owned value would
+need move and release rules that the backend does not define yet. The native
+verifier additionally rejects an in-memory conditional that does not carry
+exactly three operands (`VXC1071`); the wire reader cannot produce one.
+
+Source `condition ? first : second` lowers to one `CoreConditional`. Source
+`left ?: fallback` lowers to
+
+```text
+let $coalesceN = left in ($coalesceN ? $coalesceN : fallback)
+```
+
+so the left operand is evaluated once and is both the test and the first
+result.
+
+Analyses treat the two arms as alternative paths, not as a sequence:
+
+- effect inference adds the test's effect to the effect of each arm that is
+  feasible under the incoming integer facts; an arm excluded by a known test
+  contributes nothing;
+- integer facts are refined by the test on each edge, the arms are transferred
+  separately, and the continuation keeps only the join of both results;
+- constant folding replaces a conditional whose test is a literal by the
+  selected arm, and folds inside both arms otherwise; and
+- inlining rewrites a call inside an arm in place, so an inlined body stays
+  behind the same test.
 
 ### Closure
 
@@ -408,6 +471,8 @@ stop after the first malformed statement. Diagnostic groups cover:
 - variable lookup and type agreement;
 - call signatures;
 - primitive arity, operand, and result types;
+- let binding types and scope;
+- conditional test, arm, and result types;
 - literal payload/range validity; and
 - closure callable/capture contracts.
 
@@ -425,7 +490,8 @@ Its passes may:
 
 - propagate immutable literal bindings;
 - fold exact integer and boolean primitives;
-- select known branches;
+- select known branches and the selected arm of a conditional with a literal
+  test;
 - remove unreachable statements;
 - delete unused pure bindings, writes, and evaluations; and
 - optimize nested closure bodies.
@@ -441,6 +507,8 @@ CorePrep converts nested expression evaluation to atoms and operations. It:
 - introduces deterministic temporary symbols;
 - creates explicit basic blocks;
 - translates `CoreIf` to branch/jump structure;
+- translates short-circuit operators and conditional expressions to branches
+  over a result slot;
 - lifts closure bodies to functions;
 - materializes closure creation operations; and
 - verifies targets, definitions, operation types, and terminators.

@@ -240,6 +240,16 @@ discoverStatement catalog namespace root index statement state = case statement 
             afterSource = discoverExpression catalog namespace origin source afterAnnotation
          in discoverBlock catalog namespace origin body afterSource
     IncrementStatement _ _ annotation _ -> discoverType catalog namespace root annotation state
+    CompoundAssignmentStatement spanValue _ _ annotation value ->
+        let origin = root {discoverySites = [AssignmentTypeSite index], discoverySpan = spanValue}
+         in discoverExpression catalog namespace origin value (discoverType catalog namespace origin annotation state)
+    DiscardStatement spanValue expression ->
+        discoverExpression
+            catalog
+            namespace
+            (root {discoverySites = [ExpressionTypeSite index], discoverySpan = spanValue})
+            expression
+            state
     BreakStatement _ value -> maybe state (\expression -> discoverExpression catalog namespace root expression state) value
     ContinueStatement {} -> state
     ExpressionStatement spanValue expression _ ->
@@ -276,6 +286,16 @@ discoverExpression catalog namespace origin expression state = case expression o
         let afterType = discoverType catalog namespace origin annotation state
             afterSubject = discoverExpression catalog namespace origin subject afterType
          in discoverPattern catalog namespace origin patternValue afterSubject
+    ConditionalExpression _ condition first second annotation ->
+        let afterType = discoverType catalog namespace origin annotation state
+         in foldl'
+                (\current value -> discoverExpression catalog namespace origin value current)
+                afterType
+                [condition, first, second]
+    CoalesceExpression _ left fallback annotation ->
+        let afterType = discoverType catalog namespace origin annotation state
+            afterLeft = discoverExpression catalog namespace origin left afterType
+         in discoverExpression catalog namespace origin fallback afterLeft
     CallableExpression spanValue _ captures parameters body annotation ->
         let callableOrigin =
                 origin

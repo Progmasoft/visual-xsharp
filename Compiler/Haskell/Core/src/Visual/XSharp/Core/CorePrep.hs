@@ -22,6 +22,7 @@ module Visual.XSharp.Core.CorePrep
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Scalar (isCoreFloatingType)
 import Visual.XSharp.Core.Verifier (verifyCore)
 import Visual.XSharp.Diagnostic
 
@@ -179,6 +180,8 @@ expressionSymbolIds expression = case expression of
     CoreApply callee arguments _ -> expressionSymbolIds callee ++ concatMap expressionSymbolIds arguments
     CorePrimitive _ arguments _ -> concatMap expressionSymbolIds arguments
     CoreLet name _ value body _ -> symbol name : expressionSymbolIds value ++ expressionSymbolIds body
+    CoreConditional condition whenTrue whenFalse _ ->
+        concatMap expressionSymbolIds [condition, whenTrue, whenFalse]
     CoreClosure captures parameters _ body _ ->
         map (symbol . coreCaptureName) captures
             ++ concatMap (expressionSymbolIds . coreCaptureValue) captures
@@ -199,10 +202,19 @@ prepareStatements state open (statement : remaining) = case statement of
         let (closed, continued, atom, after) = atomize state open value
             (later, final) = prepareStatements after (appendInstruction continued (CorePrepAssign name atom)) remaining
          in (closed ++ later, final)
-    CoreEvaluate value ->
-        let (closed, continued, operation, after) = atomizeOperation state open value
-            (later, final) = prepareStatements after (appendInstruction continued (CorePrepEvaluate operation)) remaining
-         in (closed ++ later, final)
+    CoreEvaluate value
+        | discardsItsOperation value ->
+            let (closed, continued, operation, after) = atomizeOperation state open value
+                (later, final) = prepareStatements after (appendInstruction continued (CorePrepEvaluate operation)) remaining
+             in (closed ++ later, final)
+        | otherwise ->
+            -- Only a call may be an instruction whose result is dropped.
+            -- Any other value is computed into an ordinary temporary, so
+            -- its operands still run and may trap, and the unused atom is
+            -- ignored.
+            let (closed, continued, _, after) = atomize state open value
+                (later, final) = prepareStatements after continued remaining
+             in (closed ++ later, final)
     CoreReturn value ->
         let (closed, continued, atom, after) = atomize state open value
          in (closed ++ [closeBlock continued (CorePrepReturn atom)], after)
@@ -318,6 +330,15 @@ prepareFor state incoming condition body update =
         finalState = afterUpdate {loopTargets = loopTargets state}
      in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd ++ updateEnd, OpenBlock exitId [], finalState)
 
+-- | Whether an evaluated expression lowers to one result-discarding
+-- instruction. The record has no result type on the wire; a reader recovers
+-- it from the callee, which only a call has. A discarded closure creation is
+-- therefore bound like any other value.
+discardsItsOperation :: CoreExpression -> Bool
+discardsItsOperation expression = case expression of
+    CoreApply {} -> True
+    _ -> False
+
 jumpOpenBlocks :: Int -> [CorePrepBlock] -> [CorePrepBlock]
 jumpOpenBlocks target = map connect
     where
@@ -379,6 +400,8 @@ atomize state open expression = case expression of
     CorePrimitive primitive [left, right] _
         | primitive == CoreLogicalAnd || primitive == CoreLogicalOr ->
             atomizeShortCircuit state open primitive left right
+    CoreConditional condition whenTrue whenFalse valueType ->
+        atomizeConditional state open condition whenTrue whenFalse valueType
     _ ->
         let (closed, continued, operation, afterOperation) = atomizeOperation state open expression
             temporary =
@@ -400,6 +423,9 @@ atomizeOperation state open expression = case expression of
         | primitive == CoreLogicalAnd || primitive == CoreLogicalOr ->
             let (closed, continued, atom, after) = atomizeShortCircuit state open primitive left right
              in (closed, continued, CorePrepCopy atom, after)
+    CoreConditional condition whenTrue whenFalse valueType ->
+        let (closed, continued, atom, after) = atomizeConditional state open condition whenTrue whenFalse valueType
+         in (closed, continued, CorePrepCopy atom, after)
     CoreApply callee arguments _ ->
         let (calleeBlocks, calleeOpen, calleeAtom, afterCallee) = atomize state open callee
             (argumentBlocks, argumentOpen, argumentAtoms, afterArguments) = atomizeMany afterCallee calleeOpen arguments
@@ -475,6 +501,66 @@ atomizeShortCircuit state open primitive left right =
         , resultAtom
         , final
         )
+
+{- | Lower a conditional expression to a two-way branch over a result slot.
+
+Exactly one arm is evaluated. The slot is bound before the branch with the
+neutral literal of its type and each arm overwrites it on its own path, so
+the join block reads an initialized value from either predecessor without a
+phi node. The neutral value is never observable: no path reaches the join
+without passing through one of the two assignments.
+-}
+atomizeConditional ::
+    PrepState ->
+    OpenBlock ->
+    CoreExpression ->
+    CoreExpression ->
+    CoreExpression ->
+    Type ->
+    ([CorePrepBlock], OpenBlock, CorePrepAtom, PrepState)
+atomizeConditional state open condition whenTrue whenFalse valueType =
+    let (conditionBlocks, conditionOpen, conditionAtom, afterCondition) = atomize state open condition
+        (booleanOpen, predicate, afterBoolean) = booleanizeAtom afterCondition conditionOpen conditionAtom
+        resultId = nextTemporary afterBoolean
+        resultName = ResolvedName (SymbolId resultId) (Identifier ("$conditional" ++ show resultId))
+        initializedOpen =
+            appendInstruction
+                booleanOpen
+                (CorePrepBind resultName valueType True (CorePrepCopy (neutralAtom valueType)))
+        trueId = nextBlock afterBoolean
+        falseId = trueId + 1
+        joinId = falseId + 1
+        afterReservation =
+            afterBoolean
+                { nextTemporary = resultId + 1
+                , nextBlock = joinId + 1
+                }
+        header = closeBlock initializedOpen (CorePrepBranch predicate trueId falseId)
+        (trueBlocks, trueExit, afterTrue) = prepareArm afterReservation trueId whenTrue
+        (falseBlocks, falseExit, afterFalse) = prepareArm afterTrue falseId whenFalse
+        prepareArm armState armId arm =
+            let (armBlocks, armOpen, armAtom, afterArm) = atomize armState (OpenBlock armId []) arm
+                assigned = appendInstruction armOpen (CorePrepAssign resultName armAtom)
+             in (armBlocks, closeBlock assigned (CorePrepJump joinId), afterArm)
+     in ( conditionBlocks ++ [header] ++ trueBlocks ++ [trueExit] ++ falseBlocks ++ [falseExit]
+        , OpenBlock joinId []
+        , CorePrepVariable resultName valueType
+        , afterFalse
+        )
+
+-- | Literal that initializes a storage slot before its first real assignment.
+neutralAtom :: Type -> CorePrepAtom
+neutralAtom valueType
+    | valueType == boolType = CorePrepLiteral (CoreBoolean False) valueType
+    | otherwise = zeroAtom valueType
+
+-- | Zero of a numeric type, spelled as the native adapter spells its slot
+-- initializer: a floating zero is a floating literal, not an integer payload
+-- under a floating type.
+zeroAtom :: Type -> CorePrepAtom
+zeroAtom valueType
+    | isCoreFloatingType valueType = CorePrepLiteral (CoreFloating "0") valueType
+    | otherwise = CorePrepLiteral (CoreInteger 0) valueType
 
 atomizeMany :: PrepState -> OpenBlock -> [CoreExpression] -> ([CorePrepBlock], OpenBlock, [CorePrepAtom], PrepState)
 atomizeMany state open [] = ([], open, [], state)
