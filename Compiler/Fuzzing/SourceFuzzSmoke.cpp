@@ -28,7 +28,7 @@ main()
     // agree. They combine forms the generated programs below keep separate:
     // loops inside loops, short-circuit operators as loop conditions, and
     // several functions sharing one module-wide symbol numbering.
-    constexpr std::array<std::string_view, 4U> accepted{
+    constexpr std::array<std::string_view, 9U> accepted{
         "namespace Parity; class Program { public static int Evaluate() { "
         "int total = 0; for (int outer = 0; outer < 4; outer++) { "
         "if (outer == 2) { continue; } int inner = 0; "
@@ -50,6 +50,47 @@ main()
         "return result; } } class Second { public static long Other() { "
         "long value = 3; for (int step = 0; step < 2; step++) { "
         "value = value * 2; } return value; } }",
+        // Conditional expressions: Boolean and numeric tests, nesting in
+        // either result and in the test, and a recursion the first result
+        // terminates.
+        "namespace Parity; class Program { "
+        "public static int Sum(_ int n) { return n == 0 ? 0 : n + Sum(n - 1); "
+        "} public static int Pick(_ bool flag, _ int left, _ int right) { "
+        "return flag ? left > right ? left : right : left ? 0 - left : "
+        "right; } public static int Evaluate() { return (Sum(4) > 5 ? "
+        "Pick(true, 3, 9) > 4 : false) ? Pick(false, 0, 7) : Sum(2); } }",
+        // Truthy coalescing binds its left operand once. A call on the left
+        // is the case where an adapter that copies the bound value through
+        // an extra temporary disagrees with one that binds the call itself.
+        "namespace Parity; class Program { "
+        "public static int Next(_ int n) { return n > 2 ? Next(n - 3) : n; } "
+        "public static int Evaluate() { int value = Next(7) ?: Next(5); "
+        "return value + (Next(9) ?: 4) + (value ?: Next(8) ?: 6); } }",
+        // Compound assignments in statement and loop-update position, with
+        // a conditional and a coalescing operand.
+        "namespace Parity; class Program { public static int Evaluate() { "
+        "int total = 3; total += 4; total -= 1; total *= 5; total /= 2; "
+        "total //= 2; total %= 7; total <<= 3; total >>= 1; total &= 127; "
+        "total ^= 9; total |= 64; for (int index = 0; index < 6; index += 2) "
+        "{ total += index ? index : 1; total -= index ?: 2; } "
+        "return total; } }",
+        // Discarded values: a call keeps its result-dropping instruction; an
+        // operator, a conditional and a division are computed into
+        // temporaries.
+        "namespace Parity; class Program { "
+        "public static int Down(_ int n) { return n > 0 ? Down(n - 1) : 0; } "
+        "public static int Evaluate() { int value = 5; _ = Down(value); "
+        "_ = !Down(2); _ = 12 / value; _ = value > 3 ? Down(1) : value; "
+        "value > 4 ? Down(3) : 0; _ = Down(value) ?: 7; return value; } }",
+        // Conditional forms as loop conditions and as the operands of
+        // short-circuit operators, in a module with several functions.
+        "namespace Parity; class Program { "
+        "public static bool Small(_ int n) { return n < 3 ? true : n == 9; } "
+        "public static int Evaluate() { int index = 0; int total = 0; "
+        "while (index < 4 ? Small(index) || total < 9 : false) { "
+        "total += index ?: 5; index += 1; } "
+        "do { total -= 1; } while (total > 3 && (total ?: 1) \\= 2); "
+        "return Small(total) && total > 0 ? total : 0 - total; } }",
     };
     for (const auto text : accepted)
         Visual::XSharp::Fuzzing::ExerciseAcceptedSource(

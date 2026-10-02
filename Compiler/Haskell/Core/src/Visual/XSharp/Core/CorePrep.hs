@@ -208,10 +208,10 @@ prepareStatements state open (statement : remaining) = case statement of
                 (later, final) = prepareStatements after (appendInstruction continued (CorePrepEvaluate operation)) remaining
              in (closed ++ later, final)
         | otherwise ->
-            -- Only a call or a closure creation may be an instruction whose
-            -- result is dropped. Any other value is computed into an
-            -- ordinary temporary, so its operands still run and may trap,
-            -- and the unused atom is ignored.
+            -- Only a call may be an instruction whose result is dropped.
+            -- Any other value is computed into an ordinary temporary, so
+            -- its operands still run and may trap, and the unused atom is
+            -- ignored.
             let (closed, continued, _, after) = atomize state open value
                 (later, final) = prepareStatements after continued remaining
              in (closed ++ later, final)
@@ -331,11 +331,12 @@ prepareFor state incoming condition body update =
      in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd ++ updateEnd, OpenBlock exitId [], finalState)
 
 -- | Whether an evaluated expression lowers to one result-discarding
--- instruction. Later stages accept a dropped result only for these two.
+-- instruction. The record has no result type on the wire; a reader recovers
+-- it from the callee, which only a call has. A discarded closure creation is
+-- therefore bound like any other value.
 discardsItsOperation :: CoreExpression -> Bool
 discardsItsOperation expression = case expression of
     CoreApply {} -> True
-    CoreClosure {} -> True
     _ -> False
 
 jumpOpenBlocks :: Int -> [CorePrepBlock] -> [CorePrepBlock]

@@ -727,6 +727,7 @@ corePrepTests =
     , ("a discarded non-call value is computed into a temporary", discardedOperatorIsBound)
     , ("a discarded division still executes", discardedDivisionIsBound)
     , ("a conditional statement leaves no result-dropping copy", conditionalStatementHasNoEvaluate)
+    , ("a discarded closure creation is bound, not dropped", discardedClosureIsBound)
     ]
 
 preparedFunctions :: String -> [CorePrepFunction]
@@ -894,6 +895,12 @@ conditionalStatementHasNoEvaluate =
     let blocks = blocksOf (body "flag ? Countdown(left) : 0; return 0;")
         instructions = concatMap corePrepBlockInstructions blocks
      in null (evaluations instructions) && branches blocks == 1 && length (filter isCall instructions) == 1
+
+discardedClosureIsBound :: Bool
+discardedClosureIsBound =
+    let instructions = instructionsOf (body "_ = \\ -> left; return 0;")
+     in null (evaluations instructions)
+            && length [() | CorePrepBind _ _ _ CorePrepMakeClosure {} <- instructions] == 1
 
 blockIdsAreUnique :: CorePrepFunction -> Bool
 blockIdsAreUnique function =

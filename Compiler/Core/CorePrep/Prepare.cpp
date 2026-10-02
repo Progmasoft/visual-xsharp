@@ -710,14 +710,14 @@ namespace Visual::XSharp::Core::CorePrep
                     }
                     case Statement::Kind::Evaluate:
                     {
-                        // Only a call or a closure creation may be an
-                        // instruction whose result is dropped. Any other
-                        // value is computed into an ordinary temporary, so
-                        // its operands still run and may trap, and the
-                        // unused atom is ignored.
-                        if (statement.expression.kind != Expression::Kind::Apply
-                            && statement.expression.kind
-                                   != Expression::Kind::Closure)
+                        // Only a call may be an instruction whose result is
+                        // dropped: the record has no result type on the
+                        // wire, and a reader recovers it from the callee.
+                        // Any other value is computed into an ordinary
+                        // temporary, so its operands still run and may
+                        // trap, and the unused atom is ignored.
+                        if (statement.expression.kind
+                            != Expression::Kind::Apply)
                         {
                             static_cast<void>(
                                 Atomize(cursor, statement.expression));

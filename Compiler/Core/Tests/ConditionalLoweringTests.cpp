@@ -13,6 +13,7 @@
 
 #include "Visual/XSharp/Core/CorePrep/Prepare.hpp"
 #include "Visual/XSharp/Core/CorePrep/Verifier.hpp"
+#include "Visual/XSharp/Core/CorePrep/Wire.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Core/Verifier.hpp"
 #include "Visual/XSharp/Core/Wire.hpp"
@@ -636,4 +637,95 @@ TEST_CASE("the wire writer rejects a malformed conditional",
     const auto encoded = Core::Wire::Encode(Returning(malformed));
     REQUIRE_FALSE(encoded);
     CHECK(encoded.error->kind == Core::Wire::ErrorKind::InvalidCount);
+}
+
+TEST_CASE("a discarded call keeps its result type across the CorePrep wire",
+          "[coreprep][wire][conditional]")
+{
+    // int Next() { return 7; }
+    // int Evaluate(...) { Next(); <discarded values>; return left; }
+    // The evaluate record has no type field. The reader used to leave the
+    // decoded instruction as Unit, which disagrees with the adapter and
+    // fails the Xpp signature check for every value-returning callee.
+    constexpr std::uint64_t kNext = 20U;
+    const auto nextType = Core::Type::function({}, Core::Type::int64());
+    const auto call = [&nextType] {
+        return Core::Expression::Apply(
+            Core::Expression::Variable({ kNext, U"Next" }, nextType),
+            {},
+            Core::Type::int64());
+    };
+    auto module
+        = Module(Core::Type::int64(),
+                 { Core::Statement::Evaluate(call()),
+                   Core::Statement::Evaluate(Quotient(Left())),
+                   Core::Statement::Evaluate(Choose(Flag(), call(), Right())),
+                   Core::Statement::Evaluate(Left()),
+                   Core::Statement::Return(Left()) });
+    module.functions.push_back(
+        Core::Function{ { kNext, U"Next" },
+                        {},
+                        Core::Type::int64(),
+                        { Core::Statement::Return(Integer(7)) } });
+    REQUIRE(Core::Verify(module).empty());
+    // Read the module back from Core wire first, as the pipeline does. The
+    // reader stores integers in their canonical sign and magnitude form,
+    // which is also what the CorePrep reader produces.
+    const auto coreBytes = Core::Wire::Encode(module);
+    REQUIRE(coreBytes);
+    const auto canonical = Core::Wire::Decode(coreBytes.bytes);
+    REQUIRE(canonical);
+    const auto prepared = Core::CorePrep::Prepare(*canonical.module);
+    REQUIRE(Prepared::verify(prepared).empty());
+
+    // Exactly one result-dropping instruction: the direct call. The
+    // division and the conditional are bound; the plain read emits nothing.
+    std::vector<Prepared::Instruction> evaluations;
+    for (const auto &block : prepared.functions.front().blocks)
+        for (const auto &instruction : block.instructions)
+            if (instruction.kind == Prepared::Instruction::Kind::Evaluate)
+                evaluations.push_back(instruction);
+    REQUIRE(evaluations.size() == 1U);
+    CHECK(evaluations.front().operation == Prepared::Operation::Call);
+    CHECK(evaluations.front().type == Core::Type::int64());
+
+    const auto encoded = Prepared::wire::encode(prepared);
+    REQUIRE_FALSE(encoded.error);
+    const auto decoded = Prepared::wire::decode(encoded.bytes);
+    REQUIRE(decoded);
+    REQUIRE(decoded.module->functions.size() == prepared.functions.size());
+    // Literal operands are not compared here: the two readers may hold the
+    // same integer in different payload alternatives. The fields below are
+    // the ones the evaluate record must reproduce.
+    for (std::size_t function = 0U; function < prepared.functions.size();
+         ++function)
+    {
+        const auto &expected = prepared.functions[function];
+        const auto &actual = decoded.module->functions[function];
+        CAPTURE(function);
+        REQUIRE(actual.blocks.size() == expected.blocks.size());
+        for (std::size_t block = 0U; block < expected.blocks.size(); ++block)
+        {
+            CAPTURE(block);
+            const auto &expectedBlock = expected.blocks[block];
+            const auto &actualBlock = actual.blocks[block];
+            CHECK(actualBlock.terminator.kind == expectedBlock.terminator.kind);
+            REQUIRE(actualBlock.instructions.size()
+                    == expectedBlock.instructions.size());
+            for (std::size_t index = 0U;
+                 index < expectedBlock.instructions.size();
+                 ++index)
+            {
+                CAPTURE(index);
+                const auto &want = expectedBlock.instructions[index];
+                const auto &got = actualBlock.instructions[index];
+                CHECK(got.kind == want.kind);
+                CHECK(got.destination == want.destination);
+                CHECK(got.type == want.type);
+                CHECK(got.mutable_binding == want.mutable_binding);
+                CHECK(got.operation == want.operation);
+                CHECK(got.operands.size() == want.operands.size());
+            }
+        }
+    }
 }
