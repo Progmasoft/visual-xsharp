@@ -93,7 +93,7 @@ second argument of `System.Array<T, N>` as a type would make specialization
 identity unsound and prevent `[T; N]` from reaching Core.
 
 Concrete fixed-array size expressions are evaluated exactly by TypeChecker.
-Host integer width is irrelevant. Division, floor division, and remainder by
+Host integer width is irrelevant. Division, rounded division `//`, and remainder by
 zero are diagnosed; a negative or non-integer fixed size is rejected. Calls,
 closures, strings, and floating values cannot enter fixed-array type syntax as
 compile-time sizes.
