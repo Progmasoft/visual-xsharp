@@ -205,6 +205,12 @@ optimizeExpression environment expression = case expression of
             (optimizeExpression environment value)
             (optimizeExpression environment body)
             valueType
+    CoreConditional condition whenTrue whenFalse valueType ->
+        CoreConditional
+            (optimizeExpression environment condition)
+            (optimizeExpression environment whenTrue)
+            (optimizeExpression environment whenFalse)
+            valueType
     CoreClosure captures parameters returnType body valueType ->
         CoreClosure
             [capture {coreCaptureValue = optimizeExpression environment (coreCaptureValue capture)} | capture <- captures]

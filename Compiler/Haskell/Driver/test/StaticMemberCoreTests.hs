@@ -361,6 +361,7 @@ callArgumentsFor spelling moduleValue = concatMap (functionCalls . coreFunctionB
             CoreApply callee arguments _ -> expressionCalls callee ++ concatMap expressionCalls arguments
             CorePrimitive _ arguments _ -> concatMap expressionCalls arguments
             CoreLet _ _ value body _ -> expressionCalls value ++ expressionCalls body
+            CoreConditional condition whenTrue whenFalse _ -> concatMap expressionCalls [condition, whenTrue, whenFalse]
             CoreClosure _ _ _ statements _ -> concatMap statementCalls statements
 
 callTypesFor :: String -> CoreModule -> [Type]
@@ -387,6 +388,7 @@ callTypesFor spelling moduleValue = concatMap (functionCallTypes . coreFunctionB
             CoreApply callee arguments _ -> expressionTypes callee ++ concatMap expressionTypes arguments
             CorePrimitive _ arguments _ -> concatMap expressionTypes arguments
             CoreLet _ _ value body _ -> expressionTypes value ++ expressionTypes body
+            CoreConditional condition whenTrue whenFalse _ -> concatMap expressionTypes [condition, whenTrue, whenFalse]
             CoreClosure _ _ _ statements _ -> concatMap statementTypes statements
 
 coreCallTargets :: CoreModule -> [ResolvedName]
@@ -412,6 +414,7 @@ expressionTargets expression = case expression of
     CoreApply callee arguments _ -> calledTarget callee ++ expressionTargets callee ++ concatMap expressionTargets arguments
     CorePrimitive _ arguments _ -> concatMap expressionTargets arguments
     CoreLet _ _ value body _ -> expressionTargets value ++ expressionTargets body
+    CoreConditional condition whenTrue whenFalse _ -> concatMap expressionTargets [condition, whenTrue, whenFalse]
     CoreClosure _ _ _ body _ -> concatMap statementTargets body
     where
         calledTarget (CoreVariable name _) = [name]

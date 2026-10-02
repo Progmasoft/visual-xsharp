@@ -519,6 +519,18 @@ namespace Visual::XSharp::Core::Wire
                                                std::move(body),
                                                std::move(valueType));
                     }
+                    case 6:
+                    {
+                        // The three children have fixed positions, so the
+                        // payload carries no count.
+                        auto test = ReadExpression(depth + 1U);
+                        auto whenTrue = ReadExpression(depth + 1U);
+                        auto whenFalse = ReadExpression(depth + 1U);
+                        return Expression::Conditional(std::move(test),
+                                                       std::move(whenTrue),
+                                                       std::move(whenFalse),
+                                                       std::move(valueType));
+                    }
                     default:
                         Fail(ErrorKind::InvalidTag,
                              "expression tag",
@@ -1161,6 +1173,18 @@ namespace Visual::XSharp::Core::Wire
                         }
                         WriteExpression(*expression.letValue, depth + 1U);
                         WriteExpression(*expression.letBody, depth + 1U);
+                        return;
+                    case Expression::Kind::Conditional:
+                        if (expression.operands.size() != 3U)
+                        {
+                            Fail(ErrorKind::InvalidCount,
+                                 "conditional expression",
+                                 "Core conditional must contain a test and "
+                                 "two arms");
+                            return;
+                        }
+                        for (const auto &operand : expression.operands)
+                            WriteExpression(operand, depth + 1U);
                         return;
                 }
             }

@@ -427,6 +427,8 @@ spanOf expression = case expression of
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue
     IsPatternExpression spanValue _ _ _ -> spanValue
+    ConditionalExpression spanValue _ _ _ _ -> spanValue
+    CoalesceExpression spanValue _ _ _ -> spanValue
     CallableExpression spanValue _ _ _ _ _ -> spanValue
 
 isLeft :: Either [a] b -> Bool -> Bool

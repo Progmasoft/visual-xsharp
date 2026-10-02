@@ -62,7 +62,7 @@ closureTests =
     , ("Core verifier accepts a well-formed closure", coreVerifierAcceptsClosure)
     , ("Core verifier rejects mismatched closure type", coreVerifierRejectsTypeMismatch)
     , ("Core verifier rejects capture initializer mismatch", coreVerifierRejectsCaptureMismatch)
-    , ("Core wire v7 round-trips closure values and ownership", coreWireClosureRoundTrip)
+    , ("Core wire v8 round-trips closure values and ownership", coreWireClosureRoundTrip)
     , ("CorePrep wire v6 round-trips closure creation and ownership", corePrepWireClosureRoundTrip)
     , ("CorePrep verifier accepts converted closure", corePrepVerifierAcceptsClosure)
     , ("CorePrep verifier rejects primitive weak capture", corePrepVerifierRejectsWeakPrimitive)
@@ -351,6 +351,8 @@ statementCallable statement = case statement of
             `orElse` firstJust (map statementCallable updates)
     ForEachStatement _ _ _ _ _ collection body -> expressionCallable collection `orElse` blockCallable body
     IncrementStatement {} -> Nothing
+    CompoundAssignmentStatement _ _ _ _ value -> expressionCallable value
+    DiscardStatement _ value -> expressionCallable value
     BreakStatement _ value -> value >>= expressionCallable
     ContinueStatement {} -> Nothing
     ExpressionStatement _ value _ -> expressionCallable value
@@ -404,6 +406,8 @@ symbols expression = case expression of
     UnaryExpression _ _ value _ -> symbols value
     BinaryExpression _ _ left right _ -> symbols left ++ symbols right
     IsPatternExpression _ value _ _ -> symbols value
+    ConditionalExpression _ condition whenTrue whenFalse _ -> concatMap symbols [condition, whenTrue, whenFalse]
+    CoalesceExpression _ left fallback _ -> symbols left ++ symbols fallback
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters
@@ -428,6 +432,8 @@ statementSymbols statement = case statement of
     ForEachStatement _ _ _ name _ collection body ->
         resolvedSymbol name : symbols collection ++ blockSymbols body
     IncrementStatement _ name _ _ -> [resolvedSymbol name]
+    CompoundAssignmentStatement _ _ name _ value -> resolvedSymbol name : symbols value
+    DiscardStatement _ value -> symbols value
     BreakStatement _ value -> maybe [] symbols value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> symbols value
@@ -594,7 +600,7 @@ invalidPreparedWeakCapture =
 -- Keep a textual assertion near the wire tests so failures caused by an
 -- accidental version rollback explain themselves in the test output.
 _wireVersionContext :: String
-_wireVersionContext = "closures require Core wire version 7 and CorePrep wire version 6"
+_wireVersionContext = "closures require Core wire version 8 and CorePrep wire version 6"
 
 _diagnosticContext :: Diagnostic -> Bool
 _diagnosticContext diagnostic = "closure" `isInfixOf` diagnosticMessage diagnostic

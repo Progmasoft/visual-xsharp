@@ -165,6 +165,39 @@ and logical operators. A `bool` return type does not turn the integers in
 equality operands, and constant folding compares their actual values. Numeric
 equality never falls back to comparing truthiness.
 
+### Conditional and assignment forms
+
+`condition ? first : second` and `left ?: fallback` are the weakest expression
+level and group to the right. A `?` that is not followed by a result and `:`
+produces `VXP0029`. `left ? : fallback` with a spaced empty middle is the same
+omitted-middle form as `?:`.
+
+`??` and `??=` are recognized as tokens so that they are not read as two
+conditionals. They need nullable types, which are not implemented; the parser
+reports `VXP0030` and `VXP0031` instead of guessing a meaning.
+
+A compound assignment (`+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `**=`, `<<=`,
+`>>=`, `&=`, `^=`, `|=`) is a statement with a named target; another target
+expression produces `VXP0003`, the same diagnostic as for `=`. `_ = value;` is
+the discard statement, not an assignment to a binding named `_`, and is not an
+expression: `(_ = value)` is a syntax error.
+
+The type checker reports:
+
+| Code | Meaning |
+| --- | --- |
+| `VXT0035` | the operator result of a compound assignment does not have the target type, for example floating `//=` |
+| `VXT0036` | a conditional test is neither `bool` nor numeric |
+| `VXT0037` | the two results of a conditional have different types |
+| `VXT0038` | the two operands of truthy coalescing have different types |
+| `VXT0039` | the result of a conditional form is neither `bool` nor numeric; other result types are not lowered yet |
+
+A compound assignment otherwise reuses the assignment and operator
+diagnostics: `VXT0003` for an immutable target and `VXT0012` for operands the
+operator does not accept. An untyped numeric literal operand of a conditional
+form takes the type of the other operand in either direction, and both take
+the expected type when there is one; a computed operand is never converted.
+
 ### Supplied token streams
 
 Embedding clients may supply a token list through `ParserInput`. An empty list

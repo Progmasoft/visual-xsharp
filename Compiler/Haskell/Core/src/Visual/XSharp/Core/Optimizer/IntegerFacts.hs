@@ -197,6 +197,19 @@ factOfIntegerExpression facts expression = case expression of
             let afterValue = transferExpressionFacts facts value
                 bound = setIntegerFact afterValue (resolvedSymbol name) (factOfIntegerExpression afterValue value)
              in factOfIntegerExpression bound body
+    CoreConditional condition whenTrue whenFalse resultType
+        | isCoreIntegerType resultType ->
+            let afterCondition = transferExpressionFacts facts condition
+                trueFacts = refineConditionFacts True condition afterCondition
+                falseFacts = refineConditionFacts False condition afterCondition
+             in case (isUnreachableFacts trueFacts, isUnreachableFacts falseFacts) of
+                    (True, True) -> Nothing
+                    (True, False) -> factOfIntegerExpression falseFacts whenFalse
+                    (False, True) -> factOfIntegerExpression trueFacts whenTrue
+                    (False, False) ->
+                        joinFact
+                            <$> factOfIntegerExpression trueFacts whenTrue
+                            <*> factOfIntegerExpression falseFacts whenFalse
     _ -> Nothing
 
 combineIntegerFacts :: CorePrimitive -> Type -> IntegerFact -> IntegerFact -> Maybe IntegerFact
@@ -270,6 +283,11 @@ transferExpressionFacts facts (CorePrimitive CoreLogicalAnd [left, right] _) =
     transferShortCircuitFacts True facts left right
 transferExpressionFacts facts (CorePrimitive CoreLogicalOr [left, right] _) =
     transferShortCircuitFacts False facts left right
+transferExpressionFacts facts (CoreConditional condition whenTrue whenFalse _) =
+    let afterCondition = transferExpressionFacts facts condition
+        afterTrue = transferExpressionFacts (refineConditionFacts True condition afterCondition) whenTrue
+        afterFalse = transferExpressionFacts (refineConditionFacts False condition afterCondition) whenFalse
+     in joinIntegerFacts afterTrue afterFalse
 transferExpressionFacts facts expression
     | expressionInvokesCallable expression = emptyIntegerFacts
     | otherwise = facts
@@ -295,6 +313,8 @@ expressionInvokesCallable expression = case expression of
     CoreApply {} -> True
     CorePrimitive _ arguments _ -> any expressionInvokesCallable arguments
     CoreLet _ _ value body _ -> expressionInvokesCallable value || expressionInvokesCallable body
+    CoreConditional condition whenTrue whenFalse _ ->
+        any expressionInvokesCallable [condition, whenTrue, whenFalse]
     -- A closure body is deferred; only its capture initializers run now.
     CoreClosure captures _ _ _ _ -> any (expressionInvokesCallable . coreCaptureValue) captures
 
@@ -601,6 +621,15 @@ refineConditionFacts desired expression facts = refine expression
                     afterBinding = transferStatementFacts afterInitializer binding
                     afterBody = refineConditionFacts desired body afterBinding
                  in forgetIntegerFact afterBody (resolvedSymbol name)
+            -- The requested truth can come from either arm; each arm is
+            -- reached only along its own edge of the selecting condition.
+            CoreConditional condition whenTrue whenFalse _ ->
+                let afterCondition = transferExpressionFacts facts condition
+                    throughTrue =
+                        refineConditionFacts desired whenTrue (refineConditionFacts True condition afterCondition)
+                    throughFalse =
+                        refineConditionFacts desired whenFalse (refineConditionFacts False condition afterCondition)
+                 in joinIntegerFacts throughTrue throughFalse
             _
                 | expressionInvokesCallable value -> emptyIntegerFacts
                 | otherwise -> facts
@@ -810,6 +839,11 @@ conditionTruthFromFacts facts expression
             CorePrimitive CoreLogicalOr [left, right] _ ->
                 (||) <$> conditionTruthFromFacts facts left <*> conditionTruthFromFacts facts right
             CorePrimitive primitive [left, right] _ -> comparisonTruth facts primitive left right
+            CoreConditional condition whenTrue whenFalse _ ->
+                case conditionTruthFromFacts facts condition of
+                    Just True -> conditionTruthFromFacts (refineConditionFacts True condition facts) whenTrue
+                    Just False -> conditionTruthFromFacts (refineConditionFacts False condition facts) whenFalse
+                    Nothing -> Nothing
             _ -> Nothing
 
 comparisonTruth :: IntegerFacts -> CorePrimitive -> CoreExpression -> CoreExpression -> Maybe Bool

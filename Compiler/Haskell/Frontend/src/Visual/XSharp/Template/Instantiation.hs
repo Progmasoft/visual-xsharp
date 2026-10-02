@@ -150,6 +150,12 @@ instantiateStatement binding statement = case statement of
         pure (ForEachStatement spanValue kind syntax name closedAnnotation closedSource closedBody)
     IncrementStatement spanValue name annotation direction ->
         IncrementStatement spanValue name <$> instantiateType binding annotation <*> pure direction
+    CompoundAssignmentStatement spanValue operator name annotation value -> do
+        closedAnnotation <- instantiateType binding annotation
+        closedValue <- instantiateExpression binding value
+        pure (CompoundAssignmentStatement spanValue operator name closedAnnotation closedValue)
+    DiscardStatement spanValue value ->
+        DiscardStatement spanValue <$> instantiateExpression binding value
     BreakStatement spanValue value ->
         BreakStatement spanValue <$> traverse (instantiateExpression binding) value
     ContinueStatement spanValue -> pure (ContinueStatement spanValue)
@@ -189,6 +195,17 @@ instantiateExpression binding expression = case expression of
         closedPattern <- instantiatePattern binding patternValue
         closedAnnotation <- instantiateType binding annotation
         pure (IsPatternExpression spanValue closedSubject closedPattern closedAnnotation)
+    ConditionalExpression spanValue condition first second annotation -> do
+        closedCondition <- instantiateExpression binding condition
+        closedFirst <- instantiateExpression binding first
+        closedSecond <- instantiateExpression binding second
+        closedAnnotation <- instantiateType binding annotation
+        pure (ConditionalExpression spanValue closedCondition closedFirst closedSecond closedAnnotation)
+    CoalesceExpression spanValue left fallback annotation -> do
+        closedLeft <- instantiateExpression binding left
+        closedFallback <- instantiateExpression binding fallback
+        closedAnnotation <- instantiateType binding annotation
+        pure (CoalesceExpression spanValue closedLeft closedFallback closedAnnotation)
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse (instantiateCapture binding) captures
         closedParameters <- traverse (instantiateParameter binding) parameters

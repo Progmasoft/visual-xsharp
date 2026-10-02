@@ -220,7 +220,7 @@ namespace
     }
 } // namespace
 
-TEST_CASE("Core v7 round-trips closure targets captures and modes")
+TEST_CASE("Core v8 round-trips closure targets captures and modes")
 {
     const auto source = ClosureModule();
     const auto encoded = Core::wire::encode(source);

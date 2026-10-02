@@ -33,7 +33,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
 
 -- | Schema version emitted by the current Core writer.
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 7
+currentCoreWireVersion = CoreWireVersion 8
 
 -- | Finite bounds for total bytes, recursion, and individual collections.
 data CoreWireLimits = CoreWireLimits
@@ -287,6 +287,12 @@ encodeExpression limits depth expression
             encodedValue <- encodeExpression limits (depth + 1) value
             encodedBody <- encodeExpression limits (depth + 1) body
             pure ([5] ++ encodedType ++ encodedName ++ encodedBindingType ++ encodedValue ++ encodedBody)
+        CoreConditional condition whenTrue whenFalse valueType -> do
+            encodedType <- encodeType limits 0 valueType
+            encodedCondition <- encodeExpression limits (depth + 1) condition
+            encodedTrue <- encodeExpression limits (depth + 1) whenTrue
+            encodedFalse <- encodeExpression limits (depth + 1) whenFalse
+            pure ([6] ++ encodedType ++ encodedCondition ++ encodedTrue ++ encodedFalse)
 
 encodeCoreCapture :: CoreWireLimits -> Int -> CoreCapture -> Encoder
 encodeCoreCapture limits depth capture = do
@@ -571,6 +577,12 @@ decodeExpression depth = do
             value <- decodeExpression (depth + 1)
             body <- decodeExpression (depth + 1)
             pure (CoreLet name bindingType value body valueType)
+        6 -> do
+            valueType <- decodeType 0
+            condition <- decodeExpression (depth + 1)
+            whenTrue <- decodeExpression (depth + 1)
+            whenFalse <- decodeExpression (depth + 1)
+            pure (CoreConditional condition whenTrue whenFalse valueType)
         _ -> invalidTag "expression tag" tag
 
 decodeCoreCapture :: Int -> Decoder CoreCapture

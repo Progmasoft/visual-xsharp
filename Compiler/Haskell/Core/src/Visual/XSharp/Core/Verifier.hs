@@ -196,6 +196,28 @@ verifyExpression environment expression =
                     ++ typeMismatch "VXC1042" "Core let value has the wrong type" bindingType (expressionType value)
                     ++ verifyExpression (Map.insert (resolvedSymbol name) (bindingType, False) environment) body
                     ++ typeMismatch "VXC1043" "Core let result type disagrees with its body" valueType (expressionType body)
+            CoreConditional condition whenTrue whenFalse valueType ->
+                verifyExpression environment condition
+                    ++ [ problem "VXC1067" "Core conditional test must be bool or numeric"
+                       | expressionType condition /= boolType && not (isCoreNumericType (expressionType condition))
+                       ]
+                    ++ verifyExpression environment whenTrue
+                    ++ verifyExpression environment whenFalse
+                    ++ typeMismatch
+                        "VXC1068"
+                        "Core conditional result type disagrees with its first arm"
+                        valueType
+                        (expressionType whenTrue)
+                    ++ typeMismatch
+                        "VXC1069"
+                        "Core conditional result type disagrees with its second arm"
+                        valueType
+                        (expressionType whenFalse)
+                    -- The result is materialized in a plain storage slot. Owned
+                    -- values would need move and release rules for that slot.
+                    ++ [ problem "VXC1070" "Core conditional result must be bool or numeric"
+                       | valueType /= boolType && not (isCoreNumericType valueType)
+                       ]
             CoreClosure captures parameters returnType body valueType ->
                 verifyClosure environment captures parameters returnType body valueType
 

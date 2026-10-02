@@ -228,6 +228,15 @@ expressionFacts knownSymbols pureKnown facts (CoreLet name valueType value body 
         boundState = transferStatementFacts afterValue (CoreBind (CoreBinding name valueType False value))
         (bodyFacts, afterBody) = expressionFacts knownSymbols pureKnown boundState body
      in (combineFacts valueFacts bodyFacts, afterBody)
+expressionFacts knownSymbols pureKnown facts (CoreConditional condition whenTrue whenFalse _) =
+    -- Summaries are path-insensitive: both arms contribute their direct
+    -- effects and callees, and the continuation keeps only shared facts.
+    let (conditionFacts, afterCondition) = expressionFacts knownSymbols pureKnown facts condition
+        (trueFacts, afterTrue) =
+            expressionFacts knownSymbols pureKnown (refineConditionFacts True condition afterCondition) whenTrue
+        (falseFacts, afterFalse) =
+            expressionFacts knownSymbols pureKnown (refineConditionFacts False condition afterCondition) whenFalse
+     in (combineFacts conditionFacts (combineFacts trueFacts falseFacts), joinIntegerFacts afterTrue afterFalse)
 expressionFacts knownSymbols pureKnown facts (CoreApply callee arguments _) =
     let (children, _) = expressionListFacts knownSymbols pureKnown facts (callee : arguments)
         invoked = case directCallee callee of

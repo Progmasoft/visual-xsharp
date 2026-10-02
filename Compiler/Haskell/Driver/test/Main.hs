@@ -3,6 +3,7 @@
 module Main (main) where
 
 import ClosureTests (closureTests)
+import ConditionalExpressionTests (conditionalExpressionTests)
 import CompileTimeParityTests (compileTimeParityTests)
 import Control.Exception (finally)
 import CoreInliningTests (coreInliningTests)
@@ -114,8 +115,8 @@ main = do
     check "Core wire rejects trailing bytes" coreWireRejectsTrailingInput
     check "Core wire rejects unresolved types" coreWireRejectsUnresolvedType
     check "Core wire preserves Unicode scalar values" coreWirePreservesUnicode
-    check "Core wire v7 provenance fields remain stable" coreWireGoldenDocument
-    check "Core wire v7 preserves non-empty source-owner field order" coreWireProjectSourceGolden
+    check "Core wire v8 provenance fields remain stable" coreWireGoldenDocument
+    check "Core wire v8 preserves non-empty source-owner field order" coreWireProjectSourceGolden
     check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
     check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
@@ -163,6 +164,7 @@ main = do
     mapM_ (uncurry check) parserContractTests
     mapM_ (uncurry check) scalarWireTests
     mapM_ (uncurry check) shortCircuitTests
+    mapM_ (uncurry check) conditionalExpressionTests
     mapM_ (uncurry check) specializationTests
     mapM_ (uncurry check) voidTests
 
@@ -530,7 +532,7 @@ coreWireGoldenDocument =
         moduleValue = CoreModuleWithSources (QualifiedName [Identifier "Demo"]) [mainFunction] [] []
         bytes =
             upgradeSimpleV5
-                0x07
+                0x08
                 [ 0x56
                 , 0x58
                 , 0x43
@@ -625,7 +627,7 @@ coreWireProjectSourceGolden =
                 [(symbolIdValue (resolvedSymbol mainName), source)]
         goldenHex =
             unwords
-                [ "56 58 43 52 07 00 00 00 01 00 00 00"
+                [ "56 58 43 52 08 00 00 00 01 00 00 00"
                 , "04 00 00 00 44 00 00 00 65 00 00 00"
                 , "6d 00 00 00 6f 00 00 00 01 00 00 00"
                 , "10 00 00 00 53 00 00 00 6f 00 00 00"
@@ -656,7 +658,7 @@ coreWireProjectSourceGolden =
             _ -> Nothing
 
 -- Adding the empty source catalog and function owner to the compact v5 golden
--- shape gives an independent byte-level v7 expectation. The owner follows the
+-- shape gives an independent byte-level v8 expectation. The owner follows the
 -- function symbol, before its parameter vector, matching the wire contract.
 upgradeSimpleV5 :: Word8 -> [Word8] -> [Word8]
 upgradeSimpleV5 currentVersion v5Bytes =
@@ -828,7 +830,7 @@ coreArtifactRoundTrip = case compile sample of
     Left _ -> pure False
     Right artifacts -> do
         temporary <- getTemporaryDirectory
-        let path = temporary </> "visual-xsharp-core-wire-v7.core"
+        let path = temporary </> "visual-xsharp-core-wire-v8.core"
             cleanup = doesFileExist path >>= \exists -> if exists then removeFile path else pure ()
             value = artifactOptimizedCore artifacts
         ( do

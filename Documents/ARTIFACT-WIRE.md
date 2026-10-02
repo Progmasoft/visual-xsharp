@@ -50,7 +50,7 @@ still fit its declared scalar width.
 
 ## Source ownership
 
-Core v6 introduced, and Core v7 retains, the physical project source catalog
+Core v6 introduced, and Core v8 retains, the physical project source catalog
 and the source owner of each function. CorePrep v6 and Xpp/Xmm v5 also carry
 this provenance. The catalog is ordered exactly like the frontend's
 deterministic project-relative source set.
@@ -80,7 +80,7 @@ source that caused its emission.
 
 Wire v5 introduced explicit tags for unit/no-result, boolean, string, function,
 named, variable, character, every signed and unsigned integer width, and every
-floating width. Wire v6 added source ownership, and Core v7 retains both that
+floating width. Wire v6 added source ownership, and Core v8 retains both that
 metadata and the scalar catalog while adding loop statement tags.
 A decoder reconstructs the exact type; it does not infer width from the literal
 byte count.
@@ -91,7 +91,7 @@ the bit pattern is identical.
 
 ### Core scalar tags (introduced in v5)
 
-The native and Haskell Core codecs retain these assignments in version 7. This
+The native and Haskell Core codecs retain these assignments in version 8. This
 table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
@@ -139,7 +139,7 @@ type record is decoded.
 
 Core and CorePrep encode named-type arguments as typed values rather than
 treating every argument as another type. Their current format retains that
-ordered sum; Core v7 and CorePrep v6 also carry source provenance. Each argument
+ordered sum; Core v8 and CorePrep v6 also carry source provenance. Each argument
 starts with a kind tag and is decoded in source order:
 
 | Tag | Argument payload |
@@ -188,8 +188,8 @@ different role.
 
 ## Core loop statement tags
 
-Core wire v7 preserves the existing statement tags 0 through 4 and appends
-explicit loop-control records. The tag is followed by each field in the order
+Core wire v7 kept the existing statement tags 0 through 4 and appended
+explicit loop-control records; v8 retains them unchanged. The tag is followed by each field in the order
 shown; nested statement lists use the ordinary bounded statement-vector
 encoding.
 
@@ -210,10 +210,37 @@ before the condition is evaluated again. A `do/while` condition follows the
 body because it is evaluated after every entered body, including on the first
 iteration.
 
+## Core expression tags
+
+Every Core expression starts with one tag byte. A primitive is followed by its
+primitive tag; then every expression writes its result type, and the remaining
+payload follows in the order shown.
+
+| Tag | Expression | Payload order after the result type |
+| ---: | --- | --- |
+| 0 | `CoreVariable` | symbol |
+| 1 | `CoreLiteral` | literal payload |
+| 2 | `CoreApply` | callee, argument vector |
+| 3 | `CorePrimitive` | operand vector |
+| 4 | `CoreClosure` | capture vector, parameter vector, return type, body |
+| 5 | `CoreLet` | symbol, binding type, value, body |
+| 6 | `CoreConditional` | test, first arm, second arm |
+
+Core wire v8 added tag 6. Its three children have fixed positions, so the
+record carries no count: a shorter payload is a truncation, never a smaller
+conditional. Each child counts one level against the expression depth limit,
+exactly like a primitive operand. The reader does not check that the arms
+agree with the result type; that is the Core verifier's rule and runs on every
+decoded module.
+
+CorePrep, Xpp, and Xmm have no conditional-expression record. The expression
+is lowered to blocks, a branch, and assignments to one slot before CorePrep is
+serialized, so their versions did not change.
+
 ### Version transition
 
 Versions are strict, not feature-negotiated. Core readers accept only version
-7, CorePrep readers accept only version 6, and Xpp/Xmm readers accept only
+8, CorePrep readers accept only version 6, and Xpp/Xmm readers accept only
 version 5. Every older or future version fails at the version field before
 body decoding. The compiler does not
 guess whether a document happens to contain only fields from an older schema.
@@ -420,8 +447,9 @@ verified again before serialization or forward lowering.
 ## Compatibility policy
 
 The version field describes the entire schema. Core v6 and CorePrep v6 added
-project source catalogs and per-function ownership; Core v7 additionally adds
-structured `while`, `do/while`, classic `for`, `break`, and `continue` records.
+project source catalogs and per-function ownership; Core v7 additionally added
+structured `while`, `do/while`, classic `for`, `break`, and `continue` records,
+and Core v8 adds the conditional expression record.
 Xpp/Xmm began independently at
 version 1; their current version 5 retains the explicit ownership operations,
 template values, and type-test operation, and adds source catalogs and function

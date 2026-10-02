@@ -266,6 +266,16 @@ renameStatement environment next statement = case statement of
             )
     IncrementStatement spanValue name _ direction ->
         (IncrementStatement spanValue (valueOrMissing name environment) () direction, environment, next, [])
+    CompoundAssignmentStatement spanValue operator name _ value ->
+        let (renamedValue, after, problems) = renameExpression environment next value
+         in ( CompoundAssignmentStatement spanValue operator (valueOrMissing name environment) () renamedValue
+            , environment
+            , after
+            , problems
+            )
+    DiscardStatement spanValue value ->
+        let (renamedValue, after, problems) = renameExpression environment next value
+         in (DiscardStatement spanValue renamedValue, environment, after, problems)
     BreakStatement spanValue value ->
         let (renamed, after, problems) = renameOptional environment next value
          in (BreakStatement spanValue renamed, environment, after, problems)
@@ -312,6 +322,18 @@ renameExpression environment next expression = case expression of
             , afterPattern
             , subjectProblems ++ patternProblems
             )
+    ConditionalExpression spanValue condition first second _ ->
+        let (renamedCondition, afterCondition, conditionProblems) = renameExpression environment next condition
+            (renamedFirst, afterFirst, firstProblems) = renameExpression environment afterCondition first
+            (renamedSecond, afterSecond, secondProblems) = renameExpression environment afterFirst second
+         in ( ConditionalExpression spanValue renamedCondition renamedFirst renamedSecond ()
+            , afterSecond
+            , conditionProblems ++ firstProblems ++ secondProblems
+            )
+    CoalesceExpression spanValue left fallback _ ->
+        let (renamedLeft, afterLeft, leftProblems) = renameExpression environment next left
+            (renamedFallback, afterFallback, fallbackProblems) = renameExpression environment afterLeft fallback
+         in (CoalesceExpression spanValue renamedLeft renamedFallback (), afterFallback, leftProblems ++ fallbackProblems)
     CallableExpression spanValue explicit sourceCaptures sourceParameters sourceBody _ ->
         let (captures, captureEnvironment, afterCaptures, captureProblems) =
                 renameCaptures environment next sourceCaptures
