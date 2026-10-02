@@ -7,6 +7,7 @@
 #include <optional>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -450,4 +451,56 @@ TEST_CASE("do-while continue targets the trailing condition block",
     CHECK(IsJumpTo(Find(function, second.terminator.true_target), exitId));
     for (const auto &block : function.blocks)
         CHECK(ReachesReturn(function, block.id));
+}
+
+TEST_CASE("Core verifier rejects continue in a for update region",
+          "[core][verifier][loop]")
+{
+    const auto codes = [](std::vector<Core::Statement> body,
+                          std::vector<Core::Statement> update) {
+        std::vector<std::string> result;
+        for (const auto &issue : Core::Verify(LoopModule(Core::Statement::For(
+                 Compare(Core::Primitive::LessThan, kIndex, 3),
+                 std::move(body),
+                 std::move(update)))))
+            result.push_back(issue.code);
+        return result;
+    };
+    const auto has
+        = [](const std::vector<std::string> &found, std::string_view code) {
+              return std::ranges::find(found, code) != found.end();
+          };
+
+    // The update region is the loop's continuation point: a `continue`
+    // there would re-enter the update and never test the condition again.
+    CHECK(has(codes({}, { Core::Statement::Continue() }), "VXC1066"));
+    CHECK(has(
+        codes({},
+              { Core::Statement::If(Compare(Core::Primitive::Equal, kIndex, 1),
+                                    { Core::Statement::Continue() },
+                                    {}) }),
+        "VXC1066"));
+
+    // `continue` in the body, `break` in the update, and `continue` in a
+    // loop nested inside the update all keep a defined target.
+    CHECK(
+        codes({ Core::Statement::Continue() }, { Increment(kIndex, U"index") })
+            .empty());
+    CHECK(codes({ Accumulate() },
+                { Increment(kIndex, U"index"), Core::Statement::Break() })
+              .empty());
+    CHECK(codes({ Accumulate() },
+                { Increment(kIndex, U"index"),
+                  Core::Statement::While(
+                      Compare(Core::Primitive::LessThan, kTotal, 0),
+                      { Core::Statement::Continue() }) })
+              .empty());
+
+    // Outside any loop the existing diagnostic applies, not the new one.
+    auto module = LoopModule(Core::Statement::Continue());
+    std::vector<std::string> outside;
+    for (const auto &issue : Core::Verify(module))
+        outside.push_back(issue.code);
+    CHECK(has(outside, "VXC1065"));
+    CHECK_FALSE(has(outside, "VXC1066"));
 }
