@@ -142,10 +142,8 @@ go run ./helpers/cmd/githelper push
 
 The helper excludes generated and local-only paths, applies recursive submodule file-mode hygiene, and never forces a push.
 `update` refuses to commit on the default branch unless `--allow-default-branch` is given, and prints the staged scope by
-top-level directory before it commits. When a co-author is configured with `--co-author` or the `VXS_GITHELPER_CO_AUTHOR`
-environment variable, the `Co-Authored-By` trailer is added only to a commit that contains no code. Code is
-programming-language source such as C++, Haskell, C#, Kotlin or TypeScript; documentation, configuration and the Go helpers
-under `helpers/` are not. It is a maintainer convenience, not a requirement for external contributors.
+top-level directory before it commits. The commit message is committed as written. It is a maintainer convenience, not a
+requirement for external contributors.
 
 The commit message should state the user-visible or architectural outcome and the verification performed, not merely “update
 files.” Generated output, caches, local credentials, internal service state, and ignored nested-repository content remain out

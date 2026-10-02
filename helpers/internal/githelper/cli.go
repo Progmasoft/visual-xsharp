@@ -12,17 +12,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// coAuthorVariable names the environment variable that supplies the default
-// co-author, so an identity never has to be written into a command line or
-// into this source.
-const coAuthorVariable = "VXS_GITHELPER_CO_AUTHOR"
-
 const longDescription = `Guarded Git workflow for the Visual X# repositories.
 
 The helper stages safely, commits, and pushes without ever rewriting remote
-history. It keeps generated output and private agent notes out of the index,
-refuses to commit on the default branch, and applies the co-author rule from
-the staged paths instead of from memory.
+history. It keeps generated output and private agent notes out of the index
+and refuses to commit on the default branch.
 
 Typical topic-branch flow:
   githelper start feature/name
@@ -32,7 +26,7 @@ Typical topic-branch flow:
 
 // newCommand owns parsing independently of Git, so an invalid invocation
 // cannot stage, commit or push anything.
-func newCommand(runner gitRunner, output, errorOutput io.Writer, environment func(string) string) *cobra.Command {
+func newCommand(runner gitRunner, output, errorOutput io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "githelper",
 		Short:         "Guarded Git workflow for the Visual X# repositories",
@@ -64,12 +58,7 @@ func newCommand(runner gitRunner, output, errorOutput io.Writer, environment fun
 
 Generated output and files covered by an ignore rule are removed from the
 index before and after staging. The commit message is the argument or the
-content of --message-file. The push never forces.
-
-When a co-author is configured, its Co-Authored-By trailer is added only to a
-commit that contains no code. Code is programming-language source such as
-C++, Haskell, C#, Kotlin or TypeScript; documentation, configuration and the
-Go helpers under helpers/ are not.`,
+content of --message-file and is committed as written. The push never forces.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: inRepository(func(_ *cobra.Command, arguments []string) error {
 			message, err := resolveMessage(arguments, messageFile)
@@ -77,14 +66,10 @@ Go helpers under helpers/ are not.`,
 				return err
 			}
 			options.message = message
-			if options.coAuthor == "" {
-				options.coAuthor = environment(coAuthorVariable)
-			}
 			return update(runner, output, options)
 		}),
 	}
 	updateCommand.Flags().StringVarP(&messageFile, "message-file", "F", "", "read the commit message from this file")
-	updateCommand.Flags().StringVar(&options.coAuthor, "co-author", "", `co-author as "Name <address>"; default from `+coAuthorVariable)
 	updateCommand.Flags().BoolVar(&options.dryRun, "dry-run", false, "show what would be committed and change nothing")
 	updateCommand.Flags().BoolVar(&options.noPush, "no-push", false, "commit without pushing")
 	updateCommand.Flags().BoolVar(&options.allowDefaultBranch, "allow-default-branch", false, "permit a commit on the default branch")
@@ -154,7 +139,7 @@ func resolveMessage(arguments []string, messageFile string) (string, error) {
 // exit code.
 func Execute(arguments []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	runner := processRunner{stdin: stdin, stdout: stdout, stderr: stderr}
-	command := newCommand(runner, stdout, stderr, os.Getenv)
+	command := newCommand(runner, stdout, stderr)
 	command.SetArgs(arguments)
 	if err := command.Execute(); err != nil {
 		fmt.Fprintln(stderr, err)

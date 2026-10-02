@@ -75,9 +75,9 @@ func topicRepository(staged ...string) *scriptedGit {
 	}}
 }
 
-func invoke(git *scriptedGit, environment map[string]string, arguments ...string) (string, error) {
+func invoke(git *scriptedGit, arguments ...string) (string, error) {
 	var output bytes.Buffer
-	command := newCommand(git, &output, &output, func(name string) string { return environment[name] })
+	command := newCommand(git, &output, &output)
 	command.SetArgs(arguments)
 	err := command.Execute()
 	return output.String(), err
@@ -89,73 +89,6 @@ func exitCode(err error) int {
 		return failure.code
 	}
 	return -1
-}
-
-func TestClassifyTreatsOnlyLanguageSourceOutsideHelpersAsCode(t *testing.T) {
-	cases := []struct {
-		paths []string
-		want  commitScope
-	}{
-		{nil, scopeEmpty},
-		{[]string{"Documents/CORE-IR.md", "README.md", "CHANGELOG.md"}, scopeWithoutCode},
-		{[]string{"helpers/internal/githelper/cli.go", "helpers/go.mod"}, scopeWithoutCode},
-		{[]string{"helpers/cmd/githelper/main.go", "Documents/BUILDING.md"}, scopeWithoutCode},
-		{[]string{".github/workflows/ci.yml", "justfile", "MODULE.bazel", "Compiler/Core/BUILD.bazel"}, scopeWithoutCode},
-		{[]string{"Compiler/Fuzzing/Corpus/differential/arithmetic.seed", "fourmolu.yaml"}, scopeWithoutCode},
-		{[]string{"Compiler/Core/IR.cpp"}, scopeCode},
-		{[]string{"Compiler/Headers/Visual/XSharp/Core/IR.hpp"}, scopeCode},
-		{[]string{"Compiler/Haskell/Core/src/Visual/XSharp/Core.hs"}, scopeCode},
-		{[]string{"Tools/Example.cs"}, scopeCode},
-		{[]string{"xide/modules/app/Main.kt"}, scopeCode},
-		{[]string{"build.gradle.kts"}, scopeCode},
-		{[]string{"Analyzer/client/extension.ts"}, scopeCode},
-		{[]string{"Spec/Language/Operators.vxs"}, scopeCode},
-		{[]string{"tools/other/main.go"}, scopeCode},
-		{[]string{"Compiler/Core/IR.CPP"}, scopeCode},
-		// One code file decides, whatever accompanies it.
-		{[]string{"Documents/CORE-IR.md", "Compiler/Core/IR.cpp"}, scopeCode},
-		{[]string{"helpers/cmd/githelper/main.go", "Compiler/Core/IR.cpp"}, scopeCode},
-	}
-	for _, test := range cases {
-		if actual := classify(test.paths); actual != test.want {
-			t.Errorf("classify(%v) = %v, want %v", test.paths, actual, test.want)
-		}
-	}
-}
-
-func TestComposeMessageAddsTheTrailerOnlyWithoutCode(t *testing.T) {
-	const author = "Example Author <author@example.invalid>"
-	const trailer = "Co-Authored-By: " + author
-	body := "Subject\n\nBody text."
-
-	if message := composeMessage(body, author, scopeWithoutCode); message != body+"\n\n"+trailer+"\n" {
-		t.Errorf("message without code = %q", message)
-	}
-	if message := composeMessage(body, author, scopeCode); message != body+"\n" {
-		t.Errorf("code message = %q", message)
-	}
-	if message := composeMessage(body, "", scopeWithoutCode); message != body+"\n" {
-		t.Errorf("message without a configured co-author = %q", message)
-	}
-}
-
-func TestComposeMessageNeverKeepsOrDuplicatesAWrittenTrailer(t *testing.T) {
-	const author = "Example Author <author@example.invalid>"
-	const trailer = "Co-Authored-By: " + author
-	written := "Subject\r\n\r\nBody.\r\n\r\n" + trailer + "\r\n"
-
-	if message := composeMessage(written, author, scopeCode); strings.Contains(message, trailer) {
-		t.Errorf("a code commit kept the trailer: %q", message)
-	}
-	message := composeMessage(written, author, scopeWithoutCode)
-	if strings.Count(message, trailer) != 1 || strings.Contains(message, "\r") {
-		t.Errorf("documentation message = %q", message)
-	}
-	// A different co-author written by hand is the author's own statement.
-	other := "Subject\n\nCo-Authored-By: Someone Else <else@example.invalid>"
-	if message := composeMessage(other, author, scopeCode); !strings.Contains(message, "Someone Else") {
-		t.Errorf("an unrelated trailer was removed: %q", message)
-	}
 }
 
 func TestGeneratedAndPrivatePathsAreRecognizedAtAnyDepth(t *testing.T) {
@@ -193,7 +126,7 @@ func TestUntrackPathspecsAddEachIgnoredTrackedFileOnce(t *testing.T) {
 
 func TestUpdateStagesCommitsAndPushesInOrder(t *testing.T) {
 	git := topicRepository("Compiler/Core/IR.cpp")
-	output, err := invoke(git, nil, "update", "Change the IR")
+	output, err := invoke(git, "update", "Change the IR")
 	if err != nil {
 		t.Fatalf("update failed: %v\n%s", err, output)
 	}
@@ -204,14 +137,14 @@ func TestUpdateStagesCommitsAndPushesInOrder(t *testing.T) {
 	if message := git.input["commit --file=-"]; message != "Change the IR\n" {
 		t.Fatalf("commit message = %q", message)
 	}
-	if !strings.Contains(output, "1 staged path(s), code") {
+	if !strings.Contains(output, "1 staged path(s):") {
 		t.Fatalf("scope was not reported:\n%s", output)
 	}
 }
 
 func TestUpdateNeverForcesThePush(t *testing.T) {
 	git := topicRepository("Compiler/Core/IR.cpp")
-	if _, err := invoke(git, nil, "update", "Change"); err != nil {
+	if _, err := invoke(git, "update", "Change"); err != nil {
 		t.Fatal(err)
 	}
 	for _, command := range git.runs {
@@ -221,47 +154,10 @@ func TestUpdateNeverForcesThePush(t *testing.T) {
 	}
 }
 
-func TestUpdateAppliesTheCoAuthorFromTheEnvironmentByScope(t *testing.T) {
-	const author = "Example Author <author@example.invalid>"
-	environment := map[string]string{coAuthorVariable: author}
-
-	helpers := topicRepository("helpers/internal/githelper/cli.go")
-	if output, err := invoke(helpers, environment, "update", "Rewrite the helper"); err != nil {
-		t.Fatalf("%v\n%s", err, output)
-	}
-	if message := helpers.input["commit --file=-"]; !strings.HasSuffix(message, "\n\nCo-Authored-By: "+author+"\n") {
-		t.Fatalf("helpers-only message = %q", message)
-	}
-
-	code := topicRepository("helpers/internal/githelper/cli.go", "Compiler/Core/IR.cpp")
-	output, err := invoke(code, environment, "update", "Change both")
-	if err != nil {
-		t.Fatalf("%v\n%s", err, output)
-	}
-	if message := code.input["commit --file=-"]; strings.Contains(message, "Co-Authored-By") {
-		t.Fatalf("a commit with code carries the trailer: %q", message)
-	}
-	if !strings.Contains(output, "co-author trailer withheld") {
-		t.Fatalf("the decision was not reported:\n%s", output)
-	}
-}
-
-func TestUpdateFlagOverridesTheEnvironmentCoAuthor(t *testing.T) {
-	git := topicRepository("Documents/BUILDING.md")
-	environment := map[string]string{coAuthorVariable: "Environment <environment@example.invalid>"}
-	if _, err := invoke(git, environment, "update", "--co-author", "Flag <flag@example.invalid>", "Document the build"); err != nil {
-		t.Fatal(err)
-	}
-	message := git.input["commit --file=-"]
-	if !strings.Contains(message, "Flag <flag@example.invalid>") || strings.Contains(message, "Environment") {
-		t.Fatalf("message = %q", message)
-	}
-}
-
 func TestUpdateRefusesTheDefaultBranchBeforeStaging(t *testing.T) {
 	git := topicRepository("Compiler/Core/IR.cpp")
 	git.captures["branch --show-current"] = "main\n"
-	_, err := invoke(git, nil, "update", "Change")
+	_, err := invoke(git, "update", "Change")
 	if err == nil || !strings.Contains(err.Error(), "default branch") {
 		t.Fatalf("error = %v", err)
 	}
@@ -271,14 +167,14 @@ func TestUpdateRefusesTheDefaultBranchBeforeStaging(t *testing.T) {
 
 	allowed := topicRepository("Compiler/Core/IR.cpp")
 	allowed.captures["branch --show-current"] = "main\n"
-	if _, err := invoke(allowed, nil, "update", "--allow-default-branch", "Change"); err != nil {
+	if _, err := invoke(allowed, "update", "--allow-default-branch", "Change"); err != nil {
 		t.Fatalf("explicitly allowed commit failed: %v", err)
 	}
 }
 
 func TestUpdateWithNothingStagedDoesNotCommit(t *testing.T) {
 	git := topicRepository()
-	_, err := invoke(git, nil, "update", "Change")
+	_, err := invoke(git, "update", "Change")
 	if err == nil || !strings.Contains(err.Error(), "nothing to commit") {
 		t.Fatalf("error = %v", err)
 	}
@@ -292,7 +188,7 @@ func TestUpdateWithNothingStagedDoesNotCommit(t *testing.T) {
 func TestUpdateStopsWhenTheCommitFails(t *testing.T) {
 	git := topicRepository("Compiler/Core/IR.cpp")
 	git.codes = map[string]int{"commit": 1}
-	if _, err := invoke(git, nil, "update", "Change"); err == nil {
+	if _, err := invoke(git, "update", "Change"); err == nil {
 		t.Fatal("a failed commit was reported as success")
 	}
 	for _, command := range git.runs {
@@ -305,7 +201,7 @@ func TestUpdateStopsWhenTheCommitFails(t *testing.T) {
 func TestUpdateReportsADirtyTreeAfterThePush(t *testing.T) {
 	git := topicRepository("Compiler/Core/IR.cpp")
 	git.captures["status --short"] = " M Compiler/Core/IR.cpp\n"
-	_, err := invoke(git, nil, "update", "Change")
+	_, err := invoke(git, "update", "Change")
 	if err == nil || !strings.Contains(err.Error(), "still dirty") {
 		t.Fatalf("error = %v", err)
 	}
@@ -313,7 +209,7 @@ func TestUpdateReportsADirtyTreeAfterThePush(t *testing.T) {
 
 func TestUpdateNoPushOnlyCommits(t *testing.T) {
 	git := topicRepository("Compiler/Core/IR.cpp")
-	if _, err := invoke(git, nil, "update", "--no-push", "Change"); err != nil {
+	if _, err := invoke(git, "update", "--no-push", "Change"); err != nil {
 		t.Fatal(err)
 	}
 	if actual := git.mutating(); !reflect.DeepEqual(actual, []string{"add --all", "commit --file=-"}) {
@@ -326,14 +222,14 @@ func TestUpdateDryRunChangesNothing(t *testing.T) {
 	git.captures["status --porcelain=v1 -z --untracked-files=all"] = string(nullSeparated([]string{
 		" M Documents/BUILDING.md", "?? Documents/NEW.md", "R  Documents/B.md", "Documents/A.md", "?? build/output.o", "?? .claude/WORKLOG.md",
 	}))
-	output, err := invoke(git, map[string]string{coAuthorVariable: "Example <example@example.invalid>"}, "update", "--dry-run", "Document")
+	output, err := invoke(git, "update", "--dry-run", "Document")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, output)
 	}
 	if len(git.runs) != 0 {
 		t.Fatalf("a dry run issued commands: %#v", git.runs)
 	}
-	for _, expected := range []string{"4 staged path(s), no code", "Documents/A.md", "Documents/B.md", "co-author trailer added", "dry run"} {
+	for _, expected := range []string{"4 staged path(s):", "Documents/A.md", "Documents/B.md", "dry run"} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("output lacks %q:\n%s", expected, output)
 		}
@@ -343,13 +239,25 @@ func TestUpdateDryRunChangesNothing(t *testing.T) {
 	}
 }
 
+func TestUpdateCommitsTheMessageAsWritten(t *testing.T) {
+	git := topicRepository("Documents/BUILDING.md")
+	written := "Subject\r\n\r\nBody.\r\n\r\nCo-Authored-By: Someone <someone@example.invalid>\r\n\r\n"
+	if _, err := invoke(git, "update", written); err != nil {
+		t.Fatal(err)
+	}
+	want := "Subject\n\nBody.\n\nCo-Authored-By: Someone <someone@example.invalid>\n"
+	if message := git.input["commit --file=-"]; message != want {
+		t.Fatalf("message = %q", message)
+	}
+}
+
 func TestUpdateReadsTheMessageFromAFile(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "message.txt")
 	if err := os.WriteFile(file, []byte("Subject\n\nA body with \"quotes\" and $dollars.\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	git := topicRepository("Compiler/Core/IR.cpp")
-	if _, err := invoke(git, nil, "update", "--message-file", file); err != nil {
+	if _, err := invoke(git, "update", "--message-file", file); err != nil {
 		t.Fatal(err)
 	}
 	if message := git.input["commit --file=-"]; message != "Subject\n\nA body with \"quotes\" and $dollars.\n" {
@@ -370,7 +278,7 @@ func TestUpdateRejectsMissingEmptyAndDoubleMessages(t *testing.T) {
 		{"update", "one", "two"},
 	} {
 		git := topicRepository("Compiler/Core/IR.cpp")
-		if _, err := invoke(git, nil, arguments...); err == nil {
+		if _, err := invoke(git, arguments...); err == nil {
 			t.Errorf("%v was accepted", arguments)
 		}
 		if len(git.runs) != 0 {
@@ -381,7 +289,7 @@ func TestUpdateRejectsMissingEmptyAndDoubleMessages(t *testing.T) {
 
 func TestPushPublishesWithoutCommitting(t *testing.T) {
 	git := topicRepository()
-	if _, err := invoke(git, nil, "push"); err != nil {
+	if _, err := invoke(git, "push"); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(git.runs, []string{"push -u origin feature/topic"}) {
@@ -390,14 +298,14 @@ func TestPushPublishesWithoutCommitting(t *testing.T) {
 
 	protected := topicRepository()
 	protected.captures["branch --show-current"] = "main\n"
-	if _, err := invoke(protected, nil, "push"); err == nil || len(protected.runs) != 0 {
+	if _, err := invoke(protected, "push"); err == nil || len(protected.runs) != 0 {
 		t.Fatalf("push on the default branch: err=%v runs=%#v", err, protected.runs)
 	}
 }
 
 func TestSyncMergesOnlyWhenTheDefaultBranchMoved(t *testing.T) {
 	current := topicRepository()
-	output, err := invoke(current, nil, "sync")
+	output, err := invoke(current, "sync")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +315,7 @@ func TestSyncMergesOnlyWhenTheDefaultBranchMoved(t *testing.T) {
 
 	behind := topicRepository()
 	behind.captures["rev-list --count HEAD..origin/main"] = "3\n"
-	output, err = invoke(behind, nil, "sync")
+	output, err = invoke(behind, "sync")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,14 +330,14 @@ func TestSyncMergesOnlyWhenTheDefaultBranchMoved(t *testing.T) {
 func TestSyncNeedsACleanTreeAndReportsConflicts(t *testing.T) {
 	dirty := topicRepository()
 	dirty.captures["status --short"] = " M file\n"
-	if _, err := invoke(dirty, nil, "sync"); err == nil || len(dirty.runs) != 0 {
+	if _, err := invoke(dirty, "sync"); err == nil || len(dirty.runs) != 0 {
 		t.Fatalf("sync ran on a dirty tree: err=%v runs=%#v", err, dirty.runs)
 	}
 
 	conflicted := topicRepository()
 	conflicted.captures["rev-list --count HEAD..origin/main"] = "1\n"
 	conflicted.codes = map[string]int{"merge": 1}
-	_, err := invoke(conflicted, nil, "sync")
+	_, err := invoke(conflicted, "sync")
 	if err == nil || !strings.Contains(err.Error(), "conflicts") {
 		t.Fatalf("error = %v", err)
 	}
@@ -443,7 +351,7 @@ func TestSyncNeedsACleanTreeAndReportsConflicts(t *testing.T) {
 func TestSyncFastForwardsTheDefaultBranchOnly(t *testing.T) {
 	git := topicRepository()
 	git.captures["branch --show-current"] = "main\n"
-	if _, err := invoke(git, nil, "sync"); err != nil {
+	if _, err := invoke(git, "sync"); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(git.runs, []string{"fetch --prune origin", "merge --ff-only origin/main"}) {
@@ -453,7 +361,7 @@ func TestSyncFastForwardsTheDefaultBranchOnly(t *testing.T) {
 
 func TestStartCreatesABranchFromTheRemoteDefault(t *testing.T) {
 	git := topicRepository()
-	if _, err := invoke(git, nil, "start", "feature/new"); err != nil {
+	if _, err := invoke(git, "start", "feature/new"); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"check-ref-format --branch feature/new", "fetch --prune origin", "switch --create feature/new --no-track origin/main"}
@@ -463,13 +371,13 @@ func TestStartCreatesABranchFromTheRemoteDefault(t *testing.T) {
 
 	invalid := topicRepository()
 	invalid.codes = map[string]int{"check-ref-format": 1}
-	if _, err := invoke(invalid, nil, "start", "bad..name"); exitCode(err) != 2 || len(invalid.runs) != 1 {
+	if _, err := invoke(invalid, "start", "bad..name"); exitCode(err) != 2 || len(invalid.runs) != 1 {
 		t.Fatalf("err=%v runs=%#v", err, invalid.runs)
 	}
 
 	dirty := topicRepository()
 	dirty.captures["status --short"] = "?? scratch\n"
-	if _, err := invoke(dirty, nil, "start", "feature/new"); err == nil {
+	if _, err := invoke(dirty, "start", "feature/new"); err == nil {
 		t.Fatal("start ran on a dirty tree")
 	}
 }
@@ -489,7 +397,7 @@ func TestDefaultBranchFallsBackToAConventionalRemoteBranch(t *testing.T) {
 func TestStatusReportsUpstreamDefaultBranchAndChanges(t *testing.T) {
 	git := topicRepository()
 	git.captures["rev-list --count HEAD..origin/main"] = "4\n"
-	output, err := invoke(git, nil, "status")
+	output, err := invoke(git, "status")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +408,7 @@ func TestStatusReportsUpstreamDefaultBranchAndChanges(t *testing.T) {
 	}
 	// The earlier command name still works.
 	git.captures["status --short"] = " M file\n"
-	if output, err := invoke(git, nil, "uncom"); err != nil || !strings.Contains(output, " M file") {
+	if output, err := invoke(git, "uncom"); err != nil || !strings.Contains(output, " M file") {
 		t.Fatalf("uncom: err=%v output=%q", err, output)
 	}
 	if len(git.runs) != 0 {
@@ -511,7 +419,7 @@ func TestStatusReportsUpstreamDefaultBranchAndChanges(t *testing.T) {
 func TestCommandsOutsideARepositoryDoNothing(t *testing.T) {
 	git := &scriptedGit{captures: map[string]string{}}
 	for _, arguments := range [][]string{{"update", "Message"}, {"push"}, {"sync"}, {"start", "x"}, {"status"}, {"clean"}} {
-		if _, err := invoke(git, nil, arguments...); err == nil || !strings.Contains(err.Error(), "not inside a git work tree") {
+		if _, err := invoke(git, arguments...); err == nil || !strings.Contains(err.Error(), "not inside a git work tree") {
 			t.Errorf("%v: err = %v", arguments, err)
 		}
 	}
@@ -523,7 +431,7 @@ func TestCommandsOutsideARepositoryDoNothing(t *testing.T) {
 func TestInvalidInvocationsNeverReachGit(t *testing.T) {
 	for _, arguments := range [][]string{{"unknown"}, {"push", "extra"}, {"clean", "extra"}, {"start"}, {"update", "--force", "Message"}} {
 		git := topicRepository("Compiler/Core/IR.cpp")
-		if _, err := invoke(git, nil, arguments...); err == nil {
+		if _, err := invoke(git, arguments...); err == nil {
 			t.Errorf("%v was accepted", arguments)
 		}
 		if len(git.runs) != 0 {
@@ -534,7 +442,7 @@ func TestInvalidInvocationsNeverReachGit(t *testing.T) {
 
 func TestHelpDescribesEveryCommand(t *testing.T) {
 	git := &scriptedGit{}
-	output, err := invoke(git, nil, "--help")
+	output, err := invoke(git, "--help")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +451,7 @@ func TestHelpDescribesEveryCommand(t *testing.T) {
 			t.Errorf("help lacks %q:\n%s", name, output)
 		}
 	}
-	if output, err := invoke(git, nil, "help", "update"); err != nil || !strings.Contains(output, "--message-file") {
+	if output, err := invoke(git, "help", "update"); err != nil || !strings.Contains(output, "--message-file") {
 		t.Fatalf("help update: err=%v\n%s", err, output)
 	}
 }

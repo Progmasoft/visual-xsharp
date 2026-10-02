@@ -11,12 +11,8 @@ import (
 
 // updateOptions select how one commit is created and published.
 type updateOptions struct {
-	// message is the complete commit message without any trailer the scope
-	// rule may add.
+	// message is the complete commit message; it is committed as written.
 	message string
-	// coAuthor is "Name <address>". When set, a Co-Authored-By trailer is
-	// added only to a commit that contains no code.
-	coAuthor string
 	// dryRun reports what would be committed and changes nothing.
 	dryRun bool
 	// allowDefaultBranch permits a commit directly on the default branch.
@@ -59,7 +55,7 @@ func update(runner gitRunner, output io.Writer, options updateOptions) error {
 		}
 	}
 	if options.dryRun {
-		return previewUpdate(runner, output, options)
+		return previewUpdate(runner, output)
 	}
 
 	// Hygiene runs on both sides of staging: before, so a tracked generated
@@ -82,10 +78,8 @@ func update(runner gitRunner, output io.Writer, options updateOptions) error {
 		return failf("nothing to commit; use `githelper push` to publish existing commits")
 	}
 	fmt.Fprint(output, describeScope(paths))
-	message := composeMessage(options.message, options.coAuthor, classify(paths))
-	reportTrailer(output, options.coAuthor, classify(paths))
 
-	code, err := runner.Run([]byte(message), false, "commit", "--file=-")
+	code, err := runner.Run([]byte(normalizeMessage(options.message)), false, "commit", "--file=-")
 	if err != nil {
 		return err
 	}
@@ -108,19 +102,8 @@ func update(runner gitRunner, output io.Writer, options updateOptions) error {
 	return nil
 }
 
-func reportTrailer(output io.Writer, coAuthor string, scope commitScope) {
-	if coAuthor == "" {
-		return
-	}
-	if scope == scopeWithoutCode {
-		fmt.Fprintln(output, "co-author trailer added: the commit contains no code")
-	} else {
-		fmt.Fprintln(output, "co-author trailer withheld: the commit contains code")
-	}
-}
-
 // previewUpdate shows what `update` would stage, without touching the index.
-func previewUpdate(runner gitRunner, output io.Writer, options updateOptions) error {
+func previewUpdate(runner gitRunner, output io.Writer) error {
 	listing, err := runner.Capture("status", "--porcelain=v1", "-z", "--untracked-files=all")
 	if err != nil {
 		return err
@@ -152,7 +135,6 @@ func previewUpdate(runner gitRunner, output io.Writer, options updateOptions) er
 	for _, changed := range paths {
 		fmt.Fprintf(output, "  %s\n", changed)
 	}
-	reportTrailer(output, options.coAuthor, classify(paths))
 	fmt.Fprintln(output, "dry run: nothing was staged, committed or pushed")
 	return nil
 }
