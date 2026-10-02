@@ -315,6 +315,9 @@ expressionDefinitionSymbols expression = case expression of
         concatMap expressionDefinitionSymbols [condition, first, second]
     CoalesceExpression _ left fallback _ ->
         expressionDefinitionSymbols left ++ expressionDefinitionSymbols fallback
+    AssignmentExpression _ _ _ value _ -> expressionDefinitionSymbols value
+    IncrementExpression {} -> []
+    LoopExpression _ loop _ -> statementDefinitionSymbols loop
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters
@@ -381,6 +384,9 @@ expressionTypes expression = case expression of
         annotation : concatMap expressionTypes [condition, first, second]
     CoalesceExpression _ left fallback annotation ->
         annotation : expressionTypes left ++ expressionTypes fallback
+    AssignmentExpression _ _ _ value annotation -> annotation : expressionTypes value
+    IncrementExpression _ _ _ _ annotation -> [annotation]
+    LoopExpression _ loop annotation -> annotation : statementTypes loop
     CallableExpression _ _ captures parameters body annotation ->
         annotation
             : map captureAnnotation captures

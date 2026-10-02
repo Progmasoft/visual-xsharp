@@ -559,6 +559,9 @@ expressionTypes expression = case expression of
         annotation : concatMap expressionTypes [condition, whenTrue, whenFalse]
     CoalesceExpression _ left fallback annotation ->
         annotation : expressionTypes left ++ expressionTypes fallback
+    AssignmentExpression _ _ _ value annotation -> annotation : expressionTypes value
+    IncrementExpression _ _ _ _ annotation -> [annotation]
+    LoopExpression _ loop annotation -> annotation : statementTypes loop
     CallableExpression _ _ captures parameters body annotation ->
         annotation
             : concatMap captureTypes captures

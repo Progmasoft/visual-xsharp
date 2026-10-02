@@ -167,6 +167,16 @@ resolveExpression expression = case expression of
         let (resolvedLeft, leftProblems) = resolveExpression left
             (resolvedFallback, fallbackProblems) = resolveExpression fallback
          in (CoalesceExpression spanValue resolvedLeft resolvedFallback (), leftProblems ++ fallbackProblems)
+    AssignmentExpression spanValue operator name value _ ->
+        let (resolvedName, nameProblems) = resolveName spanValue name
+            (resolvedValue, valueProblems) = resolveExpression value
+         in (AssignmentExpression spanValue operator resolvedName resolvedValue (), nameProblems ++ valueProblems)
+    IncrementExpression spanValue isIncrement isPrefix name _ ->
+        let (resolvedName, problems) = resolveName spanValue name
+         in (IncrementExpression spanValue isIncrement isPrefix resolvedName (), problems)
+    LoopExpression spanValue loop _ ->
+        let (resolvedLoop, problems) = resolveStatement loop
+         in (LoopExpression spanValue resolvedLoop (), problems)
     CallableExpression spanValue explicit captures parameters body _ ->
         let resolvedCaptures = map resolveCapture captures
             resolvedParameters = map resolveParameter parameters

@@ -408,6 +408,9 @@ symbols expression = case expression of
     IsPatternExpression _ value _ _ -> symbols value
     ConditionalExpression _ condition whenTrue whenFalse _ -> concatMap symbols [condition, whenTrue, whenFalse]
     CoalesceExpression _ left fallback _ -> symbols left ++ symbols fallback
+    AssignmentExpression _ _ name value _ -> resolvedSymbol name : symbols value
+    IncrementExpression _ _ _ name _ -> [resolvedSymbol name]
+    LoopExpression {} -> []
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters

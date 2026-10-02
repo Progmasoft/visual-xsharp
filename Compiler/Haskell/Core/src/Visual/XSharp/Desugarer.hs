@@ -11,6 +11,7 @@ import Data.List (nub)
 import Data.Word (Word64)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
+import Visual.XSharp.Desugarer.Sequencing
 import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
 
 -- | Pluggable desugaring pass from typed source semantics into Core IR.
@@ -116,37 +117,57 @@ lowerDeclaration declaration@FunctionDeclaration {} = do
 lowerDeclaration TypeDeclaration {} = error "type declarations are lowered through lowerTop"
 lowerDeclaration TemplateTypeDeclaration {} = error "template declarations require specialization before Core lowering"
 
+{- | Where a @break value;@ stores its value: the result slot of the loop
+expression it leaves. A loop statement has no slot, and its body is lowered
+without one, so a value-carrying break can only reach its own loop's slot.
+-}
+type BreakTarget = Maybe (ResolvedName, Type)
+
 lowerBlock :: Block ResolvedName Type -> Lower [CoreStatement]
-lowerBlock (Block statements) = concat <$> mapM lowerStatement statements
+lowerBlock = lowerBlockInto Nothing
+
+lowerBlockInto :: BreakTarget -> Block ResolvedName Type -> Lower [CoreStatement]
+lowerBlockInto target (Block statements) = concat <$> mapM (lowerStatementInto target) statements
 
 lowerFunctionBlock :: Type -> Block ResolvedName Type -> Lower [CoreStatement]
 lowerFunctionBlock returnType (Block statements) = case reverse statements of
     ExpressionStatement _ expression False : remaining
         | returnType /= unitType -> do
             prefix <- concat <$> mapM lowerStatement (reverse remaining)
-            value <- lowerExpression expression
-            pure (prefix ++ [CoreReturn value])
+            (valuePrefix, value) <- lowerExpression expression
+            pure (prefix ++ valuePrefix ++ [CoreReturn value])
     _ -> concat <$> mapM lowerStatement statements
 
 lowerStatement :: Statement ResolvedName Type -> Lower [CoreStatement]
-lowerStatement statement = case statement of
+lowerStatement = lowerStatementInto Nothing
+
+lowerStatementInto :: BreakTarget -> Statement ResolvedName Type -> Lower [CoreStatement]
+lowerStatementInto target statement = case statement of
     BindingStatement _ kind _ name valueType value -> do
-        lowered <- lowerExpression value
-        pure [CoreBind (CoreBinding name (lowerBoundaryType valueType) (kind == MutableBinding) lowered)]
-    AssignmentStatement _ name _ value -> (: []) . CoreAssign name <$> lowerExpression value
-    ReturnStatement _ value -> (: []) . CoreReturn <$> maybe (pure (CoreLiteral CoreUnit unitType)) lowerExpression value
-    IfStatement _ condition trueBlock falseBlock ->
-        (: []) <$> (CoreIf <$> lowerExpression condition <*> lowerBlock trueBlock <*> maybe (pure []) lowerBlock falseBlock)
-    WhileStatement _ condition body ->
-        (: []) <$> (CoreWhile <$> lowerExpression condition <*> lowerBlock body)
-    DoWhileStatement _ body condition ->
-        (: []) <$> (CoreDoWhile <$> lowerBlock body <*> lowerExpression condition)
-    ForStatement _ initializer condition updates body -> do
-        loweredInitializer <- maybe (pure []) lowerStatement initializer
-        loweredCondition <- maybe (pure (CoreLiteral (CoreBoolean True) boolType)) lowerExpression condition
+        (prefix, lowered) <- lowerExpression value
+        pure (prefix ++ [CoreBind (CoreBinding name (lowerBoundaryType valueType) (kind == MutableBinding) lowered)])
+    AssignmentStatement _ name _ value -> do
+        (prefix, lowered) <- lowerExpression value
+        pure (prefix ++ [CoreAssign name lowered])
+    ReturnStatement _ Nothing -> pure [CoreReturn (CoreLiteral CoreUnit unitType)]
+    ReturnStatement _ (Just value) -> do
+        (prefix, lowered) <- lowerExpression value
+        pure (prefix ++ [CoreReturn lowered])
+    IfStatement _ condition trueBlock falseBlock -> do
+        (prefix, loweredCondition) <- lowerExpression condition
+        whenTrue <- lowerBlockInto target trueBlock
+        whenFalse <- maybe (pure []) (lowerBlockInto target) falseBlock
+        pure (prefix ++ [CoreIf loweredCondition whenTrue whenFalse])
+    WhileStatement {} -> lowerLoop Nothing statement
+    DoWhileStatement _ body condition -> do
         loweredBody <- lowerBlock body
-        loweredUpdates <- concat <$> mapM lowerStatement updates
-        pure (loweredInitializer ++ [CoreFor loweredCondition loweredBody loweredUpdates])
+        loweredCondition <- lowerExpression condition
+        if null (fst loweredCondition)
+            then pure [CoreDoWhile loweredBody (snd loweredCondition)]
+            else do
+                first <- freshGenerated "$first"
+                pure (doWhileLoop first loweredBody loweredCondition)
+    ForStatement {} -> lowerLoop Nothing statement
     ForEachStatement spanValue _ _ _ _ _ _ ->
         lift
             ( Left
@@ -160,39 +181,128 @@ lowerStatement statement = case statement of
             )
     IncrementStatement _ name valueType isIncrement ->
         let loweredType = lowerBoundaryType valueType
-            value = CoreVariable name loweredType
-            one = CoreLiteral (CoreInteger 1) loweredType
-            operation = if isIncrement then CoreAdd else CoreSubtract
-         in pure [CoreAssign name (CorePrimitive operation [value, one] loweredType)]
-    -- The type checker has established that the operator result has the
-    -- target type, so the stored primitive needs no conversion.
-    CompoundAssignmentStatement _ operator name valueType value -> do
-        lowered <- lowerExpression value
-        let loweredType = lowerBoundaryType valueType
-            current = CoreVariable name loweredType
-        pure [CoreAssign name (CorePrimitive (lowerBinary operator) [current, lowered] loweredType)]
-    DiscardStatement _ value -> (: []) . CoreEvaluate <$> lowerExpression value
+         in pure [stepStatement isIncrement name loweredType (CoreVariable name loweredType)]
+    CompoundAssignmentStatement _ operator name valueType value -> lowerCompound operator name valueType value
+    DiscardStatement _ value -> lowerDiscarded value
     BreakStatement _ Nothing -> pure [CoreBreak]
-    BreakStatement spanValue (Just _) ->
-        lift
-            ( Left
-                [ Diagnostic
-                    DesugarerStage
-                    Error
-                    "VXD0002"
-                    (Just spanValue)
-                    "value-carrying break cannot be lowered until loop expressions are supported"
-                ]
-            )
+    BreakStatement spanValue (Just value) -> case target of
+        Just (slot, _) -> do
+            (prefix, lowered) <- lowerExpression value
+            pure (prefix ++ [CoreAssign slot lowered, CoreBreak])
+        Nothing ->
+            lift
+                ( Left
+                    [ Diagnostic
+                        DesugarerStage
+                        Error
+                        "VXD0002"
+                        (Just spanValue)
+                        "a value-carrying break reached Core lowering outside a loop expression"
+                    ]
+                )
     ContinueStatement _ -> pure [CoreContinue]
-    ExpressionStatement _ value _ -> (: []) . CoreEvaluate <$> lowerExpression value
+    ExpressionStatement _ value _ -> lowerDiscarded value
 
-lowerExpression :: Expression ResolvedName Type -> Lower CoreExpression
+{- | Lower a @while@ or @for@ loop whose body stores break values into the
+given target. Loops nested in the body are statements of their own and are
+lowered without a target.
+-}
+lowerLoop :: BreakTarget -> Statement ResolvedName Type -> Lower [CoreStatement]
+lowerLoop target loop = case loop of
+    WhileStatement _ condition body -> do
+        loweredCondition <- lowerExpression condition
+        loweredBody <- lowerBlockInto target body
+        pure [whileLoop loweredCondition loweredBody]
+    ForStatement _ initializer condition updates body -> do
+        loweredInitializer <- maybe (pure []) lowerStatement initializer
+        loweredCondition <- maybe (pure ([], CoreLiteral (CoreBoolean True) boolType)) lowerExpression condition
+        loweredBody <- lowerBlockInto target body
+        loweredUpdates <- concat <$> mapM lowerStatement updates
+        pure (loweredInitializer ++ [forLoop loweredCondition loweredBody loweredUpdates])
+    _ -> lowerStatement loop
+
+{- | Lower an expression whose value is dropped.
+
+The expression is still evaluated. When it stored into a local, the stores
+are its statements and the remaining value is a plain read with nothing left
+to evaluate, so no evaluation statement is emitted for it.
+-}
+lowerDiscarded :: Expression ResolvedName Type -> Lower [CoreStatement]
+lowerDiscarded value = do
+    (prefix, lowered) <- lowerExpression value
+    pure (prefix ++ [CoreEvaluate lowered | null prefix || not (survives [] lowered)])
+
+-- | @target = target + 1@ or @target = target - 1@, reading the given operand.
+stepStatement :: Bool -> ResolvedName -> Type -> CoreExpression -> CoreStatement
+stepStatement isIncrement name loweredType from =
+    CoreAssign name (CorePrimitive operation [from, CoreLiteral (CoreInteger 1) loweredType] loweredType)
+    where
+        operation = if isIncrement then CoreAdd else CoreSubtract
+
+{- | Lower @target op= value@ to the statements that perform it.
+
+The type checker has established that the operator result has the target
+type, so the stored primitive needs no conversion. The target is read before
+the right operand is evaluated; when the right operand itself assigns the
+target, that earlier value is kept in a temporary.
+-}
+lowerCompound :: BinaryOperator -> ResolvedName -> Type -> Expression ResolvedName Type -> Lower [CoreStatement]
+lowerCompound operator name valueType value = do
+    (prefix, lowered) <- lowerExpression value
+    let loweredType = lowerBoundaryType valueType
+        current = CoreVariable name loweredType
+        store left = CoreAssign name (CorePrimitive (lowerBinary operator) [left, lowered] loweredType)
+    if survives (assignedSymbols prefix) current
+        then pure (prefix ++ [store current])
+        else do
+            previous <- freshGenerated "$target"
+            pure
+                ( CoreBind (CoreBinding previous loweredType False current)
+                    : prefix
+                    ++ [store (CoreVariable previous loweredType)]
+                )
+
+{- | Make a lowered operand usable after the statements of later operands.
+
+Operands are evaluated left to right. When a later operand has statements,
+an earlier operand that would not survive them is bound to a temporary at
+the point where the source evaluates it.
+-}
+holdAcross :: [CoreStatement] -> Lowered -> Lower Lowered
+holdAcross later lowered@(prefix, value)
+    | null later || survives (assignedSymbols later) value = pure lowered
+    | otherwise = do
+        name <- freshGenerated "$operand"
+        let valueType = expressionType value
+        pure (prefix ++ [CoreBind (CoreBinding name valueType False value)], CoreVariable name valueType)
+
+-- | Combine operands that are all evaluated, in order.
+sequenceOperands :: [Lowered] -> Lower ([CoreStatement], [CoreExpression])
+sequenceOperands [] = pure ([], [])
+sequenceOperands (operand : later) = do
+    (laterPrefix, laterValues) <- sequenceOperands later
+    (prefix, value) <- holdAcross laterPrefix operand
+    pure (prefix ++ laterPrefix, value : laterValues)
+
+-- | Combine one operand with the operands evaluated after it.
+sequenceAfter :: Lowered -> [Lowered] -> Lower ([CoreStatement], CoreExpression, [CoreExpression])
+sequenceAfter first later = do
+    (laterPrefix, laterValues) <- sequenceOperands later
+    (prefix, value) <- holdAcross laterPrefix first
+    pure (prefix ++ laterPrefix, value, laterValues)
+
+{- | Lower an expression to the statements that perform its stores and a
+store-free Core expression for its value.
+
+An expression without assignment or increment operands has no statements,
+and its Core expression is the direct translation of the source.
+-}
+lowerExpression :: Expression ResolvedName Type -> Lower Lowered
 lowerExpression expression = case expression of
-    NameExpression _ name valueType -> pure (CoreVariable name (lowerBoundaryType valueType))
+    NameExpression _ name valueType -> pure ([], CoreVariable name (lowerBoundaryType valueType))
     LiteralExpression _ literal valueType ->
         let loweredType = lowerBoundaryType valueType
-         in pure (CoreLiteral (lowerLiteral loweredType literal) loweredType)
+         in pure ([], CoreLiteral (lowerLiteral loweredType literal) loweredType)
     MemberAccessExpression spanValue _ _ _ ->
         lift
             ( Left
@@ -204,68 +314,156 @@ lowerExpression expression = case expression of
                     "an unresolved member selector reached Core lowering"
                 ]
             )
-    CallExpression _ callee arguments valueType ->
-        CoreApply <$> lowerExpression callee <*> mapM lowerExpression arguments <*> pure (lowerBoundaryType valueType)
+    CallExpression _ callee arguments valueType -> do
+        loweredCallee <- lowerExpression callee
+        loweredArguments <- mapM lowerExpression arguments
+        (prefix, calleeValue, argumentValues) <- sequenceAfter loweredCallee loweredArguments
+        pure (prefix, CoreApply calleeValue argumentValues (lowerBoundaryType valueType))
     UnaryExpression _ UnaryPlus value _ -> lowerExpression value
     UnaryExpression _ operator value valueType -> do
-        lowered <- lowerExpression value
-        pure (CorePrimitive (lowerUnary operator) [lowered] (lowerBoundaryType valueType))
-    BinaryExpression _ operator left right valueType -> do
-        loweredLeft <- lowerExpression left
-        loweredRight <- lowerExpression right
-        pure (CorePrimitive (lowerBinary operator) [loweredLeft, loweredRight] (lowerBoundaryType valueType))
+        (prefix, lowered) <- lowerExpression value
+        pure (prefix, CorePrimitive (lowerUnary operator) [lowered] (lowerBoundaryType valueType))
+    BinaryExpression _ operator left right valueType
+        | operator `elem` [LogicalAnd, LogicalOr] -> do
+            (leftPrefix, loweredLeft) <- lowerExpression left
+            loweredRight <- lowerExpression right
+            if null (fst loweredRight)
+                then
+                    pure
+                        ( leftPrefix
+                        , CorePrimitive (lowerBinary operator) [loweredLeft, snd loweredRight] (lowerBoundaryType valueType)
+                        )
+                else do
+                    result <- freshGenerated "$logical"
+                    let (statements, value) = decideLogical (operator == LogicalAnd) result loweredLeft loweredRight
+                    pure (leftPrefix ++ statements, value)
+        | otherwise -> do
+            loweredLeft <- lowerExpression left
+            loweredRight <- lowerExpression right
+            (prefix, leftValue, rightValues) <- sequenceAfter loweredLeft [loweredRight]
+            pure (prefix, CorePrimitive (lowerBinary operator) (leftValue : rightValues) (lowerBoundaryType valueType))
     IsPatternExpression _ subject patternValue _ -> do
-        loweredSubject <- lowerExpression subject
+        (prefix, loweredSubject) <- lowerExpression subject
         subjectName <- freshPatternSubject
         let subjectType = lowerBoundaryType (expressionAnnotation subject)
             subjectRead = CoreVariable subjectName subjectType
             predicate = lowerPattern subjectRead subjectType patternValue
-        pure (CoreLet subjectName subjectType loweredSubject predicate boolType)
-    ConditionalExpression _ condition first second valueType ->
-        CoreConditional
-            <$> lowerExpression condition
-            <*> lowerExpression first
-            <*> lowerExpression second
-            <*> pure (lowerBoundaryType valueType)
+        pure (prefix, CoreLet subjectName subjectType loweredSubject predicate boolType)
+    ConditionalExpression _ condition first second valueType -> do
+        (conditionPrefix, loweredCondition) <- lowerExpression condition
+        loweredFirst <- lowerExpression first
+        loweredSecond <- lowerExpression second
+        let loweredType = lowerBoundaryType valueType
+        if null (fst loweredFirst) && null (fst loweredSecond)
+            then
+                pure
+                    ( conditionPrefix
+                    , CoreConditional loweredCondition (snd loweredFirst) (snd loweredSecond) loweredType
+                    )
+            else do
+                result <- freshGenerated "$selected"
+                let (statements, value) = selectInto result loweredType loweredCondition loweredFirst loweredSecond
+                pure (conditionPrefix ++ statements, value)
     -- The left operand is both the test and the first result. Binding it once
     -- keeps its effects single even though it is read twice.
     CoalesceExpression _ left fallback valueType -> do
-        loweredLeft <- lowerExpression left
+        (leftPrefix, loweredLeft) <- lowerExpression left
         loweredFallback <- lowerExpression fallback
         subjectName <- freshCoalesceSubject
         let loweredType = lowerBoundaryType valueType
             subjectRead = CoreVariable subjectName loweredType
+        if null (fst loweredFallback)
+            then
+                pure
+                    ( leftPrefix
+                    , CoreLet
+                        subjectName
+                        loweredType
+                        loweredLeft
+                        (CoreConditional subjectRead subjectRead (snd loweredFallback) loweredType)
+                        loweredType
+                    )
+            else do
+                -- The fallback stores into a local, so it runs as statements
+                -- and only when the left value is false in Boolean context.
+                result <- freshGenerated "$selected"
+                let (statements, value) = selectInto result loweredType subjectRead ([], subjectRead) loweredFallback
+                pure
+                    ( leftPrefix ++ CoreBind (CoreBinding subjectName loweredType False loweredLeft) : statements
+                    , value
+                    )
+    -- A simple assignment stores its right operand and yields the stored
+    -- value, which is read back from the target.
+    AssignmentExpression _ Nothing name value valueType -> do
+        (prefix, lowered) <- lowerExpression value
+        pure (prefix ++ [CoreAssign name lowered], CoreVariable name (lowerBoundaryType valueType))
+    AssignmentExpression _ (Just operator) name value valueType -> do
+        statements <- lowerCompound operator name valueType value
+        pure (statements, CoreVariable name (lowerBoundaryType valueType))
+    -- A prefix form yields the new value, so the target is read after the
+    -- store. A postfix form yields the previous value, kept in a temporary.
+    IncrementExpression _ isIncrement isPrefix name valueType ->
+        let loweredType = lowerBoundaryType valueType
+            current = CoreVariable name loweredType
+         in if isPrefix
+                then pure ([stepStatement isIncrement name loweredType current], current)
+                else do
+                    previous <- freshGenerated "$previous"
+                    let previousRead = CoreVariable previous loweredType
+                    pure
+                        (
+                            [ CoreBind (CoreBinding previous loweredType False current)
+                            , stepStatement isIncrement name loweredType previousRead
+                            ]
+                        , previousRead
+                        )
+    -- A loop expression runs its loop as statements. Each break that leaves
+    -- it stores its value into the result slot first; the type checker has
+    -- established that the loop cannot end any other way.
+    LoopExpression _ loop valueType -> do
+        result <- freshGenerated "$loop"
+        let loweredType = lowerBoundaryType valueType
+        statements <- lowerLoop (Just (result, loweredType)) loop
         pure
-            ( CoreLet
-                subjectName
-                loweredType
-                loweredLeft
-                (CoreConditional subjectRead subjectRead loweredFallback loweredType)
-                loweredType
+            ( CoreBind (CoreBinding result loweredType True (neutralValue loweredType)) : statements
+            , CoreVariable result loweredType
             )
     CallableExpression _ explicit captures parameters body valueType -> do
         let loweredParameters =
                 [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
         loweredBody <- lowerCallableBody body
-        loweredCaptures <- mapM lowerCapture captures
-        let sourceCaptures = if explicit then loweredCaptures else discoverImplicitCaptures loweredParameters loweredBody
-            returnType = case valueType of
+        (prefix, loweredCaptures) <- lowerCaptures captures
+        let returnType = case valueType of
                 FunctionType _ result -> lowerBoundaryType result
                 _ -> ErrorType
-        pure (CoreClosure sourceCaptures loweredParameters returnType loweredBody (lowerBoundaryType valueType))
+            closure sourceCaptures =
+                CoreClosure sourceCaptures loweredParameters returnType loweredBody (lowerBoundaryType valueType)
+        pure $
+            if explicit
+                then (prefix, closure loweredCaptures)
+                else ([], closure (discoverImplicitCaptures loweredParameters loweredBody))
 
-lowerCapture :: Capture ResolvedName Type -> Lower CoreCapture
-lowerCapture capture = do
-    value <-
-        maybe
-            (pure (CoreVariable (captureName capture) (lowerBoundaryType (captureAnnotation capture))))
-            lowerExpression
-            (captureInitializer capture)
-    pure (CoreCapture (captureMode capture) (captureName capture) (lowerBoundaryType (captureAnnotation capture)) value)
+-- Capture initializers are evaluated in order when the closure is created,
+-- like the operands of any other expression.
+lowerCaptures :: [Capture ResolvedName Type] -> Lower ([CoreStatement], [CoreCapture])
+lowerCaptures captures = do
+    initializers <- mapM lowerInitializer captures
+    (prefix, values) <- sequenceOperands initializers
+    pure (prefix, zipWith capture captures values)
+    where
+        lowerInitializer source =
+            maybe
+                (pure ([], CoreVariable (captureName source) (lowerBoundaryType (captureAnnotation source))))
+                lowerExpression
+                (captureInitializer source)
+        capture source =
+            CoreCapture (captureMode source) (captureName source) (lowerBoundaryType (captureAnnotation source))
 
 lowerCallableBody :: CallableBody ResolvedName Type -> Lower [CoreStatement]
 lowerCallableBody body = case body of
-    CallableExpressionBody expression -> (: []) . CoreReturn <$> lowerExpression expression
+    CallableExpressionBody expression -> do
+        (prefix, value) <- lowerExpression expression
+        pure (prefix ++ [CoreReturn value])
     CallableBlockBody block ->
         let returnType = maybe unitType id (callableFinalType block)
          in lowerFunctionBlock returnType block
@@ -286,6 +484,9 @@ expressionAnnotation expression = case expression of
     IsPatternExpression _ _ _ valueType -> valueType
     ConditionalExpression _ _ _ _ valueType -> valueType
     CoalesceExpression _ _ _ valueType -> valueType
+    AssignmentExpression _ _ _ _ valueType -> valueType
+    IncrementExpression _ _ _ _ valueType -> valueType
+    LoopExpression _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
 lowerPattern :: CoreExpression -> Type -> Pattern ResolvedName Type -> CoreExpression
@@ -481,6 +682,9 @@ expressionIds expression = case expression of
     IsPatternExpression _ subject _ _ -> expressionIds subject
     ConditionalExpression _ condition first second _ -> concatMap expressionIds [condition, first, second]
     CoalesceExpression _ left fallback _ -> expressionIds left ++ expressionIds fallback
+    AssignmentExpression _ _ name value _ -> symbolValue name : expressionIds value
+    IncrementExpression _ _ _ name _ -> [symbolValue name]
+    LoopExpression _ loop _ -> statementIds loop
     CallableExpression _ _ captures parameters body _ ->
         map (symbolValue . captureName) captures
             ++ concatMap (maybe [] expressionIds . captureInitializer) captures

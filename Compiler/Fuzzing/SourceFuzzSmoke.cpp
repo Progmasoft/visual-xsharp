@@ -6,6 +6,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <string_view>
 
+#include "ExpressionExecutionCases.hpp"
 #include "SourceFuzz.hpp"
 
 int
@@ -28,7 +29,7 @@ main()
     // agree. They combine forms the generated programs below keep separate:
     // loops inside loops, short-circuit operators as loop conditions, and
     // several functions sharing one module-wide symbol numbering.
-    constexpr std::array<std::string_view, 9U> accepted{
+    constexpr std::array<std::string_view, 14U> accepted{
         "namespace Parity; class Program { public static int Evaluate() { "
         "int total = 0; for (int outer = 0; outer < 4; outer++) { "
         "if (outer == 2) { continue; } int inner = 0; "
@@ -91,12 +92,72 @@ main()
         "total += index ?: 5; index += 1; } "
         "do { total -= 1; } while (total > 3 && (total ?: 1) \\= 2); "
         "return Small(total) && total > 0 ? total : 0 - total; } }",
+        // Assignments and increments used as values: an earlier operand
+        // held across a later store, chained and compound forms, and
+        // arguments evaluated in order.
+        "namespace Parity; class Program { "
+        "public static int Pick(_ int a, _ int b, _ int c) { return a * 100 "
+        "+ b * 10 + c; } public static int Next(_ int n) { return n > 2 ? "
+        "Next(n - 3) : n; } public static int Evaluate() { int a = Next(7); "
+        "int b = 0; int c = 0; a = b = c = a + 1; int r = a + (a = b + 2) * "
+        "(a += 1) - a++ + ++b; r += Pick(a, a = r, a--) + Pick(c++, c++, c); "
+        "return r - (b -= a) + Next(a = 8) + a; } }",
+        // Loop conditions that store: the stores run before every test,
+        // after `continue` too, and a do/while body runs before its first.
+        "namespace Parity; class Program { public static int Evaluate() { "
+        "int n = 9; int sum = 0; int v = 0; "
+        "while ((v = n--) > 0) { if (v == 3) { continue; } "
+        "if (v == 7) { n -= 2; continue; } sum += v; } "
+        "do { sum += 100; if (sum > 400) { break; } } while ((n += 3) < 9); "
+        "for (int i = 0; (v = i * 3) < 11; i++) { if (v == 6) { continue; } "
+        "sum += v; } int j = 0; while (j++ < 3) { int k = 0; "
+        "do { sum += j; } while (++k < j); } return sum * 10 + n + v; } }",
+        // Stores in lazily evaluated operands: conditional results, the
+        // right side of short-circuit operators and a coalescing fallback.
+        "namespace Parity; class Program { "
+        "public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) : "
+        "0; } public static int Evaluate() { int a = Step(7); int b = "
+        "Step(0); int hits = 0; int r = a > 5 ? (a -= 5) : (b += 1); "
+        "bool both = a > 2 && (hits += 1) > 0; "
+        "bool either = b \\= 0 || (hits += 10) > 0; "
+        "int c = b ?: (hits += 100); "
+        "int d = (a = Step(3)) ? (b = a) ?: (hits += 1000) : (hits = 0); "
+        "bool chain = both && (a = 1) > 0 && (b = 2) > 0 || (c = 0) == 0; "
+        "return r + a * 3 + b * 5 + hits * 7 + c + d + (both ? 1000 : 0) + "
+        "(either ? 2000 : 0) + (chain ? 4000 : 0); } }",
+        // Stores as statements of their own and inside closures, which
+        // capture by value and store into their own copies.
+        "namespace Parity; class Program { public static int Evaluate() { "
+        "int a = 4; (a = 6); _ = (a += 1); _ = a++; _ = a++ > 0 ? 1 : 0; "
+        "auto bump = \\(int value) -> { int local = value; "
+        "return (local += 1) + local++; }; "
+        "auto held = [kept = a++] \\ -> kept; "
+        "return bump(a) + held() + a; } }",
+        // Loops used as expressions: `while` and `for` forms, a nested loop
+        // expression, a loop statement with its own bare break inside one,
+        // and loop expressions as operands and as a loop condition.
+        "namespace Parity; class Program { "
+        "public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) : "
+        "0; } public static int Evaluate() { int n = Step(2); "
+        "int first = while (true) { n += 1; if (n * n > 30) { break n; } }; "
+        "int second = for (int i = 0; ; i++) { if (i == 2) { continue; } "
+        "int inner = while (true) { int k = 0; while (true) { k++; "
+        "if (k == 3) { break; } } break k + i; }; "
+        "if (inner > 6) { break inner * 2; } }; "
+        "int third = first + while (true) { first += 1; break first; } + "
+        "first; int sum = 0; while (for (int j = sum; ; j++) { "
+        "if (j >= sum) { break j; } } < 4) { sum += 1; } "
+        "bool big = second > 9 && while (true) { n -= 1; break n > 0; }; "
+        "return first + second + third + sum + n + (big ? 100 : 0); } }",
     };
     for (const auto text : accepted)
         Visual::XSharp::Fuzzing::ExerciseAcceptedSource(
             std::span<const std::uint8_t>(
                 reinterpret_cast<const std::uint8_t *>(text.data()),
                 text.size()));
+    // Hand-written results for assignments and increments used as values
+    // and for loops used as expressions.
+    Visual::XSharp::Fuzzing::ExerciseExpressionCases();
     llvm::errs() << "Differential smoke: mixed seed\n";
     Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(expressionSeed);
     llvm::errs() << "Differential smoke: empty seed\n";
@@ -118,7 +179,7 @@ main()
     // four cycling selectors above happen to select. The two leaves are the
     // literals 0 and 4, so a form that tests its generated expression sees
     // both a false and a true value.
-    constexpr std::uint8_t kModes = 9U;
+    constexpr std::uint8_t kModes = 13U;
     constexpr std::uint8_t kLimits = 12U;
     constexpr std::array<std::uint8_t, 2U> leaves{ 0U, 4U };
     for (const auto leaf : leaves)

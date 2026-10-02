@@ -334,6 +334,18 @@ renameExpression environment next expression = case expression of
         let (renamedLeft, afterLeft, leftProblems) = renameExpression environment next left
             (renamedFallback, afterFallback, fallbackProblems) = renameExpression environment afterLeft fallback
          in (CoalesceExpression spanValue renamedLeft renamedFallback (), afterFallback, leftProblems ++ fallbackProblems)
+    AssignmentExpression spanValue operator name value _ ->
+        let (renamedValue, after, problems) = renameExpression environment next value
+         in ( AssignmentExpression spanValue operator (valueOrMissing name environment) renamedValue ()
+            , after
+            , problems
+            )
+    IncrementExpression spanValue isIncrement isPrefix name _ ->
+        (IncrementExpression spanValue isIncrement isPrefix (valueOrMissing name environment) (), next, [])
+    -- Names a loop introduces are scoped to the loop, as for the statement.
+    LoopExpression spanValue loop _ ->
+        let (renamedLoop, _, after, problems) = renameStatement environment next loop
+         in (LoopExpression spanValue renamedLoop (), after, problems)
     CallableExpression spanValue explicit sourceCaptures sourceParameters sourceBody _ ->
         let (captures, captureEnvironment, afterCaptures, captureProblems) =
                 renameCaptures environment next sourceCaptures

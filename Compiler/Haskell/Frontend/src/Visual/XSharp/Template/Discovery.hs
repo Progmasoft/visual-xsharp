@@ -296,6 +296,11 @@ discoverExpression catalog namespace origin expression state = case expression o
         let afterType = discoverType catalog namespace origin annotation state
             afterLeft = discoverExpression catalog namespace origin left afterType
          in discoverExpression catalog namespace origin fallback afterLeft
+    AssignmentExpression _ _ _ value annotation ->
+        discoverExpression catalog namespace origin value (discoverType catalog namespace origin annotation state)
+    IncrementExpression _ _ _ _ annotation -> discoverType catalog namespace origin annotation state
+    LoopExpression _ loop annotation ->
+        discoverStatement catalog namespace origin 0 loop (discoverType catalog namespace origin annotation state)
     CallableExpression spanValue _ captures parameters body annotation ->
         let callableOrigin =
                 origin

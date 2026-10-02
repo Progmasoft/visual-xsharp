@@ -290,6 +290,22 @@ data Expression name annotation
       -- context and evaluates the fallback only otherwise. The left operand
       -- is evaluated once.
       CoalesceExpression SourceSpan (Expression name annotation) (Expression name annotation) annotation
+    | -- @target = value@ or @target op= value@ used for its value. The
+      -- operator is absent for simple assignment. The expression stores into
+      -- the named location and yields the stored value; its annotation is
+      -- the target type. The statement forms keep their own nodes, so this
+      -- node appears only where an assignment is an operand.
+      AssignmentExpression SourceSpan (Maybe BinaryOperator) name (Expression name annotation) annotation
+    | -- @++target@, @target++@ and @target--@ used for their value. The first
+      -- flag selects increment over decrement and the second prefix over
+      -- postfix: a prefix form yields the new value and a postfix form the
+      -- previous one.
+      IncrementExpression SourceSpan Bool Bool name annotation
+    | -- A loop used for its value. The statement is the loop itself, a
+      -- 'WhileStatement' or a 'ForStatement'; the value is the operand of
+      -- the @break value;@ that leaves it, and the annotation is the type of
+      -- that value.
+      LoopExpression SourceSpan (Statement name annotation) annotation
     | CallableExpression
         SourceSpan
         Bool

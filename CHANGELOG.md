@@ -18,6 +18,17 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   and the discard statement `_ = value;`.
 - `??` and `??=` are now recognized and rejected with dedicated diagnostics
   until nullable types exist.
+- Assignment and compound assignment are now also expressions that yield the
+  stored value, right-associative at the weakest expression level:
+  `a = b = 10`, `int total = (value += 5)`. `++target`, `target++` and
+  `target--` are expressions that yield the new or the previous value.
+  Targets are named locals. Operands are evaluated left to right.
+- A `while` or classic `for` loop is an expression when `break value;`
+  supplies its value. The loop must not be able to end without one: its
+  condition is the constant `true`, or absent in a `for`. Loop values are
+  limited to `bool` and numeric types for now.
+- A simple assignment now types an untyped numeric literal from its target, as
+  a binding initializer does, so `wide = 5` is accepted for a `long` target.
 
 ### Compiler pipeline
 
@@ -29,6 +40,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   inlining to treat the two arms as alternative paths.
 - The native Core-to-CorePrep adapter now binds a `let` value with its own
   operation, matching the Haskell adapter.
+- Expressions that store into a local are lowered to statements by the
+  Desugarer, so Core, its wire format, the optimizer, CorePrep and the native
+  pipeline are unchanged and no Core expression writes a local.
 
 ## 0.4.0 - 2026-09-27
 

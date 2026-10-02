@@ -231,6 +231,15 @@ freshExpression expression = case expression of
             <$> freshExpression left
             <*> freshExpression fallback
             <*> freshType annotation
+    AssignmentExpression spanValue operator name value annotation ->
+        AssignmentExpression spanValue operator
+            <$> freshReference name
+            <*> freshExpression value
+            <*> freshType annotation
+    IncrementExpression spanValue isIncrement isPrefix name annotation ->
+        IncrementExpression spanValue isIncrement isPrefix <$> freshReference name <*> freshType annotation
+    LoopExpression spanValue loop annotation ->
+        LoopExpression spanValue <$> freshStatement loop <*> freshType annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse freshCaptureDefinition captures
         closedParameters <- traverse freshParameterDefinition parameters
@@ -350,6 +359,10 @@ expressionSymbols expression = case expression of
         concatMap expressionSymbols [condition, first, second] ++ typeSymbols annotation
     CoalesceExpression _ left fallback annotation ->
         expressionSymbols left ++ expressionSymbols fallback ++ typeSymbols annotation
+    AssignmentExpression _ _ name value annotation ->
+        nameSymbol name : expressionSymbols value ++ typeSymbols annotation
+    IncrementExpression _ _ _ name annotation -> nameSymbol name : typeSymbols annotation
+    LoopExpression _ loop annotation -> statementSymbols loop ++ typeSymbols annotation
     CallableExpression _ _ captures parameters body annotation ->
         concatMap captureSymbols captures
             ++ concatMap parameterSymbols parameters

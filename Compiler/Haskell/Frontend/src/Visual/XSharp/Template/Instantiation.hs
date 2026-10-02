@@ -206,6 +206,14 @@ instantiateExpression binding expression = case expression of
         closedFallback <- instantiateExpression binding fallback
         closedAnnotation <- instantiateType binding annotation
         pure (CoalesceExpression spanValue closedLeft closedFallback closedAnnotation)
+    AssignmentExpression spanValue operator name value annotation -> do
+        closedValue <- instantiateExpression binding value
+        closedAnnotation <- instantiateType binding annotation
+        pure (AssignmentExpression spanValue operator name closedValue closedAnnotation)
+    IncrementExpression spanValue isIncrement isPrefix name annotation ->
+        IncrementExpression spanValue isIncrement isPrefix name <$> instantiateType binding annotation
+    LoopExpression spanValue loop annotation ->
+        LoopExpression spanValue <$> instantiateStatement binding loop <*> instantiateType binding annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse (instantiateCapture binding) captures
         closedParameters <- traverse (instantiateParameter binding) parameters

@@ -176,11 +176,22 @@ omitted-middle form as `?:`.
 conditionals. They need nullable types, which are not implemented; the parser
 reports `VXP0030` and `VXP0031` instead of guessing a meaning.
 
-A compound assignment (`+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `**=`, `<<=`,
-`>>=`, `&=`, `^=`, `|=`) is a statement with a named target; another target
-expression produces `VXP0003`, the same diagnostic as for `=`. `_ = value;` is
-the discard statement, not an assignment to a binding named `_`, and is not an
-expression: `(_ = value)` is a syntax error.
+A simple assignment and a compound assignment (`+=`, `-=`, `*=`, `/=`, `//=`,
+`%=`, `**=`, `<<=`, `>>=`, `&=`, `^=`, `|=`) have a named target; another
+target expression produces `VXP0003`. Both are also expressions that yield the
+stored value. Assignment is the weakest expression level and groups to the
+right, so `a = b = 10` is `a = (b = 10)` and `a = b += 2` is `a = (b += 2)`.
+Elsewhere an assignment operand needs parentheses: `1 + (a = 2)`.
+
+`++target`, `target++` and `target--` are expressions too. A prefix form
+yields the new value and a postfix form the previous one. The operand must be
+a named storage location: `++10`, `(a + b)++` and `Next()++` produce
+`VXP0028`. Prefix `--target` cannot be written, because `--` not directly
+after a value starts a comment; this differs from the `--index;` example in
+`Spec/Language/Operators.vxs` and is not resolved here.
+
+`_ = value;` is the discard statement, not an assignment to a binding named
+`_`, and is not an expression: `(_ = value)` produces `VXP0032`.
 
 The type checker reports:
 
@@ -197,6 +208,48 @@ diagnostics: `VXT0003` for an immutable target and `VXT0012` for operands the
 operator does not accept. An untyped numeric literal operand of a conditional
 form takes the type of the other operand in either direction, and both take
 the expected type when there is one; a computed operand is never converted.
+
+An assignment or increment used as a value is checked exactly like its
+statement form and reports the same codes: `VXT0003` and `VXT0004` for
+assignment, `VXT0022` through `VXT0024` for increment and decrement. Its type
+is the target type. The target type is context for the assigned value, as a
+declared type is for a binding initializer, so `wide = 5` types the literal
+from `wide`; the context that receives the assignment's value does not reach
+the right operand. Parameters are immutable, so they cannot be targets.
+
+### Loop expressions
+
+A `while` or classic `for` loop in operand position is an expression. Its value
+is the operand of the `break value;` that leaves it:
+
+```vxs
+int found = while (true) {
+    if (Ready()) {
+        break 10;
+    }
+};
+```
+
+Such a loop must not be able to end without a value. The type checker
+reports:
+
+| Code | Meaning |
+| --- | --- |
+| `VXT0025` | `break` outside any loop |
+| `VXT0026` | `break value;` in a loop statement; only a loop used as an expression has a value |
+| `VXT0040` | a bare `break;` leaves a loop used as an expression |
+| `VXT0041` | the condition of a loop used as an expression is not the constant `true` (or, for `for`, absent), so the loop could end without a value |
+| `VXT0042` | a loop used as an expression has no `break` that carries a value |
+| `VXT0043` | the `break` values of one loop have different types |
+| `VXT0044` | the loop value is neither `bool` nor numeric; other result types are not lowered yet |
+| `VXT0045` | `return` inside a loop used as an expression, which is not supported yet |
+
+A `break` always leaves the innermost loop, so a value-carrying `break` inside
+a loop statement nested in a loop expression is still `VXT0026`. The value of
+a `break` takes its context from the place that receives the loop's value.
+`do`/`while` has no expression form, and the enumerable `for (:)` form is not
+implemented. `VXD0002` is an internal error: it reports a value-carrying
+`break` that reached Core lowering without a loop expression to receive it.
 
 ### Supplied token streams
 

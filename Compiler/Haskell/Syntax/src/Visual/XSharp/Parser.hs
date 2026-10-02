@@ -390,6 +390,9 @@ requireTemplateValue expression = case expression of
     IsPatternExpression spanValue _ _ _ -> unsupported spanValue
     ConditionalExpression spanValue _ _ _ _ -> unsupported spanValue
     CoalesceExpression spanValue _ _ _ -> unsupported spanValue
+    AssignmentExpression spanValue _ _ _ _ -> unsupported spanValue
+    IncrementExpression spanValue _ _ _ _ -> unsupported spanValue
+    LoopExpression spanValue _ _ -> unsupported spanValue
     CallableExpression spanValue _ _ _ _ _ -> unsupported spanValue
     where
         unsupported spanValue =
@@ -614,7 +617,7 @@ parseForAction = do
                 parseIncrement (tokenText second == "++") False
         _ | startsCompoundAssignment tokens -> parseCompoundAssignment
         _ -> do
-            value <- parseExpression
+            value <- parseConditional
             assignment <- optionalSymbol "="
             if assignment
                 then case value of
@@ -652,7 +655,7 @@ parseIncrement isIncrement prefix = do
                 (name, spanValue) <- identifier
                 finalOperator <- symbol operator
                 pure (IncrementStatement (mergeSpan spanValue (tokenSpan finalOperator)) name () isIncrement)
-        _ -> failCurrent "VXP0028" "increment and decrement statements require a named storage location"
+        _ -> failCurrent "VXP0028" incrementTargetMessage
     where
         operator = if isIncrement then "++" else "--"
 
@@ -755,7 +758,10 @@ parseBinding = do
 
 parseAssignmentOrExpression :: Bool -> P (Statement Identifier ())
 parseAssignmentOrExpression allowFinalExpression = do
-    expression <- parseExpression
+    -- The statement's own target is parsed below the assignment level so a
+    -- top-level `target = value;` keeps its statement node; the value on the
+    -- right may itself be an assignment expression.
+    expression <- parseConditional
     assignment <- optionalSymbol "="
     if assignment
         then case expression of
@@ -792,7 +798,37 @@ parseAssignmentOrExpression allowFinalExpression = do
                             pure (ExpressionStatement (expressionSpan expression) expression True)
 
 parseExpression :: P (Expression Identifier ())
-parseExpression = parseConditional
+parseExpression = parseAssignment
+
+-- Assignment binds more weakly than every other operator and is
+-- right-associative: `a = b = 10` groups as `a = (b = 10)` and `a = b += 2` as
+-- `a = (b += 2)`. The target is a single name, so two tokens decide whether an
+-- expression is an assignment. `_ = value` is the discard statement and is
+-- never an expression.
+parseAssignment :: P (Expression Identifier ())
+parseAssignment = do
+    tokens <- peekTokens 2
+    case tokens of
+        first : second : _
+            | startsDiscard tokens ->
+                failAt
+                    (mergeSpan (tokenSpan first) (tokenSpan second))
+                    "VXP0032"
+                    "discard is a statement and cannot be used as a value"
+            | tokenKind first == IdentifierToken && isSimpleAssignment second -> do
+                (name, nameSpan) <- identifier
+                _ <- takeToken
+                value <- parseAssignment
+                pure (AssignmentExpression (mergeSpan nameSpan (expressionSpan value)) Nothing name value ())
+            | tokenKind first == IdentifierToken
+            , Just operator <- compoundAssignmentOperator second -> do
+                (name, nameSpan) <- identifier
+                _ <- takeToken
+                value <- parseAssignment
+                pure (AssignmentExpression (mergeSpan nameSpan (expressionSpan value)) (Just operator) name value ())
+        _ -> parseConditional
+    where
+        isSimpleAssignment token = tokenKind token == SymbolToken && tokenText token == "="
 
 -- The conditional forms bind more weakly than every binary operator and are
 -- right-associative: `a ? b : c ? d : e` groups as `a ? b : (c ? d : e)` and
@@ -910,7 +946,35 @@ parseUnary = do
             start <- takeToken
             value <- parseUnary
             pure (UnaryExpression (mergeSpan (tokenSpan start) (expressionSpan value)) operator value ())
-        Nothing -> parsePower
+        Nothing -> case next of
+            Just token | isIncrementToken token -> parsePrefixIncrement
+            _ -> parsePower
+
+isIncrementToken :: Token -> Bool
+isIncrementToken token = tokenKind token == SymbolToken && tokenText token `elem` ["++", "--"]
+
+-- A prefix form modifies a named storage location and yields the new value.
+-- Anything else after the operator, such as `++10` or `++(a + b)`, has no
+-- storage to modify.
+parsePrefixIncrement :: P (Expression Identifier ())
+parsePrefixIncrement = do
+    operator <- takeToken
+    next <- peekToken
+    case next of
+        Just token | tokenKind token == IdentifierToken -> do
+            (name, nameSpan) <- identifier
+            pure
+                ( IncrementExpression
+                    (mergeSpan (tokenSpan operator) nameSpan)
+                    (tokenText operator == "++")
+                    True
+                    name
+                    ()
+                )
+        _ -> failAt (tokenSpan operator) "VXP0028" incrementTargetMessage
+
+incrementTargetMessage :: String
+incrementTargetMessage = "increment and decrement require a named storage location"
 
 -- Power binds more strongly than prefix operators and recurses through the
 -- prefix layer on its right, making `2 ** 3 ** 2` right-associative while
@@ -962,6 +1026,21 @@ parsePostfix = parsePrimary >>= calls
                     arguments <- separated "," parseExpression
                     close <- symbol ")"
                     calls (CallExpression (mergeSpan (expressionSpan callee) (tokenSpan close)) callee arguments ())
+                -- A postfix form yields the previous value of a named storage
+                -- location. It is not a storage location itself, so nothing
+                -- may be selected from, called on, or incremented after it.
+                Just token | isIncrementToken token -> case callee of
+                    NameExpression nameSpan name _ -> do
+                        _ <- takeToken
+                        pure
+                            ( IncrementExpression
+                                (mergeSpan nameSpan (tokenSpan token))
+                                (tokenText token == "++")
+                                False
+                                name
+                                ()
+                            )
+                    _ -> failAt (expressionSpan callee) "VXP0028" incrementTargetMessage
                 _ -> pure callee
 
 parsePrimary :: P (Expression Identifier ())
@@ -969,6 +1048,12 @@ parsePrimary = do
     next <- peekToken
     case next of
         Just token | tokenKind token == SymbolToken && tokenText token `elem` ["\\", "["] -> parseCallable
+        -- A loop in operand position is a loop expression: its value is
+        -- supplied by `break value;`. The statement parsers are reused, so
+        -- both forms have exactly one grammar.
+        Just token | tokenKind token == KeywordToken && tokenText token `elem` ["while", "for"] -> do
+            loop <- if tokenText token == "while" then parseWhile else parseFor
+            pure (LoopExpression (statementSpan loop) loop ())
         Just token | tokenKind token == IntegerToken -> do
             _ <- takeToken
             case parseIntegerSpelling (tokenText token) of
@@ -1175,6 +1260,9 @@ expressionSpan expression = case expression of
     IsPatternExpression value _ _ _ -> value
     ConditionalExpression value _ _ _ _ -> value
     CoalesceExpression value _ _ _ -> value
+    AssignmentExpression value _ _ _ _ -> value
+    IncrementExpression value _ _ _ _ -> value
+    LoopExpression value _ _ -> value
     CallableExpression value _ _ _ _ _ -> value
 
 patternSpan :: Pattern name annotation -> SourceSpan

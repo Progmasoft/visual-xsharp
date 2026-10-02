@@ -135,8 +135,11 @@ test-suite visual-xsharp-compiler-tests
         FloatingOptimizerTests
         IntegerEvaluationTests
         IntegerFlowTests
+        AssignmentExpressionTests
         ConditionalExpressionTests
+        CoreInterpreter
         IterationTests
+        LoopExpressionTests
         LoopFlowTests
         LoopFlowOracleTests
         DiagnosticProtocolTests
