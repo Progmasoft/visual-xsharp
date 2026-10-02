@@ -68,6 +68,18 @@ evaluateConstantInteger expression = case expression of
         leftValue <- evaluateConstantInteger left
         rightValue <- evaluateConstantInteger right
         evaluateBinary operator leftValue rightValue
+    -- Only the selected operand is evaluated, so a definite arithmetic error
+    -- in the other one is not a property of this expression.
+    ConditionalExpression _ condition first second _ -> do
+        test <- evaluateConstantInteger condition
+        case test of
+            Just number -> evaluateConstantInteger (if number /= 0 then first else second)
+            Nothing -> pure Nothing
+    CoalesceExpression _ left fallback _ -> do
+        leftValue <- evaluateConstantInteger left
+        case leftValue of
+            Just 0 -> evaluateConstantInteger fallback
+            other -> pure other
     _ -> pure Nothing
 
 typedBitwiseComplement :: Type -> Integer -> Integer

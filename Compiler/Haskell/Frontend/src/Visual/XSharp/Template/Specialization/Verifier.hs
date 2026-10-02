@@ -297,6 +297,8 @@ statementDefinitionSymbols statement = case statement of
     ForEachStatement _ _ _ name _ source body ->
         resolvedSymbol name : expressionDefinitionSymbols source ++ blockDefinitionSymbols body
     IncrementStatement _ name _ _ -> [resolvedSymbol name]
+    CompoundAssignmentStatement _ _ _ _ value -> expressionDefinitionSymbols value
+    DiscardStatement _ value -> expressionDefinitionSymbols value
     BreakStatement _ value -> maybe [] expressionDefinitionSymbols value
     ContinueStatement {} -> []
     ExpressionStatement _ expression _ -> expressionDefinitionSymbols expression
@@ -309,11 +311,16 @@ expressionDefinitionSymbols expression = case expression of
     UnaryExpression _ _ value _ -> expressionDefinitionSymbols value
     BinaryExpression _ _ left right _ -> expressionDefinitionSymbols left ++ expressionDefinitionSymbols right
     IsPatternExpression _ subject _ _ -> expressionDefinitionSymbols subject
+    ConditionalExpression _ condition first second _ ->
+        concatMap expressionDefinitionSymbols [condition, first, second]
+    CoalesceExpression _ left fallback _ ->
+        expressionDefinitionSymbols left ++ expressionDefinitionSymbols fallback
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters
             ++ callableBodyDefinitionSymbols body
-    _ -> []
+    NameExpression {} -> []
+    LiteralExpression {} -> []
 
 callableBodyDefinitionSymbols :: CallableBody ResolvedName Type -> [SymbolId]
 callableBodyDefinitionSymbols body = case body of
@@ -353,6 +360,8 @@ statementTypes statement = case statement of
             ++ blockTypes body
     ForEachStatement _ _ _ _ annotation source body -> annotation : expressionTypes source ++ blockTypes body
     IncrementStatement _ _ annotation _ -> [annotation]
+    CompoundAssignmentStatement _ _ _ annotation value -> annotation : expressionTypes value
+    DiscardStatement _ value -> expressionTypes value
     BreakStatement _ value -> maybe [] expressionTypes value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionTypes value
@@ -368,6 +377,10 @@ expressionTypes expression = case expression of
     BinaryExpression _ _ left right annotation -> annotation : expressionTypes left ++ expressionTypes right
     IsPatternExpression _ subject patternValue annotation ->
         annotation : expressionTypes subject ++ patternTypes patternValue
+    ConditionalExpression _ condition first second annotation ->
+        annotation : concatMap expressionTypes [condition, first, second]
+    CoalesceExpression _ left fallback annotation ->
+        annotation : expressionTypes left ++ expressionTypes fallback
     CallableExpression _ _ captures parameters body annotation ->
         annotation
             : map captureAnnotation captures

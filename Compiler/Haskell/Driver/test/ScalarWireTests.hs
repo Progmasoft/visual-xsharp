@@ -24,7 +24,7 @@ scalarWireTests =
 
 versionTests :: [(String, Bool)]
 versionTests =
-    [ ("Core wire current version is 7", currentCoreWireVersion == CoreWireVersion 7)
+    [ ("Core wire current version is 8", currentCoreWireVersion == CoreWireVersion 8)
     , ("CorePrep wire current version is 6", currentWireVersion == WireVersion 6)
     , ("Core numeric payload default is bounded", maximumCoreNumericBytes defaultCoreWireLimits == 4096)
     , ("CorePrep numeric payload default is bounded", maximumNumericBytes defaultWireLimits == 4096)
@@ -286,7 +286,8 @@ discardedFloorDivideModule leftType left rightType right =
 malformedWireTests :: [(String, Bool)]
 malformedWireTests =
     [ ("Core wire rejects v2 input", rejectsCoreVersion 2)
-    , ("Core wire rejects future input", rejectsCoreVersion 8)
+    , ("Core wire rejects the previous v7 schema", rejectsCoreVersion 7)
+    , ("Core wire rejects future input", rejectsCoreVersion 9)
     , ("CorePrep wire rejects v2 input", rejectsCorePrepVersion 2)
     , ("CorePrep wire rejects future input", rejectsCorePrepVersion 7)
     , ("Core wire enforces numeric byte limit", coreNumericLimit)

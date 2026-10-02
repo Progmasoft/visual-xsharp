@@ -388,6 +388,8 @@ requireTemplateValue expression = case expression of
         TemplateBinarySyntax spanValue operator <$> requireTemplateValue left <*> requireTemplateValue right
     CallExpression spanValue _ _ _ -> unsupported spanValue
     IsPatternExpression spanValue _ _ _ -> unsupported spanValue
+    ConditionalExpression spanValue _ _ _ _ -> unsupported spanValue
+    CoalesceExpression spanValue _ _ _ -> unsupported spanValue
     CallableExpression spanValue _ _ _ _ _ -> unsupported spanValue
     where
         unsupported spanValue =
@@ -421,6 +423,8 @@ statementSpan statement = case statement of
     ForStatement value _ _ _ _ -> value
     ForEachStatement value _ _ _ _ _ _ -> value
     IncrementStatement value _ _ _ -> value
+    CompoundAssignmentStatement value _ _ _ _ -> value
+    DiscardStatement value _ -> value
     BreakStatement value _ -> value
     ContinueStatement value -> value
     ExpressionStatement value _ _ -> value
@@ -441,6 +445,8 @@ parseStatement allowFinalExpression =
             first : _ | tokenKind first == KeywordToken && tokenText first == "break" -> parseBreak
             first : _ | tokenKind first == KeywordToken && tokenText first == "continue" -> parseContinue
             _ | startsIncrement tokens -> parseIncrementStatement
+            _ | startsCompoundAssignment tokens -> parseCompoundAssignmentStatement
+            _ | startsDiscard tokens -> parseDiscard
             first : _ | tokenKind first == KeywordToken && tokenText first == "final" -> parseBinding
             -- `unit` is forbidden specifically in type position. Commit here
             -- so declaration lookahead cannot hide VXP0013 behind an unrelated
@@ -606,6 +612,7 @@ parseForAction = do
         first : second : _
             | tokenKind first == IdentifierToken && tokenText second `elem` ["++", "--"] ->
                 parseIncrement (tokenText second == "++") False
+        _ | startsCompoundAssignment tokens -> parseCompoundAssignment
         _ -> do
             value <- parseExpression
             assignment <- optionalSymbol "="
@@ -649,6 +656,76 @@ parseIncrement isIncrement prefix = do
     where
         operator = if isIncrement then "++" else "--"
 
+-- Every compound operator stores the result of its binary operator back into
+-- the target. Comparison and logical operators have no compound spelling.
+compoundAssignmentOperators :: [(String, BinaryOperator)]
+compoundAssignmentOperators =
+    [ ("+=", Add)
+    , ("-=", Subtract)
+    , ("*=", Multiply)
+    , ("/=", Divide)
+    , ("//=", FloorDivide)
+    , ("%=", Remainder)
+    , ("**=", Power)
+    , ("<<=", ShiftLeft)
+    , (">>=", ShiftRight)
+    , ("&=", BitwiseAnd)
+    , ("^=", BitwiseXor)
+    , ("|=", BitwiseOr)
+    ]
+
+compoundAssignmentOperator :: Token -> Maybe BinaryOperator
+compoundAssignmentOperator token
+    | tokenKind token == SymbolToken = lookup (tokenText token) compoundAssignmentOperators
+    | otherwise = Nothing
+
+startsCompoundAssignment :: [Token] -> Bool
+startsCompoundAssignment tokens = case tokens of
+    first : second : _ ->
+        tokenKind first == IdentifierToken && compoundAssignmentOperator second /= Nothing
+    _ -> False
+
+-- The header form has no terminator; a `for` update list separates its
+-- actions with commas and closes them with the parenthesis.
+parseCompoundAssignment :: P (Statement Identifier ())
+parseCompoundAssignment = do
+    (name, nameSpan) <- identifier
+    operatorTokenValue <- takeToken
+    case compoundAssignmentOperator operatorTokenValue of
+        Nothing ->
+            failAt (tokenSpan operatorTokenValue) "VXP0006" "expected a compound assignment operator"
+        Just operator -> do
+            value <- parseExpression
+            pure (CompoundAssignmentStatement (mergeSpan nameSpan (expressionSpan value)) operator name () value)
+
+parseCompoundAssignmentStatement :: P (Statement Identifier ())
+parseCompoundAssignmentStatement = do
+    assignment <- parseCompoundAssignment
+    end <- symbol ";"
+    pure $ case assignment of
+        CompoundAssignmentStatement spanValue operator name annotation value ->
+            CompoundAssignmentStatement (mergeSpan spanValue (tokenSpan end)) operator name annotation value
+        _ -> assignment
+
+-- `_` never names a binding, so `_ =` can be recognized from two tokens and
+-- cannot be confused with an assignment to a declared name.
+startsDiscard :: [Token] -> Bool
+startsDiscard tokens = case tokens of
+    first : second : _ ->
+        tokenKind first == IdentifierToken
+            && tokenText first == "_"
+            && tokenKind second == SymbolToken
+            && tokenText second == "="
+    _ -> False
+
+parseDiscard :: P (Statement Identifier ())
+parseDiscard = do
+    start <- takeToken
+    _ <- symbol "="
+    value <- parseExpression
+    end <- symbol ";"
+    pure (DiscardStatement (mergeSpan (tokenSpan start) (tokenSpan end)) value)
+
 parseBreak :: P (Statement Identifier ())
 parseBreak = do
     start <- keyword "break"
@@ -688,6 +765,19 @@ parseAssignmentOrExpression allowFinalExpression = do
                 pure (AssignmentStatement (mergeSpan start (tokenSpan end)) name () value)
             _ -> failAt (expressionSpan expression) "VXP0003" "assignment target must be a name"
         else do
+            -- A named target was dispatched before this parser ran, so a
+            -- compound operator here follows a non-storage expression.
+            next <- peekToken
+            case next of
+                Just token
+                    | compoundAssignmentOperator token /= Nothing ->
+                        failAt (expressionSpan expression) "VXP0003" "assignment target must be a name"
+                    | tokenKind token == SymbolToken && tokenText token == "??=" ->
+                        failAt
+                            (tokenSpan token)
+                            "VXP0031"
+                            "null-coalescing assignment requires nullable types, which are not implemented"
+                _ -> pure ()
             terminated <- peekText ";"
             if terminated
                 then do
@@ -702,7 +792,53 @@ parseAssignmentOrExpression allowFinalExpression = do
                             pure (ExpressionStatement (expressionSpan expression) expression True)
 
 parseExpression :: P (Expression Identifier ())
-parseExpression = parseLogicalOr
+parseExpression = parseConditional
+
+-- The conditional forms bind more weakly than every binary operator and are
+-- right-associative: `a ? b : c ? d : e` groups as `a ? b : (c ? d : e)` and
+-- `a ?: b ?: c` as `a ?: (b ?: c)`.
+parseConditional :: P (Expression Identifier ())
+parseConditional = do
+    condition <- parseLogicalOr
+    next <- peekToken
+    case next of
+        Just token | tokenKind token == SymbolToken && tokenText token == "?" -> do
+            _ <- takeToken
+            omittedMiddle <- peekText ":"
+            if omittedMiddle
+                then do
+                    -- `left ? : fallback` is the same omitted-middle form
+                    -- as the adjacent `?:` spelling.
+                    _ <- symbol ":"
+                    coalesce condition
+                else do
+                    first <- parseConditional
+                    separator <- peekText ":"
+                    if separator
+                        then do
+                            _ <- symbol ":"
+                            second <- parseConditional
+                            pure
+                                ( ConditionalExpression
+                                    (mergeSpan (expressionSpan condition) (expressionSpan second))
+                                    condition
+                                    first
+                                    second
+                                    ()
+                                )
+                        else failCurrent "VXP0029" "conditional expression requires ':' and a second result"
+        Just token | tokenKind token == SymbolToken && tokenText token == "?:" -> do
+            _ <- takeToken
+            coalesce condition
+        Just token
+            | tokenKind token == SymbolToken && tokenText token == "??" ->
+                failAt (tokenSpan token) "VXP0030" "null coalescing requires nullable types, which are not implemented"
+        _ -> pure condition
+    where
+        coalesce left = do
+            fallback <- parseConditional
+            pure (CoalesceExpression (mergeSpan (expressionSpan left) (expressionSpan fallback)) left fallback ())
+
 parseLogicalOr
     , parseLogicalAnd
     , parseEquality
@@ -1037,6 +1173,8 @@ expressionSpan expression = case expression of
     UnaryExpression value _ _ _ -> value
     BinaryExpression value _ _ _ _ -> value
     IsPatternExpression value _ _ _ -> value
+    ConditionalExpression value _ _ _ _ -> value
+    CoalesceExpression value _ _ _ -> value
     CallableExpression value _ _ _ _ _ -> value
 
 patternSpan :: Pattern name annotation -> SourceSpan

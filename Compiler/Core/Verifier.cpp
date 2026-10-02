@@ -397,6 +397,44 @@ namespace Visual::XSharp::Core
                             "Core let result disagrees with its body");
                         return;
                     }
+                    case Expression::Kind::Conditional:
+                    {
+                        if (expression.operands.size() != 3U)
+                        {
+                            Add("VXC1071",
+                                "Core conditional must contain a test and two "
+                                "arms");
+                            return;
+                        }
+                        const auto &test = expression.operands[0];
+                        const auto &whenTrue = expression.operands[1];
+                        const auto &whenFalse = expression.operands[2];
+                        VerifyExpression(test, environment);
+                        if (!accepts_boolean_context(test.type))
+                            Add("VXC1067",
+                                "Core conditional test must be bool or "
+                                "numeric");
+                        VerifyExpression(whenTrue, environment);
+                        VerifyExpression(whenFalse, environment);
+                        CheckSameType(expression.type,
+                                      whenTrue.type,
+                                      "VXC1068",
+                                      "Core conditional result type disagrees "
+                                      "with its first arm");
+                        CheckSameType(expression.type,
+                                      whenFalse.type,
+                                      "VXC1069",
+                                      "Core conditional result type disagrees "
+                                      "with its second arm");
+                        // The result is materialized in a plain storage
+                        // slot. Owned values would need move and release
+                        // rules for that slot.
+                        if (!accepts_boolean_context(expression.type))
+                            Add("VXC1070",
+                                "Core conditional result must be bool or "
+                                "numeric");
+                        return;
+                    }
                 }
             }
             void

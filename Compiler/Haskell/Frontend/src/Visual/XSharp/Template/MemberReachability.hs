@@ -357,6 +357,8 @@ statementCalls owner statement = case statement of
             ++ blockCalls owner body
     ForEachStatement _ _ _ _ _ source body -> expressionCalls owner source ++ blockCalls owner body
     IncrementStatement {} -> []
+    CompoundAssignmentStatement _ _ _ _ value -> expressionCalls owner value
+    DiscardStatement _ value -> expressionCalls owner value
     BreakStatement _ value -> maybe [] (expressionCalls owner) value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionCalls owner value
@@ -373,6 +375,10 @@ expressionCalls owner expression = case expression of
     UnaryExpression _ _ value _ -> expressionCalls owner value
     BinaryExpression _ _ left right _ -> expressionCalls owner left ++ expressionCalls owner right
     IsPatternExpression _ subject _ _ -> expressionCalls owner subject
+    -- Reachability is path-insensitive: a call in either arm may execute.
+    ConditionalExpression _ condition first second _ ->
+        concatMap (expressionCalls owner) [condition, first, second]
+    CoalesceExpression _ left fallback _ -> expressionCalls owner left ++ expressionCalls owner fallback
     CallableExpression _ _ captures _ body _ ->
         concatMap (maybe [] (expressionCalls owner) . captureInitializer) captures
             ++ callableBodyCalls owner body

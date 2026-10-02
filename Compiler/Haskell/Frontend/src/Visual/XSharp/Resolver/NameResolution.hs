@@ -122,6 +122,12 @@ resolveStatement statement = case statement of
     IncrementStatement spanValue name annotation direction ->
         let (resolvedName, problems) = resolveName spanValue name
          in (IncrementStatement spanValue resolvedName annotation direction, problems)
+    CompoundAssignmentStatement spanValue operator name _ value ->
+        let (resolvedName, nameProblems) = resolveName spanValue name
+            (resolvedValue, valueProblems) = resolveExpression value
+         in (CompoundAssignmentStatement spanValue operator resolvedName () resolvedValue, nameProblems ++ valueProblems)
+    DiscardStatement spanValue value ->
+        let (resolved, problems) = resolveExpression value in (DiscardStatement spanValue resolved, problems)
     BreakStatement spanValue value ->
         let (resolvedValue, problems) = resolveOptional value
          in (BreakStatement spanValue resolvedValue, problems)
@@ -150,6 +156,17 @@ resolveExpression expression = case expression of
         let (resolvedSubject, subjectProblems) = resolveExpression subject
             (resolvedPattern, patternProblems) = resolvePattern patternValue
          in (IsPatternExpression spanValue resolvedSubject resolvedPattern (), subjectProblems ++ patternProblems)
+    ConditionalExpression spanValue condition first second _ ->
+        let (resolvedCondition, conditionProblems) = resolveExpression condition
+            (resolvedFirst, firstProblems) = resolveExpression first
+            (resolvedSecond, secondProblems) = resolveExpression second
+         in ( ConditionalExpression spanValue resolvedCondition resolvedFirst resolvedSecond ()
+            , conditionProblems ++ firstProblems ++ secondProblems
+            )
+    CoalesceExpression spanValue left fallback _ ->
+        let (resolvedLeft, leftProblems) = resolveExpression left
+            (resolvedFallback, fallbackProblems) = resolveExpression fallback
+         in (CoalesceExpression spanValue resolvedLeft resolvedFallback (), leftProblems ++ fallbackProblems)
     CallableExpression spanValue explicit captures parameters body _ ->
         let resolvedCaptures = map resolveCapture captures
             resolvedParameters = map resolveParameter parameters

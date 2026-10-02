@@ -84,11 +84,11 @@ symbol validity, parameter uniqueness, nested expressions, and return behavior.
 Optimization recursively folds capture initializers and closure bodies without
 reordering captures.
 
-Core wire version 7 serializes ownership, captures, parameters, return type,
+Core wire version 8 serializes ownership, captures, parameters, return type,
 nested statements, and structured loop statements. Existing byte, count,
 type-depth, and expression-depth limits also apply to closures.
 
-The native VXCR v7 reader and writer carry the same closure expression tag and
+The native VXCR v8 reader and writer carry the same closure expression tag and
 field order as the Haskell frontend. The C++ Core verifier validates capture
 ownership, callable shape, nested body returns, and capture mutation before
 CorePrep lifting. This keeps callable-containing `.vxs` input on the ordinary

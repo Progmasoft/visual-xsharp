@@ -179,6 +179,20 @@ simplifyExpressionUsing environment facts expression = case expression of
                     else Map.delete (resolvedSymbol name) environment
             bodyFacts = transferStatementFacts facts (CoreBind (CoreBinding name bindingType False simplifiedValue))
          in CoreLet name bindingType simplifiedValue (simplifyExpressionWithFacts bodyEnvironment bodyFacts body) valueType
+    CoreConditional condition whenTrue whenFalse valueType ->
+        let simplifiedCondition = simplifyExpressionUsing environment facts condition
+            afterCondition = transferExpressionFacts facts simplifiedCondition
+            simplifyArm desired =
+                simplifyExpressionWithFacts
+                    environment
+                    (refineConditionFacts desired simplifiedCondition afterCondition)
+         in -- A literal test has no effects, so the conditional is its selected arm.
+            case simplifiedCondition of
+                CoreLiteral (CoreBoolean selected) _ ->
+                    if selected then simplifyArm True whenTrue else simplifyArm False whenFalse
+                CoreLiteral (CoreInteger selected) _ ->
+                    if selected /= 0 then simplifyArm True whenTrue else simplifyArm False whenFalse
+                _ -> CoreConditional simplifiedCondition (simplifyArm True whenTrue) (simplifyArm False whenFalse) valueType
     CoreClosure captures parameters returnType body valueType ->
         let simplifiedCaptures = map simplifyCapture captures
             captureConstants =

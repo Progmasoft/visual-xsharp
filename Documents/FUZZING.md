@@ -25,8 +25,11 @@ memory safety or complete language coverage.
 The differential oracle independently evaluates one generated program per
 input: a bounded arithmetic expression, a classic `for` loop with `continue`
 and `break`, a `do`/`while` loop, an `if`/`else` over that expression, a
-`while` loop preceded by its own initializers, or a recursion that terminates
-only because `||` and `&&` skip their right operands. The expected value is computed
+`while` loop preceded by its own initializers, a recursion that terminates
+only because `||` and `&&` skip their right operands, a recursion and a
+division that are defined only because a conditional expression evaluates one
+arm, a loop built from truthy coalescing and compound assignments, or a chain
+of nested conditionals. The expected value is computed
 by ordinary host code in the harness, never by a second compiler path. It
 compiles the source once, lowers the same verified Core with Xpp/Xmm
 optimizations both disabled and enabled, executes both verified
@@ -160,7 +163,8 @@ whole corpus and sanitizer cache rather than just the final input.
 documents. It runs independently of libFuzzer and does not claim guided
 coverage. `source_fuzz_smoke` checks valid-source lowering and then runs the
 differential oracle on every generated program shape at trip counts 0 through
-11 before mutation campaigns begin. Set `VXS_FUZZ_TRACE=1` to print each
+11, once with a zero and once with a nonzero generated expression, before
+mutation campaigns begin. Set `VXS_FUZZ_TRACE=1` to print each
 generated source with its reference and optimized LLVM IR.
 
 Neither smoke program nor the HPC engine has libFuzzer's per-input timeout, and
@@ -204,7 +208,9 @@ The harnesses above are evidence about the inputs they ran, not proofs:
   arithmetic model. They do not model every option interaction, lockfile
   refresh, project evaluation or REPL declaration form;
 - the differential generator covers integer arithmetic, three loop forms,
-  one conditional and one guarded recursion. Closures, other scalar types,
+  one conditional statement, guarded recursion through short-circuit operators
+  and through conditional expressions, truthy coalescing, and five compound
+  assignment operators. Closures, other scalar types,
   ownership and templates have no generated-program oracle here; their
   executable checks live in the component test suites;
 - `ownership_fuzzer` varies thread count and iteration count, not arbitrary

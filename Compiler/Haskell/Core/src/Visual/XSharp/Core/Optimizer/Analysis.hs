@@ -104,6 +104,8 @@ expressionEffectWithFacts environment facts expression
                 binding = CoreBind (CoreBinding name valueType False value)
                 bodyFacts = transferStatementFacts afterValue binding
              in combineEffect valueEffect (expressionEffectWithFacts environment bodyFacts body)
+        CoreConditional condition whenTrue whenFalse _ ->
+            conditionalEffect environment facts condition whenTrue whenFalse
         CoreApply callee arguments _ ->
             let (nested, _) = expressionListEffect environment facts (callee : arguments)
                 invoked = case callee of
@@ -127,6 +129,21 @@ shortCircuitEffect environment facts isAnd left right =
                 expressionEffectWithFacts environment rightInput right
             | otherwise = PureEffect
      in combineEffect leftEffect rightEffect
+
+-- Only the selected arm runs. An arm whose edge is infeasible under the
+-- incoming facts contributes no effect, exactly like a skipped right operand.
+conditionalEffect ::
+    EffectEnvironment -> IntegerFacts -> CoreExpression -> CoreExpression -> CoreExpression -> Effect
+conditionalEffect environment facts condition whenTrue whenFalse =
+    let conditionEffect = expressionEffectWithFacts environment facts condition
+        afterCondition = transferExpressionFacts facts condition
+        truth = conditionTruthFromFacts facts condition
+        armEffect desired arm =
+            let input = refineConditionFacts desired condition afterCondition
+             in if truth == Just (not desired) || isUnreachableFacts input
+                    then PureEffect
+                    else expressionEffectWithFacts environment input arm
+     in combineEffect conditionEffect (combineEffect (armEffect True whenTrue) (armEffect False whenFalse))
 
 expressionListEffect :: EffectEnvironment -> IntegerFacts -> [CoreExpression] -> (Effect, IntegerFacts)
 expressionListEffect _ facts [] = (PureEffect, facts)
@@ -185,6 +202,8 @@ expressionSymbols expression = case expression of
     CorePrimitive _ arguments _ -> Set.unions (map expressionSymbols arguments)
     CoreLet name _ value body _ ->
         Set.union (expressionSymbols value) (Set.delete (resolvedSymbol name) (expressionSymbols body))
+    CoreConditional condition whenTrue whenFalse _ ->
+        Set.unions (map expressionSymbols [condition, whenTrue, whenFalse])
     CoreClosure captures _ _ _ _ -> Set.unions (map (expressionSymbols . coreCaptureValue) captures)
 
 statementSymbols :: CoreStatement -> Set SymbolId

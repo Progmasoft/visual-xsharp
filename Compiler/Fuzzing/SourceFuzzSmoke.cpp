@@ -42,18 +42,25 @@ main()
     // A leaf selector followed by an explicit mode and limit byte reaches
     // every generated control-flow shape at every trip count, including the
     // zero-trip, continue and break paths, instead of only the shapes the
-    // four cycling selectors above happen to select.
-    constexpr std::uint8_t kModes = 6U;
+    // four cycling selectors above happen to select. The two leaves are the
+    // literals 0 and 4, so a form that tests its generated expression sees
+    // both a false and a true value.
+    constexpr std::uint8_t kModes = 9U;
     constexpr std::uint8_t kLimits = 12U;
-    for (std::uint8_t mode = 0U; mode < kModes; ++mode)
+    constexpr std::array<std::uint8_t, 2U> leaves{ 0U, 4U };
+    for (const auto leaf : leaves)
     {
-        for (std::uint8_t limit = 0U; limit < kLimits; ++limit)
+        for (std::uint8_t mode = 0U; mode < kModes; ++mode)
         {
-            const std::array<std::uint8_t, 3U> seed{ 0U, mode, limit };
-            llvm::errs() << "Differential smoke: mode "
-                         << static_cast<unsigned>(mode) << " limit "
-                         << static_cast<unsigned>(limit) << '\n';
-            Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(seed);
+            for (std::uint8_t limit = 0U; limit < kLimits; ++limit)
+            {
+                const std::array<std::uint8_t, 3U> seed{ leaf, mode, limit };
+                llvm::errs() << "Differential smoke: leaf "
+                             << static_cast<unsigned>(leaf) << " mode "
+                             << static_cast<unsigned>(mode) << " limit "
+                             << static_cast<unsigned>(limit) << '\n';
+                Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(seed);
+            }
         }
     }
     return 0;
