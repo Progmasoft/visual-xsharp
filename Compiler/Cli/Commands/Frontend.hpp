@@ -19,7 +19,8 @@ namespace Visual::XSharp::Cli::Frontend
         CoreWire = 0,          ///< Versioned, verified Core wire bytes.
         ProjectSourceList = 1, ///< NUL-delimited UTF-8 source paths.
         DiagnosticWire = 2,    ///< Structured source diagnostics.
-        ErrorText = 3          ///< Human-readable UTF-8 failure text.
+        ErrorText = 3,         ///< Human-readable UTF-8 failure text.
+        CorePrepWire = 4       ///< Frontend CorePrep lowering; testing only.
     };
 
     /// @brief Stable operation outcomes returned by the C ABI.
@@ -79,4 +80,23 @@ namespace Visual::XSharp::Cli::Frontend
     /// failures.
     [[nodiscard]] auto
     FuzzCompile(std::span<const std::uint8_t> source) -> Result;
+
+    /// @brief Core and the frontend's own CorePrep from one compilation.
+    struct StageResult final
+    {
+        Result core; ///< Status and Core wire, as returned by FuzzCompile.
+        /// Frontend-lowered CorePrep wire; empty unless core succeeded.
+        std::vector<std::uint8_t> corePrep;
+    };
+
+    /// @brief Compile source bytes and keep both frontend artifacts.
+    ///
+    /// The native pipeline lowers Core to CorePrep with its own adapter. This
+    /// testing route additionally returns the Haskell lowering of the same
+    /// Core so the two can be compared.
+    /// @param source Candidate source bytes; malformed input is permitted.
+    /// @return Owned Core and CorePrep buffers; a successful status without
+    /// CorePrep is reported as an internal error.
+    [[nodiscard]] auto
+    FuzzCompileStages(std::span<const std::uint8_t> source) -> StageResult;
 } // namespace Visual::XSharp::Cli::Frontend
