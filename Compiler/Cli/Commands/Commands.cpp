@@ -31,6 +31,8 @@
 #    include <spawn.h>
 #    include <sys/wait.h>
 #    include <unistd.h>
+// macOS does not declare environ in a header; glibc does.
+// NOLINTNEXTLINE(readability-redundant-declaration)
 extern char **environ;
 #endif
 
@@ -163,6 +165,9 @@ namespace
     FindExecutableOnPath(std::string_view executable)
         -> std::optional<std::filesystem::path>
     {
+        // Read on the calling thread; this process never modifies its
+        // environment.
+        // NOLINTNEXTLINE(concurrency-mt-unsafe)
         const auto *const environmentPath = std::getenv("PATH");
         if (environmentPath == nullptr)
             return std::nullopt;
@@ -177,9 +182,8 @@ namespace
                                               : end - start);
             if (!directory.empty())
             {
-                const auto candidate
-                    = std::filesystem::path(std::string(directory))
-                      / std::string(executable);
+                auto candidate = std::filesystem::path(std::string(directory))
+                                 / std::string(executable);
                 std::error_code error;
                 if (std::filesystem::is_regular_file(candidate, error) && !error
                     && ::access(candidate.c_str(), X_OK) == 0)
@@ -458,7 +462,8 @@ namespace
             fmt::print(stderr,
                        "vxs: could not start '{}': {}\n",
                        executable,
-                       std::strerror(spawnStatus));
+                       std::error_code(spawnStatus, std::generic_category())
+                           .message());
             return -1;
         }
         int status{};
@@ -789,6 +794,13 @@ namespace
         const Visual::XSharp::Driver::ResolvedSourceTarget &target,
         const EffectiveCompilerOptions &effective)
     {
+        if (!target.entry)
+        {
+            fmt::print(stderr,
+                       "vxs: the selected executable target has no entry "
+                       "class\n");
+            return 1;
+        }
         project.entry = *target.entry;
         project.sourceRoots = { target.root };
         project.sourceExcludes = target.excludes;

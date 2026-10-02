@@ -765,9 +765,6 @@ TEST_CASE("Core artifact driver validates and emits LLVM and native artifacts")
     std::filesystem::create_directories(directory);
     const auto corePath = directory / "Golden.core";
     const auto llvmPath = directory / "Golden.ll";
-    const auto objectPath = directory / "Golden.o";
-    const auto assemblyPath = directory / "Golden.asm";
-    const auto executablePath = directory / "Golden.vxse";
     // Keep every explicit format beside one verified Core input, then exercise
     // the binary as a process to cover TargetMachine, LLD, and PE loading
     // together.
@@ -789,6 +786,9 @@ TEST_CASE("Core artifact driver validates and emits LLVM and native artifacts")
                                 nullptr));
     REQUIRE(std::filesystem::file_size(llvmPath) > 0U);
 #ifdef _WIN32
+    const auto objectPath = directory / "Golden.o";
+    const auto assemblyPath = directory / "Golden.asm";
+    const auto executablePath = directory / "Golden.vxse";
     REQUIRE(ProcessCoreArtifact(corePath.string().c_str(),
                                 CliCommand::kBuild,
                                 BuildOutput::kObject,

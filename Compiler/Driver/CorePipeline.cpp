@@ -412,12 +412,28 @@ namespace
         }
         if (output == BuildOutput::kXpp || output == BuildOutput::kXmm)
             return WriteIntermediate(artifactBasePath, output, result);
-        if (output == BuildOutput::kBinary)
-            return WriteExecutable(artifactBasePath, *result.llvm);
-        if (output == BuildOutput::kObject || output == BuildOutput::kAssembly
-            || output == BuildOutput::kLlvmIr
-            || output == BuildOutput::kLlvmBitcode)
+        const auto needsLlvm = output == BuildOutput::kBinary
+                               || output == BuildOutput::kObject
+                               || output == BuildOutput::kAssembly
+                               || output == BuildOutput::kLlvmIr
+                               || output == BuildOutput::kLlvmBitcode;
+        if (needsLlvm)
+        {
+            // A successful pipeline that ran to the backend carries its
+            // artifact; report the contradiction instead of reading through
+            // an empty optional.
+            if (!result.llvm)
+            {
+                fmt::print(stderr,
+                           "vxs: compiler artifact '{}' produced no LLVM "
+                           "artifact for the requested output\n",
+                           sourceName);
+                return false;
+            }
+            if (output == BuildOutput::kBinary)
+                return WriteExecutable(artifactBasePath, *result.llvm);
             return WriteArtifact(artifactBasePath, output, *result.llvm);
+        }
         fmt::print(stderr,
                    "vxs: requested artifact conversion is not supported from "
                    "this input stage\n");

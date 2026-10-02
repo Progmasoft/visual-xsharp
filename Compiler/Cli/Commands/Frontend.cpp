@@ -158,6 +158,9 @@ namespace Visual::XSharp::Cli::Frontend
                 handle_ = dlopen(libraryPath.c_str(), RTLD_NOW | RTLD_LOCAL);
                 if (handle_ == nullptr)
                 {
+                    // The loader is used on this thread only, before any
+                    // other thread exists.
+                    // NOLINTNEXTLINE(concurrency-mt-unsafe)
                     const char *const message = dlerror();
                     error_ = "could not load adjacent frontend library: ";
                     error_ += message == nullptr ? "unknown loader error"

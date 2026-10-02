@@ -25,6 +25,8 @@
 #    include <spawn.h>
 #    include <sys/wait.h>
 #    include <unistd.h>
+// macOS does not declare environ in a header; glibc does.
+// NOLINTNEXTLINE(readability-redundant-declaration)
 extern char **environ;
 #endif
 
@@ -132,6 +134,9 @@ namespace Visual::XSharp::Driver
                                                      value.get(),
                                                      length - 1 };
 #else
+            // Read on the calling thread; this process never modifies its
+            // environment.
+            // NOLINTNEXTLINE(concurrency-mt-unsafe)
             const char *value = std::getenv(name);
             return value == nullptr || *value == '\0'
                        ? std::nullopt

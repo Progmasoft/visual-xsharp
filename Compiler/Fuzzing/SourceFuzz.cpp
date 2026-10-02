@@ -245,7 +245,7 @@ namespace Visual::XSharp::Fuzzing
                 return std::move(stages.core);
 
             const auto core = Core::Wire::Decode(stages.core.bytes);
-            if (!core)
+            if (!core.module)
                 llvm::report_fatal_error(llvm::Twine(
                     "native Core reader rejected frontend Core wire"));
             // Unverified Core is rejected by the pipeline with its own
@@ -254,7 +254,7 @@ namespace Visual::XSharp::Fuzzing
                 return std::move(stages.core);
             const auto frontendCorePrep
                 = ::visual_xsharp::core::wire::decode(stages.corePrep);
-            if (!frontendCorePrep)
+            if (!frontendCorePrep.module)
                 llvm::report_fatal_error(llvm::Twine(
                     "native CorePrep reader rejected frontend CorePrep wire"));
             const auto difference
