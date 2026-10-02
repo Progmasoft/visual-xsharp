@@ -80,10 +80,16 @@ functionSources = concatMap declarationFunctionSources
 type Lower = StateT Int (Either [Diagnostic])
 
 freshPatternSubject :: Lower ResolvedName
-freshPatternSubject = do
+freshPatternSubject = freshGenerated "$pattern"
+
+freshCoalesceSubject :: Lower ResolvedName
+freshCoalesceSubject = freshGenerated "$coalesce"
+
+freshGenerated :: String -> Lower ResolvedName
+freshGenerated prefix = do
     identifier <- get
     put (identifier + 1)
-    pure (ResolvedName (SymbolId identifier) (Identifier ("$pattern" ++ show identifier)))
+    pure (ResolvedName (SymbolId identifier) (Identifier (prefix ++ show identifier)))
 
 lowerTop :: Declaration ResolvedName Type -> Lower [CoreFunction]
 lowerTop TypeDeclaration {typeMembers = members} = mapM lowerDeclaration members
@@ -158,6 +164,14 @@ lowerStatement statement = case statement of
             one = CoreLiteral (CoreInteger 1) loweredType
             operation = if isIncrement then CoreAdd else CoreSubtract
          in pure [CoreAssign name (CorePrimitive operation [value, one] loweredType)]
+    -- The type checker has established that the operator result has the
+    -- target type, so the stored primitive needs no conversion.
+    CompoundAssignmentStatement _ operator name valueType value -> do
+        lowered <- lowerExpression value
+        let loweredType = lowerBoundaryType valueType
+            current = CoreVariable name loweredType
+        pure [CoreAssign name (CorePrimitive (lowerBinary operator) [current, lowered] loweredType)]
+    DiscardStatement _ value -> (: []) . CoreEvaluate <$> lowerExpression value
     BreakStatement _ Nothing -> pure [CoreBreak]
     BreakStatement spanValue (Just _) ->
         lift
@@ -207,6 +221,28 @@ lowerExpression expression = case expression of
             subjectRead = CoreVariable subjectName subjectType
             predicate = lowerPattern subjectRead subjectType patternValue
         pure (CoreLet subjectName subjectType loweredSubject predicate boolType)
+    ConditionalExpression _ condition first second valueType ->
+        CoreConditional
+            <$> lowerExpression condition
+            <*> lowerExpression first
+            <*> lowerExpression second
+            <*> pure (lowerBoundaryType valueType)
+    -- The left operand is both the test and the first result. Binding it once
+    -- keeps its effects single even though it is read twice.
+    CoalesceExpression _ left fallback valueType -> do
+        loweredLeft <- lowerExpression left
+        loweredFallback <- lowerExpression fallback
+        subjectName <- freshCoalesceSubject
+        let loweredType = lowerBoundaryType valueType
+            subjectRead = CoreVariable subjectName loweredType
+        pure
+            ( CoreLet
+                subjectName
+                loweredType
+                loweredLeft
+                (CoreConditional subjectRead subjectRead loweredFallback loweredType)
+                loweredType
+            )
     CallableExpression _ explicit captures parameters body valueType -> do
         let loweredParameters =
                 [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
@@ -248,6 +284,8 @@ expressionAnnotation expression = case expression of
     UnaryExpression _ _ _ valueType -> valueType
     BinaryExpression _ _ _ _ valueType -> valueType
     IsPatternExpression _ _ _ valueType -> valueType
+    ConditionalExpression _ _ _ _ valueType -> valueType
+    CoalesceExpression _ _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
 lowerPattern :: CoreExpression -> Type -> Pattern ResolvedName Type -> CoreExpression
@@ -353,6 +391,8 @@ expressionReads expression = case expression of
     CorePrimitive _ arguments _ -> concatMap expressionReads arguments
     CoreLet name _ value body _ ->
         expressionReads value ++ filter ((/= resolvedSymbol name) . resolvedSymbol . fst) (expressionReads body)
+    CoreConditional condition whenTrue whenFalse _ ->
+        expressionReads condition ++ expressionReads whenTrue ++ expressionReads whenFalse
     CoreClosure captures _ _ body _ -> concatMap (expressionReads . coreCaptureValue) captures ++ statementReads body
 
 uniqueReads :: [(ResolvedName, Type)] -> [(ResolvedName, Type)]
@@ -424,6 +464,8 @@ statementIds statement = case statement of
     ForEachStatement _ _ _ name _ source body ->
         symbolValue name : expressionIds source ++ blockSymbolIds body
     IncrementStatement _ name _ _ -> [symbolValue name]
+    CompoundAssignmentStatement _ _ name _ value -> symbolValue name : expressionIds value
+    DiscardStatement _ value -> expressionIds value
     BreakStatement _ value -> maybe [] expressionIds value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionIds value
@@ -437,6 +479,8 @@ expressionIds expression = case expression of
     UnaryExpression _ _ value _ -> expressionIds value
     BinaryExpression _ _ left right _ -> expressionIds left ++ expressionIds right
     IsPatternExpression _ subject _ _ -> expressionIds subject
+    ConditionalExpression _ condition first second _ -> concatMap expressionIds [condition, first, second]
+    CoalesceExpression _ left fallback _ -> expressionIds left ++ expressionIds fallback
     CallableExpression _ _ captures parameters body _ ->
         map (symbolValue . captureName) captures
             ++ concatMap (maybe [] expressionIds . captureInitializer) captures

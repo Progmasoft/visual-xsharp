@@ -161,6 +161,8 @@ walkStatement parent state statement = case statement of
     ForEachStatement _ _ _ _ _ source body ->
         walkBlock parent (walkExpression parent state source) body
     IncrementStatement {} -> state
+    CompoundAssignmentStatement _ _ _ _ value -> walkExpression parent state value
+    DiscardStatement _ value -> walkExpression parent state value
     BreakStatement _ value -> maybe state (walkExpression parent state) value
     ContinueStatement {} -> state
     ExpressionStatement _ value _ -> walkExpression parent state value
@@ -176,6 +178,10 @@ walkExpression parent state expression = case expression of
     BinaryExpression _ _ left right _ ->
         walkExpression parent (walkExpression parent state left) right
     IsPatternExpression _ subject _ _ -> walkExpression parent state subject
+    ConditionalExpression _ condition first second _ ->
+        foldl (walkExpression parent) state [condition, first, second]
+    CoalesceExpression _ left fallback _ ->
+        walkExpression parent (walkExpression parent state left) fallback
     callable@CallableExpression {} -> walkCallable parent state callable
 
 walkCallable :: Maybe ClosureId -> WalkState -> Expression ResolvedName Type -> WalkState
@@ -271,6 +277,11 @@ statementFacts statement = case statement of
         let nested = expressionFacts source `appendFacts` blockFacts body
          in nested {factLocals = name : factLocals nested, factWrites = name : factWrites nested}
     IncrementStatement _ name annotation _ -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
+    -- A compound assignment reads its target before storing the result.
+    CompoundAssignmentStatement _ _ name annotation value ->
+        let nested = expressionFacts value
+         in nested {factReads = (name, annotation) : factReads nested, factWrites = name : factWrites nested}
+    DiscardStatement _ value -> expressionFacts value
     BreakStatement _ value -> maybe emptyFacts expressionFacts value
     ContinueStatement {} -> emptyFacts
     ExpressionStatement _ value _ -> expressionFacts value
@@ -285,6 +296,9 @@ expressionFacts expression = case expression of
     UnaryExpression _ _ value _ -> expressionFacts value
     BinaryExpression _ _ left right _ -> expressionFacts left `appendFacts` expressionFacts right
     IsPatternExpression _ subject _ _ -> expressionFacts subject
+    ConditionalExpression _ condition first second _ ->
+        foldl appendFacts (expressionFacts condition) (map expressionFacts [first, second])
+    CoalesceExpression _ left fallback _ -> expressionFacts left `appendFacts` expressionFacts fallback
     CallableExpression {} -> emptyFacts
 
 captureUse :: BodyFacts -> Bool -> Int -> Capture ResolvedName Type -> CaptureUse
@@ -374,6 +388,8 @@ statementContainsCall statement = case statement of
     ForEachStatement _ _ _ _ _ source body ->
         expressionContainsCall source || any statementContainsCall (blockStatements body)
     IncrementStatement {} -> False
+    CompoundAssignmentStatement _ _ _ _ value -> expressionContainsCall value
+    DiscardStatement _ value -> expressionContainsCall value
     BreakStatement _ value -> maybe False expressionContainsCall value
     ContinueStatement {} -> False
     ExpressionStatement _ value _ -> expressionContainsCall value
@@ -385,8 +401,11 @@ expressionContainsCall expression = case expression of
     UnaryExpression _ _ value _ -> expressionContainsCall value
     BinaryExpression _ _ left right _ -> expressionContainsCall left || expressionContainsCall right
     IsPatternExpression _ subject _ _ -> expressionContainsCall subject
+    ConditionalExpression _ condition first second _ -> any expressionContainsCall [condition, first, second]
+    CoalesceExpression _ left fallback _ -> expressionContainsCall left || expressionContainsCall fallback
     CallableExpression {} -> False
-    _ -> False
+    NameExpression {} -> False
+    LiteralExpression {} -> False
 
 descendantsOf :: [ClosureId] -> ClosureCatalog -> [ClosureId]
 descendantsOf roots catalog = roots ++ concatMap children roots

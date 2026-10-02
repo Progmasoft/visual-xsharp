@@ -5,6 +5,31 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## Unreleased
+
+### Language
+
+- Added the conditional expression `condition ? first : second` and truthy
+  coalescing `left ?: fallback`. Exactly one result is evaluated, and the left
+  operand of `?:` is evaluated once. Results are limited to `bool` and numeric
+  types for now.
+- Added the compound assignment statements `+=`, `-=`, `*=`, `/=`, `//=`, `%=`,
+  `**=`, `<<=`, `>>=`, `&=`, `^=`, and `|=`, including in `for` update lists,
+  and the discard statement `_ = value;`.
+- `??` and `??=` are now recognized and rejected with dedicated diagnostics
+  until nullable types exist.
+
+### Compiler pipeline
+
+- Added the lazy `CoreConditional` expression to the Haskell and native Core
+  models, verifiers, and wire codecs. The Core wire format is now v8; CorePrep,
+  Xpp, and Xmm are unchanged because the expression is lowered to control flow
+  before CorePrep.
+- Taught effect inference, integer facts, constant folding, liveness, and
+  inlining to treat the two arms as alternative paths.
+- The native Core-to-CorePrep adapter now binds a `let` value with its own
+  operation, matching the Haskell adapter.
+
 ## 0.4.0 - 2026-09-27
 
 ### Compiler pipeline

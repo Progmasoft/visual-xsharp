@@ -365,6 +365,8 @@ expressionDigest expression = case expression of
     CoreApply callee arguments _ -> 1 + expressionDigest callee + sum (map expressionDigest arguments)
     CorePrimitive _ arguments _ -> 1 + sum (map expressionDigest arguments)
     CoreLet _ _ value body _ -> 1 + expressionDigest value + expressionDigest body
+    CoreConditional condition whenTrue whenFalse _ ->
+        1 + sum (map expressionDigest [condition, whenTrue, whenFalse])
     CoreClosure captures parameters _ body _ ->
         1
             + length parameters

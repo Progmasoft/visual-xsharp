@@ -296,6 +296,8 @@ callsInStatement statement = case statement of
             ++ callsInBlock body
     ForEachStatement _ _ _ _ _ source body -> callsInExpression source ++ callsInBlock body
     IncrementStatement {} -> []
+    CompoundAssignmentStatement _ _ _ _ value -> callsInExpression value
+    DiscardStatement _ value -> callsInExpression value
     BreakStatement _ value -> maybe [] callsInExpression value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> callsInExpression value
@@ -312,6 +314,8 @@ callsInExpression expression = case expression of
     UnaryExpression _ _ value _ -> callsInExpression value
     BinaryExpression _ _ left right _ -> callsInExpression left ++ callsInExpression right
     IsPatternExpression _ subject _ _ -> callsInExpression subject
+    ConditionalExpression _ condition whenTrue whenFalse _ -> concatMap callsInExpression [condition, whenTrue, whenFalse]
+    CoalesceExpression _ left fallback _ -> callsInExpression left ++ callsInExpression fallback
     CallableExpression _ _ _ _ body _ -> callsInCallableBody body
     where
         isSelectedCall (CallExpression _ (NameExpression _ name _) _ _) = resolvedSpelling name == Identifier "Select"

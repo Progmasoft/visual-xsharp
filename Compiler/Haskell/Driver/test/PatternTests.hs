@@ -150,6 +150,7 @@ countCalls expression = case expression of
     CoreApply callee arguments _ -> 1 + countCalls callee + sum (map countCalls arguments)
     CorePrimitive _ arguments _ -> sum (map countCalls arguments)
     CoreLet _ _ value body _ -> countCalls value + countCalls body
+    CoreConditional condition whenTrue whenFalse _ -> sum (map countCalls [condition, whenTrue, whenFalse])
     CoreClosure captures _ _ body _ ->
         sum (map (countCalls . coreCaptureValue) captures) + sum (map statementCalls body)
 
@@ -175,6 +176,7 @@ expressionSymbols expression = case expression of
     CoreApply callee arguments _ -> expressionSymbols callee ++ concatMap expressionSymbols arguments
     CorePrimitive _ arguments _ -> concatMap expressionSymbols arguments
     CoreLet _ _ value body _ -> expressionSymbols value ++ expressionSymbols body
+    CoreConditional condition whenTrue whenFalse _ -> concatMap expressionSymbols [condition, whenTrue, whenFalse]
     CoreClosure captures _ _ body _ ->
         concatMap (expressionSymbols . coreCaptureValue) captures ++ concatMap statementSymbols body
 

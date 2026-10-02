@@ -14,7 +14,7 @@
 namespace Visual::XSharp::Core::Wire
 {
     /// Current VXCR schema version. Decoders require an exact match.
-    inline constexpr std::uint16_t kCurrentVersion = 7;
+    inline constexpr std::uint16_t kCurrentVersion = 8;
 
     /// Per-call resource ceilings for encoding and decoding.
     /// Untrusted input is checked against these bounds before allocation.

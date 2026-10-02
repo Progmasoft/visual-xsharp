@@ -83,7 +83,7 @@ namespace Visual::XSharp::Fuzzing
             expected = expression.value;
             std::string body = "return " + expression.source + ";";
             std::string members;
-            const auto mode = NextByte(bytes, cursor) % 6U;
+            const auto mode = NextByte(bytes, cursor) % 9U;
             const auto limit
                 = static_cast<std::int64_t>(NextByte(bytes, cursor) % 12U);
             if (mode == 1U)
@@ -156,6 +156,58 @@ namespace Visual::XSharp::Fuzzing
                 body = "if (Down(" + std::to_string(limit) + ") && "
                        + std::to_string(limit) + " < 6) { return "
                        + std::to_string(limit) + "; } return 0 - 1;";
+            }
+            else if (mode == 6U)
+            {
+                // Both conditionals are correct only when the unselected
+                // result is not evaluated: the recursion ends at the first
+                // result, and the division is defined only in the second.
+                const auto sum = limit * (limit + 1) / 2;
+                expected = sum + (limit == 0 ? 100 : 60 / limit);
+                members = "    public static int Sum(_ int n) { return n == 0 "
+                          "? 0 : n + Sum(n - 1); }\n";
+                body = "int value = " + std::to_string(limit)
+                       + "; return Sum(value) + (value == 0 ? 100 : 60 / "
+                         "value);";
+            }
+            else if (mode == 7U)
+            {
+                // Truthy coalescing keeps a nonzero left value and evaluates
+                // the fallback otherwise; every compound operator reads the
+                // target it writes. The host loop is the reference.
+                std::int64_t total
+                    = expression.value != 0 ? expression.value : 7;
+                for (std::int64_t index = 0; index < limit; index += 2)
+                {
+                    total += index != 0 ? index : 3;
+                    total ^= index;
+                }
+                total *= 2;
+                total -= limit;
+                total %= 1000003;
+                expected = total;
+                body = "int total = " + expression.source
+                       + " ?: 7; for (int index = 0; index < "
+                       + std::to_string(limit)
+                       + "; index += 2) { total += index ?: 3; total ^= "
+                         "index; } total *= 2; total -= "
+                       + std::to_string(limit)
+                       + "; total %= 1000003; return total;";
+            }
+            else if (mode == 8U)
+            {
+                // Chained conditionals group to the right and nest in a
+                // first result without parentheses; each trip count selects
+                // a different leaf of the same expression.
+                const auto value = limit - 5;
+                expected = value < 0    ? (value < -3 ? 1 : 2)
+                           : value == 0 ? expression.value
+                           : value > 3  ? 4
+                                        : 5;
+                body = "int value = " + std::to_string(limit)
+                       + "; value -= 5; return value < 0 ? value < 0 - 3 ? 1 "
+                         ": 2 : value == 0 ? "
+                       + expression.source + " : value > 3 ? 4 : 5 ?: 6;";
             }
             return "namespace Fuzz;\n"
                    "class Program {\n"

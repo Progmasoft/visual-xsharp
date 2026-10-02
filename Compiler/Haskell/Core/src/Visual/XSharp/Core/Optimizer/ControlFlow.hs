@@ -90,6 +90,17 @@ simplifyNestedExpression environment expression = case expression of
             (simplifyNestedExpression environment value)
             (simplifyNestedExpression environment body)
             valueType
+    CoreConditional condition whenTrue whenFalse valueType ->
+        let simplifiedCondition = simplifyNestedExpression environment condition
+         in case conditionTruth simplifiedCondition of
+                Just True -> simplifyNestedExpression environment whenTrue
+                Just False -> simplifyNestedExpression environment whenFalse
+                Nothing ->
+                    CoreConditional
+                        simplifiedCondition
+                        (simplifyNestedExpression environment whenTrue)
+                        (simplifyNestedExpression environment whenFalse)
+                        valueType
     CoreClosure captures parameters returnType body valueType ->
         CoreClosure
             [ capture {coreCaptureValue = simplifyNestedExpression environment (coreCaptureValue capture)}

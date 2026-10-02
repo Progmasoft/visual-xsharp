@@ -97,6 +97,22 @@ namespace Visual::XSharp::Core
     }
 
     auto
+    Expression::Conditional(Expression test,
+                            Expression whenTrue,
+                            Expression whenFalse,
+                            Type resultType) -> Expression
+    {
+        Expression expression;
+        expression.kind = Kind::Conditional;
+        expression.type = std::move(resultType);
+        expression.operands.reserve(3U);
+        expression.operands.push_back(std::move(test));
+        expression.operands.push_back(std::move(whenTrue));
+        expression.operands.push_back(std::move(whenFalse));
+        return expression;
+    }
+
+    auto
     Expression::operator==(const Expression &other) const -> bool
     {
         const auto equalCallee

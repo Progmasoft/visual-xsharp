@@ -275,6 +275,9 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
                     (rewriteBlock body)
             IncrementStatement spanValue name annotation isPrefix ->
                 IncrementStatement spanValue name (rewriteType annotation) isPrefix
+            CompoundAssignmentStatement spanValue operator name annotation value ->
+                CompoundAssignmentStatement spanValue operator name (rewriteType annotation) (rewriteExpression value)
+            DiscardStatement spanValue value -> DiscardStatement spanValue (rewriteExpression value)
             BreakStatement spanValue value -> BreakStatement spanValue (rewriteExpression <$> value)
             ContinueStatement {} -> statement
             ExpressionStatement spanValue value terminated -> ExpressionStatement spanValue (rewriteExpression value) terminated
@@ -295,6 +298,15 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
                     (rewriteExpression value)
                     (rewritePattern patternValue)
                     (rewriteType annotation)
+            ConditionalExpression spanValue condition whenTrue whenFalse annotation ->
+                ConditionalExpression
+                    spanValue
+                    (rewriteExpression condition)
+                    (rewriteExpression whenTrue)
+                    (rewriteExpression whenFalse)
+                    (rewriteType annotation)
+            CoalesceExpression spanValue left fallback annotation ->
+                CoalesceExpression spanValue (rewriteExpression left) (rewriteExpression fallback) (rewriteType annotation)
             CallableExpression spanValue isStatic captures parameters body annotation ->
                 CallableExpression spanValue isStatic captures parameters body (rewriteType annotation)
         rewritePattern patternValue = case patternValue of

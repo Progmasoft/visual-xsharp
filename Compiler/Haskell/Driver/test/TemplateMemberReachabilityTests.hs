@@ -614,6 +614,8 @@ statementTargets statement = case statement of
             ++ blockTargets body
     ForEachStatement _ _ _ _ _ source body -> expressionTargets source ++ blockTargets body
     IncrementStatement {} -> []
+    CompoundAssignmentStatement _ _ _ _ value -> expressionTargets value
+    DiscardStatement _ value -> expressionTargets value
     BreakStatement _ value -> maybe [] expressionTargets value
     ContinueStatement {} -> []
     ExpressionStatement _ value _ -> expressionTargets value
@@ -626,6 +628,8 @@ expressionTargets expression = case expression of
     CallExpression _ (NameExpression _ name _) arguments _ -> resolvedSymbol name : concatMap expressionTargets arguments
     CallExpression _ callee arguments _ -> expressionTargets callee ++ concatMap expressionTargets arguments
     UnaryExpression _ _ value _ -> expressionTargets value
+    ConditionalExpression _ condition whenTrue whenFalse _ -> concatMap expressionTargets [condition, whenTrue, whenFalse]
+    CoalesceExpression _ left fallback _ -> expressionTargets left ++ expressionTargets fallback
     BinaryExpression _ _ left right _ -> expressionTargets left ++ expressionTargets right
     CallableExpression _ _ captures _ body _ ->
         concatMap (maybe [] expressionTargets . captureInitializer) captures

@@ -452,6 +452,7 @@ expressionContainsDivision name expression = case expression of
     CorePrimitive _ arguments _ -> any (expressionContainsDivision name) arguments
     CoreLet _ _ value body _ ->
         expressionContainsDivision name value || expressionContainsDivision name body
+    CoreConditional condition whenTrue whenFalse _ -> any (expressionContainsDivision name) [condition, whenTrue, whenFalse]
     CoreClosure captures _ _ body _ ->
         any (expressionContainsDivision name . coreCaptureValue) captures
             || any (statementContainsDivision name) body

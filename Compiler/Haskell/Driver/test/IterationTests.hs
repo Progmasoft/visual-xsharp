@@ -34,7 +34,7 @@ iterationTests =
     , ("continue outside a loop is rejected", continueOutsideLoopIsRejected)
     , ("value-carrying break remains an explicit unsupported feature", valuedBreakIsRejected)
     , ("enumerable for remains guarded by its missing generator ABI", forEachIsRejected)
-    , ("Core v7 round-trips all structured loop statement tags", loopCoreRoundTrips)
+    , ("Core v8 round-trips all structured loop statement tags", loopCoreRoundTrips)
     , ("loop CorePrep survives its verifier", loopCorePrepVerifies)
     ]
 

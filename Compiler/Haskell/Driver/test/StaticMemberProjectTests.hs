@@ -235,6 +235,7 @@ expressionTargets expression = case expression of
     CoreApply callee arguments _ -> target callee ++ expressionTargets callee ++ concatMap expressionTargets arguments
     CorePrimitive _ arguments _ -> concatMap expressionTargets arguments
     CoreLet _ _ value body _ -> expressionTargets value ++ expressionTargets body
+    CoreConditional condition whenTrue whenFalse _ -> concatMap expressionTargets [condition, whenTrue, whenFalse]
     CoreClosure _ _ _ body _ -> concatMap statementTargets body
     where
         target (CoreVariable name _) = [name]
