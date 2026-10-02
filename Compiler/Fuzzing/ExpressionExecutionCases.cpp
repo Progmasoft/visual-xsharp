@@ -35,7 +35,7 @@ namespace Visual::XSharp::Fuzzing
             std::string_view body;
         };
 
-        constexpr std::array<Case, 124U> kCases{ {
+        constexpr std::array<Case, 122U> kCases{ {
             { false,
               false,
               3,
@@ -104,7 +104,6 @@ namespace Visual::XSharp::Fuzzing
               "b;" },
             { false, false, 3, 0, 7, "int a = left; return a++ + a;" },
             { false, false, 3, 0, 8, "int a = left; return ++a + a;" },
-            { false, false, 3, 0, 1, "int a = left; return a-- - a;" },
             { false, false, 3, 0, 7, "int a = left; return a++ + a++;" },
             { false, false, 3, 0, 20, "int a = left; return ++a * ++a;" },
             { false,
@@ -119,12 +118,6 @@ namespace Visual::XSharp::Fuzzing
               0,
               44,
               "int a = left; int b = ++a; return a * 10 + b;" },
-            { false,
-              false,
-              3,
-              0,
-              23,
-              "int a = left; int b = a--; return a * 10 + b;" },
             { false, false, 3, 0, 10, "int a = left; return a + a++ + a;" },
             { false,
               false,
@@ -446,36 +439,36 @@ namespace Visual::XSharp::Fuzzing
               false,
               4,
               0,
-              99,
-              "int n = left; int sum = 0; int v = 0; while ((v = n--) > 0) { "
+              65,
+              "int n = 0; int sum = 0; int v = 0; while ((v = n++) < left) { "
               "sum += v; } return sum * 10 + n;" },
             { false,
               false,
               0,
               0,
-              -1,
-              "int n = left; int sum = 0; int v = 0; while ((v = n--) > 0) { "
+              1,
+              "int n = 0; int sum = 0; int v = 0; while ((v = n++) < left) { "
               "sum += v; } return sum * 10 + n;" },
             { false,
               false,
               4,
               0,
-              8,
-              "int n = left; int sum = 0; int v = 0; while ((v = n--) > 0) { "
+              4,
+              "int n = 0; int sum = 0; int v = 0; while ((v = n++) < left) { "
               "if (v == 2) { continue; } sum += v; } return sum;" },
             { false,
               false,
               4,
               0,
-              71,
-              "int n = left; int sum = 0; int v = 0; while ((v = n--) > 0) { "
+              13,
+              "int n = 0; int sum = 0; int v = 0; while ((v = n++) < left) { "
               "if (v == 2) { break; } sum += v; } return sum * 10 + n;" },
             { false,
               false,
               3,
               0,
-              29,
-              "int n = left; int count = 0; while (n-- > 0) { count++; } "
+              34,
+              "int n = 0; int count = 0; while (n++ < left) { count++; } "
               "return count * 10 + n;" },
             { false,
               false,
@@ -517,8 +510,8 @@ namespace Visual::XSharp::Fuzzing
               false,
               3,
               0,
-              30,
-              "int n = left; int count = 0; do { count++; } while (n-- > 1); "
+              44,
+              "int n = 0; int count = 0; do { count++; } while (n++ < left); "
               "return count * 10 + n;" },
             { false,
               false,

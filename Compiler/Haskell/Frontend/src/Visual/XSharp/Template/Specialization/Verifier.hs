@@ -296,7 +296,7 @@ statementDefinitionSymbols statement = case statement of
             ++ blockDefinitionSymbols body
     ForEachStatement _ _ _ name _ source body ->
         resolvedSymbol name : expressionDefinitionSymbols source ++ blockDefinitionSymbols body
-    IncrementStatement _ name _ _ -> [resolvedSymbol name]
+    IncrementStatement _ name _ -> [resolvedSymbol name]
     CompoundAssignmentStatement _ _ _ _ value -> expressionDefinitionSymbols value
     DiscardStatement _ value -> expressionDefinitionSymbols value
     BreakStatement _ value -> maybe [] expressionDefinitionSymbols value
@@ -362,7 +362,7 @@ statementTypes statement = case statement of
             ++ concatMap statementTypes updates
             ++ blockTypes body
     ForEachStatement _ _ _ _ annotation source body -> annotation : expressionTypes source ++ blockTypes body
-    IncrementStatement _ _ annotation _ -> [annotation]
+    IncrementStatement _ _ annotation -> [annotation]
     CompoundAssignmentStatement _ _ _ annotation value -> annotation : expressionTypes value
     DiscardStatement _ value -> expressionTypes value
     BreakStatement _ value -> maybe [] expressionTypes value
@@ -385,7 +385,7 @@ expressionTypes expression = case expression of
     CoalesceExpression _ left fallback annotation ->
         annotation : expressionTypes left ++ expressionTypes fallback
     AssignmentExpression _ _ _ value annotation -> annotation : expressionTypes value
-    IncrementExpression _ _ _ _ annotation -> [annotation]
+    IncrementExpression _ _ _ annotation -> [annotation]
     LoopExpression _ loop annotation -> annotation : statementTypes loop
     CallableExpression _ _ captures parameters body annotation ->
         annotation

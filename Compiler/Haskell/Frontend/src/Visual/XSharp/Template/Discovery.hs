@@ -239,7 +239,7 @@ discoverStatement catalog namespace root index statement state = case statement 
             afterAnnotation = discoverType catalog namespace origin annotation state
             afterSource = discoverExpression catalog namespace origin source afterAnnotation
          in discoverBlock catalog namespace origin body afterSource
-    IncrementStatement _ _ annotation _ -> discoverType catalog namespace root annotation state
+    IncrementStatement _ _ annotation -> discoverType catalog namespace root annotation state
     CompoundAssignmentStatement spanValue _ _ annotation value ->
         let origin = root {discoverySites = [AssignmentTypeSite index], discoverySpan = spanValue}
          in discoverExpression catalog namespace origin value (discoverType catalog namespace origin annotation state)
@@ -298,7 +298,7 @@ discoverExpression catalog namespace origin expression state = case expression o
          in discoverExpression catalog namespace origin fallback afterLeft
     AssignmentExpression _ _ _ value annotation ->
         discoverExpression catalog namespace origin value (discoverType catalog namespace origin annotation state)
-    IncrementExpression _ _ _ _ annotation -> discoverType catalog namespace origin annotation state
+    IncrementExpression _ _ _ annotation -> discoverType catalog namespace origin annotation state
     LoopExpression _ loop annotation ->
         discoverStatement catalog namespace origin 0 loop (discoverType catalog namespace origin annotation state)
     CallableExpression spanValue _ captures parameters body annotation ->

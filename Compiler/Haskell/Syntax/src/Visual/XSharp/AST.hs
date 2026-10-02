@@ -254,7 +254,8 @@ data Statement name annotation
         annotation
         (Expression name annotation)
         (Block name annotation)
-    | IncrementStatement SourceSpan name annotation Bool
+    | -- @target++;@ or @++target;@. The language has no decrement operator.
+      IncrementStatement SourceSpan name annotation
     | -- @target op= value@ reads and writes one named storage location. The
       -- annotation is the target type; the operator is the binary operation
       -- whose result is stored back.
@@ -296,11 +297,10 @@ data Expression name annotation
       -- the target type. The statement forms keep their own nodes, so this
       -- node appears only where an assignment is an operand.
       AssignmentExpression SourceSpan (Maybe BinaryOperator) name (Expression name annotation) annotation
-    | -- @++target@, @target++@ and @target--@ used for their value. The first
-      -- flag selects increment over decrement and the second prefix over
-      -- postfix: a prefix form yields the new value and a postfix form the
+    | -- @++target@ and @target++@ used for their value. The flag selects the
+      -- prefix form, which yields the new value; the postfix form yields the
       -- previous one.
-      IncrementExpression SourceSpan Bool Bool name annotation
+      IncrementExpression SourceSpan Bool name annotation
     | -- A loop used for its value. The statement is the loop itself, a
       -- 'WhileStatement' or a 'ForStatement'; the value is the operand of
       -- the @break value;@ that leaves it, and the annotation is the type of

@@ -125,9 +125,11 @@ parserTests =
     , ("an unparenthesized assignment cannot be a conditional result", parseRejected (returning "flag ? a = 1 : 2"))
     , ("an unparenthesized assignment cannot follow a binary operator", parseRejected (returning "1 + a = 2"))
     , ("a call is not an assignment target in an expression", parseRejected (returning "Next() = 1"))
-    , ("prefix increment parses with its direction and position", incrementParses "++a" True True)
-    , ("postfix increment parses with its direction and position", incrementParses "a++" True False)
-    , ("postfix decrement parses with its direction and position", incrementParses "a--" False False)
+    , ("prefix increment parses as the prefix form", incrementParses "++a" True)
+    , ("postfix increment parses as the postfix form", incrementParses "a++" False)
+    , ("a double dash after a name starts a comment, not a decrement", doubleDashIsComment)
+    , ("the old postfix decrement spelling leaves only the name before the comment", oldPostfixSpellingIsName)
+    , ("the old prefix decrement spelling is entirely a comment", oldPrefixSpellingIsComment)
     , ("a postfix increment is the left operand of a following addition", postfixThenAddition)
     , ("a prefix increment is an operand of unary minus", prefixUnderNegation)
     , ("a statement increment keeps its statement node", incrementStatementKeepsItsNode)
@@ -135,7 +137,6 @@ parserTests =
     , ("prefix increment of a literal has no storage", parseRejectedWith "VXP0028" (returning "++10"))
     , ("prefix increment of a parenthesized value has no storage", parseRejectedWith "VXP0028" (returning "++(a)"))
     , ("postfix increment of a sum has no storage", parseRejectedWith "VXP0028" (returning "(a + b)++"))
-    , ("postfix decrement of a sum has no storage", parseRejectedWith "VXP0028" (returning "(a + b)--"))
     , ("postfix increment of a call has no storage", parseRejectedWith "VXP0028" (returning "Next()++"))
     , ("postfix increment of a literal has no storage", parseRejectedWith "VXP0028" (returning "10++"))
     , ("an increment result is not a storage location", parseRejected (returning "a++++"))
@@ -216,9 +217,9 @@ assignmentIsWeakerThanLogicalOr = case firstStatements (body "bool seen = false;
         [ _
             , ReturnStatement _ (Just (ConditionalExpression _ (AssignmentExpression _ Nothing (Identifier "seen") value ()) _ _ ()))
             ] ->
-        case value of
-            BinaryExpression _ LogicalOr left right () -> isName "flag" left && isName "other" right
-            _ -> False
+            case value of
+                BinaryExpression _ LogicalOr left right () -> isName "flag" left && isName "other" right
+                _ -> False
     _ -> False
 
 assignmentIsCallArgument :: Bool
@@ -233,25 +234,44 @@ parenthesizedAssignmentIsOperand = case returned "a + (a = 5)" of
         isName "a" left && isInteger 5 value
     _ -> False
 
-incrementParses :: String -> Bool -> Bool -> Bool
-incrementParses expression isIncrement isPrefix = case returned expression of
-    Just (IncrementExpression _ actualIncrement actualPrefix (Identifier "a") ()) ->
-        actualIncrement == isIncrement && actualPrefix == isPrefix
+incrementParses :: String -> Bool -> Bool
+incrementParses expression isPrefix = case returned expression of
+    Just (IncrementExpression _ actualPrefix (Identifier "a") ()) -> actualPrefix == isPrefix
+    _ -> False
+
+-- `a--; return a;` is the name `a` followed by a comment. The name is then
+-- the last thing in the block, which reads it as the block's final
+-- expression: nothing is subtracted and no diagnostic is produced.
+oldPostfixSpellingIsName :: Bool
+oldPostfixSpellingIsName = case firstStatements (body "int a = 1; a--; return a;") of
+    Just [BindingStatement {}, ExpressionStatement _ value False] -> isName "a" value
+    _ -> False
+
+oldPrefixSpellingIsComment :: Bool
+oldPrefixSpellingIsComment = case firstStatements (body "int a = 1; --a; return a;") of
+    Just [BindingStatement {}] -> True
+    _ -> False
+
+-- The language has no decrement operator, so everything from `--` to the end
+-- of the line is a comment and the statement before it is all that remains.
+doubleDashIsComment :: Bool
+doubleDashIsComment = case firstStatements (body "return left;-- - right--;") of
+    Just [ReturnStatement _ (Just value)] -> isName "left" value
     _ -> False
 
 postfixThenAddition :: Bool
 postfixThenAddition = case returned "a+++b" of
-    Just (BinaryExpression _ Add (IncrementExpression _ True False (Identifier "a") ()) right ()) -> isName "b" right
+    Just (BinaryExpression _ Add (IncrementExpression _ False (Identifier "a") ()) right ()) -> isName "b" right
     _ -> False
 
 prefixUnderNegation :: Bool
 prefixUnderNegation = case returned "-++a" of
-    Just (UnaryExpression _ UnaryNegate (IncrementExpression _ True True (Identifier "a") ()) ()) -> True
+    Just (UnaryExpression _ UnaryNegate (IncrementExpression _ True (Identifier "a") ()) ()) -> True
     _ -> False
 
 incrementStatementKeepsItsNode :: Bool
 incrementStatementKeepsItsNode = case firstStatements (body "int a = 0; a++; ++a; return a;") of
-    Just [_, IncrementStatement _ (Identifier "a") () True, IncrementStatement _ (Identifier "a") () True, _] -> True
+    Just [_, IncrementStatement _ (Identifier "a") (), IncrementStatement _ (Identifier "a") (), _] -> True
     _ -> False
 
 compoundStatementKeepsItsNode :: Bool
@@ -276,7 +296,7 @@ typeTests =
     , ("an assignment expression statement is not a pure value statement", accepted (body "int a = 0; (a = 5); return a;"))
     ,
         ( "an assignment in a while condition is accepted"
-        , accepted (body "int a = left; int v = 0; while ((v = a--) > 0) { } return v;")
+        , accepted (body "int a = left; int v = 0; while ((v = (a -= 1)) > 0) { } return v;")
         )
     , ("an assignment yields the target type, not the value type", yieldsTargetType)
     ,
@@ -397,10 +417,10 @@ prefixLowers = case loweredReturning "++a" of
     _ -> False
 
 postfixLowers :: Bool
-postfixLowers = case loweredReturning "a--" of
+postfixLowers = case loweredReturning "a++" of
     Just
         [ CoreBind (CoreBinding previous _ False initial)
-            , CoreAssign target (CorePrimitive CoreSubtract [CoreVariable from _, one] _)
+            , CoreAssign target (CorePrimitive CoreAdd [CoreVariable from _, one] _)
             , CoreReturn (CoreVariable result _)
             ] ->
             isGenerated "$previous" previous
@@ -428,7 +448,7 @@ earlierCallIsBound = case loweredReturning "Next() + (a = 5)" of
             , CoreAssign _ _
             , CoreReturn (CorePrimitive CoreAdd [CoreVariable left _, _] _)
             ] ->
-        isGenerated "$operand" held && left == held
+            isGenerated "$operand" held && left == held
     _ -> False
 
 literalIsNotBound :: Bool
@@ -499,11 +519,11 @@ logicalAndIsLazy = case loweredBody (body "int a = 0; bool both = flag && (a = 5
             , CoreBind _
             , _
             ] ->
-        isGenerated "$logical" slot
-            && initial == CoreLiteral (CoreBoolean False) boolType
-            && isRead "flag" left
-            && spelling stored == "a"
-            && set == slot
+            isGenerated "$logical" slot
+                && initial == CoreLiteral (CoreBoolean False) boolType
+                && isRead "flag" left
+                && spelling stored == "a"
+                && set == slot
     _ -> False
 
 logicalOrIsLazy :: Bool
@@ -515,7 +535,7 @@ logicalOrIsLazy = case loweredBody (body "int a = 0; bool either = flag || (a = 
             , CoreBind _
             , _
             ] ->
-        isGenerated "$logical" slot && isRead "flag" left && set == slot && spelling stored == "a" && later == slot
+            isGenerated "$logical" slot && isRead "flag" left && set == slot && spelling stored == "a" && later == slot
     _ -> False
 
 coalesceFallbackIsLazy :: Bool
@@ -646,12 +666,10 @@ evaluationCases =
     , ("int a = left; int b = right; return (a = b) + (b = 1) + a + b;", [(plain 3 4, 10)])
     , ("int a = left; return a++ + a;", [(plain 3 0, 7)])
     , ("int a = left; return ++a + a;", [(plain 3 0, 8)])
-    , ("int a = left; return a-- - a;", [(plain 3 0, 1)])
     , ("int a = left; return a++ + a++;", [(plain 3 0, 7)])
     , ("int a = left; return ++a * ++a;", [(plain 3 0, 20)])
     , ("int a = left; int b = a++; return a * 10 + b;", [(plain 3 0, 43)])
     , ("int a = left; int b = ++a; return a * 10 + b;", [(plain 3 0, 44)])
-    , ("int a = left; int b = a--; return a * 10 + b;", [(plain 3 0, 23)])
     , ("int a = left; return a + a++ + a;", [(plain 3 0, 10)])
     , ("int a = left; int total = (a += right); return a + total;", [(plain 3 4, 14)])
     , ("int a = left; a += (a = right); return a;", [(plain 3 4, 7)])
@@ -719,18 +737,18 @@ evaluationCases =
     , ("int a = left; int r = (a = right) ?: 7; return a * 10 + r;", [(plain 3 4, 44), (plain 3 0, 7)])
     , ("int a = 0; if ((a = left) > 2) { return a; } return -a;", [(plain 5 0, 5), (plain 1 0, -1)])
     ,
-        ( "int n = left; int sum = 0; int v = 0; while ((v = n--) > 0) { sum += v; } return sum * 10 + n;"
-        , [(plain 4 0, 99), (plain 0 0, -1)]
+        ( "int n = 0; int sum = 0; int v = 0; while ((v = n++) < left) { sum += v; } return sum * 10 + n;"
+        , [(plain 4 0, 65), (plain 0 0, 1)]
         )
     ,
-        ( "int n = left; int sum = 0; int v = 0; while ((v = n--) > 0) { if (v == 2) { continue; } sum += v; } return sum;"
-        , [(plain 4 0, 8)]
+        ( "int n = 0; int sum = 0; int v = 0; while ((v = n++) < left) { if (v == 2) { continue; } sum += v; } return sum;"
+        , [(plain 4 0, 4)]
         )
     ,
-        ( "int n = left; int sum = 0; int v = 0; while ((v = n--) > 0) { if (v == 2) { break; } sum += v; } return sum * 10 + n;"
-        , [(plain 4 0, 71)]
+        ( "int n = 0; int sum = 0; int v = 0; while ((v = n++) < left) { if (v == 2) { break; } sum += v; } return sum * 10 + n;"
+        , [(plain 4 0, 13)]
         )
-    , ("int n = left; int count = 0; while (n-- > 0) { count++; } return count * 10 + n;", [(plain 3 0, 29)])
+    , ("int n = 0; int count = 0; while (n++ < left) { count++; } return count * 10 + n;", [(plain 3 0, 34)])
     , ("int n = 0; int count = 0; while (++n < left) { count++; } return count * 10 + n;", [(plain 3 0, 23)])
     ,
         ( "int n = left; int count = 0; do { count++; } while ((n = n - 1) > 0); return count;"
@@ -744,7 +762,7 @@ evaluationCases =
         ( "int n = left; int count = 0; do { count++; if (count == 2) { break; } } while ((n -= 1) > 0); return count * 10 + n;"
         , [(plain 5 0, 24)]
         )
-    , ("int n = left; int count = 0; do { count++; } while (n-- > 1); return count * 10 + n;", [(plain 3 0, 30)])
+    , ("int n = 0; int count = 0; do { count++; } while (n++ < left); return count * 10 + n;", [(plain 3 0, 44)])
     ,
         ( "int sum = 0; int v = 0; for (int i = 0; (v = i * 2) < left; i++) { if (v == 2) { continue; } sum += v; } return sum;"
         , [(plain 7 0, 10)]
@@ -858,7 +876,7 @@ templateSource =
         , "int copy = 0;"
         , "copy = value = First(seed);"
         , "int total = (value += Second(copy)) + value++ + ++copy;"
-        , "while ((copy = Third(copy)) > 0) { total += copy--; }"
+        , "while ((copy = Third(copy)) > 0) { total += copy; }"
         , "return total;"
         , "}"
         , "int First(_ int value) { return value; }"

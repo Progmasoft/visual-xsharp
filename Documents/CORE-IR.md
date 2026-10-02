@@ -312,7 +312,7 @@ closures.
 ### Source expressions that store
 
 The source language has expressions that write a local: `a = b`, `a += b`,
-`++a`, `a++`, `a--`, and a loop used as an expression, whose `break value;`
+`++a`, `a++`, and a loop used as an expression, whose `break value;`
 supplies its result. Core has no such expression. The Desugarer lowers each of
 them to a pair: statements that perform the stores, and a store-free
 expression that reads the result. Every Core optimization may therefore keep

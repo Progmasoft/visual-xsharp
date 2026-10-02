@@ -244,14 +244,14 @@ namespace Visual::XSharp::Fuzzing
                 // Loop conditions that store. The stores run on every test
                 // of the condition, including the test after `continue`,
                 // and a do/while body still runs before its first test.
-                std::int64_t n = limit;
+                std::int64_t n = 0;
                 std::int64_t sum = 0;
                 std::int64_t v = 0;
                 for (;;)
                 {
                     v = n;
-                    n -= 1;
-                    if (v <= 0)
+                    n += 1;
+                    if (v >= limit)
                         break;
                     if (v == 3)
                         continue;
@@ -276,9 +276,9 @@ namespace Visual::XSharp::Fuzzing
                 }
                 expected = sum * 10 + n + v;
                 const auto bound = std::to_string(limit);
-                body = "int n = " + bound
-                       + "; int sum = 0; int v = 0; while ((v = n--) > 0) { "
-                         "if (v == 3) { continue; } if (v == 9) { break; } "
+                body = "int n = 0; int sum = 0; int v = 0; while ((v = n++) < "
+                       + bound
+                       + ") { if (v == 3) { continue; } if (v == 9) { break; } "
                          "sum += v; } int m = "
                        + bound
                        + "; do { sum += 100; } while ((m -= 4) > 0); "

@@ -119,9 +119,9 @@ resolveStatement statement = case statement of
          in ( ForEachStatement spanValue kind syntax resolvedName annotation resolvedSource resolvedBody
             , nameProblems ++ sourceProblems ++ bodyProblems
             )
-    IncrementStatement spanValue name annotation direction ->
+    IncrementStatement spanValue name annotation ->
         let (resolvedName, problems) = resolveName spanValue name
-         in (IncrementStatement spanValue resolvedName annotation direction, problems)
+         in (IncrementStatement spanValue resolvedName annotation, problems)
     CompoundAssignmentStatement spanValue operator name _ value ->
         let (resolvedName, nameProblems) = resolveName spanValue name
             (resolvedValue, valueProblems) = resolveExpression value
@@ -171,9 +171,9 @@ resolveExpression expression = case expression of
         let (resolvedName, nameProblems) = resolveName spanValue name
             (resolvedValue, valueProblems) = resolveExpression value
          in (AssignmentExpression spanValue operator resolvedName resolvedValue (), nameProblems ++ valueProblems)
-    IncrementExpression spanValue isIncrement isPrefix name _ ->
+    IncrementExpression spanValue isPrefix name _ ->
         let (resolvedName, problems) = resolveName spanValue name
-         in (IncrementExpression spanValue isIncrement isPrefix resolvedName (), problems)
+         in (IncrementExpression spanValue isPrefix resolvedName (), problems)
     LoopExpression spanValue loop _ ->
         let (resolvedLoop, problems) = resolveStatement loop
          in (LoopExpression spanValue resolvedLoop (), problems)

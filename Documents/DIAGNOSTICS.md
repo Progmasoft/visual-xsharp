@@ -183,12 +183,16 @@ stored value. Assignment is the weakest expression level and groups to the
 right, so `a = b = 10` is `a = (b = 10)` and `a = b += 2` is `a = (b += 2)`.
 Elsewhere an assignment operand needs parentheses: `1 + (a = 2)`.
 
-`++target`, `target++` and `target--` are expressions too. A prefix form
-yields the new value and a postfix form the previous one. The operand must be
-a named storage location: `++10`, `(a + b)++` and `Next()++` produce
-`VXP0028`. Prefix `--target` cannot be written, because `--` not directly
-after a value starts a comment; this differs from the `--index;` example in
-`Spec/Language/Operators.vxs` and is not resolved here.
+`++target` and `target++` are expressions too. The prefix form yields the new
+value and the postfix form the previous one. The operand must be a named
+storage location: `++10`, `(a + b)++` and `Next()++` produce `VXP0028`.
+
+The language has no decrement operator. `--` starts a comment wherever it
+stands outside a string, also directly after a value, so `value--;` is the
+name `value` followed by a comment and `--value;` is only a comment. Neither
+is diagnosed as a decrement: the remaining text is parsed as it stands, and a
+trailing `value` before the closing brace of a block is that block's final
+expression. Write `value -= 1`.
 
 `_ = value;` is the discard statement, not an assignment to a binding named
 `_`, and is not an expression: `(_ = value)` produces `VXP0032`.
@@ -211,7 +215,7 @@ the expected type when there is one; a computed operand is never converted.
 
 An assignment or increment used as a value is checked exactly like its
 statement form and reports the same codes: `VXT0003` and `VXT0004` for
-assignment, `VXT0022` through `VXT0024` for increment and decrement. Its type
+assignment, `VXT0022` through `VXT0024` for increment. Its type
 is the target type. The target type is context for the assigned value, as a
 declared type is for a binding initializer, so `wide = 5` types the literal
 from `wide`; the context that receives the assignment's value does not reach

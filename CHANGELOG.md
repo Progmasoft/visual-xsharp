@@ -20,9 +20,12 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   until nullable types exist.
 - Assignment and compound assignment are now also expressions that yield the
   stored value, right-associative at the weakest expression level:
-  `a = b = 10`, `int total = (value += 5)`. `++target`, `target++` and
-  `target--` are expressions that yield the new or the previous value.
-  Targets are named locals. Operands are evaluated left to right.
+  `a = b = 10`, `int total = (value += 5)`. `++target` and `target++` are
+  expressions that yield the new or the previous value. Targets are named
+  locals. Operands are evaluated left to right.
+- Removed the decrement operator. `--` now starts a comment wherever it stands
+  outside a string, including directly after a value, so `value--;` no longer
+  decrements and is not diagnosed. Use `value -= 1`.
 - A `while` or classic `for` loop is an expression when `break value;`
   supplies its value. The loop must not be able to end without one: its
   condition is the constant `true`, or absent in a `for`. Loop values are

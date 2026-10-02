@@ -531,18 +531,18 @@ checkStatementWith context environment expected loops statement = case statement
             , returns
             , unsupported : typeSyntaxProblemsIn context syntax ++ sourceProblems ++ bodyProblems
             )
-    IncrementStatement spanValue name _ direction ->
+    IncrementStatement spanValue name _ ->
         let target = lookup (resolvedSymbol name) environment
             targetType = maybe ErrorType fst target
             writableProblems = case target of
-                Just (_, False) -> [problem spanValue "VXT0022" "increment or decrement cannot modify an immutable binding"]
-                Nothing -> [problem spanValue "VXT0023" "increment or decrement target is not defined"]
+                Just (_, False) -> [problem spanValue "VXT0022" "increment cannot modify an immutable binding"]
+                Nothing -> [problem spanValue "VXT0023" "increment target is not defined"]
                 _ -> []
             numericProblems =
                 if isNumericType targetType && targetType /= boolType
                     then []
-                    else [problem spanValue "VXT0024" "increment or decrement target must have a numeric type"]
-         in (IncrementStatement spanValue name targetType direction, environment, [], writableProblems ++ numericProblems)
+                    else [problem spanValue "VXT0024" "increment target must have a numeric type"]
+         in (IncrementStatement spanValue name targetType, environment, [], writableProblems ++ numericProblems)
     CompoundAssignmentStatement spanValue operator name _ value ->
         -- `target op= value` has the typing of `target = target op value`:
         -- the operator rule is applied to the target type and the result
@@ -632,7 +632,7 @@ typedExpressionType expression = case expression of
     ConditionalExpression _ _ _ _ valueType -> valueType
     CoalesceExpression _ _ _ valueType -> valueType
     AssignmentExpression _ _ _ _ valueType -> valueType
-    IncrementExpression _ _ _ _ valueType -> valueType
+    IncrementExpression _ _ _ valueType -> valueType
     LoopExpression _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
@@ -814,18 +814,18 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , targetType
             , problems ++ immutable ++ operatorProblems ++ resultProblems
             )
-    IncrementExpression spanValue isIncrement isPrefix name _ ->
+    IncrementExpression spanValue isPrefix name _ ->
         let target = lookup (resolvedSymbol name) environment
             targetType = maybe ErrorType fst target
             writableProblems = case target of
-                Just (_, False) -> [problem spanValue "VXT0022" "increment or decrement cannot modify an immutable binding"]
-                Nothing -> [problem spanValue "VXT0023" "increment or decrement target is not defined"]
+                Just (_, False) -> [problem spanValue "VXT0022" "increment cannot modify an immutable binding"]
+                Nothing -> [problem spanValue "VXT0023" "increment target is not defined"]
                 _ -> []
             numericProblems =
-                [ problem spanValue "VXT0024" "increment or decrement target must have a numeric type"
+                [ problem spanValue "VXT0024" "increment target must have a numeric type"
                 | not (isNumericType targetType && targetType /= boolType)
                 ]
-         in ( IncrementExpression spanValue isIncrement isPrefix name targetType
+         in ( IncrementExpression spanValue isPrefix name targetType
             , targetType
             , writableProblems ++ numericProblems
             )
@@ -1101,7 +1101,7 @@ sourceSpanOf expression = case expression of
     ConditionalExpression spanValue _ _ _ _ -> spanValue
     CoalesceExpression spanValue _ _ _ -> spanValue
     AssignmentExpression spanValue _ _ _ _ -> spanValue
-    IncrementExpression spanValue _ _ _ _ -> spanValue
+    IncrementExpression spanValue _ _ _ -> spanValue
     LoopExpression spanValue _ _ -> spanValue
     CallableExpression spanValue _ _ _ _ _ -> spanValue
 

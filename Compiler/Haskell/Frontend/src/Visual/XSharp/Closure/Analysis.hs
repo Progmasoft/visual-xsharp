@@ -279,7 +279,7 @@ statementFacts statement = case statement of
     ForEachStatement _ _ _ name _ source body ->
         let nested = expressionFacts source `appendFacts` blockFacts body
          in nested {factLocals = name : factLocals nested, factWrites = name : factWrites nested}
-    IncrementStatement _ name annotation _ -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
+    IncrementStatement _ name annotation -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
     -- A compound assignment reads its target before storing the result.
     CompoundAssignmentStatement _ _ name annotation value ->
         let nested = expressionFacts value
@@ -308,7 +308,7 @@ expressionFacts expression = case expression of
         let nested = expressionFacts value
             targetReads = maybe [] (const [(name, annotation)]) operator
          in nested {factReads = targetReads ++ factReads nested, factWrites = name : factWrites nested}
-    IncrementExpression _ _ _ name annotation -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
+    IncrementExpression _ _ name annotation -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
     LoopExpression _ loop _ -> statementFacts loop
     CallableExpression {} -> emptyFacts
 

@@ -182,8 +182,8 @@ freshStatement statement = case statement of
         closedAnnotation <- freshType annotation
         closedBody <- freshBlock body
         pure (ForEachStatement spanValue kind syntax closedName closedAnnotation closedSource closedBody)
-    IncrementStatement spanValue name annotation direction ->
-        IncrementStatement spanValue <$> freshReference name <*> freshType annotation <*> pure direction
+    IncrementStatement spanValue name annotation ->
+        IncrementStatement spanValue <$> freshReference name <*> freshType annotation
     CompoundAssignmentStatement spanValue operator name annotation value ->
         CompoundAssignmentStatement spanValue operator
             <$> freshReference name
@@ -236,8 +236,8 @@ freshExpression expression = case expression of
             <$> freshReference name
             <*> freshExpression value
             <*> freshType annotation
-    IncrementExpression spanValue isIncrement isPrefix name annotation ->
-        IncrementExpression spanValue isIncrement isPrefix <$> freshReference name <*> freshType annotation
+    IncrementExpression spanValue isPrefix name annotation ->
+        IncrementExpression spanValue isPrefix <$> freshReference name <*> freshType annotation
     LoopExpression spanValue loop annotation ->
         LoopExpression spanValue <$> freshStatement loop <*> freshType annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do
@@ -335,7 +335,7 @@ statementSymbols statement = case statement of
             ++ blockSymbols body
     ForEachStatement _ _ _ name annotation source body ->
         nameSymbol name : typeSymbols annotation ++ expressionSymbols source ++ blockSymbols body
-    IncrementStatement _ name annotation _ -> nameSymbol name : typeSymbols annotation
+    IncrementStatement _ name annotation -> nameSymbol name : typeSymbols annotation
     CompoundAssignmentStatement _ _ name annotation value ->
         nameSymbol name : typeSymbols annotation ++ expressionSymbols value
     DiscardStatement _ value -> expressionSymbols value
@@ -361,7 +361,7 @@ expressionSymbols expression = case expression of
         expressionSymbols left ++ expressionSymbols fallback ++ typeSymbols annotation
     AssignmentExpression _ _ name value annotation ->
         nameSymbol name : expressionSymbols value ++ typeSymbols annotation
-    IncrementExpression _ _ _ name annotation -> nameSymbol name : typeSymbols annotation
+    IncrementExpression _ _ name annotation -> nameSymbol name : typeSymbols annotation
     LoopExpression _ loop annotation -> statementSymbols loop ++ typeSymbols annotation
     CallableExpression _ _ captures parameters body annotation ->
         concatMap captureSymbols captures

@@ -391,7 +391,7 @@ requireTemplateValue expression = case expression of
     ConditionalExpression spanValue _ _ _ _ -> unsupported spanValue
     CoalesceExpression spanValue _ _ _ -> unsupported spanValue
     AssignmentExpression spanValue _ _ _ _ -> unsupported spanValue
-    IncrementExpression spanValue _ _ _ _ -> unsupported spanValue
+    IncrementExpression spanValue _ _ _ -> unsupported spanValue
     LoopExpression spanValue _ _ -> unsupported spanValue
     CallableExpression spanValue _ _ _ _ _ -> unsupported spanValue
     where
@@ -425,7 +425,7 @@ statementSpan statement = case statement of
     DoWhileStatement value _ _ -> value
     ForStatement value _ _ _ _ -> value
     ForEachStatement value _ _ _ _ _ _ -> value
-    IncrementStatement value _ _ _ -> value
+    IncrementStatement value _ _ -> value
     CompoundAssignmentStatement value _ _ _ _ -> value
     DiscardStatement value _ -> value
     BreakStatement value _ -> value
@@ -603,18 +603,17 @@ parseForBinding = do
     pure (ForBinding (maybe MutableBinding (const ImmutableBinding) finalToken) syntax name nameSpan)
 
 -- Assignment headers are represented with the same statement node used in a
--- body. Prefix and postfix ++/-- have identical statement effects here; their
--- value-producing expression forms remain a separate expression feature.
+-- body. Prefix and postfix `++` have the same effect as a statement; their
+-- value-producing forms are expressions. The language has no decrement
+-- operator: `--` always starts a comment.
 parseForAction :: P (Statement Identifier ())
 parseForAction = do
     tokens <- peekTokens 2
     case tokens of
         first : second : _
-            | tokenText first `elem` ["++", "--"] && tokenKind second == IdentifierToken ->
-                parseIncrement (tokenText first == "++") True
+            | isIncrementToken first && tokenKind second == IdentifierToken -> parseIncrement True
         first : second : _
-            | tokenKind first == IdentifierToken && tokenText second `elem` ["++", "--"] ->
-                parseIncrement (tokenText second == "++") False
+            | tokenKind first == IdentifierToken && isIncrementToken second -> parseIncrement False
         _ | startsCompoundAssignment tokens -> parseCompoundAssignment
         _ -> do
             value <- parseConditional
@@ -628,8 +627,8 @@ parseForAction = do
 startsIncrement :: [Token] -> Bool
 startsIncrement tokens = case tokens of
     first : second : _ ->
-        (tokenText first `elem` ["++", "--"] && tokenKind second == IdentifierToken)
-            || (tokenKind first == IdentifierToken && tokenText second `elem` ["++", "--"])
+        (isIncrementToken first && tokenKind second == IdentifierToken)
+            || (tokenKind first == IdentifierToken && isIncrementToken second)
     _ -> False
 
 parseIncrementStatement :: P (Statement Identifier ())
@@ -637,27 +636,25 @@ parseIncrementStatement = do
     increment <- parseForAction
     end <- symbol ";"
     pure $ case increment of
-        IncrementStatement spanValue name annotation direction ->
-            IncrementStatement (mergeSpan spanValue (tokenSpan end)) name annotation direction
+        IncrementStatement spanValue name annotation ->
+            IncrementStatement (mergeSpan spanValue (tokenSpan end)) name annotation
         _ -> increment
 
-parseIncrement :: Bool -> Bool -> P (Statement Identifier ())
-parseIncrement isIncrement prefix = do
+parseIncrement :: Bool -> P (Statement Identifier ())
+parseIncrement prefix = do
     tokens <- peekTokens 2
     case (prefix, tokens) of
         (True, first : second : _)
-            | tokenText first == operator && tokenKind second == IdentifierToken -> do
-                _ <- symbol operator
+            | isIncrementToken first && tokenKind second == IdentifierToken -> do
+                _ <- symbol "++"
                 (name, spanValue) <- identifier
-                pure (IncrementStatement (mergeSpan (tokenSpan first) spanValue) name () isIncrement)
+                pure (IncrementStatement (mergeSpan (tokenSpan first) spanValue) name ())
         (False, first : second : _)
-            | tokenKind first == IdentifierToken && tokenText second == operator -> do
+            | tokenKind first == IdentifierToken && isIncrementToken second -> do
                 (name, spanValue) <- identifier
-                finalOperator <- symbol operator
-                pure (IncrementStatement (mergeSpan spanValue (tokenSpan finalOperator)) name () isIncrement)
+                finalOperator <- symbol "++"
+                pure (IncrementStatement (mergeSpan spanValue (tokenSpan finalOperator)) name ())
         _ -> failCurrent "VXP0028" incrementTargetMessage
-    where
-        operator = if isIncrement then "++" else "--"
 
 -- Every compound operator stores the result of its binary operator back into
 -- the target. Comparison and logical operators have no compound spelling.
@@ -951,7 +948,7 @@ parseUnary = do
             _ -> parsePower
 
 isIncrementToken :: Token -> Bool
-isIncrementToken token = tokenKind token == SymbolToken && tokenText token `elem` ["++", "--"]
+isIncrementToken token = tokenKind token == SymbolToken && tokenText token == "++"
 
 -- A prefix form modifies a named storage location and yields the new value.
 -- Anything else after the operator, such as `++10` or `++(a + b)`, has no
@@ -964,17 +961,11 @@ parsePrefixIncrement = do
         Just token | tokenKind token == IdentifierToken -> do
             (name, nameSpan) <- identifier
             pure
-                ( IncrementExpression
-                    (mergeSpan (tokenSpan operator) nameSpan)
-                    (tokenText operator == "++")
-                    True
-                    name
-                    ()
-                )
+                (IncrementExpression (mergeSpan (tokenSpan operator) nameSpan) True name ())
         _ -> failAt (tokenSpan operator) "VXP0028" incrementTargetMessage
 
 incrementTargetMessage :: String
-incrementTargetMessage = "increment and decrement require a named storage location"
+incrementTargetMessage = "increment requires a named storage location"
 
 -- Power binds more strongly than prefix operators and recurses through the
 -- prefix layer on its right, making `2 ** 3 ** 2` right-associative while
@@ -1032,14 +1023,7 @@ parsePostfix = parsePrimary >>= calls
                 Just token | isIncrementToken token -> case callee of
                     NameExpression nameSpan name _ -> do
                         _ <- takeToken
-                        pure
-                            ( IncrementExpression
-                                (mergeSpan nameSpan (tokenSpan token))
-                                (tokenText token == "++")
-                                False
-                                name
-                                ()
-                            )
+                        pure (IncrementExpression (mergeSpan nameSpan (tokenSpan token)) False name ())
                     _ -> failAt (expressionSpan callee) "VXP0028" incrementTargetMessage
                 _ -> pure callee
 
@@ -1261,7 +1245,7 @@ expressionSpan expression = case expression of
     ConditionalExpression value _ _ _ _ -> value
     CoalesceExpression value _ _ _ -> value
     AssignmentExpression value _ _ _ _ -> value
-    IncrementExpression value _ _ _ _ -> value
+    IncrementExpression value _ _ _ -> value
     LoopExpression value _ _ -> value
     CallableExpression value _ _ _ _ _ -> value
 

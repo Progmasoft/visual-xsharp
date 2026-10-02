@@ -100,15 +100,15 @@ main()
         "+ b * 10 + c; } public static int Next(_ int n) { return n > 2 ? "
         "Next(n - 3) : n; } public static int Evaluate() { int a = Next(7); "
         "int b = 0; int c = 0; a = b = c = a + 1; int r = a + (a = b + 2) * "
-        "(a += 1) - a++ + ++b; r += Pick(a, a = r, a--) + Pick(c++, c++, c); "
+        "(a += 1) - a++ + ++b; r += Pick(a, a = r, a++) + Pick(c++, c++, c); "
         "return r - (b -= a) + Next(a = 8) + a; } }",
         // Loop conditions that store: the stores run before every test,
         // after `continue` too, and a do/while body runs before its first.
         "namespace Parity; class Program { public static int Evaluate() { "
-        "int n = 9; int sum = 0; int v = 0; "
-        "while ((v = n--) > 0) { if (v == 3) { continue; } "
-        "if (v == 7) { n -= 2; continue; } sum += v; } "
-        "do { sum += 100; if (sum > 400) { break; } } while ((n += 3) < 9); "
+        "int n = 0; int sum = 0; int v = 0; "
+        "while ((v = n++) < 9) { if (v == 3) { continue; } "
+        "if (v == 5) { n += 2; continue; } sum += v; } "
+        "do { sum += 100; if (sum > 400) { break; } } while ((n -= 3) > 4); "
         "for (int i = 0; (v = i * 3) < 11; i++) { if (v == 6) { continue; } "
         "sum += v; } int j = 0; while (j++ < 3) { int k = 0; "
         "do { sum += j; } while (++k < j); } return sum * 10 + n + v; } }",

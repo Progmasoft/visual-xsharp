@@ -148,8 +148,8 @@ instantiateStatement binding statement = case statement of
         closedSource <- instantiateExpression binding source
         closedBody <- instantiateBlock binding body
         pure (ForEachStatement spanValue kind syntax name closedAnnotation closedSource closedBody)
-    IncrementStatement spanValue name annotation direction ->
-        IncrementStatement spanValue name <$> instantiateType binding annotation <*> pure direction
+    IncrementStatement spanValue name annotation ->
+        IncrementStatement spanValue name <$> instantiateType binding annotation
     CompoundAssignmentStatement spanValue operator name annotation value -> do
         closedAnnotation <- instantiateType binding annotation
         closedValue <- instantiateExpression binding value
@@ -210,8 +210,8 @@ instantiateExpression binding expression = case expression of
         closedValue <- instantiateExpression binding value
         closedAnnotation <- instantiateType binding annotation
         pure (AssignmentExpression spanValue operator name closedValue closedAnnotation)
-    IncrementExpression spanValue isIncrement isPrefix name annotation ->
-        IncrementExpression spanValue isIncrement isPrefix name <$> instantiateType binding annotation
+    IncrementExpression spanValue isPrefix name annotation ->
+        IncrementExpression spanValue isPrefix name <$> instantiateType binding annotation
     LoopExpression spanValue loop annotation ->
         LoopExpression spanValue <$> instantiateStatement binding loop <*> instantiateType binding annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do

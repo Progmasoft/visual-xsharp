@@ -179,9 +179,9 @@ lowerStatementInto target statement = case statement of
                     "enumerable for loops cannot be lowered without the generator and Enumerable ABI"
                 ]
             )
-    IncrementStatement _ name valueType isIncrement ->
+    IncrementStatement _ name valueType ->
         let loweredType = lowerBoundaryType valueType
-         in pure [stepStatement isIncrement name loweredType (CoreVariable name loweredType)]
+         in pure [stepStatement name loweredType (CoreVariable name loweredType)]
     CompoundAssignmentStatement _ operator name valueType value -> lowerCompound operator name valueType value
     DiscardStatement _ value -> lowerDiscarded value
     BreakStatement _ Nothing -> pure [CoreBreak]
@@ -232,12 +232,10 @@ lowerDiscarded value = do
     (prefix, lowered) <- lowerExpression value
     pure (prefix ++ [CoreEvaluate lowered | null prefix || not (survives [] lowered)])
 
--- | @target = target + 1@ or @target = target - 1@, reading the given operand.
-stepStatement :: Bool -> ResolvedName -> Type -> CoreExpression -> CoreStatement
-stepStatement isIncrement name loweredType from =
-    CoreAssign name (CorePrimitive operation [from, CoreLiteral (CoreInteger 1) loweredType] loweredType)
-    where
-        operation = if isIncrement then CoreAdd else CoreSubtract
+-- | @target = operand + 1@, reading the given operand.
+stepStatement :: ResolvedName -> Type -> CoreExpression -> CoreStatement
+stepStatement name loweredType from =
+    CoreAssign name (CorePrimitive CoreAdd [from, CoreLiteral (CoreInteger 1) loweredType] loweredType)
 
 {- | Lower @target op= value@ to the statements that perform it.
 
@@ -402,18 +400,18 @@ lowerExpression expression = case expression of
         pure (statements, CoreVariable name (lowerBoundaryType valueType))
     -- A prefix form yields the new value, so the target is read after the
     -- store. A postfix form yields the previous value, kept in a temporary.
-    IncrementExpression _ isIncrement isPrefix name valueType ->
+    IncrementExpression _ isPrefix name valueType ->
         let loweredType = lowerBoundaryType valueType
             current = CoreVariable name loweredType
          in if isPrefix
-                then pure ([stepStatement isIncrement name loweredType current], current)
+                then pure ([stepStatement name loweredType current], current)
                 else do
                     previous <- freshGenerated "$previous"
                     let previousRead = CoreVariable previous loweredType
                     pure
                         (
                             [ CoreBind (CoreBinding previous loweredType False current)
-                            , stepStatement isIncrement name loweredType previousRead
+                            , stepStatement name loweredType previousRead
                             ]
                         , previousRead
                         )
@@ -485,7 +483,7 @@ expressionAnnotation expression = case expression of
     ConditionalExpression _ _ _ _ valueType -> valueType
     CoalesceExpression _ _ _ valueType -> valueType
     AssignmentExpression _ _ _ _ valueType -> valueType
-    IncrementExpression _ _ _ _ valueType -> valueType
+    IncrementExpression _ _ _ valueType -> valueType
     LoopExpression _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
@@ -664,7 +662,7 @@ statementIds statement = case statement of
             ++ blockSymbolIds body
     ForEachStatement _ _ _ name _ source body ->
         symbolValue name : expressionIds source ++ blockSymbolIds body
-    IncrementStatement _ name _ _ -> [symbolValue name]
+    IncrementStatement _ name _ -> [symbolValue name]
     CompoundAssignmentStatement _ _ name _ value -> symbolValue name : expressionIds value
     DiscardStatement _ value -> expressionIds value
     BreakStatement _ value -> maybe [] expressionIds value
@@ -683,7 +681,7 @@ expressionIds expression = case expression of
     ConditionalExpression _ condition first second _ -> concatMap expressionIds [condition, first, second]
     CoalesceExpression _ left fallback _ -> expressionIds left ++ expressionIds fallback
     AssignmentExpression _ _ name value _ -> symbolValue name : expressionIds value
-    IncrementExpression _ _ _ name _ -> [symbolValue name]
+    IncrementExpression _ _ name _ -> [symbolValue name]
     LoopExpression _ loop _ -> statementIds loop
     CallableExpression _ _ captures parameters body _ ->
         map (symbolValue . captureName) captures
