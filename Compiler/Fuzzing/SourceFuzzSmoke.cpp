@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <llvm/Support/raw_ostream.h>
 #include <string_view>
 
 #include "SourceFuzz.hpp"
@@ -23,6 +24,37 @@ main()
     const std::span<const std::uint8_t> emptySource;
     Visual::XSharp::Fuzzing::ExerciseSourceToLlvm(emptySource);
     Visual::XSharp::Fuzzing::ExerciseSourceToLlvm(source);
+    llvm::errs() << "Differential smoke: mixed seed\n";
     Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(expressionSeed);
+    llvm::errs() << "Differential smoke: empty seed\n";
+    Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(emptySource);
+    // Constant seeds force leaves, full-depth addition, subtraction and
+    // multiplication. Exercise the independent oracle before a mutation
+    // campaign so a missing generated-code route cannot appear as success.
+    constexpr std::array<std::uint8_t, 4U> selectors{ 252U, 253U, 254U, 255U };
+    for (const auto selector : selectors)
+    {
+        const std::array<std::uint8_t, 1U> seed{ selector };
+        llvm::errs() << "Differential smoke: selector "
+                     << static_cast<unsigned>(selector) << '\n';
+        Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(seed);
+    }
+    // A leaf selector followed by an explicit mode and limit byte reaches
+    // every generated control-flow shape at every trip count, including the
+    // zero-trip, continue and break paths, instead of only the shapes the
+    // four cycling selectors above happen to select.
+    constexpr std::uint8_t kModes = 6U;
+    constexpr std::uint8_t kLimits = 12U;
+    for (std::uint8_t mode = 0U; mode < kModes; ++mode)
+    {
+        for (std::uint8_t limit = 0U; limit < kLimits; ++limit)
+        {
+            const std::array<std::uint8_t, 3U> seed{ 0U, mode, limit };
+            llvm::errs() << "Differential smoke: mode "
+                         << static_cast<unsigned>(mode) << " limit "
+                         << static_cast<unsigned>(limit) << '\n';
+            Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(seed);
+        }
+    }
     return 0;
 }

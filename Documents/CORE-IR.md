@@ -241,6 +241,45 @@ moving evaluation across a `break`, `continue`, or return. CorePrep consumes
 the verified structure and materializes loop headers, exits, latches, and the
 distinct `for` update block.
 
+The Haskell CorePrep lowering and the native Core-to-CorePrep adapter must
+build the same loop shape:
+
+- a `while` or `for` condition owns a dedicated header block. The statements
+  that precede the loop stay in the incoming block, which jumps to the header
+  once; every back-edge targets the header, never the incoming block;
+- a numeric condition's canonicalizing `value != 0` comparison belongs to that
+  header and is re-evaluated on every iteration;
+- the `for` update region is entered by normal body completion and by
+  `continue`, and every open tail of the update region jumps to the header.
+  The region's own entry is its `continue` target but is not its successor;
+- `&&` and `||` are control flow, not eager two-operand instructions. A
+  Boolean result slot is initialized with the short-circuit value, the left
+  operand selects a branch, and only the block on the evaluating edge computes
+  the right operand and overwrites the slot. Calls, traps, and non-termination
+  in the right operand therefore stay conditional. A short-circuit condition
+  of a loop is evaluated starting at the loop header, so the loop's own
+  body/exit branch may sit in the operator's join block.
+
+`LoopLoweringTests.cpp` and `ShortCircuitLoweringTests.cpp` under
+`Compiler/Core/Tests/` assert these edges exactly on the native adapter.
+`LoopExecutionTests.cpp` and `ShortCircuitExecutionTests.cpp` under
+`Compiler/Backend/LLVM/Tests/` execute each form through CorePrep, Xpp, Xmm,
+and LLVM with both native optimizer settings and compare the result with host
+code; the short-circuit programs guard a division or a recursive call, so an
+eager right operand traps or never returns instead of merely producing the
+same Boolean. A CorePrep, Xpp,
+or Xmm verifier cannot reject a wrong back-edge by itself: a block that jumps
+to itself is a well-formed control-flow graph.
+
+Both lowerings also allocate generated symbols the same way. Temporaries,
+condition and short-circuit slots, and lifted closure names come from one
+counter that starts above every symbol identity in the whole module and is
+never reset between functions. Identities are module-wide and CorePrep
+verification rejects one identity with two spellings, so a counter seeded
+from a single function would reuse another function's symbols.
+`SymbolAllocationTests.cpp` covers this for multi-function modules and
+closures.
+
 ## Expressions
 
 Every Core expression has a statically queryable type.

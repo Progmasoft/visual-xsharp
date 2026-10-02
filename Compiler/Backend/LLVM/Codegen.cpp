@@ -131,6 +131,13 @@ namespace Visual::XSharp::Backend::LLVM
             result->append(*spelling);
             result->append(".");
             result->append(std::to_string(function.symbol.id));
+            // LLVM reserves every global name beginning with `llvm.` for
+            // intrinsics and rejects a module that defines one, but `llvm`
+            // is an ordinary namespace name in source. `$` cannot occur in
+            // a source identifier, so the prefixed name is unambiguous and
+            // cannot collide with another module's symbol.
+            if (result->starts_with("llvm."))
+                result->insert(0U, 1U, '$');
             return result;
         }
 

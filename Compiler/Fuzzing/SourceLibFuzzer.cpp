@@ -20,7 +20,10 @@ LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size)
 #elif VXS_SOURCE_FUZZ_STAGE == 1
     Visual::XSharp::Fuzzing::ExerciseParser(input);
 #elif VXS_SOURCE_FUZZ_STAGE == 2
+    // Arbitrary source and generated arithmetic have independent corpora and
+    // time budgets. An invalid source mutation should not pay for two JITs.
     Visual::XSharp::Fuzzing::ExerciseSourceToLlvm(input);
+#elif VXS_SOURCE_FUZZ_STAGE == 3
     Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(input);
 #else
 #    error Unsupported VXS_SOURCE_FUZZ_STAGE

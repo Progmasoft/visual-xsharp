@@ -37,6 +37,10 @@ benchmark:
 fuzz:
     go run ./helpers/cmd/develop fuzz
 
+# Threaded fuzz targets under ThreadSanitizer; macOS and native Linux only.
+fuzz-thread:
+    go run ./helpers/cmd/develop fuzz-thread
+
 fuzz-stress:
     go run ./helpers/cmd/develop fuzz-stress
 

@@ -23,6 +23,13 @@
 #include <utility>
 #include <vector>
 
+#ifdef _WIN32
+// Only the Windows linking layer below needs these. Other hosts build against
+// distribution LLVM releases whose memory manager has no reservation mode.
+#    include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#    include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#endif
+
 #include "Visual/XSharp/Backend/LLVM.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 
@@ -262,7 +269,34 @@ namespace Visual::XSharp::Backend::LLVM
                 return;
             }
 
-            auto created = llvm::orc::LLJITBuilder().create();
+            llvm::orc::LLJITBuilder builder;
+#ifdef _WIN32
+            // Win64 unwind tables use image-relative relocations, which
+            // RuntimeDyld can only apply when no section of an object
+            // lies below the lowest one it has already seen. The default
+            // memory manager maps code and data sections separately, so
+            // the host decides their order and some address layouts
+            // abort linking with "relocation requires an ordered section
+            // layout". Reserving one contiguous block per object fixes
+            // the order: every section is carved from that reservation.
+            builder.setObjectLinkingLayerCreator(
+                [](llvm::orc::ExecutionSession &session)
+                    -> llvm::Expected<std::unique_ptr<llvm::orc::ObjectLayer>> {
+                    auto layer
+                        = std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(
+                            session,
+                            [](const llvm::MemoryBuffer &) {
+                                return std::make_unique<
+                                    llvm::SectionMemoryManager>(nullptr, true);
+                            });
+                    // Same COFF symbol-flag handling as LLJIT's default
+                    // linking layer.
+                    layer->setOverrideObjectFlagsWithResponsibilityFlags(true);
+                    layer->setAutoClaimResponsibilityForObjectSymbols(true);
+                    return layer;
+                });
+#endif
+            auto created = builder.create();
             if (!created)
             {
                 initializationError

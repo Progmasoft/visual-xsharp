@@ -118,7 +118,8 @@ go run ./helpers/cmd/develop doctor
 go run ./helpers/cmd/develop test
 ```
 
-The command executes 18 Catch3 binaries and one C11 ABI contract executable on
+The command executes 19 Catch3 binaries, one C11 ABI contract executable and
+one source/differential fuzz smoke executable on
 Windows 10/11, macOS Sequoia/Tahoe, Ubuntu 26.04 LTS, and Fedora 43. Bazel
 selects the host configuration automatically; no public test instruction
 requires `--config`.
@@ -142,14 +143,18 @@ labels shorten iteration, but they do not replace the full native gate. See
 Run native memory diagnostics through the same entry point:
 
 ```powershell
-go run ./helpers/cmd/develop sanitize address
+go run ./helpers/cmd/develop sanitize address-undefined
 ```
 
-macOS and Linux additionally support `sanitize undefined` and `sanitize thread`. Each sanitizer instruments both compilation and
-linking and runs the complete native suite set rather than merely proving that instrumented objects compile.
+Windows, macOS and Linux support combined ASan/UBSan and their individual
+`sanitize address` / `sanitize undefined` profiles. macOS and native Linux also
+support the separate `sanitize thread` profile. Each profile verifies real
+intentional failures before running the complete native suite set. See
+[Fuzzing](FUZZING.md) for the Windows and Fedora TSan boundaries.
 
-The Compiler Tier 1/2/3 workflows also run a separate deterministic wire-mutation smoke target. It is not included in the 16
-component-owned `develop.go test` suites. Run it directly when a Core, CorePrep, Xpp, or Xmm decoder changes:
+The Compiler Tier 1/2/3 workflows also run a separate deterministic wire-mutation
+smoke target. It is separate from the component-owned `develop test` suite set.
+Run it directly when a Core, CorePrep, Xpp, or Xmm decoder changes:
 
 ```powershell
 bazelisk build //Compiler/Fuzzing:wire_fuzz_smoke
@@ -336,7 +341,7 @@ or below 1500 lines. A simple review aid is:
 
 ```powershell
 $extensions = '*.hs','*.cpp','*.hpp','*.hh','*.kt','*.kts','*.go','*.java'
-Get-ChildItem Compiler,Interactive,ProjectSystem,Analyzer,Formatter,Linter,scripts -Recurse -File -Include $extensions |
+Get-ChildItem Compiler,Interactive,ProjectSystem,Analyzer,Formatter,Linter,helpers -Recurse -File -Include $extensions |
   Where-Object { (Get-Content -LiteralPath $_.FullName).Count -gt 1500 } |
   Select-Object FullName
 ```

@@ -273,7 +273,7 @@ namespace Visual::XSharp::Driver
             if (!input)
                 return std::nullopt;
             const auto end = static_cast<std::streamoff>(input.tellg());
-            if (end <= 0
+            if (end <= 0 || end > 4 * 1024 * 1024
                 || static_cast<std::uintmax_t>(end)
                        > std::numeric_limits<std::size_t>::max())
                 return std::nullopt;
@@ -287,7 +287,7 @@ namespace Visual::XSharp::Driver
         }
 
         [[nodiscard]] std::optional<std::vector<std::string_view>>
-        SplitRecords(const std::vector<char> &bytes)
+        SplitRecords(std::span<const char> bytes)
         {
             std::vector<std::string_view> records;
             std::size_t start{};
@@ -330,7 +330,8 @@ namespace Visual::XSharp::Driver
                                       text->data() + text->size(),
                                       result);
                 if (conversion.ec != std::errc{}
-                    || conversion.ptr != text->data() + text->size())
+                    || conversion.ptr != text->data() + text->size()
+                    || result > records_.size() - position_)
                     return std::nullopt;
                 return result;
             }
@@ -441,7 +442,7 @@ namespace Visual::XSharp::Driver
         }
 
         [[nodiscard]] std::optional<ResolvedProject>
-        ParseRegistry(const std::vector<char> &bytes, bool requireSources)
+        ParseRegistry(std::span<const char> bytes, bool requireSources)
         {
             const auto split = SplitRecords(bytes);
             if (!split || split->size() < kHeaderRecordCount
@@ -588,6 +589,15 @@ namespace Visual::XSharp::Driver
     } // namespace
 
     std::optional<ResolvedProject>
+    ParseProjectRegistry(std::span<const char> bytes, bool requireSources)
+    {
+        if (bytes.empty() || bytes.size() > 4U * 1024U * 1024U
+            || bytes.back() != '\0')
+            return std::nullopt;
+        return ParseRegistry(bytes, requireSources);
+    }
+
+    std::optional<ResolvedProject>
     ResolveProject(bool requireSources)
     {
         TemporaryRegistry registry;
@@ -607,7 +617,7 @@ namespace Visual::XSharp::Driver
                        "source registry\n");
             return std::nullopt;
         }
-        auto project = ParseRegistry(*bytes, requireSources);
+        auto project = ParseProjectRegistry(*bytes, requireSources);
         if (!project)
             fmt::print(stderr,
                        "vxs: bundled project evaluator returned invalid "

@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <cstdint>
+#include <cstdlib>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/raw_ostream.h>
 #include <span>
 #include <string>
 #include <utility>
@@ -78,12 +80,89 @@ namespace Visual::XSharp::Fuzzing
             const auto expression
                 = GenerateExpression(bytes, cursor, kMaximumGeneratedDepth);
             expected = expression.value;
+            std::string body = "return " + expression.source + ";";
+            std::string members;
+            const auto mode = NextByte(bytes, cursor) % 6U;
+            const auto limit
+                = static_cast<std::int64_t>(NextByte(bytes, cursor) % 12U);
+            if (mode == 1U)
+            {
+                // Independent host execution models for/continue/break rather
+                // than comparing two copies of the compiler's CFG algorithm.
+                expected = 0;
+                for (std::int64_t index = 0; index < limit; ++index)
+                {
+                    if (index == 2)
+                        continue;
+                    if (index == 9)
+                        break;
+                    expected += index;
+                }
+                body = "int total = 0; for (int index = 0; index < "
+                       + std::to_string(limit)
+                       + "; index++) { if (index == 2) { continue; } "
+                         "if (index == 9) { break; } total = total + index; } "
+                         "return total;";
+            }
+            else if (mode == 2U)
+            {
+                expected = limit == 0 ? 1 : limit;
+                body = "int total = 0; do { total++; } while (total < "
+                       + std::to_string(limit) + "); return total;";
+            }
+            else if (mode == 3U)
+            {
+                expected = limit < 6 ? expression.value : -expression.value;
+                body = "if (" + std::to_string(limit) + " < 6) { return "
+                       + expression.source + "; } else { return -("
+                       + expression.source + "); }";
+            }
+            else if (mode == 4U)
+            {
+                // Statements before a pre-test loop run exactly once. The
+                // initializers and the loop share one source block, so a
+                // back-edge that re-enters that block resets the counter.
+                expected = 0;
+                std::int64_t index = 0;
+                while (index < limit)
+                {
+                    if (index == 1)
+                    {
+                        ++index;
+                        continue;
+                    }
+                    if (index == 7)
+                        break;
+                    expected += index;
+                    ++index;
+                }
+                body = "int total = 0; int index = 0; while (index < "
+                       + std::to_string(limit)
+                       + ") { if (index == 1) { index++; continue; } "
+                         "if (index == 7) { break; } total = total + index; "
+                         "index++; } return total;";
+            }
+            else if (mode == 5U)
+            {
+                // The recursion ends only because `||` skips its right
+                // operand at zero, and the comparison after `&&` is reached
+                // only when the call returned. Evaluating either right
+                // operand eagerly recurses without bound.
+                expected = limit < 6 ? limit : -1;
+                members
+                    = "    public static bool Down(_ int n) { return n == 0 "
+                      "|| Down(n - 1); }\n";
+                body = "if (Down(" + std::to_string(limit) + ") && "
+                       + std::to_string(limit) + " < 6) { return "
+                       + std::to_string(limit) + "; } return 0 - 1;";
+            }
             return "namespace Fuzz;\n"
                    "class Program {\n"
-                   "    public static int Evaluate() {\n"
-                   "        return "
-                   + expression.source
-                   + ";\n"
+                   + members
+                   + "    public static int Evaluate() {\n"
+                     "        "
+                   + body
+                   + "\n"
                      "    }\n"
                      "}\n";
         }
@@ -174,23 +253,18 @@ namespace Visual::XSharp::Fuzzing
         }
 
         [[nodiscard]] auto
-        CompileVariant(std::span<const std::uint8_t> source,
+        CompileVariant(std::span<const std::uint8_t> coreBytes,
                        bool optimizeXpp,
                        bool optimizeXmm) -> Llvm::Artifact
         {
-            const auto compiled = CompileSource(source);
-            if (!compiled.succeeded()
-                || compiled.kind != Frontend::OutputKind::CoreWire)
-                llvm::report_fatal_error(
-                    llvm::Twine("generated arithmetic source was rejected by "
-                                "the frontend"));
-
             Visual::XSharp::Pipeline::Options options;
             options.optimize_xpp = optimizeXpp;
             options.optimize_xmm = optimizeXmm;
+            options.llvm.optimization = optimizeXmm
+                                            ? Llvm::OptimizationLevel::Default
+                                            : Llvm::OptimizationLevel::Debug;
             const auto pipeline
-                = Visual::XSharp::Pipeline::ConsumeCore(compiled.bytes,
-                                                        options);
+                = Visual::XSharp::Pipeline::ConsumeCore(coreBytes, options);
             if (!pipeline || !pipeline.llvm)
                 llvm::report_fatal_error(llvm::Twine(
                     "differential source failed a verified compiler pipeline: "
@@ -288,8 +362,21 @@ namespace Visual::XSharp::Fuzzing
         const auto bytes = std::span<const std::uint8_t>(
             reinterpret_cast<const std::uint8_t *>(source.data()),
             source.size());
-        const auto unoptimized = CompileVariant(bytes, false, false);
-        const auto optimized = CompileVariant(bytes, true, true);
+        const auto compiled = CompileSource(bytes);
+        if (!compiled.succeeded()
+            || compiled.kind != Frontend::OutputKind::CoreWire)
+            llvm::report_fatal_error(
+                llvm::Twine("generated arithmetic source was rejected by "
+                            "the frontend"));
+        // The comparison varies native optimizers, so both paths start from
+        // the same frontend result. Recompiling identical source adds no
+        // independent evidence and repeats work in the expensive oracle.
+        const auto unoptimized = CompileVariant(compiled.bytes, false, false);
+        const auto optimized = CompileVariant(compiled.bytes, true, true);
+        if (std::getenv("VXS_FUZZ_TRACE") != nullptr)
+            llvm::errs() << source << "\nReference LLVM:\n"
+                         << unoptimized.llvm_ir << "\nOptimized LLVM:\n"
+                         << optimized.llvm_ir;
         constexpr std::string_view kReferenceModule = "vxs-fuzz-reference";
         constexpr std::string_view kOptimizedModule = "vxs-fuzz-optimized";
         const auto referenceValue = Invoke(unoptimized, kReferenceModule);

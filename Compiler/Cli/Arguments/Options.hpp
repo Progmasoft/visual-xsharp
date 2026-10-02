@@ -116,6 +116,9 @@ struct CompilerSettings
     LlvmOptLevel llvmOptLevel;
     LlvmCompiler llvmCompiler;
     LlvmLto llvmLto;
+
+    bool
+    operator==(const CompilerSettings &) const = default;
 };
 
 struct CliOptions
@@ -155,6 +158,9 @@ struct CliOptions
     bool llvmOptOverride;
     bool llvmCompilerOverride;
     bool llvmLtoOverride;
+
+    bool
+    operator==(const CliOptions &) const = default;
 };
 
 // Fully resolved values for one compiler invocation. A project evaluation can
@@ -183,6 +189,9 @@ struct CliParseOutcome
     CliOptions options;
     std::optional<CliCommand> helpCommand;
     std::string diagnostic;
+
+    bool
+    operator==(const CliParseOutcome &) const = default;
 };
 
 [[nodiscard]] CompilerSettings

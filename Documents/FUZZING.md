@@ -14,20 +14,53 @@ memory safety or complete language coverage.
 | `wire_fuzzer` | Core, private CorePrep transport, Xpp and Xmm; bounded decoding, semantic verification and equal encode/decode round trips | First-party C++ codecs and verifiers |
 | `lexer_fuzzer` | Arbitrary bytes through the frontend lexer ABI; complete token/diagnostic evaluation | Native ABI bridge, not GHC-generated lexer branches |
 | `parser_fuzzer` | Arbitrary bytes through syntax analysis; complete AST/diagnostic evaluation | Native ABI bridge, not GHC-generated parser branches |
-| `source_llvm_fuzzer` | Source through Core/CorePrep, Xpp/Xmm verification and LLVM lowering; generated arithmetic differential oracle | First-party C++ pipeline and JIT bridge |
+| `source_llvm_fuzzer` | Arbitrary source through Core/CorePrep, Xpp/Xmm verification and LLVM lowering | First-party C++ pipeline |
+| `differential_fuzzer` | Generated arithmetic and control flow compiled with native optimizers disabled/enabled and compared with an independent evaluator | First-party C++ pipeline and JIT bridge |
+| `cli_fuzzer` | NUL-separated arguments through the typed command-line parser; two parses must produce equal typed models, leave `argv` unchanged, attach a diagnostic to every rejection and select a command on every acceptance | First-party C++ CLI parser |
+| `project_fuzzer` | Evaluator registry records, both raw and as one mutated field of a valid document; decoding must be deterministic and a source-requiring decode may only accept what the permissive decode accepts | First-party C++ registry decoder; no evaluator process or filesystem access |
+| `repl_fuzzer` | Up to eight operations on one persistent session: arithmetic cells checked against an independent accumulator, type queries that must not change history, failed-cell rollback and reset | First-party C++ session and JIT bridge |
+| `ownership_fuzzer` | One to four threads racing weak locks, unowned loads and weak copies against the final strong release; the payload must be destroyed exactly once, never resurrected and never read after destruction | AARC runtime |
+| `frontend-fuzz` | Lexer, parser and source-to-CorePrep stages mutated in-process with GHC HPC tick feedback | GHC-compiled frontend modules; no native sanitizer |
 
-The source oracle independently evaluates bounded generated arithmetic, compiles
-it with Xpp/Xmm optimizations both disabled and enabled, executes both verified
-artifacts through ORC, and compares all three results. This detects miscompiles
-within that generated subset; it is not an oracle for arbitrary Visual X#
+The differential oracle independently evaluates one generated program per
+input: a bounded arithmetic expression, a classic `for` loop with `continue`
+and `break`, a `do`/`while` loop, an `if`/`else` over that expression, a
+`while` loop preceded by its own initializers, or a recursion that terminates
+only because `||` and `&&` skip their right operands. The expected value is computed
+by ordinary host code in the harness, never by a second compiler path. It
+compiles the source once, lowers the same verified Core with Xpp/Xmm
+optimizations both disabled and enabled, executes both verified
+artifacts through ORC, and compares all three results. Agreement between the
+two optimizer settings is not accepted by itself: both consume the same
+Core-to-CorePrep adapter, so a defect there makes them agree on the same wrong
+or non-terminating program. This detects miscompiles within that generated
+subset; it is not an oracle for arbitrary Visual X#
 programs. Invalid source is a normal rejection, whereas internal failures and
 verified-model inconsistencies fail the campaign.
 
+Arbitrary source and generated arithmetic use separate corpora and equal
+per-target time budgets. This lets source mutations reach native lowering
+without repeatedly creating two ORC sessions for unrelated generated code.
+The differential generator consumes at most 33 bytes: 31 expression selectors,
+one shape byte and one trip-count byte. Its 64-byte input limit keeps
+mutations near the bytes that influence the program.
+
 GHC frontend code and prebuilt LLVM dependencies do not receive Clang native
-coverage instrumentation. Lexer/parser execution must not be presented as
-coverage-guided exploration of their Haskell implementation. Haskell tests and
-HPC coverage remain complementary gates, not substitutes for a frontend-specific
-feedback-guided engine.
+coverage instrumentation. Running `lexer_fuzzer` or `parser_fuzzer` must not be
+presented as coverage-guided exploration of the Haskell implementation.
+
+`frontend-fuzz` is the separate feedback engine for that code. It is a Cabal
+executable built with `--enable-coverage` in its own `dist-fuzz-coverage`
+build directory, so it never shares package state with the ordinary frontend
+build. It resets the HPC counters before each input, keeps an input when it
+reaches a tick of a `Visual.XSharp.*` module that no earlier input reached,
+and refuses to run when the production modules carry no ticks. Mutations are
+deterministic for a recorded seed, inputs are limited to 8192 bytes and five
+seconds, and the runtime heap is limited to 512 MiB. A Haskell exception or a
+timeout writes the exact input as `failure.seed` and fails the campaign;
+`frontend-fuzz STAGE --replay FILE` replays it. This engine has no sanitizer
+and reports tick coverage, which is not comparable with libFuzzer edge
+coverage.
 
 ## Run a campaign
 
@@ -46,6 +79,28 @@ target; `fuzz-stress` defaults to 900. Set `VXS_FUZZ_SECONDS` to an integer from
 1 through 3600 to override either duration. CI uses 90 seconds per target for
 bounded campaigns and 900 for scheduled stress campaigns.
 
+Targets are independent processes with their own corpus, artifact directory
+and report entry, so the helper can run several at once. Concurrency is not
+free evidence: a campaign is worth the inputs it executes inside its time
+budget, and on a two-core, four-thread host two concurrent targets executed
+40 to 90 percent fewer inputs each. The default is therefore one job per four
+logical processors, at most four, which is one target at a time on such a host
+and on four-vCPU CI runners. Set `VXS_FUZZ_JOBS` to an integer from 1 through
+64 on a host with spare cores. Two targets with a 4096 MiB RSS limit never
+overlap, the three HPC stages follow the same setting, and the ThreadSanitizer
+campaign always runs one target at a time because its targets start their own
+threads. Time budgets, RSS limits, per-input timeouts and watchdogs are
+identical at every job count.
+
+Most local wall-clock time is compilation, not fuzzing. The plain, sanitizer
+and fuzz configurations share one Bazel output tree, and each switch would
+otherwise recompile every owned translation unit. Outside CI the helper adds a
+persistent content-addressed Bazel disk cache under the user cache directory
+(`visual-xsharp/bazel-disk-cache`, limited to 8 GiB). It is keyed by each
+action's full command line and inputs, so no instrumentation or check changes.
+`VXS_BAZEL_DISK_CACHE` selects another absolute directory, or `off` for a cold
+measurement.
+
 Each campaign has a 30-second per-input timeout and a finite input length:
 
 | Target | Maximum input bytes | RSS limit (MiB) |
@@ -54,6 +109,11 @@ Each campaign has a 30-second per-input timeout and a finite input length:
 | Lexer | 65536 | 1024 |
 | Parser | 65536 | 1536 |
 | Source/LLVM | 65536 | 4096 |
+| Differential | 64 | 4096 |
+| CLI | 16384 | 768 |
+| Project registry | 65536 | 768 |
+| REPL | 64 | 4096 |
+| Ownership | 64 | 768 |
 
 ASan intentionally retains freed allocations in quarantine. Fuzz-only settings
 bound this cache to 64 MiB, with a 256 KiB thread-local cache; the nonzero
@@ -64,15 +124,20 @@ normal quarantine settings.
 ## Corpus synchronization and reports
 
 Wire seeds come from production writers, so format-version changes do not leave
-handwritten supposedly valid documents behind. Lexer, parser and source seeds
-come from `Compiler/Fuzzing/Corpus/`. Set `VXS_FUZZ_CORPUS` to retain mutation
+handwritten supposedly valid documents behind. Every other target has
+versioned seeds under `Compiler/Fuzzing/Corpus/<target>/`; a target without
+that directory fails the campaign instead of starting from nothing. Set `VXS_FUZZ_CORPUS` to retain mutation
 corpora across local runs. Updated versioned seeds are added without overwriting
 older discovered inputs; conflicting contents under a stable hash fail closed.
 
 GitHub Actions restores a per-platform corpus cache and saves a unique cache
 version for each run. It also uploads campaign artifacts on success or failure.
 Reports contain the target, duration, RSS limit, selected sanitizer, native
-coverage ownership and result. Logs include execution counts and peak RSS.
+coverage ownership and result. Structured reports also include executed inputs,
+average executions per second, new corpus entries, slowest input time and peak
+RSS from libFuzzer's final counters. A successful process without a complete
+final report or with zero executed inputs fails the campaign gate. Failed
+processes retain their original logs even if final counters are unavailable.
 Failed work directories are preserved for diagnosis; successful CI reports
 are retained for artifact upload.
 
@@ -93,8 +158,31 @@ whole corpus and sanitizer cache rather than just the final input.
 
 `wire_fuzz_smoke` exercises 1024 deterministic mutations of each of four valid
 documents. It runs independently of libFuzzer and does not claim guided
-coverage. `source_fuzz_smoke` checks valid-source lowering and the differential
-oracle before mutation campaigns begin.
+coverage. `source_fuzz_smoke` checks valid-source lowering and then runs the
+differential oracle on every generated program shape at trip counts 0 through
+11 before mutation campaigns begin. Set `VXS_FUZZ_TRACE=1` to print each
+generated source with its reference and optimized LLVM IR.
+
+Neither smoke program nor the HPC engine has libFuzzer's per-input timeout, and
+a miscompiled generated loop does not return. The developer helper therefore
+bounds every smoke, libFuzzer and HPC process as a whole: 90 seconds for a
+smoke program, the campaign duration plus 90 seconds for a libFuzzer target and
+plus 300 seconds for the HPC engine. On expiry it terminates the complete
+process tree and reports a watchdog failure. Build tools are not bounded by
+this watchdog. Do not run a smoke binary directly without an external time
+limit when investigating a suspected hang.
+
+## ThreadSanitizer campaign
+
+AddressSanitizer and ThreadSanitizer cannot share one executable.
+`go run ./helpers/cmd/develop fuzz-thread` builds only the targets that start
+their own threads, currently `ownership_fuzzer`, with libFuzzer and
+ThreadSanitizer, proves that the runtime reports an intentional data race, and
+then runs a bounded campaign with the same corpus, limits and report checks.
+The command fails on Windows, where Clang has no ThreadSanitizer runtime; it
+never reports a skipped run as success. The fuzzing workflow runs it on macOS
+and native Ubuntu. The Fedora container job does not run it for the
+shadow-memory reason given below.
 
 Compiler Tier 1/2/3 run complete native suites with ASan/UBSan. Tier 1 macOS
 and Tier 2 native Ubuntu additionally run separate TSan suites. Fedora Tier 3
@@ -110,8 +198,22 @@ protection must require these actual checks.
 
 ## Remaining coverage boundaries
 
-CLI argument generation, project/lockfile inputs, persistent REPL sessions and
-broader generated language programs need independent oracles. Deep semantic
-cases, ownership concurrency and frontend feedback-guided coverage are not
-established by the four existing targets. Expand these deliberately instead of
-equating a green workflow with completion of the entire security program.
+The harnesses above are evidence about the inputs they ran, not proofs:
+
+- the CLI, project and REPL oracles check determinism, rollback and a small
+  arithmetic model. They do not model every option interaction, lockfile
+  refresh, project evaluation or REPL declaration form;
+- the differential generator covers integer arithmetic, three loop forms,
+  one conditional and one guarded recursion. Closures, other scalar types,
+  ownership and templates have no generated-program oracle here; their
+  executable checks live in the component test suites;
+- `ownership_fuzzer` varies thread count and iteration count, not arbitrary
+  interleavings, and its ThreadSanitizer campaign does not run on Windows or in
+  the Fedora container;
+- HPC feedback is expression-tick coverage of the frontend, without
+  memory-safety instrumentation, and its mutator is byte- and token-level, not
+  grammar-aware;
+- prebuilt LLVM and the GHC runtime are not instrumented by any campaign.
+
+Expand these deliberately instead of equating a green workflow with completion
+of the entire security program.

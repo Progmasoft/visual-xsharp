@@ -681,15 +681,37 @@ TEST_CASE(
     REQUIRE(Core::Verify(module).empty());
     const auto prepared = Core::CorePrep::Prepare(module);
     REQUIRE(visual_xsharp::core::verify(prepared).empty());
-    const auto &instructions
-        = prepared.functions.front().blocks.front().instructions;
-    REQUIRE(instructions.size() == 3U);
-    CHECK(instructions.at(0).operation
+    // Each operand is canonicalized with its own typed `!= 0` comparison.
+    // The conjunction itself is control flow: the left comparison and the
+    // result slot live in the entry block, and the right comparison runs
+    // only in the block the true edge reaches.
+    const auto &blocks = prepared.functions.front().blocks;
+    REQUIRE(blocks.size() == 3U);
+    const auto &entry = blocks.front();
+    REQUIRE(entry.instructions.size() == 2U);
+    CHECK(entry.instructions.at(0).operation
           == visual_xsharp::core::Operation::NotEqual);
-    CHECK(instructions.at(1).operation
+    CHECK(entry.instructions.at(0).operands.front().type
+          == Core::Type::int64());
+    CHECK(entry.instructions.at(1).operation
+          == visual_xsharp::core::Operation::Copy);
+    REQUIRE(entry.terminator.kind
+            == visual_xsharp::core::Terminator::Kind::Branch);
+    const auto right = std::ranges::find(blocks,
+                                         entry.terminator.true_target,
+                                         &visual_xsharp::core::Block::id);
+    REQUIRE(right != blocks.end());
+    REQUIRE(right->instructions.size() == 2U);
+    CHECK(right->instructions.at(0).operation
           == visual_xsharp::core::Operation::NotEqual);
-    CHECK(instructions.at(2).operation
-          == visual_xsharp::core::Operation::LogicalAnd);
+    CHECK(right->instructions.at(0).operands.front().type
+          == Core::Type::float32());
+    CHECK(right->instructions.at(1).kind
+          == visual_xsharp::core::Instruction::Kind::Assign);
+    for (const auto &block : blocks)
+        for (const auto &instruction : block.instructions)
+            CHECK(instruction.operation
+                  != visual_xsharp::core::Operation::LogicalAnd);
     const auto result = Visual::XSharp::Pipeline::ConsumeCore(
         Core::Wire::Encode(module).bytes);
     REQUIRE(result);
