@@ -75,6 +75,23 @@ coreVerifierTests =
         , rejectedWith "VXC1028" (primitiveModule CoreEqual [boolValue, boolValue] intType)
         )
     , ("Core verifier accepts all-returning branches", accepted allReturningBranch)
+    , ("Core verifier rejects break outside a loop", rejectedWith "VXC1045" (loopModule [CoreBreak]))
+    , ("Core verifier rejects continue outside a loop", rejectedWith "VXC1046" (loopModule [CoreContinue]))
+    , ("Core verifier accepts continue in a for body", accepted (forModule [CoreContinue] []))
+    , ("Core verifier accepts break in a for update region", accepted (forModule [] [CoreBreak]))
+    , ("Core verifier rejects continue in a for update region", rejectedWith "VXC1066" (forModule [] [CoreContinue]))
+    ,
+        ( "Core verifier rejects continue nested in a branch of a for update region"
+        , rejectedWith "VXC1066" (forModule [] [CoreIf boolValue [CoreContinue] []])
+        )
+    ,
+        ( "Core verifier accepts continue in a loop nested in a for update region"
+        , accepted (forModule [] [CoreWhile boolValue [CoreContinue]])
+        )
+    ,
+        ( "Core verifier does not report an outside-loop continue as an update continue"
+        , not (rejectedWith "VXC1066" (loopModule [CoreContinue]))
+        )
     , ("Core verifier accepts a well-typed direct call", accepted validDirectCall)
     , ("Core verifier accepts a well-typed closure", accepted validClosure)
     ]
@@ -383,3 +400,9 @@ validDirectCall =
 
 validClosure :: CoreModule
 validClosure = coreModule [unitFunction mainName [CoreEvaluate validClosureValue]]
+
+loopModule :: [CoreStatement] -> CoreModule
+loopModule body = coreModule [unitFunction mainName body]
+
+forModule :: [CoreStatement] -> [CoreStatement] -> CoreModule
+forModule body update = loopModule [CoreFor boolValue body update]
