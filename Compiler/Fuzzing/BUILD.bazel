@@ -33,14 +33,28 @@ cc_binary(
     deps = [":wire_fuzz_harness"],
 )
 
+# Structural comparison of two CorePrep lowerings. It has no frontend or LLVM
+# dependency so its own contract can be tested without either.
+cc_library(
+    name = "coreprep_parity",
+    srcs = ["CorePrepParity.cpp"],
+    hdrs = ["CorePrepParity.hpp"],
+    visibility = ["//Compiler/Fuzzing/Tests:__pkg__"],
+    deps = ["//Compiler/Headers/Visual/XSharp/Core:core"],
+)
+
 cc_library(
     name = "source_fuzz_harness",
     srcs = ["SourceFuzz.cpp"],
     hdrs = ["SourceFuzz.hpp"],
     deps = [
+        ":coreprep_parity",
         "//Compiler/Backend/LLVM:llvm_backend",
         "//Compiler/Cli/Commands:frontend",
+        "//Compiler/Core:core",
         "//Compiler/Driver:pipeline",
+        "//Compiler/Headers/Visual/XSharp/Core:core",
+        "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
     ],
 )
 
