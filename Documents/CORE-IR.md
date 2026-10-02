@@ -237,6 +237,17 @@ tracks loop nesting independently for each function and closure body and rejects
 either statement outside a loop. Nested loops push a new target pair, so an
 inner transfer cannot accidentally jump to an outer loop.
 
+The update list of a classic `for` is that loop's continuation point, so the
+two transfers differ there. `CoreBreak` in an update list is valid and exits
+the loop after the statements before it. `CoreContinue` placed directly in an
+update list, including inside a `CoreIf` there, is rejected with `VXC1066`:
+it has no later point of the same iteration to reach, and lowering it would
+jump back to the start of the update without testing the condition. A loop
+nested inside an update list has its own body and continuation point, so
+`CoreContinue` is valid again inside it. Source code cannot produce this form
+because a `for` update is a list of expressions; the rule protects Core built
+or transformed by other means.
+
 Optimizer passes preserve the explicit loop form unless their rewrite proves
 the replacement semantics, including effects and transfer edges. In
 particular, a constant condition does not permit deleting an effectful body or
