@@ -190,9 +190,22 @@ storage location: `++10`, `(a + b)++` and `Next()++` produce `VXP0028`.
 The language has no decrement operator. `--` starts a comment wherever it
 stands outside a string, also directly after a value, so `value--;` is the
 name `value` followed by a comment and `--value;` is only a comment. Neither
-is diagnosed as a decrement: the remaining text is parsed as it stands, and a
-trailing `value` before the closing brace of a block is that block's final
-expression. Write `value -= 1`.
+is an error: the remaining text is parsed as it stands, and a trailing `value`
+before the closing brace of a block is that block's final expression. Write
+`value -= 1`.
+
+Because such text can keep compiling with a different meaning, the compiler
+reports the warning `VXL0009` at the `--` in two spellings:
+
+- attached: `--` directly follows a name, `)` or `]`, as in `value--;`;
+- leading: the whole comment is a name directly after `--` and a `;`, as in
+  `--value;`.
+
+A comment separated from the code by a space (`value -- note`), a comment that
+starts with a space (`-- value;`), documentation comments (`--|`, `--!`) and
+long comments are not reported. The warning does not change what is compiled.
+It follows `-Warnings none` and `-Werror true` like every other warning, and
+it is listed after the errors when the same source is also rejected.
 
 `_ = value;` is the discard statement, not an assignment to a binding named
 `_`, and is not an expression: `(_ = value)` produces `VXP0032`.

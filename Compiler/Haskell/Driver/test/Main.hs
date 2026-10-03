@@ -32,6 +32,7 @@ import ScalarWireTests (scalarWireTests)
 import ShortCircuitTests (shortCircuitTests)
 import SourceSetTests (sourceSetTests)
 import SourceTextTests (sourceTextTests)
+import SourceWarningTests (sourceWarningTests)
 import SpecializationTests (specializationTests)
 import StaticMemberCoreTests (staticMemberCoreTests)
 import StaticMemberOverloadTests (staticMemberOverloadTests)
@@ -130,6 +131,7 @@ main = do
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
     mapM_ (uncurry checkIO) sourceSetTests
     mapM_ (uncurry check) sourceTextTests
+    mapM_ (uncurry check) sourceWarningTests
     mapM_ (uncurry check) staticMemberParserTests
     mapM_ (uncurry check) staticMemberSemanticTests
     mapM_ (uncurry check) staticMemberCoreTests

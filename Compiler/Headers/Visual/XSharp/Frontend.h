@@ -45,7 +45,12 @@ extern "C"
         /** Human-readable UTF-8 failure text. */
         VXS_FRONTEND_ERROR_TEXT = 3,
         /** The frontend's own CorePrep lowering; testing entries only. */
-        VXS_FRONTEND_COREPREP_WIRE = 4
+        VXS_FRONTEND_COREPREP_WIRE = 4,
+        /** Human-readable UTF-8 warnings of a successful request.
+         *
+         * Delivered at most once and before the result payload. A rejected
+         * request lists its warnings after its errors instead. */
+        VXS_FRONTEND_WARNING_TEXT = 5
     };
 
     /** @brief Stable result codes returned by frontend ABI entry points. */
@@ -66,7 +71,8 @@ extern "C"
     };
 
     /** @brief Return the ABI version implemented by the loaded frontend.
-     * @return ABI version 1 for this contract.
+     * @return ABI version 2 for this contract. Version 2 added
+     * `VXS_FRONTEND_WARNING_TEXT`.
      */
     uint32_t
     vxs_frontend_abi_version(void);

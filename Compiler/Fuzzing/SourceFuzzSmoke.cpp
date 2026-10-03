@@ -29,7 +29,7 @@ main()
     // agree. They combine forms the generated programs below keep separate:
     // loops inside loops, short-circuit operators as loop conditions, and
     // several functions sharing one module-wide symbol numbering.
-    constexpr std::array<std::string_view, 14U> accepted{
+    constexpr std::array<std::string_view, 15U> accepted{
         "namespace Parity; class Program { public static int Evaluate() { "
         "int total = 0; for (int outer = 0; outer < 4; outer++) { "
         "if (outer == 2) { continue; } int inner = 0; "
@@ -149,6 +149,14 @@ main()
         "if (j >= sum) { break j; } } < 4) { sum += 1; } "
         "bool big = second > 9 && while (true) { n -= 1; break n > 0; }; "
         "return first + second + third + sum + n + (big ? 100 : 0); } }",
+        // Floating values in Boolean contexts. Both lowerings must compare
+        // them with a floating zero, not an integer one.
+        "namespace Parity; class Program { public static int Evaluate() { "
+        "double zero = 0.0; double half = 0.5; float small = 0.25; "
+        "bool both = half && small; bool either = zero || half; "
+        "double kept = zero ?: half; int picked = half ? 1 : 2; "
+        "return (both ? 1 : 0) + (either ? 2 : 0) + (kept ? 4 : 0) + "
+        "picked * 8 + (not zero ? 32 : 0); } }",
     };
     for (const auto text : accepted)
         Visual::XSharp::Fuzzing::ExerciseAcceptedSource(

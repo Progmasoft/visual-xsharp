@@ -12,8 +12,8 @@
    use Lua-style equal-sign levels. The closing delimiter must contain exactly
    the same number of '=' characters as its opener; that equality constraint is
    stated lexically because ordinary EBNF cannot bind and replay a delimiter.
-   The lexical scanner resolves '--' after a postfix-capable expression as the
-   decrement operator; elsewhere it begins a comment. The token '//' is integer
+   The token '--' always begins a comment outside a string; the language has
+   no decrement operator. The token '//' is integer
    division, not a C-style comment delimiter. Identifiers are normalized to NFC
    before comparison; the Unicode character classes named below are scanner
    primitives rather than productions over individual code points.
@@ -134,7 +134,7 @@ callable-declaration = type, callable-name, "(", [ parameter-list ], ")",
 callable-name = identifier | operator-name ;
 operator-name = "Operator", "<", operator-token, [ "prefix" | "postfix" ], ">" ;
 operator-token = "+" | "-" | "*" | "/" | "//" | "%" | "**"
-               | "++" | "--" | "==" | "\\=" | "<" | "<=" | ">" | ">="
+               | "++" | "==" | "\\=" | "<" | "<=" | ">" | ">="
                | "&" | "|" | "^" | "~" | "<<" | ">>"
                | "from" | "to" | custom-operator ;
 custom-operator = custom-operator-character, custom-operator-character,
@@ -311,7 +311,7 @@ additive-expression = multiplicative-expression,
                       { ( "+" | "-" ), multiplicative-expression } ;
 multiplicative-expression = prefix-expression,
                             { ( "*" | "/" | "//" | "%" ), prefix-expression } ;
-prefix-expression = { "+" | "-" | "++" | "--" | "not" | "!" | "await" | "throw"
+prefix-expression = { "+" | "-" | "++" | "not" | "!" | "await" | "throw"
                     | "copy" | "move" }, power-expression ;
 power-expression = postfix-expression, [ "**", prefix-expression ] ;
 
@@ -323,7 +323,6 @@ postfix-part = argument-list
              | "::", identifier
              | "[", expression-list, "]"
              | "++"
-             | "--"
              | "..." ;
 
 primary-expression = literal

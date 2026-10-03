@@ -330,10 +330,11 @@ prepareFor state incoming condition body update =
         finalState = afterUpdate {loopTargets = loopTargets state}
      in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd ++ updateEnd, OpenBlock exitId [], finalState)
 
--- | Whether an evaluated expression lowers to one result-discarding
--- instruction. The record has no result type on the wire; a reader recovers
--- it from the callee, which only a call has. A discarded closure creation is
--- therefore bound like any other value.
+{- | Whether an evaluated expression lowers to one result-discarding
+instruction. The record has no result type on the wire; a reader recovers
+it from the callee, which only a call has. A discarded closure creation is
+therefore bound like any other value.
+-}
 discardsItsOperation :: CoreExpression -> Bool
 discardsItsOperation expression = case expression of
     CoreApply {} -> True
@@ -357,14 +358,16 @@ closeBlock open terminator =
 
 -- Numeric conditions are a source-language convenience. Core retains their
 -- numeric type for optimization, while CorePrep makes the zero comparison
--- explicit so every native branch still consumes a canonical bool atom.
+-- explicit so every native branch still consumes a canonical bool atom. The
+-- zero has the literal form of the operand type, a floating zero for a
+-- floating operand, exactly as the native adapter spells it.
 booleanizeAtom :: PrepState -> OpenBlock -> CorePrepAtom -> (OpenBlock, CorePrepAtom, PrepState)
 booleanizeAtom state open atom
     | corePrepAtomType atom == boolType = (open, atom, state)
     | otherwise =
         let identifier = nextTemporary state
             temporary = ResolvedName (SymbolId identifier) (Identifier ("$condition" ++ show identifier))
-            zero = CorePrepLiteral (CoreInteger 0) (corePrepAtomType atom)
+            zero = zeroAtom (corePrepAtomType atom)
             instruction = CorePrepBind temporary boolType False (CorePrepPrimitive CoreNotEqual [atom, zero])
          in (appendInstruction open instruction, CorePrepVariable temporary boolType, state {nextTemporary = identifier + 1})
 
@@ -554,9 +557,10 @@ neutralAtom valueType
     | valueType == boolType = CorePrepLiteral (CoreBoolean False) valueType
     | otherwise = zeroAtom valueType
 
--- | Zero of a numeric type, spelled as the native adapter spells its slot
--- initializer: a floating zero is a floating literal, not an integer payload
--- under a floating type.
+{- | Zero of a numeric type, spelled as the native adapter spells its slot
+initializer: a floating zero is a floating literal, not an integer payload
+under a floating type.
+-}
 zeroAtom :: Type -> CorePrepAtom
 zeroAtom valueType
     | isCoreFloatingType valueType = CorePrepLiteral (CoreFloating "0") valueType
