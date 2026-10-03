@@ -112,7 +112,7 @@ suite set on macOS.
 Before creating release artifacts, validate the exact cross-build-system version:
 
 ```powershell
-go run ./helpers/cmd/develop version 0.4.0
+go run ./helpers/cmd/develop version 0.4.1
 ```
 
 The check compares `MODULE.bazel`, the changelog heading, the Haskell package, and the Kotlin project runtime using exact
