@@ -19,7 +19,6 @@ module Visual.XSharp.SourceText
     , protectedLineNumbers
     ) where
 
-import Data.Char (isAlphaNum)
 import Data.List (stripPrefix)
 import Visual.XSharp.AST (SourcePosition (..), SourceSpan (..))
 import Visual.XSharp.Diagnostic
@@ -48,8 +47,7 @@ scanSourceFragments file = go (SourcePosition 1 1) Nothing []
     where
         go _ pending output [] = Right (reverse (flushPending file pending output))
         go position pending output input
-            | Just remaining <- stripPrefix "--" input
-            , not (isPostfixDecrement position pending output) =
+            | Just remaining <- stripPrefix "--" input =
                 let flushed = flushPending file pending output
                  in case longBracketOpener remaining of
                         Just (level, opener, content) -> do
@@ -81,19 +79,6 @@ scanSourceFragments file = go (SourcePosition 1 1) Nothing []
                 let (unit, rest, end) = consumeSourceUnit position input
                     nextPending = appendPending position unit pending
                  in go end nextPending output rest
-
--- A decrement is lexical only when it is attached to a postfix-capable source
--- form. Whitespace before `--` therefore makes it a comment, while `value--`
--- remains code. Full assignability is still checked by the parser.
-isPostfixDecrement :: SourcePosition -> Maybe (SourcePosition, String) -> [SourceFragment] -> Bool
-isPostfixDecrement _ (Just (_, previous : _)) _ = postfixCharacter previous
-isPostfixDecrement position _ (previous : _) =
-    sourceEnd (sourceFragmentSpan previous) == position
-        && sourceFragmentKind previous `elem` [StringLiteralFragment, CharacterLiteralFragment, RawStringLiteralFragment]
-isPostfixDecrement _ _ _ = False
-
-postfixCharacter :: Char -> Bool
-postfixCharacter previous = isAlphaNum previous || previous `elem` "_)]'\""
 
 appendPending :: SourcePosition -> String -> Maybe (SourcePosition, String) -> Maybe (SourcePosition, String)
 appendPending position text Nothing = Just (position, reverse text)

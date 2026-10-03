@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string_view>
 
 namespace Visual::XSharp::Fuzzing
 {
@@ -25,4 +26,11 @@ namespace Visual::XSharp::Fuzzing
     /// program that silently stopped compiling cannot pass as "rejected".
     void
     ExerciseAcceptedSource(std::span<const std::uint8_t> input);
+    /// Compile a valid source whose `Evaluate()` in namespace `Fuzz` takes no
+    /// arguments and returns `int`, run it through the unoptimized and the
+    /// optimized native pipeline, and require both results to equal
+    /// `expected`. The expected value comes from the caller, never from the
+    /// compiler, so the check is an oracle and not a self-comparison.
+    void
+    ExerciseExpectedValue(std::string_view source, std::int64_t expected);
 } // namespace Visual::XSharp::Fuzzing

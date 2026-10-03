@@ -1662,11 +1662,11 @@ left + right; -- INVALID
 
 -- ============================================================================
 -- Example 173: 26. Expression Statements and Discard
--- Demonstrates: Assignments and increment/decrement expressions may appear as statements.
+-- Demonstrates: Assignments and increment expressions may appear as statements.
 
 value = 10;
 count++;
---index;
+++index;
 
 -- ============================================================================
 -- Example 174: Normal function body + Expr();
