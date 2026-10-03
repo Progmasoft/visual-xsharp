@@ -200,7 +200,7 @@ optimized LLVM IR.
 
 Neither smoke program nor the HPC engine has libFuzzer's per-input timeout, and
 a miscompiled generated loop does not return. The developer helper therefore
-bounds every smoke, libFuzzer and HPC process as a whole: 90 seconds for a
+bounds every smoke, libFuzzer and HPC process as a whole: 240 seconds for a
 smoke program, the campaign duration plus 90 seconds for a libFuzzer target and
 plus 300 seconds for the HPC engine. On expiry it terminates the complete
 process tree and reports a watchdog failure. Build tools are not bounded by

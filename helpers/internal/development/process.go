@@ -86,10 +86,19 @@ func watchedCommandWithin(seconds int, name string, arguments []string) (*exec.C
 	}
 }
 
+// smokeProcessSeconds bounds a deterministic smoke program. The bound exists to
+// end a run that will never finish, not to measure speed, so it must stay well
+// clear of the slowest legitimate run. source_fuzz_smoke takes 3 to 7 seconds in
+// an ordinary build and about 78 seconds under AddressSanitizer and
+// UndefinedBehaviorSanitizer on a hosted Windows runner. The former bound of 90
+// seconds left that run 12 seconds of headroom, and a slower machine exceeded it
+// with every case passing.
+const smokeProcessSeconds = 240
+
 func fuzzProcessSeconds(name string, arguments []string) int {
 	binary := strings.TrimSuffix(filepath.Base(name), ".exe")
 	if binary == "source_fuzz_smoke" || binary == "wire_fuzz_smoke" {
-		return 90
+		return smokeProcessSeconds
 	}
 	if binary == "frontend-fuzz" && len(arguments) >= 2 {
 		if seconds, err := strconv.Atoi(arguments[1]); err == nil && seconds >= 1 && seconds <= 3600 {
