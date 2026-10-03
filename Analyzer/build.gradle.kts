@@ -10,7 +10,7 @@ plugins {
     kotlin("jvm") version "2.4.0"
     id("org.jetbrains.dokka") version "2.2.0"
     jacoco
-    id("com.diffplug.spotless") version "8.9.0"
+    id("com.diffplug.spotless") version "8.10.3"
 }
 
 group = "com.progmasoft.visual.analyzer"
