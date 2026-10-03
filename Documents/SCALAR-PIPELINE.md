@@ -213,9 +213,9 @@ Instruction selection depends on the scalar family:
 | equality | `icmp` | `icmp` | ordered `fcmp` |
 | rounded division | nearest quotient, halves away from zero | nearest quotient, halves upward | `round(fdiv)` then signed `int` conversion |
 
-Floor division for signed integers corrects truncation when a nonzero
-remainder and opposite operand signs require rounding toward negative
-zero. Signed and unsigned integer lowering compares the exact remainder against
+Rounded division `//` (named `FloorDivide` in the IR for historical
+reasons) rounds to the nearest integer with halves away from zero; it does
+not floor. Signed and unsigned integer lowering compares the exact remainder against
 half the divisor without converting through floating point. Floating rounded
 division calls the LLVM round intrinsic on the quotient and converts that
 rounded value to the signed 64-bit `int` result.
