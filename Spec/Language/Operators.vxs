@@ -166,8 +166,9 @@ auto result = 7.8 // 2.0; -- int
 2.0 ** -3 -- 0.125
 
 -- ============================================================================
--- Example 25: 8. Increment and Decrement
+-- Example 25: 8. Increment
 -- Demonstrates: The operand must be an assignable mutable numeric storage expression.
+--   Visual X# has no decrement operator: `--` always starts a comment. Write `value -= 1`.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 ++value;      -- VALID
@@ -177,8 +178,8 @@ items[i]++;   -- VALID
 (a + b)++;    -- INVALID
 
 -- ============================================================================
--- Example 26: 8. Increment and Decrement
--- Demonstrates: Prefix increment/decrement modifies the operand first and yields the new value.
+-- Example 26: 8. Increment
+-- Demonstrates: Prefix increment modifies the operand first and yields the new value.
 
 int a = 10;
 int b = ++a;
@@ -187,8 +188,8 @@ int b = ++a;
 -- b == 11
 
 -- ============================================================================
--- Example 27: 8. Increment and Decrement
--- Demonstrates: Postfix increment/decrement yields the previous value and then modifies the operand.
+-- Example 27: 8. Increment
+-- Demonstrates: Postfix increment yields the previous value and then modifies the operand.
 
 int a = 10;
 int b = a++;
@@ -656,7 +657,8 @@ int rounded = 7 // 2;
 mask = !mask;
 
 count++;
---index;
+++index;
+index -= 1;
 
 Range<int> range = 1 ... 10 by 2;
 

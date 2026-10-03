@@ -2,9 +2,10 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 module Main (main) where
 
+import AssignmentExpressionTests (assignmentExpressionTests)
 import ClosureTests (closureTests)
-import ConditionalExpressionTests (conditionalExpressionTests)
 import CompileTimeParityTests (compileTimeParityTests)
+import ConditionalExpressionTests (conditionalExpressionTests)
 import Control.Exception (finally)
 import CoreInliningTests (coreInliningTests)
 import CoreLinearInliningTests (coreLinearInliningTests)
@@ -19,6 +20,7 @@ import FloatingOptimizerTests (floatingOptimizerTests)
 import IntegerEvaluationTests (integerEvaluationTests)
 import IntegerFlowTests (integerFlowTests)
 import IterationTests (iterationTests)
+import LoopExpressionTests (loopExpressionTests)
 import LoopFlowOracleTests (loopFlowOracleTests)
 import LoopFlowTests (loopFlowTests)
 import MonomorphizationTests (monomorphizationTests)
@@ -165,6 +167,8 @@ main = do
     mapM_ (uncurry check) scalarWireTests
     mapM_ (uncurry check) shortCircuitTests
     mapM_ (uncurry check) conditionalExpressionTests
+    mapM_ (uncurry check) assignmentExpressionTests
+    mapM_ (uncurry check) loopExpressionTests
     mapM_ (uncurry check) specializationTests
     mapM_ (uncurry check) voidTests
 
