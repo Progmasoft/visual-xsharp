@@ -48,7 +48,7 @@ body:
     attributes:
       label: Environment
       description: OS/version, Visual X# version, and relevant compiler or toolchain versions.
-      placeholder: Windows 11; vxs 0.4.0; Clang 22; GHC 9.10
+      placeholder: Windows 11; vxs 0.4.1; Clang 22; GHC 9.10
     validations:
       required: true
   - type: textarea
