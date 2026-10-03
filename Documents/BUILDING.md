@@ -261,6 +261,28 @@ Advanced Bazel options may follow a `--` separator, for example
 `go run ./helpers/cmd/develop sanitize address -- --jobs=4`. Platform and sanitizer `--config` values are deliberately
 owned by the command so compile and link instrumentation cannot accidentally diverge.
 
+## Static analysis
+
+```powershell
+go run ./helpers/cmd/develop tidy
+```
+
+The command builds the native targets, asks Bazel for the compile action of every C++ source they depend on, and runs
+`clang-tidy` with the repository's `.clang-tidy` over each first-party translation unit under `Compiler/`,
+`Interactive/`, and `Benchmarks/`. Each unit is analyzed with the exact flags Bazel compiled it with, so there is no
+second, hand-maintained compile database to drift. The build comes first because the analyzer needs generated and
+fetched headers and, on Windows, the parameter files that hold the commands.
+
+A finding belongs to the file it is reported in. Findings located in vendored or fetched dependency headers are counted
+and printed as a total, but do not fail the run; a compiler error fails it wherever it is reported, because the unit
+was then not analyzed. A first-party unit whose compile command is unavailable, an analyzer that exits unsuccessfully
+without an attributable diagnostic, and an action graph without first-party sources all fail the run rather than
+passing as clean. One analyzer process runs per logical processor; set `VXS_TIDY_JOBS` to change that. Bazel options
+may follow a `--` separator.
+
+The libFuzzer entry points and benchmark programs are outside the built target set and are not analyzed by this
+command. The `Clang-Tidy` workflow runs it on Ubuntu for every pull request and push.
+
 ## Clean rebuilds
 
 Generated trees are disposable. Prefer deleting only the build system's known output rather than source or workspace roots:

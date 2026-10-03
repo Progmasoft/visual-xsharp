@@ -14,6 +14,8 @@ namespace Visual::XSharp::Cli::Frontend
 {
     /// @brief Kinds of data that may be synchronously delivered by the
     /// frontend.
+    // Mirrors the 32-bit kind argument of the C ABI callback.
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class OutputKind : std::uint32_t
     {
         CoreWire = 0,          ///< Versioned, verified Core wire bytes.
@@ -24,6 +26,8 @@ namespace Visual::XSharp::Cli::Frontend
     };
 
     /// @brief Stable operation outcomes returned by the C ABI.
+    // Mirrors the 32-bit status the C ABI entry points return.
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class Status : std::int32_t
     {
         Success = 0,        ///< The request completed and delivered its result.

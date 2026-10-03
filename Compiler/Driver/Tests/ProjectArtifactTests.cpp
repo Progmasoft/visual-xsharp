@@ -195,16 +195,9 @@ TEST_CASE("source catalog rejects Windows device names before output planning")
 TEST_CASE("source output names reject characters not portable to Windows")
 {
     const std::vector<std::u32string> invalid_stems{
-        U"bad<name.vxs",
-        U"bad>name.vxs",
-        U"bad\"name.vxs",
-        U"bad|name.vxs",
-        U"bad?name.vxs",
-        U"bad*name.vxs",
-        U"bad\nname.vxs",
-        U"bad\tname.vxs",
-        U"bad\x7f"
-        U"name.vxs",
+        U"bad<name.vxs",  U"bad>name.vxs",  U"bad\"name.vxs",
+        U"bad|name.vxs",  U"bad?name.vxs",  U"bad*name.vxs",
+        U"bad\nname.vxs", U"bad\tname.vxs", U"bad\u007Fname.vxs",
     };
 
     for (const auto &source : invalid_stems)

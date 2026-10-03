@@ -302,8 +302,9 @@ TEST_CASE("Xpp optimization is insensitive to source block presentation")
         Block(1U, { Copy(10U, Integer(1)) }, Jump(3U)),
     });
 
-    CHECK(IR::optimize(std::move(ordered))
-          == IR::optimize(std::move(shuffled)));
+    const auto optimizedOrdered = IR::optimize(std::move(ordered));
+    const auto optimizedShuffled = IR::optimize(std::move(shuffled));
+    CHECK(optimizedOrdered == optimizedShuffled);
 }
 
 TEST_CASE("Xpp optimization preserves semantic branch successor order")

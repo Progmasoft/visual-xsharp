@@ -9,6 +9,10 @@ namespace
     ContinueFromXmm(visual_xsharp::PipelineResult &result,
                     const visual_xsharp::PipelineOptions &options)
     {
+        // The caller stores the module before continuing; without one there
+        // is nothing to verify or lower.
+        if (!result.xmm)
+            return;
         result.xmmVerificationIssues = Visual::XSharp::Xmm::Verify(*result.xmm);
         if (!result.xmmVerificationIssues.empty())
             return;
@@ -32,6 +36,8 @@ namespace
     ContinueFromXpp(visual_xsharp::PipelineResult &result,
                     const visual_xsharp::PipelineOptions &options)
     {
+        if (!result.xpp)
+            return;
         result.xppVerificationIssues = Visual::XSharp::Xpp::Verify(*result.xpp);
         if (!result.xppVerificationIssues.empty())
             return;
@@ -66,6 +72,9 @@ namespace visual_xsharp
         }
 
         result.core_prep = std::move(decoded.module);
+        // A successful decode always carries its module.
+        if (!result.core_prep)
+            return result;
         // Semantic verification precedes every lowering stage. Partial state is
         // retained in result, but no downstream IR is fabricated from an
         // invalid CorePrep module.
@@ -100,6 +109,9 @@ namespace Visual::XSharp::Pipeline
         }
 
         result.core = std::move(decoded.module);
+        // A successful decode always carries its module.
+        if (!result.core)
+            return result;
         result.coreVerificationIssues = Core::Verify(*result.core);
         if (!result.coreVerificationIssues.empty())
             return result;
@@ -134,6 +146,9 @@ namespace Visual::XSharp::Pipeline
             return result;
         }
         result.xpp = std::move(decoded.module);
+        // A successful decode always carries its module.
+        if (!result.xpp)
+            return result;
         result.xppVerificationIssues = Xpp::Verify(*result.xpp);
         if (!result.xppVerificationIssues.empty())
             return result;
@@ -155,6 +170,9 @@ namespace Visual::XSharp::Pipeline
             return result;
         }
         result.xmm = std::move(decoded.module);
+        // A successful decode always carries its module.
+        if (!result.xmm)
+            return result;
         if (options.stop_after == Stop::Xpp)
         {
             result.xmmWireError = Xmm::Wire::Error{

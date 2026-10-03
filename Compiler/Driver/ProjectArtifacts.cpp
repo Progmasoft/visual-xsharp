@@ -5,6 +5,7 @@
 #include <atomic>
 #include <fstream>
 #include <limits>
+#include <ranges>
 #include <string>
 #include <unordered_set>
 
@@ -18,8 +19,7 @@ namespace Visual::XSharp::Driver::ProjectArtifacts
         [[nodiscard]] auto
         IsUnicodeScalar(const char32_t value) -> bool
         {
-            return value <= 0x10ffffU
-                   && !(value >= 0xd800U && value <= 0xdfffU);
+            return value <= 0x10ffffU && (value < 0xd800U || value > 0xdfffU);
         }
 
         [[nodiscard]] auto
@@ -318,41 +318,39 @@ namespace Visual::XSharp::Driver::ProjectArtifacts
             // only by this transaction, so rollback never erases unrelated
             // project output.
             std::string failures;
-            for (auto replacement = replacements.rbegin();
-                 replacement != replacements.rend();
-                 ++replacement)
+            for (auto &replacement : std::views::reverse(replacements))
             {
                 std::error_code error;
-                if (replacement->installed)
+                if (replacement.installed)
                 {
-                    std::filesystem::remove(replacement->destination, error);
+                    std::filesystem::remove(replacement.destination, error);
                     if (error)
                     {
                         failures += " could not remove '";
-                        failures += PathText(replacement->destination);
+                        failures += PathText(replacement.destination);
                         failures += "': ";
                         failures += error.message();
                         continue;
                     }
-                    replacement->installed = false;
+                    replacement.installed = false;
                 }
-                if (replacement->backed_up)
+                if (replacement.backed_up)
                 {
                     error.clear();
-                    std::filesystem::rename(replacement->backup,
-                                            replacement->destination,
+                    std::filesystem::rename(replacement.backup,
+                                            replacement.destination,
                                             error);
                     if (error)
                     {
                         failures += " could not restore '";
-                        failures += PathText(replacement->destination);
+                        failures += PathText(replacement.destination);
                         failures += "' from '";
-                        failures += PathText(replacement->backup);
+                        failures += PathText(replacement.backup);
                         failures += "': ";
                         failures += error.message();
                         continue;
                     }
-                    replacement->backed_up = false;
+                    replacement.backed_up = false;
                 }
             }
             if (failures.empty())

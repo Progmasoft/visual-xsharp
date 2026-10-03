@@ -3,13 +3,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <iosfwd>
 #include <string>
 #include <string_view>
 
 namespace Visual::XSharp::Interactive
 {
-    enum class InputLineStatus
+    enum class InputLineStatus : std::uint8_t
     {
         Complete,
         End,
@@ -17,7 +18,7 @@ namespace Visual::XSharp::Interactive
         Failure
     };
 
-    enum class ReplCommandKind
+    enum class ReplCommandKind : std::uint8_t
     {
         Expression,
         Help,
