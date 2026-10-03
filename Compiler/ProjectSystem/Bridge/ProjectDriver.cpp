@@ -25,6 +25,8 @@
 #    include <spawn.h>
 #    include <sys/wait.h>
 #    include <unistd.h>
+// macOS does not declare environ in a header; glibc does.
+// NOLINTNEXTLINE(readability-redundant-declaration)
 extern char **environ;
 #endif
 
@@ -132,6 +134,9 @@ namespace Visual::XSharp::Driver
                                                      value.get(),
                                                      length - 1 };
 #else
+            // Read on the calling thread; this process never modifies its
+            // environment.
+            // NOLINTNEXTLINE(concurrency-mt-unsafe)
             const char *value = std::getenv(name);
             return value == nullptr || *value == '\0'
                        ? std::nullopt
@@ -273,7 +278,7 @@ namespace Visual::XSharp::Driver
             if (!input)
                 return std::nullopt;
             const auto end = static_cast<std::streamoff>(input.tellg());
-            if (end <= 0 || end > 4 * 1024 * 1024
+            if (end <= 0 || end > std::streamoff{ 4 } * 1024 * 1024
                 || static_cast<std::uintmax_t>(end)
                        > std::numeric_limits<std::size_t>::max())
                 return std::nullopt;
@@ -591,7 +596,7 @@ namespace Visual::XSharp::Driver
     std::optional<ResolvedProject>
     ParseProjectRegistry(std::span<const char> bytes, bool requireSources)
     {
-        if (bytes.empty() || bytes.size() > 4U * 1024U * 1024U
+        if (bytes.empty() || bytes.size() > std::size_t{ 4U } * 1024U * 1024U
             || bytes.back() != '\0')
             return std::nullopt;
         return ParseRegistry(bytes, requireSources);

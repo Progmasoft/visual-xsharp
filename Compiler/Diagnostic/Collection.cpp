@@ -21,7 +21,7 @@ namespace Visual::XSharp::Diagnostic
     Collection::Append(Record record) -> AppendResult
     {
         auto encoded = Identity(record);
-        if (!encoded)
+        if (encoded.error)
         {
             const auto status = encoded.error->kind == ErrorKind::LimitExceeded
                                     ? AppendStatus::LimitExceeded

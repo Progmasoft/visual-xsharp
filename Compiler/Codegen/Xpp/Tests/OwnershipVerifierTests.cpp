@@ -301,7 +301,8 @@ TEST_CASE("Xpp ownership ignores scalar storage")
     auto function
         = Function({ Block(0U, { IntegerCopy(9U, 10U) }, ReturnUnit()) });
     function.parameters.push_back({ { 9U, U"number" }, Core::Type::int64() });
-    CHECK(Xpp::VerifyOwnership(Module(std::move(function))).empty());
+    const auto issues = Xpp::VerifyOwnership(Module(std::move(function)));
+    CHECK(issues.empty());
 }
 
 TEST_CASE("Xpp ownership ignores unreachable misuse")

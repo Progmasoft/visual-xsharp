@@ -308,7 +308,8 @@ namespace visual_xsharp::core
             ++cursor;
         bool integralDigits = false;
         while (cursor < spelling.size()
-               && std::isdigit(static_cast<unsigned char>(spelling[cursor])))
+               && std::isdigit(static_cast<unsigned char>(spelling[cursor]))
+                      != 0)
         {
             integralDigits = true;
             ++cursor;
@@ -317,9 +318,9 @@ namespace visual_xsharp::core
         if (cursor < spelling.size() && spelling[cursor] == '.')
         {
             ++cursor;
-            while (
-                cursor < spelling.size()
-                && std::isdigit(static_cast<unsigned char>(spelling[cursor])))
+            while (cursor < spelling.size()
+                   && std::isdigit(static_cast<unsigned char>(spelling[cursor]))
+                          != 0)
             {
                 fractionalDigits = true;
                 ++cursor;
@@ -335,9 +336,9 @@ namespace visual_xsharp::core
                 && (spelling[cursor] == '+' || spelling[cursor] == '-'))
                 ++cursor;
             const auto exponentStart = cursor;
-            while (
-                cursor < spelling.size()
-                && std::isdigit(static_cast<unsigned char>(spelling[cursor])))
+            while (cursor < spelling.size()
+                   && std::isdigit(static_cast<unsigned char>(spelling[cursor]))
+                          != 0)
                 ++cursor;
             if (cursor == exponentStart)
                 return false;

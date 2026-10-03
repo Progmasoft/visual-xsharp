@@ -38,6 +38,7 @@ func newCommand(runner commandRunner, output, errorOutput io.Writer) *cobra.Comm
 		{"bundle", "Stage, checksum, and smoke-test a host distribution.", 0, true},
 		{"test", "Build and execute every native contract suite.", 0, true},
 		{"sanitize", "Run address, undefined, address-undefined, or thread sanitizer suites.", 1, true},
+		{"tidy", "Run clang-tidy over every first-party C++ translation unit.", 0, true},
 		{"version", "Validate major.minor.patch[.revision] release metadata.", 1, false},
 		{"fuzz", "Run bounded ASan/UBSan libFuzzer campaigns and the Haskell HPC campaign.", 0, false},
 		{"fuzz-thread", "Run the threaded fuzz targets under ThreadSanitizer (macOS/Linux).", 0, false},

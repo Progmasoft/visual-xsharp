@@ -24,8 +24,9 @@ namespace
     namespace Core = Llvm::Core;
 
     auto
-    LowerConstant(Core::Literal literal, Core::Type type, std::uint64_t id = 1U)
-        -> Llvm::Result
+    LowerConstant(Core::Literal literal,
+                  const Core::Type &type,
+                  std::uint64_t id = 1U) -> Llvm::Result
     {
         Core::Function function{
             { id, U"Evaluate" },
@@ -49,7 +50,7 @@ namespace
 
     auto
     InvokeConstant(Core::Literal literal,
-                   Core::Type type,
+                   const Core::Type &type,
                    std::string_view symbol = "VXSI.Cells.Evaluate.1")
         -> Llvm::JitResult
     {
@@ -374,7 +375,9 @@ TEST_CASE(
     REQUIRE(movedResult);
     REQUIRE(std::get<std::int64_t>(movedResult.value->payload) == -64);
 
+    // The moved-from session is the contract under test.
     const auto sourceInvoke
+        // NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
         = source.InvokeScalar("VXSI.Cells.Evaluate.1", Core::Type::int64());
     REQUIRE_FALSE(sourceInvoke);
     REQUIRE(sourceInvoke.error->kind == Llvm::JitErrorKind::Initialization);

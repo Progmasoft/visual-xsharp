@@ -28,10 +28,14 @@ namespace Visual::XSharp::Cli::Frontend
 {
     namespace
     {
-        constexpr std::size_t kMaximumArgumentBytes = 1024U * 1024U;
-        constexpr std::size_t kMaximumCoreBytes = 64U * 1024U * 1024U;
-        constexpr std::size_t kMaximumDiagnosticBytes = 16U * 1024U * 1024U;
-        constexpr std::size_t kMaximumSourceListBytes = 64U * 1024U * 1024U;
+        constexpr std::size_t kMaximumArgumentBytes
+            = std::size_t{ 1024U } * 1024U;
+        constexpr std::size_t kMaximumCoreBytes
+            = std::size_t{ 64U } * 1024U * 1024U;
+        constexpr std::size_t kMaximumDiagnosticBytes
+            = std::size_t{ 16U } * 1024U * 1024U;
+        constexpr std::size_t kMaximumSourceListBytes
+            = std::size_t{ 64U } * 1024U * 1024U;
 
         using AbiVersionFunction = std::uint32_t (*)();
         using InitializeFunction = std::int32_t (*)();
@@ -154,6 +158,9 @@ namespace Visual::XSharp::Cli::Frontend
                 handle_ = dlopen(libraryPath.c_str(), RTLD_NOW | RTLD_LOCAL);
                 if (handle_ == nullptr)
                 {
+                    // The loader is used on this thread only, before any
+                    // other thread exists.
+                    // NOLINTNEXTLINE(concurrency-mt-unsafe)
                     const char *const message = dlerror();
                     error_ = "could not load adjacent frontend library: ";
                     error_ += message == nullptr ? "unknown loader error"

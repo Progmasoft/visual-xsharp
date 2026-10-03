@@ -413,6 +413,8 @@ TEST_CASE("diagnostic encoder validates record identity")
     SECTION("invalid stage")
     {
         auto document = RichDocument();
+        // The out-of-catalog value is the input under test.
+        // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
         document.records.front().stage = static_cast<Diagnostic::Stage>(255U);
         RequireError(Diagnostic::Encode(document),
                      ErrorKind::InvalidTag,
@@ -421,7 +423,9 @@ TEST_CASE("diagnostic encoder validates record identity")
     SECTION("invalid severity")
     {
         auto document = RichDocument();
+        // The out-of-catalog value is the input under test.
         document.records.front().severity
+            // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
             = static_cast<Diagnostic::Severity>(255U);
         RequireError(Diagnostic::Encode(document),
                      ErrorKind::InvalidTag,

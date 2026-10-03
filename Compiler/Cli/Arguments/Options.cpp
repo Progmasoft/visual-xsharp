@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <fmt/format.h>
 #include <optional>
 #include <sstream>
@@ -23,7 +24,7 @@ namespace
 
     constexpr std::string_view kHelpOption = "-Help";
 
-    enum class Option : unsigned
+    enum class Option : std::uint8_t
     {
         File,
         Standard,
@@ -53,7 +54,7 @@ namespace
         Count,
     };
 
-    enum class ValueDomain : unsigned
+    enum class ValueDomain : std::uint8_t
     {
         None,
         Path,
@@ -72,7 +73,7 @@ namespace
         ViPkgType,
     };
 
-    enum class PositionalKind : unsigned
+    enum class PositionalKind : std::uint8_t
     {
         None,
         PackageCoordinate,
@@ -80,7 +81,7 @@ namespace
         ViPkgAction,
     };
 
-    enum class ApplyResult : unsigned
+    enum class ApplyResult : std::uint8_t
     {
         Applied,
         Invalid,
@@ -106,6 +107,10 @@ namespace
         std::string_view description;
     };
 
+    // The field order mirrors the columns of the declarative option table
+    // below; the table has a few dozen static rows, so its padding is not
+    // worth reordering every row.
+    // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding)
     struct OptionSpec
     {
         std::string_view spelling;

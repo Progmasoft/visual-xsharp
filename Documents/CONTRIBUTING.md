@@ -115,6 +115,8 @@ Run the checks appropriate to the changed ownership boundary:
 - Native: `go run ./helpers/cmd/develop test` on an official Windows 10/11 or macOS Sequoia/Tahoe host.
 - Sanitizers: `go run ./helpers/cmd/develop sanitize address`; macOS also exposes `undefined` and `thread`.
 - C/C++ style: LLVM 23.1.0 `clang-format --dry-run --Werror` over project-owned `.cpp`, `.hpp`, `.hh`, and `.h` files.
+- C/C++ static analysis: `go run ./helpers/cmd/develop tidy` runs `clang-tidy` with the repository configuration over
+  every first-party translation unit.
 - Documentation: link scan, spelling scan, and `git diff --check`.
 
 Initialize recursive submodules before native configuration. Do not store machine-specific LLVM or toolchain paths in tracked

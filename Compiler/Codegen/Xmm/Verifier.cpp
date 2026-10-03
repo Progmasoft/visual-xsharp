@@ -388,7 +388,6 @@ namespace Visual::XSharp::Xmm
                     switch (contract.error)
                     {
                         case ContractError::None:
-                            break;
                         case ContractError::ResultIsNotCallable:
                             // VXL1033 already reports the public result shape.
                             break;

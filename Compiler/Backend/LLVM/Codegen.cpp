@@ -184,12 +184,10 @@ namespace Visual::XSharp::Backend::LLVM
                     case core::Type::Kind::Float128:
                         return llvm::Type::getFP128Ty(context);
                     case core::Type::Kind::String:
-                        return llvm::PointerType::get(context, 0);
                     case core::Type::Kind::Function:
                         // A function value is an AARC closure pointer. Direct
                         // function declarations build their LLVM FunctionType
                         // in FunctionType().
-                        return llvm::PointerType::get(context, 0);
                     case core::Type::Kind::Named:
                         // Nominal AARC values are opaque at this boundary.
                         // Concrete field layout belongs to the type metadata
@@ -243,7 +241,8 @@ namespace Visual::XSharp::Backend::LLVM
             }
 
             [[nodiscard]] auto
-            FunctionType(const xmm::Function &function) -> llvm::FunctionType *
+            FunctionType(const xmm::Function &function) const
+                -> llvm::FunctionType *
             {
                 std::vector<llvm::Type *> parameters;
                 parameters.reserve(function.parameter_types.size());
@@ -447,7 +446,7 @@ namespace Visual::XSharp::Backend::LLVM
                     case core::Type::Kind::Bool:
                         return llvm::ConstantInt::get(
                             llvm::Type::getInt1Ty(context),
-                            std::get<bool>(value.immediate));
+                            std::get<bool>(value.immediate) ? 1U : 0U);
                     case core::Type::Kind::Character:
                     case core::Type::Kind::Int8:
                     case core::Type::Kind::Int16:

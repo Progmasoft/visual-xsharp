@@ -58,7 +58,8 @@ namespace
     }
 
     [[nodiscard]] auto
-    Increment(std::uint64_t id, std::u32string spelling) -> Core::Statement
+    Increment(std::uint64_t id, const std::u32string &spelling)
+        -> Core::Statement
     {
         return Core::Statement::Assign(
             { id, spelling },
