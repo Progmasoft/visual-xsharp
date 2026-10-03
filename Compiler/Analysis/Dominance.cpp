@@ -349,13 +349,12 @@ namespace Visual::XSharp::Analysis
             const auto order = FinishOrder(nodes, successors);
             std::unordered_set<ControlFlowBlockId> visited;
             std::vector<BlockSet> components;
-            for (auto current = order.rbegin(); current != order.rend();
-                 ++current)
+            for (const auto current : std::views::reverse(order))
             {
-                if (!visited.insert(*current).second)
+                if (!visited.insert(current).second)
                     continue;
                 BlockSet component;
-                std::vector<ControlFlowBlockId> worklist{ *current };
+                std::vector<ControlFlowBlockId> worklist{ current };
                 while (!worklist.empty())
                 {
                     const auto block = worklist.back();

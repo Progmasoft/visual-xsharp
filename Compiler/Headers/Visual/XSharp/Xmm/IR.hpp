@@ -18,18 +18,20 @@ namespace visual_xsharp::xmm
     /// Typed operation encoded by an Xmm instruction.
     enum class Opcode : std::uint8_t
     {
-        LoadImmediate,    ///< Materialize a constant into a virtual register.
-        Move,             ///< Copy a value into the destination register.
-        Call,             ///< Invoke a function value or direct function.
-        Add,              ///< Arithmetic addition.
-        Subtract,         ///< Arithmetic subtraction.
-        Multiply,         ///< Arithmetic multiplication.
-        Divide,           ///< Truncating arithmetic division.
-        FloorDivide,      ///< Floor-rounded arithmetic division.
-        Remainder,        ///< Arithmetic remainder.
-        CompareLess,      ///< Ordered less-than comparison.
-        CompareLessEqual, ///< Ordered less-than-or-equal comparison.
-        CompareGreater,   ///< Ordered greater-than comparison.
+        LoadImmediate, ///< Materialize a constant into a virtual register.
+        Move,          ///< Copy a value into the destination register.
+        Call,          ///< Invoke a function value or direct function.
+        Add,           ///< Arithmetic addition.
+        Subtract,      ///< Arithmetic subtraction.
+        Multiply,      ///< Arithmetic multiplication.
+        Divide,        ///< Truncating arithmetic division.
+        /// Rounded division `//`: nearest integer, halves away from zero.
+        /// The enumerator keeps its historical name; it never floors.
+        FloorDivide,
+        Remainder,           ///< Arithmetic remainder.
+        CompareLess,         ///< Ordered less-than comparison.
+        CompareLessEqual,    ///< Ordered less-than-or-equal comparison.
+        CompareGreater,      ///< Ordered greater-than comparison.
         CompareGreaterEqual, ///< Ordered greater-than-or-equal comparison.
         CompareEqual,        ///< Value equality comparison.
         CompareNotEqual,     ///< Value inequality comparison.

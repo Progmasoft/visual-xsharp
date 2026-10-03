@@ -528,13 +528,15 @@ namespace visual_xsharp::core
     /// Operation encoded by a CorePrep instruction.
     enum class Operation : std::uint8_t
     {
-        Copy,         ///< Copy one operand into the destination.
-        Call,         ///< Call the function supplied as the first operand.
-        Add,          ///< Arithmetic addition.
-        Subtract,     ///< Arithmetic subtraction.
-        Multiply,     ///< Arithmetic multiplication.
-        Divide,       ///< Truncating arithmetic division.
-        FloorDivide,  ///< Floor-rounded arithmetic division.
+        Copy,     ///< Copy one operand into the destination.
+        Call,     ///< Call the function supplied as the first operand.
+        Add,      ///< Arithmetic addition.
+        Subtract, ///< Arithmetic subtraction.
+        Multiply, ///< Arithmetic multiplication.
+        Divide,   ///< Truncating arithmetic division.
+        /// Rounded division `//`: nearest integer, halves away from zero.
+        /// The enumerator keeps its historical name; it never floors.
+        FloorDivide,
         Remainder,    ///< Arithmetic remainder.
         LessThan,     ///< Ordered less-than comparison.
         LessEqual,    ///< Ordered less-than-or-equal comparison.

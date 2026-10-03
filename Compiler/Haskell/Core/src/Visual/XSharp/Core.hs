@@ -46,7 +46,9 @@ data CorePrimitive
       CoreMultiply
     | -- | Truncating division.
       CoreDivide
-    | -- | Floor division.
+    | {- | Rounded division @//@: nearest integer, halves away from zero. The
+      constructor keeps its historical name; it never floors.
+      -}
       CoreFloorDivide
     | -- | Remainder operation.
       CoreRemainder

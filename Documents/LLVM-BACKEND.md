@@ -52,8 +52,12 @@ exists.
 Every branch and jump target must belong to the current function. Branch conditions must be `Bool`; returns must match the
 declared function result. Calls resolve by stable symbol identity and must match their complete function signature.
 
-Integer division uses signed LLVM division. Floor division additionally adjusts a truncated quotient when the remainder is
-nonzero and operand signs differ, preserving mathematical floor semantics for negative operands.
+Integer division uses signed LLVM division. Rounded division `//`, which the IR names `FloorDivide` for historical reasons,
+rounds to the nearest integer with exact halves away from zero, as the specification requires: `7 // 2` is `4` and
+`-7 // 2` is `-4`. The backend adjusts the truncated quotient by one, away from zero, when twice the remainder's magnitude
+reaches the divisor's magnitude. It does not floor: `1 // 2` is `1`, not `0`.
+`Compiler/Backend/LLVM/Tests/ArithmeticExecutionTests.cpp` executes the specification examples and every sign
+combination of small operands through both native optimizer settings.
 
 Numeric boolean context is normalized before Xpp. A branch therefore receives a canonical boolean value rather than asking
 LLVM to reinterpret every integer width differently. This keeps source semantics out of the backend and lets the Xmm

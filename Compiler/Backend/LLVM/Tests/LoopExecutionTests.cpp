@@ -261,7 +261,7 @@ TEST_CASE("for-loop accepts a numeric condition and an empty update",
           "[llvm][loop][execution]")
 {
     std::int64_t expected{};
-    for (std::int64_t index = 0; 3 - index; ++index)
+    for (std::int64_t index = 0; 3 - index != 0; ++index)
         expected += index;
     CheckBothPipelines(
         LoopModule(Core::Statement::For(
@@ -396,5 +396,130 @@ TEST_CASE("nested loops transfer only within their own loop",
         body.insert(body.begin() + 2, Declare(kInner));
         CAPTURE(limit);
         CheckBothPipelines(module, expected);
+    }
+}
+
+TEST_CASE("return inside a loop leaves the function with the current value",
+          "[llvm][loop][execution]")
+{
+    // for (index = 0; index < limit; index++) {
+    //     if (index == 4) { return total + 1000; }
+    //     total = total + index;
+    // }
+    // return total;
+    for (std::int64_t limit = 0; limit < kLimits; ++limit)
+    {
+        const auto host = [limit]() -> std::int64_t {
+            std::int64_t total{};
+            for (std::int64_t index = 0; index < limit; ++index)
+            {
+                if (index == 4)
+                    return total + 1000;
+                total += index;
+            }
+            return total;
+        };
+        CAPTURE(limit);
+        CheckBothPipelines(
+            LoopModule(Core::Statement::For(
+                Compare(Core::Primitive::LessThan, kIndex, limit),
+                { Core::Statement::If(
+                      Compare(Core::Primitive::Equal, kIndex, 4),
+                      { Core::Statement::Return(
+                          Core::Expression::InvokePrimitive(
+                              Core::Primitive::Add,
+                              { Variable(kTotal), Integer(1000) },
+                              Core::Type::int64())) },
+                      {}),
+                  Add(kTotal, Variable(kIndex)) },
+                { Increment(kIndex) })),
+            host());
+    }
+}
+
+TEST_CASE("return from a nested loop skips every enclosing update",
+          "[llvm][loop][execution]")
+{
+    // The inner loop returns from inside a while that sits in a for body;
+    // neither the inner increment nor the outer update may run afterwards.
+    for (std::int64_t limit = 0; limit < 7; ++limit)
+    {
+        const auto host = [limit]() -> std::int64_t {
+            std::int64_t total{};
+            for (std::int64_t index = 0; index < limit; ++index)
+            {
+                std::int64_t inner{};
+                while (inner < 3)
+                {
+                    if (index == 2 && inner == 1)
+                        return total * 10 + index;
+                    total += inner;
+                    ++inner;
+                }
+            }
+            return total;
+        };
+        auto reset
+            = Core::Statement::Assign({ kInner, Spelling(kInner) }, Integer(0));
+        auto module = LoopModule(Core::Statement::For(
+            Compare(Core::Primitive::LessThan, kIndex, limit),
+            { reset,
+              Core::Statement::While(
+                  Compare(Core::Primitive::LessThan, kInner, 3),
+                  { Core::Statement::If(
+                        Compare(Core::Primitive::Equal, kIndex, 2),
+                        { When(kInner,
+                               1,
+                               Core::Statement::Return(
+                                   Core::Expression::InvokePrimitive(
+                                       Core::Primitive::Add,
+                                       { Core::Expression::InvokePrimitive(
+                                             Core::Primitive::Multiply,
+                                             { Variable(kTotal), Integer(10) },
+                                             Core::Type::int64()),
+                                         Variable(kIndex) },
+                                       Core::Type::int64()))) },
+                        {}),
+                    Add(kTotal, Variable(kInner)),
+                    Increment(kInner) }) },
+            { Increment(kIndex) }));
+        auto &body = module.functions.front().body;
+        body.insert(body.begin() + 2, Declare(kInner));
+        CAPTURE(limit);
+        CheckBothPipelines(module, host());
+    }
+}
+
+TEST_CASE("do-while returns from its body before the trailing test",
+          "[llvm][loop][execution]")
+{
+    for (std::int64_t limit = 0; limit < kLimits; ++limit)
+    {
+        const auto host = [limit]() -> std::int64_t {
+            std::int64_t total{};
+            std::int64_t index{};
+            do
+            {
+                ++index;
+                if (index == 6)
+                    return -total;
+                total += index;
+            } while (index < limit);
+            return total;
+        };
+        CAPTURE(limit);
+        CheckBothPipelines(
+            LoopModule(Core::Statement::DoWhile(
+                { Increment(kIndex),
+                  When(
+                      kIndex,
+                      6,
+                      Core::Statement::Return(Core::Expression::InvokePrimitive(
+                          Core::Primitive::Negate,
+                          { Variable(kTotal) },
+                          Core::Type::int64()))),
+                  Add(kTotal, Variable(kIndex)) },
+                Compare(Core::Primitive::LessThan, kIndex, limit))),
+            host());
     }
 }

@@ -1,0 +1,75 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+name: Clang-Tidy
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clang-tidy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Ubuntu 26.04 Clang-Tidy
+    runs-on: ubuntu-26.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+
+      - name: Configure Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.x
+          cache: false
+
+      - name: Configure Bazel
+        uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: compiler-ubuntu-2604-clang
+          repository-cache: true
+
+      - name: Install LLVM development, link and analysis packages
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang clang-tidy lld llvm-dev libzstd-dev libxml2-dev zlib1g-dev
+          llvm_root="$(llvm-config --prefix)"
+          echo "LLVM_ROOT=$llvm_root" >> "$GITHUB_ENV"
+          test -f "$(clang -print-resource-dir)/include/stddef.h"
+          clang-tidy --version
+
+      - name: Install GHC and Cabal
+        uses: haskell/ghcup-setup@269e121e9e7528761aca5a606a53fe9d04cd6658 # ghcup-setup
+        with:
+          ghc: 9.10.3
+          cabal: 3.16.1.0
+
+      - name: Resolve frontend package index
+        shell: bash
+        working-directory: Compiler
+        run: cabal update
+
+      # The helper builds the native targets first: clang-tidy needs the
+      # generated and fetched headers, and it analyzes each translation unit
+      # with the exact command Bazel compiled it with.
+      - name: Analyze first-party C++ with the repository configuration
+        shell: bash
+        run: go run ./helpers/cmd/develop tidy
+
+  required:
+    name: Clang-Tidy Required
+    runs-on: ubuntu-26.04
+    if: always()
+    needs: [analyze]
+    steps:
+      - name: Require a clean analysis
+        run: test '${{ needs.analyze.result }}' = success

@@ -37,7 +37,8 @@ namespace Visual::XSharp::Backend::LLVM
 {
     namespace
     {
-        constexpr std::size_t kMaximumJitBitcodeBytes = 256U * 1024U * 1024U;
+        constexpr std::size_t kMaximumJitBitcodeBytes
+            = std::size_t{ 256U } * 1024U * 1024U;
 
         [[nodiscard]] auto
         IsSupportedInvocationType(const Core::Type &type) -> bool

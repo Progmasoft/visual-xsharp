@@ -14,7 +14,7 @@
 
 namespace Visual::XSharp::Interactive
 {
-    enum class CellStatus
+    enum class CellStatus : std::uint8_t
     {
         Value,
         Void,

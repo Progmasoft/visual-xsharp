@@ -40,8 +40,10 @@ The Haskell package exposes separate modules for:
 The current language slice covers namespace and class declarations, member methods, typed and inferred local bindings,
 assignments, compound assignments, the discard statement, calls, returns, conditionals, conditional and truthy-coalescing
 expressions over `bool` and numeric values, core operator precedence, entry-point validation, and basic CorePrep control flow.
-Assignment is a statement: the value-producing forms `a = b = 10` and `(value += 5)`, null coalescing `??`, and `??=` are not
-implemented.
+Assignment, compound assignment and `++` are also expressions over named locals: `a = b = 10`, `(value += 5)`, `a++`. There
+is no decrement operator; `--` always starts a comment. A `while` or classic `for` loop is an expression when a
+`break value;` supplies its value. Null coalescing `??` and `??=`, storage targets other than a named local, loop values
+that are not `bool` or numeric, and `return` inside a loop expression are not implemented.
 It does not yet implement the complete language catalog in `Spec/`.
 
 Core optimization is connected, verifier-guarded, and fixed-point driven. It performs immutable literal propagation,

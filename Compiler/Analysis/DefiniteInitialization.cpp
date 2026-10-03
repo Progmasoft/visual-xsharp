@@ -300,15 +300,16 @@ namespace Visual::XSharp::Analysis
                                   0U });
                     }
 
-                    if (!access.write)
+                    const auto write = access.write;
+                    if (!write)
                         continue;
-                    const auto index = catalog.Find(*access.write);
+                    const auto index = catalog.Find(*write);
                     if (!index)
                         issues.push_back({ IssueKind::UnknownWriteStorage,
                                            block.id,
                                            access.instruction,
                                            access.terminator,
-                                           *access.write,
+                                           *write,
                                            0U });
                     else
                         initialized.Set(*index);

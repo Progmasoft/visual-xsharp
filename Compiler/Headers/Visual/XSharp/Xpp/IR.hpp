@@ -18,13 +18,15 @@ namespace visual_xsharp::xpp
     /// Typed operation encoded by an Xpp instruction.
     enum class Opcode : std::uint8_t
     {
-        Copy,                ///< Copy an operand to the destination.
-        Call,                ///< Invoke the function in the first operand.
-        Add,                 ///< Arithmetic addition.
-        Subtract,            ///< Arithmetic subtraction.
-        Multiply,            ///< Arithmetic multiplication.
-        Divide,              ///< Truncating division.
-        FloorDivide,         ///< Floor-rounded division.
+        Copy,     ///< Copy an operand to the destination.
+        Call,     ///< Invoke the function in the first operand.
+        Add,      ///< Arithmetic addition.
+        Subtract, ///< Arithmetic subtraction.
+        Multiply, ///< Arithmetic multiplication.
+        Divide,   ///< Truncating division.
+        /// Rounded division `//`: nearest integer, halves away from zero.
+        /// The enumerator keeps its historical name; it never floors.
+        FloorDivide,
         Remainder,           ///< Arithmetic remainder.
         CompareLess,         ///< Ordered less-than comparison.
         CompareLessEqual,    ///< Ordered less-than-or-equal comparison.

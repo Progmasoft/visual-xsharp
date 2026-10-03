@@ -60,7 +60,7 @@ namespace
         instruction.captures.push_back(Core::Capture{
             mode,
             Name(4U, U"count"),
-            captureType,
+            std::move(captureType),
             Integer(0),
         });
         return instruction;

@@ -113,11 +113,15 @@ namespace Visual::XSharp::Xmm::Wire
                 std::string context) -> std::uint8_t
         {
             const auto tag = reader.Byte(context);
-            if (!reader.Failure() && tag > maximum)
+            if (tag <= maximum)
+                return tag;
+            if (!reader.Failure())
                 reader.Fail(ErrorKind::InvalidTag,
                             std::move(context),
                             "wire tag is outside the stage catalog");
-            return tag;
+            // The document is already rejected. Returning the first catalog
+            // entry keeps the caller's enumeration cast in range.
+            return 0U;
         }
 
         [[nodiscard]] auto

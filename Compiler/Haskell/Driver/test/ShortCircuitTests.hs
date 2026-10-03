@@ -409,7 +409,12 @@ hasComparisonToZero valueType = any comparison . allInstructions
                 && any ((== valueType) . atomType) operands
                 && any isZero operands
         comparison _ = False
-        isZero (CorePrepLiteral (CoreInteger 0) literalType) = literalType == valueType
+        -- The zero has the literal form of the operand type, as the native
+        -- adapter spells it: a floating operand is compared with a floating
+        -- zero, never with an integer payload under a floating type.
+        isZero (CorePrepLiteral literal literalType) =
+            literalType == valueType
+                && literal == (if valueType == floatType then CoreFloating "0" else CoreInteger 0)
         isZero _ = False
 
 atomType :: CorePrepAtom -> Type

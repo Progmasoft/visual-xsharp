@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <vector>
@@ -29,7 +30,7 @@ namespace Visual::XSharp::Core::Callable
     };
 
     /// Reason a lifted closure target does not match its public signature.
-    enum class ClosureContractError
+    enum class ClosureContractError : std::uint8_t
     {
         None,                         ///< No signature mismatch was found.
         ResultIsNotCallable,          ///< Public result type is not a function.

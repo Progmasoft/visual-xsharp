@@ -418,6 +418,8 @@ namespace visual_xsharp::core::wire
                                  "null literal",
                                  "null tag requires an AARC reference type");
                         return std::monostate{};
+                    default:
+                        break;
                 }
                 fail(ErrorKind::InvalidTag,
                      "literal tag",

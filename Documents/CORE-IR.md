@@ -93,7 +93,7 @@ second argument of `System.Array<T, N>` as a type would make specialization
 identity unsound and prevent `[T; N]` from reaching Core.
 
 Concrete fixed-array size expressions are evaluated exactly by TypeChecker.
-Host integer width is irrelevant. Division, floor division, and remainder by
+Host integer width is irrelevant. Division, rounded division `//`, and remainder by
 zero are diagnosed; a negative or non-integer fixed size is rejected. Calls,
 closures, strings, and floating values cannot enter fixed-array type syntax as
 compile-time sizes.
@@ -169,6 +169,9 @@ storage type.
 Assignment is a statement, not a value expression. An optimizer may remove a
 dead write only when it preserves evaluation effects of the right-hand side and
 retains the storage declaration required by any surviving write.
+
+No Core expression writes a local. Source expressions that do are lowered to
+statements before Core; see "Source expressions that store" below.
 
 ### Return
 
@@ -305,6 +308,45 @@ verification rejects one identity with two spellings, so a counter seeded
 from a single function would reuse another function's symbols.
 `SymbolAllocationTests.cpp` covers this for multi-function modules and
 closures.
+
+### Source expressions that store
+
+The source language has expressions that write a local: `a = b`, `a += b`,
+`++a`, `a++`, and a loop used as an expression, whose `break value;`
+supplies its result. Core has no such expression. The Desugarer lowers each of
+them to a pair: statements that perform the stores, and a store-free
+expression that reads the result. Every Core optimization may therefore keep
+assuming that only `CoreAssign` and `CoreBind` change a local.
+
+The statements run where the source evaluates the expression:
+
+- Operands are evaluated left to right. When a later operand has statements,
+  an earlier operand is bound to an immutable `$operand` temporary first,
+  unless it is a literal or reads a local those statements do not assign. So
+  `a + (a = 5)` reads `a` before the store, and `Next() + (a = 5)` calls
+  `Next` before it.
+- A postfix form keeps the previous value in `$previous`. A compound
+  assignment whose right operand assigns its own target keeps the earlier
+  target value in `$target`.
+- A conditional result, the right operand of `&&` or `||`, and a coalescing
+  fallback are evaluated lazily, so their statements move into a `CoreIf`
+  that assigns a mutable `$selected` or `$logical` slot. A form with no
+  storing operand keeps its expression lowering unchanged.
+- A loop condition with statements moves to the top of the loop body as
+  `if (condition) { } else { break; }` under an always-true header, so the
+  statements run before every test, including the one after `continue`. A
+  `for` keeps its update list in the update position. A `do`/`while` runs its
+  body before the first test, which a mutable `$first` flag records.
+- A loop expression binds a mutable `$loop` slot, runs its loop, and each
+  `break value;` assigns the slot and then breaks. The type checker has
+  established that the loop cannot end any other way.
+
+`Visual.XSharp.Desugarer.Sequencing` holds these rules. Result slots are
+initialized with a neutral literal of their type that no path can observe.
+`AssignmentExpressionTests.hs` and `LoopExpressionTests.hs` pin the shapes and
+run a reference Core evaluator, `CoreInterpreter.hs`, on the unoptimized and
+on the optimized Core against hand-written results. The same programs run
+through CorePrep, Xpp, Xmm, LLVM and the ORC JIT in `source_fuzz_smoke`.
 
 ## Expressions
 
