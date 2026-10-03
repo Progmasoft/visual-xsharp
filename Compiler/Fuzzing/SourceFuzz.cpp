@@ -426,7 +426,8 @@ namespace Visual::XSharp::Fuzzing
                 return { Frontend::Status::InvalidRequest,
                          Frontend::OutputKind::ErrorText,
                          {},
-                         "source fuzz input exceeds 64 KiB" };
+                         "source fuzz input exceeds 64 KiB",
+                         {} };
             auto stages = Frontend::FuzzCompileStages(source);
             if (!stages.core.succeeded()
                 || stages.core.kind != Frontend::OutputKind::CoreWire)

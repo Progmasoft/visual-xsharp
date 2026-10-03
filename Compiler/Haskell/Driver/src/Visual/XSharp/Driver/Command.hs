@@ -22,6 +22,7 @@ import Visual.XSharp.Core (CoreModule)
 import Visual.XSharp.Core.Wire
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.SourceSet
+import Visual.XSharp.SourceWarnings
 
 {- | Output tags are part of the private in-process ABI, not public artifact
 names. Each output is borrowed only for the synchronous native callback.
@@ -33,9 +34,14 @@ data FrontendOutputKind
     | ErrorTextOutput
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 
--- | Owned result of one private frontend request, ready for native consumption.
+{- | Owned result of one private frontend request, ready for native consumption.
+
+A success carries the warnings of the sources it compiled. A rejection lists
+its errors first and the warnings after them, because a warning often
+explains the error that follows it in the same statement.
+-}
 data FrontendOutcome
-    = FrontendSuccess FrontendOutputKind ByteString.ByteString
+    = FrontendSuccess FrontendOutputKind ByteString.ByteString [Diagnostic]
     | FrontendDiagnostics [Diagnostic]
     | FrontendFailure String
 
@@ -165,16 +171,20 @@ executeCommand command = case command of
         loaded <- loadSourceFile source
         case loaded of
             Left diagnostics -> pure (FrontendDiagnostics diagnostics)
-            Right document -> case compileToCorePrep (CompilerInput (loadedSourceRelativePath document) (loadedSourceText document)) of
-                Left diagnostics -> pure (FrontendDiagnostics diagnostics)
-                Right artifacts -> encodeCoreOutcome (artifactOptimizedCore artifacts)
+            Right document ->
+                let warnings = loadedSourceWarnings document
+                 in case compileToCorePrep (CompilerInput (loadedSourceRelativePath document) (loadedSourceText document)) of
+                        Left diagnostics -> pure (FrontendDiagnostics (diagnostics ++ warnings))
+                        Right artifacts -> encodeCoreOutcome warnings (artifactOptimizedCore artifacts)
     CompileProject root entry roots excludes -> do
         loaded <- loadSourceSet (SourceSetRequest root roots excludes)
         case loaded of
             Left diagnostics -> pure (FrontendDiagnostics diagnostics)
-            Right documents -> case compileProjectToCorePrep entry (map toProjectCompilerInput documents) of
-                Left diagnostics -> pure (FrontendDiagnostics diagnostics)
-                Right artifacts -> encodeCoreOutcome (projectEntryCore artifacts)
+            Right documents ->
+                let warnings = concatMap loadedSourceWarnings documents
+                 in case compileProjectToCorePrep entry (map toProjectCompilerInput documents) of
+                        Left diagnostics -> pure (FrontendDiagnostics (diagnostics ++ warnings))
+                        Right artifacts -> encodeCoreOutcome warnings (projectEntryCore artifacts)
     ListProjectSources root roots excludes -> do
         discovered <- discoverSourceSet (SourceSetRequest root roots excludes)
         pure $ case discovered of
@@ -183,11 +193,15 @@ executeCommand command = case command of
                 FrontendSuccess
                     ProjectSourceListOutput
                     (Text.encodeUtf8 (Text.pack (concatMap (++ "\0") paths)))
+                    []
 
 toProjectCompilerInput :: LoadedSource -> CompilerInput
 toProjectCompilerInput source = CompilerInput (loadedSourceRelativePath source) (loadedSourceText source)
 
-encodeCoreOutcome :: CoreModule -> IO FrontendOutcome
-encodeCoreOutcome core = pure $ case encodeCore defaultCoreWireLimits core of
+loadedSourceWarnings :: LoadedSource -> [Diagnostic]
+loadedSourceWarnings source = sourceWarnings (loadedSourceRelativePath source) (loadedSourceText source)
+
+encodeCoreOutcome :: [Diagnostic] -> CoreModule -> IO FrontendOutcome
+encodeCoreOutcome warnings core = pure $ case encodeCore defaultCoreWireLimits core of
     Left issue -> FrontendFailure ("could not encode verified Core: " ++ show issue)
-    Right bytes -> FrontendSuccess CoreWireOutput (ByteString.pack bytes)
+    Right bytes -> FrontendSuccess CoreWireOutput (ByteString.pack bytes) warnings

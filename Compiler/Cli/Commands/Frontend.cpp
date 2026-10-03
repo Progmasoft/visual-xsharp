@@ -68,6 +68,9 @@ namespace Visual::XSharp::Cli::Frontend
             // single-payload contract.
             bool acceptCorePrep{};
             std::optional<std::vector<std::uint8_t>> corePrep;
+            // Warning text of a successful request. It arrives before the
+            // payload and at most once.
+            std::optional<std::string> warnings;
         };
 
         auto
@@ -190,7 +193,7 @@ namespace Visual::XSharp::Cli::Frontend
                     || fuzzSyntax_ == nullptr || compileSource_ == nullptr
                     || fuzzCompile_ == nullptr)
                 {
-                    error_ = "frontend library is missing a required ABI v1 "
+                    error_ = "frontend library is missing a required ABI v2 "
                              "symbol";
                     Close();
                     return;
@@ -205,7 +208,7 @@ namespace Visual::XSharp::Cli::Frontend
                 // Even the version function is a Haskell `foreign export` and
                 // enters the RTS. Initialize before calling any exported
                 // function, then shut down cleanly if the ABI is incompatible.
-                if (abiVersion_() != 1U)
+                if (abiVersion_() != 2U)
                 {
                     error_ = "frontend library ABI version is incompatible";
                     shutdown_();
@@ -325,10 +328,25 @@ namespace Visual::XSharp::Cli::Frontend
                       const std::uint8_t *bytes,
                       std::size_t size) noexcept -> std::int32_t
         {
-            if (context == nullptr || rawKind > 4U
+            if (context == nullptr || rawKind > 5U
                 || (size != 0U && bytes == nullptr))
                 return 1;
             auto &captured = *static_cast<CapturedOutput *>(context);
+            if (static_cast<OutputKind>(rawKind) == OutputKind::WarningText)
+            {
+                // Warnings never stand for a result: they are accepted once
+                // and only while no payload has been delivered.
+                if (captured.kind.has_value() || captured.warnings.has_value()
+                    || size > kMaximumDiagnosticBytes)
+                {
+                    captured.error = "frontend emitted an unexpected warning "
+                                     "payload";
+                    return 1;
+                }
+                captured.warnings.emplace(reinterpret_cast<const char *>(bytes),
+                                          size);
+                return 0;
+            }
             if (static_cast<OutputKind>(rawKind) == OutputKind::CorePrepWire)
             {
                 // CorePrep is accepted once, only after Core, and only on
@@ -378,6 +396,8 @@ namespace Visual::XSharp::Cli::Frontend
             result.kind = output.kind.value_or(OutputKind::ErrorText);
             result.bytes = std::move(output.bytes);
             result.error = std::move(output.error);
+            if (output.warnings)
+                result.warnings = std::move(*output.warnings);
             if (rawStatus < 0 || rawStatus > 4)
             {
                 result.status = Status::InternalError;
@@ -422,14 +442,16 @@ namespace Visual::XSharp::Cli::Frontend
             return { Status::InternalError,
                      OutputKind::ErrorText,
                      {},
-                     frontend.Error() };
+                     frontend.Error(),
+                     {} };
         std::vector<std::uint8_t> blob;
         if (!BuildArgumentBlob(arguments, blob))
             return {
                 Status::InvalidRequest,
                 OutputKind::ErrorText,
                 {},
-                "private frontend arguments are empty, malformed, or too large"
+                "private frontend arguments are empty, malformed, or too large",
+                {}
             };
         CapturedOutput output;
         const auto status = frontend.Execute(blob.data(), blob.size(), output);
@@ -444,12 +466,14 @@ namespace Visual::XSharp::Cli::Frontend
             return { Status::InternalError,
                      OutputKind::ErrorText,
                      {},
-                     frontend.Error() };
+                     frontend.Error(),
+                     {} };
         if (source.size() > kMaximumArgumentBytes)
             return { Status::InvalidRequest,
                      OutputKind::ErrorText,
                      {},
-                     "source exceeds the 1 MiB in-memory compile limit" };
+                     "source exceeds the 1 MiB in-memory compile limit",
+                     {} };
         CapturedOutput output;
         const auto status
             = frontend.CompileSource(source.data(), source.size(), output);
@@ -476,7 +500,8 @@ namespace Visual::XSharp::Cli::Frontend
             return { Status::InternalError,
                      OutputKind::ErrorText,
                      {},
-                     frontend.Error() };
+                     frontend.Error(),
+                     {} };
         CapturedOutput output;
         output.acceptCorePrep = true;
         const auto status
@@ -492,7 +517,8 @@ namespace Visual::XSharp::Cli::Frontend
             return { { Status::InternalError,
                        OutputKind::ErrorText,
                        {},
-                       frontend.Error() },
+                       frontend.Error(),
+                       {} },
                      {} };
         CapturedOutput output;
         output.acceptCorePrep = true;

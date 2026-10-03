@@ -25,7 +25,8 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   locals. Operands are evaluated left to right.
 - Removed the decrement operator. `--` now starts a comment wherever it stands
   outside a string, including directly after a value, so `value--;` no longer
-  decrements and is not diagnosed. Use `value -= 1`.
+  decrements. Use `value -= 1`. The spellings `value--;` and `--value;` are
+  still accepted as comments and now produce the warning `VXL0009`.
 - A `while` or classic `for` loop is an expression when `break value;`
   supplies its value. The loop must not be able to end without one: its
   condition is the constant `true`, or absent in a `for`. Loop values are
@@ -46,6 +47,18 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 - Expressions that store into a local are lowered to statements by the
   Desugarer, so Core, its wire format, the optimizer, CorePrep and the native
   pipeline are unchanged and no Core expression writes a local.
+- The frontend ABI is now version 2. A successful request may deliver its
+  warnings as output kind `VXS_FRONTEND_WARNING_TEXT` before the result; the
+  compiler prints them, hides them under `-Warnings none`, and fails under
+  `-Werror true`. A compiler and a frontend library of different ABI versions
+  refuse to load together.
+- The Haskell CorePrep lowering now compares a floating value with a floating
+  zero when it becomes a Boolean, as the native adapter already did. Only the
+  native lowering reaches code generation, so compiled programs are unchanged;
+  the two lowerings are now compared on floating conditions as well.
+- The native Core-to-CorePrep adapter now writes fixed-width integer constants
+  in the canonical integer form the CorePrep reader produces, so a lowered
+  module is equal to its own wire round trip.
 
 ## 0.4.0 - 2026-09-27
 

@@ -25,7 +25,7 @@
       "patterns": [
         {
           "name": "comment.block.documentation.visual-xsharp",
-          "begin": "(?<![A-Za-z0-9_)\\]])--\\[(=*)\\[\\|",
+          "begin": "--\\[(=*)\\[\\|",
           "beginCaptures": {
             "0": { "name": "punctuation.definition.comment.begin.visual-xsharp" }
           },
@@ -36,7 +36,7 @@
         },
         {
           "name": "comment.block.documentation.namespace.visual-xsharp",
-          "begin": "(?<![A-Za-z0-9_)\\]])--\\[(=*)\\[!",
+          "begin": "--\\[(=*)\\[!",
           "beginCaptures": {
             "0": { "name": "punctuation.definition.comment.begin.visual-xsharp" }
           },
@@ -47,7 +47,7 @@
         },
         {
           "name": "comment.block.visual-xsharp",
-          "begin": "(?<![A-Za-z0-9_)\\]])--\\[(=*)\\[",
+          "begin": "--\\[(=*)\\[",
           "beginCaptures": {
             "0": { "name": "punctuation.definition.comment.begin.visual-xsharp" }
           },
@@ -58,15 +58,15 @@
         },
         {
           "name": "comment.line.documentation.visual-xsharp",
-          "match": "(?<![A-Za-z0-9_)\\]])--\\|.*$"
+          "match": "--\\|.*$"
         },
         {
           "name": "comment.line.documentation.namespace.visual-xsharp",
-          "match": "(?<![A-Za-z0-9_)\\]])--!.*$"
+          "match": "--!.*$"
         },
         {
           "name": "comment.line.double-dash.visual-xsharp",
-          "match": "(?<![A-Za-z0-9_)\\]])--.*$"
+          "match": "--.*$"
         }
       ]
     },
@@ -358,7 +358,7 @@
         },
         {
           "name": "keyword.operator.increment.visual-xsharp",
-          "match": "\\+\\+|--"
+          "match": "\\+\\+"
         },
         {
           "name": "keyword.operator.method-reference.visual-xsharp",

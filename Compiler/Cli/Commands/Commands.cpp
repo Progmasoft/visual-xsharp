@@ -221,7 +221,8 @@ namespace
             return { Visual::XSharp::Cli::Frontend::Status::InternalError,
                      Visual::XSharp::Cli::Frontend::OutputKind::ErrorText,
                      {},
-                     error.message() };
+                     error.message(),
+                     {} };
         }
         std::vector<std::string> arguments{ "--project-root",
                                             PathText(projectRoot),
@@ -284,7 +285,8 @@ namespace
             return { Visual::XSharp::Cli::Frontend::Status::InternalError,
                      Visual::XSharp::Cli::Frontend::OutputKind::ErrorText,
                      {},
-                     error.message() };
+                     error.message(),
+                     {} };
         std::vector<std::string> arguments{ "--project-root",
                                             PathText(projectRoot),
                                             "--list-sources" };
@@ -316,6 +318,23 @@ namespace
                            result.bytes.size()));
         if (!result.error.empty())
             fmt::print(stderr, "vxs: frontend: {}\n", result.error);
+        return false;
+    }
+
+    /// Print the warnings of an accepted compilation and apply the warning
+    /// policy. `-Warnings none` hides them; `-Werror true` fails the command
+    /// after printing them, without changing what they say.
+    [[nodiscard]] auto
+    FrontendWarningsAllowed(const Visual::XSharp::Cli::Frontend::Result &result,
+                            const CompilerSettings &settings) -> bool
+    {
+        if (result.warnings.empty()
+            || settings.warningLevel == WarningLevel::kNone)
+            return true;
+        fmt::print(stderr, "{}", result.warnings);
+        if (!settings.warningsAsErrors)
+            return true;
+        fmt::print(stderr, "vxs: warnings are treated as errors (-Werror)\n");
         return false;
     }
 
@@ -632,7 +651,8 @@ namespace
         }
         const auto core = RunFileFrontend(source);
         if (!FrontendSucceeded(core)
-            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire)
+            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire
+            || !FrontendWarningsAllowed(core, effective.compiler))
             return 1;
         const auto sourceText = PathText(source);
         // Every source command crosses the same verified Core consumer. `check`
@@ -807,7 +827,8 @@ namespace
 
         const auto core = RunProjectFrontend(project);
         if (!FrontendSucceeded(core)
-            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire)
+            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire
+            || !FrontendWarningsAllowed(core, effective.compiler))
             return 1;
 
         std::error_code pathError;
