@@ -470,7 +470,11 @@ namespace Visual::XSharp::Core::Wire
                                 return ReadExpression(depth + 1U);
                             });
                         return Expression::InvokePrimitive(
-                            static_cast<Primitive>(primitiveTag),
+                            // A rejected tag never becomes an enumerator.
+                            primitiveTag > static_cast<std::uint8_t>(
+                                Primitive::TypeIs)
+                                ? Primitive::Add
+                                : static_cast<Primitive>(primitiveTag),
                             std::move(arguments),
                             std::move(valueType));
                     }
@@ -546,7 +550,9 @@ namespace Visual::XSharp::Core::Wire
                 auto type = ReadType();
                 auto value = ReadExpression(depth);
                 Capture capture;
-                capture.mode = static_cast<CaptureMode>(tag);
+                // A rejected tag never becomes an enumerator.
+                capture.mode = tag > 2U ? CaptureMode::Strong
+                                        : static_cast<CaptureMode>(tag);
                 capture.symbol = std::move(symbol);
                 capture.type = std::move(type);
                 capture.value = std::make_shared<Expression>(std::move(value));

@@ -32,6 +32,8 @@ extern "C"
                                                     size_t size);
 
     /** @brief Output categories transferred across the in-process ABI. */
+    /* A C11 enumeration has no selectable base type. */
+    /* NOLINTNEXTLINE(performance-enum-size) */
     enum vxs_frontend_output_kind
     {
         /** Verified Core wire bytes ready for the native pipeline. */
@@ -47,6 +49,8 @@ extern "C"
     };
 
     /** @brief Stable result codes returned by frontend ABI entry points. */
+    /* A C11 enumeration has no selectable base type. */
+    /* NOLINTNEXTLINE(performance-enum-size) */
     enum vxs_frontend_status
     {
         /** The requested operation completed and delivered its output. */

@@ -52,7 +52,7 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                     DenseBitSet(handleCount),
                 }
             {
-                for (std::uint8_t bit = 0U; bit < states_.size(); ++bit)
+                for (std::size_t bit = 0U; bit < states_.size(); ++bit)
                     if ((initial & (StateMask{ 1U } << bit)) != 0U)
                         states_[bit].Fill();
             }
@@ -63,7 +63,7 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
                 if (index >= handleCount_)
                     return kAbsent;
                 StateMask result{};
-                for (std::uint8_t bit = 0U; bit < states_.size(); ++bit)
+                for (std::size_t bit = 0U; bit < states_.size(); ++bit)
                     if (states_[bit].Test(index))
                         result = static_cast<StateMask>(
                             result | (StateMask{ 1U } << bit));
@@ -75,7 +75,7 @@ namespace Visual::XSharp::Analysis::OwnershipFlow
             {
                 if (index >= handleCount_)
                     return;
-                for (std::uint8_t bit = 0U; bit < states_.size(); ++bit)
+                for (std::size_t bit = 0U; bit < states_.size(); ++bit)
                     states_[bit].Assign(index,
                                         (value & (StateMask{ 1U } << bit))
                                             != 0U);

@@ -4,6 +4,13 @@
 ---
 # Naming checks are intentionally absent. Visual X# retains its established
 # PascalCase functions/types/namespaces and camelCase local-variable contract.
+#
+# Two checks are disabled because they contradict a repository convention:
+# - portability-avoid-pragma-once: every first-party header uses `#pragma once`,
+#   which Clang, GCC and MSVC all implement.
+# - readability-redundant-member-init: aggregate members keep an explicit `{}`
+#   so brace initialization that omits trailing fields stays clean under
+#   -Wmissing-field-initializers, which the build treats as an error.
 Checks: >
   -*,
   clang-analyzer-*,
@@ -41,6 +48,8 @@ Checks: >
   readability-static-accessed-through-instance,
   readability-uniqueptr-delete-release,
   -bugprone-easily-swappable-parameters,
+  -portability-avoid-pragma-once,
+  -readability-redundant-member-init,
   -bugprone-exception-escape,
   -bugprone-unhandled-code-paths,
   -modernize-use-auto,
@@ -59,8 +68,11 @@ HeaderFileExtensions:
 ImplementationFileExtensions:
   - c
   - cpp
-HeaderFilterRegex: '.*/(Compiler|Analyzer|Formatter|Linter|tests|include)/.*'
-ExcludeHeaderFilterRegex: '(^|.*/)(bazel-.*|build|vendor|third_party|external|subprojects)/.*'
+# Bazel exposes the public headers under bazel-out/<config>/bin/_virtual_includes,
+# so that tree must be analyzed too. Fetched repositories live under an
+# external/ directory in both the source and the output tree and stay excluded.
+HeaderFilterRegex: '(^|.*/)(Compiler|Interactive|Benchmarks|Analyzer|Formatter|Linter|_virtual_includes)/.*'
+ExcludeHeaderFilterRegex: '(^|.*/)(build|vendor|third_party|external|subprojects)/.*'
 SystemHeaders: false
 FormatStyle: file
 InheritParentConfig: false

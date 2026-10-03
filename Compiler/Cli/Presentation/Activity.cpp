@@ -30,8 +30,12 @@ namespace Visual::XSharp::Cli
             // pipes must remain stable input for tools, so environment and TTY
             // checks are both required before emitting a single carriage
             // return.
+            // The environment is read on the calling thread before the
+            // spinner thread exists, and this process never modifies it.
+            // NOLINTNEXTLINE(concurrency-mt-unsafe)
             if (std::getenv("CI") != nullptr)
                 return false;
+            // NOLINTNEXTLINE(concurrency-mt-unsafe)
             if (const auto *term = std::getenv("TERM");
                 term != nullptr && std::string_view(term) == "dumb")
                 return false;

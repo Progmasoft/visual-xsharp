@@ -251,7 +251,6 @@ namespace Visual::XSharp::Xpp
                     switch (contract.error)
                     {
                         case ContractError::None:
-                            break;
                         case ContractError::ResultIsNotCallable:
                             // VXP1029 already reports this shape without
                             // duplicating it.

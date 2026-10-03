@@ -180,6 +180,8 @@ TEST_CASE("moving a worklist preserves pending state and statistics")
     CHECK(Drain(destination)
           == std::vector<Analysis::ControlFlowBlockId>{ 1U });
     CHECK(destination.Statistics().blockEvaluations == 2U);
+    // The moved-from state is the contract under test.
+    // NOLINTNEXTLINE(bugprone-use-after-move)
     CHECK(source.Empty());
 }
 
@@ -194,6 +196,8 @@ TEST_CASE("move assignment releases old state and adopts new work")
 
     first = std::move(second);
     CHECK(Drain(first) == secondFlow.reversePostorder);
+    // The moved-from state is the contract under test.
+    // NOLINTNEXTLINE(bugprone-use-after-move)
     CHECK(second.Empty());
 }
 
