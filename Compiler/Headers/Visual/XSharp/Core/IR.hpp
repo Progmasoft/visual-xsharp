@@ -25,11 +25,13 @@ namespace Visual::XSharp::Core
     /// Built-in operation represented directly in a typed Core expression.
     enum class Primitive : std::uint8_t
     {
-        Add,          ///< Arithmetic addition.
-        Subtract,     ///< Arithmetic subtraction.
-        Multiply,     ///< Arithmetic multiplication.
-        Divide,       ///< Truncating arithmetic division.
-        FloorDivide,  ///< Floor-rounded arithmetic division.
+        Add,      ///< Arithmetic addition.
+        Subtract, ///< Arithmetic subtraction.
+        Multiply, ///< Arithmetic multiplication.
+        Divide,   ///< Truncating arithmetic division.
+        /// Rounded division `//`: nearest integer, halves away from zero.
+        /// The enumerator keeps its historical name; it never floors.
+        FloorDivide,
         Remainder,    ///< Arithmetic remainder.
         LessThan,     ///< Ordered less-than comparison.
         LessEqual,    ///< Ordered less-than-or-equal comparison.

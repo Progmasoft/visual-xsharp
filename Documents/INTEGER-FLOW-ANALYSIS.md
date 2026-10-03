@@ -530,7 +530,7 @@ statistical performance gates.
 
 ## Effect inference and dead-code elimination
 
-Integer division, floor division, and remainder over integer types can fail
+Integer division, rounded division `//`, and remainder over integer types can fail
 when the divisor is zero. Without a proof, their local effect remains
 `FailureEffect`; a dead result must therefore remain observable. A literal
 nonzero divisor is immediately safe. A variable divisor is safe only when the
