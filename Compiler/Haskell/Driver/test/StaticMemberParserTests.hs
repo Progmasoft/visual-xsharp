@@ -429,6 +429,9 @@ spanOf expression = case expression of
     IsPatternExpression spanValue _ _ _ -> spanValue
     ConditionalExpression spanValue _ _ _ _ -> spanValue
     CoalesceExpression spanValue _ _ _ -> spanValue
+    AssignmentExpression spanValue _ _ _ _ -> spanValue
+    IncrementExpression spanValue _ _ _ -> spanValue
+    LoopExpression spanValue _ _ -> spanValue
     CallableExpression spanValue _ _ _ _ _ -> spanValue
 
 isLeft :: Either [a] b -> Bool -> Bool

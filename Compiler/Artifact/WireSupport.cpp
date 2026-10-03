@@ -695,6 +695,6 @@ namespace Visual::XSharp::Artifact::Wire
     IsUnicodeScalar(char32_t value) noexcept -> bool
     {
         const auto scalar = static_cast<std::uint32_t>(value);
-        return scalar <= 0x10ffffU && !(scalar >= 0xd800U && scalar <= 0xdfffU);
+        return scalar <= 0x10ffffU && (scalar < 0xd800U || scalar > 0xdfffU);
     }
 } // namespace Visual::XSharp::Artifact::Wire

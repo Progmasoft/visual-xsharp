@@ -54,7 +54,7 @@ foreign export ccall "vxs_frontend_fuzz_compile"
     frontendFuzzCompile :: Ptr Word8 -> CSize -> FunPtr OutputCallback -> Ptr () -> IO CInt
 
 frontendAbiVersion :: IO Word32
-frontendAbiVersion = pure 1
+frontendAbiVersion = pure 2
 
 frontendExecute :: Ptr Word8 -> CSize -> FunPtr OutputCallback -> Ptr () -> IO CInt
 frontendExecute argumentPointer argumentSize callback context =
@@ -65,12 +65,21 @@ frontendExecute argumentPointer argumentSize callback context =
             Right values -> do
                 outcome <- runFrontendArguments values
                 case outcome of
-                    FrontendSuccess kind bytes -> do
-                        sideChannel <- writeDiagnosticSideChannel []
+                    FrontendSuccess kind bytes warnings -> do
+                        sideChannel <- writeDiagnosticSideChannel warnings
                         case sideChannel of
                             Left issue -> emitBytes callback context 3 (Text.encodeUtf8 (Text.pack (show issue))) >> pure (CInt 3)
                             Right () -> do
-                                delivered <- emitBytes callback context (fromIntegral (fromEnum kind)) bytes
+                                -- Warnings precede the payload: the receiver
+                                -- accepts them only while no result exists.
+                                warned <-
+                                    if null warnings
+                                        then pure True
+                                        else emitBytes callback context warningTextKind (Text.encodeUtf8 (Text.pack (renderDiagnostics warnings)))
+                                delivered <-
+                                    if warned
+                                        then emitBytes callback context (fromIntegral (fromEnum kind)) bytes
+                                        else pure False
                                 pure (if delivered then CInt 0 else CInt 4)
                     FrontendDiagnostics diagnostics -> do
                         sideChannel <- writeDiagnosticSideChannel diagnostics
@@ -222,11 +231,18 @@ writeDiagnosticSideChannel diagnostics = do
             written <- writeDiagnosticFile path diagnostics
             pure (either (Left . show) Right written)
 
+-- Output kind 5 of the C ABI: warning text that accompanies a successful
+-- result. It is not a constructor of 'FrontendOutputKind' because it is never
+-- the result of a request.
+warningTextKind :: Word32
+warningTextKind = 5
+
 renderDiagnostics :: [Diagnostic] -> String
 renderDiagnostics = unlines . map renderDiagnostic
     where
         renderDiagnostic diagnostic =
             maybe "" renderLocation (diagnosticSpan diagnostic)
+                ++ (if diagnosticSeverity diagnostic == Warning then "warning " else "")
                 ++ diagnosticCode diagnostic
                 ++ ": "
                 ++ diagnosticMessage diagnostic

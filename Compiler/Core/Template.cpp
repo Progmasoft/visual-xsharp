@@ -58,7 +58,7 @@ namespace Visual::XSharp::Core::Template
             for (const auto octet : value.magnitude)
                 scalar = (scalar << 8U) | octet;
             return scalar <= 0x10ffffU
-                   && !(scalar >= 0xd800U && scalar <= 0xdfffU);
+                   && (scalar < 0xd800U || scalar > 0xdfffU);
         }
 
         [[nodiscard]] auto
@@ -130,7 +130,7 @@ namespace Visual::XSharp::Core::Template
             if (IsName(type, { U"[]" }))
             {
                 if (type.templateArguments.size() != 1U
-                    || !TypeArgument(type.templateArguments.front()))
+                    || TypeArgument(type.templateArguments.front()) == nullptr)
                     AddIssue(issues,
                              IssueKind::MalformedArrayFamily,
                              path,
@@ -140,10 +140,10 @@ namespace Visual::XSharp::Core::Template
             if (!IsName(type, { U"System", U"Array" }))
                 return;
             if (type.templateArguments.size() == 1U
-                && TypeArgument(type.templateArguments.front()))
+                && TypeArgument(type.templateArguments.front()) != nullptr)
                 return;
             if (type.templateArguments.size() == 2U
-                && TypeArgument(type.templateArguments.front()))
+                && TypeArgument(type.templateArguments.front()) != nullptr)
             {
                 const auto &size = type.templateArguments[1U];
                 if (size.kind == Model::TemplateArgument::Kind::Value
@@ -513,7 +513,7 @@ namespace Visual::XSharp::Core::Template
             || type.templateArguments.empty())
             return std::nullopt;
         const auto *element = TypeArgument(type.templateArguments[0U]);
-        if (!element)
+        if (element == nullptr)
             return std::nullopt;
         if (type.templateArguments.size() == 1U)
             return ArrayShape{ ArrayShape::Kind::Dynamic,

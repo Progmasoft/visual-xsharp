@@ -668,9 +668,7 @@ TEST_CASE("a discarded call keeps its result type across the CorePrep wire",
                         Core::Type::int64(),
                         { Core::Statement::Return(Integer(7)) } });
     REQUIRE(Core::Verify(module).empty());
-    // Read the module back from Core wire first, as the pipeline does. The
-    // reader stores integers in their canonical sign and magnitude form,
-    // which is also what the CorePrep reader produces.
+    // Read the module back from Core wire first, as the pipeline does.
     const auto coreBytes = Core::Wire::Encode(module);
     REQUIRE(coreBytes);
     const auto canonical = Core::Wire::Decode(coreBytes.bytes);
@@ -693,39 +691,7 @@ TEST_CASE("a discarded call keeps its result type across the CorePrep wire",
     REQUIRE_FALSE(encoded.error);
     const auto decoded = Prepared::wire::decode(encoded.bytes);
     REQUIRE(decoded);
-    REQUIRE(decoded.module->functions.size() == prepared.functions.size());
-    // Literal operands are not compared here: the two readers may hold the
-    // same integer in different payload alternatives. The fields below are
-    // the ones the evaluate record must reproduce.
-    for (std::size_t function = 0U; function < prepared.functions.size();
-         ++function)
-    {
-        const auto &expected = prepared.functions[function];
-        const auto &actual = decoded.module->functions[function];
-        CAPTURE(function);
-        REQUIRE(actual.blocks.size() == expected.blocks.size());
-        for (std::size_t block = 0U; block < expected.blocks.size(); ++block)
-        {
-            CAPTURE(block);
-            const auto &expectedBlock = expected.blocks[block];
-            const auto &actualBlock = actual.blocks[block];
-            CHECK(actualBlock.terminator.kind == expectedBlock.terminator.kind);
-            REQUIRE(actualBlock.instructions.size()
-                    == expectedBlock.instructions.size());
-            for (std::size_t index = 0U;
-                 index < expectedBlock.instructions.size();
-                 ++index)
-            {
-                CAPTURE(index);
-                const auto &want = expectedBlock.instructions[index];
-                const auto &got = actualBlock.instructions[index];
-                CHECK(got.kind == want.kind);
-                CHECK(got.destination == want.destination);
-                CHECK(got.type == want.type);
-                CHECK(got.mutable_binding == want.mutable_binding);
-                CHECK(got.operation == want.operation);
-                CHECK(got.operands.size() == want.operands.size());
-            }
-        }
-    }
+    // The adapter emits integers in the canonical form the reader
+    // produces, so a round trip reproduces the module exactly.
+    CHECK(*decoded.module == prepared);
 }

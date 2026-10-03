@@ -261,7 +261,7 @@ TEST_CASE("for-loop accepts a numeric condition and an empty update",
           "[llvm][loop][execution]")
 {
     std::int64_t expected{};
-    for (std::int64_t index = 0; 3 - index; ++index)
+    for (std::int64_t index = 0; 3 - index != 0; ++index)
         expected += index;
     CheckBothPipelines(
         LoopModule(Core::Statement::For(

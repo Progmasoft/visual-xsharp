@@ -24,7 +24,7 @@ namespace Visual::XSharp::Fuzzing
         namespace Llvm = ::Visual::XSharp::Backend::LLVM;
         namespace Core = ::Visual::XSharp::Core;
 
-        constexpr std::size_t kMaximumFuzzInput = 64U * 1024U;
+        constexpr std::size_t kMaximumFuzzInput = std::size_t{ 64U } * 1024U;
         constexpr std::size_t kMaximumGeneratedDepth = 4U;
 
         struct Expression final
@@ -83,7 +83,7 @@ namespace Visual::XSharp::Fuzzing
             expected = expression.value;
             std::string body = "return " + expression.source + ";";
             std::string members;
-            const auto mode = NextByte(bytes, cursor) % 9U;
+            const auto mode = NextByte(bytes, cursor) % 13U;
             const auto limit
                 = static_cast<std::int64_t>(NextByte(bytes, cursor) % 12U);
             if (mode == 1U)
@@ -209,6 +209,194 @@ namespace Visual::XSharp::Fuzzing
                          ": 2 : value == 0 ? "
                        + expression.source + " : value > 3 ? 4 : 5 ?: 6;";
             }
+            else if (mode == 9U)
+            {
+                // Assignments and increments used as values. Operands are
+                // evaluated left to right, so a read written before a store
+                // sees the value from before it. The host model performs
+                // each read and store as its own statement, in that order.
+                std::int64_t a = limit;
+                std::int64_t b = expression.value;
+                // int r = a + (a = b) * 2;
+                const auto firstRead = a;
+                a = b;
+                std::int64_t r = firstRead + a * 2;
+                // r += a++ - (b += a);
+                const auto targetRead = r;
+                const auto previous = a;
+                a += 1;
+                b += a;
+                r = targetRead + (previous - b);
+                // return r - (a -= 2) + a + (b = a++) + a;
+                a -= 2;
+                const auto reduced = a;
+                const auto second = a;
+                b = a;
+                a += 1;
+                expected = r - reduced + second + b + a;
+                body = "int a = " + std::to_string(limit)
+                       + "; int b = " + expression.source
+                       + "; int r = a + (a = b) * 2; r += a++ - (b += a); "
+                         "return r - (a -= 2) + a + (b = a++) + a;";
+            }
+            else if (mode == 10U)
+            {
+                // Loop conditions that store. The stores run on every test
+                // of the condition, including the test after `continue`,
+                // and a do/while body still runs before its first test.
+                std::int64_t n = 0;
+                std::int64_t sum = 0;
+                std::int64_t v = 0;
+                for (;;)
+                {
+                    v = n;
+                    n += 1;
+                    if (v >= limit)
+                        break;
+                    if (v == 3)
+                        continue;
+                    if (v == 9)
+                        break;
+                    sum += v;
+                }
+                std::int64_t m = limit;
+                for (;;)
+                {
+                    sum += 100;
+                    m -= 4;
+                    if (m <= 0)
+                        break;
+                }
+                for (std::int64_t index = 0;; ++index)
+                {
+                    v = index * 3;
+                    if (v >= limit)
+                        break;
+                    sum += v;
+                }
+                expected = sum * 10 + n + v;
+                const auto bound = std::to_string(limit);
+                body = "int n = 0; int sum = 0; int v = 0; while ((v = n++) < "
+                       + bound
+                       + ") { if (v == 3) { continue; } if (v == 9) { break; } "
+                         "sum += v; } int m = "
+                       + bound
+                       + "; do { sum += 100; } while ((m -= 4) > 0); "
+                         "for (int index = 0; (v = index * 3) < "
+                       + bound
+                       + "; index++) { sum += v; } return sum * 10 + n + v;";
+            }
+            else if (mode == 11U)
+            {
+                // Stores in operands that are evaluated lazily. Each store
+                // must happen only when its operand is selected: in one
+                // conditional result, on the right of `&&` and `||`, and in
+                // a coalescing fallback.
+                std::int64_t a = limit;
+                std::int64_t b = expression.value;
+                std::int64_t hits = 0;
+                std::int64_t r = 0;
+                if (a > 5)
+                {
+                    a -= 5;
+                    r = a;
+                }
+                else
+                {
+                    b += 1;
+                    r = b;
+                }
+                bool both = false;
+                if (a > 2)
+                {
+                    hits += 1;
+                    both = hits > 0;
+                }
+                bool either = b != 0;
+                if (!either)
+                {
+                    hits += 10;
+                    either = hits > 0;
+                }
+                std::int64_t c = b;
+                if (b == 0)
+                {
+                    hits += 100;
+                    c = hits;
+                }
+                expected = r + a * 3 + b * 5 + hits * 7 + c + (both ? 1000 : 0)
+                           + (either ? 2000 : 0);
+                body = "int a = " + std::to_string(limit)
+                       + "; int b = " + expression.source
+                       + "; int hits = 0; int r = a > 5 ? (a -= 5) : (b += 1); "
+                         "bool both = a > 2 && (hits += 1) > 0; "
+                         "bool either = b \\= 0 || (hits += 10) > 0; "
+                         "int c = b ?: (hits += 100); "
+                         "return r + a * 3 + b * 5 + hits * 7 + c + "
+                         "(both ? 1000 : 0) + (either ? 2000 : 0);";
+            }
+            else if (mode == 12U)
+            {
+                // Loops used as expressions. Each loop leaves only through
+                // a break that carries its value; the nested loop statement
+                // has a bare break of its own, and the second loop reads a
+                // local the first one stored.
+                // The start value is reduced so that a seed cannot make the
+                // first loop run for an unbounded number of iterations.
+                std::int64_t n = expression.value % 7;
+                std::int64_t first = 0;
+                for (;;)
+                {
+                    n += 2;
+                    if (n > limit)
+                    {
+                        first = n;
+                        break;
+                    }
+                }
+                std::int64_t second = 0;
+                for (std::int64_t index = 0;; ++index)
+                {
+                    if (index == 1)
+                        continue;
+                    std::int64_t inner = 0;
+                    for (;;)
+                    {
+                        inner += 1;
+                        if (inner == 3)
+                            break;
+                    }
+                    if (index * inner >= limit)
+                    {
+                        second = index + first;
+                        break;
+                    }
+                }
+                // return first * 100 + second + (n > 4 ? <loop> : 0 - n);
+                std::int64_t tail = 0;
+                if (n > 4)
+                {
+                    n -= 4;
+                    tail = n;
+                }
+                else
+                {
+                    tail = 0 - n;
+                }
+                expected = first * 100 + second + tail;
+                const auto bound = std::to_string(limit);
+                body = "int n = (" + expression.source
+                       + ") % 7; int first = while (true) { n += 2; if (n > "
+                       + bound
+                       + ") { break n; } }; int second = for (int index = 0; ; "
+                         "index++) { if (index == 1) { continue; } int inner = "
+                         "0; while (true) { inner += 1; if (inner == 3) { "
+                         "break; } } if (index * inner >= "
+                       + bound
+                       + ") { break index + first; } }; return first * 100 + "
+                         "second + (n > 4 ? while (true) { n -= 4; break n; } "
+                         ": 0 - n);";
+            }
             return "namespace Fuzz;\n"
                    "class Program {\n"
                    + members
@@ -238,14 +426,15 @@ namespace Visual::XSharp::Fuzzing
                 return { Frontend::Status::InvalidRequest,
                          Frontend::OutputKind::ErrorText,
                          {},
-                         "source fuzz input exceeds 64 KiB" };
+                         "source fuzz input exceeds 64 KiB",
+                         {} };
             auto stages = Frontend::FuzzCompileStages(source);
             if (!stages.core.succeeded()
                 || stages.core.kind != Frontend::OutputKind::CoreWire)
                 return std::move(stages.core);
 
             const auto core = Core::Wire::Decode(stages.core.bytes);
-            if (!core)
+            if (!core.module)
                 llvm::report_fatal_error(llvm::Twine(
                     "native Core reader rejected frontend Core wire"));
             // Unverified Core is rejected by the pipeline with its own
@@ -254,7 +443,7 @@ namespace Visual::XSharp::Fuzzing
                 return std::move(stages.core);
             const auto frontendCorePrep
                 = ::visual_xsharp::core::wire::decode(stages.corePrep);
-            if (!frontendCorePrep)
+            if (!frontendCorePrep.module)
                 llvm::report_fatal_error(llvm::Twine(
                     "native CorePrep reader rejected frontend CorePrep wire"));
             const auto difference
@@ -400,11 +589,13 @@ namespace Visual::XSharp::Fuzzing
                                 + ": " + error->message));
             const auto result
                 = session.InvokeScalar(entrySymbol, Core::Type::int64());
-            if (!result)
-                llvm::report_fatal_error(
-                    llvm::Twine("ORC could not invoke the verified "
-                                "fuzz expression: "
-                                + result.error->message));
+            if (!result.value)
+                llvm::report_fatal_error(llvm::Twine(
+                    "ORC could not invoke the verified "
+                    "fuzz expression: "
+                    + (result.error ? result.error->message
+                                    : std::string("no error "
+                                                  "was reported"))));
             return std::get<std::int64_t>(result.value->payload);
         }
     } // namespace
@@ -457,20 +648,28 @@ namespace Visual::XSharp::Fuzzing
             return;
         std::int64_t expected{};
         const auto source = GeneratedProgram(input, expected);
+        ExerciseExpectedValue(source, expected);
+    }
+
+    void
+    ExerciseExpectedValue(std::string_view source, std::int64_t expected)
+    {
         const auto bytes = std::span<const std::uint8_t>(
             reinterpret_cast<const std::uint8_t *>(source.data()),
             source.size());
         const auto compiled = CompileSource(bytes);
         if (!compiled.succeeded()
             || compiled.kind != Frontend::OutputKind::CoreWire)
-            llvm::report_fatal_error(
-                llvm::Twine("generated arithmetic source was rejected by "
-                            "the frontend"));
+            llvm::report_fatal_error(llvm::Twine(
+                "source with a known result was rejected by the frontend:\n"
+                + std::string(source)));
         // The comparison varies native optimizers, so both paths start from
         // the same frontend result. Recompiling identical source adds no
         // independent evidence and repeats work in the expensive oracle.
         const auto unoptimized = CompileVariant(compiled.bytes, false, false);
         const auto optimized = CompileVariant(compiled.bytes, true, true);
+        // The harness never modifies its environment.
+        // NOLINTNEXTLINE(concurrency-mt-unsafe)
         if (std::getenv("VXS_FUZZ_TRACE") != nullptr)
             llvm::errs() << source << "\nReference LLVM:\n"
                          << unoptimized.llvm_ir << "\nOptimized LLVM:\n"
@@ -487,7 +686,7 @@ namespace Visual::XSharp::Fuzzing
                 "compiler differential oracle found a miscompile: expected "
                 + std::to_string(expected) + ", baseline "
                 + std::to_string(referenceValue) + ", optimized "
-                + std::to_string(optimizedValue) + "; generated source:\n"
-                + source));
+                + std::to_string(optimizedValue) + "; source:\n"
+                + std::string(source)));
     }
 } // namespace Visual::XSharp::Fuzzing

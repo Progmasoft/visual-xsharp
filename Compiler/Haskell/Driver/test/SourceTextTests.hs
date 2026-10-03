@@ -17,8 +17,8 @@ sourceTextTests =
     , ("multi-line raw strings protect every crossed line", rawStringProtectedLines)
     , ("multi-line long comments protect every crossed line", longCommentProtectedLines)
     , ("single-line protected fragments do not protect indentation", singleLineFragmentsRemainIndentable)
-    , ("attached decrement remains ordinary code", attachedDecrementIsCode)
-    , ("attached decrement after a literal remains ordinary code", literalDecrementIsCode)
+    , ("an attached double dash begins a line comment", attachedDoubleDashIsComment)
+    , ("a double dash after a literal begins a line comment", literalDoubleDashIsComment)
     , ("spaced double dash begins a line comment", spacedDoubleDashIsComment)
     , ("unterminated normal strings have a lossless-scan diagnostic", rejectsUnterminatedString)
     , ("unterminated character literals have a lossless-scan diagnostic", rejectsUnterminatedCharacter)
@@ -89,17 +89,21 @@ singleLineFragmentsRemainIndentable = case fragmentsOf "\"text\" -- comment\n" o
     Right fragments -> null (protectedLineNumbers fragments)
     Left _ -> False
 
-attachedDecrementIsCode :: Bool
-attachedDecrementIsCode = case fragmentsOf "value--;" of
-    Right [value] -> sourceFragmentKind value == CodeFragment && sourceFragmentText value == "value--;"
+attachedDoubleDashIsComment :: Bool
+attachedDoubleDashIsComment = case fragmentsOf "value--;" of
+    Right [code, comment] ->
+        sourceFragmentKind code == CodeFragment
+            && sourceFragmentText code == "value"
+            && sourceFragmentKind comment == LineCommentFragment
+            && sourceFragmentText comment == "--;"
     _ -> False
 
-literalDecrementIsCode :: Bool
-literalDecrementIsCode = case fragmentsOf "\"value\"--;" of
-    Right [literal, suffix] ->
+literalDoubleDashIsComment :: Bool
+literalDoubleDashIsComment = case fragmentsOf "\"value\"--;" of
+    Right [literal, comment] ->
         sourceFragmentKind literal == StringLiteralFragment
-            && sourceFragmentKind suffix == CodeFragment
-            && sourceFragmentText suffix == "--;"
+            && sourceFragmentKind comment == LineCommentFragment
+            && sourceFragmentText comment == "--;"
     _ -> False
 
 spacedDoubleDashIsComment :: Bool

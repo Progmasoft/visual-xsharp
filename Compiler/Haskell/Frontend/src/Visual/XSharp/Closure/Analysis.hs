@@ -182,6 +182,9 @@ walkExpression parent state expression = case expression of
         foldl (walkExpression parent) state [condition, first, second]
     CoalesceExpression _ left fallback _ ->
         walkExpression parent (walkExpression parent state left) fallback
+    AssignmentExpression _ _ _ value _ -> walkExpression parent state value
+    IncrementExpression {} -> state
+    LoopExpression _ loop _ -> walkStatement parent state loop
     callable@CallableExpression {} -> walkCallable parent state callable
 
 walkCallable :: Maybe ClosureId -> WalkState -> Expression ResolvedName Type -> WalkState
@@ -276,7 +279,7 @@ statementFacts statement = case statement of
     ForEachStatement _ _ _ name _ source body ->
         let nested = expressionFacts source `appendFacts` blockFacts body
          in nested {factLocals = name : factLocals nested, factWrites = name : factWrites nested}
-    IncrementStatement _ name annotation _ -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
+    IncrementStatement _ name annotation -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
     -- A compound assignment reads its target before storing the result.
     CompoundAssignmentStatement _ _ name annotation value ->
         let nested = expressionFacts value
@@ -299,6 +302,14 @@ expressionFacts expression = case expression of
     ConditionalExpression _ condition first second _ ->
         foldl appendFacts (expressionFacts condition) (map expressionFacts [first, second])
     CoalesceExpression _ left fallback _ -> expressionFacts left `appendFacts` expressionFacts fallback
+    -- A simple assignment only writes its target; a compound one reads it
+    -- first, exactly as the statement forms do.
+    AssignmentExpression _ operator name value annotation ->
+        let nested = expressionFacts value
+            targetReads = maybe [] (const [(name, annotation)]) operator
+         in nested {factReads = targetReads ++ factReads nested, factWrites = name : factWrites nested}
+    IncrementExpression _ _ name annotation -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
+    LoopExpression _ loop _ -> statementFacts loop
     CallableExpression {} -> emptyFacts
 
 captureUse :: BodyFacts -> Bool -> Int -> Capture ResolvedName Type -> CaptureUse
@@ -403,6 +414,9 @@ expressionContainsCall expression = case expression of
     IsPatternExpression _ subject _ _ -> expressionContainsCall subject
     ConditionalExpression _ condition first second _ -> any expressionContainsCall [condition, first, second]
     CoalesceExpression _ left fallback _ -> expressionContainsCall left || expressionContainsCall fallback
+    AssignmentExpression _ _ _ value _ -> expressionContainsCall value
+    IncrementExpression {} -> False
+    LoopExpression _ loop _ -> statementContainsCall loop
     CallableExpression {} -> False
     NameExpression {} -> False
     LiteralExpression {} -> False

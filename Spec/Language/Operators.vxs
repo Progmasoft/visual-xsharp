@@ -166,8 +166,9 @@ auto result = 7.8 // 2.0; -- int
 2.0 ** -3 -- 0.125
 
 -- ============================================================================
--- Example 25: 8. Increment and Decrement
+-- Example 25: 8. Increment
 -- Demonstrates: The operand must be an assignable mutable numeric storage expression.
+--   Visual X# has no decrement operator: `--` always starts a comment. Write `value -= 1`.
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 ++value;      -- VALID
@@ -177,8 +178,8 @@ items[i]++;   -- VALID
 (a + b)++;    -- INVALID
 
 -- ============================================================================
--- Example 26: 8. Increment and Decrement
--- Demonstrates: Prefix increment/decrement modifies the operand first and yields the new value.
+-- Example 26: 8. Increment
+-- Demonstrates: Prefix increment modifies the operand first and yields the new value.
 
 int a = 10;
 int b = ++a;
@@ -187,8 +188,8 @@ int b = ++a;
 -- b == 11
 
 -- ============================================================================
--- Example 27: 8. Increment and Decrement
--- Demonstrates: Postfix increment/decrement yields the previous value and then modifies the operand.
+-- Example 27: 8. Increment
+-- Demonstrates: Postfix increment yields the previous value and then modifies the operand.
 
 int a = 10;
 int b = a++;
@@ -526,21 +527,32 @@ int result = (value *= 2);
 
 -- ============================================================================
 -- Example 69: 34. -- and Comment Lexing
--- Demonstrates: Outside a String:
+-- Demonstrates: Outside a String, -- starts a comment that runs to the end of the line, wherever it
+--   stands. There is no decrement operator, so neither spacing nor the neighbouring token changes this.
+--   The fragment below is the expression a; --b is a comment.
 
 a --b
 
 -- ============================================================================
 -- Example 70: 34. -- and Comment Lexing
--- Demonstrates: By contrast:
+-- Demonstrates: By contrast, a space between the two signs keeps them apart: binary - followed by
+--   unary -.
 
 a - -b
 
 -- ============================================================================
 -- Example 71: 34. -- and Comment Lexing
--- Demonstrates: The following parenthesized form is also parsed as binary - followed by unary -:
+-- Demonstrates: Parentheses do not change the rule. The comment takes the rest of the line, including
+--   the closing parenthesis, so the parenthesis is never closed.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
 
-(a --b)
+(a --b) -- INVALID: the comment begins at the first --
+
+-- The subtraction of a negated operand is written with a space:
+(a - -b)
+
+-- An attached -- is the same comment; it does not decrement:
+count--; -- INVALID where a statement terminator is required: `;` is inside the comment
 
 -- ============================================================================
 -- Example 72: 35. Strings and Operator-Like Text
@@ -551,7 +563,7 @@ String b = "a -- b";
 
 -- ============================================================================
 -- Example 73: 35. Strings and Operator-Like Text
--- Demonstrates: power binds before prefix negation, and prefix negation binds before multiplication.
+-- Demonstrates: The same rule applies to long-bracket raw/multiline Strings.
 
 String text = [[
 a -- b
@@ -560,7 +572,7 @@ a -- b
 
 -- ============================================================================
 -- Example 74: 36.1 Power, Prefix, and Multiplication
--- Demonstrates: The same rule applies to long-bracket raw/multiline Strings.
+-- Demonstrates: power binds before prefix negation, and prefix negation binds before multiplication.
 
 -value ** 2 * scale
 
@@ -656,7 +668,8 @@ int rounded = 7 // 2;
 mask = !mask;
 
 count++;
---index;
+++index;
+index -= 1;
 
 Range<int> range = 1 ... 10 by 2;
 

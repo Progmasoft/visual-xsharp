@@ -17,9 +17,9 @@ namespace visual_xsharp::core::wire
     struct Limits final
     {
         /// Maximum total serialized size in bytes.
-        std::size_t maximum_wire_bytes{ 64U * 1024U * 1024U };
+        std::size_t maximum_wire_bytes{ std::size_t{ 64U } * 1024U * 1024U };
         /// Maximum Unicode code points accepted in one string.
-        std::size_t maximum_string_code_points{ 1024U * 1024U };
+        std::size_t maximum_string_code_points{ std::size_t{ 1024U } * 1024U };
         /// Maximum function count in a module.
         std::size_t maximum_functions{ 65535U };
         /// Maximum parameters in one function.

@@ -178,23 +178,37 @@ namespace Visual::XSharp::Core
                 }
                 return false;
             }
+            /// Where a `break` or `continue` would transfer to. A `for`
+            /// update region is inside its loop for `break`, which leaves the
+            /// loop, but it is the loop's continuation point itself: a
+            /// `continue` there has no later point of the same iteration to
+            /// reach and would re-enter the update without testing the
+            /// condition. A loop nested in an update opens a body scope again.
+            enum class TransferScope : std::uint8_t
+            {
+                OutsideLoop,
+                InLoopBody,
+                InForUpdate
+            };
+
             void
             VerifyStatements(const llvm::ArrayRef<Statement> statements,
                              Environment &environment,
                              const Type &expectedReturnType,
-                             const std::size_t loopDepth = 0U)
+                             const TransferScope scope
+                             = TransferScope::OutsideLoop)
             {
                 for (const auto &statement : statements)
                     VerifyStatement(statement,
                                     environment,
                                     expectedReturnType,
-                                    loopDepth);
+                                    scope);
             }
             void
             VerifyStatement(const Statement &statement,
                             Environment &environment,
                             const Type &expectedReturnType,
-                            const std::size_t loopDepth)
+                            const TransferScope scope)
             {
                 switch (statement.kind)
                 {
@@ -269,11 +283,11 @@ namespace Visual::XSharp::Core
                         VerifyStatements(statement.trueBranch,
                                          trueEnvironment,
                                          expectedReturnType,
-                                         loopDepth);
+                                         scope);
                         VerifyStatements(statement.falseBranch,
                                          falseEnvironment,
                                          expectedReturnType,
-                                         loopDepth);
+                                         scope);
                         return;
                     }
                     case Statement::Kind::Evaluate:
@@ -291,25 +305,29 @@ namespace Visual::XSharp::Core
                         VerifyStatements(statement.loopBody,
                                          loopEnvironment,
                                          expectedReturnType,
-                                         loopDepth + 1U);
+                                         TransferScope::InLoopBody);
                         if (statement.kind == Statement::Kind::For)
                         {
                             auto updateEnvironment = environment;
                             VerifyStatements(statement.loopUpdate,
                                              updateEnvironment,
                                              expectedReturnType,
-                                             loopDepth + 1U);
+                                             TransferScope::InForUpdate);
                         }
                         return;
                     }
                     case Statement::Kind::Break:
-                        if (loopDepth == 0U)
+                        if (scope == TransferScope::OutsideLoop)
                             Add("VXC1064", "Core break appears outside a loop");
                         return;
                     case Statement::Kind::Continue:
-                        if (loopDepth == 0U)
+                        if (scope == TransferScope::OutsideLoop)
                             Add("VXC1065",
                                 "Core continue appears outside a loop");
+                        if (scope == TransferScope::InForUpdate)
+                            Add("VXC1066",
+                                "Core continue appears in a for update "
+                                "region");
                         return;
                 }
             }
@@ -673,7 +691,7 @@ namespace Visual::XSharp::Core
                 VerifyStatements(*expression.closureBody,
                                  closureEnvironment,
                                  expression.closureReturnType,
-                                 0U);
+                                 TransferScope::OutsideLoop);
                 if (expression.closureReturnType != Type::unit()
                     && !AlwaysReturns(*expression.closureBody))
                     Add("VXC1042",

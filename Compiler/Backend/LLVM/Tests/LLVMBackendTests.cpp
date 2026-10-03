@@ -184,7 +184,7 @@ namespace
         std::string compact;
         compact.reserve(llvmIr.size());
         for (const auto character : llvmIr)
-            if (!std::isspace(static_cast<unsigned char>(character)))
+            if (std::isspace(static_cast<unsigned char>(character)) == 0)
                 compact.push_back(character);
 
         auto symbol = compact.find(suffix);

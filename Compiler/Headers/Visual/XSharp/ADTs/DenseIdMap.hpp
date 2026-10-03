@@ -51,13 +51,13 @@ namespace Visual::XSharp::ADTs
 
         struct KeyInfo final
         {
-            [[nodiscard]] static inline auto
+            [[nodiscard]] static auto
             getEmptyKey() noexcept -> Key
             {
                 return { Id{}, Slot::Empty };
             }
 
-            [[nodiscard]] static inline auto
+            [[nodiscard]] static auto
             getTombstoneKey() noexcept -> Key
             {
                 return { Id{}, Slot::Tombstone };
