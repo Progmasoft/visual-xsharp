@@ -30,9 +30,25 @@ namespace Visual::XSharp::Core::CorePrep
                 loopTargets;
         };
 
+        /// Lower a Core literal to a CorePrep atom.
+        ///
+        /// Core still carries fixed-width integer payloads. CorePrep has one
+        /// canonical integer form, the sign and magnitude that its wire
+        /// reader produces, so the adapter converts here. Without this the
+        /// same module compares unequal before and after a wire round trip.
         [[nodiscard]] auto
         LowerLiteral(const Expression &expression) -> Prepared::Atom
         {
+            if (const auto *wide
+                = std::get_if<std::int64_t>(&expression.literal))
+                return Prepared::Atom::constant(
+                    Prepared::integer_from_signed(*wide),
+                    expression.type);
+            if (const auto *narrow
+                = std::get_if<std::int32_t>(&expression.literal))
+                return Prepared::Atom::constant(
+                    Prepared::integer_from_signed(*narrow),
+                    expression.type);
             return Prepared::Atom::constant(expression.literal,
                                             expression.type);
         }

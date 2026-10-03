@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace Visual::XSharp::Interactive
 {
-    enum class RequestKind
+    enum class RequestKind : std::uint8_t
     {
         Repl,
         Evaluate,

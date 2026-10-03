@@ -35,8 +35,7 @@ lexVisualXSharp (LexerInput file source) = go 1 1 source []
     where
         go line column [] output = Right (reverse (token EndOfFileToken "" line column line column : output))
         go line column input@(character : rest) output
-            | Just remaining <- stripPrefix "--" input
-            , not (isPostfixDecrement (SourcePosition line column) output) =
+            | Just remaining <- stripPrefix "--" input =
                 lexComment line column remaining output
             | Just (level, openerWidth, remaining) <- longBracketOpener input =
                 lexRawString line column level openerWidth remaining output
@@ -163,17 +162,6 @@ lexVisualXSharp (LexerInput file source) = go 1 1 source []
                 code
                 (Just (SourceSpan file (SourcePosition line column) (SourcePosition line (column + 1))))
                 message
-
--- `--` is also the line-comment marker. Match the lossless source scanner's
--- rule here: only an adjacent postfix-capable token makes it a decrement
--- operator; whitespace or a statement boundary leaves it as a comment.
-isPostfixDecrement :: SourcePosition -> [Token] -> Bool
-isPostfixDecrement position (previous : _) =
-    sourceEnd (tokenSpan previous) == position
-        && ( tokenKind previous `elem` [IdentifierToken, IntegerToken, FloatingToken, CharacterToken, StringToken]
-                || tokenText previous `elem` [")", "]", "true", "false", "null"]
-           )
-isPostfixDecrement _ [] = False
 
 dropDocumentationMarker :: String -> String
 dropDocumentationMarker ('|' : remaining) = remaining
@@ -319,7 +307,6 @@ longestSymbol source =
         , "->"
         , "**"
         , "++"
-        , "--"
         , "{"
         , "}"
         , "("

@@ -21,9 +21,9 @@ namespace Visual::XSharp::Core::Wire
     struct Limits final
     {
         /// Maximum total document size in bytes.
-        std::size_t maximumWireBytes{ 64U * 1024U * 1024U };
+        std::size_t maximumWireBytes{ std::size_t{ 64U } * 1024U * 1024U };
         /// Maximum Unicode scalar count in one text field.
-        std::size_t maximumTextScalars{ 1024U * 1024U };
+        std::size_t maximumTextScalars{ std::size_t{ 1024U } * 1024U };
         /// Maximum number of functions in one module.
         std::size_t maximumFunctions{ 65535U };
         /// Maximum parameters in one function or closure signature.

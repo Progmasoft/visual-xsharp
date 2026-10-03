@@ -15,7 +15,8 @@ namespace Visual::XSharp::Interactive::Runtime
 {
     namespace
     {
-        constexpr std::size_t kMaximumExpressionBytes = 1024U * 1024U;
+        constexpr std::size_t kMaximumExpressionBytes
+            = std::size_t{ 1024U } * 1024U;
 
         [[nodiscard]] auto
         AppendPreviousBinding(

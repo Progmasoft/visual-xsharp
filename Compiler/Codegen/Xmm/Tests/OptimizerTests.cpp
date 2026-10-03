@@ -339,8 +339,9 @@ TEST_CASE("Xmm optimization canonicalizes shuffled block presentation")
         Block(0U, {}, Branch(1U, 2U)),
         Block(2U, { Define(11U, 2) }, Jump(3U)),
     });
-    CHECK(IR::optimize(std::move(ordered))
-          == IR::optimize(std::move(shuffled)));
+    const auto optimizedOrdered = IR::optimize(std::move(ordered));
+    const auto optimizedShuffled = IR::optimize(std::move(shuffled));
+    CHECK(optimizedOrdered == optimizedShuffled);
 }
 
 TEST_CASE("Xmm optimization is idempotent")

@@ -316,6 +316,9 @@ callsInExpression expression = case expression of
     IsPatternExpression _ subject _ _ -> callsInExpression subject
     ConditionalExpression _ condition whenTrue whenFalse _ -> concatMap callsInExpression [condition, whenTrue, whenFalse]
     CoalesceExpression _ left fallback _ -> callsInExpression left ++ callsInExpression fallback
+    AssignmentExpression _ _ _ value _ -> callsInExpression value
+    IncrementExpression {} -> []
+    LoopExpression _ loop _ -> callsInStatement loop
     CallableExpression _ _ _ _ body _ -> callsInCallableBody body
     where
         isSelectedCall (CallExpression _ (NameExpression _ name _) _ _) = resolvedSpelling name == Identifier "Select"

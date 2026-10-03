@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -13,7 +14,7 @@
 namespace Visual::XSharp::Diagnostic
 {
     /// Outcome of inserting or merging a validated diagnostic record.
-    enum class AppendStatus
+    enum class AppendStatus : std::uint8_t
     {
         Added,         ///< A new record was appended.
         Duplicate,     ///< An identical record already existed.

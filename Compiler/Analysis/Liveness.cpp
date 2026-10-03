@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <algorithm>
+#include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -126,10 +127,8 @@ namespace Visual::XSharp::Analysis::Liveness
                  const StorageCatalog &catalog,
                  DenseBitSet live) -> DenseBitSet
         {
-            for (auto access = block.accesses.rbegin();
-                 access != block.accesses.rend();
-                 ++access)
-                live = Apply(*access, catalog, std::move(live));
+            for (const auto &access : std::views::reverse(block.accesses))
+                live = Apply(access, catalog, std::move(live));
             return live;
         }
 
@@ -190,20 +189,17 @@ namespace Visual::XSharp::Analysis::Liveness
         {
             std::vector<AccessFacts> reversed;
             reversed.reserve(block.accesses.size());
-            for (auto access = block.accesses.rbegin();
-                 access != block.accesses.rend();
-                 ++access)
+            for (const auto &access : std::views::reverse(block.accesses))
             {
                 auto liveAfter = materializeLiveSets ? Visible(catalog, live)
                                                      : std::vector<StorageId>{};
-                const auto retained
-                    = !access->write || !access->removable
-                      || live.Test(catalog.Find(*access->write));
+                const auto retained = !access.write || !access.removable
+                                      || live.Test(catalog.Find(*access.write));
                 if (retained)
-                    live = Apply(*access, catalog, std::move(live));
+                    live = Apply(access, catalog, std::move(live));
                 reversed.push_back({
-                    access->instruction,
-                    access->terminator,
+                    access.instruction,
+                    access.terminator,
                     retained,
                     materializeLiveSets ? Visible(catalog, live)
                                         : std::vector<StorageId>{},

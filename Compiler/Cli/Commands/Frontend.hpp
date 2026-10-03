@@ -14,16 +14,21 @@ namespace Visual::XSharp::Cli::Frontend
 {
     /// @brief Kinds of data that may be synchronously delivered by the
     /// frontend.
+    // Mirrors the 32-bit kind argument of the C ABI callback.
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class OutputKind : std::uint32_t
     {
         CoreWire = 0,          ///< Versioned, verified Core wire bytes.
         ProjectSourceList = 1, ///< NUL-delimited UTF-8 source paths.
         DiagnosticWire = 2,    ///< Structured source diagnostics.
         ErrorText = 3,         ///< Human-readable UTF-8 failure text.
-        CorePrepWire = 4       ///< Frontend CorePrep lowering; testing only.
+        CorePrepWire = 4,      ///< Frontend CorePrep lowering; testing only.
+        WarningText = 5        ///< Warnings that accompany a successful result.
     };
 
     /// @brief Stable operation outcomes returned by the C ABI.
+    // Mirrors the 32-bit status the C ABI entry points return.
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class Status : std::int32_t
     {
         Success = 0,        ///< The request completed and delivered its result.
@@ -42,6 +47,9 @@ namespace Visual::XSharp::Cli::Frontend
         std::vector<std::uint8_t>
             bytes;         ///< Caller-owned copy of returned bytes.
         std::string error; ///< Local ABI or runtime failure description.
+        /// Rendered warnings of a successful request; empty when there are
+        /// none. A rejected request carries its warnings in @ref bytes.
+        std::string warnings;
 
         /// @brief Report whether the frontend completed successfully.
         /// @return true only when status is Success.

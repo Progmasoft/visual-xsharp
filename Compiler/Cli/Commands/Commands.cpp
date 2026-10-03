@@ -31,6 +31,8 @@
 #    include <spawn.h>
 #    include <sys/wait.h>
 #    include <unistd.h>
+// macOS does not declare environ in a header; glibc does.
+// NOLINTNEXTLINE(readability-redundant-declaration)
 extern char **environ;
 #endif
 
@@ -112,9 +114,8 @@ namespace
             if (!directory.empty())
             {
                 std::error_code error;
-                const auto candidate
-                    = std::filesystem::path(std::wstring(directory))
-                      / std::wstring(executable);
+                auto candidate = std::filesystem::path(std::wstring(directory))
+                                 / std::wstring(executable);
                 if (std::filesystem::is_regular_file(candidate, error)
                     && !error)
                     return candidate;
@@ -164,6 +165,9 @@ namespace
     FindExecutableOnPath(std::string_view executable)
         -> std::optional<std::filesystem::path>
     {
+        // Read on the calling thread; this process never modifies its
+        // environment.
+        // NOLINTNEXTLINE(concurrency-mt-unsafe)
         const auto *const environmentPath = std::getenv("PATH");
         if (environmentPath == nullptr)
             return std::nullopt;
@@ -178,9 +182,8 @@ namespace
                                               : end - start);
             if (!directory.empty())
             {
-                const auto candidate
-                    = std::filesystem::path(std::string(directory))
-                      / std::string(executable);
+                auto candidate = std::filesystem::path(std::string(directory))
+                                 / std::string(executable);
                 std::error_code error;
                 if (std::filesystem::is_regular_file(candidate, error) && !error
                     && ::access(candidate.c_str(), X_OK) == 0)
@@ -218,7 +221,8 @@ namespace
             return { Visual::XSharp::Cli::Frontend::Status::InternalError,
                      Visual::XSharp::Cli::Frontend::OutputKind::ErrorText,
                      {},
-                     error.message() };
+                     error.message(),
+                     {} };
         }
         std::vector<std::string> arguments{ "--project-root",
                                             PathText(projectRoot),
@@ -281,7 +285,8 @@ namespace
             return { Visual::XSharp::Cli::Frontend::Status::InternalError,
                      Visual::XSharp::Cli::Frontend::OutputKind::ErrorText,
                      {},
-                     error.message() };
+                     error.message(),
+                     {} };
         std::vector<std::string> arguments{ "--project-root",
                                             PathText(projectRoot),
                                             "--list-sources" };
@@ -313,6 +318,23 @@ namespace
                            result.bytes.size()));
         if (!result.error.empty())
             fmt::print(stderr, "vxs: frontend: {}\n", result.error);
+        return false;
+    }
+
+    /// Print the warnings of an accepted compilation and apply the warning
+    /// policy. `-Warnings none` hides them; `-Werror true` fails the command
+    /// after printing them, without changing what they say.
+    [[nodiscard]] auto
+    FrontendWarningsAllowed(const Visual::XSharp::Cli::Frontend::Result &result,
+                            const CompilerSettings &settings) -> bool
+    {
+        if (result.warnings.empty()
+            || settings.warningLevel == WarningLevel::kNone)
+            return true;
+        fmt::print(stderr, "{}", result.warnings);
+        if (!settings.warningsAsErrors)
+            return true;
+        fmt::print(stderr, "vxs: warnings are treated as errors (-Werror)\n");
         return false;
     }
 
@@ -459,7 +481,8 @@ namespace
             fmt::print(stderr,
                        "vxs: could not start '{}': {}\n",
                        executable,
-                       std::strerror(spawnStatus));
+                       std::error_code(spawnStatus, std::generic_category())
+                           .message());
             return -1;
         }
         int status{};
@@ -628,7 +651,8 @@ namespace
         }
         const auto core = RunFileFrontend(source);
         if (!FrontendSucceeded(core)
-            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire)
+            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire
+            || !FrontendWarningsAllowed(core, effective.compiler))
             return 1;
         const auto sourceText = PathText(source);
         // Every source command crosses the same verified Core consumer. `check`
@@ -790,13 +814,21 @@ namespace
         const Visual::XSharp::Driver::ResolvedSourceTarget &target,
         const EffectiveCompilerOptions &effective)
     {
+        if (!target.entry)
+        {
+            fmt::print(stderr,
+                       "vxs: the selected executable target has no entry "
+                       "class\n");
+            return 1;
+        }
         project.entry = *target.entry;
         project.sourceRoots = { target.root };
         project.sourceExcludes = target.excludes;
 
         const auto core = RunProjectFrontend(project);
         if (!FrontendSucceeded(core)
-            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire)
+            || core.kind != Visual::XSharp::Cli::Frontend::OutputKind::CoreWire
+            || !FrontendWarningsAllowed(core, effective.compiler))
             return 1;
 
         std::error_code pathError;

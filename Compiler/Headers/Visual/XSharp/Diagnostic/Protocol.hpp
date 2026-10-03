@@ -204,11 +204,11 @@ namespace Visual::XSharp::Diagnostic
     struct Limits final
     {
         /// Maximum encoded or decoded payload size, in bytes.
-        std::size_t maximumWireBytes{ 16U * 1024U * 1024U };
+        std::size_t maximumWireBytes{ std::size_t{ 16U } * 1024U * 1024U };
         /// Maximum number of diagnostic records in one document.
         std::size_t maximumRecords{ 65535U };
         /// Maximum scalar count for any encoded text value.
-        std::size_t maximumTextScalars{ 1024U * 1024U };
+        std::size_t maximumTextScalars{ std::size_t{ 1024U } * 1024U };
         /// Maximum named formatting arguments per record.
         std::size_t maximumArguments{ 256U };
         /// Maximum related source locations per record.

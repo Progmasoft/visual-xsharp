@@ -110,6 +110,14 @@ func executeWorkflow(arguments []string, runner commandRunner) error {
 			return err
 		}
 		return runTests(repository, currentHost, runner, nil)
+	case "tidy":
+		if len(commandArguments) != 0 {
+			return errors.New("tidy accepts Bazel options only after --")
+		}
+		if err := requireBuildTools(currentHost, runner); err != nil {
+			return err
+		}
+		return runTidy(repository, runner, bazelArguments)
 	case "sanitize":
 		if len(commandArguments) != 1 {
 			return errors.New("sanitize requires exactly one kind: address, undefined, address-undefined, or thread")

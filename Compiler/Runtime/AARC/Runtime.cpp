@@ -129,10 +129,15 @@ namespace Visual::XSharp::Runtime::Aarc
         header->metadata = &metadata;
         header->allocation = allocation;
 
-        auto address = reinterpret_cast<std::uintptr_t>(allocation + kPrefix);
-        address = (address + alignment - 1U)
-                  & ~(static_cast<std::uintptr_t>(alignment) - 1U);
-        auto *object = reinterpret_cast<void *>(address);
+        // Advance to the next multiple of the alignment without turning an
+        // integer back into a pointer, which would discard provenance.
+        auto *payload = allocation + kPrefix;
+        const auto misalignment
+            = reinterpret_cast<std::uintptr_t>(payload)
+              & (static_cast<std::uintptr_t>(alignment) - 1U);
+        if (misalignment != 0U)
+            payload += alignment - misalignment;
+        void *object = payload;
         *(reinterpret_cast<ObjectHeader **>(object) - 1) = header;
         header->object.store(object, std::memory_order_release);
         return object;

@@ -379,6 +379,9 @@ expressionCalls owner expression = case expression of
     ConditionalExpression _ condition first second _ ->
         concatMap (expressionCalls owner) [condition, first, second]
     CoalesceExpression _ left fallback _ -> expressionCalls owner left ++ expressionCalls owner fallback
+    AssignmentExpression _ _ _ value _ -> expressionCalls owner value
+    IncrementExpression {} -> []
+    LoopExpression _ loop _ -> statementCalls owner loop
     CallableExpression _ _ captures _ body _ ->
         concatMap (maybe [] (expressionCalls owner) . captureInitializer) captures
             ++ callableBodyCalls owner body

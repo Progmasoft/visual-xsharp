@@ -12,8 +12,7 @@ namespace Visual::XSharp::Artifact
         [[nodiscard]] auto
         IsUnicodeScalar(const char32_t value) -> bool
         {
-            return value <= 0x10ffffU
-                   && !(value >= 0xd800U && value <= 0xdfffU);
+            return value <= 0x10ffffU && (value < 0xd800U || value > 0xdfffU);
         }
     } // namespace
 

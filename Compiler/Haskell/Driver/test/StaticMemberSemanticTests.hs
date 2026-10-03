@@ -554,6 +554,9 @@ expressionCalls expression = case expression of
     IsPatternExpression _ subject _ _ -> expressionCalls subject
     ConditionalExpression _ condition whenTrue whenFalse _ -> concatMap expressionCalls [condition, whenTrue, whenFalse]
     CoalesceExpression _ left fallback _ -> expressionCalls left ++ expressionCalls fallback
+    AssignmentExpression _ _ _ value _ -> expressionCalls value
+    IncrementExpression {} -> []
+    LoopExpression _ loop _ -> statementCalls loop
     CallableExpression _ _ _ _ body _ -> callableBodyCalls body
     where
         isCall CallExpression {} = True

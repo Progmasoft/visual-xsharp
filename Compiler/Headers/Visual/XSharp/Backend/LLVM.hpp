@@ -269,11 +269,11 @@ namespace Visual::XSharp::Backend::LLVM
     [[nodiscard]] auto
     Verify(const Xmm::Module &module) -> std::vector<Issue>;
     /// Lower verified Xmm to LLVM IR, bitcode, and requested native payloads.
-    /// @param module Xmm program to lower.
+    /// @param source Xmm program to lower.
     /// @param options Target, optimization, and emission settings.
     /// @return Backend artifact or a structured lowering/emission error.
     [[nodiscard]] auto
-    Lower(const Xmm::Module &module, const Options &options = {}) -> Result;
+    Lower(const Xmm::Module &source, const Options &options = {}) -> Result;
     /// Write LLVM IR text to a file.
     /// @param path Destination file path.
     /// @param llvmIr IR text to write.

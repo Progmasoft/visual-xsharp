@@ -47,6 +47,10 @@ fuzz-stress:
 sanitize:
     go run ./helpers/cmd/develop sanitize address-undefined
 
+# clang-tidy over every first-party C++ translation unit.
+tidy:
+    go run ./helpers/cmd/develop tidy
+
 sanitize-thread:
     go run ./helpers/cmd/develop sanitize thread
 
