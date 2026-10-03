@@ -28,8 +28,10 @@ and `break`, a `do`/`while` loop, an `if`/`else` over that expression, a
 `while` loop preceded by its own initializers, a recursion that terminates
 only because `||` and `&&` skip their right operands, a recursion and a
 division that are defined only because a conditional expression evaluates one
-arm, a loop built from truthy coalescing and compound assignments, or a chain
-of nested conditionals. The expected value is computed
+arm, a loop built from truthy coalescing and compound assignments, a chain
+of nested conditionals, assignments and increments used as operands, loop
+conditions that store, stores in lazily evaluated operands, or loops used as
+expressions. The expected value is computed
 by ordinary host code in the harness, never by a second compiler path. It
 compiles the source once, lowers the same verified Core with Xpp/Xmm
 optimizations both disabled and enabled, executes both verified
@@ -187,8 +189,14 @@ documents. It runs independently of libFuzzer and does not claim guided
 coverage. `source_fuzz_smoke` checks valid-source lowering and then runs the
 differential oracle on every generated program shape at trip counts 0 through
 11, once with a zero and once with a nonzero generated expression, before
-mutation campaigns begin. Set `VXS_FUZZ_TRACE=1` to print each
-generated source with its reference and optimized LLVM IR.
+mutation campaigns begin. It also runs the programs of
+`ExpressionExecutionCases.cpp`: assignments, increments and loops used as
+values, each with a hand-written result that both native pipeline modes must
+return. That table is transcribed from the evaluation tables of
+`AssignmentExpressionTests.hs` and `LoopExpressionTests.hs`, where the same
+programs are checked against a reference Core evaluator. Set
+`VXS_FUZZ_TRACE=1` to print each generated source with its reference and
+optimized LLVM IR.
 
 Neither smoke program nor the HPC engine has libFuzzer's per-input timeout, and
 a miscompiled generated loop does not return. The developer helper therefore
@@ -232,8 +240,10 @@ The harnesses above are evidence about the inputs they ran, not proofs:
   refresh, project evaluation or REPL declaration form;
 - the differential generator covers integer arithmetic, three loop forms,
   one conditional statement, guarded recursion through short-circuit operators
-  and through conditional expressions, truthy coalescing, and five compound
-  assignment operators. Closures, other scalar types,
+  and through conditional expressions, truthy coalescing, five compound
+  assignment operators, assignment and increment expressions, and loop
+  expressions. Each of those shapes is one fixed program per trip count; the
+  generator does not compose them. Closures, other scalar types,
   ownership and templates have no generated-program oracle here; their
   executable checks live in the component test suites;
 - `ownership_fuzzer` varies thread count and iteration count, not arbitrary

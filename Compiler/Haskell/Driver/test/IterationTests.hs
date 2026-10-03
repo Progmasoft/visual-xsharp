@@ -17,7 +17,7 @@ import Visual.XSharp.Parser (Token (..), TokenKind (..))
 iterationTests :: [(String, Bool)]
 iterationTests =
     [ ("loop-control words are reserved lexer tokens", loopControlWordsAreReserved)
-    , ("postfix decrement is not swallowed as a line comment", postfixDecrementIsTokenized)
+    , ("a double dash after a value starts a line comment", doubleDashAfterValueIsComment)
     , ("while lowers to a verified CorePrep back-edge", whileLowersToControlFlow)
     , ("do/while executes its body before testing its condition", doWhileEntersBodyFirst)
     , ("classic for lowers its update as a separate CFG region", forUpdateHasItsOwnBlock)
@@ -25,7 +25,6 @@ iterationTests =
     , ("break in a while body targets that loop's exit", breakTargetsLoopExit)
     , ("nested break targets the innermost loop exit", nestedBreakTargetsInnerLoop)
     , ("prefix and postfix increments are accepted in statement position", bothIncrementFormsCompile)
-    , ("postfix decrement lowers as a mutable update", postfixDecrementCompiles)
     , ("for initializer bindings remain scoped to the loop", forInitializerDoesNotEscape)
     , ("increment rejects immutable bindings", immutableIncrementIsRejected)
     , ("increment rejects non-numeric bindings", nonNumericIncrementIsRejected)
@@ -67,7 +66,7 @@ doWhileSource =
         unlines
             [ "        int value = limit;"
             , "        do {"
-            , "            value--;"
+            , "            value -= 1;"
             , "        } while (value > 0);"
             , "        return value;"
             ]
@@ -97,7 +96,7 @@ allLoopsSource =
         , "    }"
         , "    public static int DoLoop(int limit) {"
         , "        int index = limit;"
-        , "        do { index--; } while (index > 0);"
+        , "        do { index -= 1; } while (index > 0);"
         , "        return index;"
         , "    }"
         , "    public static int ForLoop(int limit) {"
@@ -134,11 +133,13 @@ loopControlWordsAreReserved = case runLexer defaultLexer (LexerInput "iteration.
             == [(word, KeywordToken) | word <- ["while", "do", "for", "break", "continue"]]
     Left _ -> False
 
-postfixDecrementIsTokenized :: Bool
-postfixDecrementIsTokenized = case runLexer defaultLexer (LexerInput "iteration.vxs" "value--; -- explanation\n") of
+-- The language has no decrement operator: `--` starts a comment wherever it
+-- stands outside a string, also directly after a value.
+doubleDashAfterValueIsComment :: Bool
+doubleDashAfterValueIsComment = case runLexer defaultLexer (LexerInput "iteration.vxs" "value--; -- explanation\nnext") of
     Right tokens ->
         [(tokenText token, tokenKind token) | token <- tokens, tokenKind token /= EndOfFileToken]
-            == [("value", IdentifierToken), ("--", SymbolToken), (";", SymbolToken)]
+            == [("value", IdentifierToken), ("next", IdentifierToken)]
     Left _ -> False
 
 whileLowersToControlFlow :: Bool
@@ -242,13 +243,6 @@ bothIncrementFormsCompile =
             Just function -> countIncrements (coreFunctionBody function) == 2
             Nothing -> False
 
-postfixDecrementCompiles :: Bool
-postfixDecrementCompiles =
-    let text = source "int value = 1; value--; return value;"
-     in case compiled text >>= singleCoreFunction of
-            Just function -> countDecrements (coreFunctionBody function) == 1
-            Nothing -> False
-
 forInitializerDoesNotEscape :: Bool
 forInitializerDoesNotEscape =
     let text = source "for (int index = 0; index < limit; index++) {} return index;"
@@ -315,17 +309,6 @@ countIncrements = sum . map count
             CoreWhile _ body -> countIncrements body
             CoreDoWhile body _ -> countIncrements body
             CoreFor _ body update -> countIncrements body + countIncrements update
-            _ -> 0
-
-countDecrements :: [CoreStatement] -> Int
-countDecrements = sum . map count
-    where
-        count statement = case statement of
-            CoreAssign _ (CorePrimitive CoreSubtract _ _) -> 1
-            CoreIf _ yes no -> countDecrements yes + countDecrements no
-            CoreWhile _ body -> countDecrements body
-            CoreDoWhile body _ -> countDecrements body
-            CoreFor _ body update -> countDecrements body + countDecrements update
             _ -> 0
 
 isBranch :: CorePrepBlock -> Bool

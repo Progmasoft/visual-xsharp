@@ -60,7 +60,11 @@ cc_library(
 
 cc_binary(
     name = "source_fuzz_smoke",
-    srcs = ["SourceFuzzSmoke.cpp"],
+    srcs = [
+        "ExpressionExecutionCases.cpp",
+        "ExpressionExecutionCases.hpp",
+        "SourceFuzzSmoke.cpp",
+    ],
     deps = [":source_fuzz_harness"],
 )
 
