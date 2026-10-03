@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
-## Unreleased
+## 0.4.1 - 2026-10-03
 
 ### Language
 
@@ -59,6 +59,31 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 - The native Core-to-CorePrep adapter now writes fixed-width integer constants
   in the canonical integer form the CorePrep reader produces, so a lowered
   module is equal to its own wire round trip.
+
+### Verification and tooling
+
+- Added execution tests that run compiled loops with early returns and
+  integer division and check the results against hand-written expectations,
+  and corrected the documentation of rounded division to match.
+- Added a Clang-Tidy gate for the native sources to CI.
+- Rewrote the Go Git helper around the topic-branch workflow: `start`,
+  `update`, `sync`, `push`, `status` and `clean`. It never rewrites remote
+  history and refuses to commit on the default branch.
+
+### Upgrading from 0.4.0
+
+- `value--;` and `--value;` no longer decrement and still compile, now as
+  comments. Build once with the default warning level and replace every place
+  that reports `VXL0009` with `value -= 1`.
+- The compiler and its frontend library must come from the same release: the
+  frontend ABI moved to version 2, and a mixed pair refuses to load.
+- Core wire files written by 0.4.0 are version 6 and are not read by this
+  release, which reads version 8 only; rebuild `.core` artifacts from source.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the CLI, Bazel module, Kotlin
+  project model, and compiler project version to 0.4.1.
 
 ## 0.4.0 - 2026-09-27
 
