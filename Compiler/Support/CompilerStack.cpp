@@ -50,20 +50,28 @@ namespace Visual::XSharp::Support
     void
     RunOnCompilerStackRaw(void (*function)(void *), void *argument)
     {
+        RunOnStackRaw(kCompilerStackBytes, function, argument);
+    }
+
+    void
+    RunOnStackRaw(std::size_t bytes, void (*function)(void *), void *argument)
+    {
         Start start{ function, argument };
 #if defined(_WIN32)
         // Without the reservation flag the size would be committed up
         // front: every run would charge the whole stack against the
         // system's commit limit and pay for mapping it.
-        const auto handle
-            = _beginthreadex(nullptr,
-                             static_cast<unsigned>(kCompilerStackBytes),
-                             Enter,
-                             &start,
-                             STACK_SIZE_PARAM_IS_A_RESERVATION,
-                             nullptr);
+        const auto handle = _beginthreadex(nullptr,
+                                           static_cast<unsigned>(bytes),
+                                           Enter,
+                                           &start,
+                                           STACK_SIZE_PARAM_IS_A_RESERVATION,
+                                           nullptr);
         if (handle == 0U)
             llvm::report_fatal_error("could not start the compiler thread");
+        // _beginthreadex returns the thread handle as an integer; this cast
+        // is how its documentation says to recover the handle.
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
         const auto thread = reinterpret_cast<HANDLE>(handle);
         if (WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0)
             llvm::report_fatal_error("could not wait for the compiler thread");
@@ -72,7 +80,7 @@ namespace Visual::XSharp::Support
         // A pthread stack is mapped lazily, so the size is a reservation.
         pthread_attr_t attributes;
         if (pthread_attr_init(&attributes) != 0
-            || pthread_attr_setstacksize(&attributes, kCompilerStackBytes) != 0)
+            || pthread_attr_setstacksize(&attributes, bytes) != 0)
             llvm::report_fatal_error(
                 "could not size the stack of the compiler thread");
         pthread_t thread;

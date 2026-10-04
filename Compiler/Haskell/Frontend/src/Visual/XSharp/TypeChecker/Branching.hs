@@ -89,7 +89,7 @@ checkValueBlock checker environment expected spanValue (Block statements) =
         (typedLeading, inner, returns, leadingProblems) =
             branchStatements checker environment (branchValueLoops checker) leading
         returnProblems =
-            [ problem spanValue "VXT0047" "return inside a block used as a value is not supported"
+            [ problem spanValue "VXT0047" "return inside a block used as a value is not implemented"
             | not (null returns)
             ]
      in case final of
@@ -195,8 +195,10 @@ checkArm checker use environment expected subjectTypes (MatchArm spanValue patte
         checkedPatterns = zipWith (checkMatchPattern checker) (subjectTypes ++ repeat ErrorType) patterns
         typedPatterns = map fst checkedPatterns
         patternProblems = concatMap snd checkedPatterns
+        -- A pattern binding is an ordinary local: it may be assigned, like
+        -- every binding that is not declared final.
         armEnvironment =
-            [ (resolvedSymbol name, (matchPatternAnnotation patternValue, False))
+            [ (resolvedSymbol name, (matchPatternAnnotation patternValue, True))
             | patternValue <- reverse typedPatterns
             , Just name <- [matchPatternBinding patternValue]
             ]
@@ -212,10 +214,12 @@ checkArm checker use environment expected subjectTypes (MatchArm spanValue patte
                         ]
                  in (Just typed, problems ++ mismatch)
         (typedBody, bodyType, returns, bodyProblems) = case (use, body) of
-            -- The block of a statement arm is an ordinary statement block.
+            -- The block of a statement arm is an ordinary statement block. A
+            -- match in its last position was parsed as the value of the
+            -- block; here nothing takes that value, so it is a statement.
             (MatchStatement loops, BlockExpression blockSpan (Block statements) _) ->
                 let (typedStatements, _, blockReturns, problems) =
-                        branchStatements checker armEnvironment loops statements
+                        branchStatements checker armEnvironment loops (lastMatchAsStatement statements)
                  in (BlockExpression blockSpan (Block typedStatements) voidType, voidType, blockReturns, problems)
             (MatchStatement _, expression) ->
                 let (typed, _, problems) = branchExpression checker armEnvironment Nothing expression
@@ -232,6 +236,12 @@ checkArm checker use environment expected subjectTypes (MatchArm spanValue patte
         , returns
         , arityProblems ++ patternProblems ++ guardProblems ++ bodyProblems
         )
+
+lastMatchAsStatement :: [Statement name annotation] -> [Statement name annotation]
+lastMatchAsStatement statements = case reverse statements of
+    ExpressionStatement spanValue value@MatchExpression {} False : before ->
+        reverse (ExpressionStatement spanValue value True : before)
+    _ -> statements
 
 {- | Check one pattern against the type of its subject.
 

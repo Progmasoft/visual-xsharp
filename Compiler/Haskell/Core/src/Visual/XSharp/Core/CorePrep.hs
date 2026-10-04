@@ -101,6 +101,9 @@ data PrepState = PrepState
 data OpenBlock = OpenBlock
     { openBlockId :: Int
     , openBlockInstructions :: [CorePrepInstruction]
+    {- ^ Newest first, so that appending one is constant time; 'closeBlock'
+    puts them in execution order.
+    -}
     }
 
 {- | Adapt one verified Core module without changing its source-level semantics.
@@ -191,21 +194,41 @@ expressionSymbolIds expression = case expression of
         symbol = symbolIdValue . resolvedSymbol
 
 prepareStatements :: PrepState -> OpenBlock -> [CoreStatement] -> ([CorePrepBlock], PrepState)
-prepareStatements state open [] = ([closeBlock open CorePrepUnreachable], state)
-prepareStatements state open (statement : remaining) = case statement of
+prepareStatements state open statements = prepareStatementsTo CorePrepUnreachable state open statements []
+
+{- | Lower statements into blocks, ending the last open block with the given
+terminator and placing the given blocks after the ones produced.
+
+Both arguments exist so that the work is linear in the size of the body. A
+branch or a loop body falls through to a known block; passing that jump down
+ends the region with it directly, where patching the blocks afterwards would
+visit every block of a nested region once per enclosing region. The blocks
+that follow are passed in so that they are consed onto, where appending them
+would copy the blocks of a nested region once per enclosing region; an
+@else if@ chain is such a nest, one level per link.
+
+Only the last block of a region can be left open: a @return@, @break@ or
+@continue@ closes its block and drops the statements after it, and every
+nested region is closed by its own terminator.
+-}
+prepareStatementsTo ::
+    CorePrepTerminator -> PrepState -> OpenBlock -> [CoreStatement] -> [CorePrepBlock] -> ([CorePrepBlock], PrepState)
+prepareStatementsTo end state open [] rest = (closeBlock open end : rest, state)
+prepareStatementsTo end state open (statement : remaining) rest = case statement of
     CoreBind binding ->
         let (closed, continued, operation, after) = atomizeOperation state open (coreBindingValue binding)
             instruction = CorePrepBind (coreBindingName binding) (coreBindingType binding) (coreBindingMutable binding) operation
-            (later, final) = prepareStatements after (appendInstruction continued instruction) remaining
+            (later, final) = prepareStatementsTo end after (appendInstruction continued instruction) remaining rest
          in (closed ++ later, final)
     CoreAssign name value ->
         let (closed, continued, atom, after) = atomize state open value
-            (later, final) = prepareStatements after (appendInstruction continued (CorePrepAssign name atom)) remaining
+            (later, final) = prepareStatementsTo end after (appendInstruction continued (CorePrepAssign name atom)) remaining rest
          in (closed ++ later, final)
     CoreEvaluate value
         | discardsItsOperation value ->
             let (closed, continued, operation, after) = atomizeOperation state open value
-                (later, final) = prepareStatements after (appendInstruction continued (CorePrepEvaluate operation)) remaining
+                (later, final) =
+                    prepareStatementsTo end after (appendInstruction continued (CorePrepEvaluate operation)) remaining rest
              in (closed ++ later, final)
         | otherwise ->
             -- Only a call may be an instruction whose result is dropped.
@@ -213,11 +236,11 @@ prepareStatements state open (statement : remaining) = case statement of
             -- its operands still run and may trap, and the unused atom is
             -- ignored.
             let (closed, continued, _, after) = atomize state open value
-                (later, final) = prepareStatements after continued remaining
+                (later, final) = prepareStatementsTo end after continued remaining rest
              in (closed ++ later, final)
     CoreReturn value ->
         let (closed, continued, atom, after) = atomize state open value
-         in (closed ++ [closeBlock continued (CorePrepReturn atom)], after)
+         in (closed ++ closeBlock continued (CorePrepReturn atom) : rest, after)
     CoreIf condition trueBranch falseBranch ->
         let (conditionBlocks, conditionOpen, conditionAtom, afterCondition) = atomize state open condition
             (booleanOpen, booleanAtom, afterBoolean) = booleanizeAtom afterCondition conditionOpen conditionAtom
@@ -225,25 +248,31 @@ prepareStatements state open (statement : remaining) = case statement of
             falseId = trueId + 1
             joinId = falseId + 1
             branchState = afterBoolean {nextBlock = joinId + 1}
-            (trueBlocks, afterTrue) = prepareBranch branchState trueId joinId trueBranch
-            (falseBlocks, afterFalse) = prepareBranch afterTrue falseId joinId falseBranch
+            -- The states are threaded in source order. The block lists are
+            -- built back to front: each region is consed onto the blocks
+            -- that follow it, which laziness allows although those depend
+            -- on a later state.
+            (trueBlocks, afterTrue) = prepareBranchTo branchState trueId joinId trueBranch falseBlocks
+            (falseBlocks, afterFalse) = prepareBranchTo afterTrue falseId joinId falseBranch tailBlocks
             header = closeBlock booleanOpen (CorePrepBranch booleanAtom trueId falseId)
-            (tailBlocks, final) = prepareStatements afterFalse (OpenBlock joinId []) remaining
-         in (conditionBlocks ++ [header] ++ trueBlocks ++ falseBlocks ++ tailBlocks, final)
+            (tailBlocks, final) = prepareStatementsTo end afterFalse (OpenBlock joinId []) remaining rest
+         in (conditionBlocks ++ header : trueBlocks, final)
     CoreWhile condition body ->
         let (loopBlocks, exitOpen, afterLoop) = prepareWhile state open condition body
-            (tailBlocks, final) = prepareStatements afterLoop exitOpen remaining
+            (tailBlocks, final) = prepareStatementsTo end afterLoop exitOpen remaining rest
          in (loopBlocks ++ tailBlocks, final)
     CoreDoWhile body condition ->
         let (loopBlocks, exitOpen, afterLoop) = prepareDoWhile state open body condition
-            (tailBlocks, final) = prepareStatements afterLoop exitOpen remaining
+            (tailBlocks, final) = prepareStatementsTo end afterLoop exitOpen remaining rest
          in (loopBlocks ++ tailBlocks, final)
     CoreFor condition body update ->
         let (loopBlocks, exitOpen, afterLoop) = prepareFor state open condition body update
-            (tailBlocks, final) = prepareStatements afterLoop exitOpen remaining
+            (tailBlocks, final) = prepareStatementsTo end afterLoop exitOpen remaining rest
          in (loopBlocks ++ tailBlocks, final)
-    CoreBreak -> closeLoopControl state open True
-    CoreContinue -> closeLoopControl state open False
+    CoreBreak -> onto (closeLoopControl state open True)
+    CoreContinue -> onto (closeLoopControl state open False)
+    where
+        onto (blocks, after) = (blocks ++ rest, after)
 
 {- | Close the current block at the innermost loop transfer destination.
 The Boolean selects @break@ (exit) versus @continue@ (continuation point);
@@ -274,8 +303,7 @@ prepareWhile state incoming condition body =
         (booleanOpen, predicate, afterBoolean) = booleanizeAtom afterCondition conditionOpen atom
         branch = closeBlock booleanOpen (CorePrepBranch predicate bodyId exitId)
         bodyState = afterBoolean {loopTargets = (exitId, conditionId) : loopTargets afterBoolean}
-        (bodyBlocks, afterBody) = prepareStatements bodyState (OpenBlock bodyId []) body
-        bodyEnd = jumpOpenBlocks conditionId bodyBlocks
+        (bodyEnd, afterBody) = prepareStatementsTo (CorePrepJump conditionId) bodyState (OpenBlock bodyId []) body []
         finalState = afterBody {loopTargets = loopTargets state}
      in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd, OpenBlock exitId [], finalState)
 
@@ -293,8 +321,7 @@ prepareDoWhile state incoming body condition =
         reserved = state {nextBlock = exitId + 1}
         entry = closeBlock incoming (CorePrepJump bodyId)
         bodyState = reserved {loopTargets = (exitId, conditionId) : loopTargets state}
-        (bodyBlocks, afterBody) = prepareStatements bodyState (OpenBlock bodyId []) body
-        bodyEnd = jumpOpenBlocks conditionId bodyBlocks
+        (bodyEnd, afterBody) = prepareStatementsTo (CorePrepJump conditionId) bodyState (OpenBlock bodyId []) body []
         (conditionBlocks, conditionOpen, atom, afterCondition) =
             atomize afterBody (OpenBlock conditionId []) condition
         (booleanOpen, predicate, afterBoolean) = booleanizeAtom afterCondition conditionOpen atom
@@ -322,11 +349,10 @@ prepareFor state incoming condition body update =
         (booleanOpen, predicate, afterBoolean) = booleanizeAtom afterCondition conditionOpen atom
         branch = closeBlock booleanOpen (CorePrepBranch predicate bodyId exitId)
         bodyState = afterBoolean {loopTargets = (exitId, updateId) : loopTargets afterBoolean}
-        (bodyBlocks, afterBody) = prepareStatements bodyState (OpenBlock bodyId []) body
-        bodyEnd = jumpOpenBlocks updateId bodyBlocks
+        (bodyEnd, afterBody) = prepareStatementsTo (CorePrepJump updateId) bodyState (OpenBlock bodyId []) body []
         updateState = afterBody {loopTargets = (exitId, updateId) : loopTargets state}
-        (updateBlocks, afterUpdate) = prepareStatements updateState (OpenBlock updateId []) update
-        updateEnd = jumpOpenBlocks conditionId updateBlocks
+        (updateEnd, afterUpdate) =
+            prepareStatementsTo (CorePrepJump conditionId) updateState (OpenBlock updateId []) update []
         finalState = afterUpdate {loopTargets = loopTargets state}
      in ([entry] ++ conditionBlocks ++ [branch] ++ bodyEnd ++ updateEnd, OpenBlock exitId [], finalState)
 
@@ -340,21 +366,13 @@ discardsItsOperation expression = case expression of
     CoreApply {} -> True
     _ -> False
 
-jumpOpenBlocks :: Int -> [CorePrepBlock] -> [CorePrepBlock]
-jumpOpenBlocks target = map connect
-    where
-        connect block
-            | corePrepBlockTerminator block == CorePrepUnreachable =
-                block {corePrepBlockTerminator = CorePrepJump target}
-            | otherwise = block
-
 appendInstruction :: OpenBlock -> CorePrepInstruction -> OpenBlock
 appendInstruction open instruction =
-    open {openBlockInstructions = openBlockInstructions open ++ [instruction]}
+    open {openBlockInstructions = instruction : openBlockInstructions open}
 
 closeBlock :: OpenBlock -> CorePrepTerminator -> CorePrepBlock
 closeBlock open terminator =
-    CorePrepBlock (openBlockId open) (openBlockInstructions open) terminator
+    CorePrepBlock (openBlockId open) (reverse (openBlockInstructions open)) terminator
 
 -- Numeric conditions are a source-language convenience. Core retains their
 -- numeric type for optimization, while CorePrep makes the zero comparison
@@ -383,13 +401,10 @@ corePrepAtomType atom = case atom of
     CorePrepVariable _ valueType -> valueType
     CorePrepLiteral _ valueType -> valueType
 
-prepareBranch :: PrepState -> Int -> Int -> [CoreStatement] -> ([CorePrepBlock], PrepState)
-prepareBranch state blockId joinId statements =
-    let (blocks, after) = prepareStatements state (OpenBlock blockId []) statements
-     in (map addJump blocks, after)
-    where
-        addJump block | corePrepBlockTerminator block == CorePrepUnreachable = block {corePrepBlockTerminator = CorePrepJump joinId}
-        addJump block = block
+-- | Lower one branch of a conditional: it falls through to the join block.
+prepareBranchTo :: PrepState -> Int -> Int -> [CoreStatement] -> [CorePrepBlock] -> ([CorePrepBlock], PrepState)
+prepareBranchTo state blockId joinId =
+    prepareStatementsTo (CorePrepJump joinId) state (OpenBlock blockId [])
 
 atomize :: PrepState -> OpenBlock -> CoreExpression -> ([CorePrepBlock], OpenBlock, CorePrepAtom, PrepState)
 atomize state open expression = case expression of

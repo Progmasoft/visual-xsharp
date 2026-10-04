@@ -6,7 +6,8 @@ Verification is required after decoding artifacts and before native lowering.
 -}
 module Visual.XSharp.Core.CorePrep.Verifier (verifyCorePrep) where
 
-import Data.List (nub)
+import Data.IntSet qualified as IntSet
+import Data.Set qualified as Set
 import Visual.XSharp.AST
 import Visual.XSharp.Core qualified as Core
 import Visual.XSharp.Core.CorePrep
@@ -36,7 +37,7 @@ verifyFunction function =
             ++ duplicateIds "VXC0003" "duplicate CorePrep block id" blockIds
             ++ duplicateIds "VXC0004" "duplicate CorePrep parameter symbol" parameterIds
             ++ duplicateIds "VXC0005" "CorePrep symbol is defined more than once" (parameterIds ++ definitionIds)
-            ++ concatMap (verifyBlock blockIds) blocks
+            ++ concatMap (verifyBlock (IntSet.fromList blockIds)) blocks
     where
         verifyParameterType = verifyType "function parameter"
         missingEntry ids =
@@ -47,7 +48,7 @@ verifyFunction function =
 blockDefinitions :: CorePrepBlock -> [SymbolId]
 blockDefinitions block = [resolvedSymbol name | CorePrepBind name _ _ _ <- corePrepBlockInstructions block]
 
-verifyBlock :: [Int] -> CorePrepBlock -> [Diagnostic]
+verifyBlock :: IntSet.IntSet -> CorePrepBlock -> [Diagnostic]
 verifyBlock blockIds block =
     concatMap verifyInstruction (corePrepBlockInstructions block)
         ++ verifyTerminator blockIds (corePrepBlockTerminator block)
@@ -164,14 +165,17 @@ verifyPrimitive primitive atoms resultType
             NamedType _ _ -> not (isNumericType valueType) && valueType /= unitType
             _ -> False
 
-verifyTerminator :: [Int] -> CorePrepTerminator -> [Diagnostic]
+verifyTerminator :: IntSet.IntSet -> CorePrepTerminator -> [Diagnostic]
 verifyTerminator blockIds terminator = case terminator of
     CorePrepReturn atom -> verifyAtom atom
     CorePrepBranch atom trueTarget falseTarget -> verifyAtom atom ++ requireBool atom ++ targets [trueTarget, falseTarget]
     CorePrepJump target -> targets [target]
     CorePrepUnreachable -> []
     where
-        targets values = [problem "VXC0010" "CorePrep terminator targets a missing block" | any (`notElem` blockIds) values]
+        targets values =
+            [ problem "VXC0010" "CorePrep terminator targets a missing block"
+            | any (`IntSet.notMember` blockIds) values
+            ]
         requireBool atom = [problem "VXC0011" "CorePrep branch condition must be bool" | atomType atom /= boolType]
 
 verifyAtom :: CorePrepAtom -> [Diagnostic]
@@ -279,8 +283,11 @@ verifyType context valueType = map templateProblem (validateTemplateType 128 val
         renderPath [] = "the type root"
         renderPath indexes = "argument " ++ concatMap (\index -> "[" ++ show index ++ "]") indexes
 
-duplicateIds :: (Eq a) => String -> String -> [a] -> [Diagnostic]
-duplicateIds code message values = [problem code message | length values /= length (nub values)]
+-- A function may have tens of thousands of blocks and symbols, so the
+-- distinct values are counted through a set rather than by comparing every
+-- pair.
+duplicateIds :: (Ord a) => String -> String -> [a] -> [Diagnostic]
+duplicateIds code message values = [problem code message | length values /= Set.size (Set.fromList values)]
 
 problem :: String -> String -> Diagnostic
 problem code message = Diagnostic CorePrepStage Error code Nothing message

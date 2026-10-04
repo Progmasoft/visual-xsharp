@@ -339,12 +339,42 @@ the last, potentially under-approximating iteration.
 loopFactSummary :: IntegerFacts -> CoreStatement -> Maybe LoopFactSummary
 loopFactSummary input statement = case statement of
     CoreWhile condition body ->
-        Just $ solveLoop input (whileStep condition body [])
+        Just $ solve body (whileStep condition body [])
     CoreDoWhile body condition ->
-        Just $ solveLoop input (doWhileStep body condition)
+        Just $ solve body (doWhileStep body condition)
     CoreFor condition body update ->
-        Just $ solveLoop input (whileStep condition body update)
+        Just $ solve (body ++ update) (whileStep condition body update)
     _ -> Nothing
+    where
+        -- Every round of the fixed point analyses the loop body, and with it
+        -- every loop nested in the body, each of which iterates in turn: the
+        -- work is the product of the rounds of all enclosing loops, which is
+        -- exponential in the depth of the nest. Only the innermost levels
+        -- iterate; a loop with a deeper nest inside it is summarized in one
+        -- pass from the state that assumes nothing, which is always sound
+        -- and is what the iteration falls back to when it does not settle.
+        solve nested step
+            | loopNestingHeight nested >= iteratedLoopNesting = summarize 1 True emptyIntegerFacts (step emptyIntegerFacts)
+            | otherwise = solveLoop input step
+
+{- | How many levels of nested loops are iterated to a fixed point. A loop
+whose body holds this many levels of loops or more is summarized in a single
+pass, so the cost of a nest grows with its size and not exponentially with
+its depth.
+-}
+iteratedLoopNesting :: Int
+iteratedLoopNesting = 2
+
+-- | The deepest nest of loops in the statements: 0 when they hold no loop.
+loopNestingHeight :: [CoreStatement] -> Int
+loopNestingHeight = foldr (max . statementHeight) 0
+    where
+        statementHeight statement = case statement of
+            CoreIf _ whenTrue whenFalse -> max (loopNestingHeight whenTrue) (loopNestingHeight whenFalse)
+            CoreWhile _ body -> 1 + loopNestingHeight body
+            CoreDoWhile body _ -> 1 + loopNestingHeight body
+            CoreFor _ body update -> 1 + max (loopNestingHeight body) (loopNestingHeight update)
+            _ -> 0
 
 loopIterationLimit :: Int
 loopIterationLimit = 8

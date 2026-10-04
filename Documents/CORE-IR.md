@@ -349,21 +349,25 @@ The statements run where the source evaluates the expression:
   conjunction of `subject == literal` comparisons, the first branch is the
   body, and the second branch holds the arms after it. A pattern that accepts
   every value contributes no comparison, so a catch-all arm is its body
-  without a test and ends the chain. A name bound by a type pattern is an
-  immutable local initialized from its subject before the test of its arm.
-- A guard on an arm with comparisons is decided in a `$accepted` slot by the
-  rule of `&&` with a storing right operand: the guard and its statements run
-  only when the comparisons hold. A guard on an arm without comparisons is
-  the test itself.
+  without a test and ends the chain. A name bound by a type pattern is a
+  mutable local initialized from its subject. All such locals are bound
+  after the subjects and before the first test: binding an evaluated scalar
+  has no effect of its own, every local has its own symbol, and the chain
+  then holds nothing but tests and bodies.
+- A guard is the last operand of the short-circuit conjunction that tests
+  its arm, so it is evaluated only when the comparisons hold. A guard that
+  stores into a local needs statements of its own; it is decided in a
+  `$accepted` slot by the rule of `&&` with a storing right operand, and its
+  statements stand before the conditional of its arm, inside the false
+  branch of the arm before it.
 - A match used as an expression binds a mutable `$matched` slot and every
   body assigns it. The statement form has no slot; its block bodies are
   statement blocks of the enclosing body, so a `break value;` in them stores
   into the slot of the enclosing loop expression.
-- A match with more than 16 arms is lowered in groups of 16. The groups
-  follow each other in one statement sequence; a mutable `$taken` slot is
-  set by every body before it runs, and each group after the first is the
-  else branch of a test of that slot. The nesting of the lowered statements
-  is therefore bounded by one group, whatever the number of arms.
+- The arms form one chain: each arm is the false branch of the arm before
+  it, which is the shape of an `else if` chain. Every stage walks that shape
+  in a loop, so the lowering of a match is as deep as one arm, whatever the
+  number of arms.
 - `guard (condition) else { ... }` is `if (condition) { } else { ... }`.
 - A block statement has no Core form: its statements join the enclosing
   sequence. Every local has its own symbol, so the names of the block cannot
@@ -379,18 +383,35 @@ and the block numbering of CorePrep are those of the nested formulation; the
 Haskell CorePrep lowering and the native adapter are compared on such chains
 like on any other program.
 
+Three shapes of expression nest as deep as an expression is long: a chain
+of operators nests in the first operand of each primitive, a chain of
+conditional expressions in each false arm, and a sequence of bindings in
+each let body. The native wire reader walks all three in a loop; the Core
+verifier and the adapter walk operator chains in a loop, and the adapter
+also let bodies and conditional chains. The symbols, the blocks and the
+checks are those of the nested formulation.
+
 Other nesting is walked recursively, one level of recursion per level of
-nesting, in the wire codec, the verifier and the adapter. Two bounds keep
-that within the stack. The frontend rejects a function body that nests
-statements more than 256 levels or expressions more than 1024 levels deep,
-with a source position, before Core exists. The native wire reader and
-writer bound statement bodies and expressions at 4096 levels each, so Core
-from a file is bounded as well. Both bounds are stated against the stack the
-compiler runs on, `Visual/XSharp/Support/CompilerStack.hpp`: `vxs`, `vxsi`
-and the fuzz programs run the pipeline on a thread with 256 MiB of reserved
-stack instead of the stack the operating system gives the process, which is
-one megabyte on Windows. A program that hosts the pipeline on another thread
-must give it that stack or accept a lower depth.
+nesting, in the wire codec, the verifier and the adapter. The functions on
+those paths are written to keep their frames small: a statement holds two
+expressions by value and is large, so it is read into its place and built
+by functions that return before the next level is entered, and diagnostics
+and instructions are built outside the functions that recurse. Releasing a
+module still recurses once per level and per link of a chain.
+
+Two bounds keep the recursion within the stack. The frontend rejects a
+function body that nests statements more than 256 levels or expressions more
+than 1024 levels deep, with a source position, before Core exists. The
+native wire reader and writer bound statement bodies and expressions at 4096
+levels each, so Core from a file is bounded as well. `vxs`, `vxsi` and the
+fuzz programs run the pipeline on a thread with 256 MiB of reserved stack,
+`Visual/XSharp/Support/CompilerStack.hpp`, instead of the stack the
+operating system gives the process, which is one megabyte on Windows. A
+program that hosts the pipeline on another thread must give it enough stack
+or accept a lower depth. The stack each stage uses per level is measured
+with `//Compiler/Support/Tests:stack_probe`, which runs one stage on a stack
+of a chosen size; the measurements are recorded in
+`Benchmarks/2026-10-04-Nesting-And-Chains.md`.
 
 `Visual.XSharp.Desugarer.Sequencing` and `Visual.XSharp.Desugarer.Branching`
 hold these rules. Result slots are

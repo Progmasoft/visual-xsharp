@@ -16,14 +16,19 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   subject is. Several subjects are written `match (a), (b)` with one pattern
   for each in every arm. The subjects are evaluated once, left to right.
 - A pattern is a literal, `_`, or a type followed by a name or `_`. A type
-  pattern binds the subject for the guard and the body of its arm; the
-  binding is immutable. An arm may have a guard, `pattern if condition ->`,
+  pattern binds the value of the subject for the guard and the body of its
+  arm, as an ordinary local that may be assigned. An arm may have a guard, `pattern if condition ->`,
   which is evaluated only when the patterns of that arm accept.
 - An arm that can never be selected is an error: a second arm for the same
   literals, or any arm after one that accepts every value without a guard.
 - Added `if` as an expression: `int larger = if (a > b) { a } else { b };`.
   Both blocks are required and each ends with an expression that has no
-  semicolon. Only the selected block runs.
+  semicolon. Only the selected block runs. As the last item of a block that
+  is used as a value, an `if` with two such blocks and a `match` are the
+  value of that block.
+- The comma after a match arm is optional, as in the grammar. A
+  parenthesized pattern that follows an expression body without a comma is
+  read as a call of that body; `VXP0038` is reported at the arrow after it.
 - Added `guard (condition) else { ... }`. The block runs when the condition is
   false and must leave the enclosing scope with `return`, `break` or
   `continue`.
@@ -37,8 +42,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   such as `.Ready`, type patterns that name another type than their
   subject's, and a binding in the condition of `if`, `guard` or `while` are
   recognized and rejected with dedicated diagnostics until reference
-  subjects, enums, class hierarchies and optional values exist. `return`,
-  `break` and `continue` cannot leave a block that is used as a value.
+  subjects, enums, class hierarchies and optional values exist. Leaving a
+  block that is used as a value with `return`, `break` or `continue` is not
+  implemented and is rejected.
 
 ### Compiler pipeline
 
@@ -47,10 +53,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   expression, `guard` to an `if` with an empty first branch, and a block
   statement to its statements in the enclosing sequence. Core, its wire
   format, the optimizer, CorePrep and the native pipeline are unchanged.
-- A match with more than 16 arms is lowered in groups of 16 that follow each
-  other in one statement sequence, with a Boolean slot that records the taken
-  arm, so the nesting of the lowered Core does not grow with the number of
-  arms. Matches of 200 and of 2000 arms compile.
+- The arms of a match are lowered to one chain, each arm in the false branch
+  of the one before it, which is the shape of an `else if` chain and is
+  walked in a loop by every stage. The names the arms bind are bound before
+  the chain, and a guard is the last operand of the test of its arm. Matches
+  of 200 and of 2000 arms compile.
 - Fixed a stack overflow that ended the compiler without a diagnostic on an
   `else if` chain of about 150 links. Such a chain reaches Core as one level
   of nesting per link, and the native Core wire reader and writer, the Core
@@ -79,6 +86,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   `source_fuzz_smoke` runs 255 nested `if` statements
   and a sum of 1024 operands through both pipeline modes, and the source
   corpus has permanent seeds at and beyond both limits.
+- `source_fuzz_smoke` compiles each distinct body of its execution tables
+  once, up to eight small bodies in a program, and checks all runs of a body
+  in that program, instead of compiling a program for every run. No run was
+  removed. Under sanitizers the program takes 160 seconds where it took 291
+  on the same machine.
 - `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
   and the values of 83 program runs on the unoptimized and the optimized
   Core. `BranchingOracleTests.hs` generates 36 families of arm lists, writes
@@ -117,11 +129,18 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 - The frontend rejects a function body that nests statements more than 256
   levels deep (`VXP0039`) or expressions more than 1024 levels deep
   (`VXP0040`), at the first node that is too deep. An `else if` chain is not
-  nesting. The body of a `match` arm counts one level for each arm of its
-  match, up to seventeen, because that is how deep its lowering nests.
-  Measured on the compiler stack, the native stages pass 4000 levels of
-  either kind; the limits leave room for sanitizer builds, which use about
-  three times the stack per level.
+  nesting, and the body of a `match` arm is one level below its match
+  however many arms the match has.
+- The native stages use far less stack per level of nesting. The Core wire
+  reader, the Core verifier and the Core-to-CorePrep adapter no longer hold
+  statements, instructions or diagnostic texts in the frames of the
+  functions that recurse, and they walk chains of operators, of conditional
+  expressions and of let bindings in a loop. Measured with the new
+  `stack_probe` program, the whole native pipeline went from 14.9 KiB to
+  0.67 KiB of stack per statement level and from 10.6 KiB to 0.42 KiB per
+  expression level; a sanitizer build uses 1.67 KiB and 0.67 KiB. At the
+  frontend's limits that is under one megabyte in either build. The
+  measurements are in `Benchmarks/2026-10-04-Nesting-And-Chains.md`.
 - The native Core wire reader and writer bound the nesting of statement
   bodies at 4096 levels, as they already bounded expression depth. A `.core`
   file nested deeper is rejected as exceeding a limit instead of being
@@ -131,17 +150,32 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   what overflowed the stack on long `else if` chains; chains of 5000 links
   now compile.
 
+### Compile time
+
+- Nested loops no longer multiply the time of the integer analysis. It
+  repeated the fixed point of an inner loop on every pass over the loop
+  around it, so 14 nested loops took a second and 50 did not finish. It now
+  iterates only loops that hold at most one further level of loops and
+  treats what a deeper loop assigns as unknown; 255 nested loops compile in
+  under four seconds.
+- The Haskell Core wire encoder, the Haskell CorePrep lowering and the
+  CorePrep verifier no longer copy what they have produced once per level
+  of nesting or per block. On an `else if` chain of 2048 links, encoding
+  went from 4.9 seconds to 60 milliseconds, lowering from 2.2 seconds to 20
+  milliseconds and verification from 0.75 seconds to 15 milliseconds.
+- `Compiler/Haskell/Core/Benches` has benchmarks for nested loops, `else if`
+  chains and sequences of `if` statements.
+
 ### Known limitations
 
-- Compile time grows faster than the program in three cases, all in the
-  frontend and none new in this version: an `else if` chain of 2000 links
-  takes about 10 seconds and one of 5000 about a minute; 2000 sequential
-  `if` statements take about 4 seconds; and each additional level of nested
-  loops multiplies the time by about 1.4, so 14 nested loops take 2 seconds
-  and 50 do not finish. The nesting limits do not bound the last case.
-- An `if` or a `match` at the start of a statement is the statement form,
-  also as the last item of a block that is used as a value. Write it in
-  parentheses to use it as the value of the block.
+- Compile time still grows faster than the program on very long functions:
+  from 2000 to 4000 `else if` links the time of `vxs check` grows from 3.3
+  to 10.4 seconds, and from 2000 to 4000 sequential `if` statements from 2.8
+  to 7.1 seconds. Nothing bounds the number of statements of a function.
+- Releasing a Core module recurses once per level of nesting and per link of
+  an `else if` chain, at about 0.4 KiB of stack each.
+- In the body of a method, a closure or a property, an `if` or a `match` in
+  last position is the statement form.
 
 ### Upgrading from 0.4.1
 

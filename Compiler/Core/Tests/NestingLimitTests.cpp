@@ -282,7 +282,8 @@ TEST_CASE("the compiler stack carries a result back to its caller",
         touched = 7;
     });
     CHECK(touched == 7);
-    CHECK(Visual::XSharp::Support::kCompilerStackBytes == 256U * 1024U * 1024U);
+    CHECK(Visual::XSharp::Support::kCompilerStackBytes
+          == std::size_t{ 256U } * 1024U * 1024U);
 }
 
 TEST_CASE("every native Core stage walks deep nesting on the compiler stack",

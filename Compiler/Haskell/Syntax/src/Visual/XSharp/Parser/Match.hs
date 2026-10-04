@@ -125,9 +125,12 @@ parseArms grammar = do
 
 {- | One arm: @patterns [if guard] -> body [,]@.
 
-The comma after a block body is optional. After an expression body it is
-required unless the arm is the last one: without it, the parenthesized
-pattern of the next arm would continue the expression as a call.
+The comma is optional after every body, as in the grammar. An expression
+body is parsed like any expression, so a parenthesized pattern that follows
+it without a comma is read as the argument list of a call of the body. That
+reading is the grammar's own: the arrow that then follows cannot continue an
+expression, and the diagnostic for it says what happened instead of naming
+the arrow as unexpected.
 -}
 parseArm :: BranchGrammar -> P (MatchArm Identifier ())
 parseArm grammar = do
@@ -144,10 +147,13 @@ parseArm grammar = do
         blockBody <- peekText "{"
         body <- if blockBody then valueBlock grammar else grammarExpression grammar
         separated <- optionalSymbol ","
-        closes <- peekText "}"
-        if blockBody || separated || closes
-            then pure ()
-            else failCurrent "VXP0038" "a match arm with an expression body must be followed by ',' or '}'"
+        swallowed <- peekText "->"
+        if not blockBody && not separated && swallowed
+            then
+                failCurrent
+                    "VXP0038"
+                    "the pattern of this arm was read as part of the previous arm's body; write ',' after that body"
+            else pure ()
         pure (patterns, guard, body)
     pure (MatchArm spanValue patterns guard body)
 

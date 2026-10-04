@@ -6,9 +6,13 @@
 This page describes what the compiler implements today for `match`, for `if`
 used as an expression, for `guard` and for a block written as a statement:
 what is accepted, in what order things are evaluated, and where the
-implemented subset ends. The language design is in `Spec/Language/Decls.vxs`,
-sections 31 and 32; the diagnostics are listed in
-[Diagnostics](DIAGNOSTICS.md); the lowering is described in
+implemented subset ends. It describes an implementation and is not the
+language contract: the language is defined by `Spec/`, here
+`Spec/Language/Decls.vxs`, sections 31 and 32, and where this page and the
+specification differ the specification is right and the compiler is wrong.
+Where the specification is silent, what the compiler does today is a state of
+the implementation and not a decision about the language. The diagnostics are
+listed in [Diagnostics](DIAGNOSTICS.md); the lowering is described in
 [Core IR](CORE-IR.md).
 
 ## Match
@@ -31,9 +35,11 @@ int kind = match (code), (strict) {
   its arm accept. A guard that is false passes the subjects on to the arms
   after it. A guard is `bool` or numeric; a numeric guard holds when it is
   not zero.
-- The body is an expression or a block. The comma after a block body is
-  optional; after an expression body it is required unless the arm is the
-  last one.
+- The body is an expression or a block. The comma after an arm is optional,
+  as in the grammar. An expression body is parsed like every expression, so
+  a parenthesized pattern that follows it without a comma is read as the
+  argument list of a call of the body; the arrow that then follows is
+  reported as `VXP0038`, which says what was read.
 
 ### Patterns
 
@@ -41,11 +47,12 @@ int kind = match (code), (strict) {
 | --- | --- | --- |
 | a literal, `1`, `true`, `'a'` | the value equal to it | typed from its subject; has no sign |
 | `_` | every value | |
-| `Type name` | every value of the subject's type | binds the subject as an immutable local |
+| `Type name` | every value of the subject's type | binds the value of the subject as a local of its arm |
 | `Type _` | every value of the subject's type | binds nothing |
 
-A binding is in scope in the guard and the body of its own arm only. Two arms
-may bind the same name; one arm may not bind a name twice, and a binding may
+A binding is in scope in the guard and the body of its own arm only. It is an
+ordinary local: it may be assigned, and assigning it does not change the
+subject. Two arms may bind the same name; one arm may not bind a name twice, and a binding may
 not reuse a name that is already in scope. A bare name is not a pattern: a
 binding always states its type.
 
@@ -61,7 +68,8 @@ may `return`, and inside a loop they may `break` and `continue`. An expression
 body is evaluated for its effect and must have one. When no arm accepts,
 nothing happens.
 
-Anywhere else a `match` is an expression:
+Anywhere else a `match` is an expression, and so is a `match` that is the
+last item of a block used as a value:
 
 - every arm yields a value, and all arms have one type;
 - an arm made only of untyped numeric literals takes its type from the place
@@ -86,15 +94,22 @@ An `if` in operand position is an expression. Both blocks are required, the
 `else` branch is a block and not another `if`, and each block ends with an
 expression that has no semicolon; that expression is the value of the block.
 Only the selected block runs. The two blocks have one type. An `if` at the
-start of a statement is the `if` statement, as before.
+start of a statement is the `if` statement, as before, with one exception: as
+the last item of a block used as a value, an `if` whose two blocks both end
+with a value is the value of that block.
+
+```vxs
+int sign = if (value < 0) { 0 - 1 } else { if (value > 0) { 1 } else { 0 } };
+```
 
 ## Blocks used as values
 
 The blocks of an `if` expression and the block bodies of the arms of a match
 expression are blocks used as values. Statements before the final expression
-run in order, and names declared in the block end with it. `return`, `break`
-and `continue` cannot leave such a block; a loop inside the block may still be
-left with `break`.
+run in order, and names declared in the block end with it. Leaving such a
+block with `return`, `break` or `continue` is not implemented and is rejected
+(`VXT0047`, `VXT0059`); a loop inside the block may still be left with
+`break`.
 
 ## Guard
 
@@ -126,32 +141,14 @@ name that is in scope around it.
   `if (auto user = Find())`, is recognized and rejected: it requires optional
   values.
 - `match` and `guard` are reserved words.
-- A match may have any number of arms: the lowering groups them, so its
-  nesting does not grow with the number of arms. Statements may nest 256
-  levels deep and expressions 1024; the body of a match arm counts one level
-  for each arm of its match, up to seventeen. See the nesting limits in
+- A match may have any number of arms: it is lowered to one chain of
+  conditionals, the shape of an `else if` chain, which every stage walks in
+  a loop. The body of an arm is one statement level below its match however
+  many arms the match has. See the nesting limits in
   [Diagnostics](DIAGNOSTICS.md).
-- An `if` or a `match` at the start of a statement is the statement form,
-  also as the last item of a block used as a value. To use one as the value
-  of a block, write it in parentheses.
-
-## Choices the specification does not fix
-
-The specification gives examples for these forms, not complete rules. The
-implementation makes the following choices where it is silent. They are
-provisional: each is pinned by a test so that changing it is a deliberate
-act, and none is a statement of the language design.
-
-| Choice | Basis |
-| --- | --- |
-| A statement `match` may select no arm; an expression `match` must always select one. | By analogy with `if` used as an expression, which the specification requires to have an `else`. The specification also has an `[Exhaustive]` attribute for data and enum types whose effect on `match` it does not state. |
-| A name bound by a type pattern is immutable. | None. Other bindings, including the binding of `for (:)`, may be rebound unless they are `final`. |
-| A literal pattern has no sign. | The grammar: a pattern is a `literal`, and a literal has no sign. A negative constant cannot be matched. |
-| The comma after an expression body is required unless the arm is the last one. | Stricter than the grammar, which makes the comma optional after every arm. Without it the parenthesized pattern of the next arm parses as a call of the body. |
-| The `else` block of a `guard` must end by leaving the enclosing scope. | The specification shows only `return;` there and says the binding of a guard is available after it. |
-| `return`, `break` and `continue` cannot leave a block used as a value. | An implementation limit, not a rule: the lowering has no place to carry them yet. |
-| `guard` and `if` accept a plain condition. | The grammar. The specification shows `guard` only with a binding, which is recognized and rejected until optional values exist. |
-| A type pattern over a scalar must name the subject's own type and then always accepts. | The specification shows type patterns for class hierarchies only. |
+- In the body of a method, a closure or a property, which may also end with
+  an expression, an `if` or a `match` in last position is still the
+  statement form.
 
 ## Where it is implemented and tested
 

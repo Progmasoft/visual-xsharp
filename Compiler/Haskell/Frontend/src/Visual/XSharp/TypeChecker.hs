@@ -614,14 +614,14 @@ checkStatementWith context environment expected loops statement = case statement
                 (Just (ExpressionLoop _), Nothing) ->
                     [problem spanValue "VXT0040" "a loop used as an expression must be left by a break that carries a value"]
                 (Just ValueBlockEdge, _) ->
-                    [problem spanValue "VXT0059" "break cannot leave a block that is used as a value"]
+                    [problem spanValue "VXT0059" "leaving a block that is used as a value with break is not implemented"]
                 _ -> []
          in (BreakStatement spanValue typedValue, environment, [], placementProblems ++ valueProblems)
     ContinueStatement spanValue ->
         let problems = case enclosingLoops loops of
                 [] -> [problem spanValue "VXT0027" "continue is only valid inside a loop"]
                 ValueBlockEdge : _ ->
-                    [problem spanValue "VXT0059" "continue cannot leave a block that is used as a value"]
+                    [problem spanValue "VXT0059" "leaving a block that is used as a value with continue is not implemented"]
                 _ -> []
          in (ContinueStatement spanValue, environment, [], problems)
     GuardStatement spanValue condition block ->

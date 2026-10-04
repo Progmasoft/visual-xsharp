@@ -197,13 +197,20 @@ return. Those tables are transcribed from the evaluation tables of
 `AssignmentExpressionTests.hs`, `LoopExpressionTests.hs` and
 `BranchingTests.hs`, where the same programs are checked against a reference
 Core evaluator. `BranchingExecutionCases.cpp` also runs a match of 200 arms on
-a subject in its second group of the lowering and on one that only the
-catch-all accepts, an `else if` chain of 300 links, which the native stages
-after Core walk in a loop, on its last link and past it, and programs at the
-nesting limits of the frontend: 255 nested `if` statements and a sum of 1024
-operands. Each of those runs compiles its whole program again in both
-pipeline modes, so they are few: the smoke program has a process watchdog,
-and sanitizer builds are several times slower.
+seven subjects, from its first arm to the catch-all, an `else if` chain of
+300 links, which the native stages after Core walk in a loop, on five
+subjects, and programs at the nesting limits of the frontend: 255 nested
+`if` statements, entered and not entered, and a sum of 1024 operands.
+
+A body that several runs share is compiled once, and up to eight small
+bodies share a program. `ExecutionCases.cpp` puts each body in a method of
+its own and calls it once for each run from one further method, which
+compares every result with its expected value and returns a distinct bit for
+each run that differs; the program must return zero from both
+pipeline modes, and a result that is not zero names the runs that failed.
+Compiling dominates the cost of these cases under sanitizers, and the smoke
+program has a process watchdog, so the runs of a body are not worth a
+compilation each.
 
 The source fuzz targets and `source_fuzz_smoke` run the compiler on the
 compiler stack, as `vxs` does, because an input nested up to the frontend's

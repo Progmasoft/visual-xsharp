@@ -145,7 +145,7 @@ specimen =
         , "guard (left >= 0) else { return 0; }"
         , "{ int scoped = left; }"
         , "int kind = match (left), (flag) { (0), (_) -> 10, (1), (true) -> 20,"
-        , "(int low), (_) if low < 5 -> { int doubled = low * 2; doubled }, (_), (_) -> 30 };"
+        , "(int low), (_) if low < 5 -> { int doubled = low * 2; doubled } (_), (_) -> 30 };"
         , "int total = 0;"
         , "for (int index = 0; index < right; index++) {"
         , "match (index % 3) { 0 -> { continue; }, 1 -> total += 10, _ -> { total += index; } }"

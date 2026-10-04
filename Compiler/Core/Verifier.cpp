@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <llvm/ADT/ArrayRef.h>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include "Compiler/Artifact/SourcePath.hpp"
@@ -97,40 +99,48 @@ namespace Visual::XSharp::Core
                 return locals.Contains(symbol) || functions_.Contains(symbol);
             }
 
-            void
-            Add(std::string code, std::string message, SymbolId symbol = 0U)
+            // The verifier recurses once per level of nesting. Reporting
+            // is therefore kept out of the functions that recurse: the
+            // texts are passed as views and become strings only here, so a
+            // check costs its caller no string on the stack.
+            [[gnu::noinline]] void
+            Add(std::string_view code,
+                std::string_view message,
+                SymbolId symbol = 0U)
             {
-                issues_.push_back(VerificationIssue{ std::move(code),
-                                                     std::move(message),
+                issues_.push_back(VerificationIssue{ std::string(code),
+                                                     std::string(message),
                                                      function_.symbol.id,
                                                      symbol });
             }
             void
             CheckSymbol(const SymbolName &symbol,
-                        std::string code,
-                        std::string message)
+                        std::string_view code,
+                        std::string_view message)
             {
                 if (symbol.id == 0U)
-                    Add(std::move(code), std::move(message), symbol.id);
+                    Add(code, message, symbol.id);
             }
-            void
-            CheckType(const Type &type, std::string code, std::string message)
+            [[gnu::noinline]] void
+            CheckType(const Type &type,
+                      std::string_view code,
+                      std::string_view message)
             {
                 if (ContainsInvalidType(type))
-                    Add(std::move(code), std::move(message));
+                    Add(code, message);
                 for (const auto &templateIssue : Template::Validate(type))
                     Add("VXC1040",
                         "invalid Core template type: " + templateIssue.message);
             }
-            void
+            [[gnu::noinline]] void
             CheckSameType(const Type &expected,
                           const Type &actual,
-                          std::string code,
-                          std::string message,
+                          std::string_view code,
+                          std::string_view message,
                           SymbolId symbol = 0U)
             {
                 if (expected != actual)
-                    Add(std::move(code), std::move(message), symbol);
+                    Add(code, message, symbol);
             }
             [[nodiscard]] static auto
             ContainsInvalidType(const Type &type) -> bool
@@ -251,7 +261,7 @@ namespace Visual::XSharp::Core
              * environment for the whole chain instead of copying it per
              * link.
              */
-            void
+            [[gnu::noinline]] void
             VerifyConditionalChain(const Statement &first,
                                    Environment &environment,
                                    const Type &expectedReturnType,
@@ -289,6 +299,10 @@ namespace Visual::XSharp::Core
                                  scope);
             }
 
+            // Each kind of statement and of expression is verified by a
+            // function of its own, so that a level of nesting costs the
+            // frame of the kind that nests and not the frames of every kind
+            // together.
             void
             VerifyStatement(const Statement &statement,
                             Environment &environment,
@@ -298,58 +312,11 @@ namespace Visual::XSharp::Core
                 switch (statement.kind)
                 {
                     case Statement::Kind::Bind:
-                    {
-                        const auto &binding = statement.binding;
-                        CheckSymbol(binding.symbol,
-                                    "VXC1008",
-                                    "Core binding symbol must be positive");
-                        CheckType(binding.type,
-                                  "VXC1009",
-                                  "Core binding has an unresolved type");
-                        VerifyExpression(binding.value, environment);
-                        CheckSameType(binding.type,
-                                      binding.value.type,
-                                      "VXC1011",
-                                      "Core binding value type does not match "
-                                      "its declaration",
-                                      binding.symbol.id);
-                        if (ContainsDefinition(environment, binding.symbol.id))
-                            Add("VXC1010",
-                                "Core binding symbol is already defined",
-                                binding.symbol.id);
-                        environment.InsertOrAssign(
-                            binding.symbol.id,
-                            Definition{ binding.type,
-                                        binding.mutableBinding,
-                                        binding.symbol.spelling });
+                        VerifyBinding(statement.binding, environment);
                         return;
-                    }
                     case Statement::Kind::Assign:
-                    {
-                        CheckSymbol(statement.destination,
-                                    "VXC1015",
-                                    "Core assignment symbol must be positive");
-                        VerifyExpression(statement.expression, environment);
-                        const auto *found
-                            = FindDefinition(environment,
-                                             statement.destination.id);
-                        if (found == nullptr)
-                            Add("VXC1012",
-                                "Core assignment targets an undefined symbol",
-                                statement.destination.id);
-                        else if (!found->mutableBinding)
-                            Add("VXC1013",
-                                "Core assignment targets an immutable symbol",
-                                statement.destination.id);
-                        else
-                            CheckSameType(
-                                found->type,
-                                statement.expression.type,
-                                "VXC1014",
-                                "Core assignment value has the wrong type",
-                                statement.destination.id);
+                        VerifyAssignment(statement, environment);
                         return;
-                    }
                     case Statement::Kind::Return:
                         VerifyExpression(statement.expression, environment);
                         CheckSameType(expectedReturnType,
@@ -369,26 +336,8 @@ namespace Visual::XSharp::Core
                     case Statement::Kind::While:
                     case Statement::Kind::DoWhile:
                     case Statement::Kind::For:
-                    {
-                        VerifyExpression(statement.expression, environment);
-                        if (!accepts_boolean_context(statement.expression.type))
-                            Add("VXC1017",
-                                "Core loop condition must be bool or numeric");
-                        auto loopEnvironment = environment;
-                        VerifyStatements(statement.loopBody,
-                                         loopEnvironment,
-                                         expectedReturnType,
-                                         TransferScope::InLoopBody);
-                        if (statement.kind == Statement::Kind::For)
-                        {
-                            auto updateEnvironment = environment;
-                            VerifyStatements(statement.loopUpdate,
-                                             updateEnvironment,
-                                             expectedReturnType,
-                                             TransferScope::InForUpdate);
-                        }
+                        VerifyLoop(statement, environment, expectedReturnType);
                         return;
-                    }
                     case Statement::Kind::Break:
                         if (scope == TransferScope::OutsideLoop)
                             Add("VXC1064", "Core break appears outside a loop");
@@ -404,46 +353,126 @@ namespace Visual::XSharp::Core
                         return;
                 }
             }
-            void
+            [[gnu::noinline]] void
+            VerifyBinding(const Binding &binding, Environment &environment)
+            {
+                CheckSymbol(binding.symbol,
+                            "VXC1008",
+                            "Core binding symbol must be positive");
+                CheckType(binding.type,
+                          "VXC1009",
+                          "Core binding has an unresolved type");
+                VerifyExpression(binding.value, environment);
+                CheckSameType(binding.type,
+                              binding.value.type,
+                              "VXC1011",
+                              "Core binding value type does not match "
+                              "its declaration",
+                              binding.symbol.id);
+                if (ContainsDefinition(environment, binding.symbol.id))
+                    Add("VXC1010",
+                        "Core binding symbol is already defined",
+                        binding.symbol.id);
+                environment.InsertOrAssign(
+                    binding.symbol.id,
+                    Definition{ binding.type,
+                                binding.mutableBinding,
+                                binding.symbol.spelling });
+            }
+            [[gnu::noinline]] void
+            VerifyAssignment(const Statement &statement,
+                             const Environment &environment)
+            {
+                CheckSymbol(statement.destination,
+                            "VXC1015",
+                            "Core assignment symbol must be positive");
+                VerifyExpression(statement.expression, environment);
+                const auto *found
+                    = FindDefinition(environment, statement.destination.id);
+                if (found == nullptr)
+                    Add("VXC1012",
+                        "Core assignment targets an undefined symbol",
+                        statement.destination.id);
+                else if (!found->mutableBinding)
+                    Add("VXC1013",
+                        "Core assignment targets an immutable symbol",
+                        statement.destination.id);
+                else
+                    CheckSameType(found->type,
+                                  statement.expression.type,
+                                  "VXC1014",
+                                  "Core assignment value has the wrong type",
+                                  statement.destination.id);
+            }
+            [[gnu::noinline]] void
+            VerifyLoop(const Statement &statement,
+                       const Environment &environment,
+                       const Type &expectedReturnType)
+            {
+                VerifyExpression(statement.expression, environment);
+                if (!accepts_boolean_context(statement.expression.type))
+                    Add("VXC1017",
+                        "Core loop condition must be bool or numeric");
+                auto loopEnvironment = environment;
+                VerifyStatements(statement.loopBody,
+                                 loopEnvironment,
+                                 expectedReturnType,
+                                 TransferScope::InLoopBody);
+                if (statement.kind == Statement::Kind::For)
+                {
+                    auto updateEnvironment = environment;
+                    VerifyStatements(statement.loopUpdate,
+                                     updateEnvironment,
+                                     expectedReturnType,
+                                     TransferScope::InForUpdate);
+                }
+            }
+
+            /**
+             * @brief Verify one expression.
+             *
+             * A chain of operators nests in the first operand of each
+             * primitive, as deep as the chain is long. Those operands are
+             * walked in a loop: the type of each primitive is checked on
+             * the way down, and its other operands and its own rules on
+             * the way back, innermost first. The checks and their order
+             * are those of the recursive formulation.
+             */
+            [[gnu::noinline]] void
             VerifyExpression(const Expression &expression,
                              const Environment &environment)
             {
-                CheckType(expression.type,
-                          "VXC1018",
-                          "Core expression has an unresolved type");
+                std::vector<const Expression *> chain;
+                const Expression *current = &expression;
+                for (;;)
+                {
+                    CheckType(current->type,
+                              "VXC1018",
+                              "Core expression has an unresolved type");
+                    if (current->kind != Expression::Kind::Primitive
+                        || current->operands.empty())
+                        break;
+                    chain.push_back(current);
+                    current = &current->operands.front();
+                }
+                VerifyUnchained(*current, environment);
+                while (!chain.empty())
+                {
+                    VerifyPrimitive(*chain.back(), environment);
+                    chain.pop_back();
+                }
+            }
+            /// An expression that is not a primitive with operands; its
+            /// type was checked.
+            void
+            VerifyUnchained(const Expression &expression,
+                            const Environment &environment)
+            {
                 switch (expression.kind)
                 {
                     case Expression::Kind::Variable:
-                    {
-                        CheckSymbol(expression.symbol,
-                                    "VXC1019",
-                                    "Core variable symbol must be positive");
-                        const auto *found
-                            = FindDefinition(environment, expression.symbol.id);
-                        if (found == nullptr)
-                            Add("VXC1020",
-                                "Core expression references an undefined "
-                                "symbol",
-                                expression.symbol.id);
-                        else
-                        {
-                            CheckSameType(found->type,
-                                          expression.type,
-                                          "VXC1021",
-                                          "Core variable type disagrees with "
-                                          "its definition",
-                                          expression.symbol.id);
-                            if (!expression.symbol.spelling.empty()
-                                && !found->spelling.empty()
-                                && expression.symbol.spelling
-                                       != found->spelling)
-                                Add("VXC1030",
-                                    "Core symbol spelling disagrees with its "
-                                    "definition",
-                                    expression.symbol.id);
-                        }
+                        VerifyVariable(expression, environment);
                         return;
-                    }
                     case Expression::Kind::Literal:
                         VerifyLiteral(expression);
                         return;
@@ -457,78 +486,110 @@ namespace Visual::XSharp::Core
                         VerifyClosure(expression, environment);
                         return;
                     case Expression::Kind::Let:
-                    {
-                        CheckSymbol(expression.letSymbol,
-                                    "VXC1045",
-                                    "Core let symbol must be positive");
-                        CheckType(expression.letType,
-                                  "VXC1046",
-                                  "Core let binding has an unresolved type");
-                        if (!expression.letValue || !expression.letBody)
-                        {
-                            Add("VXC1047", "Core let value or body is missing");
-                            return;
-                        }
-                        VerifyExpression(*expression.letValue, environment);
-                        CheckSameType(expression.letType,
-                                      expression.letValue->type,
-                                      "VXC1048",
-                                      "Core let value has the wrong type");
-                        auto bodyEnvironment = environment;
-                        bodyEnvironment.InsertOrAssign(
-                            expression.letSymbol.id,
-                            Definition{ expression.letType,
-                                        false,
-                                        expression.letSymbol.spelling });
-                        VerifyExpression(*expression.letBody, bodyEnvironment);
-                        CheckSameType(
-                            expression.type,
-                            expression.letBody->type,
-                            "VXC1049",
-                            "Core let result disagrees with its body");
+                        VerifyLet(expression, environment);
                         return;
-                    }
                     case Expression::Kind::Conditional:
-                    {
-                        if (expression.operands.size() != 3U)
-                        {
-                            Add("VXC1071",
-                                "Core conditional must contain a test and two "
-                                "arms");
-                            return;
-                        }
-                        const auto &test = expression.operands[0];
-                        const auto &whenTrue = expression.operands[1];
-                        const auto &whenFalse = expression.operands[2];
-                        VerifyExpression(test, environment);
-                        if (!accepts_boolean_context(test.type))
-                            Add("VXC1067",
-                                "Core conditional test must be bool or "
-                                "numeric");
-                        VerifyExpression(whenTrue, environment);
-                        VerifyExpression(whenFalse, environment);
-                        CheckSameType(expression.type,
-                                      whenTrue.type,
-                                      "VXC1068",
-                                      "Core conditional result type disagrees "
-                                      "with its first arm");
-                        CheckSameType(expression.type,
-                                      whenFalse.type,
-                                      "VXC1069",
-                                      "Core conditional result type disagrees "
-                                      "with its second arm");
-                        // The result is materialized in a plain storage
-                        // slot. Owned values would need move and release
-                        // rules for that slot.
-                        if (!accepts_boolean_context(expression.type))
-                            Add("VXC1070",
-                                "Core conditional result must be bool or "
-                                "numeric");
+                        VerifyConditional(expression, environment);
                         return;
-                    }
                 }
             }
-            void
+            [[gnu::noinline]] void
+            VerifyVariable(const Expression &expression,
+                           const Environment &environment)
+            {
+                CheckSymbol(expression.symbol,
+                            "VXC1019",
+                            "Core variable symbol must be positive");
+                const auto *found
+                    = FindDefinition(environment, expression.symbol.id);
+                if (found == nullptr)
+                {
+                    Add("VXC1020",
+                        "Core expression references an undefined symbol",
+                        expression.symbol.id);
+                    return;
+                }
+                CheckSameType(found->type,
+                              expression.type,
+                              "VXC1021",
+                              "Core variable type disagrees with its "
+                              "definition",
+                              expression.symbol.id);
+                if (!expression.symbol.spelling.empty()
+                    && !found->spelling.empty()
+                    && expression.symbol.spelling != found->spelling)
+                    Add("VXC1030",
+                        "Core symbol spelling disagrees with its definition",
+                        expression.symbol.id);
+            }
+            [[gnu::noinline]] void
+            VerifyLet(const Expression &expression,
+                      const Environment &environment)
+            {
+                CheckSymbol(expression.letSymbol,
+                            "VXC1045",
+                            "Core let symbol must be positive");
+                CheckType(expression.letType,
+                          "VXC1046",
+                          "Core let binding has an unresolved type");
+                if (!expression.letValue || !expression.letBody)
+                {
+                    Add("VXC1047", "Core let value or body is missing");
+                    return;
+                }
+                VerifyExpression(*expression.letValue, environment);
+                CheckSameType(expression.letType,
+                              expression.letValue->type,
+                              "VXC1048",
+                              "Core let value has the wrong type");
+                auto bodyEnvironment = environment;
+                bodyEnvironment.InsertOrAssign(
+                    expression.letSymbol.id,
+                    Definition{ expression.letType,
+                                false,
+                                expression.letSymbol.spelling });
+                VerifyExpression(*expression.letBody, bodyEnvironment);
+                CheckSameType(expression.type,
+                              expression.letBody->type,
+                              "VXC1049",
+                              "Core let result disagrees with its body");
+            }
+            [[gnu::noinline]] void
+            VerifyConditional(const Expression &expression,
+                              const Environment &environment)
+            {
+                if (expression.operands.size() != 3U)
+                {
+                    Add("VXC1071",
+                        "Core conditional must contain a test and two arms");
+                    return;
+                }
+                const auto &test = expression.operands[0];
+                const auto &whenTrue = expression.operands[1];
+                const auto &whenFalse = expression.operands[2];
+                VerifyExpression(test, environment);
+                if (!accepts_boolean_context(test.type))
+                    Add("VXC1067",
+                        "Core conditional test must be bool or numeric");
+                VerifyExpression(whenTrue, environment);
+                VerifyExpression(whenFalse, environment);
+                CheckSameType(expression.type,
+                              whenTrue.type,
+                              "VXC1068",
+                              "Core conditional result type disagrees with "
+                              "its first arm");
+                CheckSameType(expression.type,
+                              whenFalse.type,
+                              "VXC1069",
+                              "Core conditional result type disagrees with "
+                              "its second arm");
+                // The result is materialized in a plain storage slot. Owned
+                // values would need move and release rules for that slot.
+                if (!accepts_boolean_context(expression.type))
+                    Add("VXC1070",
+                        "Core conditional result must be bool or numeric");
+            }
+            [[gnu::noinline]] void
             VerifyLiteral(const Expression &expression)
             {
                 if (const auto issue
@@ -537,7 +598,7 @@ namespace Visual::XSharp::Core
                         "Core literal payload does not match its type: "
                             + *issue);
             }
-            void
+            [[gnu::noinline]] void
             VerifyCall(const Expression &expression,
                        const Environment &environment)
             {
@@ -572,12 +633,15 @@ namespace Visual::XSharp::Core
                     "VXC1024",
                     "Core call result type disagrees with the callee");
             }
-            void
+            /// Verify the operands of a primitive after the first, which
+            /// the caller has verified, and then the primitive itself.
+            [[gnu::noinline]] void
             VerifyPrimitive(const Expression &expression,
                             const Environment &environment)
             {
-                for (const auto &operand : expression.operands)
-                    VerifyExpression(operand, environment);
+                for (std::size_t index = 1U; index < expression.operands.size();
+                     ++index)
+                    VerifyExpression(expression.operands[index], environment);
                 const auto unary
                     = expression.primitive == Primitive::Negate
                       || expression.primitive == Primitive::LogicalNot
@@ -663,7 +727,7 @@ namespace Visual::XSharp::Core
                               "VXC1028",
                               "Core primitive result has the wrong type");
             }
-            void
+            [[gnu::noinline]] void
             VerifyClosure(const Expression &expression,
                           const Environment &outerEnvironment)
             {

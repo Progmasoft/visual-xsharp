@@ -295,13 +295,13 @@ The parser reports:
 | `VXP0035` | the condition of an `if`, `guard` or `while` is a binding such as `auto user = Find()`, which requires optional values |
 | `VXP0036` | a match arm does not start with a pattern: a literal, `_`, `null`, `.Case`, or a type followed by a name or `_` |
 | `VXP0037` | `guard (condition)` is not followed by `else` |
-| `VXP0038` | a match arm with an expression body is followed by neither `,` nor `}` |
+| `VXP0038` | the pattern of a match arm was read as part of the expression body of the arm before it |
 
 A bare name is not a pattern, so `value -> ...` is `VXP0036`: a binding always
 states its type, as in `int value -> ...`. A literal pattern has no sign.
-The comma after a block body is optional; after an expression body it is
-required unless the arm is the last one, because the parenthesized pattern of
-the next arm would otherwise continue the expression as a call. An unterminated
+The comma after an arm is optional. Without it, a parenthesized pattern after
+an expression body continues that expression as a call, and the `->` that
+follows cannot; `VXP0038` is reported at that arrow. An unterminated
 match reports `VXP0002`.
 
 The renamer reports `VXR0008` when a pattern binds a name that is already in
@@ -314,7 +314,7 @@ The type checker reports:
 | Code | Meaning |
 | --- | --- |
 | `VXT0046` | a block used as a value does not end with an expression that has no semicolon |
-| `VXT0047` | `return` inside a block used as a value, which is not supported yet |
+| `VXT0047` | `return` inside a block used as a value, which is not implemented |
 | `VXT0048` | a match arm does not have exactly one pattern for each subject |
 | `VXT0049` | a match guard is neither `bool` nor numeric |
 | `VXT0050` | the arms of a match used as an expression have different types |
@@ -326,7 +326,7 @@ The type checker reports:
 | `VXT0056` | an enum case pattern such as `.Ready`; enum declarations are not implemented |
 | `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
 | `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
-| `VXT0059` | `break` or `continue` would leave a block that is used as a value |
+| `VXT0059` | `break` or `continue` would leave a block that is used as a value, which is not implemented |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
 
@@ -341,7 +341,7 @@ literal.
 An arm made only of untyped numeric literals takes its type from the context
 that receives the match, and without one from the first arm that has a type.
 A literal pattern is typed as the other operand of a comparison with its
-subject. A pattern binding is immutable, so assigning it is `VXT0003`. An
+subject. A pattern binding is an ordinary local and may be assigned. An
 expression body in a statement match must have an effect, like any expression
 statement; a pure one is `VXT0013`.
 
@@ -362,7 +362,7 @@ any local. Two blocks side by side may declare the same name.
 
 The stages after Core recurse once per level of nesting, so the frontend
 bounds how deep a function body may nest and reports the place where it
-becomes too deep:
+becomes too deep. The check runs before any analysis of the body:
 
 | Code | Meaning |
 | --- | --- |
@@ -374,8 +374,8 @@ not an operand is at level 1. A block, a branch, a loop body, a `guard`
 block, a block used as a value and a closure body are each one statement
 level below what holds them. The links of an `else if` chain are all at the
 level of the first `if`, and so are the `if` statements of `else { if ... }`.
-The body of a `match` arm is as many levels below its match as the match has
-arms, up to seventeen. Expressions inside a statement that is itself inside
+The body of a `match` arm is one level below its match, however many arms
+the match has. Expressions inside a statement that is itself inside
 an expression keep counting from that expression. Each function reports each
 code at most once, at the first node in source order that is one level
 beyond the limit, and nothing below that node is examined.

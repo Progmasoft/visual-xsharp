@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdlib>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -43,6 +44,35 @@ namespace Visual::XSharp::Support
     RunOnCompilerStackRaw(void (*function)(void *), void *argument);
 
     /**
+     * @brief Run a function on a new thread with a stack of the given size
+     * and wait for it.
+     *
+     * This is the general form of RunOnCompilerStackRaw. Measuring tools use
+     * it to find how much stack a stage needs; nothing else should choose a
+     * stack size of its own.
+     *
+     * @param bytes Stack size to reserve; the platform may round it up.
+     * @param function Called once on the new thread with `argument`.
+     * @param argument Passed through unchanged.
+     */
+    void
+    RunOnStackRaw(std::size_t bytes, void (*function)(void *), void *argument);
+
+    /// Run a callable that returns nothing on a thread with a stack of the
+    /// given size. See RunOnStackRaw.
+    template<typename Callable>
+    void
+    RunOnStack(std::size_t bytes, Callable &&callable)
+    {
+        RunOnStackRaw(
+            bytes,
+            [](void *context) {
+                (*static_cast<std::remove_reference_t<Callable> *>(context))();
+            },
+            &callable);
+    }
+
+    /**
      * @brief Run a callable on a thread with the compiler stack and return
      * its result.
      *
@@ -78,6 +108,10 @@ namespace Visual::XSharp::Support
                     self->result.emplace((*self->callable)());
                 },
                 &call);
+            // The thread was joined, so the callable has run and stored
+            // its result; anything else is a defect of the raw entry.
+            if (!call.result)
+                std::abort();
             return std::move(*call.result);
         }
     }

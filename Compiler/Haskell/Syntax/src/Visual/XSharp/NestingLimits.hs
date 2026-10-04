@@ -20,13 +20,10 @@ lowering may add a level of its own around a source level, and because the
 native Core reader bounds both depths at 4096. Both limits are also far above
 what hand-written code reaches.
 
-A @match@ is the one form whose lowering adds more than a level: its arms
-become a chain of nested tests, in groups of sixteen. The body of an arm
-therefore counts as many levels as the match has arms, up to seventeen, so
-that the limit bounds the nesting of the lowered Core as well.
-
 An @else if@ chain is not nesting: every stage walks it in a loop, so its
-links all count as the level of the first @if@.
+links all count as the level of the first @if@. The arms of a @match@ are
+not nesting either: they lower to such a chain, so the body of an arm is one
+level below its match however many arms the match has.
 -}
 module Visual.XSharp.NestingLimits
     ( maximumStatementNesting
@@ -161,20 +158,10 @@ expressionExcess level depth expression
         LoopExpression _ loop _ -> statementExcess (level + 1) depth loop
         BlockExpression _ block _ -> blockExcess (level + 1) depth block
         MatchExpression _ subjects arms _ ->
-            concatMap operand subjects
-                ++ concatMap (concatMap (expressionExcess (level + matchLevels arms - 1) (depth + 1)) . matchArmExpressions) arms
+            concatMap operand subjects ++ concatMap (concatMap operand . matchArmExpressions) arms
         CallableExpression _ _ captures _ body _ ->
             concatMap (maybe [] operand . captureInitializer) captures ++ case body of
                 CallableExpressionBody value -> operand value
                 CallableBlockBody block -> blockExcess (level + 1) depth block
     where
         operand = expressionExcess level (depth + 1)
-
-{- | How many statement levels the arms of a match stand for: one for each
-arm of a group of the lowering, and one more for the group when there are
-several. This is 'Visual.XSharp.Desugarer.Branching.maximumNestedArms' plus
-one at most; the desugarer's tests pin that the lowered nesting stays within
-it.
--}
-matchLevels :: [arm] -> Int
-matchLevels arms = max 1 (min 17 (length arms))

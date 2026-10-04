@@ -64,6 +64,8 @@ cc_binary(
     srcs = [
         "BranchingExecutionCases.cpp",
         "BranchingExecutionCases.hpp",
+        "ExecutionCases.cpp",
+        "ExecutionCases.hpp",
         "ExpressionExecutionCases.cpp",
         "ExpressionExecutionCases.hpp",
         "SourceFuzzSmoke.cpp",

@@ -106,7 +106,7 @@ statementTests :: [(String, Bool)]
 statementTests =
     concat
         [ [ ( "a statement at level 256 inside nested " ++ name ++ " statements is accepted"
-            , name `elem` loops || accepted (method (nest atLimit open close ++ "return total;"))
+            , accepted (method (nest atLimit open close ++ "return total;"))
             )
           , ( "a statement at level 257 inside nested " ++ name ++ " statements is rejected at that statement"
             , columnsOf "VXP0039" (method (nest beyondLimit open close ++ "return total;"))
@@ -121,6 +121,13 @@ statementTests =
         ++ [ ("256 levels of if statements compute their value", valuesOf (method (nest atLimit ifOpen "} " ++ "return total;")) 5 == [Just 1, Just 1])
            , ("256 levels of if statements skip the innermost one", valuesOf (method (nest atLimit ifOpen "} " ++ "return total;")) 0 == [Just 0, Just 0])
            , ("256 levels of blocks compute their value", valuesOf (method (nest atLimit "{ " "} " ++ "return total;")) 0 == [Just 1, Just 1])
+           , -- Each level of nested loops once multiplied the time of the
+             -- loop analysis, so that 50 levels did not finish. These nests
+             -- are compiled, optimized and run.
+             ("255 nested while loops compute their value", valuesOf (method (nest atLimit "while (total < 1) { " "} " ++ "return total;")) 0 == [Just 1, Just 1])
+           , ("255 nested for loops compute their value", valuesOf (method (nest atLimit "for (; total < 1; total += 1) { " "} " ++ "return total;")) 0 == [Just 256, Just 256])
+           , ("40 nested counting loops compute their value", valuesOf (method (countingLoops 40)) 1 == [Just 1, Just 1])
+           , ("3 nested counting loops compute their value", valuesOf (method (countingLoops 3)) 4 == [Just 64, Just 64])
            , ("a statement far beyond the limit is still reported once", codesOf (method (nest 2000 ifOpen "} " ++ "return total;")) == ["VXP0039"])
            , ("every function reports its own excess", codesOf twoDeepFunctions == ["VXP0039", "VXP0039"])
            , ("a deep function does not hide an accepted one", codesOf oneDeepFunction == ["VXP0039"])
@@ -130,12 +137,16 @@ statementTests =
         atLimit = maximumStatementNesting - 1
         beyondLimit = maximumStatementNesting
         ifOpen = "if (value > 0) { "
-        -- Loops nested to the limit are not rejected, but they are not
-        -- compiled here either: the time the optimizer spends on loops
-        -- grows exponentially with the depth of nested loops, which is a
-        -- defect of its own. Their nests are checked for rejection only,
-        -- which happens before the optimizer runs.
-        loops = ["while", "do/while", "for"]
+        -- Loops that each count to the argument with a counter of their
+        -- own, around one statement: the innermost statement runs
+        -- value ^ depth times.
+        countingLoops :: Int -> String
+        countingLoops depth =
+            "int total = 0; "
+                ++ concat ["for (int c" ++ show level ++ " = 0; c" ++ show level ++ " < value; c" ++ show level ++ " += 1) { " | level <- [1 .. depth]]
+                ++ "total += 1; "
+                ++ concat (replicate depth "} ")
+                ++ "return total;"
         twoDeepFunctions =
             unlines
                 [ "class Program {"
@@ -233,6 +244,11 @@ combinedTests =
         , valuesOf (method ("return " ++ valueBlocks (maximumStatementNesting - 1) ++ ";")) 1 == [Just 1, Just 1]
         )
     ,
+        ( "if expressions nested in last position need no parentheses"
+        , valuesOf (method ("return " ++ concat (replicate 100 "if (value > 0) { ") ++ "value" ++ concat (replicate 100 " } else { 0 }") ++ ";")) 4
+            == [Just 4, Just 4]
+        )
+    ,
         ( "value blocks nested to level 257 are rejected as statements"
         , codesOf (method ("return " ++ valueBlocks maximumStatementNesting ++ ";")) == ["VXP0039"]
         )
@@ -299,22 +315,22 @@ chainTests =
         )
     , -- An else block that holds exactly one if is the same tree as `else if`.
       ("else blocks that hold only an if form a chain", accepted (method (nest 600 "if (value < 0) { } else { " "} " ++ "return total;")))
-    , -- An arm stands for as many levels as its match has arms, up to seventeen.
-        ( "arms of a wide match count the levels their lowering nests"
-        , accepted (method (around (maximumStatementNesting - 18) wideArms))
-            && codesOf (method (around (maximumStatementNesting - 17) wideArms)) == ["VXP0039"]
+    , -- The body of an arm is one level below its match, however many arms it has.
+        ( "the arms of a wide match are one level below it"
+        , accepted (method (around (maximumStatementNesting - 2) wideArms))
+            && codesOf (method (around (maximumStatementNesting - 1) wideArms)) == ["VXP0039"]
         )
     ,
-        ( "arms of a narrow match count one level each"
-        , accepted (method (around (maximumStatementNesting - 4) narrowArms))
-            && codesOf (method (around (maximumStatementNesting - 3) narrowArms)) == ["VXP0039"]
+        ( "the arms of a narrow match are one level below it"
+        , accepted (method (around (maximumStatementNesting - 2) narrowArms))
+            && codesOf (method (around (maximumStatementNesting - 1) narrowArms)) == ["VXP0039"]
         )
     , ("a statement match of 300 arms is not nesting", accepted (method ("match (value) { " ++ concat [show index ++ " -> { return " ++ show index ++ "; }, " | index <- [0 .. 298 :: Int]] ++ "_ -> { return 0; } } return 1;")))
     ]
     where
-        -- Twenty arms with block bodies: each body is seventeen levels below the match.
+        -- Twenty arms with block bodies.
         wideArms = "match (value) { " ++ concat [show index ++ " -> { total = " ++ show index ++ "; }, " | index <- [0 .. 18 :: Int]] ++ "_ -> { total = 0; } } "
-        -- Three arms: each body is three levels below the match.
+        -- Three arms with block bodies.
         narrowArms = "match (value) { 1 -> { total = 1; }, 2 -> { total = 2; }, _ -> { total = 0; } } "
         threeLinks = "if (value == 1) { total = 1; } else if (value == 2) { total = 2; } else if (value == 3) { total = 3; } "
         -- The statement inside the given number of if statements, at level count + 1.

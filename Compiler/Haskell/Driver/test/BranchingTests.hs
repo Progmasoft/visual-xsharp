@@ -97,9 +97,23 @@ parserTests =
     , ("the comma after a block body is optional", parses (body "match (left) { 1 -> { } 2 -> { } } return 0;"))
     , ("the comma after the last arm is optional", parses (body "return match (left) { 1 -> 10, _ -> 20, };"))
     , ("a match without arms parses", parses (body "match (left) { } return 0;"))
+    , ("the comma after an expression body is optional", parses (body "return match (left) { 1 -> 10 2 -> 20 _ -> 30 };"))
     ,
-        ( "an expression body must be separated from the next arm"
-        , parseFailsWith "VXP0038" (body "return match (left) { 1 -> 10 _ -> 20 };")
+        ( "a parenthesized pattern after an expression body without a comma is read as a call"
+        , parseFailsWith "VXP0038" (body "return match (left) { 1 -> Twice (2) -> 20, _ -> 30 };")
+        )
+    , ("a comma keeps a parenthesized pattern apart from the body before it", parses (body "return match (left) { 1 -> Twice(left), (2) -> 20, _ -> 30 };"))
+    , ("an if in last position of a value block is the value of the block", nestedIfIsValue)
+    , ("a match in last position of a value block is the value of the block", nestedMatchIsValue)
+    , ("an if that is not last in a value block is a statement", ifInsideValueBlockIsStatement)
+    , ("a match that is not last in a value block is a statement", matchInsideValueBlockIsStatement)
+    ,
+        ( "a statement block inside a value block may end with a match"
+        , parses (body "int r = if (flag) { if (other) { match (left) { 1 -> { Twice(left); } } } 1 } else { 2 }; return r;")
+        )
+    ,
+        ( "a value in a block that is not used as a value needs its semicolon"
+        , parseFailsWith "VXP0006" (body "int r = if (flag) { if (other) { 1 } 2 } else { 3 }; return r;")
         )
     , ("a bare name is not a pattern", parseFailsWith "VXP0036" (body "match (left) { right -> { } } return 0;"))
     , ("a negative literal is not a pattern", parseFailsWith "VXP0036" (body "match (left) { -1 -> { } } return 0;"))
@@ -238,6 +252,33 @@ nestedBlockParses = case firstStatements (body "int a = 1; { int b = 2; a = b; }
     Just [BindingStatement {}, BlockStatement _ (Block [BindingStatement {}, AssignmentStatement {}]), ReturnStatement {}] -> True
     _ -> False
 
+-- The statements of the first block of `int r = if (flag) { ... } else { 0 };`.
+innerBlock :: String -> Maybe [Statement Identifier ()]
+innerBlock inner = case firstStatements (body ("int r = if (flag) { " ++ inner ++ " } else { 0 }; return r;")) of
+    Just (BindingStatement _ _ _ _ () (ConditionalExpression _ _ (BlockExpression _ (Block statements) ()) _ ()) : _) ->
+        Just statements
+    _ -> Nothing
+
+nestedIfIsValue :: Bool
+nestedIfIsValue = case innerBlock "if (other) { 1 } else { 2 }" of
+    Just [ExpressionStatement _ (ConditionalExpression _ _ (BlockExpression {}) (BlockExpression {}) ()) False] -> True
+    _ -> False
+
+nestedMatchIsValue :: Bool
+nestedMatchIsValue = case innerBlock "match (left) { 1 -> 10, _ -> 20 }" of
+    Just [ExpressionStatement _ (MatchExpression {}) False] -> True
+    _ -> False
+
+ifInsideValueBlockIsStatement :: Bool
+ifInsideValueBlockIsStatement = case innerBlock "if (other) { Twice(left); } else { Twice(right); } 1" of
+    Just [IfStatement _ _ (Block [ExpressionStatement _ _ True]) (Just (Block [ExpressionStatement _ _ True])), ExpressionStatement _ _ False] -> True
+    _ -> False
+
+matchInsideValueBlockIsStatement :: Bool
+matchInsideValueBlockIsStatement = case innerBlock "match (left) { 1 -> { Twice(left); } } 1" of
+    Just [ExpressionStatement _ (MatchExpression {}) True, ExpressionStatement _ _ False] -> True
+    _ -> False
+
 guardParses :: Bool
 guardParses = case firstStatements (body "guard (left > 0) else { return 0; } return 1;") of
     Just [GuardStatement _ (BinaryExpression _ GreaterThan _ _ ()) (Block [ReturnStatement {}]), _] -> True
@@ -358,7 +399,23 @@ typeTests =
         ( "an effectful expression body in a statement match is accepted"
         , accepted (body "int r = 0; match (left) { 1 -> r = 5, _ -> r = Twice(left) } return r;")
         )
-    , ("a pattern binding is immutable", rejectedWith "VXT0003" (body "match (left) { int value -> { value = 5; } } return 0;"))
+    , ("a pattern binding may be assigned", accepted (body "match (left) { int value -> { value = 5; return value; } } return 0;"))
+    ,
+        ( "a nested if in last position supplies the value of its block"
+        , accepted (body "int r = if (flag) { if (other) { 1 } else { 2 } } else { 3 }; return r;")
+        )
+    ,
+        ( "a match in last position supplies the value of its block"
+        , accepted (body "int r = if (flag) { match (left) { 1 -> 10, _ -> 20 } } else { 3 }; return r;")
+        )
+    ,
+        ( "a match in last position of a value block must accept every value"
+        , rejectedWith "VXT0052" (body "int r = if (flag) { match (left) { 1 -> 10 } } else { 3 }; return r;")
+        )
+    ,
+        ( "a match in last position of a statement arm is a statement"
+        , accepted (body "match (left) { 1 -> { match (right) { 2 -> { return 2; } } } } return 0;")
+        )
     ,
         ( "a pattern binding is in scope in its guard"
         , accepted (body "return match (left) { int value if value > 3 -> value, _ -> 0 };")
@@ -468,17 +525,17 @@ loweringTests =
     , ("a statement match lowers without a result slot", matchStatementLowers)
     , ("a catch-all arm ends the chain without a test", catchAllEndsChain)
     , ("patterns for several subjects are tested together", severalSubjectsLower)
-    , ("a guard after a literal is decided in its own slot", guardedLiteralLowers)
+    , ("a guard after a literal is the last operand of the arm's test", guardedLiteralLowers)
+    , ("a guard that stores is decided in its own slot", storingGuardLowers)
     , ("a guard on a catch-all is the test itself", guardedCatchAllLowers)
     , ("a pattern binding is bound to the subject before its guard", bindingLowers)
     , ("an if expression over pure blocks is one lazy conditional", pureIfExpressionLowers)
     , ("an if expression whose block has statements selects into a slot", ifExpressionWithStatementsLowers)
     , ("a guard runs its block when the condition is false", guardLowers)
     , ("the statements of a nested block join the enclosing sequence", nestedBlockLowers)
-    , ("a match within the nesting bound has no taken slot", not (usesTakenSlot (wideMatch 16)))
-    , ("a match beyond the nesting bound records the taken arm in a slot", usesTakenSlot (wideMatch 17))
-    , ("a wide match nests no deeper than one group", all ((<= 18) . nestingOf . wideMatch) [17, 40, 200])
-    , ("a wide match is split into groups in one sequence", wideMatchIsGrouped)
+    , ("a match of any width is one chain of conditionals", all (isOneChain . wideMatch) [2, 17, 40, 200])
+    , ("a chain of arms is as deep as one arm", all ((== 1) . nestingOf . wideMatch) [2, 17, 40, 200])
+    , ("the names of all arms are bound before the chain", bindingsPrecedeChain)
     ]
 
 -- | A match expression with the given number of literal arms and a catch-all.
@@ -490,41 +547,45 @@ wideMatch count =
             ++ "_ -> 0 };"
         )
 
-usesTakenSlot :: String -> Bool
-usesTakenSlot text = case loweredBody text of
-    Just statements -> or [generated "$taken" name | CoreBind (CoreBinding name _ _ _) <- statements]
-    Nothing -> False
+-- | Whether the body is a subject, a result slot, one chain of conditionals and a return.
+isOneChain :: String -> Bool
+isOneChain text = case loweredBody text of
+    Just [CoreBind _, CoreBind _, chain@CoreIf {}, CoreReturn _] -> linksOnly chain
+    _ -> False
+    where
+        -- Every false branch is the next link until the body of the catch-all.
+        linksOnly statement = case statement of
+            CoreIf _ [CoreAssign _ _] [next@CoreIf {}] -> linksOnly next
+            CoreIf _ [CoreAssign _ _] [CoreAssign _ _] -> True
+            _ -> False
 
--- | The deepest nesting of conditional statements in the lowered body.
+{- | The deepest nesting of conditional statements in the lowered body, where
+the links of a chain share one level: a false branch that is exactly one
+conditional continues the chain, as it does in every stage after Core.
+-}
 nestingOf :: String -> Int
 nestingOf text = maybe 0 depth (loweredBody text)
     where
         depth :: [CoreStatement] -> Int
         depth statements = maximum (0 : map statementDepth statements)
         statementDepth statement = case statement of
+            CoreIf _ whenTrue [next@CoreIf {}] -> max (1 + depth whenTrue) (statementDepth next)
             CoreIf _ whenTrue whenFalse -> 1 + max (depth whenTrue) (depth whenFalse)
             _ -> 0
 
--- Forty arms are three groups: the first chain, then two guarded groups.
-wideMatchIsGrouped :: Bool
-wideMatchIsGrouped = case loweredBody (wideMatch 40) of
+bindingsPrecedeChain :: Bool
+bindingsPrecedeChain = case loweredBody (body "return match (left) { int low if low < 3 -> low, int high if high > 9 -> high, _ -> 0 };") of
     Just
         [ CoreBind (CoreBinding subject _ False _)
+            , CoreBind (CoreBinding first _ True (CoreVariable firstSource _))
+            , CoreBind (CoreBinding second _ True (CoreVariable secondSource _))
             , CoreBind (CoreBinding slot _ True _)
-            , CoreBind (CoreBinding taken _ True (CoreLiteral (CoreBoolean False) _))
-            , CoreIf _ [CoreAssign firstTaken _, CoreAssign firstStore _] _
-            , CoreIf (CoreVariable secondTest _) [] [CoreIf {}]
-            , CoreIf (CoreVariable thirdTest _) [] [CoreIf {}]
-            , CoreReturn (CoreVariable result _)
+            , CoreIf _ [CoreAssign _ _] [CoreIf _ [CoreAssign _ _] [CoreAssign _ _]]
+            , CoreReturn _
             ] ->
-        generated "$subject" subject
+        map spelling [first, second] == ["low", "high"]
+            && all (== subject) [firstSource, secondSource]
             && generated "$matched" slot
-            && generated "$taken" taken
-            && firstTaken == taken
-            && firstStore == slot
-            && secondTest == taken
-            && thirdTest == taken
-            && result == slot
     _ -> False
 
 loweredBody :: String -> Maybe [CoreStatement]
@@ -591,18 +652,33 @@ severalSubjectsLower = case loweredBody (body "match (left), (right) { (1), (2) 
         comparesWith first 1 firstTest && comparesWith second 2 secondTest && comparesWith second 3 laterTest
     _ -> False
 
+-- The guard is the last operand of the arm's test, behind the short-circuit
+-- conjunction, so it is evaluated only when the comparison holds.
 guardedLiteralLowers :: Bool
 guardedLiteralLowers = case loweredBody (body "match (left) { 1 if flag -> { return 1; } } return 0;") of
     Just
         [ CoreBind (CoreBinding subject _ False _)
+            , CoreIf (CorePrimitive CoreLogicalAnd [test, CoreVariable guard _] _) [CoreReturn _] []
+            , CoreReturn _
+            ] ->
+        comparesWith subject 1 test && spelling guard == "flag"
+    _ -> False
+
+-- A guard that stores into a local runs as statements, and only when the
+-- comparison holds: the decision is taken in a slot of its own.
+storingGuardLowers :: Bool
+storingGuardLowers = case loweredBody (body "int hits = 0; match (left) { 1 if (hits += 1) > 0 -> { return 1; } } return hits;") of
+    Just
+        [ _
+            , CoreBind (CoreBinding subject _ False _)
             , CoreBind (CoreBinding decision _ True (CoreLiteral (CoreBoolean False) _))
-            , CoreIf test [CoreIf (CoreVariable guard _) [CoreAssign decided _] []] []
+            , CoreIf test [CoreAssign stored _, CoreIf _ [CoreAssign decided _] []] []
             , CoreIf (CoreVariable taken _) [CoreReturn _] []
             , CoreReturn _
             ] ->
         generated "$accepted" decision
             && comparesWith subject 1 test
-            && spelling guard == "flag"
+            && spelling stored == "hits"
             && decided == decision
             && taken == decision
     _ -> False
@@ -616,7 +692,7 @@ bindingLowers :: Bool
 bindingLowers = case loweredBody (body "match (left) { int value if value > 3 -> { return value; } } return 0;") of
     Just
         [ CoreBind (CoreBinding subject _ False _)
-            , CoreBind (CoreBinding bound _ False (CoreVariable source _))
+            , CoreBind (CoreBinding bound _ True (CoreVariable source _))
             , CoreIf (CorePrimitive CoreGreaterThan [CoreVariable tested _, _] _) [CoreReturn (CoreVariable returned _)] []
             , CoreReturn _
             ] ->
@@ -756,6 +832,27 @@ evaluationCases =
     ,
         ( "int total = 0; for (int i = 0; i < left; i++) { { if (i == 1) { continue; } } { int step = i * 2; total += step; } } return total;"
         , [(plain 4 0, 10), (plain 1 0, 0)]
+        )
+    , ("return match (left) { 1 -> 10 2 -> 20 _ -> 30 };", [(plain 1 0, 10), (plain 2 0, 20), (plain 9 0, 30)])
+    , -- A pattern binding is a local of its arm and may be assigned.
+        ( "return match (left) { int value if value > 2 -> { value = value * 2; value }, int value -> { value += 1; value } };"
+        , [(plain 5 0, 10), (plain 1 0, 2)]
+        )
+    , -- Assigning a binding does not change the subject the later arms test.
+        ( "int r = 0; match (left) { int value if (value = 7) > 9 -> { r = 1; }, 3 -> { r = 2; }, _ -> { r = 3; } } return r;"
+        , [(plain 3 0, 2), (plain 4 0, 3)]
+        )
+    ,
+        ( "int r = if (flag) { if (other) { 1 } else { 2 } } else { match (left) { 1 -> 10, _ -> 20 } }; return r;"
+        , [(flags True True 0 0, 1), (flags True False 0 0, 2), (flags False False 1 0, 10), (flags False False 2 0, 20)]
+        )
+    ,
+        ( "int n = 0; int r = if (flag) { if (other) { n += 1; } else { n += 2; } match (left) { 1 -> { n += 10; } } n } else { 0 }; return r;"
+        , [(flags True True 1 0, 11), (flags True False 2 0, 2), (flags False False 1 0, 0)]
+        )
+    ,
+        ( "match (left) { 1 -> { match (right) { 2 -> { return 12; } } }, _ -> { } } return 5;"
+        , [(plain 1 2, 12), (plain 1 3, 5), (plain 2 2, 5)]
         )
     , -- A guard condition with a store runs once, before the block decision.
         ( "int n = left; guard ((n += 1) > 3) else { return n * 10; } return n;"

@@ -3,12 +3,12 @@
 
 #include <array>
 #include <cstdint>
-#include <llvm/Support/raw_ostream.h>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "BranchingExecutionCases.hpp"
-#include "SourceFuzz.hpp"
+#include "ExecutionCases.hpp"
 
 // Executable regressions for `match`, for `if` used as an expression and for
 // `guard`. Each case is a method body, the arguments it runs on and the value
@@ -25,17 +25,7 @@ namespace Visual::XSharp::Fuzzing
 {
     namespace
     {
-        struct Case final
-        {
-            bool flag;
-            bool other;
-            int left;
-            int right;
-            std::int64_t expected;
-            std::string_view body;
-        };
-
-        constexpr std::array<Case, 83U> kCases{ {
+        constexpr std::array<ExecutionCase, 100U> kCases{ {
             { false,
               false,
               1,
@@ -586,6 +576,125 @@ namespace Visual::XSharp::Fuzzing
               "total;" },
             { false,
               false,
+              1,
+              0,
+              10,
+              "return match (left) { 1 -> 10 2 -> 20 _ -> 30 };" },
+            { false,
+              false,
+              2,
+              0,
+              20,
+              "return match (left) { 1 -> 10 2 -> 20 _ -> 30 };" },
+            { false,
+              false,
+              9,
+              0,
+              30,
+              "return match (left) { 1 -> 10 2 -> 20 _ -> 30 };" },
+            { false,
+              false,
+              5,
+              0,
+              10,
+              "return match (left) { int value if value > 2 -> { value = value "
+              "* 2; value }, int value -> { value += 1; value } };" },
+            { false,
+              false,
+              1,
+              0,
+              2,
+              "return match (left) { int value if value > 2 -> { value = value "
+              "* 2; value }, int value -> { value += 1; value } };" },
+            { false,
+              false,
+              3,
+              0,
+              2,
+              "int r = 0; match (left) { int value if (value = 7) > 9 -> { r = "
+              "1; }, 3 -> { r = 2; }, _ -> { r = 3; } } return r;" },
+            { false,
+              false,
+              4,
+              0,
+              3,
+              "int r = 0; match (left) { int value if (value = 7) > 9 -> { r = "
+              "1; }, 3 -> { r = 2; }, _ -> { r = 3; } } return r;" },
+            { true,
+              true,
+              0,
+              0,
+              1,
+              "int r = if (flag) { if (other) { 1 } else { 2 } } else { match "
+              "(left) { 1 -> 10, _ -> 20 } }; return r;" },
+            { true,
+              false,
+              0,
+              0,
+              2,
+              "int r = if (flag) { if (other) { 1 } else { 2 } } else { match "
+              "(left) { 1 -> 10, _ -> 20 } }; return r;" },
+            { false,
+              false,
+              1,
+              0,
+              10,
+              "int r = if (flag) { if (other) { 1 } else { 2 } } else { match "
+              "(left) { 1 -> 10, _ -> 20 } }; return r;" },
+            { false,
+              false,
+              2,
+              0,
+              20,
+              "int r = if (flag) { if (other) { 1 } else { 2 } } else { match "
+              "(left) { 1 -> 10, _ -> 20 } }; return r;" },
+            { true,
+              true,
+              1,
+              0,
+              11,
+              "int n = 0; int r = if (flag) { if (other) { n += 1; } else { n "
+              "+= 2; } match (left) { 1 -> { n += 10; } } n } else { 0 }; "
+              "return r;" },
+            { true,
+              false,
+              2,
+              0,
+              2,
+              "int n = 0; int r = if (flag) { if (other) { n += 1; } else { n "
+              "+= 2; } match (left) { 1 -> { n += 10; } } n } else { 0 }; "
+              "return r;" },
+            { false,
+              false,
+              1,
+              0,
+              0,
+              "int n = 0; int r = if (flag) { if (other) { n += 1; } else { n "
+              "+= 2; } match (left) { 1 -> { n += 10; } } n } else { 0 }; "
+              "return r;" },
+            { false,
+              false,
+              1,
+              2,
+              12,
+              "match (left) { 1 -> { match (right) { 2 -> { return 12; } } }, "
+              "_ -> { } } return 5;" },
+            { false,
+              false,
+              1,
+              3,
+              5,
+              "match (left) { 1 -> { match (right) { 2 -> { return 12; } } }, "
+              "_ -> { } } return 5;" },
+            { false,
+              false,
+              2,
+              2,
+              5,
+              "match (left) { 1 -> { match (right) { 2 -> { return 12; } } }, "
+              "_ -> { } } return 5;" },
+            { false,
+              false,
               5,
               0,
               6,
@@ -600,34 +709,13 @@ namespace Visual::XSharp::Fuzzing
               "return n;" },
         } };
 
-        [[nodiscard]] auto
-        Truth(bool value) -> std::string
-        {
-            // `Id` is recursive, so the optimizer cannot fold the arguments
-            // away and the body really executes on run-time values.
-            return value ? "Id(1) > 0" : "Id(0) > 0";
-        }
+        // The methods a body may call besides `Run` itself.
+        constexpr std::string_view kHelpers
+            = "    public static int Twice(_ int value) { return value + "
+              "value; }\n";
 
-        [[nodiscard]] auto
-        Program(const Case &entry) -> std::string
-        {
-            return "namespace Fuzz;\n"
-                   "class Program {\n"
-                   "    public static int Id(_ int n) { return n > 0 ? 1 + "
-                   "Id(n - 1) : 0; }\n"
-                   "    public static int Twice(_ int value) { return value + "
-                   "value; }\n"
-                   "    public static int Run(_ bool flag, _ bool other, _ int "
-                   "left, _ int right) {\n        "
-                   + std::string(entry.body)
-                   + "\n    }\n"
-                     "    public static int Evaluate() { return Run("
-                   + Truth(entry.flag) + ", " + Truth(entry.other) + ", Id("
-                   + std::to_string(entry.left) + "), Id("
-                   + std::to_string(entry.right) + ")); }\n}\n";
-        }
-        // A match with far more arms than the lowering nests in one group.
-        // Arm `index` yields `index * 3 + 1` and the catch-all yields 0.
+        // A match with many arms. Arm `index` yields `index * 3 + 1` and the
+        // catch-all yields 0.
         [[nodiscard]] auto
         WideMatchBody(int arms) -> std::string
         {
@@ -638,8 +726,7 @@ namespace Visual::XSharp::Fuzzing
             return body + "_ -> 0 };";
         }
 
-        // The same table written as an `else if` chain, which reaches Core
-        // as one level of nesting per link.
+        // The same table written as an `else if` chain.
         [[nodiscard]] auto
         ElseIfChainBody(int links) -> std::string
         {
@@ -650,87 +737,92 @@ namespace Visual::XSharp::Fuzzing
                         + std::to_string(index * 3 + 1) + "; }";
             return body + " return 0;";
         }
+
+        // `if (left > 0) { if (left > 1) { ... total += 1; } }`
+        [[nodiscard]] auto
+        NestedIfBody(int levels) -> std::string
+        {
+            std::string body = "int total = 0; ";
+            for (int index = 0; index < levels; ++index)
+                body += "if (left > " + std::to_string(index) + ") { ";
+            body += "total += 1; ";
+            for (int index = 0; index < levels; ++index)
+                body += "} ";
+            return body + "return total;";
+        }
+
+        // `left + left + ... + left`
+        [[nodiscard]] auto
+        SumBody(int operands) -> std::string
+        {
+            std::string body = "return left";
+            for (int index = 1; index < operands; ++index)
+                body += " + left";
+            return body + ";";
+        }
+
+        // The value of arm or link `index` in the tables above.
+        [[nodiscard]] constexpr auto
+        TableValue(int index) -> std::int64_t
+        {
+            return std::int64_t{ index } * 3 + 1;
+        }
     } // namespace
 
     void
     ExerciseBranchingCases()
     {
-        for (const auto &entry : kCases)
-        {
-            llvm::errs() << "Branching execution: " << entry.body << '\n';
-            ExerciseExpectedValue(Program(entry), entry.expected);
-        }
-        // The subjects select the first arm of the second group and the
-        // catch-all; every run compiles the whole match again, so there are
-        // only two. A
+        ExerciseExecutionCases("Branching execution", kCases, kHelpers);
+
+        // Programs whose size is the point. Every body is compiled once and
+        // all of its runs are checked by that one program.
+        std::vector<ExecutionCase> large;
+
+        // The subjects select the first arm, arms around a multiple of
+        // sixteen, an arm in the middle, the last arm and the catch-all. A
         // lowering that nested one level per arm would overflow the stack
         // of the stages after Core long before this many arms.
         constexpr int kWideArms = 200;
-        constexpr std::array<int, 2U> subjects{ 16, 200 };
         const auto wide = WideMatchBody(kWideArms);
-        for (const auto subject : subjects)
-        {
-            const Case entry{ false,
+        for (const auto subject : { 0, 15, 16, 17, 150, 199, 200 })
+            large.push_back({ false,
                               false,
                               subject,
                               0,
-                              subject < kWideArms ? subject * 3 + 1 : 0,
-                              wide };
-            llvm::errs() << "Branching execution: match of " << kWideArms
-                         << " arms on " << subject << '\n';
-            ExerciseExpectedValue(Program(entry), entry.expected);
-        }
+                              subject < kWideArms ? TableValue(subject) : 0,
+                              wide });
+
         // An `else if` chain of 300 links. The native wire reader, the Core
         // verifier and the CorePrep adapter walk a chain in a loop; when
         // they recursed, 150 links overflowed the stack. Both CorePrep
         // lowerings are compared on it as on every other program here.
         constexpr int kChainLinks = 300;
-        constexpr std::array<int, 2U> selected{ 299, 300 };
         const auto chain = ElseIfChainBody(kChainLinks);
-        for (const auto subject : selected)
-        {
-            const Case entry{ false,
+        for (const auto subject : { 0, 149, 150, 299, 300 })
+            large.push_back({ false,
                               false,
                               subject,
                               0,
-                              subject < kChainLinks ? subject * 3 + 1 : 0,
-                              chain };
-            llvm::errs() << "Branching execution: else-if chain of "
-                         << kChainLinks << " links on " << subject << '\n';
-            ExerciseExpectedValue(Program(entry), entry.expected);
-        }
+                              subject < kChainLinks ? TableValue(subject) : 0,
+                              chain });
+
         // Programs at the nesting limits of the frontend: a statement at
         // level 256 and an expression at level 1024. They compile only on
         // the compiler stack, which the smoke program runs on like `vxs`.
-        {
-            constexpr int kLevels = 255;
-            std::string nested = "int total = 0; ";
-            for (int index = 0; index < kLevels; ++index)
-                nested += "if (left > " + std::to_string(index) + ") { ";
-            nested += "total += 1; ";
-            for (int index = 0; index < kLevels; ++index)
-                nested += "} ";
-            nested += "return total;";
-            constexpr std::array<int, 1U> arguments{ kLevels };
-            for (const auto argument : arguments)
-            {
-                const Case entry{
-                    false, false, argument, 0, argument == kLevels ? 1 : 0,
-                    nested
-                };
-                llvm::errs() << "Branching execution: " << kLevels
-                             << " nested if statements on " << argument << '\n';
-                ExerciseExpectedValue(Program(entry), entry.expected);
-            }
-            constexpr int kOperands = 1024;
-            std::string sum = "return left";
-            for (int index = 1; index < kOperands; ++index)
-                sum += " + left";
-            sum += ";";
-            const Case entry{ false, false, 3, 0, 3 * kOperands, sum };
-            llvm::errs() << "Branching execution: sum of " << kOperands
-                         << " operands\n";
-            ExerciseExpectedValue(Program(entry), entry.expected);
-        }
+        constexpr int kLevels = 255;
+        const auto nested = NestedIfBody(kLevels);
+        for (const auto argument : { kLevels, kLevels - 1 })
+            large.push_back({ false,
+                              false,
+                              argument,
+                              0,
+                              argument == kLevels ? 1 : 0,
+                              nested });
+        constexpr int kOperands = 1024;
+        const auto sum = SumBody(kOperands);
+        large.push_back(
+            { false, false, 3, 0, std::int64_t{ 3 } * kOperands, sum });
+
+        ExerciseExecutionCases("Branching execution", large, kHelpers);
     }
 } // namespace Visual::XSharp::Fuzzing
