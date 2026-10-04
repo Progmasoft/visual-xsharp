@@ -91,4 +91,32 @@ namespace Visual::XSharp::Support
             llvm::report_fatal_error("could not wait for the compiler thread");
 #endif
     }
+
+    auto
+    CommittedStackBytes() -> std::size_t
+    {
+#if defined(_WIN32)
+        MEMORY_BASIC_INFORMATION information{};
+        const char here = 0;
+        if (VirtualQuery(&here, &information, sizeof(information)) == 0U)
+            return 0U;
+        // A thread stack is one allocation: reserved pages at the bottom,
+        // then the guard page, then the committed pages up to the top.
+        const auto *const allocation = information.AllocationBase;
+        std::size_t committed = 0U;
+        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        const auto *cursor = static_cast<const char *>(allocation);
+        while (VirtualQuery(cursor, &information, sizeof(information)) != 0U
+               && information.AllocationBase == allocation)
+        {
+            if (information.State == MEM_COMMIT)
+                committed += information.RegionSize;
+            cursor += information.RegionSize;
+        }
+        // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        return committed;
+#else
+        return 0U;
+#endif
+    }
 } // namespace Visual::XSharp::Support

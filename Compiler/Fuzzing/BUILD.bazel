@@ -73,6 +73,14 @@ cc_binary(
     deps = [":source_fuzz_harness"],
 )
 
+# A measuring instrument, not a test: it compiles one source file on a stack
+# of a chosen size and prints the stack the compilation committed.
+cc_binary(
+    name = "source_stack_probe",
+    srcs = ["SourceStackProbe.cpp"],
+    deps = [":source_fuzz_harness"],
+)
+
 cc_binary(
     name = "lexer_fuzzer",
     srcs = ["SourceLibFuzzer.cpp"],

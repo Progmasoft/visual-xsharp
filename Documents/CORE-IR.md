@@ -412,6 +412,8 @@ fuzz programs run the pipeline on a thread with 256 MiB of reserved stack,
 operating system gives the process, which is one megabyte on Windows. A
 program that hosts the pipeline on another thread must give it enough stack
 or accept a lower depth. The stack each stage uses per level is measured
+with `//Compiler/Fuzzing:source_stack_probe`, which compiles a source file
+and reports the stack the compilation committed, and
 with `//Compiler/Support/Tests:stack_probe`, which runs one stage on a stack
 of a chosen size; the measurements are recorded in
 `Benchmarks/2026-10-04-Nesting-And-Chains.md`.

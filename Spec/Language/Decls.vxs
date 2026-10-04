@@ -1942,6 +1942,24 @@ while (HasNext()) {
 }
 
 -- ============================================================================
+-- Example 310: 31.1 if Expressions
+-- Demonstrates: An if or match expression none of whose branches completes normally is valid. It never
+--   produces a value, so whatever would have received the value is never evaluated and the statements after
+--   it are not reached. Each return is still checked against the return type of the method, and break and
+--   continue still need a loop.
+
+int Classify(bool known, int code) {
+    int result = if (known) {
+        return code;
+    }
+    else {
+        return 0;
+    };
+
+    return result; -- never reached
+}
+
+-- ============================================================================
 -- Example 299: 31.1 if Expressions
 -- Demonstrates: A block that can complete normally must end with its value.
 -- Expected result: compile-time rejection; the INVALID marker is normative.

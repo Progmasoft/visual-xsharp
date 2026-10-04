@@ -8,9 +8,9 @@ import Control.Monad.State.Strict
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (nub)
-import Data.Maybe (isJust)
 import Data.Word (Word64)
 import Visual.XSharp.AST
+import Visual.XSharp.Completion
 import Visual.XSharp.Core
 import Visual.XSharp.Desugarer.Branching
 import Visual.XSharp.Desugarer.Sequencing
@@ -145,17 +145,56 @@ branchLowering target =
 lowerBlock :: Block ResolvedName Type -> Lower [CoreStatement]
 lowerBlock = lowerBlockInto Nothing
 
+{- | Lower the statements of a block in order.
+
+A statement an expression of which never completes ends the block: it is
+lowered as the statements that run until control leaves, without the store,
+the binding or the test that would have received the value, and the
+statements after it, which are never reached, are not lowered. Nothing is
+invented for a value that does not exist.
+-}
 lowerBlockInto :: BreakTarget -> Block ResolvedName Type -> Lower [CoreStatement]
-lowerBlockInto target (Block statements) = concat <$> mapM (lowerStatementInto target) statements
+lowerBlockInto target (Block statements) = go statements
+    where
+        go [] = pure []
+        go (statement : remaining) = case neverCompletingExpression statement of
+            Just (before, expression) -> do
+                leading <- concat <$> mapM (lowerStatementInto target) before
+                (leading ++) <$> lowerNeverCompleting (branchLowering target) expression
+            Nothing -> (++) <$> lowerStatementInto target statement <*> go remaining
+
+{- | The expression of a statement that is always evaluated and never
+completes, with the statements that run before it as part of the same
+statement.
+-}
+neverCompletingExpression ::
+    Statement ResolvedName Type -> Maybe ([Statement ResolvedName Type], Expression ResolvedName Type)
+neverCompletingExpression statement = case statement of
+    BindingStatement _ _ _ _ _ value -> only value
+    AssignmentStatement _ _ _ value -> only value
+    CompoundAssignmentStatement _ _ _ _ value -> only value
+    DiscardStatement _ value -> only value
+    ReturnStatement _ (Just value) -> only value
+    IfStatement _ condition _ _ -> only condition
+    GuardStatement _ condition _ -> only condition
+    WhileStatement _ condition _ -> only condition
+    ForStatement _ initializer (Just condition) _ _
+        | doesNotComplete condition -> Just (maybe [] (: []) initializer, condition)
+    ExpressionStatement _ value _ -> only value
+    _ -> Nothing
+    where
+        only value = if doesNotComplete value then Just ([], value) else Nothing
 
 lowerFunctionBlock :: Type -> Block ResolvedName Type -> Lower [CoreStatement]
 lowerFunctionBlock returnType (Block statements) = case reverse statements of
     ExpressionStatement _ expression False : remaining
-        | returnType /= unitType -> do
-            prefix <- concat <$> mapM lowerStatement (reverse remaining)
+        | returnType /= unitType
+        , not (blockCannotComplete (Block (reverse remaining)))
+        , not (doesNotComplete expression) -> do
+            prefix <- lowerBlock (Block (reverse remaining))
             (valuePrefix, value) <- lowerExpression expression
             pure (prefix ++ valuePrefix ++ [CoreReturn value])
-    _ -> concat <$> mapM lowerStatement statements
+    _ -> lowerBlock (Block statements)
 
 lowerStatement :: Statement ResolvedName Type -> Lower [CoreStatement]
 lowerStatement = lowerStatementInto Nothing
@@ -249,7 +288,7 @@ lowerLoop target loop = case loop of
         loweredInitializer <- maybe (pure []) lowerStatement initializer
         loweredCondition <- maybe (pure ([], CoreLiteral (CoreBoolean True) boolType)) lowerExpression condition
         loweredBody <- lowerBlockInto target body
-        loweredUpdates <- concat <$> mapM lowerStatement updates
+        loweredUpdates <- lowerBlock (Block updates)
         pure (loweredInitializer ++ [forLoop loweredCondition loweredBody loweredUpdates])
     _ -> lowerStatement loop
 
@@ -354,6 +393,16 @@ lowerExpression expression = case expression of
         (prefix, lowered) <- lowerExpression value
         pure (prefix, CorePrimitive (lowerUnary operator) [lowered] (lowerBoundaryType valueType))
     BinaryExpression _ operator left right valueType
+        -- A right operand that never completes leaves when it is
+        -- evaluated, so the operator yields a value only on the path that
+        -- skips it, and that value is known: false for `&&`, true for `||`.
+        | operator `elem` [LogicalAnd, LogicalOr]
+        , doesNotComplete right -> do
+            (leftPrefix, loweredLeft) <- lowerExpression left
+            leaving <- lowerNeverCompleting (branchLowering Nothing) right
+            let conjunction = operator == LogicalAnd
+                skip = if conjunction then CoreIf loweredLeft leaving [] else CoreIf loweredLeft [] leaving
+            pure (leftPrefix ++ [skip], CoreLiteral (CoreBoolean (not conjunction)) boolType)
         | operator `elem` [LogicalAnd, LogicalOr] -> do
             (leftPrefix, loweredLeft) <- lowerExpression left
             loweredRight <- lowerExpression right
@@ -379,9 +428,22 @@ lowerExpression expression = case expression of
             subjectRead = CoreVariable subjectName subjectType
             predicate = lowerPattern subjectRead subjectType patternValue
         pure (prefix, CoreLet subjectName subjectType loweredSubject predicate boolType)
-    -- A branch that is a block which leaves has no value to lower.
+    -- A choice that never yields a value is reached here only where the
+    -- place that reads it survives its statements, which is the condition
+    -- of a do/while loop; a statement whose expression never completes is
+    -- lowered by 'lowerBlockInto' without that place. The condition is
+    -- never tested, so the constant is not a value of the program.
+    ConditionalExpression _ _ _ _ valueType
+        | valueType == voidType -> do
+            statements <- lowerNeverCompleting (branchLowering Nothing) expression
+            pure (statements, CoreLiteral (CoreBoolean False) boolType)
+    MatchExpression _ _ arms valueType
+        | valueType == voidType && not (null arms) -> do
+            statements <- lowerNeverCompleting (branchLowering Nothing) expression
+            pure (statements, CoreLiteral (CoreBoolean False) boolType)
+    -- A branch that does not complete has no value to lower.
     ConditionalExpression _ condition first second valueType
-        | any (isJust . leavingBlock) [first, second] -> do
+        | any doesNotComplete [first, second] -> do
             loweredCondition <- lowerExpression condition
             lowerSelection (branchLowering Nothing) valueType loweredCondition first second
     ConditionalExpression _ condition first second valueType -> do
@@ -401,6 +463,22 @@ lowerExpression expression = case expression of
                 pure (conditionPrefix ++ statements, value)
     -- The left operand is both the test and the first result. Binding it once
     -- keeps its effects single even though it is read twice.
+    -- A fallback that never completes leaves when the left value is false
+    -- in Boolean context, so the operator yields the left value or nothing.
+    CoalesceExpression _ left fallback valueType
+        | doesNotComplete fallback -> do
+            (leftPrefix, loweredLeft) <- lowerExpression left
+            leaving <- lowerNeverCompleting (branchLowering Nothing) fallback
+            subjectName <- freshCoalesceSubject
+            let loweredType = lowerBoundaryType valueType
+                subjectRead = CoreVariable subjectName loweredType
+            pure
+                ( leftPrefix
+                    ++ [ CoreBind (CoreBinding subjectName loweredType False loweredLeft)
+                       , CoreIf subjectRead [] leaving
+                       ]
+                , subjectRead
+                )
     CoalesceExpression _ left fallback valueType -> do
         (leftPrefix, loweredLeft) <- lowerExpression left
         loweredFallback <- lowerExpression fallback
@@ -498,9 +576,11 @@ lowerCaptures captures = do
 
 lowerCallableBody :: CallableBody ResolvedName Type -> Lower [CoreStatement]
 lowerCallableBody body = case body of
-    CallableExpressionBody expression -> do
-        (prefix, value) <- lowerExpression expression
-        pure (prefix ++ [CoreReturn value])
+    CallableExpressionBody expression
+        | doesNotComplete expression -> lowerNeverCompleting (branchLowering Nothing) expression
+        | otherwise -> do
+            (prefix, value) <- lowerExpression expression
+            pure (prefix ++ [CoreReturn value])
     CallableBlockBody block ->
         let returnType = maybe unitType id (callableFinalType block)
          in lowerFunctionBlock returnType block

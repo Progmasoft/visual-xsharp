@@ -789,8 +789,13 @@ checkExpressionExpectedWith context environment expected expression = case expre
         let operandExpected = if operator == LogicalNot then Nothing else expected
             (typedValue, valueType, problems) = checkExpressionExpectedWith context environment operandExpected value
             rule = unaryNumericRule operator valueType
-            mismatch = ruleProblems spanValue "VXT0011" rule
-         in (UnaryExpression spanValue operator typedValue (numericRuleType rule), numericRuleType rule, problems ++ mismatch)
+            -- An operand without a type was reported already, or never
+            -- yields a value; either way the operator has nothing to check.
+            (resultType, mismatch) =
+                if valueType == ErrorType
+                    then (ErrorType, [])
+                    else (numericRuleType rule, ruleProblems spanValue "VXT0011" rule)
+         in (UnaryExpression spanValue operator typedValue resultType, resultType, problems ++ mismatch)
     BinaryExpression spanValue operator left right _ ->
         -- A Boolean result does not imply Boolean operands: pushing the return
         -- context into 1 == 2 would convert both literals to true. Comparisons
@@ -809,8 +814,12 @@ checkExpressionExpectedWith context environment expected expression = case expre
             rightExpected = if operator `elem` [LogicalAnd, LogicalOr] then Nothing else Just leftType
             (typedRight, rightType, rightProblems) = checkExpressionExpectedWith context environment rightExpected right
             rule = binaryNumericRule operator leftType rightType
-            resultType = numericRuleType rule
-            mismatch = ruleProblems spanValue "VXT0012" rule
+            -- An operand without a type was reported already, or never
+            -- yields a value; either way the operator has nothing to check.
+            (resultType, mismatch) =
+                if leftType == ErrorType || rightType == ErrorType
+                    then (if booleanResult operator then boolType else ErrorType, [])
+                    else (numericRuleType rule, ruleProblems spanValue "VXT0012" rule)
          in ( BinaryExpression spanValue operator typedLeft typedRight resultType
             , resultType
             , leftProblems ++ rightProblems ++ mismatch
@@ -833,13 +842,18 @@ checkExpressionExpectedWith context environment expected expression = case expre
                 checkOperandPair context environment expected first second
             -- A block that leaves instead of completing has no value, so
             -- the other block alone gives the expression its type.
-            (resultType, resultProblems) = case (valueBlockLeaves typedFirst, valueBlockLeaves typedSecond) of
-                (True, True) -> (ErrorType, [noValueProblem spanValue])
-                (True, False) -> (secondType, [])
-                (False, True) -> (firstType, [])
+            -- When neither completes, the expression never yields a value:
+            -- it is annotated void, and what receives it is not held to a
+            -- type, because that place is never reached.
+            (annotation, resultType, resultProblems) = case (doesNotComplete typedFirst, doesNotComplete typedSecond) of
+                (True, True) -> (voidType, ErrorType, [])
+                (True, False) -> (secondType, secondType, [])
+                (False, True) -> (firstType, firstType, [])
                 (False, False) ->
-                    selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
-         in ( ConditionalExpression spanValue typedCondition typedFirst typedSecond resultType
+                    let (valueType, problems) =
+                            selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
+                     in (valueType, valueType, problems)
+         in ( ConditionalExpression spanValue typedCondition typedFirst typedSecond annotation
             , resultType
             , conditionProblems ++ conditionMismatch ++ firstProblems ++ secondProblems ++ resultProblems
             )
@@ -1404,8 +1418,10 @@ checkCallableBodyWith outer environment body = case body of
             finalType = maybe (inferReturn ErrorType returns) id (finalExpressionType typed)
          in (CallableBlockBody typed, finalType, problems)
 
+-- An expression without a type was reported already, or never yields a
+-- value; a condition of either kind has nothing to check.
 booleanContextType :: Type -> Bool
-booleanContextType = acceptsBooleanContext
+booleanContextType valueType = valueType == ErrorType || acceptsBooleanContext valueType
 
 literalTypeInContext :: SourceSpan -> Maybe Type -> Literal -> (Type, [Diagnostic])
 literalTypeInContext spanValue expected literal = case literal of

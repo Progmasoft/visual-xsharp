@@ -17,6 +17,7 @@ library
         Visual.XSharp.Diagnostic.Protocol
         Visual.XSharp.FloatingLiteral
         Visual.XSharp.Lexer
+        Visual.XSharp.Completion
         Visual.XSharp.NestingLimits
         Visual.XSharp.NumericLiteral
         Visual.XSharp.Parser

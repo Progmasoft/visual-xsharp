@@ -52,14 +52,16 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   leaves the enclosing method and `break` and `continue` target the loop
   around the expression, under the rules they have anywhere else. A block
   that leaves has no value; the expression has the type of the blocks that
-  complete, and `VXT0062` reports an expression none of whose blocks does.
+  complete. An expression none of whose blocks completes is valid: it never
+  yields a value, what would have received the value is not lowered, and no
+  result slot or placeholder is created for it.
 - The `else` block of a `guard` is checked by its control flow instead of by
   its last statement: a loop that cannot end and a statement `match` that
   always selects an arm and all of whose arms leave are accepted, and a
   block that leaves before its last statement is as well.
 - A type pattern over a scalar applies no numeric conversion: `long n` does
   not match an `int`.
-- `Spec/Language/Decls.vxs` gains examples 295 to 309 for these rules, for
+- `Spec/Language/Decls.vxs` gains examples 295 to 310 for these rules, for
   exhaustiveness and for the statement `match` that selects no arm, and the
   grammar allows `-` before a numeric literal in a match pattern.
 
@@ -164,10 +166,14 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   `stack_probe` program, the whole native pipeline went from 14.9 KiB to
   0.67 KiB of stack per statement level and from 7.1 KiB to 1.9 KiB per
   level of nested operands; a sanitizer build uses 1.67 KiB and 3.4 KiB.
-  Chains of operators and `else if` chains use none per link. At the
-  frontend's limits the pipeline needs 0.2 MiB for statements and 1.9 MiB
-  for expressions, and 0.4 MiB and 3.4 MiB in a sanitizer build. The
-  measurements are in `Benchmarks/2026-10-04-Nesting-And-Chains.md`.
+  Chains of operators and `else if` chains use none per link. Whole
+  compilations at the frontend's limits commit at most 0.8 MiB of stack for
+  nested statements and 2.5 MiB for nested expressions, and 1.3 MiB and
+  4.6 MiB in a sanitizer build, measured with the new `source_stack_probe`
+  program. The reservation of 256 MiB costs address space only: the commit
+  of a compilation is the same with and without it. The measurements,
+  including what the lowering adds to a nest and what was not measured, are
+  in `Benchmarks/2026-10-04-Nesting-And-Chains.md`.
 - The native Core wire reader and writer bound the nesting of statement
   bodies at 4096 levels, as they already bounded expression depth. A `.core`
   file nested deeper is rejected as exceeding a limit instead of being
@@ -209,13 +215,17 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   to 7.1 seconds. Nothing bounds the number of statements of a function.
 - Copying a native Core module recurses once per level of nesting; the
   pipeline copies only closure bodies.
-- A binding in the condition of `if`, `guard` or `while` is not implemented:
-  it needs optional values. A call whose result is `never` is not recognized
-  as leaving a `guard` block or a block used as a value.
-- Three ways of leaving a block used as a value are recognized and not
-  implemented: `break` or `continue` in the condition or the update clause
-  of a loop, a `break` that carries a value, and a `return` where the
-  enclosing return type is inferred or inside a loop used as an expression.
+- Parts of the specified language are recognized and rejected as not
+  implemented. They are pending work, listed with their diagnostics under
+  "Pending implementation" in `Documents/BRANCHING.md`: a binding in the
+  condition of `if`, `guard` or `while`, which needs optional values; a call
+  whose result is `never` as a way of leaving; `break` or `continue` out of a
+  value block in the condition or the update clause of a loop; a `break`
+  that carries a value out of a value block; and `return` in a value block
+  where the enclosing return type is inferred or inside a loop used as an
+  expression.
+- The statements after a statement that never completes are checked but no
+  longer lowered to Core.
 
 ### Upgrading from 0.4.1
 

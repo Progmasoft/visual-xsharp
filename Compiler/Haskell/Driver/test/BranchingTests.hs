@@ -523,12 +523,67 @@ typeTests =
         , rejectedWith "VXT0002" (body "bool r = if (flag) { return 1; } else { left }; return 0;")
         )
     ,
-        ( "an if expression whose blocks both leave has no value"
-        , rejectedWith "VXT0062" (body "int r = if (flag) { return 1; } else { return 2; }; return r;")
+        ( "an if expression whose blocks both leave is valid"
+        , accepted (body "int r = if (flag) { return 1; } else { return 2; }; return r;")
         )
     ,
-        ( "a match expression whose arms all leave has no value"
-        , rejectedWith "VXT0062" (body "int r = match (left) { 1 -> { return 1; }, _ -> { return 2; } }; return r;")
+        ( "a match expression whose arms all leave is valid"
+        , accepted (body "int r = match (left) { 1 -> { return 1; }, _ -> { return 2; } }; return r;")
+        )
+    ,
+        ( "an expression that never completes is not held to the type of its receiver"
+        , accepted (body "bool r = if (flag) { return 1; } else { return 2; }; return r ? 1 : 0;")
+        )
+    ,
+        ( "an inferred binding may be initialized by an expression that never completes"
+        , accepted (body "auto r = if (flag) { return 1; } else { return 2; }; return 0;")
+        )
+    ,
+        ( "the returns of an expression that never completes are still checked"
+        , rejectedWith "VXT0005" (body "int r = if (flag) { return true; } else { return 2; }; return r;")
+        )
+    ,
+        ( "the statements after an expression that never completes are still checked"
+        , rejectedWith "VXT0012" (body "int r = if (flag) { return 1; } else { return 2; }; int s = r + true; return s;")
+        )
+    ,
+        ( "a match whose arms all leave must still be exhaustive"
+        , rejectedWith "VXT0052" (body "int r = match (left) { 1 -> { return 1; } }; return r;")
+        )
+    ,
+        ( "an expression that never completes may be an operand"
+        , accepted (body "int r = 1 + (if (flag) { return 1; } else { return 2; }); return r;")
+        )
+    ,
+        ( "an expression that never completes may be a condition"
+        , accepted (body "if (if (flag) { return 1; } else { return 2; }) { return 3; } return 4;")
+        )
+    ,
+        ( "a block that ends with an expression that never completes leaves"
+        , accepted (body "int r = if (left > 0) { 5 } else { if (flag) { return 1; } else { return 2; } }; return r;")
+        )
+    ,
+        ( "a guard block may leave through an initializer that never completes"
+        , accepted (body "guard (left > 0) else { int q = if (flag) { return 1; } else { return 2; }; } return 5;")
+        )
+    , -- Nothing is stored for a value that does not exist: no slot, no
+      -- binding, and none of the statements that are never reached.
+        ( "an initializer that never completes lowers to its branches alone"
+        , case loweredBody (body "int r = if (flag) { return 1; } else { return 2; }; return r;") of
+            Just [CoreIf _ [CoreReturn _] [CoreReturn _]] -> True
+            _ -> False
+        )
+    ,
+        ( "a returned expression that never completes lowers to its branches alone"
+        , case loweredBody (body "return Twice(if (flag) { return 1; } else { return 2; });") of
+            Just [CoreIf _ [CoreReturn _] [CoreReturn _]] -> True
+            _ -> False
+        )
+    ,
+        ( "a match that never completes lowers without a result slot"
+        , case loweredBody (body "int r = match (left) { 1 -> { return 1; }, _ -> { return 2; } }; return r;") of
+            Just statements -> not (any bindsResultSlot statements)
+            Nothing -> False
         )
     ,
         ( "a value block that can complete must end with its value"
@@ -723,6 +778,12 @@ bindingsPrecedeChain = case loweredBody (body "return match (left) { int low if 
             && generated "$matched" slot
     _ -> False
 
+-- | Whether a statement binds the result slot of a match or of a choice.
+bindsResultSlot :: CoreStatement -> Bool
+bindsResultSlot statement = case statement of
+    CoreBind binding -> any (`isPrefixOf` identifierText (resolvedSpelling (coreBindingName binding))) ["$matched", "$selected"]
+    _ -> False
+
 loweredBody :: String -> Maybe [CoreStatement]
 loweredBody text = case compileSource text of
     Right artifacts -> functionBody (artifactCore artifacts)
@@ -772,8 +833,9 @@ matchStatementLowers = case loweredBody (body "match (left) { 1 -> { return 1; }
     _ -> False
 
 catchAllEndsChain :: Bool
+-- The match never completes, so the statement after it is not lowered.
 catchAllEndsChain = case loweredBody (body "match (left) { _ -> { return 7; } } return 0;") of
-    Just [CoreBind (CoreBinding subject _ False _), CoreReturn _, CoreReturn _] -> generated "$subject" subject
+    Just [CoreBind (CoreBinding subject _ False _), CoreReturn _] -> generated "$subject" subject
     _ -> False
 
 severalSubjectsLower :: Bool
@@ -878,6 +940,46 @@ evaluationCases =
     ,
         ( "int v = right - left; return match (v), (flag) { (-1), (true) -> 1, (-1), (_) -> 2, (_), (_) -> 3 };"
         , [(flags True False 3 2, 1), (flags False False 3 2, 2), (flags True False 2 2, 3)]
+        )
+    , -- An expression every branch of which leaves never yields a value.
+        ( "int r = if (flag) { return 1; } else { return 2; }; return r + 50;"
+        , [(flags True False 0 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int r = match (left) { 0 -> { return 10; }, _ -> { return 20; } }; return r + 1;"
+        , [(plain 0 0, 10), (plain 5 0, 20)]
+        )
+    ,
+        ( "return Twice(if (flag) { return 7; } else { return 9; });"
+        , [(flags True False 0 0, 7), (plain 0 0, 9)]
+        )
+    ,
+        ( "int r = 1 + (if (flag) { return 1; } else { return 2; }); return r;"
+        , [(flags True False 0 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int t = 0; int i = 0; while (i < 5) { i += 1; int q = if (i > left) { break; } else { continue; }; t += q; } return t * 10 + i;"
+        , [(plain 2 0, 3), (plain 9 0, 5)]
+        )
+    ,
+        ( "bool b = flag && (if (left > 0) { return 1; } else { return 2; }); return b ? 3 : 4;"
+        , [(flags True False 5 0, 1), (flags True False 0 0, 2), (plain 5 0, 4)]
+        )
+    ,
+        ( "bool b = flag || (if (left > 0) { return 1; } else { return 2; }); return b ? 3 : 4;"
+        , [(flags True False 5 0, 3), (plain 5 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int n = left ?: (if (flag) { return 100; } else { return 200; }); return n;"
+        , [(plain 5 0, 5), (flags True False 0 0, 100), (plain 0 0, 200)]
+        )
+    ,
+        ( "int r = if (left > 0) { 5 } else { if (flag) { return 1; } else { return 2; } }; return r;"
+        , [(plain 3 0, 5), (flags True False 0 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int n = left; do { n += 1; } while (if (n > 3) { return n; } else { return 0 - n; }); return 99;"
+        , [(plain 5 0, 6), (plain 1 0, -2)]
         )
     , -- A block used as a value may leave instead of yielding one.
         ( "int r = if (left > 5) { return 100; } else { left * 2 }; return r + 1;"

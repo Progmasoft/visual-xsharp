@@ -220,6 +220,7 @@ main(int argc, char **argv)
             return 3;
         }
         int outcome = 0;
+        std::size_t committed = 0U;
         Visual::XSharp::Support::RunOnStack(stack, [&] {
             if (stage == "encode")
                 outcome = Wire::Encode(module, limits) ? 0 : 4;
@@ -239,9 +240,12 @@ main(int argc, char **argv)
                               : 4;
             else
                 outcome = 2;
+            committed = Visual::XSharp::Support::CommittedStackBytes();
         });
+        // The size on the command line is only reserved. What the stage
+        // touched is committed, and that is the most it used.
         if (outcome == 0)
-            llvm::outs() << "ok\n";
+            llvm::outs() << "ok committed-kib " << committed / 1024U << '\n';
         return outcome;
     });
 }

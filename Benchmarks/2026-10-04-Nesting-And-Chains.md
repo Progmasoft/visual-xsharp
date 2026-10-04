@@ -108,6 +108,142 @@ compiler thread reserves. The adapter is now the stage that costs most per
 level of real nesting. Copying a module still recurses once per level; the
 pipeline copies only the bodies of closures.
 
+## Peak stack of whole compilations
+
+The slopes above come from one native stage at a time on synthetic Core. The
+figures in this section are from whole compilations of source text: the
+frontend and every native stage run on one thread, as in `vxs`, and the
+stack that thread committed is read at the end.
+
+```powershell
+go -C helpers run ./cmd/develop build -- //Compiler/Fuzzing:source_stack_probe
+bazel-bin/Compiler/Fuzzing/source_stack_probe.exe program.vxs 262144
+```
+
+The second argument is the reservation in KiB; 262144 is the 256 MiB of the
+compiler thread. Windows commits a page of a stack when it is first touched,
+so the committed size is the most the thread used, to the page, including the
+guard page. Every program is one method; its conditions differ at every
+level, so that the optimizer cannot remove the nesting before the native
+stages see it. "Limit" is the deepest the frontend accepts: a statement at
+level 256, an expression at level 1024. Committed stack, KiB:
+
+| Program | Ordinary build | ASan and UBSan |
+| --- | ---: | ---: |
+| `return value + 1;` | 72 | 76 |
+| 255 nested `if`, limit | 196 | 464 |
+| 255 nested `while`, limit | 172 | 416 |
+| 255 nested `for`, limit | 176 | 416 |
+| 255 nested `do`/`while`, limit | 168 | 416 |
+| 255 nested `guard` blocks, limit | 188 | 464 |
+| 255 nested `match` arms, limit | 196 | 464 |
+| 255 nested `while` whose condition stores, limit | 172 | 416 |
+| 255 nested blocks used as values, limit | 784 | 1348 |
+| 256 nested `if`, rejected with `VXP0039` | 32 | 36 |
+| 1023 additions nested to the right, limit | 2004 | 3484 |
+| 1023 nested calls, limit | 2572 | 4720 |
+| conditional chain of 1022 tests, limit | 548 | 1504 |
+| 1023 unary operators, limit | 72 | 76 |
+| 1024 additions nested to the right, rejected with `VXP0040` | 32 | 40 |
+| sum of 7000 operands | 72 | 76 |
+| 3000 comparisons joined by `&&` | 72 | 76 |
+| `else if` chain of 1400 links | 68 | 76 |
+| `match` of 2000 arms | 72 | 76 |
+
+The harness accepts at most 64 KiB of source, which bounds the chains
+measured here; `vxs check` itself was run on a sum of 50000 operands and on an
+`else if` chain of 4000 links. The frontend adds almost nothing: Haskell code
+runs on stacks of its own, and a program the frontend rejects commits 32 to
+40 KiB. Chains commit what the smallest program does.
+
+The most any program at the frontend limits committed is 2.5 MiB in an
+ordinary build and 4.6 MiB under the sanitizers, for nested calls, which cost
+2.5 and 4.6 KiB per level. A function can combine a statement nest with an
+expression nest at its bottom; from the two worst rows that is about 3.0 MiB
+and 5.2 MiB.
+
+### What the lowering adds
+
+Core nesting per source level, counted on the unoptimized Core of each
+construct nested 100 deep. Statement depth counts bodies, with an `else if`
+chain as one level; expression depth counts every child except the first
+operand of a primitive.
+
+| Source, 100 levels | Core statement depth | Core expression depth |
+| --- | ---: | ---: |
+| `if`, `while`, `for`, `do`/`while`, `guard`, `match` arm | 100 | 1 |
+| block statement | 0 | 1 |
+| `while` whose condition stores | 101 | 1 |
+| `do`/`while` whose condition stores | 102 | 1 |
+| blocks used as values, pure | 0 | 101 |
+| blocks used as values that hold statements | 100 | 1 |
+| additions nested to the right, nested calls | 0 | 100 |
+| conditional chain | 0 | 101 |
+| unary operators | 0 | 1 |
+| right operands that store | 0 | 101 |
+| `&&` whose right operands store, 200 expression levels | 101 | 2 |
+| sum of 100 operands, `else if` chain of 100, `match` of 100 arms | 0 or 1 | 1 |
+
+The lowering adds at most two levels to a nest. It can turn a level of one
+kind into a level of the other: a block used as a value is an expression
+level when it is pure and a statement level when it holds statements, and a
+short-circuit operator whose right operand stores becomes a conditional
+statement. Core from a function at the frontend limits therefore has at most
+about 256 + 1024 levels of either kind, inside the 4096 the wire codecs
+admit.
+
+### Beyond the frontend limits
+
+Core that does not come from this frontend is bounded by the wire codecs at
+4096 levels of each kind; deeper input is rejected by the reader before it is
+walked. Measured near that bound with the stack probe: 8.2 MiB for 4096
+nested statements in the writer and 13.3 MiB for 4000 nested operands in the
+adapter, both under the sanitizers. Nested calls were not measured at that
+depth; from their slope of 4.6 KiB they would need about 18.4 MiB, and a
+function that nests both kinds to the bound about 27 MiB. That last figure is
+an extrapolation, not a measurement.
+
+### Reserve and commit
+
+The compiler thread reserves 256 MiB of address space and commits what it
+touches. `vxs check` on this branch and on `main`, which has no compiler
+thread, one process and eight at once; MiB, the largest of the processes
+except where summed:
+
+| Program | Build | Processes | Peak virtual size | Peak commit | Commit, summed | Wall, s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| small program | `main` | 1 | 4295.8 | 30.9 | 30.9 | 1.03 |
+| | `main` | 8 | 4294.8 | 30.9 | 247.1 | 0.28 |
+| | now | 1 | 4550.1 | 31.0 | 31.0 | 0.25 |
+| | now | 8 | 4552.1 | 31.0 | 247.7 | 0.32 |
+| 1023 nested calls | `main` | 1 | 4309.8 | 44.9 | 44.9 | crash |
+| | now | 1 | 4568.1 | 50.5 | 50.5 | 0.50 |
+| | now | 8 | 4567.1 | 50.4 | 403.3 | 1.43 |
+| sum of 50000 operands | now | 1 | 5101.8 | 582.9 | 582.9 | 13.3 |
+| | now | 8 | 5112.9 | 593.8 | 4673.7 | 34.8 |
+
+The reservation shows as 256 MiB of virtual size and as nothing else: the
+commit of a small program is the same with and without it, alone and eight
+at once. What a compilation commits is its heap; the stack is at most a few
+megabytes of it. The first `main` row includes a cold start. Concurrency
+inside one process was not measured, because the compiler has one compiler
+thread per process.
+
+### What the measurements do and do not support
+
+All of these figures are from one machine: Windows, x86-64, clang-cl, an
+ordinary build and an AddressSanitizer build with UndefinedBehaviorSanitizer.
+The stack code for Linux and macOS is built and tested by CI, but stack use
+has not been measured there, and frame sizes differ between compilers and
+ABIs. ThreadSanitizer and MemorySanitizer builds were not measured either.
+
+Against these figures a reservation of 64 MiB would be about 12 times the
+largest commit at the frontend limits under the sanitizers and about 2.4
+times the extrapolated worst case of wire-fed Core. That is an argument for
+a smaller reservation, not a decision: it rests on one platform and on one
+extrapolation, the cost of a reservation was measured to be address space
+only, and the values in the code are unchanged.
+
 ## Haskell Core operations
 
 ```powershell

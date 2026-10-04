@@ -17,10 +17,11 @@ module Visual.XSharp.Desugarer.Branching
     , lowerValueBlock
     , lowerMatch
     , lowerSelection
-    , leavingBlock
+    , lowerNeverCompleting
     ) where
 
 import Visual.XSharp.AST
+import Visual.XSharp.Completion
 import Visual.XSharp.Core
 import Visual.XSharp.Desugarer.Sequencing
 
@@ -44,23 +45,56 @@ data BranchLowering lower = BranchLowering
     -- ^ The Core literal of a source literal of the given Core type.
     }
 
-{- | The statements of a block used as a value that has no value: it has no
-final expression, and the type checker has established that it cannot
-complete normally. Such a block leaves with @return@, @break@ or
-@continue@, which are ordinary Core statements wherever they stand, so it is
-lowered as its statements alone and nothing is stored for it.
--}
-leavingBlock :: Expression name annotation -> Maybe [Statement name annotation]
-leavingBlock expression = case expression of
-    BlockExpression _ (Block statements) _ -> case reverse statements of
-        ExpressionStatement _ _ False : _ -> Nothing
-        _ -> Just statements
-    _ -> Nothing
+{- | Lower an expression that never yields a value, as the statements that
+run until control leaves.
 
-{- | Lower a two-way choice one of whose branches is a block that leaves.
+Such an expression has no Core value, so none is made up for it: there is no
+result slot, no placeholder and nothing for a join to read. The operands
+that are evaluated before the one that never completes are evaluated for
+their effects, in order; the operands after it are never reached and are not
+lowered. A choice every branch of which leaves is a conditional statement
+over the statements of its branches.
+-}
+lowerNeverCompleting ::
+    (Monad lower) => BranchLowering lower -> Expression ResolvedName Type -> lower [CoreStatement]
+lowerNeverCompleting lowering expression = case expression of
+    BlockExpression _ (Block statements) _ -> case reverse statements of
+        ExpressionStatement _ value False : before
+            | not (blockCannotComplete (Block (reverse before))) -> do
+                leading <- branchStatements lowering (reverse before)
+                final <- lowerNeverCompleting lowering value
+                pure (leading ++ final)
+        _ -> branchStatements lowering statements
+    ConditionalExpression _ condition first second _
+        | doesNotComplete condition -> lowerNeverCompleting lowering condition
+        | otherwise -> do
+            (prefix, test) <- branchExpression lowering condition
+            whenTrue <- lowerNeverCompleting lowering first
+            whenFalse <- lowerNeverCompleting lowering second
+            pure (prefix ++ [CoreIf test whenTrue whenFalse])
+    MatchExpression _ subjects arms _
+        | not (any doesNotComplete subjects) -> fst <$> lowerMatch lowering voidType subjects arms
+    _ -> case neverCompletingOperand expression of
+        Just (before, operand) -> do
+            -- Reading a name or a literal has no effect to keep.
+            evaluated <- mapM (branchDiscarded lowering) (filter hasEvaluation before)
+            final <- lowerNeverCompleting lowering operand
+            pure (concat evaluated ++ final)
+        -- Not reached for an expression that never completes; an
+        -- expression that does is evaluated for its effects.
+        Nothing -> branchDiscarded lowering expression
+    where
+        hasEvaluation operand = case operand of
+            NameExpression {} -> False
+            LiteralExpression {} -> False
+            _ -> True
+
+{- | Lower a two-way choice exactly one of whose branches completes.
 
 The result slot is assigned only on the branch that completes. The other
-branch never reaches the read of the slot.
+branch leaves with @return@, @break@ or @continue@, which are ordinary Core
+statements wherever they stand; it is lowered as its statements alone and
+never reaches the read of the slot.
 -}
 lowerSelection ::
     (Monad lower) =>
@@ -73,9 +107,9 @@ lowerSelection ::
 lowerSelection lowering valueType (conditionPrefix, condition) first second = do
     result <- branchFresh lowering "$selected"
     let resultType = branchType lowering valueType
-        branch value = case leavingBlock value of
-            Just statements -> branchStatements lowering statements
-            Nothing -> do
+        branch value
+            | doesNotComplete value = lowerNeverCompleting lowering value
+            | otherwise = do
                 (prefix, lowered) <- branchExpression lowering value
                 pure (prefix ++ [CoreAssign result lowered])
     whenTrue <- branch first
@@ -91,8 +125,8 @@ lowerSelection lowering valueType (conditionPrefix, condition) first second = do
 {- | Lower a block used as a value.
 
 The leading statements run in order; the value is the final expression. A
-block that leaves has no value; the forms that hold one lower it through
-'leavingBlock' and never ask for its value.
+block that does not complete has no value; the forms that hold one lower it
+through 'lowerNeverCompleting' and never ask for its value.
 -}
 lowerValueBlock :: (Monad lower) => BranchLowering lower -> Block ResolvedName Type -> lower Lowered
 lowerValueBlock lowering (Block statements) = case reverse statements of
@@ -233,10 +267,12 @@ its effects.
 lowerArmBody ::
     (Monad lower) => BranchLowering lower -> Maybe ResolvedName -> Expression ResolvedName Type -> lower [CoreStatement]
 lowerArmBody lowering result body = case (result, body) of
-    (Just slot, _) -> case leavingBlock body of
-        Just statements -> branchStatements lowering statements
-        Nothing -> do
+    (Just slot, _)
+        | doesNotComplete body -> lowerNeverCompleting lowering body
+        | otherwise -> do
             (prefix, value) <- branchExpression lowering body
             pure (prefix ++ [CoreAssign slot value])
     (Nothing, BlockExpression _ (Block statements) _) -> branchStatements lowering statements
-    (Nothing, _) -> branchDiscarded lowering body
+    (Nothing, _)
+        | doesNotComplete body -> lowerNeverCompleting lowering body
+        | otherwise -> branchDiscarded lowering body

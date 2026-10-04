@@ -113,10 +113,6 @@ positionTests =
         , reportedAt "VXT0046" (3, 19) ["int r = if (flag) { } else { 2 };", "return r;"]
         )
     ,
-        ( "an if expression without a value is reported at the expression"
-        , reportedAt "VXT0062" (3, 9) ["int r = if (flag) { return 1; } else { return 2; };", "return r;"]
-        )
-    ,
         ( "a return of the wrong type in a value block is reported at the return"
         , reportedAt "VXT0005" (3, 21) ["int r = if (flag) { return true; } else { 3 };", "return r;"]
         )

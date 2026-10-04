@@ -58,6 +58,20 @@ namespace Visual::XSharp::Support
     void
     RunOnStackRaw(std::size_t bytes, void (*function)(void *), void *argument);
 
+    /**
+     * @brief The stack the calling thread has committed so far, in bytes.
+     *
+     * A stack is reserved as address space and committed page by page as
+     * it is first touched, so the committed part is the most the thread has
+     * used, rounded up to pages and including the guard page. Measuring
+     * tools call this at the end of the work they measure.
+     *
+     * @return The committed bytes, or zero on a platform where this is not
+     * determined; it is determined on Windows.
+     */
+    [[nodiscard]] auto
+    CommittedStackBytes() -> std::size_t;
+
     /// Run a callable that returns nothing on a thread with a stack of the
     /// given size. See RunOnStackRaw.
     template<typename Callable>

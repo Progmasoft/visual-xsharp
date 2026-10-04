@@ -333,23 +333,26 @@ The type checker reports:
 | `VXT0059` | a `break` or `continue` in a block used as a value that is not implemented: in the condition or the update clause of a loop, or a `break` that carries a value |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
-| `VXT0062` | every block of an `if` expression, or every arm of a match expression, leaves, so the expression has no value |
 
 A block used as a value may leave instead of yielding a value: `return`
 leaves the enclosing method and is checked against its return type
 (`VXT0005`), and `break` and `continue` target the loop around the expression
 and need one (`VXT0025`, `VXT0027`). A block that cannot complete normally
 needs no final expression and gives its expression no type; the blocks that
-complete do.
+complete do. When no block completes, the expression never yields a value.
+That is valid: the place that would have received the value is not held to a
+type, because it is never reached, and nothing is stored for it. The
+statements after it are still checked.
 
 Whether a block can complete normally, for `VXT0046` and `VXT0061`, is decided
 from its control flow. A statement cannot complete when it is a `return`, a
 `break` or a `continue`; an `if` with an `else` whose two blocks both cannot;
 a nested block that cannot; a loop whose condition is the literal `true`, or
 absent in a `for`, and that no `break` leaves, also from a block used as a
-value; or a statement `match` one arm of which always matches and all arms of
-which are blocks that cannot. A block cannot complete when any of its
-statements cannot. A call is assumed to return: calls whose result is `never`
+value; a statement `match` one arm of which always matches and all arms of
+which are blocks that cannot; or any statement an expression of which is
+always evaluated and never yields a value. A block cannot complete when any
+of its statements cannot. A call is assumed to return: calls whose result is `never`
 are not recognized yet.
 
 A match used as an expression is complete, so that `VXT0052` is not reported,
@@ -384,7 +387,10 @@ any local. Two blocks side by side may declare the same name.
 
 The stages after Core recurse once per level of real nesting, so the
 frontend bounds how deep a function body may nest and reports the place where
-it becomes too deep. The check runs before any analysis of the body:
+it becomes too deep. The check runs before any analysis of the body. The two
+values are resource limits of this implementation, chosen against the
+measured cost of a level in every native stage; the specification states no
+nesting limit, and they are not language rules:
 
 | Code | Meaning |
 | --- | --- |

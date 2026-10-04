@@ -18,11 +18,11 @@ module Visual.XSharp.TypeChecker.Branching
     , guardBlockProblems
     , matchArmsAlwaysAccept
     , blockCannotComplete
-    , valueBlockLeaves
-    , noValueProblem
+    , doesNotComplete
     ) where
 
 import Visual.XSharp.AST
+import Visual.XSharp.Completion
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
 
@@ -82,9 +82,12 @@ expression is typed in the context that receives the value. A block may
 instead leave: with @return@ it leaves the enclosing function, with @break@
 or @continue@ the enclosing loop, under the rules those statements have
 anywhere else. A block that cannot complete normally produces no value and
-needs no final expression; it is typed @void@, and the form that holds it
-takes its type from the blocks that do complete. A block that can complete
-normally must end with its value.
+needs no final expression, and a block whose final expression never
+completes produces none either. Whether a block completes is a fact about
+its control flow, kept apart from its type: 'doesNotComplete' answers it from
+the typed tree, the annotation of such a block is @void@, and the form that
+holds it takes its type from the blocks that do complete. A block that can
+complete normally must end with its value.
 
 A @return@ in such a block is checked against the declared return type of
 the enclosing function. Where that type is inferred from the returns of the
@@ -129,10 +132,13 @@ checkValueBlock checker environment expected spanValue (Block statements) =
                     )
             Just (finalSpan, value) ->
                 let (typedValue, valueType, valueProblems) = branchExpression checker inner expected value
+                    -- A final expression that never completes gives the
+                    -- block no value and therefore no type.
+                    blockType = if doesNotComplete typedValue then voidType else valueType
                  in ( BlockExpression
                         spanValue
                         (Block (typedLeading ++ [ExpressionStatement finalSpan typedValue False]))
-                        valueType
+                        blockType
                     , valueType
                     , leadingProblems ++ returnProblems ++ valueProblems
                     )
@@ -168,14 +174,18 @@ checkMatch checker use environment expected spanValue subjects arms =
                    , not (acceptsBooleanContext valueType)
                    ]
         (typedArms, armTypes, returns, armProblems) = checkArms subjectTypes expected arms
-        -- An arm whose block leaves produces no value; the arms that
-        -- complete give the match its type.
-        valueTypes = [armType | (arm, armType) <- zip typedArms armTypes, not (valueBlockLeaves (matchArmBody arm))]
-        (resultType, resultProblems) = case use of
-            MatchStatement _ -> (voidType, [])
+        -- An arm that does not complete produces no value; the arms that
+        -- complete give the match its type. When none completes, the match
+        -- never yields a value: it is annotated void, like the statement
+        -- form it is lowered as, and what receives it is not held to a
+        -- type, because that place is never reached.
+        valueTypes = [armType | (arm, armType) <- zip typedArms armTypes, not (doesNotComplete (matchArmBody arm))]
+        noArmCompletes = null valueTypes && not (null typedArms)
+        (annotation, resultType, resultProblems) = case use of
+            MatchStatement _ -> (voidType, voidType, [])
             MatchValue
-                | null valueTypes && not (null typedArms) -> (ErrorType, [noValueProblem spanValue])
-                | otherwise -> matchValueType spanValue valueTypes
+                | noArmCompletes -> (voidType, ErrorType, [])
+                | otherwise -> let (valueType, problems) = matchValueType spanValue valueTypes in (valueType, valueType, problems)
         coverageProblems = case use of
             MatchStatement _ -> []
             MatchValue ->
@@ -185,7 +195,7 @@ checkMatch checker use environment expected spanValue subjects arms =
                     "a match used as an expression must accept every value of its subjects; add a '_' arm"
                 | not (matchArmsAlwaysAccept subjectTypes typedArms)
                 ]
-     in ( MatchExpression spanValue typedSubjects typedArms resultType
+     in ( MatchExpression spanValue typedSubjects typedArms annotation
         , resultType
         , returns
         , subjectProblems ++ armProblems ++ unreachableArmProblems typedArms ++ resultProblems ++ coverageProblems
@@ -333,51 +343,6 @@ matchValueType spanValue armTypes = case filter (/= ErrorType) armTypes of
             (first, [problem spanValue "VXT0051" "match expressions currently support only bool and numeric results"])
         | otherwise -> (first, [])
 
--- | Whether a pattern accepts every value of its subject.
-acceptsEveryValue :: MatchPattern name annotation -> Bool
-acceptsEveryValue patternValue = case patternValue of
-    MatchWildcardPattern {} -> True
-    MatchTypePattern {} -> True
-    _ -> False
-
-{- | Whether some arm is certain to accept, whatever the subjects are.
-
-That is the case when an arm without a guard has only patterns that accept
-every value. It is also the case when every subject is a @bool@ and the arms
-without guards accept each combination of @true@ and @false@ between them;
-the combinations are enumerated, which is bounded by 'maximumBoolSubjects'.
-Nothing else is recognized: a guard may be false, and the literals of a wider
-type are never listed in full.
--}
-matchArmsAlwaysAccept :: [Type] -> [MatchArm name annotation] -> Bool
-matchArmsAlwaysAccept subjectTypes arms = any catchAll unguarded || coversBooleans
-    where
-        unguarded = filter isUnguarded arms
-        catchAll arm = all acceptsEveryValue (matchArmPatterns arm)
-        coversBooleans =
-            not (null subjectTypes)
-                && length subjectTypes <= maximumBoolSubjects
-                && all (== boolType) subjectTypes
-                && all (\values -> any (`acceptsBooleans` values) unguarded) (combinations (length subjectTypes))
-        combinations :: Int -> [[Bool]]
-        combinations count = sequence (replicate count [True, False])
-
-{- | The most @bool@ subjects whose combinations are enumerated to decide
-whether a match accepts every value. A match with more is complete only
-through a catch-all arm; the bound keeps the check linear in practice.
--}
-maximumBoolSubjects :: Int
-maximumBoolSubjects = 8
-
--- | Whether an arm's patterns accept the given values of @bool@ subjects.
-acceptsBooleans :: MatchArm name annotation -> [Bool] -> Bool
-acceptsBooleans arm values =
-    length (matchArmPatterns arm) == length values && and (zipWith accepts (matchArmPatterns arm) values)
-    where
-        accepts patternValue value = case patternValue of
-            MatchLiteralPattern _ (BooleanLiteral literal) _ -> literal == value
-            _ -> acceptsEveryValue patternValue
-
 {- | Arms that can never be selected because an earlier arm without a guard
 accepts everything they accept: pattern by pattern, the earlier one accepts
 every value or names the same literal.
@@ -402,11 +367,6 @@ unreachableArmProblems = go []
             (MatchLiteralPattern _ left _, MatchLiteralPattern _ right _) -> left == right
             _ -> acceptsEveryValue first
 
-isUnguarded :: MatchArm name annotation -> Bool
-isUnguarded arm = case matchArmGuard arm of
-    Nothing -> True
-    Just _ -> False
-
 {- | Problems of the else block of a @guard@.
 
 The statements after a guard rely on its condition, so the block must not
@@ -421,120 +381,6 @@ guardBlockProblems spanValue block =
         "the else block of a guard can complete normally; every path through it must leave the enclosing scope"
     | not (blockCannotComplete block)
     ]
-
--- | The diagnostic for an @if@ or a @match@ expression none of whose branches yields a value.
-noValueProblem :: SourceSpan -> Diagnostic
-noValueProblem spanValue =
-    problem
-        spanValue
-        "VXT0062"
-        "every branch of this expression leaves it, so it has no value; write it as a statement"
-
-{- | Whether a block used as a value leaves instead of yielding a value: it
-has no final expression and cannot complete normally.
--}
-valueBlockLeaves :: Expression name Type -> Bool
-valueBlockLeaves expression = case expression of
-    BlockExpression _ block@(Block statements) _ -> not (endsWithValue statements) && blockCannotComplete block
-    _ -> False
-    where
-        endsWithValue statements = case reverse statements of
-            ExpressionStatement _ _ False : _ -> True
-            _ -> False
-
-{- | Whether control can never reach the end of a block.
-
-A statement cannot complete normally when it is a @return@, a @break@ or a
-@continue@; an @if@ with an @else@ whose two blocks both cannot; a nested
-block that cannot; a loop whose condition is the constant true, or absent in
-a @for@, and that no @break@ leaves; or a statement @match@ some arm of which
-always accepts and all of whose arms are blocks that cannot. A block cannot
-complete when one of its statements cannot, because the statements after
-that one are never reached.
-
-The answer errs on the side of completing: a call is assumed to return, and
-a condition is assumed to be able to take either value unless it is the
-literal @true@. Whether a @break@ or @continue@ has a loop to leave is a
-separate rule, reported where the statement stands.
--}
-blockCannotComplete :: Block name Type -> Bool
-blockCannotComplete (Block statements) = any statementCannotComplete statements
-
-statementCannotComplete :: Statement name Type -> Bool
-statementCannotComplete statement = case statement of
-    ReturnStatement {} -> True
-    BreakStatement {} -> True
-    ContinueStatement {} -> True
-    IfStatement _ _ whenTrue (Just whenFalse) -> blockCannotComplete whenTrue && blockCannotComplete whenFalse
-    BlockStatement _ nested -> blockCannotComplete nested
-    WhileStatement _ condition body -> isConstantTrue condition && not (blockBreaks body)
-    DoWhileStatement _ body condition -> isConstantTrue condition && not (blockBreaks body)
-    ForStatement _ _ condition _ body -> maybe True isConstantTrue condition && not (blockBreaks body)
-    ExpressionStatement _ (MatchExpression _ _ arms annotation) _
-        | annotation == voidType ->
-            matchArmsAlwaysAccept (subjectTypesOf arms) arms && all (armCannotComplete . matchArmBody) arms
-    _ -> False
-    where
-        isConstantTrue expression = case expression of
-            LiteralExpression _ (BooleanLiteral True) _ -> True
-            _ -> False
-        armCannotComplete body = case body of
-            BlockExpression _ block _ -> blockCannotComplete block
-            _ -> False
-        -- Every typed pattern carries the type of the value it accepts.
-        subjectTypesOf arms = case arms of
-            first : _ -> map matchPatternAnnotation (matchArmPatterns first)
-            [] -> []
-
-{- | Whether a @break@ in the block leaves the loop whose body the block is.
-
-Loops nested in the block keep their own breaks. A break in a block used as
-a value inside an expression leaves the same loop as one in a statement, so
-expressions are searched as well; closures and loops used as expressions
-are not, because a break in them cannot leave this loop.
--}
-blockBreaks :: Block name annotation -> Bool
-blockBreaks (Block statements) = any statementBreaks statements
-
-statementBreaks :: Statement name annotation -> Bool
-statementBreaks statement = case statement of
-    BreakStatement {} -> True
-    BindingStatement _ _ _ _ _ value -> expressionBreaks value
-    AssignmentStatement _ _ _ value -> expressionBreaks value
-    ReturnStatement _ value -> maybe False expressionBreaks value
-    IfStatement _ condition whenTrue whenFalse ->
-        expressionBreaks condition || blockBreaks whenTrue || maybe False blockBreaks whenFalse
-    WhileStatement {} -> False
-    DoWhileStatement {} -> False
-    ForStatement _ initializer _ _ _ -> maybe False statementBreaks initializer
-    ForEachStatement _ _ _ _ _ source _ -> expressionBreaks source
-    IncrementStatement {} -> False
-    CompoundAssignmentStatement _ _ _ _ value -> expressionBreaks value
-    DiscardStatement _ value -> expressionBreaks value
-    ContinueStatement {} -> False
-    GuardStatement _ condition block -> expressionBreaks condition || blockBreaks block
-    BlockStatement _ block -> blockBreaks block
-    ExpressionStatement _ value _ -> expressionBreaks value
-
-expressionBreaks :: Expression name annotation -> Bool
-expressionBreaks expression = case expression of
-    NameExpression {} -> False
-    LiteralExpression {} -> False
-    MemberAccessExpression _ receiver _ _ -> expressionBreaks receiver
-    CallExpression _ callee arguments _ -> any expressionBreaks (callee : arguments)
-    UnaryExpression _ _ value _ -> expressionBreaks value
-    BinaryExpression _ _ left right _ -> expressionBreaks left || expressionBreaks right
-    IsPatternExpression _ subject _ _ -> expressionBreaks subject
-    ConditionalExpression _ condition first second _ -> any expressionBreaks [condition, first, second]
-    CoalesceExpression _ left fallback _ -> expressionBreaks left || expressionBreaks fallback
-    AssignmentExpression _ _ _ value _ -> expressionBreaks value
-    IncrementExpression {} -> False
-    LoopExpression {} -> False
-    BlockExpression _ block _ -> blockBreaks block
-    MatchExpression _ subjects arms _ ->
-        any expressionBreaks subjects
-            || any (\arm -> maybe False expressionBreaks (matchArmGuard arm) || expressionBreaks (matchArmBody arm)) arms
-    CallableExpression {} -> False
 
 expressionSpanOf :: Expression name annotation -> SourceSpan
 expressionSpanOf expression = case expression of

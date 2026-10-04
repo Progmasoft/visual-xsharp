@@ -122,14 +122,25 @@ while (index < limit) {
 `return` leaves the enclosing method and carries its return type. `break` and
 `continue` target the loop around the expression and need one. A block that
 cannot complete normally has no final expression and no value; the expression
-has the type of the blocks that complete, and at least one must. Such a block
-is lowered as its statements alone: nothing is stored for it.
+has the type of the blocks that complete. Such a block is lowered as its
+statements alone: nothing is stored for it.
 
-Three cases are recognized and not implemented, each with its own
-diagnostic: a `break` or `continue` in a block used as a value in the
-condition or the update clause of a loop, a `break` that carries a value out
-of such a block, and a `return` in such a block where the enclosing return
-type is inferred or inside a loop used as an expression.
+An expression none of whose blocks completes is valid and never yields a
+value:
+
+```vxs
+int result = if (known) { return code; } else { return 0; };
+```
+
+Whether an expression completes is a fact about control flow that the
+compiler keeps apart from types (`Visual.XSharp.Completion`); there is no
+type for it in the language. What would have received the value, here the
+binding, is not held to a type and is not lowered: the statement becomes the
+conditional over the two `return` statements, with no result slot and no
+placeholder, and the statements after it, which are never reached, are
+checked but not lowered. The same holds for such an expression as an
+operand, an argument, a condition or a returned value: the operands that are
+evaluated before it keep their effects, and nothing after it is evaluated.
 
 ## Guard
 
@@ -154,6 +165,23 @@ order, and the names it declares are in scope only inside it, so two blocks
 side by side may declare the same name. A nested block may not redeclare a
 name that is in scope around it.
 
+## Pending implementation
+
+These are parts of the language that the compiler recognizes and rejects with
+a diagnostic that says so. They are owed work, not rules: none of them is a
+restriction of the language, and the specification is not changed to match
+them.
+
+| Pending | Specified by | Diagnostic today | Needs |
+| --- | --- | --- | --- |
+| a binding in the condition of `if`, `guard` or `while`, as in `guard (auto user = Find()) else { return; }` | `Spec/Language/Decls.vxs`, examples 190 to 192 | `VXP0035` | optional values |
+| a call whose result is `never` as a way of leaving a `guard` block or a block used as a value | example 297 | `VXT0061` or `VXT0046` at the block that is taken to complete | the `never` type; nothing else here depends on it |
+| `break` or `continue` out of a block used as a value in the condition or the update clause of a loop | example 298, by the ordinary rules of `break` and `continue` | `VXT0059` | a lowering of loop headers that keeps the target of the transfer |
+| a `break` that carries a value out of a block used as a value | the same | `VXT0059` | the result slot of the loop expression in the lowering of expressions |
+| `return` in a block used as a value where the return type of the enclosing callable is inferred, or inside a loop used as an expression | example 298 | `VXT0047` | return types collected through expressions; `return` in loop expressions |
+| exhaustiveness of a `match` over an enum or a nullable subject | example 304 | `VXT0056`, `VXT0055` | enum declarations; nullable subjects |
+| type patterns over class hierarchies | examples 198 to 203 | `VXT0057` | class hierarchies |
+
 ## Limits of the implemented subset
 
 - Subjects and results of `match`, and results of `if` expressions, are
@@ -166,7 +194,6 @@ name that is in scope around it.
   not have. The plain condition is implemented.
 - A type pattern over a scalar subject names the type of the subject itself;
   no numeric conversion is applied, so `long n` does not match an `int`.
-- A call whose result is `never` is not recognized as leaving.
 - `match` and `guard` are reserved words.
 - A match may have any number of arms: it is lowered to one chain of
   conditionals, the shape of an `else if` chain, which every stage walks in
