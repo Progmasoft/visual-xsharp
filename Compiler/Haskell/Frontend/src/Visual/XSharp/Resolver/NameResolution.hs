@@ -132,6 +132,13 @@ resolveStatement statement = case statement of
         let (resolvedValue, problems) = resolveOptional value
          in (BreakStatement spanValue resolvedValue, problems)
     ContinueStatement spanValue -> (ContinueStatement spanValue, [])
+    GuardStatement spanValue condition block ->
+        let (resolvedCondition, conditionProblems) = resolveExpression condition
+            (resolvedBlock, blockProblems) = resolveBlock block
+         in (GuardStatement spanValue resolvedCondition resolvedBlock, conditionProblems ++ blockProblems)
+    BlockStatement spanValue block ->
+        let (resolvedBlock, problems) = resolveBlock block
+         in (BlockStatement spanValue resolvedBlock, problems)
     ExpressionStatement spanValue value terminated -> let (resolved, problems) = resolveExpression value in (ExpressionStatement spanValue resolved terminated, problems)
 
 resolveOptional :: Maybe (Expression RenamedName ()) -> (Maybe (Expression ResolvedName ()), [Diagnostic])
@@ -177,6 +184,15 @@ resolveExpression expression = case expression of
     LoopExpression spanValue loop _ ->
         let (resolvedLoop, problems) = resolveStatement loop
          in (LoopExpression spanValue resolvedLoop (), problems)
+    BlockExpression spanValue block _ ->
+        let (resolvedBlock, problems) = resolveBlock block
+         in (BlockExpression spanValue resolvedBlock (), problems)
+    MatchExpression spanValue subjects arms _ ->
+        let resolvedSubjects = map resolveExpression subjects
+            resolvedArms = map resolveMatchArm arms
+         in ( MatchExpression spanValue (map fst resolvedSubjects) (map fst resolvedArms) ()
+            , concatMap snd resolvedSubjects ++ concatMap snd resolvedArms
+            )
     CallableExpression spanValue explicit captures parameters body _ ->
         let resolvedCaptures = map resolveCapture captures
             resolvedParameters = map resolveParameter parameters
@@ -190,6 +206,26 @@ resolveExpression expression = case expression of
                 ()
             , concatMap snd resolvedCaptures ++ concatMap snd resolvedParameters ++ bodyProblems
             )
+
+resolveMatchArm :: MatchArm RenamedName () -> (MatchArm ResolvedName (), [Diagnostic])
+resolveMatchArm (MatchArm spanValue patterns guard body) =
+    let resolvedPatterns = map resolveMatchPattern patterns
+        (resolvedGuard, guardProblems) = resolveOptional guard
+        (resolvedBody, bodyProblems) = resolveExpression body
+     in ( MatchArm spanValue (map fst resolvedPatterns) resolvedGuard resolvedBody
+        , concatMap snd resolvedPatterns ++ guardProblems ++ bodyProblems
+        )
+
+resolveMatchPattern :: MatchPattern RenamedName () -> (MatchPattern ResolvedName (), [Diagnostic])
+resolveMatchPattern patternValue = case patternValue of
+    MatchWildcardPattern spanValue _ -> (MatchWildcardPattern spanValue (), [])
+    MatchLiteralPattern spanValue literal _ -> (MatchLiteralPattern spanValue literal (), [])
+    MatchNullPattern spanValue _ -> (MatchNullPattern spanValue (), [])
+    MatchCasePattern spanValue name _ -> (MatchCasePattern spanValue name (), [])
+    MatchTypePattern spanValue syntax Nothing _ -> (MatchTypePattern spanValue syntax Nothing (), [])
+    MatchTypePattern spanValue syntax (Just name) _ ->
+        let (resolvedName, problems) = resolveName spanValue name
+         in (MatchTypePattern spanValue syntax (Just resolvedName) (), problems)
 
 resolvePattern :: Pattern RenamedName () -> (Pattern ResolvedName (), [Diagnostic])
 resolvePattern patternValue = case patternValue of

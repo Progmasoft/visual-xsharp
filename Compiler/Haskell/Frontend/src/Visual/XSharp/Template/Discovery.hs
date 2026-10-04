@@ -252,6 +252,11 @@ discoverStatement catalog namespace root index statement state = case statement 
             state
     BreakStatement _ value -> maybe state (\expression -> discoverExpression catalog namespace root expression state) value
     ContinueStatement {} -> state
+    GuardStatement spanValue condition block ->
+        let origin = root {discoverySites = [ConditionTypeSite index], discoverySpan = spanValue}
+         in discoverBlock catalog namespace origin block (discoverExpression catalog namespace origin condition state)
+    BlockStatement spanValue block ->
+        discoverBlock catalog namespace (root {discoverySites = [ConditionTypeSite index], discoverySpan = spanValue}) block state
     ExpressionStatement spanValue expression _ ->
         discoverExpression
             catalog
@@ -301,6 +306,19 @@ discoverExpression catalog namespace origin expression state = case expression o
     IncrementExpression _ _ _ annotation -> discoverType catalog namespace origin annotation state
     LoopExpression _ loop annotation ->
         discoverStatement catalog namespace origin 0 loop (discoverType catalog namespace origin annotation state)
+    BlockExpression _ block annotation ->
+        discoverBlock catalog namespace origin block (discoverType catalog namespace origin annotation state)
+    MatchExpression _ subjects arms annotation ->
+        let afterType = discoverType catalog namespace origin annotation state
+            afterPatterns =
+                foldl'
+                    (\current patternValue -> discoverType catalog namespace origin (matchPatternAnnotation patternValue) current)
+                    afterType
+                    (concatMap matchArmPatterns arms)
+         in foldl'
+                (\current value -> discoverExpression catalog namespace origin value current)
+                afterPatterns
+                (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression spanValue _ captures parameters body annotation ->
         let callableOrigin =
                 origin

@@ -680,6 +680,68 @@ namespace Visual::XSharp::Core::CorePrep
         }
 
         /**
+         * @brief Prepare an `if` and every `else if` that continues it.
+         *
+         * An `else if` reaches Core as a false branch that holds exactly
+         * one nested `if`. Preparing such a chain by recursion uses stack
+         * in proportion to its length, and a long chain in valid source
+         * would overflow it, so the links are prepared in a loop.
+         *
+         * The blocks are created, numbered and closed exactly as the
+         * recursive formulation would: each link takes three consecutive
+         * block identities for its true branch, its false branch and its
+         * join; a false branch that only holds the next link opens that
+         * link in the false block; and when the last link is done, the
+         * joins are completed from the innermost outwards, each enclosing
+         * false branch falling through to its own join. Both CorePrep
+         * lowerings are compared block by block, so this order is part of
+         * the contract.
+         */
+        void
+        PrepareConditionalChain(Cursor &cursor, const Statement &first)
+        {
+            std::vector<Prepared::BlockId> joins;
+            const Statement *link = &first;
+            for (;;)
+            {
+                auto condition = PrepareCondition(cursor, link->expression);
+                const auto trueId = cursor.state.nextBlock;
+                const auto falseId = trueId + 1U;
+                const auto joinId = falseId + 1U;
+                cursor.state.nextBlock = joinId + 1U;
+                cursor.Branch(std::move(condition), trueId, falseId);
+                PrepareBranchRegion(cursor, trueId, joinId, link->trueBranch);
+                joins.push_back(joinId);
+                const auto continues
+                    = link->falseBranch.size() == 1U
+                      && link->falseBranch.front().kind == Statement::Kind::If;
+                if (!continues)
+                {
+                    PrepareBranchRegion(cursor,
+                                        falseId,
+                                        joinId,
+                                        link->falseBranch);
+                    break;
+                }
+                // The false branch is the next link: it starts in the false
+                // block, and its own join is completed before this one.
+                cursor.Open(falseId);
+                link = &link->falseBranch.front();
+            }
+            cursor.Open(joins.back());
+            joins.pop_back();
+            while (!joins.empty())
+            {
+                // The end of an enclosing false branch: fall through to its
+                // join when the inner join is reachable, then continue there.
+                if (cursor.open)
+                    cursor.Jump(joins.back());
+                cursor.Open(joins.back());
+                joins.pop_back();
+            }
+        }
+
+        /**
          * @brief Append structured statements to the cursor's open block.
          *
          * On return the cursor is either still open, meaning control falls
@@ -865,25 +927,8 @@ namespace Visual::XSharp::Core::CorePrep
                         break;
                     }
                     case Statement::Kind::If:
-                    {
-                        auto condition
-                            = PrepareCondition(cursor, statement.expression);
-                        const auto trueId = cursor.state.nextBlock;
-                        const auto falseId = trueId + 1U;
-                        const auto joinId = falseId + 1U;
-                        cursor.state.nextBlock = joinId + 1U;
-                        cursor.Branch(std::move(condition), trueId, falseId);
-                        PrepareBranchRegion(cursor,
-                                            trueId,
-                                            joinId,
-                                            statement.trueBranch);
-                        PrepareBranchRegion(cursor,
-                                            falseId,
-                                            joinId,
-                                            statement.falseBranch);
-                        cursor.Open(joinId);
+                        PrepareConditionalChain(cursor, statement);
                         break;
-                    }
                 }
             }
         }

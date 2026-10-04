@@ -3,6 +3,9 @@
 module Main (main) where
 
 import AssignmentExpressionTests (assignmentExpressionTests)
+import BranchingDiagnosticTests (branchingDiagnosticTests)
+import BranchingOracleTests (branchingOracleTests)
+import BranchingTests (branchingTests)
 import ClosureTests (closureTests)
 import CompileTimeParityTests (compileTimeParityTests)
 import ConditionalExpressionTests (conditionalExpressionTests)
@@ -171,6 +174,9 @@ main = do
     mapM_ (uncurry check) conditionalExpressionTests
     mapM_ (uncurry check) assignmentExpressionTests
     mapM_ (uncurry check) loopExpressionTests
+    mapM_ (uncurry check) branchingTests
+    mapM_ (uncurry check) branchingOracleTests
+    mapM_ (uncurry check) branchingDiagnosticTests
     mapM_ (uncurry check) specializationTests
     mapM_ (uncurry check) voidTests
 

@@ -165,6 +165,8 @@ walkStatement parent state statement = case statement of
     DiscardStatement _ value -> walkExpression parent state value
     BreakStatement _ value -> maybe state (walkExpression parent state) value
     ContinueStatement {} -> state
+    GuardStatement _ condition block -> walkBlock parent (walkExpression parent state condition) block
+    BlockStatement _ block -> walkBlock parent state block
     ExpressionStatement _ value _ -> walkExpression parent state value
 
 walkExpression :: Maybe ClosureId -> WalkState -> Expression ResolvedName Type -> WalkState
@@ -185,6 +187,9 @@ walkExpression parent state expression = case expression of
     AssignmentExpression _ _ _ value _ -> walkExpression parent state value
     IncrementExpression {} -> state
     LoopExpression _ loop _ -> walkStatement parent state loop
+    BlockExpression _ block _ -> walkBlock parent state block
+    MatchExpression _ subjects arms _ ->
+        foldl (walkExpression parent) state (subjects ++ concatMap matchArmExpressions arms)
     callable@CallableExpression {} -> walkCallable parent state callable
 
 walkCallable :: Maybe ClosureId -> WalkState -> Expression ResolvedName Type -> WalkState
@@ -287,6 +292,8 @@ statementFacts statement = case statement of
     DiscardStatement _ value -> expressionFacts value
     BreakStatement _ value -> maybe emptyFacts expressionFacts value
     ContinueStatement {} -> emptyFacts
+    GuardStatement _ condition block -> expressionFacts condition `appendFacts` blockFacts block
+    BlockStatement _ block -> blockFacts block
     ExpressionStatement _ value _ -> expressionFacts value
 
 expressionFacts :: Expression ResolvedName Type -> BodyFacts
@@ -310,6 +317,13 @@ expressionFacts expression = case expression of
          in nested {factReads = targetReads ++ factReads nested, factWrites = name : factWrites nested}
     IncrementExpression _ _ name annotation -> emptyFacts {factReads = [(name, annotation)], factWrites = [name]}
     LoopExpression _ loop _ -> statementFacts loop
+    BlockExpression _ block _ -> blockFacts block
+    -- A pattern binding is a local of the match, written once when its arm
+    -- is entered.
+    MatchExpression _ subjects arms _ ->
+        let nested = foldl appendFacts emptyFacts (map expressionFacts (subjects ++ concatMap matchArmExpressions arms))
+            bound = [name | arm <- arms, Just name <- map matchPatternBinding (matchArmPatterns arm)]
+         in nested {factLocals = bound ++ factLocals nested, factWrites = bound ++ factWrites nested}
     CallableExpression {} -> emptyFacts
 
 captureUse :: BodyFacts -> Bool -> Int -> Capture ResolvedName Type -> CaptureUse
@@ -372,6 +386,15 @@ statementContainsReturn statement = case statement of
             || any statementContainsReturn (blockStatements body)
     ForEachStatement _ _ _ _ _ _ body -> any statementContainsReturn (blockStatements body)
     BreakStatement _ value -> maybe False (const False) value
+    GuardStatement _ _ block -> any statementContainsReturn (blockStatements block)
+    BlockStatement _ block -> any statementContainsReturn (blockStatements block)
+    -- The arms of a statement match are statements, so a return in a block
+    -- body returns from the enclosing callable.
+    ExpressionStatement _ (MatchExpression _ _ arms _) _ ->
+        or
+            [ any statementContainsReturn (blockStatements block)
+            | BlockExpression _ block _ <- map matchArmBody arms
+            ]
     _ -> False
 
 bodyContainsCall :: CallableBody name annotation -> Bool
@@ -403,6 +426,9 @@ statementContainsCall statement = case statement of
     DiscardStatement _ value -> expressionContainsCall value
     BreakStatement _ value -> maybe False expressionContainsCall value
     ContinueStatement {} -> False
+    GuardStatement _ condition block ->
+        expressionContainsCall condition || any statementContainsCall (blockStatements block)
+    BlockStatement _ block -> any statementContainsCall (blockStatements block)
     ExpressionStatement _ value _ -> expressionContainsCall value
 
 expressionContainsCall :: Expression name annotation -> Bool
@@ -417,6 +443,9 @@ expressionContainsCall expression = case expression of
     AssignmentExpression _ _ _ value _ -> expressionContainsCall value
     IncrementExpression {} -> False
     LoopExpression _ loop _ -> statementContainsCall loop
+    BlockExpression _ block _ -> any statementContainsCall (blockStatements block)
+    MatchExpression _ subjects arms _ ->
+        any expressionContainsCall (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression {} -> False
     NameExpression {} -> False
     LiteralExpression {} -> False

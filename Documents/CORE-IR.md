@@ -340,12 +340,54 @@ The statements run where the source evaluates the expression:
 - A loop expression binds a mutable `$loop` slot, runs its loop, and each
   `break value;` assigns the slot and then breaks. The type checker has
   established that the loop cannot end any other way.
+- A block used as a value lowers to its statements followed by its final
+  expression. An `if` expression is a conditional over two such blocks: when
+  neither block has statements it stays one `CoreConditional`, otherwise it
+  selects into a `$selected` slot like any conditional with storing operands.
+- A `match` binds each subject once to an immutable `$subject` local, in
+  source order, and then nests one `CoreIf` per arm: the test is the
+  conjunction of `subject == literal` comparisons, the first branch is the
+  body, and the second branch holds the arms after it. A pattern that accepts
+  every value contributes no comparison, so a catch-all arm is its body
+  without a test and ends the chain. A name bound by a type pattern is an
+  immutable local initialized from its subject before the test of its arm.
+- A guard on an arm with comparisons is decided in a `$accepted` slot by the
+  rule of `&&` with a storing right operand: the guard and its statements run
+  only when the comparisons hold. A guard on an arm without comparisons is
+  the test itself.
+- A match used as an expression binds a mutable `$matched` slot and every
+  body assigns it. The statement form has no slot; its block bodies are
+  statement blocks of the enclosing body, so a `break value;` in them stores
+  into the slot of the enclosing loop expression.
+- A match with more than 16 arms is lowered in groups of 16. The groups
+  follow each other in one statement sequence; a mutable `$taken` slot is
+  set by every body before it runs, and each group after the first is the
+  else branch of a test of that slot. The nesting of the lowered statements
+  is therefore bounded by one group, whatever the number of arms.
+- `guard (condition) else { ... }` is `if (condition) { } else { ... }`.
+- A block statement has no Core form: its statements join the enclosing
+  sequence. Every local has its own symbol, so the names of the block cannot
+  collide with later ones.
 
-`Visual.XSharp.Desugarer.Sequencing` holds these rules. Result slots are
+An `else if` has no Core form of its own either: it is a false branch that
+holds exactly one nested conditional statement, so a chain of N links is N
+levels of nesting. The native wire reader and writer, the native Core
+verifier and the Core-to-CorePrep adapter recognize that shape and walk the
+links in a loop instead of recursing, because recursion would use stack in
+proportion to the length of the chain. The encoding, the verifier's checks
+and the block numbering of CorePrep are those of the nested formulation; the
+Haskell CorePrep lowering and the native adapter are compared on such chains
+like on any other program. Other deep nesting is still walked recursively,
+and the wire format has no statement depth limit yet.
+
+`Visual.XSharp.Desugarer.Sequencing` and `Visual.XSharp.Desugarer.Branching`
+hold these rules. Result slots are
 initialized with a neutral literal of their type that no path can observe.
-`AssignmentExpressionTests.hs` and `LoopExpressionTests.hs` pin the shapes and
-run a reference Core evaluator, `CoreInterpreter.hs`, on the unoptimized and
-on the optimized Core against hand-written results. The same programs run
+`AssignmentExpressionTests.hs`, `LoopExpressionTests.hs` and
+`BranchingTests.hs` pin the shapes and run a reference Core evaluator,
+`CoreInterpreter.hs`, on the unoptimized and on the optimized Core against
+hand-written results. `BranchingOracleTests.hs` additionally compares
+generated matches with the `if` chains they stand for. The same programs run
 through CorePrep, Xpp, Xmm, LLVM and the ORC JIT in `source_fuzz_smoke`.
 
 ## Expressions

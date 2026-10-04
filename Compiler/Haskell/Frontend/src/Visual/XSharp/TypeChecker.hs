@@ -15,6 +15,7 @@ import Visual.XSharp.ConstantEvaluation
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
 import Visual.XSharp.TemplateValue
+import Visual.XSharp.TypeChecker.Branching
 
 -- | A resolved-tree checker that produces a typed tree only when checking succeeds.
 newtype TypeChecker = TypeChecker {checkResolvedAST :: ResolvedAST -> Either [Diagnostic] TypedAST}
@@ -379,6 +380,11 @@ data LoopKind
       value, typed in the context that receives it.
       -}
       ExpressionLoop (Maybe Type)
+    | {- | Not a loop: the edge of a block used as a value. A @break@ or
+      @continue@ inside it would have to leave the block before its value
+      exists, so neither may cross this edge.
+      -}
+      ValueBlockEdge
 
 {- | The loops around a statement, innermost first, and the kind of the loop
 statement that is about to be checked. A loop expression checks its loop
@@ -395,6 +401,27 @@ outsideLoops = LoopContext StatementLoop []
 
 enterLoop :: LoopContext -> LoopContext
 enterLoop loops = LoopContext StatementLoop (pendingLoop loops : enclosingLoops loops)
+
+-- | The context inside a block used as a value, whatever surrounds it.
+insideValueBlock :: LoopContext
+insideValueBlock = LoopContext StatementLoop [ValueBlockEdge]
+
+{- | The checker for expressions and statements as the branching rules of
+"Visual.XSharp.TypeChecker.Branching" receive it: applied to the template
+context and to the type that a @return@ must have.
+-}
+branchChecker :: TemplateContext -> Type -> BranchChecker LoopContext
+branchChecker context expected =
+    BranchChecker
+        { branchExpression = checkExpressionExpectedWith context
+        , branchStatements = \environment loops statements ->
+            let (Block typed, final, returns, problems) = checkBlockWith context environment expected loops (Block statements)
+             in (typed, final, returns, problems)
+        , branchType = \syntax -> (syntaxTypeIn context syntax, typeSyntaxProblemsIn context syntax)
+        , branchLiteral = literalTypeInContext
+        , branchHasEffect = effectCapable
+        , branchValueLoops = insideValueBlock
+        }
 
 -- | The context of a statement that belongs to a loop header, not its body.
 settledLoops :: LoopContext -> LoopContext
@@ -586,12 +613,42 @@ checkStatementWith context environment expected loops statement = case statement
                     [problem spanValue "VXT0026" "a value-carrying break is only valid in a loop used as an expression"]
                 (Just (ExpressionLoop _), Nothing) ->
                     [problem spanValue "VXT0040" "a loop used as an expression must be left by a break that carries a value"]
+                (Just ValueBlockEdge, _) ->
+                    [problem spanValue "VXT0059" "break cannot leave a block that is used as a value"]
                 _ -> []
          in (BreakStatement spanValue typedValue, environment, [], placementProblems ++ valueProblems)
     ContinueStatement spanValue ->
-        let problems =
-                [problem spanValue "VXT0027" "continue is only valid inside a loop" | null (enclosingLoops loops)]
+        let problems = case enclosingLoops loops of
+                [] -> [problem spanValue "VXT0027" "continue is only valid inside a loop"]
+                ValueBlockEdge : _ ->
+                    [problem spanValue "VXT0059" "continue cannot leave a block that is used as a value"]
+                _ -> []
          in (ContinueStatement spanValue, environment, [], problems)
+    GuardStatement spanValue condition block ->
+        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+            conditionMismatch =
+                [ problem spanValue "VXT0060" "guard condition must be bool or numeric"
+                | conditionType /= ErrorType
+                , not (booleanContextType conditionType)
+                ]
+            (typedBlock, _, returns, blockProblems) = checkBlockWith context environment expected loops block
+         in ( GuardStatement spanValue typedCondition typedBlock
+            , environment
+            , returns
+            , conditionProblems ++ conditionMismatch ++ blockProblems ++ guardBlockProblems spanValue typedBlock
+            )
+    -- A nested block is checked in the scope it starts in; what it declares
+    -- does not reach the statements after it.
+    BlockStatement spanValue block ->
+        let (typedBlock, _, returns, problems) = checkBlockWith context environment expected loops block
+         in (BlockStatement spanValue typedBlock, environment, returns, problems)
+    -- A match that is a statement of its own: its arms are statements, they
+    -- may return and may leave the enclosing loop, and no arm has to accept.
+    ExpressionStatement spanValue (MatchExpression matchSpan subjects arms _) terminated
+        | terminated ->
+            let (typedMatch, _, returns, problems) =
+                    checkMatch (branchChecker context expected) (MatchStatement loops) environment Nothing matchSpan subjects arms
+             in (ExpressionStatement spanValue typedMatch terminated, environment, returns, problems)
     ExpressionStatement spanValue value terminated ->
         let (typedValue, _, problems) = checkExpressionWith context environment value
             effectProblems =
@@ -634,6 +691,8 @@ typedExpressionType expression = case expression of
     AssignmentExpression _ _ _ _ valueType -> valueType
     IncrementExpression _ _ _ valueType -> valueType
     LoopExpression _ _ valueType -> valueType
+    BlockExpression _ _ valueType -> valueType
+    MatchExpression _ _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
 effectCapable :: Expression name annotation -> Bool
@@ -644,6 +703,9 @@ effectCapable (CoalesceExpression _ left fallback _) = effectCapable left || eff
 effectCapable AssignmentExpression {} = True
 effectCapable IncrementExpression {} = True
 effectCapable LoopExpression {} = True
+effectCapable (BlockExpression _ (Block statements) _) = not (null statements)
+effectCapable (MatchExpression _ subjects arms _) =
+    any effectCapable (subjects ++ concatMap matchArmExpressions arms)
 effectCapable CallableExpression {} = False
 effectCapable _ = False
 
@@ -852,6 +914,12 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , resultType
             , loopProblems ++ endProblems ++ returnProblems ++ resultProblems
             )
+    BlockExpression spanValue block _ ->
+        checkValueBlock (branchChecker context ErrorType) environment expected spanValue block
+    MatchExpression spanValue subjects arms _ ->
+        let (typedMatch, resultType, _, problems) =
+                checkMatch (branchChecker context ErrorType) MatchValue environment expected spanValue subjects arms
+         in (typedMatch, resultType, problems)
     CallableExpression spanValue explicit captures parameters body _ ->
         let checkedCaptures = checkCapturesWith context environment captures
             captureEnvironment =
@@ -892,6 +960,10 @@ loopBreakTypes loop = case loop of
         statementBreaks statement = case statement of
             BreakStatement _ (Just value) -> [typedExpressionType value]
             IfStatement _ _ trueBlock falseBlock -> blockBreaks trueBlock ++ maybe [] blockBreaks falseBlock
+            GuardStatement _ _ block -> blockBreaks block
+            BlockStatement _ block -> blockBreaks block
+            ExpressionStatement _ (MatchExpression _ _ arms _) _ ->
+                concat [blockBreaks block | BlockExpression _ block _ <- map matchArmBody arms]
             _ -> []
 
 {- | Result type of a loop expression from the types of its break values.
@@ -934,6 +1006,10 @@ statementReturns statement = case statement of
     ForStatement _ initializer _ updates body ->
         maybe False statementReturns initializer || any statementReturns updates || blockReturns body
     ForEachStatement _ _ _ _ _ _ body -> blockReturns body
+    GuardStatement _ _ block -> blockReturns block
+    BlockStatement _ block -> blockReturns block
+    ExpressionStatement _ (MatchExpression _ _ arms _) _ ->
+        or [blockReturns block | BlockExpression _ block _ <- map matchArmBody arms]
     _ -> False
     where
         blockReturns (Block statements) = any statementReturns statements
@@ -1103,6 +1179,8 @@ sourceSpanOf expression = case expression of
     AssignmentExpression spanValue _ _ _ _ -> spanValue
     IncrementExpression spanValue _ _ _ -> spanValue
     LoopExpression spanValue _ _ -> spanValue
+    BlockExpression spanValue _ _ -> spanValue
+    MatchExpression spanValue _ _ _ -> spanValue
     CallableExpression spanValue _ _ _ _ _ -> spanValue
 
 checkMemberOverloadCall ::

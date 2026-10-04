@@ -190,11 +190,23 @@ coverage. `source_fuzz_smoke` checks valid-source lowering and then runs the
 differential oracle on every generated program shape at trip counts 0 through
 11, once with a zero and once with a nonzero generated expression, before
 mutation campaigns begin. It also runs the programs of
-`ExpressionExecutionCases.cpp`: assignments, increments and loops used as
-values, each with a hand-written result that both native pipeline modes must
-return. That table is transcribed from the evaluation tables of
-`AssignmentExpressionTests.hs` and `LoopExpressionTests.hs`, where the same
-programs are checked against a reference Core evaluator. Set
+`ExpressionExecutionCases.cpp` and `BranchingExecutionCases.cpp`: assignments,
+increments and loops used as values, and `match`, `if` expressions and
+`guard`, each with a hand-written result that both native pipeline modes must
+return. Those tables are transcribed from the evaluation tables of
+`AssignmentExpressionTests.hs`, `LoopExpressionTests.hs` and
+`BranchingTests.hs`, where the same programs are checked against a reference
+Core evaluator. `BranchingExecutionCases.cpp` also runs a match of 200 arms on
+subjects at the start, at both sides of a group boundary of the lowering, deep
+in later groups and in the catch-all, and an `else if` chain of 300 links,
+which the native stages after Core walk in a loop.
+
+The differential generator selects one of fourteen program shapes from the
+byte after its generated expression, modulo the shape count. Adding a shape
+therefore changes which shape an existing seed selects, so the seeds in
+`Corpus/differential` are rewritten together with the count: each is a leaf
+selector, a shape byte and a limit byte, and its name states the shape it is
+meant to reach. Set
 `VXS_FUZZ_TRACE=1` to print each generated source with its reference and
 optimized LLVM IR.
 

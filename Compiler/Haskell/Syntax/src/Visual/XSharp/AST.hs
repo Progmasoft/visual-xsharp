@@ -24,6 +24,14 @@ module Visual.XSharp.AST
     , Expression (..)
     , Pattern (..)
     , RelationalPatternOperator (..)
+    , MatchArm (..)
+    , MatchPattern (..)
+    , matchArmExpressions
+    , matchPatternSpan
+    , matchPatternAnnotation
+    , matchPatternBinding
+    , traverseMatchArm
+    , traverseMatchPattern
     , CallableBody (..)
     , Capture (..)
     , CaptureMode (..)
@@ -265,6 +273,13 @@ data Statement name annotation
       DiscardStatement SourceSpan (Expression name annotation)
     | BreakStatement SourceSpan (Maybe (Expression name annotation))
     | ContinueStatement SourceSpan
+    | -- @guard (condition) else { ... }@ runs its block only when the
+      -- condition is false, and the block must leave the enclosing scope, so
+      -- the statements after the guard run only when the condition held.
+      GuardStatement SourceSpan (Expression name annotation) (Block name annotation)
+    | -- A block written as a statement of its own. Its statements run in
+      -- order, and the names it declares are in scope only inside it.
+      BlockStatement SourceSpan (Block name annotation)
     | ExpressionStatement SourceSpan (Expression name annotation) Bool
     deriving stock (Eq, Ord, Read, Show)
 
@@ -306,6 +321,18 @@ data Expression name annotation
       -- the @break value;@ that leaves it, and the annotation is the type of
       -- that value.
       LoopExpression SourceSpan (Statement name annotation) annotation
+    | -- A block used for its value: the arms of an @if@ expression and the
+      -- block bodies of @match@ arms. Its statements run in order and its
+      -- value is the final expression, which has no terminating semicolon.
+      -- The parser creates this node only in those two places; a block is
+      -- not a primary expression of its own.
+      BlockExpression SourceSpan (Block name annotation) annotation
+    | -- @match (subject), ... { patterns -> body, ... }@. The subjects are
+      -- evaluated once, left to right, and the first arm whose patterns and
+      -- guard accept them supplies the result. The same node is the
+      -- statement form; there its annotation is @void@, the arms yield no
+      -- value, and no arm needs to accept.
+      MatchExpression SourceSpan [Expression name annotation] [MatchArm name annotation] annotation
     | CallableExpression
         SourceSpan
         Bool
@@ -314,6 +341,96 @@ data Expression name annotation
         (CallableBody name annotation)
         annotation
     deriving stock (Eq, Ord, Read, Show)
+
+{- | One arm of a @match@: one pattern per subject, an optional guard, and
+the body that runs when all of them accept.
+
+A block body is a 'BlockExpression'; any other body is the expression written
+after the arrow.
+-}
+data MatchArm name annotation = MatchArm
+    { matchArmSpan :: SourceSpan
+    , matchArmPatterns :: [MatchPattern name annotation]
+    , matchArmGuard :: Maybe (Expression name annotation)
+    , matchArmBody :: Expression name annotation
+    }
+    deriving stock (Eq, Ord, Read, Show)
+
+{- | Pattern of a @match@ arm for one subject.
+
+These are the forms of the @match-pattern@ grammar rule. They are separate
+from 'Pattern', the patterns of an @is@ expression, which have relational and
+combined forms that a @match@ arm does not have, and no bindings.
+-}
+data MatchPattern name annotation
+    = -- | @_@ accepts every value.
+      MatchWildcardPattern SourceSpan annotation
+    | -- | A literal accepts the value equal to it.
+      MatchLiteralPattern SourceSpan Literal annotation
+    | -- | @null@ accepts the null reference.
+      MatchNullPattern SourceSpan annotation
+    | {- | @Type name@ or @Type _@ accepts a value of the type and, with a
+      name, binds it for the guard and the body.
+      -}
+      MatchTypePattern SourceSpan TypeSyntax (Maybe name) annotation
+    | -- | @.Case@ names an enum case of the subject's type.
+      MatchCasePattern SourceSpan Identifier annotation
+    deriving stock (Eq, Ord, Read, Show)
+
+-- | The guard, when present, and the body of an arm, in evaluation order.
+matchArmExpressions :: MatchArm name annotation -> [Expression name annotation]
+matchArmExpressions arm = maybe [] (: []) (matchArmGuard arm) ++ [matchArmBody arm]
+
+-- | Source range of a match pattern.
+matchPatternSpan :: MatchPattern name annotation -> SourceSpan
+matchPatternSpan patternValue = case patternValue of
+    MatchWildcardPattern value _ -> value
+    MatchLiteralPattern value _ _ -> value
+    MatchNullPattern value _ -> value
+    MatchTypePattern value _ _ _ -> value
+    MatchCasePattern value _ _ -> value
+
+-- | Annotation of a match pattern: after type checking, the subject type.
+matchPatternAnnotation :: MatchPattern name annotation -> annotation
+matchPatternAnnotation patternValue = case patternValue of
+    MatchWildcardPattern _ value -> value
+    MatchLiteralPattern _ _ value -> value
+    MatchNullPattern _ value -> value
+    MatchTypePattern _ _ _ value -> value
+    MatchCasePattern _ _ value -> value
+
+-- | The name a match pattern binds, when it binds one.
+matchPatternBinding :: MatchPattern name annotation -> Maybe name
+matchPatternBinding patternValue = case patternValue of
+    MatchTypePattern _ _ name _ -> name
+    _ -> Nothing
+
+{- | Rebuild an arm from rewrites of its patterns, its guard, and its body,
+applied in source order.
+-}
+traverseMatchArm ::
+    (Applicative effect) =>
+    (MatchPattern name annotation -> effect (MatchPattern name' annotation')) ->
+    (Expression name annotation -> effect (Expression name' annotation')) ->
+    MatchArm name annotation ->
+    effect (MatchArm name' annotation')
+traverseMatchArm onPattern onExpression (MatchArm spanValue patterns guard body) =
+    MatchArm spanValue <$> traverse onPattern patterns <*> traverse onExpression guard <*> onExpression body
+
+-- | Rebuild a pattern from rewrites of the name it binds and its annotation.
+traverseMatchPattern ::
+    (Applicative effect) =>
+    (name -> effect name') ->
+    (annotation -> effect annotation') ->
+    MatchPattern name annotation ->
+    effect (MatchPattern name' annotation')
+traverseMatchPattern onName onAnnotation patternValue = case patternValue of
+    MatchWildcardPattern spanValue annotation -> MatchWildcardPattern spanValue <$> onAnnotation annotation
+    MatchLiteralPattern spanValue literal annotation -> MatchLiteralPattern spanValue literal <$> onAnnotation annotation
+    MatchNullPattern spanValue annotation -> MatchNullPattern spanValue <$> onAnnotation annotation
+    MatchTypePattern spanValue syntax name annotation ->
+        MatchTypePattern spanValue syntax <$> traverse onName name <*> onAnnotation annotation
+    MatchCasePattern spanValue name annotation -> MatchCasePattern spanValue name <$> onAnnotation annotation
 
 {- | Pattern tested by an @is@ expression.
 

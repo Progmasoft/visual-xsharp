@@ -361,6 +361,8 @@ statementCalls owner statement = case statement of
     DiscardStatement _ value -> expressionCalls owner value
     BreakStatement _ value -> maybe [] (expressionCalls owner) value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionCalls owner condition ++ blockCalls owner block
+    BlockStatement _ block -> blockCalls owner block
     ExpressionStatement _ value _ -> expressionCalls owner value
 
 expressionCalls :: SymbolId -> Expression ResolvedName Type -> [TemplateMemberCall]
@@ -382,6 +384,10 @@ expressionCalls owner expression = case expression of
     AssignmentExpression _ _ _ value _ -> expressionCalls owner value
     IncrementExpression {} -> []
     LoopExpression _ loop _ -> statementCalls owner loop
+    BlockExpression _ block _ -> blockCalls owner block
+    -- Reachability is path-insensitive: a call in any arm may execute.
+    MatchExpression _ subjects arms _ ->
+        concatMap (expressionCalls owner) (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ captures _ body _ ->
         concatMap (maybe [] (expressionCalls owner) . captureInitializer) captures
             ++ callableBodyCalls owner body

@@ -540,6 +540,8 @@ statementCalls statement = case statement of
     DiscardStatement _ value -> expressionCalls value
     BreakStatement _ value -> maybe [] expressionCalls value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionCalls condition ++ blockCalls block
+    BlockStatement _ block -> blockCalls block
     ExpressionStatement _ value _ -> expressionCalls value
 
 expressionCalls :: Expression ResolvedName Type -> [Expression ResolvedName Type]
@@ -557,6 +559,8 @@ expressionCalls expression = case expression of
     AssignmentExpression _ _ _ value _ -> expressionCalls value
     IncrementExpression {} -> []
     LoopExpression _ loop _ -> statementCalls loop
+    BlockExpression _ block _ -> blockCalls block
+    MatchExpression _ subjects arms _ -> concatMap expressionCalls (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ _ _ body _ -> callableBodyCalls body
     where
         isCall CallExpression {} = True
