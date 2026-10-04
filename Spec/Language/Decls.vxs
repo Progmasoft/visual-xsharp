@@ -1892,8 +1892,8 @@ guard (ready) else {
 -- Demonstrates: Whether the else block leaves is decided by its control flow, not by the spelling of its last
 --   statement. return leaves the method; break and continue leave or continue the enclosing loop and are valid
 --   only where they have one; a loop that cannot end, a match all of whose arms leave and one of which always
---   matches, and a call whose result is never also do not complete.
--- Context note: Fail returns never.
+--   matches, and a call that is known never to return also do not complete.
+-- Context note: Fail is known never to return.
 
 while (HasNext()) {
     auto item = Next();

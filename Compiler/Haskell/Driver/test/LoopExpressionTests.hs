@@ -216,8 +216,16 @@ typeTests =
         , rejectedWith "VXT0044" (body "int n = 0; auto text = while (true) { break \"done\"; }; return n;")
         )
     ,
-        ( "a return inside a loop expression is rejected"
-        , rejectedWith "VXT0045" (body "int r = while (true) { if (flag) { return 1; } break 2; }; return r;")
+        ( "a return inside a loop expression leaves the method"
+        , accepted (body "int r = while (true) { if (flag) { return 1; } break 2; }; return r;")
+        )
+    ,
+        ( "a return inside a loop expression carries the return type of the method"
+        , rejectedWith "VXT0005" (body "int r = while (true) { if (flag) { return true; } break 2; }; return r;")
+        )
+    ,
+        ( "a loop expression that only returns never yields a value"
+        , accepted (body "int r = while (true) { return left; }; return r;")
         )
     ,
         ( "a loop value of the wrong type is rejected by its receiver"

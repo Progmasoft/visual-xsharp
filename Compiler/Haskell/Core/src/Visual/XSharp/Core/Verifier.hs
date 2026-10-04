@@ -338,6 +338,13 @@ literalProblems literal valueType =
             NamedType _ _ -> not (isCoreNumericType value) && value /= unitType
             _ -> False
 
+{- | Whether control can never fall off the end of the statements.
+
+That is so when they return on every path, and also when they hold a loop
+that cannot be left: its condition is the literal true and no @break@
+leaves it. Such a loop ends only through a @return@ inside it, or not at
+all, so nothing after it is reached.
+-}
 statementsAlwaysReturn :: [CoreStatement] -> Bool
 statementsAlwaysReturn [] = False
 statementsAlwaysReturn (statement : remaining) = case statement of
@@ -345,7 +352,24 @@ statementsAlwaysReturn (statement : remaining) = case statement of
     CoreIf _ trueBranch falseBranch ->
         (not (null falseBranch) && statementsAlwaysReturn trueBranch && statementsAlwaysReturn falseBranch)
             || statementsAlwaysReturn remaining
+    CoreWhile condition body
+        | cannotBeLeft condition body -> True
+    CoreDoWhile body condition
+        | cannotBeLeft condition body -> True
+    CoreFor condition body update
+        | cannotBeLeft condition (body ++ update) -> True
     _ -> statementsAlwaysReturn remaining
+    where
+        cannotBeLeft condition body = isLiteralTrue condition && not (leftByBreak body)
+        isLiteralTrue expression = case expression of
+            CoreLiteral (CoreBoolean True) _ -> True
+            _ -> False
+        -- A break in a nested loop leaves that loop.
+        leftByBreak = any breaks
+        breaks nested = case nested of
+            CoreBreak -> True
+            CoreIf _ trueBranch falseBranch -> leftByBreak trueBranch || leftByBreak falseBranch
+            _ -> False
 
 emptyName :: QualifiedName -> [Diagnostic]
 emptyName (QualifiedName parts) =

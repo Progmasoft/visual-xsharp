@@ -34,6 +34,7 @@ library
         Visual.XSharp.TypeChecker
         Visual.XSharp.TypeChecker.Branching
         Visual.XSharp.TypeChecker.Loops
+        Visual.XSharp.TypeChecker.Returns
     hs-source-dirs: src
     build-depends:
         base >=4.20 && <4.23,

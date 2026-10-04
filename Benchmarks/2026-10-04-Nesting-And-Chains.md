@@ -108,12 +108,26 @@ compiler thread reserves. The adapter is now the stage that costs most per
 level of real nesting. Copying a module still recurses once per level; the
 pipeline copies only the bodies of closures.
 
-## Peak stack of whole compilations
+## Committed stack of whole compilations
 
 The slopes above come from one native stage at a time on synthetic Core. The
 figures in this section are from whole compilations of source text: the
 frontend and every native stage run on one thread, as in `vxs`, and the
 stack that thread committed is read at the end.
+
+What is measured is the committed stack, not the bytes in use. It is an upper
+bound on the deepest the thread's stack pointer went, rounded up to whole
+pages, and it includes the guard page; it is not an exact high-water mark of
+the bytes used. It counts only the thread's own stack. Memory that a build
+keeps elsewhere for what would be stack frames is not in it: when
+AddressSanitizer's use-after-return detection is active, it moves frames to
+a fake stack on the heap, and those frames would be missing here. The
+sanitizer builds measured ran with `halt_on_error=1:strict_string_checks=1`
+and otherwise the defaults of the runtime, which on Windows leave that
+detection off, so their figures are of instrumented frames on the real
+stack; they say nothing about a run with the detection on. Measured
+figures and figures derived from them are kept apart below: a derived figure
+is called extrapolated where it appears.
 
 ```powershell
 go -C helpers run ./cmd/develop build -- //Compiler/Fuzzing:source_stack_probe
@@ -121,9 +135,8 @@ bazel-bin/Compiler/Fuzzing/source_stack_probe.exe program.vxs 262144
 ```
 
 The second argument is the reservation in KiB; 262144 is the 256 MiB of the
-compiler thread. Windows commits a page of a stack when it is first touched,
-so the committed size is the most the thread used, to the page, including the
-guard page. Every program is one method; its conditions differ at every
+compiler thread. Windows commits a page of a stack when it is first touched.
+Every program is one method; its conditions differ at every
 level, so that the optimizer cannot remove the nesting before the native
 stages see it. "Limit" is the deepest the frontend accepts: a statement at
 level 256, an expression at level 1024. Committed stack, KiB:
@@ -158,9 +171,9 @@ runs on stacks of its own, and a program the frontend rejects commits 32 to
 
 The most any program at the frontend limits committed is 2.5 MiB in an
 ordinary build and 4.6 MiB under the sanitizers, for nested calls, which cost
-2.5 and 4.6 KiB per level. A function can combine a statement nest with an
-expression nest at its bottom; from the two worst rows that is about 3.0 MiB
-and 5.2 MiB.
+2.5 and 4.6 KiB per level. Those are measurements. A function can combine a
+statement nest with an expression nest at its bottom; adding the two worst
+rows gives about 3.0 MiB and 5.2 MiB, which is derived, not measured.
 
 ### What the lowering adds
 

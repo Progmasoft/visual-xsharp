@@ -1,0 +1,393 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | The programs that "BranchingTests" runs, with the value each must return.
+
+A case is the body of @int Run(bool flag, bool other, int left, int right)@
+and the runs of that body. The expected values are written by hand from the
+language rules. The native smoke program @source_execution_smoke@ runs the
+same programs through LLVM: 'selectionCases' are transcribed in
+@BranchingExecutionCases.cpp@ and 'leavingCases' in
+@LeavingExecutionCases.cpp@.
+-}
+module BranchingEvaluationCases
+    ( EvaluationCase
+    , evaluationCases
+    , selectionCases
+    , leavingCases
+    ) where
+
+-- | A body, and for each run its arguments and the value it must return.
+type EvaluationCase = (String, [((Bool, Bool, Integer, Integer), Integer)])
+
+-- | Every case, in the order the tests report them.
+evaluationCases :: [EvaluationCase]
+evaluationCases = selectionCases ++ leavingCases
+
+-- | Which arm, block or body is selected, and how often each part runs.
+selectionCases :: [EvaluationCase]
+selectionCases =
+    [ ("return match (left) { 1 -> 10, 2 -> 20, _ -> 30 };", [(plain 1 0, 10), (plain 2 0, 20), (plain 5 0, 30)])
+    , -- Negative constants.
+        ( "int v = 0 - left; return match (v) { -1 -> 10, -2 -> 20, 0 -> 5, _ -> 7 };"
+        , [(plain 1 0, 10), (plain 2 0, 20), (plain 0 0, 5), (plain 3 0, 7)]
+        )
+    ,
+        ( "int v = 0 - left - 9223372036854775807; return match (v) { -9223372036854775808 -> 1, -9223372036854775807 -> 2, _ -> 0 };"
+        , [(plain 1 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int v = right - left; return match (v), (flag) { (-1), (true) -> 1, (-1), (_) -> 2, (_), (_) -> 3 };"
+        , [(flags True False 3 2, 1), (flags False False 3 2, 2), (flags True False 2 2, 3)]
+        )
+    , -- Two bool subjects covered without a catch-all arm.
+        ( "return match (flag), (other) { (true), (_) -> 1, (false), (true) -> 2, (false), (false) -> 3 };"
+        , [(flags True True 0 0, 1), (flags True False 0 0, 1), (flags False True 0 0, 2), (flags False False 0 0, 3)]
+        )
+    ,
+        ( "return match (flag), (other) { (true), (true) -> 3, (true), (_) -> 2, (_), (true) -> 1, (_), (_) -> 0 };"
+        , [(flags True True 0 0, 3), (flags True False 0 0, 2), (flags False True 0 0, 1), (flags False False 0 0, 0)]
+        )
+    , -- The subject is evaluated once, whichever arm accepts.
+        ( "int n = left; int r = match (n += 1) { 1 -> 100, 2 -> 200, _ -> 300 }; return r + n;"
+        , [(plain 0 0, 101), (plain 1 0, 202), (plain 5 0, 306)]
+        )
+    , -- Subjects are evaluated left to right, before any arm is tested.
+        ( "int n = left; return match (n += 1), (n * 10) { (2), (20) -> 1, (_), (_) -> 0 };"
+        , [(plain 1 0, 1), (plain 2 0, 0)]
+        )
+    , -- A guard runs only when the patterns of its arm accept.
+        ( "int calls = 0; int r = match (left) { 1 if (calls += 1) > 0 -> 10, 2 if (calls += 10) > 0 -> 20, _ -> 30 }; return r * 100 + calls;"
+        , [(plain 1 0, 1001), (plain 2 0, 2010), (plain 3 0, 3000)]
+        )
+    , -- A guard that is false passes the value on to the arms after it.
+        ( "return match (left) { 1 if flag -> 1, 1 -> 2, _ -> 3 };"
+        , [(flags True False 1 0, 1), (flags False False 1 0, 2), (flags True False 9 0, 3)]
+        )
+    , -- A numeric guard is tested in Boolean context.
+        ( "return match (left) { 1 if right -> 1, _ -> 0 };"
+        , [(plain 1 5, 1), (plain 1 0, 0), (plain 2 5, 0)]
+        )
+    , -- Only the body of the accepting arm runs.
+        ( "int n = 0; int r = match (left) { 1 -> (n += 1), 2 -> (n += 10), _ -> (n += 100) }; return r * 1000 + n;"
+        , [(plain 1 0, 1001), (plain 2 0, 10010), (plain 3 0, 100100)]
+        )
+    , ("return match (Twice(left)) { 4 -> 1, 6 -> 2, _ -> 0 };", [(plain 2 0, 1), (plain 3 0, 2), (plain 4 0, 0)])
+    , ("long wide = 5; return match (wide) { 5 -> 1, _ -> 0 };", [(plain 0 0, 1)])
+    , ("long wide = match (left) { 1 -> 10, _ -> 20 }; return wide > 15 ? 1 : 0;", [(plain 1 0, 0), (plain 2 0, 1)])
+    , ("int r = 0; match (left) { 1 -> r = 5, _ -> r = Twice(left) } return r;", [(plain 1 0, 5), (plain 4 0, 8)])
+    ,
+        ( "return match (left) { 1 -> if (flag) { 5 } else { 6 }, _ -> match (right) { 0 -> 7, _ -> 8 } };"
+        , [(flags True False 1 0, 5), (flags False False 1 0, 6), (plain 2 0, 7), (plain 2 3, 8)]
+        )
+    ,
+        ( "return match (left) { 1 -> { int t = right * 2; t + 1 }, _ -> { int t = right * 3; t - 1 } };"
+        , [(plain 1 4, 9), (plain 2 4, 11)]
+        )
+    , -- A statement arm may continue or leave the enclosing loop.
+        ( "int total = 0; for (int i = 0; i < left; i++) { match (i) { 2 -> { continue; }, 5 -> { break; }, _ -> { total += i; } } } return total;"
+        , [(plain 10 0, 8), (plain 3 0, 1), (plain 0 0, 0)]
+        )
+    , -- A statement arm may supply the value of an enclosing loop expression.
+        ( "int n = 0; int r = while (true) { n += 1; match (n) { 4 -> { break n * 10; }, _ -> { } } }; return r;"
+        , [(plain 0 0, 40)]
+        )
+    , ("match (left) { 1 -> { return 100; }, _ -> { } } return 5;", [(plain 1 0, 100), (plain 2 0, 5)])
+    , ("match (left) { } return 5;", [(plain 1 0, 5)])
+    , ("int r = if (left > right) { left } else { right }; return r;", [(plain 3 5, 5), (plain 9 2, 9)])
+    ,
+        ( "int r = if (flag) { int t = left * 2; t + 1 } else { int t = right * 3; t - 1 }; return r;"
+        , [(flags True False 4 0, 9), (flags False False 0 5, 14)]
+        )
+    , -- Only the selected block of an if expression runs.
+        ( "int n = 0; int r = if (flag) { n += 1; 10 } else { n += 100; 20 }; return r * 1000 + n;"
+        , [(flags True False 0 0, 10001), (flags False False 0 0, 20100)]
+        )
+    ,
+        ( "return (if (flag) { left } else { right }) + (if (other) { 100 } else { 200 });"
+        , [(flags True True 1 2, 101), (flags False False 1 2, 202)]
+        )
+    , ("guard (left > 0) else { return 0 - 1; } return left * 2;", [(plain 3 0, 6), (plain 0 0, -1)])
+    ,
+        ( "int total = 0; for (int i = 0; i < left; i++) { guard (i % 2 == 0) else { continue; } total += i; } return total;"
+        , [(plain 6 0, 6), (plain 1 0, 0)]
+        )
+    ,
+        ( "int n = 0; while (true) { guard (n < left) else { break; } n += 1; } return n;"
+        , [(plain 4 0, 4), (plain 0 0, 0)]
+        )
+    ,
+        ( "int total = 0; { int part = left * 2; total += part; } { int part = right * 3; total += part; } return total;"
+        , [(plain 2 3, 13), (plain 0 0, 0)]
+        )
+    ,
+        ( "int n = 0; while (true) { { n += 1; if (n > left) { break; } } } { { return n * 10; } }"
+        , [(plain 3 0, 40), (plain 0 0, 10)]
+        )
+    ,
+        ( "int total = 0; for (int i = 0; i < left; i++) { { if (i == 1) { continue; } } { int step = i * 2; total += step; } } return total;"
+        , [(plain 4 0, 10), (plain 1 0, 0)]
+        )
+    , ("return match (left) { 1 -> 10 2 -> 20 _ -> 30 };", [(plain 1 0, 10), (plain 2 0, 20), (plain 9 0, 30)])
+    , -- A pattern binding is a local of its arm and may be assigned.
+        ( "return match (left) { int value if value > 2 -> { value = value * 2; value }, int value -> { value += 1; value } };"
+        , [(plain 5 0, 10), (plain 1 0, 2)]
+        )
+    , -- Assigning a binding does not change the subject the later arms test.
+        ( "int r = 0; match (left) { int value if (value = 7) > 9 -> { r = 1; }, 3 -> { r = 2; }, _ -> { r = 3; } } return r;"
+        , [(plain 3 0, 2), (plain 4 0, 3)]
+        )
+    ,
+        ( "int r = if (flag) { if (other) { 1 } else { 2 } } else { match (left) { 1 -> 10, _ -> 20 } }; return r;"
+        , [(flags True True 0 0, 1), (flags True False 0 0, 2), (flags False False 1 0, 10), (flags False False 2 0, 20)]
+        )
+    ,
+        ( "int n = 0; int r = if (flag) { if (other) { n += 1; } else { n += 2; } match (left) { 1 -> { n += 10; } } n } else { 0 }; return r;"
+        , [(flags True True 1 0, 11), (flags True False 2 0, 2), (flags False False 1 0, 0)]
+        )
+    ,
+        ( "match (left) { 1 -> { match (right) { 2 -> { return 12; } } }, _ -> { } } return 5;"
+        , [(plain 1 2, 12), (plain 1 3, 5), (plain 2 2, 5)]
+        )
+    , -- A guard condition with a store runs once, before the block decision.
+        ( "int n = left; guard ((n += 1) > 3) else { return n * 10; } return n;"
+        , [(plain 5 0, 6), (plain 1 0, 20)]
+        )
+    ]
+
+{- | Expressions that leave instead of yielding a value: @return@, @break@
+and @continue@ out of blocks used as values, in loop bodies, loop headers and
+loop expressions.
+-}
+leavingCases :: [EvaluationCase]
+leavingCases =
+    [ -- An expression every branch of which leaves never yields a value.
+        ( "int r = if (flag) { return 1; } else { return 2; }; return r + 50;"
+        , [(flags True False 0 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int r = match (left) { 0 -> { return 10; }, _ -> { return 20; } }; return r + 1;"
+        , [(plain 0 0, 10), (plain 5 0, 20)]
+        )
+    ,
+        ( "return Twice(if (flag) { return 7; } else { return 9; });"
+        , [(flags True False 0 0, 7), (plain 0 0, 9)]
+        )
+    ,
+        ( "int r = 1 + (if (flag) { return 1; } else { return 2; }); return r;"
+        , [(flags True False 0 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int t = 0; int i = 0; while (i < 5) { i += 1; int q = if (i > left) { break; } else { continue; }; t += q; } return t * 10 + i;"
+        , [(plain 2 0, 3), (plain 9 0, 5)]
+        )
+    ,
+        ( "bool b = flag && (if (left > 0) { return 1; } else { return 2; }); return b ? 3 : 4;"
+        , [(flags True False 5 0, 1), (flags True False 0 0, 2), (plain 5 0, 4)]
+        )
+    ,
+        ( "bool b = flag || (if (left > 0) { return 1; } else { return 2; }); return b ? 3 : 4;"
+        , [(flags True False 5 0, 3), (plain 5 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int n = left ?: (if (flag) { return 100; } else { return 200; }); return n;"
+        , [(plain 5 0, 5), (flags True False 0 0, 100), (plain 0 0, 200)]
+        )
+    ,
+        ( "int r = if (left > 0) { 5 } else { if (flag) { return 1; } else { return 2; } }; return r;"
+        , [(plain 3 0, 5), (flags True False 0 0, 1), (plain 0 0, 2)]
+        )
+    ,
+        ( "int n = left; do { n += 1; } while (if (n > 3) { return n; } else { return 0 - n; }); return 99;"
+        , [(plain 5 0, 6), (plain 1 0, -2)]
+        )
+    , -- The condition of a do/while that never completes still runs after
+      -- the body and after a continue, with its effects, and is skipped by
+      -- a break.
+        ( "int t = 0; int n = 0; do { n += 1; if (n == left) { continue; } t += 10; } while (if ((t += 1) > 100) { return 1; } else { return t * 100 + n; }); return 99;"
+        , [(plain 1 0, 101), (plain 5 0, 1101)]
+        )
+    ,
+        ( "int t = 0; do { if (left > 0) { break; } t += 5; } while (if ((t += 1) > 0) { return t; } else { return 0; }); return t + 1000;"
+        , [(plain 1 0, 1000), (plain 0 0, 6)]
+        )
+    ,
+        ( "int t = 0; for (int i = 0; i < 3; i += 1) { do { t += 1; } while (if (t > left) { return t * 10 + i; } else { return t; }); } return 77;"
+        , [(plain 0 0, 10), (plain 5 0, 1)]
+        )
+    ,
+        ( "int t = 0; int i = 0; while (i < 3) { i += 1; int j = 0; do { j += 1; if (j < 3) { continue; } t += j; } while (if (i > left) { return t * 10 + i; } else { j < 4 }); } return t;"
+        , [(plain 0 0, 1), (plain 9 0, 21)]
+        )
+    , -- A transfer in a value block targets the innermost loop only.
+        ( "int t = 0; int i = 0; while (i < 5) { i += 1; int j = 0; while (j < 3) { j += 1; t += if (j == 2) { break; } else { 1 }; } } return t * 10 + i;"
+        , [(plain 0 0, 55)]
+        )
+    ,
+        ( "int t = 0; int i = 0; while (i < 5) { i += 1; int j = 0; while (j < 3) { j += 1; t += if (j == 2) { continue; } else { 1 }; } } return t * 10 + i;"
+        , [(plain 0 0, 105)]
+        )
+    ,
+        ( "int t = 0; while (t < 10) { t += 1; int q = while (true) { break t; }; if (q > left) { break; } } return t;"
+        , [(plain 3 0, 4), (plain 20 0, 10)]
+        )
+    , -- A short-circuit operator evaluates its left operand, with its
+      -- effects, and reaches a right operand that never completes only
+      -- when the left one does not decide.
+        ( "int t = 0; bool b = (t += 1) > 0 && (if (left > 0) { return t * 10; } else { return t * 100; }); return 7;"
+        , [(plain 1 0, 10), (plain 0 0, 100)]
+        )
+    ,
+        ( "int t = 0; bool b = (t += 1) > 5 && (if (left > 0) { return t * 10; } else { return t * 100; }); return t + (b ? 1000 : 0);"
+        , [(plain 1 0, 1), (plain 0 0, 1)]
+        )
+    ,
+        ( "int t = 0; bool b = (t += left) > 0 || (if (flag) { return t * 10; } else { return 50 + t; }); return b ? t + 1 : 7;"
+        , [(plain 3 0, 4), (flags True False 0 0, 0), (plain 0 0, 50)]
+        )
+    ,
+        ( "int t = 0; int q = (t += left) ? t * 2 : (if (flag) { return 0 - 1; } else { return 0 - 2; }); return q + t;"
+        , [(plain 4 0, 12), (flags True False 0 0, -1), (plain 0 0, -2)]
+        )
+    , -- Operands are evaluated left to right up to the one that never
+      -- completes; the ones after it are not evaluated.
+        ( "int t = 0; int r = (t += 1) + (if (flag) { return t * 10; } else { return t * 100; }) + (t += 50); return r;"
+        , [(flags True False 0 0, 10), (plain 0 0, 100)]
+        )
+    ,
+        ( "int t = 0; return Twice(Twice(t += 3) + (if (flag) { return t; } else { return t * 2; }));"
+        , [(flags True False 0 0, 3), (plain 0 0, 6)]
+        )
+    ,
+        ( "int t = left; t = Twice(t += 1) + (if (flag) { return t; } else { return t + 100; }); return 0 - 1;"
+        , [(flags True False 4 0, 5), (plain 4 0, 105)]
+        )
+    , -- A guard runs only when its patterns accept, and a guarded arm that
+      -- leaves does not make the match leave.
+        ( "int t = 0; int r = match (left) { 0 if (t += 1) > 5 -> { return 1; }, 0 -> { return 10 + t; }, _ -> { return 20 + t; } }; return r;"
+        , [(plain 0 0, 11), (plain 3 0, 20)]
+        )
+    ,
+        ( "int r = match (left) { _ if flag -> { return 1; }, _ -> 5 }; return r + 1;"
+        , [(flags True False 0 0, 1), (plain 0 0, 6)]
+        )
+    , -- A break in the condition of a loop leaves that loop, once, with the
+      -- effects of the condition up to it.
+        ( "int n = 0; while (if (n >= left) { break; } else { true }) { n += 1; } return n * 10 + 1;"
+        , [(plain 3 0, 31), (plain 0 0, 1)]
+        )
+    ,
+        ( "int c = 0; int n = 0; while (if ((c += 1) > left) { break; } else { true }) { n += 1; } return c * 100 + n;"
+        , [(plain 2 0, 302), (plain 0 0, 100)]
+        )
+    ,
+        ( "int n = 0; do { n += 1; } while (if (n >= left) { break; } else { true }); return n;"
+        , [(plain 3 0, 3), (plain 0 0, 1)]
+        )
+    ,
+        ( "int t = 0; for (int i = 0; if (i > left) { break; } else { i < 10 }; i += 1) { t += i; } return t;"
+        , [(plain 2 0, 3), (plain 20 0, 45)]
+        )
+    ,
+        ( "int t = 0; for (int i = 0; i < 3; i += 1) { int j = 0; while (if (j == 2) { break; } else { true }) { j += 1; t += 1; } t += 10; } return t;"
+        , [(plain 0 0, 36)]
+        )
+    ,
+        ( "int t = 0; int i = 0; while (i < 4) { i += 1; int j = 0; while (if (j >= i) { break; } else { true }) { j += 1; if (j == 2) { continue; } t += 1; } } return t * 10 + i;"
+        , [(plain 0 0, 74)]
+        )
+    , -- A continue in the update of a loop ends the update; the condition
+      -- is tested next, and the update is not run again for that pass.
+        ( "int t = 0; int skips = 0; for (int i = 0; i < 6; i += if (i == left && skips == 0) { skips += 1; continue; } else { 1 }) { t += 1; } return t * 10 + skips;"
+        , [(plain 2 0, 71), (plain 9 0, 60)]
+        )
+    ,
+        ( "int t = 0; int u = 0; for (int i = 0; i < 4; i += 1, u += if (i == left) { continue; } else { 10 }) { t += 1; } return u * 10 + t;"
+        , [(plain 2 0, 304), (plain 9 0, 404)]
+        )
+    ,
+        ( "int t = 0; for (int i = 0; i < 3; i += 1) { int c = 0; for (int j = 0; j < 4; j += if (c == 0 && j == left) { c += 1; continue; } else { 1 }) { t += 1; } t += c * 100; } return t;"
+        , [(plain 1 0, 315), (plain 7 0, 12)]
+        )
+    , -- A value block may carry a value out of the loop expression around
+      -- it; the value goes to that loop, not to one around it.
+        ( "int r = while (true) { int q = if (flag) { break left + 1; } else { 2 }; break q; }; return r;"
+        , [(flags True False 4 0, 5), (plain 4 0, 2)]
+        )
+    ,
+        ( "int r = while (true) { int q = match (left) { 0 -> { break 100; }, int n -> n * 2 }; break q; }; return r;"
+        , [(plain 0 0, 100), (plain 4 0, 8)]
+        )
+    ,
+        ( "int t = 0; int r = for (int i = 0; ; i += 1) { int inner = while (true) { t += 1; int q = if (t > left) { break t * 2; } else { 0 }; t += q; }; if (inner > 0) { break inner + i; } }; return r * 10 + t;"
+        , [(plain 2 0, 63), (plain 0 0, 21)]
+        )
+    ,
+        ( "int t = 0; int r = Twice(while (true) { t += 1; int q = (t += 10) + (if (t > left) { break t; } else { 1 }); t += q; });  return r * 100 + t;"
+        , [(plain 5 0, 2211), (plain 30 0, 6834)]
+        )
+    , -- A return leaves the method from a loop expression, directly and
+      -- through a value block.
+        ( "int r = while (true) { int q = if (flag) { return 77; } else { 2 }; break q + left; }; return r;"
+        , [(flags True False 0 0, 77), (plain 3 0, 5)]
+        )
+    ,
+        ( "int r = while (true) { if (flag) { return 1; } break 2; }; return r + 10;"
+        , [(flags True False 0 0, 1), (plain 0 0, 12)]
+        )
+    ,
+        ( "int r = while (true) { return left; }; return r + 1;"
+        , [(plain 6 0, 6)]
+        )
+    ,
+        ( "int t = 0; int r = while (true) { t += 1; int q = for (int i = 0; ; i += 1) { if (i + t > left) { return i * 10 + t; } if (i == 2) { break i; } }; if (t == 3) { break q; } }; return 0 - r;"
+        , [(plain 1 0, 11), (plain 2 0, 21), (plain 99 0, -2)]
+        )
+    , -- A block used as a value may leave instead of yielding one.
+        ( "int r = if (left > 5) { return 100; } else { left * 2 }; return r + 1;"
+        , [(plain 9 0, 100), (plain 3 0, 7)]
+        )
+    ,
+        ( "int r = match (left) { 0 -> { return 50; }, int n -> n + 1 }; return r * 2;"
+        , [(plain 0 0, 50), (plain 4 0, 10)]
+        )
+    ,
+        ( "return Twice(if (flag) { return 7; } else { left });"
+        , [(flags True False 4 0, 7), (plain 4 0, 8)]
+        )
+    ,
+        ( "int t = 0; int i = 0; while (i < 10) { i += 1; t += if (i > left) { break; } else { i }; } return t * 100 + i;"
+        , [(plain 3 0, 604), (plain 0 0, 1)]
+        )
+    ,
+        ( "int t = 0; for (int i = 0; i < 6; i += 1) { t += match (i) { 2 -> { continue; }, int n -> { if (n == left) { continue; } else { n } } }; } return t;"
+        , [(plain 4 0, 9), (plain 9 0, 13)]
+        )
+    , -- A guard block that leaves through a match, and through continue.
+        ( "guard (left > 0) else { match (flag) { true -> { return 1; }, false -> { return 2; } } } return left + 10;"
+        , [(flags True False 0 0, 1), (plain 0 0, 2), (plain 5 0, 15)]
+        )
+    ,
+        ( "int t = 0; int i = 0; while (i < left) { i += 1; guard (i \\= 2) else { continue; } t += i; } return t;"
+        , [(plain 4 0, 8), (plain 1 0, 1)]
+        )
+    ,
+        ( "int r = 0; match (left) { 1 -> { r = 10; }, 2 -> { r = 20; } } return r;"
+        , [(plain 1 0, 10), (plain 2 0, 20), (plain 7 0, 0)]
+        )
+    ,
+        ( "return match (left) { int n if n > 10 -> n * 2, int n if n > 5 -> n + 1, _ -> 0 };"
+        , [(plain 20 0, 40), (plain 7 0, 8), (plain 3 0, 0)]
+        )
+    ,
+        ( "return match (left), (right) { (1), (1) -> 11, (1), (_) -> 10, (_), (1) -> 1, (_), (_) -> 0 };"
+        , [(plain 1 1, 11), (plain 1 5, 10), (plain 4 1, 1), (plain 4 4, 0)]
+        )
+    , ("return match (flag) { true -> 1, false -> 2 };", [(flags True False 0 0, 1), (flags False False 0 0, 2)])
+    ]
+
+plain :: Integer -> Integer -> (Bool, Bool, Integer, Integer)
+plain = flags False False
+
+flags :: Bool -> Bool -> Integer -> Integer -> (Bool, Bool, Integer, Integer)
+flags flag other left right = (flag, other, left, right)

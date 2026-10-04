@@ -55,10 +55,6 @@ data BranchChecker loops = BranchChecker
     {- ^ The loop context inside a block used as a value: the loops around
     the expression the block belongs to, seen across the edge of the block.
     -}
-    , branchReturnType :: Type
-    {- ^ The type a @return@ carries here, or the error type when the
-    enclosing function does not declare one.
-    -}
     }
 
 -- | How a @match@ is used, which decides what its arms must provide.
@@ -90,9 +86,9 @@ holds it takes its type from the blocks that do complete. A block that can
 complete normally must end with its value.
 
 A @return@ in such a block is checked against the declared return type of
-the enclosing function. Where that type is inferred from the returns of the
-body, a return reached through an expression is not collected yet and is
-rejected.
+the enclosing function like any other. Where that type is inferred, the
+returns of the body are read from its typed tree afterwards, through
+expressions as well ("Visual.XSharp.TypeChecker.Returns").
 -}
 checkValueBlock ::
     BranchChecker loops ->
@@ -105,25 +101,16 @@ checkValueBlock checker environment expected spanValue (Block statements) =
     let (leading, final) = case reverse statements of
             ExpressionStatement finalSpan value False : before -> (reverse before, Just (finalSpan, value))
             _ -> (statements, Nothing)
-        (typedLeading, inner, returns, leadingProblems) =
+        (typedLeading, inner, _, leadingProblems) =
             branchStatements checker environment (branchValueLoops checker) leading
-        returnProblems =
-            [ problem
-                spanValue
-                "VXT0047"
-                "return inside a block used as a value requires a declared return type and is not implemented inside a loop used as an expression"
-            | not (null returns)
-            , branchReturnType checker == ErrorType
-            ]
      in case final of
             Nothing
                 | blockCannotComplete (Block typedLeading) ->
-                    (BlockExpression spanValue (Block typedLeading) voidType, voidType, leadingProblems ++ returnProblems)
+                    (BlockExpression spanValue (Block typedLeading) voidType, voidType, leadingProblems)
                 | otherwise ->
                     ( BlockExpression spanValue (Block typedLeading) ErrorType
                     , ErrorType
                     , leadingProblems
-                        ++ returnProblems
                         ++ [ problem
                                 spanValue
                                 "VXT0046"
@@ -140,7 +127,7 @@ checkValueBlock checker environment expected spanValue (Block statements) =
                         (Block (typedLeading ++ [ExpressionStatement finalSpan typedValue False]))
                         blockType
                     , valueType
-                    , leadingProblems ++ returnProblems ++ valueProblems
+                    , leadingProblems ++ valueProblems
                     )
 
 {- | Check a @match@.

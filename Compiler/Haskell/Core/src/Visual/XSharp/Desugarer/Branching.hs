@@ -74,6 +74,8 @@ lowerNeverCompleting lowering expression = case expression of
             pure (prefix ++ [CoreIf test whenTrue whenFalse])
     MatchExpression _ subjects arms _
         | not (any doesNotComplete subjects) -> fst <$> lowerMatch lowering voidType subjects arms
+    -- A loop that no break leaves: the loop statement itself.
+    LoopExpression _ loop _ -> branchStatements lowering [loop]
     _ -> case neverCompletingOperand expression of
         Just (before, operand) -> do
             -- Reading a name or a literal has no effect to keep.

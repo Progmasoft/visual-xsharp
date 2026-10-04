@@ -244,9 +244,19 @@ update list, including inside a `CoreIf` there, is rejected with `VXC1066`:
 it has no later point of the same iteration to reach, and lowering it would
 jump back to the start of the update without testing the condition. A loop
 nested inside an update list has its own body and continuation point, so
-`CoreContinue` is valid again inside it. Source code cannot produce this form
-because a `for` update is a list of expressions; the rule protects Core built
-or transformed by other means.
+`CoreContinue` is valid again inside it. A source `continue` in an update
+clause ends the update, and the frontend lowers it without `CoreContinue`:
+an update clause that holds one becomes a loop that runs once, its
+statements followed by `CoreBreak`, and the `continue` becomes a `CoreBreak`
+of that loop. The rule protects Core built or transformed by other means.
+
+A function that returns a value must not fall off the end of its body
+(`VXC1005`). A body does not when every path returns or runs into a loop
+that cannot be left: one whose condition is the literal `true` and that no
+`CoreBreak` of its own body or update list leaves. A `CoreBreak` in a loop
+nested inside it leaves only that loop. The Haskell and the native verifier
+apply the same rule, and the native one decides it without recursing along
+an `else if` chain.
 
 Optimizer passes preserve the explicit loop form unless their rewrite proves
 the replacement semantics, including effects and transfer edges. In
@@ -426,7 +436,7 @@ initialized with a neutral literal of their type that no path can observe.
 `CoreInterpreter.hs`, on the unoptimized and on the optimized Core against
 hand-written results. `BranchingOracleTests.hs` additionally compares
 generated matches with the `if` chains they stand for. The same programs run
-through CorePrep, Xpp, Xmm, LLVM and the ORC JIT in `source_fuzz_smoke`.
+through CorePrep, Xpp, Xmm, LLVM and the ORC JIT in `source_execution_smoke`.
 
 ## Expressions
 

@@ -6,8 +6,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <string_view>
 
-#include "BranchingExecutionCases.hpp"
-#include "ExpressionExecutionCases.hpp"
 #include "SourceFuzz.hpp"
 #include "Visual/XSharp/Support/CompilerStack.hpp"
 
@@ -20,8 +18,7 @@ namespace
 int
 main()
 {
-    // The programs below include ones nested up to the frontend's limits,
-    // which only compile on the stack the compiler runs on in `vxs`.
+    // The compiler runs here on the stack it runs on in `vxs`.
     return Visual::XSharp::Support::RunOnCompilerStack([] {
         return Smoke();
     });
@@ -198,11 +195,8 @@ namespace
                 std::span<const std::uint8_t>(
                     reinterpret_cast<const std::uint8_t *>(text.data()),
                     text.size()));
-        // Hand-written results for assignments and increments used as values
-        // and for loops used as expressions.
-        Visual::XSharp::Fuzzing::ExerciseExpressionCases();
-        // Hand-written results for match, if expressions and guard.
-        Visual::XSharp::Fuzzing::ExerciseBranchingCases();
+        // The programs with hand-written results run in
+        // `source_execution_smoke`, a program of its own.
         llvm::errs() << "Differential smoke: mixed seed\n";
         Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(expressionSeed);
         llvm::errs() << "Differential smoke: empty seed\n";

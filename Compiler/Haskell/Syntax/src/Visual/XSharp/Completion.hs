@@ -25,6 +25,11 @@ module Visual.XSharp.Completion
     , matchArmsAlwaysAccept
     , acceptsEveryValue
     , isUnguarded
+    , blockTransfers
+    , statementTransfers
+    , expressionTransfers
+    , isBreak
+    , isContinue
     ) where
 
 import Visual.XSharp.AST
@@ -58,18 +63,34 @@ statementCannotComplete statement = case statement of
             || maybe False (\block -> blockCannotComplete whenTrue && blockCannotComplete block) whenFalse
     GuardStatement _ condition _ -> doesNotComplete condition
     BlockStatement _ nested -> blockCannotComplete nested
-    WhileStatement _ condition body -> doesNotComplete condition || (isConstantTrue condition && not (blockBreaks body))
-    DoWhileStatement _ body condition -> isConstantTrue condition && not (blockBreaks body)
-    ForStatement _ initializer condition _ body ->
+    -- A loop ends normally when a break leaves it, from its body or from
+    -- its condition. Without one it does not end when its condition is the
+    -- constant true or never completes; a do/while also when its body
+    -- cannot complete, because its body runs first.
+    WhileStatement _ condition body ->
+        not (leftByBreak (expressionTransfers condition ++ blockTransfers body))
+            && (doesNotComplete condition || isConstantTrue condition)
+    DoWhileStatement _ body condition ->
+        not (leftByBreak (expressionTransfers condition ++ blockTransfers body))
+            && (doesNotComplete condition || isConstantTrue condition)
+    ForStatement _ initializer condition updates body ->
         maybe False statementCannotComplete initializer
-            || maybe False doesNotComplete condition
-            || (maybe True isConstantTrue condition && not (blockBreaks body))
+            || ( not
+                    ( leftByBreak
+                        ( maybe [] expressionTransfers condition
+                            ++ blockTransfers body
+                            ++ concatMap statementTransfers updates
+                        )
+                    )
+                    && maybe True (\test -> doesNotComplete test || isConstantTrue test) condition
+               )
     ExpressionStatement _ value _ -> doesNotComplete value
     _ -> False
     where
         isConstantTrue expression = case expression of
             LiteralExpression _ (BooleanLiteral True) _ -> True
             _ -> False
+        leftByBreak = any isBreak
 
 {- | Whether evaluating an expression never yields a value.
 
@@ -94,6 +115,9 @@ doesNotComplete expression = case expression of
                     && matchArmsAlwaysAccept (subjectTypesOf arms) arms
                     && all (doesNotComplete . matchArmBody) arms
                )
+    -- A loop used as an expression yields the value of the break that
+    -- leaves it; without such a break it never yields one.
+    LoopExpression _ loop _ -> statementCannotComplete loop
     _ -> case neverCompletingOperand expression of
         Just _ -> True
         Nothing -> False
@@ -177,52 +201,68 @@ isUnguarded arm = case matchArmGuard arm of
     Nothing -> True
     Just _ -> False
 
-{- | Whether a @break@ in the block leaves the loop whose body the block is.
+{- | The @break@ and @continue@ statements in a block that target the loop
+the block belongs to.
 
-Loops nested in the block keep their own breaks. A break in a block used as
-a value inside an expression leaves the same loop as one in a statement, so
+Loops nested in the block keep their own transfers, in their bodies and in
+their conditions and update clauses. A transfer in a block used as a value
+inside an expression targets the same loop as one in a statement, so
 expressions are searched as well; closures and loops used as expressions
-are not, because a break in them cannot leave this loop.
+are not, because a transfer in them cannot reach this loop.
 -}
-blockBreaks :: Block name annotation -> Bool
-blockBreaks (Block statements) = any statementBreaks statements
+blockTransfers :: Block name annotation -> [Statement name annotation]
+blockTransfers (Block statements) = concatMap statementTransfers statements
 
-statementBreaks :: Statement name annotation -> Bool
-statementBreaks statement = case statement of
-    BreakStatement {} -> True
-    BindingStatement _ _ _ _ _ value -> expressionBreaks value
-    AssignmentStatement _ _ _ value -> expressionBreaks value
-    ReturnStatement _ value -> maybe False expressionBreaks value
+-- | The transfers of one statement that target the loop around it.
+statementTransfers :: Statement name annotation -> [Statement name annotation]
+statementTransfers statement = case statement of
+    BreakStatement _ value -> statement : maybe [] expressionTransfers value
+    ContinueStatement {} -> [statement]
+    BindingStatement _ _ _ _ _ value -> expressionTransfers value
+    AssignmentStatement _ _ _ value -> expressionTransfers value
+    ReturnStatement _ value -> maybe [] expressionTransfers value
     IfStatement _ condition whenTrue whenFalse ->
-        expressionBreaks condition || blockBreaks whenTrue || maybe False blockBreaks whenFalse
-    WhileStatement {} -> False
-    DoWhileStatement {} -> False
-    ForStatement _ initializer _ _ _ -> maybe False statementBreaks initializer
-    ForEachStatement _ _ _ _ _ source _ -> expressionBreaks source
-    IncrementStatement {} -> False
-    CompoundAssignmentStatement _ _ _ _ value -> expressionBreaks value
-    DiscardStatement _ value -> expressionBreaks value
-    ContinueStatement {} -> False
-    GuardStatement _ condition block -> expressionBreaks condition || blockBreaks block
-    BlockStatement _ block -> blockBreaks block
-    ExpressionStatement _ value _ -> expressionBreaks value
+        expressionTransfers condition ++ blockTransfers whenTrue ++ maybe [] blockTransfers whenFalse
+    WhileStatement {} -> []
+    DoWhileStatement {} -> []
+    ForStatement _ initializer _ _ _ -> maybe [] statementTransfers initializer
+    ForEachStatement _ _ _ _ _ source _ -> expressionTransfers source
+    IncrementStatement {} -> []
+    CompoundAssignmentStatement _ _ _ _ value -> expressionTransfers value
+    DiscardStatement _ value -> expressionTransfers value
+    GuardStatement _ condition block -> expressionTransfers condition ++ blockTransfers block
+    BlockStatement _ block -> blockTransfers block
+    ExpressionStatement _ value _ -> expressionTransfers value
 
-expressionBreaks :: Expression name annotation -> Bool
-expressionBreaks expression = case expression of
-    NameExpression {} -> False
-    LiteralExpression {} -> False
-    MemberAccessExpression _ receiver _ _ -> expressionBreaks receiver
-    CallExpression _ callee arguments _ -> any expressionBreaks (callee : arguments)
-    UnaryExpression _ _ value _ -> expressionBreaks value
-    BinaryExpression _ _ left right _ -> expressionBreaks left || expressionBreaks right
-    IsPatternExpression _ subject _ _ -> expressionBreaks subject
-    ConditionalExpression _ condition first second _ -> any expressionBreaks [condition, first, second]
-    CoalesceExpression _ left fallback _ -> expressionBreaks left || expressionBreaks fallback
-    AssignmentExpression _ _ _ value _ -> expressionBreaks value
-    IncrementExpression {} -> False
-    LoopExpression {} -> False
-    BlockExpression _ block _ -> blockBreaks block
+-- | The transfers in an expression that target the loop around it.
+expressionTransfers :: Expression name annotation -> [Statement name annotation]
+expressionTransfers expression = case expression of
+    NameExpression {} -> []
+    LiteralExpression {} -> []
+    MemberAccessExpression _ receiver _ _ -> expressionTransfers receiver
+    CallExpression _ callee arguments _ -> concatMap expressionTransfers (callee : arguments)
+    UnaryExpression _ _ value _ -> expressionTransfers value
+    BinaryExpression _ _ left right _ -> expressionTransfers left ++ expressionTransfers right
+    IsPatternExpression _ subject _ _ -> expressionTransfers subject
+    ConditionalExpression _ condition first second _ -> concatMap expressionTransfers [condition, first, second]
+    CoalesceExpression _ left fallback _ -> expressionTransfers left ++ expressionTransfers fallback
+    AssignmentExpression _ _ _ value _ -> expressionTransfers value
+    IncrementExpression {} -> []
+    LoopExpression {} -> []
+    BlockExpression _ block _ -> blockTransfers block
     MatchExpression _ subjects arms _ ->
-        any expressionBreaks subjects
-            || any (\arm -> maybe False expressionBreaks (matchArmGuard arm) || expressionBreaks (matchArmBody arm)) arms
-    CallableExpression {} -> False
+        concatMap expressionTransfers subjects
+            ++ concatMap (\arm -> maybe [] expressionTransfers (matchArmGuard arm) ++ expressionTransfers (matchArmBody arm)) arms
+    CallableExpression {} -> []
+
+-- | Whether a statement is a @break@.
+isBreak :: Statement name annotation -> Bool
+isBreak statement = case statement of
+    BreakStatement {} -> True
+    _ -> False
+
+-- | Whether a statement is a @continue@.
+isContinue :: Statement name annotation -> Bool
+isContinue statement = case statement of
+    ContinueStatement {} -> True
+    _ -> False

@@ -32,7 +32,7 @@ defaultDesugarer = Desugarer lowerTree
 
 lowerTree :: TypedAST -> Either [Diagnostic] CoreModule
 lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
-    evalStateT lowerModule (1 + maximum (0 : syntaxSymbolIds tree))
+    evalStateT lowerModule (LowerState (1 + maximum (0 : syntaxSymbolIds tree)) Nothing [CoreContinue])
     where
         defaultName = QualifiedName [Identifier "Main"]
         sourceFiles = nub (map portableSourcePath (concatMap declarationSourceFiles declarations))
@@ -80,7 +80,51 @@ functionSources = concatMap declarationFunctionSources
                 )
             ]
 
-type Lower = StateT Int (Either [Diagnostic])
+{- | What the lowering carries besides the tree.
+
+The break target and the lowering of @continue@ belong to the statement
+being lowered. They are state rather than arguments because a statement is
+also reached through an expression: a block used as a value holds statements,
+and a @break@ or @continue@ in it must reach the loop around the expression.
+-}
+data LowerState = LowerState
+    { lowerNextSymbol :: Int
+    -- ^ The identity of the next compiler-generated local.
+    , lowerBreakTarget :: BreakTarget
+    -- ^ Where a @break value;@ of the statement being lowered stores.
+    , lowerContinue :: [CoreStatement]
+    {- ^ What a @continue@ of the statement being lowered becomes: the Core
+    @continue@ in a loop body, and a @break@ of the enclosing one-pass loop
+    in an update clause, where it ends the update.
+    -}
+    }
+
+type Lower = StateT LowerState (Either [Diagnostic])
+
+-- | Lower with the given break target, and restore the previous one after.
+targeting :: BreakTarget -> Lower a -> Lower a
+targeting target action = do
+    previous <- gets lowerBreakTarget
+    modify (\current -> current {lowerBreakTarget = target})
+    result <- action
+    modify (\current -> current {lowerBreakTarget = previous})
+    pure result
+
+-- | Lower with the given lowering of @continue@, and restore the previous one after.
+continuingWith :: [CoreStatement] -> Lower a -> Lower a
+continuingWith statements action = do
+    previous <- gets lowerContinue
+    modify (\current -> current {lowerContinue = statements})
+    result <- action
+    modify (\current -> current {lowerContinue = previous})
+    pure result
+
+{- | The branching forms as they are lowered at the current place: a
+@break value;@ in a block used as a value stores where one in the statement
+around it would.
+-}
+branching :: (BranchLowering Lower -> Lower a) -> Lower a
+branching use = gets lowerBreakTarget >>= use . branchLowering
 
 freshPatternSubject :: Lower ResolvedName
 freshPatternSubject = freshGenerated "$pattern"
@@ -90,8 +134,8 @@ freshCoalesceSubject = freshGenerated "$coalesce"
 
 freshGenerated :: String -> Lower ResolvedName
 freshGenerated prefix = do
-    identifier <- get
-    put (identifier + 1)
+    identifier <- gets lowerNextSymbol
+    modify (\current -> current {lowerNextSymbol = identifier + 1})
     pure (ResolvedName (SymbolId identifier) (Identifier (prefix ++ show identifier)))
 
 lowerTop :: Declaration ResolvedName Type -> Lower [CoreFunction]
@@ -127,8 +171,8 @@ type BreakTarget = Maybe (ResolvedName, Type)
 
 {- | The lowering of this module as the branching forms of
 "Visual.XSharp.Desugarer.Branching" receive it. The target is where a
-@break value;@ in a statement arm stores its value; value blocks have none,
-because the type checker rejects a value-carrying break that leaves one.
+@break value;@ among their statements stores its value: the result slot of
+the loop expression around them, if there is one.
 -}
 branchLowering :: BreakTarget -> BranchLowering Lower
 branchLowering target =
@@ -177,9 +221,14 @@ neverCompletingExpression statement = case statement of
     ReturnStatement _ (Just value) -> only value
     IfStatement _ condition _ _ -> only condition
     GuardStatement _ condition _ -> only condition
-    WhileStatement _ condition _ -> only condition
+    -- A condition that leaves by a break of its own loop is lowered with
+    -- the loop, which that break needs around it.
+    WhileStatement _ condition _
+        | not (any isBreak (expressionTransfers condition)) -> only condition
     ForStatement _ initializer (Just condition) _ _
-        | doesNotComplete condition -> Just (maybe [] (: []) initializer, condition)
+        | doesNotComplete condition
+        , not (any isBreak (expressionTransfers condition)) ->
+            Just (maybe [] (: []) initializer, condition)
     ExpressionStatement _ value _ -> only value
     _ -> Nothing
     where
@@ -200,7 +249,11 @@ lowerStatement :: Statement ResolvedName Type -> Lower [CoreStatement]
 lowerStatement = lowerStatementInto Nothing
 
 lowerStatementInto :: BreakTarget -> Statement ResolvedName Type -> Lower [CoreStatement]
-lowerStatementInto target statement = case statement of
+lowerStatementInto target statement = targeting target (lowerStatementWith target statement)
+
+-- The break target is already the current one.
+lowerStatementWith :: BreakTarget -> Statement ResolvedName Type -> Lower [CoreStatement]
+lowerStatementWith target statement = case statement of
     BindingStatement _ kind _ name valueType value -> do
         (prefix, lowered) <- lowerExpression value
         pure (prefix ++ [CoreBind (CoreBinding name (lowerBoundaryType valueType) (kind == MutableBinding) lowered)])
@@ -217,9 +270,11 @@ lowerStatementInto target statement = case statement of
         whenFalse <- maybe (pure []) (lowerBlockInto target) falseBlock
         pure (prefix ++ [CoreIf loweredCondition whenTrue whenFalse])
     WhileStatement {} -> lowerLoop Nothing statement
+    -- A loop statement has no slot for break values, and a continue in its
+    -- body or condition is its own.
     DoWhileStatement _ body condition -> do
-        loweredBody <- lowerBlock body
-        loweredCondition <- lowerExpression condition
+        loweredBody <- continuingWith [CoreContinue] (lowerBlock body)
+        loweredCondition <- continuingWith [CoreContinue] (targeting Nothing (lowerExpression condition))
         if null (fst loweredCondition)
             then pure [CoreDoWhile loweredBody (snd loweredCondition)]
             else do
@@ -258,7 +313,7 @@ lowerStatementInto target statement = case statement of
                         "a value-carrying break reached Core lowering outside a loop expression"
                     ]
                 )
-    ContinueStatement _ -> pure [CoreContinue]
+    ContinueStatement _ -> gets lowerContinue
     -- The block runs when the condition is false and never completes
     -- normally, so the statements after the guard follow the empty branch.
     GuardStatement _ condition block -> do
@@ -274,23 +329,38 @@ lowerStatementInto target statement = case statement of
         | annotation == voidType -> fst <$> lowerMatch (branchLowering target) annotation subjects arms
     ExpressionStatement _ value _ -> lowerDiscarded value
 
-{- | Lower a @while@ or @for@ loop whose body stores break values into the
-given target. Loops nested in the body are statements of their own and are
-lowered without a target.
+{- | Lower a @while@ or @for@ loop whose body and condition store break
+values into the given target. Loops nested in the body are statements of
+their own and are lowered without a target.
+
+A @break@ in the condition leaves the loop. The statements of a condition
+that has any stand at the top of the Core loop body, so the Core @break@
+there leaves the right loop without further work.
+
+A @continue@ in the update clause ends the update, and the condition is
+tested next. Core has no such transfer inside an update region, so an update
+clause that holds one is wrapped in a loop that runs once: its statements,
+then a @break@. The @continue@ becomes a @break@ of that loop.
 -}
 lowerLoop :: BreakTarget -> Statement ResolvedName Type -> Lower [CoreStatement]
 lowerLoop target loop = case loop of
     WhileStatement _ condition body -> do
-        loweredCondition <- lowerExpression condition
-        loweredBody <- lowerBlockInto target body
+        loweredCondition <- inLoop (lowerExpression condition)
+        loweredBody <- continuingWith [CoreContinue] (lowerBlockInto target body)
         pure [whileLoop loweredCondition loweredBody]
     ForStatement _ initializer condition updates body -> do
         loweredInitializer <- maybe (pure []) lowerStatement initializer
-        loweredCondition <- maybe (pure ([], CoreLiteral (CoreBoolean True) boolType)) lowerExpression condition
-        loweredBody <- lowerBlockInto target body
-        loweredUpdates <- lowerBlock (Block updates)
-        pure (loweredInitializer ++ [forLoop loweredCondition loweredBody loweredUpdates])
+        loweredCondition <- maybe (pure ([], CoreLiteral (CoreBoolean True) boolType)) (inLoop . lowerExpression) condition
+        loweredBody <- continuingWith [CoreContinue] (lowerBlockInto target body)
+        loweredUpdates <- continuingWith [CoreBreak] (lowerBlock (Block updates))
+        let updateRegion =
+                if any isContinue (concatMap statementTransfers updates)
+                    then [CoreWhile (CoreLiteral (CoreBoolean True) boolType) (loweredUpdates ++ [CoreBreak])]
+                    else loweredUpdates
+        pure (loweredInitializer ++ [forLoop loweredCondition loweredBody updateRegion])
     _ -> lowerStatement loop
+    where
+        inLoop = continuingWith [CoreContinue] . targeting target
 
 {- | Lower an expression whose value is dropped.
 
@@ -399,7 +469,7 @@ lowerExpression expression = case expression of
         | operator `elem` [LogicalAnd, LogicalOr]
         , doesNotComplete right -> do
             (leftPrefix, loweredLeft) <- lowerExpression left
-            leaving <- lowerNeverCompleting (branchLowering Nothing) right
+            leaving <- branching (`lowerNeverCompleting` right)
             let conjunction = operator == LogicalAnd
                 skip = if conjunction then CoreIf loweredLeft leaving [] else CoreIf loweredLeft [] leaving
             pure (leftPrefix ++ [skip], CoreLiteral (CoreBoolean (not conjunction)) boolType)
@@ -435,17 +505,17 @@ lowerExpression expression = case expression of
     -- never tested, so the constant is not a value of the program.
     ConditionalExpression _ _ _ _ valueType
         | valueType == voidType -> do
-            statements <- lowerNeverCompleting (branchLowering Nothing) expression
+            statements <- branching (`lowerNeverCompleting` expression)
             pure (statements, CoreLiteral (CoreBoolean False) boolType)
     MatchExpression _ _ arms valueType
         | valueType == voidType && not (null arms) -> do
-            statements <- lowerNeverCompleting (branchLowering Nothing) expression
+            statements <- branching (`lowerNeverCompleting` expression)
             pure (statements, CoreLiteral (CoreBoolean False) boolType)
     -- A branch that does not complete has no value to lower.
     ConditionalExpression _ condition first second valueType
         | any doesNotComplete [first, second] -> do
             loweredCondition <- lowerExpression condition
-            lowerSelection (branchLowering Nothing) valueType loweredCondition first second
+            branching (\lowering -> lowerSelection lowering valueType loweredCondition first second)
     ConditionalExpression _ condition first second valueType -> do
         (conditionPrefix, loweredCondition) <- lowerExpression condition
         loweredFirst <- lowerExpression first
@@ -468,7 +538,7 @@ lowerExpression expression = case expression of
     CoalesceExpression _ left fallback valueType
         | doesNotComplete fallback -> do
             (leftPrefix, loweredLeft) <- lowerExpression left
-            leaving <- lowerNeverCompleting (branchLowering Nothing) fallback
+            leaving <- branching (`lowerNeverCompleting` fallback)
             subjectName <- freshCoalesceSubject
             let loweredType = lowerBoundaryType valueType
                 subjectRead = CoreVariable subjectName loweredType
@@ -533,6 +603,13 @@ lowerExpression expression = case expression of
     -- A loop expression runs its loop as statements. Each break that leaves
     -- it stores its value into the result slot first; the type checker has
     -- established that the loop cannot end any other way.
+    -- A loop that no break leaves never yields a value; like a choice
+    -- that never does, it is reached here only as the condition of a
+    -- do/while loop.
+    LoopExpression _ loop valueType
+        | valueType == voidType -> do
+            statements <- lowerLoop Nothing loop
+            pure (statements, CoreLiteral (CoreBoolean False) boolType)
     LoopExpression _ loop valueType -> do
         result <- freshGenerated "$loop"
         let loweredType = lowerBoundaryType valueType
@@ -541,12 +618,14 @@ lowerExpression expression = case expression of
             ( CoreBind (CoreBinding result loweredType True (neutralValue loweredType)) : statements
             , CoreVariable result loweredType
             )
-    BlockExpression _ block _ -> lowerValueBlock (branchLowering Nothing) block
-    MatchExpression _ subjects arms valueType -> lowerMatch (branchLowering Nothing) valueType subjects arms
+    BlockExpression _ block _ -> branching (`lowerValueBlock` block)
+    MatchExpression _ subjects arms valueType -> branching (\lowering -> lowerMatch lowering valueType subjects arms)
     CallableExpression _ explicit captures parameters body valueType -> do
         let loweredParameters =
                 [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
-        loweredBody <- lowerCallableBody body
+        -- A callable is a function of its own: no loop of the function
+        -- that creates it is around its body.
+        loweredBody <- continuingWith [CoreContinue] (targeting Nothing (lowerCallableBody body))
         (prefix, loweredCaptures) <- lowerCaptures captures
         let returnType = case valueType of
                 FunctionType _ result -> lowerBoundaryType result
@@ -577,7 +656,7 @@ lowerCaptures captures = do
 lowerCallableBody :: CallableBody ResolvedName Type -> Lower [CoreStatement]
 lowerCallableBody body = case body of
     CallableExpressionBody expression
-        | doesNotComplete expression -> lowerNeverCompleting (branchLowering Nothing) expression
+        | doesNotComplete expression -> branching (`lowerNeverCompleting` expression)
         | otherwise -> do
             (prefix, value) <- lowerExpression expression
             pure (prefix ++ [CoreReturn value])

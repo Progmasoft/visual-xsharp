@@ -259,7 +259,10 @@ reports:
 | `VXT0042` | a loop used as an expression has no `break` that carries a value |
 | `VXT0043` | the `break` values of one loop have different types |
 | `VXT0044` | the loop value is neither `bool` nor numeric; other result types are not lowered yet |
-| `VXT0045` | `return` inside a loop used as an expression, which is not supported yet |
+
+A `return` inside a loop used as an expression leaves the method. A loop that
+no `break` leaves and that returns never yields a value, which is valid; a
+loop that neither breaks nor returns is `VXT0042`.
 
 A `break` always leaves the innermost loop, so a value-carrying `break` inside
 a loop statement nested in a loop expression is still `VXT0026`. The value of
@@ -318,7 +321,6 @@ The type checker reports:
 | Code | Meaning |
 | --- | --- |
 | `VXT0046` | a block used as a value can complete normally and does not end with an expression that has no semicolon |
-| `VXT0047` | `return` inside a block used as a value where the enclosing return type is inferred, or inside a loop used as an expression; neither is implemented |
 | `VXT0048` | a match arm does not have exactly one pattern for each subject |
 | `VXT0049` | a match guard is neither `bool` nor numeric |
 | `VXT0050` | the arms of a match used as an expression have different types |
@@ -330,14 +332,22 @@ The type checker reports:
 | `VXT0056` | an enum case pattern such as `.Ready`; enum declarations are not implemented |
 | `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
 | `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
-| `VXT0059` | a `break` or `continue` in a block used as a value that is not implemented: in the condition or the update clause of a loop, or a `break` that carries a value |
+| `VXT0059` | a transfer out of a block used as a value that is not implemented: `continue` in the condition of a loop, or `break` in the update clause of a loop |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
+| `VXT0062` | the `return` statements of a callable whose result type is inferred carry values of different types |
 
 A block used as a value may leave instead of yielding a value: `return`
 leaves the enclosing method and is checked against its return type
-(`VXT0005`), and `break` and `continue` target the loop around the expression
-and need one (`VXT0025`, `VXT0027`). A block that cannot complete normally
+(`VXT0005`), also from inside a loop used as an expression, and `break` and
+`continue` target the nearest loop around the expression and need one
+(`VXT0025`, `VXT0027`). A `break` follows the rules of that loop: it carries
+a value to a loop used as an expression (`VXT0040` without one) and none to a
+loop statement (`VXT0026`). The condition of a loop belongs to the loop, so a
+`break` in a block used as a value there leaves that loop; a `continue` in
+the update clause of a `for` ends the update. The returns of a callable whose
+result type is inferred are collected through expressions as well and must
+agree (`VXT0062`); the returns of a nested callable are its own. A block that cannot complete normally
 needs no final expression and gives its expression no type; the blocks that
 complete do. When no block completes, the expression never yields a value.
 That is valid: the place that would have received the value is not held to a

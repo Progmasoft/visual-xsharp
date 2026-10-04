@@ -62,13 +62,25 @@ cc_library(
 cc_binary(
     name = "source_fuzz_smoke",
     srcs = [
+        "SourceFuzzSmoke.cpp",
+    ],
+    deps = [":source_fuzz_harness"],
+)
+
+# The programs with hand-written results. A program of its own, so that it
+# and `source_fuzz_smoke` each run under one process watchdog.
+cc_binary(
+    name = "source_execution_smoke",
+    srcs = [
         "BranchingExecutionCases.cpp",
         "BranchingExecutionCases.hpp",
         "ExecutionCases.cpp",
         "ExecutionCases.hpp",
         "ExpressionExecutionCases.cpp",
         "ExpressionExecutionCases.hpp",
-        "SourceFuzzSmoke.cpp",
+        "LeavingExecutionCases.cpp",
+        "LeavingExecutionCases.hpp",
+        "SourceExecutionSmoke.cpp",
     ],
     deps = [":source_fuzz_harness"],
 )

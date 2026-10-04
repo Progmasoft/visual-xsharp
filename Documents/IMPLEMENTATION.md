@@ -79,6 +79,35 @@ The connected frontend is strongest around scalar expressions, local control flo
 CorePrep, namespace merging, and entry validation. Fixed-width integer/radix/separator behavior, character packing, numeric
 boolean context, source `void`, stable `SymbolId` identity, and constant range checks are represented before Core emission.
 
+### Pending branching and loop forms
+
+These are parts of the specified language that the frontend recognizes and
+rejects with a diagnostic that says so, or that fail in a later stage. They
+are owed work, not rules: none of them is a restriction of the language, and
+the specification is not changed to match them.
+
+| Pending | Specified by | Today | Needs |
+| --- | --- | --- | --- |
+| a binding in the condition of `if`, `guard` or `while`, as in `guard (auto user = Find()) else { return; }` | `Spec/Language/Decls.vxs`, examples 190 to 192 | `VXP0035` | optional values |
+| a call that does not return as a way of leaving a `guard` block or a block used as a value | example 297 | every call is assumed to return, so the block is taken to complete: `VXT0061` or `VXT0046` | a way to know that a call does not return; how that is expressed in the language is not decided here |
+| `continue` out of a block used as a value in the condition of a loop | no rule in the specification states its target | `VXT0059` | a decision on the target, then its lowering |
+| `break` out of a block used as a value in the update clause of a loop | the rule that `break` leaves the nearest loop | `VXT0059` | a lowering that leaves the loop from inside the update region |
+| exhaustiveness of a `match` over an enum or a nullable subject | example 304 | `VXT0056`, `VXT0055` | enum declarations; nullable subjects |
+| type patterns over class hierarchies | examples 198 to 203 | `VXT0057` | class hierarchies |
+| a call of a method whose return type is written `auto` | `Spec/Language/Decls.vxs`, example 139 and the other `auto` return examples of section 22 | the frontend accepts it and the Core verifier rejects the module with `VXC1018` | not investigated beyond reproducing it; `main` behaves the same |
+| a callable created inside another callable | the callable literals of the specification | the frontend accepts it and the Core verifier rejects the module with `VXC1020` | not investigated beyond reproducing it; `main` behaves the same |
+
+Implemented and verified through native execution: `return`, `break` and
+`continue` out of a block used as a value, in loop bodies; a `break` in a
+loop condition; a `continue` in a `for` update clause; a `break` that carries
+a value out of a block used as a value to a loop used as an expression;
+`return` out of a loop used as an expression, directly and from a block used
+as a value; an `if` or `match` expression none of whose branches completes.
+Implemented and verified through the whole pipeline but not executed,
+because neither the reference evaluator nor the JIT of the smoke programs
+runs closures: the inference of a callable's return type from returns in
+blocks used as values and in loop expressions.
+
 The full `Spec/` catalog is not implemented. Object/value layout, the complete standard-library surface, cross-namespace
 imports, template declaration cloning and constraint selection, exception lowering, ownership runtime operations, generators, FFI, assembly, and
 many advanced declaration forms require additional semantic and native work. Unsupported forms must produce frontend or

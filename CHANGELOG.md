@@ -55,6 +55,17 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   complete. An expression none of whose blocks completes is valid: it never
   yields a value, what would have received the value is not lowered, and no
   result slot or placeholder is created for it.
+- Such a block may stand in a loop header and in a loop used as an
+  expression. A `break` in the condition of a loop leaves that loop; a
+  `continue` in the update clause of a `for` ends the update, and the
+  condition is tested next; a `break` may carry a value to the loop
+  expression around the block.
+- `return` is accepted inside a loop used as an expression, and a loop
+  expression that returns and never breaks is valid. `VXT0045` and `VXT0047`
+  are retired.
+- The return type of a callable is inferred from the returns inside its
+  expressions as well, up to nested callables. Returns of different types
+  are `VXT0062`.
 - The `else` block of a `guard` is checked by its control flow instead of by
   its last statement: a loop that cannot end and a statement `match` that
   always selects an arm and all of whose arms leave are accepted, and a
@@ -110,6 +121,12 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   in that program, instead of compiling a program for every run. No run was
   removed. Under sanitizers the program takes 160 seconds where it took 291
   on the same machine.
+- The execution tables are a smoke program of their own,
+  `source_execution_smoke`, beside `source_fuzz_smoke`, each under the
+  unchanged process watchdog of 240 seconds. In the fuzzing configuration
+  the single program had grown to 221 seconds; apart, each takes 77 to 110
+  seconds on the same machine. The new program also compiles and verifies
+  programs that own closures while control leaves through a value block.
 - `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
   and the values of 83 program runs on the unoptimized and the optimized
   Core. `BranchingOracleTests.hs` generates 36 families of arm lists, writes
@@ -169,8 +186,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   Chains of operators and `else if` chains use none per link. Whole
   compilations at the frontend's limits commit at most 0.8 MiB of stack for
   nested statements and 2.5 MiB for nested expressions, and 1.3 MiB and
-  4.6 MiB in a sanitizer build, measured with the new `source_stack_probe`
-  program. The reservation of 256 MiB costs address space only: the commit
+  4.6 MiB in a sanitizer build, measured as committed stack, which is an
+  upper bound to the page and not an exact count of bytes in use, with the
+  new `source_stack_probe` program. The reservation of 256 MiB costs address space only: the commit
   of a compilation is the same with and without it. The measurements,
   including what the lowering adds to a nest and what was not measured, are
   in `Benchmarks/2026-10-04-Nesting-And-Chains.md`.
@@ -217,13 +235,16 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   pipeline copies only closure bodies.
 - Parts of the specified language are recognized and rejected as not
   implemented. They are pending work, listed with their diagnostics under
-  "Pending implementation" in `Documents/BRANCHING.md`: a binding in the
-  condition of `if`, `guard` or `while`, which needs optional values; a call
-  whose result is `never` as a way of leaving; `break` or `continue` out of a
-  value block in the condition or the update clause of a loop; a `break`
-  that carries a value out of a value block; and `return` in a value block
-  where the enclosing return type is inferred or inside a loop used as an
-  expression.
+  "Pending branching and loop forms" in `Documents/IMPLEMENTATION.md`: a
+  binding in the condition of `if`, `guard` or `while`, which needs optional
+  values; a call that does not return as a way of leaving; `continue` out of
+  a value block in the condition of a loop; and `break` out of a value block
+  in the update clause of a loop.
+- A call of a method whose return type is written `auto`, and a callable
+  created inside another callable, pass the frontend and are rejected by the
+  Core verifier (`VXC1018`, `VXC1020`), as on `main`. Closures are compiled
+  and verified by the tests but run by neither the reference evaluator nor
+  the JIT of the smoke programs.
 - The statements after a statement that never completes are checked but no
   longer lowered to Core.
 

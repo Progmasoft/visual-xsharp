@@ -119,11 +119,26 @@ while (index < limit) {
 }
 ```
 
-`return` leaves the enclosing method and carries its return type. `break` and
-`continue` target the loop around the expression and need one. A block that
-cannot complete normally has no final expression and no value; the expression
-has the type of the blocks that complete. Such a block is lowered as its
-statements alone: nothing is stored for it.
+`return` leaves the enclosing method and carries its return type, also from
+inside a loop used as an expression. Where the return type of a callable is
+inferred, the returns in its value blocks count like the others; the returns
+of a nested callable are its own. `break` and `continue` target the nearest
+loop around the expression and need one. A `break` may carry a value to a
+loop used as an expression, exactly as a `break` statement in its body does.
+A block that cannot complete normally has no final expression and no value;
+the expression has the type of the blocks that complete. Such a block is
+lowered as its statements alone: nothing is stored for it.
+
+A value block may also stand in the condition or the update clause of a
+loop. The condition belongs to its loop, so a `break` there leaves that
+loop, with the effects of the condition up to it. A `continue` in the update
+clause ends the update, and the condition is tested next.
+
+```vxs
+while (if (index >= limit) { break; } else { true }) { index += 1; }
+
+for (int i = 0; i < 6; i += if (skip) { skip = false; continue; } else { 1 }) { }
+```
 
 An expression none of whose blocks completes is valid and never yields a
 value:
@@ -165,33 +180,15 @@ order, and the names it declares are in scope only inside it, so two blocks
 side by side may declare the same name. A nested block may not redeclare a
 name that is in scope around it.
 
-## Pending implementation
-
-These are parts of the language that the compiler recognizes and rejects with
-a diagnostic that says so. They are owed work, not rules: none of them is a
-restriction of the language, and the specification is not changed to match
-them.
-
-| Pending | Specified by | Diagnostic today | Needs |
-| --- | --- | --- | --- |
-| a binding in the condition of `if`, `guard` or `while`, as in `guard (auto user = Find()) else { return; }` | `Spec/Language/Decls.vxs`, examples 190 to 192 | `VXP0035` | optional values |
-| a call whose result is `never` as a way of leaving a `guard` block or a block used as a value | example 297 | `VXT0061` or `VXT0046` at the block that is taken to complete | the `never` type; nothing else here depends on it |
-| `break` or `continue` out of a block used as a value in the condition or the update clause of a loop | example 298, by the ordinary rules of `break` and `continue` | `VXT0059` | a lowering of loop headers that keeps the target of the transfer |
-| a `break` that carries a value out of a block used as a value | the same | `VXT0059` | the result slot of the loop expression in the lowering of expressions |
-| `return` in a block used as a value where the return type of the enclosing callable is inferred, or inside a loop used as an expression | example 298 | `VXT0047` | return types collected through expressions; `return` in loop expressions |
-| exhaustiveness of a `match` over an enum or a nullable subject | example 304 | `VXT0056`, `VXT0055` | enum declarations; nullable subjects |
-| type patterns over class hierarchies | examples 198 to 203 | `VXT0057` | class hierarchies |
-
 ## Limits of the implemented subset
 
 - Subjects and results of `match`, and results of `if` expressions, are
   `bool` or numeric. Other types need storage rules for the result slot that
   the backend does not have yet. A value of a template type parameter is
   rejected for the same reason.
-- A binding in the condition of an `if`, a `guard` or a `while`, such as
-  `guard (auto user = Find()) else { return; }`, is recognized and rejected
-  as not implemented: it requires optional values, which the compiler does
-  not have. The plain condition is implemented.
+- Parts of these forms that the specification has and the compiler does not
+  implement yet are listed, with their diagnostics, under "Pending branching
+  and loop forms" in [Implementation status](IMPLEMENTATION.md).
 - A type pattern over a scalar subject names the type of the subject itself;
   no numeric conversion is applied, so `long n` does not match an `int`.
 - `match` and `guard` are reserved words.
@@ -212,7 +209,7 @@ them.
 | scoping of pattern bindings and nested blocks | `Visual.XSharp.Resolver.Renamer` |
 | typing rules | `Visual.XSharp.TypeChecker.Branching` |
 | lowering to Core | `Visual.XSharp.Desugarer.Branching` |
-| grammar, typing, lowered shapes, evaluation | `BranchingTests.hs` |
+| grammar, typing, lowered shapes, evaluation | `BranchingTests.hs`, with the programs of `BranchingEvaluationCases.hs` |
 | match against the `if` chain it stands for | `BranchingOracleTests.hs` |
 | diagnostic positions, damaged input, templates | `BranchingDiagnosticTests.hs` |
 | native execution in both pipeline modes | `Compiler/Fuzzing/BranchingExecutionCases.cpp` |

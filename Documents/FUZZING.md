@@ -189,8 +189,9 @@ documents. It runs independently of libFuzzer and does not claim guided
 coverage. `source_fuzz_smoke` checks valid-source lowering and then runs the
 differential oracle on every generated program shape at trip counts 0 through
 11, once with a zero and once with a nonzero generated expression, before
-mutation campaigns begin. It also runs the programs of
-`ExpressionExecutionCases.cpp` and `BranchingExecutionCases.cpp`: assignments,
+mutation campaigns begin. `source_execution_smoke` runs the programs of
+`ExpressionExecutionCases.cpp`, `BranchingExecutionCases.cpp` and
+`LeavingExecutionCases.cpp`: assignments,
 increments and loops used as values, and `match`, `if` expressions and
 `guard`, each with a hand-written result that both native pipeline modes must
 return. Those tables are transcribed from the evaluation tables of
@@ -210,9 +211,26 @@ each run that differs; the program must return zero from both
 pipeline modes, and a result that is not zero names the runs that failed.
 Compiling dominates the cost of these cases under sanitizers, and the smoke
 program has a process watchdog, so the runs of a body are not worth a
-compilation each.
+compilation each. `source_execution_smoke` also compiles programs that own
+closures while control leaves through a block used as a value, so that the
+ownership verifiers of Xpp and Xmm see those paths; they are compiled and
+verified, not run, because the JIT of the harness does not link closures.
 
-The source fuzz targets and `source_fuzz_smoke` run the compiler on the
+The tables are a program of their own because each smoke program is one
+deterministic check under one process watchdog. As one program, in the
+fuzzing configuration, the tables took 107 seconds and the differential
+sweep 107 seconds of a 221 second run, which left no margin under the 240
+second watchdog on a loaded machine; a passing second attempt was not a
+fix. The watchdog is unchanged, and no case was removed. Measured on the
+same Windows machine in the same configuration after the split, three runs
+each: `source_execution_smoke` takes 77 to 110 seconds, of which in the run
+that was broken down 23 were the expression table, 35 the branching table,
+17 the leaving table and 2 the ownership programs; `source_fuzz_smoke` takes
+100 to 105 seconds, of which 98 are the differential sweep. Other work ran
+on the machine during these runs, so the spread is not the programs' own.
+In an ordinary build each takes about 7 seconds.
+
+The source fuzz targets and both source smoke programs run the compiler on the
 compiler stack, as `vxs` does, because an input nested up to the frontend's
 limits does not fit on the default stack of a process. `Corpus/source` has
 permanent seeds for deep nesting, for nesting at and one level beyond each

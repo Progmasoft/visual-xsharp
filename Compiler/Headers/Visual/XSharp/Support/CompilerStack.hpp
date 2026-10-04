@@ -62,9 +62,11 @@ namespace Visual::XSharp::Support
      * @brief The stack the calling thread has committed so far, in bytes.
      *
      * A stack is reserved as address space and committed page by page as
-     * it is first touched, so the committed part is the most the thread has
-     * used, rounded up to pages and including the guard page. Measuring
-     * tools call this at the end of the work they measure.
+     * it is first touched. The committed part is therefore an upper bound on
+     * what the thread has used, rounded up to pages and including the guard
+     * page; it is not the exact number of bytes in use, and it does not
+     * include frames that a sanitizer keeps on a heap-allocated fake stack.
+     * Measuring tools call this at the end of the work they measure.
      *
      * @return The committed bytes, or zero on a platform where this is not
      * determined; it is determined on Windows.

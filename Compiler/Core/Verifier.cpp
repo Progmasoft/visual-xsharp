@@ -174,7 +174,49 @@ namespace Visual::XSharp::Core
                                           Kind::Boolean;
                     });
             }
-            /// Whether every path through the statements returns. The false
+            /// Whether a statement is a loop that cannot be left: its
+            /// condition is the literal true and no `break` leaves it. Such
+            /// a loop ends only through a `return` inside it, or not at
+            /// all, so control never reaches the statement after it.
+            [[nodiscard]] static auto
+            CannotBeLeft(const Statement &statement) -> bool
+            {
+                if (statement.kind != Statement::Kind::While
+                    && statement.kind != Statement::Kind::DoWhile
+                    && statement.kind != Statement::Kind::For)
+                    return false;
+                const auto *const condition
+                    = std::get_if<bool>(&statement.expression.literal);
+                if (statement.expression.kind != Expression::Kind::Literal
+                    || condition == nullptr || !*condition)
+                    return false;
+                // The statements of the loop are searched from a list, so
+                // an `else if` chain in the body costs no stack per link.
+                // A break in a nested loop leaves that loop.
+                std::vector<const std::vector<Statement> *> pending{
+                    &statement.loopBody,
+                    &statement.loopUpdate
+                };
+                while (!pending.empty())
+                {
+                    const auto *const statements = pending.back();
+                    pending.pop_back();
+                    for (const auto &nested : *statements)
+                    {
+                        if (nested.kind == Statement::Kind::Break)
+                            return false;
+                        if (nested.kind == Statement::Kind::If)
+                        {
+                            pending.push_back(&nested.trueBranch);
+                            pending.push_back(&nested.falseBranch);
+                        }
+                    }
+                }
+                return true;
+            }
+            /// Whether control can never fall off the end of the statements:
+            /// every path returns, or runs into a loop that cannot be left.
+            /// The false
             /// branch of an `if` is followed in a loop rather than by
             /// recursion while it is the last statement to decide the
             /// answer, so an `else if` chain costs no stack per link.
@@ -186,7 +228,8 @@ namespace Visual::XSharp::Core
                     const Statement *deciding = nullptr;
                     for (const auto &statement : statements)
                     {
-                        if (statement.kind == Statement::Kind::Return)
+                        if (statement.kind == Statement::Kind::Return
+                            || CannotBeLeft(statement))
                             return true;
                         if (statement.kind != Statement::Kind::If
                             || statement.falseBranch.empty()

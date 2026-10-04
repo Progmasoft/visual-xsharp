@@ -452,3 +452,75 @@ TEST_CASE("the adapter prepares a chain of any length",
         CHECK(Returns(closed) == links + 1U);
     }
 }
+
+TEST_CASE("a loop that cannot be left never falls off the end of a body",
+          "[core][verifier]")
+{
+    const auto always = [] {
+        return Core::Expression::Constant(true, Core::Type::boolean());
+    };
+    // The function is moved into its module. A braced list would copy it,
+    // and copying a statement recurses once per level of nesting.
+    const auto ends = [](Core::Statement loop) {
+        Core::Function function{ { 1U, U"Pick" },
+                                 { { { kValue, U"value" },
+                                     Core::Type::int64() } },
+                                 Core::Type::int64(),
+                                 {} };
+        function.body.push_back(std::move(loop));
+        Core::Module module{ { U"Chain" }, {} };
+        module.functions.push_back(std::move(function));
+        return module;
+    };
+
+    SECTION("an endless loop of each kind ends a body that returns a value")
+    {
+        CHECK_FALSE(
+            HasIssue(ends(Core::Statement::While(always(), {})), "VXC1005"));
+        CHECK_FALSE(
+            HasIssue(ends(Core::Statement::DoWhile({}, always())), "VXC1005"));
+        CHECK_FALSE(
+            HasIssue(ends(Core::Statement::For(always(), {}, {})), "VXC1005"));
+    }
+
+    SECTION("a break leaves the loop, from its body and from its update")
+    {
+        CHECK(HasIssue(ends(Core::Statement::While(
+                           always(),
+                           { Core::Statement::If(Is(1),
+                                                 { Core::Statement::Break() },
+                                                 {}) })),
+                       "VXC1005"));
+        CHECK(HasIssue(ends(Core::Statement::For(always(),
+                                                 {},
+                                                 { Core::Statement::Break() })),
+                       "VXC1005"));
+    }
+
+    SECTION("a break at the end of a long else-if chain is found")
+    {
+        // The search walks the chain from a list, not by recursion. The
+        // chain is moved into the loop: copying one recurses per link.
+        constexpr std::size_t kLinks = 600U;
+        const auto around = [&](std::vector<Core::Statement> last) {
+            std::vector<Core::Statement> body;
+            body.push_back(Chain(kLinks, std::move(last)));
+            return ends(Core::Statement::While(always(), std::move(body)));
+        };
+        std::vector<Core::Statement> leaves;
+        leaves.push_back(Core::Statement::Break());
+        CHECK(HasIssue(around(std::move(leaves)), "VXC1005"));
+        CHECK_FALSE(HasIssue(around({}), "VXC1005"));
+    }
+
+    SECTION("a loop with a condition, or left only by a nested break")
+    {
+        CHECK(HasIssue(ends(Core::Statement::While(Is(1), {})), "VXC1005"));
+        CHECK_FALSE(HasIssue(
+            ends(Core::Statement::While(
+                always(),
+                { Core::Statement::While(always(),
+                                         { Core::Statement::Break() }) })),
+            "VXC1005"));
+    }
+}

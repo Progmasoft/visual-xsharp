@@ -13,7 +13,8 @@ module Visual.XSharp.TypeChecker.Loops
     , LoopContext (..)
     , outsideLoops
     , enterLoop
-    , loopHeader
+    , loopCondition
+    , loopUpdate
     , transferTarget
     ) where
 
@@ -32,11 +33,14 @@ data LoopKind
       loop around the expression the block belongs to.
       -}
       ValueBlockEdge
-    | {- | Not a loop: the edge of the condition or the update clause of a
-      loop. An expression there is evaluated as part of the loop's own
-      control, so leaving an enclosing loop from it is not lowered yet.
+    | {- | The condition of a loop of the given kind. A @break@ there leaves
+      that loop, like one in its body.
       -}
-      LoopHeaderEdge
+      LoopCondition LoopKind
+    | {- | The update clause of a loop of the given kind. A @continue@ there
+      ends the update, and the condition of the loop is tested next.
+      -}
+      LoopUpdate LoopKind
 
 {- | The loops around a statement, innermost first, and the kind of the loop
 statement that is about to be checked. A loop expression checks its loop
@@ -56,17 +60,23 @@ outsideLoops = LoopContext StatementLoop []
 enterLoop :: LoopContext -> LoopContext
 enterLoop loops = LoopContext StatementLoop (pendingLoop loops : enclosingLoops loops)
 
--- | The context of the condition or the update clause of a loop.
-loopHeader :: LoopContext
-loopHeader = LoopContext StatementLoop [LoopHeaderEdge]
+-- | The context of the condition of the loop statement about to be checked.
+loopCondition :: LoopContext -> LoopContext
+loopCondition loops = LoopContext StatementLoop (LoopCondition (pendingLoop loops) : enclosingLoops loops)
 
-{- | The loop a @break@ or @continue@ targets, and whether it leaves a block
-used as a value on the way.
+-- | The context of the update clause of the loop statement about to be checked.
+loopUpdate :: LoopContext -> LoopContext
+loopUpdate loops = LoopContext StatementLoop (LoopUpdate (pendingLoop loops) : enclosingLoops loops)
+
+{- | The loop a @break@ or @continue@ targets: the innermost entry that is
+not the edge of a block used as a value. A transfer crosses such an edge
+freely; the block it leaves simply yields no value.
 -}
-transferTarget :: LoopContext -> (Bool, Maybe LoopKind)
-transferTarget loops = go False (enclosingLoops loops)
+transferTarget :: LoopContext -> Maybe LoopKind
+transferTarget loops = case dropWhile isValueBlockEdge (enclosingLoops loops) of
+    kind : _ -> Just kind
+    [] -> Nothing
     where
-        go crossed kinds = case kinds of
-            ValueBlockEdge : outer -> go True outer
-            kind : _ -> (crossed, Just kind)
-            [] -> (crossed, Nothing)
+        isValueBlockEdge kind = case kind of
+            ValueBlockEdge -> True
+            _ -> False

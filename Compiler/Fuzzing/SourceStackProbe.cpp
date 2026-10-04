@@ -16,10 +16,12 @@
 //
 // compiles a source file through the frontend and the native pipeline on a
 // thread whose stack has the given size, as `vxs` does on the compiler
-// stack, and prints the stack that thread committed, which is the most it
-// used. The size on the command line is only reserved. A source of at most
-// 64 KiB that the frontend rejects is a completed run as well; a larger one
-// must be accepted. The process is terminated by the operating system when
+// stack, and prints the stack that thread committed. That is an upper bound
+// on what it used, to the page and with the guard page, not the exact number
+// of bytes in use; frames a sanitizer keeps on a heap-allocated fake stack
+// are not in it. The size on the command line is only reserved. A source of at
+// most 64 KiB that the frontend rejects is a completed run as well; a larger
+// one must be accepted. The process is terminated by the operating system when
 // the stack is too small. The program is a measuring instrument, not a test.
 
 int

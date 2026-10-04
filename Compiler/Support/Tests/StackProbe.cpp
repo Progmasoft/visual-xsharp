@@ -243,7 +243,7 @@ main(int argc, char **argv)
             committed = Visual::XSharp::Support::CommittedStackBytes();
         });
         // The size on the command line is only reserved. What the stage
-        // touched is committed, and that is the most it used.
+        // touched is committed: an upper bound on what it used, to the page.
         if (outcome == 0)
             llvm::outs() << "ok committed-kib " << committed / 1024U << '\n';
         return outcome;
