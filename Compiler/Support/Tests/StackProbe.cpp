@@ -20,6 +20,10 @@
 //
 //     stack_probe <shape> <depth> <stage> <stack-kibibytes>
 //
+// The shapes are `statements`, an `if` nested in an `if`; `expressions`, a
+// chain of additions that nests in the first operand; `operands`, additions
+// that nest in the second operand; and `chain`, an `else if` chain.
+//
 // builds a Core module of the given shape and depth on the compiler stack,
 // then runs one stage on a thread whose stack has the given size. The
 // process exits with 0 when the stage completes and is terminated by the
@@ -119,6 +123,27 @@ namespace
         return Module(std::move(statements));
     }
 
+    /// `total = (value + (value + (...)))`: the second operand nests,
+    /// which is nesting that no stage walks in a loop.
+    [[nodiscard]] auto
+    Operands(std::size_t depth) -> Core::Module
+    {
+        auto expression = Value();
+        for (std::size_t index = 0U; index < depth; ++index)
+        {
+            std::vector<Core::Expression> operands;
+            operands.push_back(Value());
+            operands.push_back(std::move(expression));
+            expression = Core::Expression::InvokePrimitive(Core::Primitive::Add,
+                                                           std::move(operands),
+                                                           Core::Type::int64());
+        }
+        std::vector<Core::Statement> statements;
+        statements.push_back(Core::Statement::Assign({ kTotal, U"total" },
+                                                     std::move(expression)));
+        return Module(std::move(statements));
+    }
+
     /// `if (value == 0) { total = value; } else if (value == 1) { ... }`
     [[nodiscard]] auto
     Chain(std::size_t links) -> Core::Module
@@ -145,9 +170,10 @@ namespace
     [[nodiscard]] auto
     Usage() -> int
     {
-        llvm::errs() << "usage: stack_probe <statements|expressions|chain> "
-                        "<depth> <encode|decode|verify|prepare|pipeline> "
-                        "<stack-kibibytes>\n";
+        llvm::errs()
+            << "usage: stack_probe <statements|expressions|operands|chain> "
+               "<depth> <encode|decode|verify|prepare|pipeline> "
+               "<stack-kibibytes>\n";
         return 2;
     }
 
@@ -183,6 +209,7 @@ main(int argc, char **argv)
         const auto module = shape == "statements"    ? Statements(depth)
                             : shape == "expressions" ? Expressions(depth)
                             : shape == "chain"       ? Chain(depth)
+                            : shape == "operands"    ? Operands(depth)
                                                      : Core::Module{};
         if (module.functions.empty())
             return Usage();

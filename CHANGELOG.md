@@ -42,9 +42,26 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   such as `.Ready`, type patterns that name another type than their
   subject's, and a binding in the condition of `if`, `guard` or `while` are
   recognized and rejected with dedicated diagnostics until reference
-  subjects, enums, class hierarchies and optional values exist. Leaving a
-  block that is used as a value with `return`, `break` or `continue` is not
-  implemented and is rejected.
+  subjects, enums, class hierarchies and optional values exist.
+- A numeric constant pattern may be negative: `-1 -> ...`. The minus sign
+  belongs to the numeric literal; no other expression is a pattern. The
+  constant is checked against the type of its subject, so the most negative
+  value of a signed type is a pattern and a negative constant for an
+  unsigned subject is rejected.
+- A block used as a value may leave instead of yielding a value. `return`
+  leaves the enclosing method and `break` and `continue` target the loop
+  around the expression, under the rules they have anywhere else. A block
+  that leaves has no value; the expression has the type of the blocks that
+  complete, and `VXT0062` reports an expression none of whose blocks does.
+- The `else` block of a `guard` is checked by its control flow instead of by
+  its last statement: a loop that cannot end and a statement `match` that
+  always selects an arm and all of whose arms leave are accepted, and a
+  block that leaves before its last statement is as well.
+- A type pattern over a scalar applies no numeric conversion: `long n` does
+  not match an `int`.
+- `Spec/Language/Decls.vxs` gains examples 295 to 309 for these rules, for
+  exhaustiveness and for the statement `match` that selects no arm, and the
+  grammar allows `-` before a numeric literal in a match pattern.
 
 ### Compiler pipeline
 
@@ -130,16 +147,26 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   levels deep (`VXP0039`) or expressions more than 1024 levels deep
   (`VXP0040`), at the first node that is too deep. An `else if` chain is not
   nesting, and the body of a `match` arm is one level below its match
-  however many arms the match has.
+  however many arms the match has. A chain of a binary operator is not
+  nesting either: the left operand of a binary operator is at the level of
+  the operator, so `a + b + c + ...` is one level however long it is, and a
+  sum of 50000 operands compiles. The Core wire formats count the first
+  operand of a primitive at the level of the primitive for the same reason.
+- Releasing a Core module no longer recurses along a chain of operators or
+  an `else if` chain: the destructors of the native Core expression and
+  statement release their operands and nested statements from a list. The
+  native wire writer walks operator chains in a loop like the reader.
 - The native stages use far less stack per level of nesting. The Core wire
   reader, the Core verifier and the Core-to-CorePrep adapter no longer hold
   statements, instructions or diagnostic texts in the frames of the
   functions that recurse, and they walk chains of operators, of conditional
   expressions and of let bindings in a loop. Measured with the new
   `stack_probe` program, the whole native pipeline went from 14.9 KiB to
-  0.67 KiB of stack per statement level and from 10.6 KiB to 0.42 KiB per
-  expression level; a sanitizer build uses 1.67 KiB and 0.67 KiB. At the
-  frontend's limits that is under one megabyte in either build. The
+  0.67 KiB of stack per statement level and from 7.1 KiB to 1.9 KiB per
+  level of nested operands; a sanitizer build uses 1.67 KiB and 3.4 KiB.
+  Chains of operators and `else if` chains use none per link. At the
+  frontend's limits the pipeline needs 0.2 MiB for statements and 1.9 MiB
+  for expressions, and 0.4 MiB and 3.4 MiB in a sanitizer build. The
   measurements are in `Benchmarks/2026-10-04-Nesting-And-Chains.md`.
 - The native Core wire reader and writer bound the nesting of statement
   bodies at 4096 levels, as they already bounded expression depth. A `.core`
@@ -165,6 +192,14 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   milliseconds and verification from 0.75 seconds to 15 milliseconds.
 - `Compiler/Haskell/Core/Benches` has benchmarks for nested loops, `else if`
   chains and sequences of `if` statements.
+- Long chains of operators no longer take quadratic time or worse. Constant
+  propagation asked the integer facts about every node of an expression,
+  which re-evaluated the operands at each level, and the CorePrep lowering
+  collected symbol identities by appending lists. A sum of 20000 operands
+  went from 30 seconds to 4.6, and one of 50000 from 198 seconds to 9.4.
+  The truth of a condition is now looked up in the facts only while the
+  condition has at most 256 nodes; a chain of 200 comparisons joined by `&&`
+  went from 47 seconds to 1.1, on `main` as well as on this branch.
 
 ### Known limitations
 
@@ -172,10 +207,15 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   from 2000 to 4000 `else if` links the time of `vxs check` grows from 3.3
   to 10.4 seconds, and from 2000 to 4000 sequential `if` statements from 2.8
   to 7.1 seconds. Nothing bounds the number of statements of a function.
-- Releasing a Core module recurses once per level of nesting and per link of
-  an `else if` chain, at about 0.4 KiB of stack each.
-- In the body of a method, a closure or a property, an `if` or a `match` in
-  last position is the statement form.
+- Copying a native Core module recurses once per level of nesting; the
+  pipeline copies only closure bodies.
+- A binding in the condition of `if`, `guard` or `while` is not implemented:
+  it needs optional values. A call whose result is `never` is not recognized
+  as leaving a `guard` block or a block used as a value.
+- Three ways of leaving a block used as a value are recognized and not
+  implemented: `break` or `continue` in the condition or the update clause
+  of a loop, a `break` that carries a value, and a `return` where the
+  enclosing return type is inferred or inside a loop used as an expression.
 
 ### Upgrading from 0.4.1
 

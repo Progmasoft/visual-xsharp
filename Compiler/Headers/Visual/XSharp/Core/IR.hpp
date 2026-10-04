@@ -133,6 +133,31 @@ namespace Visual::XSharp::Core
         /// Structured closure body; null outside closure expressions.
         std::shared_ptr<std::vector<Statement>> closureBody;
 
+        /// Construct the default value of every member.
+        Expression() = default;
+        /// Copy every member; nested values are copied recursively.
+        Expression(const Expression &) = default;
+        /// Move every member.
+        Expression(Expression &&) = default;
+        /// Copy-assign every member.
+        /// @return This value.
+        auto
+        operator=(const Expression &) -> Expression & = default;
+        /// Move-assign every member.
+        /// @return This value.
+        auto
+        operator=(Expression &&) -> Expression & = default;
+        /**
+         * @brief Release the operands without recursing once per operand
+         * level.
+         *
+         * A chain of operators nests as deep as it is long, in the first
+         * operand of each primitive. The operands are moved to a list and
+         * released from there, so the stack this uses does not grow with
+         * the length of a chain.
+         */
+        ~Expression();
+
         /// Construct a typed reference to a resolved binding.
         /// @param name Resolved binding identity.
         /// @param valueType Static type of the binding.
@@ -258,6 +283,31 @@ namespace Visual::XSharp::Core
         std::vector<Statement> loopBody;
         /// Update region executed after each For body iteration.
         std::vector<Statement> loopUpdate;
+
+        /// Construct the default value of every member.
+        Statement() = default;
+        /// Copy every member; nested values are copied recursively.
+        Statement(const Statement &) = default;
+        /// Move every member.
+        Statement(Statement &&) = default;
+        /// Copy-assign every member.
+        /// @return This value.
+        auto
+        operator=(const Statement &) -> Statement & = default;
+        /// Move-assign every member.
+        /// @return This value.
+        auto
+        operator=(Statement &&) -> Statement & = default;
+        /**
+         * @brief Release the nested statements without recursing once per
+         * level.
+         *
+         * An `else if` chain nests as deep as it is long. The branches and
+         * loop regions are moved to a list and released from there, so the
+         * stack this uses does not grow with the length of a chain or the
+         * depth of nesting.
+         */
+        ~Statement();
 
         /// Introduce a local binding.
         /// @param value Binding and initializer to add.

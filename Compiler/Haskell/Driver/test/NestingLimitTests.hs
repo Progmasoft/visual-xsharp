@@ -168,6 +168,10 @@ statementTests =
 sumOf :: Int -> String
 sumOf operands = intercalate " + " (replicate operands "value")
 
+-- | @value + (value + (... value))@ with the given number of additions.
+rightNested :: Int -> String
+rightNested additions = concat (replicate additions "value + (") ++ "value" ++ replicate additions ')'
+
 -- | @(((value + 1) + 1) ...)@ with the given number of additions.
 parenthesized :: Int -> String
 parenthesized additions = replicate additions '(' ++ "value" ++ concat (replicate additions " + 1)")
@@ -193,24 +197,33 @@ withTwice statements =
 
 expressionTests :: [(String, Bool)]
 expressionTests =
-    [ -- The operands of a left-associative chain nest one level each: the
-      -- first operand of a sum of n operands is at level n.
+    [ -- A chain of a left-associative operator is not nesting: the left
+      -- operand of a binary operator is at the level of the operator, and
+      -- every stage walks the chain in a loop.
       ("a sum of 1024 operands is accepted", accepted (method ("return " ++ sumOf limit ++ ";")))
     , ("a sum of 1024 operands computes its value", valuesOf (method ("return " ++ sumOf limit ++ ";")) 3 == [Just 3072, Just 3072])
-    ,
-        ( "a sum of 1025 operands is rejected at its first operand"
-        , columnsOf "VXP0040" (method ("return " ++ sumOf (limit + 1) ++ ";")) == [1 + length "return "]
+    , ("a sum of 1025 operands is not nesting", codesOf (method ("return " ++ sumOf (limit + 1) ++ ";")) == [])
+    , ("a sum of 20000 operands computes its value", valuesOf (method ("return " ++ sumOf 20000 ++ ";")) 3 == [Just 60000, Just 60000])
+    , -- Parentheses around a left operand do not change the tree.
+        ( "5000 parentheses around left operands compute their value"
+        , valuesOf (method ("return " ++ parenthesized 5000 ++ ";")) 1 == [Just 5001, Just 5001]
         )
-    , ("nothing else is reported for the long sum", codesOf (method ("return " ++ sumOf (limit + 1) ++ ";")) == ["VXP0040"])
-    , -- n additions in parentheses put `value` at level n + 1.
-      ("1023 nested parentheses are accepted", accepted (method ("return " ++ parenthesized (limit - 1) ++ ";")))
+    , ("a chain of comparisons joined by && is not nesting", accepted (method ("return (" ++ intercalate " && " (replicate 3000 "value > 0") ++ ") ? 1 : 0;")))
+    , -- A right operand is one level below its operator: n additions that
+      -- nest to the right put the last `value` at level n + 1.
+      ("1023 additions nested to the right are accepted", accepted (method ("return " ++ rightNested (limit - 1) ++ ";")))
     ,
-        ( "1023 nested parentheses compute their value"
-        , valuesOf (method ("return " ++ parenthesized (limit - 1) ++ ";")) 1 == [Just 1024, Just 1024]
+        ( "1023 additions nested to the right compute their value"
+        , valuesOf (method ("return " ++ rightNested (limit - 1) ++ ";")) 2 == [Just 2048, Just 2048]
         )
     ,
-        ( "1024 nested parentheses are rejected at the innermost operand"
-        , columnsOf "VXP0040" (method ("return " ++ parenthesized limit ++ ";")) == [1 + length "return " + limit]
+        ( "1024 additions nested to the right are rejected at the innermost operand"
+        , columnsOf "VXP0040" (method ("return " ++ rightNested limit ++ ";")) == [1 + length "return " + limit * length "value + ("]
+        )
+    , ("nothing else is reported for the deep right operand", codesOf (method ("return " ++ rightNested limit ++ ";")) == ["VXP0040"])
+    , -- A long chain as a right operand costs one level, not its length.
+        ( "a long sum as a right operand is one level"
+        , accepted (method ("return " ++ rightNested 1000 ++ " + (" ++ sumOf 5000 ++ ");"))
         )
     , -- Each test of a conditional chain puts the rest of the chain one level deeper.
       -- The operands of the last test are two levels below its conditional.
@@ -221,7 +234,7 @@ expressionTests =
     , -- n calls put `value` at level n + 1.
       ("1023 nested calls are accepted", accepted (withTwice ("return " ++ calls (limit - 1) ++ ";")))
     , ("1024 nested calls are rejected", codesOf (withTwice ("return " ++ calls limit ++ ";")) == ["VXP0040"])
-    , ("an expression far beyond the limit is reported once", codesOf (method ("return " ++ sumOf 5000 ++ ";")) == ["VXP0040"])
+    , ("an expression far beyond the limit is reported once", codesOf (method ("return " ++ rightNested 5000 ++ ";")) == ["VXP0040"])
     ,
         ( "many separate expressions at the limit are accepted"
         , accepted (method ("int a = " ++ sumOf limit ++ "; int b = " ++ sumOf limit ++ "; return a + b;"))
@@ -255,15 +268,15 @@ combinedTests =
     , -- Expressions inside nested statements keep counting from the
       -- expression around them, so the two limits bound the total depth.
         ( "an expression split by value blocks is still limited"
-        , codesOf (method ("return " ++ sumThroughBlocks 4 300 ++ ";")) == ["VXP0040"]
+        , codesOf (method ("return " ++ nestedThroughBlocks 4 300 ++ ";")) == ["VXP0040"]
         )
     ,
         ( "an expression split by value blocks below the limit is accepted"
-        , accepted (method ("return " ++ sumThroughBlocks 4 200 ++ ";"))
+        , accepted (method ("return " ++ nestedThroughBlocks 4 200 ++ ";"))
         )
     ,
         ( "a statement excess and an expression excess are both reported"
-        , codesOf (method (nest maximumStatementNesting "if (value > 0) { " "} " ++ "return " ++ sumOf (maximumExpressionNesting + 1) ++ ";"))
+        , codesOf (method (nest maximumStatementNesting "if (value > 0) { " "} " ++ "return " ++ rightNested maximumExpressionNesting ++ ";"))
             == ["VXP0039", "VXP0040"]
         )
     ,
@@ -279,14 +292,15 @@ combinedTests =
         -- `if` statement.
         valueBlocks :: Int -> String
         valueBlocks count = concat (replicate count "if (value > 0) { (") ++ "value" ++ concat (replicate count ") } else { 0 }")
-        -- Nested if expressions whose blocks each hold a sum, the first
-        -- operand of which is the next if expression: the deepest operand
-        -- is below every sum and every block around it.
-        sumThroughBlocks :: Int -> Int -> String
-        sumThroughBlocks blocks operands =
-            concat (replicate blocks "if (value > 0) { (")
+        -- Nested if expressions whose blocks each hold additions that
+        -- nest to the right, the innermost operand of which is the next
+        -- if expression: the deepest operand is below every addition and
+        -- every block around it.
+        nestedThroughBlocks :: Int -> Int -> String
+        nestedThroughBlocks blocks additions =
+            concat (replicate blocks ("if (value > 0) { " ++ concat (replicate additions "value + (")))
                 ++ "value"
-                ++ concat (replicate blocks (")" ++ concat (replicate operands " + value") ++ " } else { 0 }"))
+                ++ concat (replicate blocks (replicate additions ')' ++ " } else { 0 }"))
 
 -- ------------------------------------------------------------------ chains
 

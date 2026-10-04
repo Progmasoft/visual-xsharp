@@ -393,9 +393,51 @@ namespace Visual::XSharp::Core::Wire
                          "literal",
                          "literal cannot cross the Core v5 boundary");
             }
+            /**
+             * @brief Write one expression.
+             *
+             * A chain of operators nests in the first operand of each
+             * primitive, as deep as the chain is long. The headers of those
+             * primitives are written in a loop, then the innermost first
+             * operand, then the remaining operands of each primitive from
+             * the innermost outwards, which is the order of the nested
+             * formulation. The first operand of a primitive is at the depth
+             * of the primitive, so a chain does not count against the
+             * expression depth limit; every other child is one level deeper.
+             */
             void
-            WriteExpression(const Expression &expression,
-                            std::size_t depth = 0U)
+            WriteExpression(const Expression &root, std::size_t depth = 0U)
+            {
+                std::vector<const Expression *> chain;
+                const Expression *current = &root;
+                while (!error_ && current->kind == Expression::Kind::Primitive
+                       && !current->operands.empty())
+                {
+                    if (depth > limits_.maximumExpressionDepth)
+                        break;
+                    Byte(static_cast<std::uint8_t>(current->kind));
+                    Byte(static_cast<std::uint8_t>(current->primitive));
+                    WriteType(current->type);
+                    Count(current->operands.size(),
+                          limits_.maximumOperands,
+                          "primitive operand count");
+                    chain.push_back(current);
+                    current = &current->operands.front();
+                }
+                WriteUnchained(*current, depth);
+                while (!chain.empty() && !error_)
+                {
+                    const auto &operands = chain.back()->operands;
+                    for (std::size_t index = 1U;
+                         index < operands.size() && !error_;
+                         ++index)
+                        WriteExpression(operands[index], depth + 1U);
+                    chain.pop_back();
+                }
+            }
+            /// An expression that is not a primitive with operands.
+            void
+            WriteUnchained(const Expression &expression, std::size_t depth)
             {
                 if (depth > limits_.maximumExpressionDepth)
                 {

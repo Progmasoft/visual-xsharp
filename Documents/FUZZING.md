@@ -216,7 +216,9 @@ The source fuzz targets and `source_fuzz_smoke` run the compiler on the
 compiler stack, as `vxs` does, because an input nested up to the frontend's
 limits does not fit on the default stack of a process. `Corpus/source` has
 permanent seeds for deep nesting, for nesting at and one level beyond each
-limit, and for long `else if` and operator chains.
+limit, for long `else if` and operator chains, which are not nesting, for
+negative constant patterns, and for blocks used as values that leave with
+`return`, `break` and `continue`.
 
 The differential generator selects one of fourteen program shapes from the
 byte after its generated expression, modulo the shape count. Adding a shape

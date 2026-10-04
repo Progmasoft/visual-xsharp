@@ -529,7 +529,8 @@ parseIf = do
 
 Whether it is the statement or the expression is known only after it: it is
 the value of the block when it is the last item, has an @else@ block, and
-both of its blocks end with a value. Its blocks are therefore parsed once,
+one of its blocks ends with a value; the other block then either ends with a
+value as well or leaves the block, which the type checker decides. Its blocks are therefore parsed once,
 as value blocks, and the statement form is recovered from them when the @if@
 turns out to be a statement. Parsing it twice instead would double the work
 at every level of nested value blocks.
@@ -558,7 +559,7 @@ parseIfInValueBlock = do
     closesBlock <- peekText "}"
     case (second, chained) of
         (Just (secondBlock, secondSpan), Nothing)
-            | closesBlock && blockEndsWithValue (fst first) && blockEndsWithValue secondBlock ->
+            | closesBlock && (blockEndsWithValue (fst first) || blockEndsWithValue secondBlock) ->
                 pure
                     ( ExpressionStatement
                         spanValue

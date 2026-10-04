@@ -153,45 +153,54 @@ prepareFunction state function =
         , after
         )
 
+{- | Every symbol identity a function mentions.
+
+The identities are prepended to an accumulator. Appending the lists of the
+operands instead would copy the identities of a first operand once for every
+operator above it, which is quadratic in the length of an operator chain.
+-}
 symbolIds :: CoreFunction -> [Int]
 symbolIds function =
     symbolIdValue (resolvedSymbol (coreFunctionName function))
         : map (symbolIdValue . resolvedSymbol . fst) (coreFunctionParameters function)
-        ++ concatMap statementSymbolIds (coreFunctionBody function)
+        ++ statementsSymbolIds (coreFunctionBody function) []
 
-statementSymbolIds :: CoreStatement -> [Int]
-statementSymbolIds statement = case statement of
-    CoreBind binding -> symbol (coreBindingName binding) : expressionSymbolIds (coreBindingValue binding)
-    CoreAssign name expression -> symbol name : expressionSymbolIds expression
-    CoreReturn expression -> expressionSymbolIds expression
+statementsSymbolIds :: [CoreStatement] -> [Int] -> [Int]
+statementsSymbolIds statements rest = foldr statementSymbolIds rest statements
+
+statementSymbolIds :: CoreStatement -> [Int] -> [Int]
+statementSymbolIds statement rest = case statement of
+    CoreBind binding -> symbol (coreBindingName binding) : expressionSymbolIds (coreBindingValue binding) rest
+    CoreAssign name expression -> symbol name : expressionSymbolIds expression rest
+    CoreReturn expression -> expressionSymbolIds expression rest
     CoreIf condition trueBranch falseBranch ->
-        expressionSymbolIds condition ++ concatMap statementSymbolIds trueBranch ++ concatMap statementSymbolIds falseBranch
-    CoreWhile condition body -> expressionSymbolIds condition ++ concatMap statementSymbolIds body
-    CoreDoWhile body condition -> concatMap statementSymbolIds body ++ expressionSymbolIds condition
+        expressionSymbolIds condition (statementsSymbolIds trueBranch (statementsSymbolIds falseBranch rest))
+    CoreWhile condition body -> expressionSymbolIds condition (statementsSymbolIds body rest)
+    CoreDoWhile body condition -> statementsSymbolIds body (expressionSymbolIds condition rest)
     CoreFor condition body update ->
-        expressionSymbolIds condition ++ concatMap statementSymbolIds body ++ concatMap statementSymbolIds update
-    CoreBreak -> []
-    CoreContinue -> []
-    CoreEvaluate expression -> expressionSymbolIds expression
+        expressionSymbolIds condition (statementsSymbolIds body (statementsSymbolIds update rest))
+    CoreBreak -> rest
+    CoreContinue -> rest
+    CoreEvaluate expression -> expressionSymbolIds expression rest
     where
         symbol = symbolIdValue . resolvedSymbol
 
-expressionSymbolIds :: CoreExpression -> [Int]
-expressionSymbolIds expression = case expression of
-    CoreVariable name _ -> [symbol name]
-    CoreLiteral _ _ -> []
-    CoreApply callee arguments _ -> expressionSymbolIds callee ++ concatMap expressionSymbolIds arguments
-    CorePrimitive _ arguments _ -> concatMap expressionSymbolIds arguments
-    CoreLet name _ value body _ -> symbol name : expressionSymbolIds value ++ expressionSymbolIds body
-    CoreConditional condition whenTrue whenFalse _ ->
-        concatMap expressionSymbolIds [condition, whenTrue, whenFalse]
+expressionSymbolIds :: CoreExpression -> [Int] -> [Int]
+expressionSymbolIds expression rest = case expression of
+    CoreVariable name _ -> symbol name : rest
+    CoreLiteral _ _ -> rest
+    CoreApply callee arguments _ -> expressionSymbolIds callee (expressions arguments rest)
+    CorePrimitive _ arguments _ -> expressions arguments rest
+    CoreLet name _ value body _ -> symbol name : expressionSymbolIds value (expressionSymbolIds body rest)
+    CoreConditional condition whenTrue whenFalse _ -> expressions [condition, whenTrue, whenFalse] rest
     CoreClosure captures parameters _ body _ ->
         map (symbol . coreCaptureName) captures
-            ++ concatMap (expressionSymbolIds . coreCaptureValue) captures
-            ++ map (symbol . fst) parameters
-            ++ concatMap statementSymbolIds body
+            ++ expressions
+                (map coreCaptureValue captures)
+                (map (symbol . fst) parameters ++ statementsSymbolIds body rest)
     where
         symbol = symbolIdValue . resolvedSymbol
+        expressions values after = foldr expressionSymbolIds after values
 
 prepareStatements :: PrepState -> OpenBlock -> [CoreStatement] -> ([CorePrepBlock], PrepState)
 prepareStatements state open statements = prepareStatementsTo CorePrepUnreachable state open statements []

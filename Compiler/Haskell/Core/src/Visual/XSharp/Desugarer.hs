@@ -8,6 +8,7 @@ import Control.Monad.State.Strict
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (nub)
+import Data.Maybe (isJust)
 import Data.Word (Word64)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
@@ -127,7 +128,7 @@ type BreakTarget = Maybe (ResolvedName, Type)
 {- | The lowering of this module as the branching forms of
 "Visual.XSharp.Desugarer.Branching" receive it. The target is where a
 @break value;@ in a statement arm stores its value; value blocks have none,
-because nothing may leave them early.
+because the type checker rejects a value-carrying break that leaves one.
 -}
 branchLowering :: BreakTarget -> BranchLowering Lower
 branchLowering target =
@@ -378,6 +379,11 @@ lowerExpression expression = case expression of
             subjectRead = CoreVariable subjectName subjectType
             predicate = lowerPattern subjectRead subjectType patternValue
         pure (prefix, CoreLet subjectName subjectType loweredSubject predicate boolType)
+    -- A branch that is a block which leaves has no value to lower.
+    ConditionalExpression _ condition first second valueType
+        | any (isJust . leavingBlock) [first, second] -> do
+            loweredCondition <- lowerExpression condition
+            lowerSelection (branchLowering Nothing) valueType loweredCondition first second
     ConditionalExpression _ condition first second valueType -> do
         (conditionPrefix, loweredCondition) <- lowerExpression condition
         loweredFirst <- lowerExpression first

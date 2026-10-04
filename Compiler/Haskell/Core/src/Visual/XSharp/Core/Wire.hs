@@ -273,6 +273,9 @@ encodeExpression limits depth expression
                     (encodeExpression limits (depth + 1))
                     arguments
             pure (tagByte 2 <> encodedType <> encodedCallee <> encodedArguments)
+        -- The first operand of a primitive is at the depth of the
+        -- primitive: a chain of operators nests in it, as deep as the chain
+        -- is long, and every stage walks that chain in a loop.
         CorePrimitive primitive arguments valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedArguments <-
@@ -280,8 +283,8 @@ encodeExpression limits depth expression
                     limits
                     "primitive operand count"
                     (maximumCoreOperands limits)
-                    (encodeExpression limits (depth + 1))
-                    arguments
+                    (\(position, argument) -> encodeExpression limits (depth + position) argument)
+                    (zip (0 : repeat 1) arguments)
             pure (rawBytes [3, primitiveTag primitive] <> encodedType <> encodedArguments)
         CoreClosure captures parameters returnType body valueType -> do
             encodedType <- encodeType limits 0 valueType
@@ -589,7 +592,18 @@ decodeExpression depth = do
         3 -> do
             primitive <- readWord8 "primitive tag" >>= decodePrimitive
             valueType <- decodeType 0
-            arguments <- decodeVector "primitive operand count" maximumCoreOperands (decodeExpression (depth + 1))
+            count <- readWord32 "primitive operand count"
+            requireDecode
+                (toInteger count <= toInteger (maximumCoreOperands limits))
+                CoreLimitExceeded
+                "primitive operand count"
+                "count exceeds configured limit"
+            -- The first operand is at the depth of the primitive.
+            arguments <-
+                sequence
+                    [ decodeExpression (depth + position)
+                    | position <- take (fromIntegral count) (0 : repeat 1)
+                    ]
             pure (CorePrimitive primitive arguments valueType)
         4 -> do
             valueType <- decodeType 0

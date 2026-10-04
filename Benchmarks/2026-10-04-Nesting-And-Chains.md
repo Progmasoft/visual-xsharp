@@ -19,9 +19,10 @@ change set:
 - the time of `vxs check` on whole programs of those shapes, and of the
   sanitized `source_fuzz_smoke` program.
 
-"Before" is commit `5ffdbdff` for the stack and Criterion measurements and
-`main` at `d9bd54e4` for `vxs check` and the smoke program. "After" is the
-working tree that this file is committed with.
+"Before" is commit `5ffdbdff` for the Criterion measurements and `main` at
+`d9bd54e4` for `vxs check` and the smoke program. "After" is commit
+`35d9c1ab`. The stack tables and the operator chain table name their
+revisions themselves; "now" is the working tree this file is committed with.
 
 ## Environment
 
@@ -47,50 +48,65 @@ go -C helpers run ./cmd/develop build -- //Compiler/Support/Tests:stack_probe
 bazel-bin/Compiler/Support/Tests/stack_probe.exe statements 1024 decode 708
 ```
 
-The shapes are `statements`, an `if` nested in an `if`; `expressions`, an
-addition whose first operand is an addition; and `chain`, an `else if`
-chain. `pipeline` is `Pipeline::ConsumeCore`, the whole native route from
-Core bytes to LLVM. KiB per level:
+The shapes are `statements`, an `if` nested in an `if`; `operands`, an
+addition whose second operand is an addition; `expressions`, an addition
+whose first operand is an addition; and `chain`, an `else if` chain. The
+first two are nesting that every stage recurses along. The last two are
+chains, which are as deep in the tree as they are long. `pipeline` is
+`Pipeline::ConsumeCore`, the whole native route from Core bytes to LLVM.
 
-| Shape | Stage | Before | After | After, sanitizers |
-| --- | --- | ---: | ---: | ---: |
-| statements | wire writer | 0.67 | 0.67 | 2.05 |
-| statements | wire reader | 14.8 | 0.65 | 1.59 |
-| statements | Core verifier | 1.70 | 0.67 | 1.70 |
-| statements | CorePrep adapter | 3.81 | 0.31 | 1.15 |
-| statements | pipeline | 14.9 | 0.67 | 1.67 |
-| expressions | wire writer | 0.83 | 0.83 | 2.34 |
-| expressions | wire reader | 10.6 | 0.42 | 0.67 |
-| expressions | Core verifier | 2.34 | 0 | 0 |
-| expressions | CorePrep adapter | 4.35 | 0 | 0 |
-| expressions | pipeline | 10.6 | 0.42 | 0.67 |
-| chain | wire reader | 0.38 | 0.38 | 0.62 |
-| chain | CorePrep adapter | 0.25 | 0 | 0 |
-| chain | pipeline | 0.38 | 0.38 | not measured |
+Three revisions were measured: `5ffdbdff`, before any of this work;
+`35d9c1ab`, after the frames of the reader, the verifier and the adapter were
+reduced; and the working tree this file is committed with, in which chains
+are walked in a loop by every stage, modules are released from a list, and
+the reader reads every expression into its place. KiB of stack per level:
 
-A zero means the stage completed on the smallest stack at every depth. The
-sanitizer build was not measured before the change. What remains per
-expression level and per chain link in the reader and the pipeline is the
-release of the module, whose implicit destructors recurse.
+| Shape | Stage | `5ffdbdff` | `35d9c1ab` | Now | Now, sanitizers |
+| --- | --- | ---: | ---: | ---: | ---: |
+| statements | wire writer | 0.67 | 0.67 | 0.67 | 2.05 |
+| statements | wire reader | 14.8 | 0.65 | 0.65 | 1.59 |
+| statements | Core verifier | 1.70 | 0.67 | 0.67 | 1.70 |
+| statements | CorePrep adapter | 3.81 | 0.31 | 0.31 | 1.17 |
+| statements | pipeline | 14.9 | 0.67 | 0.67 | 1.67 |
+| operands | wire writer | | 0.19 | 0.19 | 0.62 |
+| operands | wire reader | | 7.13 | 0.37 | 1.06 |
+| operands | Core verifier | | 0.91 | 0.91 | 2.52 |
+| operands | CorePrep adapter | | 1.94 | 1.94 | 3.39 |
+| operands | pipeline | | 7.13 | 1.94 | 3.39 |
+| expressions | wire writer | 0.83 | 0.83 | 0 | not measured |
+| expressions | wire reader | 10.6 | 0.42 | 0 | not measured |
+| expressions | Core verifier | 2.34 | 0 | 0 | not measured |
+| expressions | CorePrep adapter | 4.35 | 0 | 0 | not measured |
+| expressions | pipeline | 10.6 | 0.42 | 0 | not measured |
+| chain | wire reader | 0.38 | 0.38 | 0 | not measured |
+| chain | CorePrep adapter | 0.25 | 0 | 0 | not measured |
+| chain | pipeline | 0.38 | 0.38 | 0 | not measured |
 
-Totals that follow from the slopes, for the whole pipeline:
+A zero means the stage completed on the smallest stack at every depth
+measured: up to 1024 additions and 4096 links, and, for the working tree,
+20000 of each on 512 KiB in every stage. An empty cell was not measured: the
+`operands` shape was added to the probe after `5ffdbdff`, and until then the
+cost of nesting in a second operand had been taken, wrongly, to be that of
+the `expressions` shape. The sanitizer build is AddressSanitizer with
+UndefinedBehaviorSanitizer.
 
-| Input | Before | After | After, sanitizers |
+Totals that follow from the slopes, for the whole native pipeline:
+
+| Input | `5ffdbdff` | Now | Now, sanitizers |
 | --- | ---: | ---: | ---: |
-| statements nested 256 deep | 3.7 MiB | 0.2 MiB | 0.4 MiB |
-| expressions nested 1024 deep | 10.7 MiB | 0.4 MiB | 0.6 MiB |
-| statements nested 4096 deep, reader only | 59 MiB | 2.6 MiB | 6.4 MiB |
-| statements nested 4096 deep, writer only | 2.7 MiB | 2.7 MiB | 8.2 MiB |
-| `else if` chain of 4096 links | 1.5 MiB | 1.5 MiB | 2.4 MiB, reader only |
-
-The first two rows are the frontend's nesting limits and the next two the
-default depth limit of the native wire codec. The pipeline row for 4096
-nested statements is absent: the function body is a level itself, so that
-module is one level beyond the wire limit and is rejected.
+| statements nested 256 deep, the frontend limit | 3.7 MiB | 0.2 MiB | 0.4 MiB |
+| operands nested 1024 deep, the frontend limit | | 1.9 MiB | 3.4 MiB |
+| statements nested 4096 deep, the wire limit, writer | 2.7 MiB | 2.7 MiB | 8.2 MiB |
+| operands nested 4000 deep, near the wire limit | | 7.6 MiB | 13.3 MiB |
+| sum of 20000 operands | crash | under 0.1 MiB | not measured |
+| `else if` chain of 20000 links | crash | under 0.1 MiB | not measured |
 
 The largest stack any measured stage needs on input the limits admit is
-therefore 8.2 MiB, in a sanitizer build, against the 256 MiB the compiler
-thread reserves.
+therefore 13.3 MiB, in a sanitizer build at the depth limit of the wire
+codec, and 3.4 MiB at the limits of the frontend, against the 256 MiB the
+compiler thread reserves. The adapter is now the stage that costs most per
+level of real nesting. Copying a module still recurses once per level; the
+pipeline copies only the bodies of closures.
 
 ## Haskell Core operations
 
@@ -170,6 +186,26 @@ in seconds. `crash` is a stack overflow without a diagnostic.
 | `match` arms | 500 | 0.74 | 0.65 |
 | | 1000 | 1.65 | 1.36 |
 | | 2000 | 3.95 | 3.41 |
+
+Chains of operators, which the expression nesting limit rejected above 1024
+operands until this change, on `35d9c1ab` with the limit lifted and on the
+working tree:
+
+| Program | Size | Limit lifted only | Now |
+| --- | ---: | ---: | ---: |
+| sum of operands | 5000 | 2.45 | 1.23 |
+| | 20000 | 30.4 | 4.57 |
+| | 50000 | 198 | 9.37 |
+| comparisons joined by `&&` | 100 | 3.68 | not measured |
+| | 200 | 47.6 | 1.13 |
+| | 800 | more than 120 | 1.75 |
+| | 3000 | not measured | 5.60 |
+
+The `&&` figures of the first column are the same on `main`: 3.66 seconds
+for 100 comparisons. Constant propagation asked the integer facts about
+every node of an expression, and the CorePrep lowering collected symbol
+identities by appending lists; both are fixed, and the facts are consulted
+only for conditions of at most 256 nodes.
 
 The time still grows faster than the program between 2000 and 4000
 statements: by 3.1 for the chain and by 2.5 for the sequence. Earlier

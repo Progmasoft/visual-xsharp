@@ -108,12 +108,16 @@ namespace
                                                  Integer(0) }));
         body.push_back(std::move(statement));
         body.push_back(Core::Statement::Return(Total()));
-        return { { U"Nesting" },
-                 { Core::Function{
-                     { 1U, U"Pick" },
-                     { { { kValue, U"value" }, Core::Type::int64() } },
-                     Core::Type::int64(),
-                     std::move(body) } } };
+        // The function is moved into the module. A braced list would copy
+        // it, and copying nested statements recurses once per level.
+        Core::Module module;
+        module.name = { U"Nesting" };
+        module.functions.push_back(
+            Core::Function{ { 1U, U"Pick" },
+                            { { { kValue, U"value" }, Core::Type::int64() } },
+                            Core::Type::int64(),
+                            std::move(body) });
+        return module;
     }
 
     [[nodiscard]] auto
@@ -370,4 +374,125 @@ TEST_CASE("the adapter prepares a long chain without copying the module",
         return branches == kLinks ? 0 : 3;
     });
     CHECK(outcome == 0);
+}
+
+namespace
+{
+    /// `value + value + ...` with the given number of additions, each sum
+    /// the first operand of the next.
+    [[nodiscard]] auto
+    LeftChain(std::size_t additions) -> Core::Expression
+    {
+        auto expression = Value();
+        for (std::size_t index = 0U; index < additions; ++index)
+        {
+            std::vector<Core::Expression> operands;
+            operands.push_back(std::move(expression));
+            operands.push_back(Value());
+            expression = Core::Expression::InvokePrimitive(Core::Primitive::Add,
+                                                           std::move(operands),
+                                                           Core::Type::int64());
+        }
+        return expression;
+    }
+
+    /// `value + (value + (...))` with the given number of additions, each
+    /// sum the second operand of the one around it.
+    [[nodiscard]] auto
+    RightChain(std::size_t additions) -> Core::Expression
+    {
+        auto expression = Value();
+        for (std::size_t index = 0U; index < additions; ++index)
+        {
+            std::vector<Core::Expression> operands;
+            operands.push_back(Value());
+            operands.push_back(std::move(expression));
+            expression = Core::Expression::InvokePrimitive(Core::Primitive::Add,
+                                                           std::move(operands),
+                                                           Core::Type::int64());
+        }
+        return expression;
+    }
+
+    [[nodiscard]] auto
+    WithExpressionDepth(std::size_t depth) -> Wire::Limits
+    {
+        Wire::Limits limits;
+        limits.maximumExpressionDepth = depth;
+        return limits;
+    }
+} // namespace
+
+TEST_CASE("a chain of operators is one expression level",
+          "[core][wire][nesting]")
+{
+    // The first operand of a primitive is at the level of the primitive.
+    // A sum of 20001 operands therefore fits a depth limit of one, and the
+    // whole test runs on the stack the test process starts with: the
+    // writer, the reader, the verifier and the adapter walk the chain in a
+    // loop, and releasing the module does not recurse along it either.
+    constexpr std::size_t kAdditions = 20000U;
+    const auto module = Module(
+        Core::Statement::Assign({ kTotal, U"total" }, LeftChain(kAdditions)));
+    const auto limits = WithExpressionDepth(1U);
+    const auto encoded = Wire::Encode(module, limits);
+    REQUIRE(encoded);
+    const auto decoded = Wire::Decode(encoded.bytes, limits);
+    REQUIRE(decoded);
+    REQUIRE(decoded.module);
+    const auto again = Wire::Encode(*decoded.module, limits);
+    REQUIRE(again);
+    CHECK(again.bytes == encoded.bytes);
+    CHECK(Core::Verify(*decoded.module).empty());
+    const auto prepared = Core::CorePrep::Prepare(*decoded.module);
+    CHECK(Prepared::verify(prepared).empty());
+    REQUIRE(prepared.functions.size() == 1U);
+    // One block: the binding of `total`, a temporary for every addition,
+    // and the assignment that copies the last one.
+    REQUIRE(prepared.functions.front().blocks.size() == 1U);
+    CHECK(prepared.functions.front().blocks.front().instructions.size()
+          == kAdditions + 2U);
+}
+
+TEST_CASE("an operand after the first is one expression level deeper",
+          "[core][wire][nesting]")
+{
+    // Five additions that nest to the right put the innermost operand at
+    // depth five; the expression of the statement is at depth zero.
+    const auto module
+        = Module(Core::Statement::Assign({ kTotal, U"total" }, RightChain(5U)));
+    CHECK(Wire::Encode(module, WithExpressionDepth(5U)));
+    CHECK(IsLimit(Wire::Encode(module, WithExpressionDepth(4U)).error));
+    const auto encoded = Wire::Encode(module, WithExpressionDepth(5U));
+    REQUIRE(encoded);
+    CHECK(Wire::Decode(encoded.bytes, WithExpressionDepth(5U)));
+    CHECK(IsLimit(Wire::Decode(encoded.bytes, WithExpressionDepth(4U)).error));
+}
+
+TEST_CASE("a long else-if chain is handled on the default stack",
+          "[core][coreprep][nesting]")
+{
+    // 20000 links are 20000 levels of nested statements. Every native Core
+    // stage walks them in a loop and the statements are released from a
+    // list, so none of this needs the compiler stack.
+    constexpr std::size_t kLinks = 20000U;
+    auto statement = Core::Statement::If(Exceeds(0), { Count() }, {});
+    for (std::size_t index = 1U; index < kLinks; ++index)
+    {
+        std::vector<Core::Statement> next;
+        next.push_back(std::move(statement));
+        statement
+            = Core::Statement::If(Exceeds(static_cast<std::int64_t>(index)),
+                                  { Count() },
+                                  std::move(next));
+    }
+    const auto module = Module(std::move(statement));
+    const auto encoded = Wire::Encode(module);
+    REQUIRE(encoded);
+    const auto decoded = Wire::Decode(encoded.bytes);
+    REQUIRE(decoded);
+    REQUIRE(decoded.module);
+    CHECK(Core::Verify(*decoded.module).empty());
+    const auto prepared = Core::CorePrep::Prepare(*decoded.module);
+    CHECK(Prepared::verify(prepared).empty());
 }

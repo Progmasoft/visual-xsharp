@@ -16,6 +16,8 @@ module Visual.XSharp.Desugarer.Branching
     ( BranchLowering (..)
     , lowerValueBlock
     , lowerMatch
+    , lowerSelection
+    , leavingBlock
     ) where
 
 import Visual.XSharp.AST
@@ -42,11 +44,55 @@ data BranchLowering lower = BranchLowering
     -- ^ The Core literal of a source literal of the given Core type.
     }
 
+{- | The statements of a block used as a value that has no value: it has no
+final expression, and the type checker has established that it cannot
+complete normally. Such a block leaves with @return@, @break@ or
+@continue@, which are ordinary Core statements wherever they stand, so it is
+lowered as its statements alone and nothing is stored for it.
+-}
+leavingBlock :: Expression name annotation -> Maybe [Statement name annotation]
+leavingBlock expression = case expression of
+    BlockExpression _ (Block statements) _ -> case reverse statements of
+        ExpressionStatement _ _ False : _ -> Nothing
+        _ -> Just statements
+    _ -> Nothing
+
+{- | Lower a two-way choice one of whose branches is a block that leaves.
+
+The result slot is assigned only on the branch that completes. The other
+branch never reaches the read of the slot.
+-}
+lowerSelection ::
+    (Monad lower) =>
+    BranchLowering lower ->
+    Type ->
+    Lowered ->
+    Expression ResolvedName Type ->
+    Expression ResolvedName Type ->
+    lower Lowered
+lowerSelection lowering valueType (conditionPrefix, condition) first second = do
+    result <- branchFresh lowering "$selected"
+    let resultType = branchType lowering valueType
+        branch value = case leavingBlock value of
+            Just statements -> branchStatements lowering statements
+            Nothing -> do
+                (prefix, lowered) <- branchExpression lowering value
+                pure (prefix ++ [CoreAssign result lowered])
+    whenTrue <- branch first
+    whenFalse <- branch second
+    pure
+        ( conditionPrefix
+            ++ [ CoreBind (CoreBinding result resultType True (neutralValue resultType))
+               , CoreIf condition whenTrue whenFalse
+               ]
+        , CoreVariable result resultType
+        )
+
 {- | Lower a block used as a value.
 
-The leading statements run in order; the value is the final expression. The
-type checker has established that the block ends with one and that nothing
-in it leaves the block early.
+The leading statements run in order; the value is the final expression. A
+block that leaves has no value; the forms that hold one lower it through
+'leavingBlock' and never ask for its value.
 -}
 lowerValueBlock :: (Monad lower) => BranchLowering lower -> Block ResolvedName Type -> lower Lowered
 lowerValueBlock lowering (Block statements) = case reverse statements of
@@ -70,9 +116,10 @@ in a loop, so the lowering of a match is as deep as one arm whatever the
 number of arms.
 
 A match whose type is @void@ is the statement form: its arm bodies run for
-their effects and its value is the unit literal. Otherwise every arm stores
-its value into a result slot, which the type checker guarantees is assigned
-on every path, because some arm always accepts.
+their effects and its value is the unit literal. Otherwise every arm that
+completes stores its value into a result slot, and an arm whose block leaves
+stores nothing. The type checker guarantees that the slot is assigned on
+every path that reaches its read, because some arm always accepts.
 -}
 lowerMatch ::
     (Monad lower) =>
@@ -186,8 +233,10 @@ its effects.
 lowerArmBody ::
     (Monad lower) => BranchLowering lower -> Maybe ResolvedName -> Expression ResolvedName Type -> lower [CoreStatement]
 lowerArmBody lowering result body = case (result, body) of
-    (Just slot, _) -> do
-        (prefix, value) <- branchExpression lowering body
-        pure (prefix ++ [CoreAssign slot value])
+    (Just slot, _) -> case leavingBlock body of
+        Just statements -> branchStatements lowering statements
+        Nothing -> do
+            (prefix, value) <- branchExpression lowering body
+            pure (prefix ++ [CoreAssign slot value])
     (Nothing, BlockExpression _ (Block statements) _) -> branchStatements lowering statements
     (Nothing, _) -> branchDiscarded lowering body

@@ -293,12 +293,16 @@ The parser reports:
 | `VXP0033` | an `if` used as an expression has no `else` branch |
 | `VXP0034` | the `else` branch of an `if` used as an expression is another `if` instead of a block |
 | `VXP0035` | the condition of an `if`, `guard` or `while` is a binding such as `auto user = Find()`, which requires optional values |
-| `VXP0036` | a match arm does not start with a pattern: a literal, `_`, `null`, `.Case`, or a type followed by a name or `_` |
+| `VXP0036` | a match arm does not start with a pattern: a literal, a `-` and a numeric literal, `_`, `null`, `.Case`, or a type followed by a name or `_`; or a `-` in a pattern is not followed by a numeric literal |
 | `VXP0037` | `guard (condition)` is not followed by `else` |
 | `VXP0038` | the pattern of a match arm was read as part of the expression body of the arm before it |
 
 A bare name is not a pattern, so `value -> ...` is `VXP0036`: a binding always
-states its type, as in `int value -> ...`. A literal pattern has no sign.
+states its type, as in `int value -> ...`. A numeric literal may be preceded
+by `-`, which makes the constant negative; no other expression is a pattern.
+The constant is checked against the type of its subject like every literal
+(`VXT0016`), so `-128` is a pattern for a `byte` and `-129`, `128` and any
+negative constant for an unsigned subject are not.
 The comma after an arm is optional. Without it, a parenthesized pattern after
 an expression body continues that expression as a call, and the `->` that
 follows cannot; `VXP0038` is reported at that arrow. An unterminated
@@ -313,8 +317,8 @@ The type checker reports:
 
 | Code | Meaning |
 | --- | --- |
-| `VXT0046` | a block used as a value does not end with an expression that has no semicolon |
-| `VXT0047` | `return` inside a block used as a value, which is not implemented |
+| `VXT0046` | a block used as a value can complete normally and does not end with an expression that has no semicolon |
+| `VXT0047` | `return` inside a block used as a value where the enclosing return type is inferred, or inside a loop used as an expression; neither is implemented |
 | `VXT0048` | a match arm does not have exactly one pattern for each subject |
 | `VXT0049` | a match guard is neither `bool` nor numeric |
 | `VXT0050` | the arms of a match used as an expression have different types |
@@ -326,9 +330,27 @@ The type checker reports:
 | `VXT0056` | an enum case pattern such as `.Ready`; enum declarations are not implemented |
 | `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
 | `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
-| `VXT0059` | `break` or `continue` would leave a block that is used as a value, which is not implemented |
+| `VXT0059` | a `break` or `continue` in a block used as a value that is not implemented: in the condition or the update clause of a loop, or a `break` that carries a value |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
+| `VXT0062` | every block of an `if` expression, or every arm of a match expression, leaves, so the expression has no value |
+
+A block used as a value may leave instead of yielding a value: `return`
+leaves the enclosing method and is checked against its return type
+(`VXT0005`), and `break` and `continue` target the loop around the expression
+and need one (`VXT0025`, `VXT0027`). A block that cannot complete normally
+needs no final expression and gives its expression no type; the blocks that
+complete do.
+
+Whether a block can complete normally, for `VXT0046` and `VXT0061`, is decided
+from its control flow. A statement cannot complete when it is a `return`, a
+`break` or a `continue`; an `if` with an `else` whose two blocks both cannot;
+a nested block that cannot; a loop whose condition is the literal `true`, or
+absent in a `for`, and that no `break` leaves, also from a block used as a
+value; or a statement `match` one arm of which always matches and all arms of
+which are blocks that cannot. A block cannot complete when any of its
+statements cannot. A call is assumed to return: calls whose result is `never`
+are not recognized yet.
 
 A match used as an expression is complete, so that `VXT0052` is not reported,
 when an arm without a guard has only `_` and type patterns, or when every
@@ -360,9 +382,9 @@ any local. Two blocks side by side may declare the same name.
 
 ### Nesting limits
 
-The stages after Core recurse once per level of nesting, so the frontend
-bounds how deep a function body may nest and reports the place where it
-becomes too deep. The check runs before any analysis of the body:
+The stages after Core recurse once per level of real nesting, so the
+frontend bounds how deep a function body may nest and reports the place where
+it becomes too deep. The check runs before any analysis of the body:
 
 | Code | Meaning |
 | --- | --- |
@@ -380,9 +402,13 @@ an expression keep counting from that expression. Each function reports each
 code at most once, at the first node in source order that is one level
 beyond the limit, and nothing below that node is examined.
 
-Operands of a left-associative operator nest one level each: the first
-operand of `a + b + c` is at level 3. A sum of 1025 operands is therefore
-`VXP0040`; compute part of it in a statement of its own.
+A chain of a binary operator is not nesting either. The left operand of a
+binary operator is at the level of the operator, so `a + b + c + ...` and
+`a && b && c && ...` are at one level however long they are: every stage
+walks such a chain in a loop, and a sum of 50000 operands compiles. A right
+operand, a call argument, a conditional result and the operand of a unary
+operator are one level below the expression that holds them, so
+`a + (b + (c + ...))` nests one level per addition.
 
 ### Supplied token streams
 

@@ -432,6 +432,8 @@ namespace Visual::XSharp::Core::Wire
             struct Pending final
             {
                 std::uint8_t tag{};
+                /// The level of this expression.
+                std::size_t level{};
                 Primitive primitive{ Primitive::Add };
                 Type valueType;
                 /// Primitive: the number of operands, the first of which is
@@ -448,7 +450,7 @@ namespace Visual::XSharp::Core::Wire
             };
 
             /**
-             * @brief Read one expression.
+             * @brief Read one expression into its place.
              *
              * Three shapes nest as deep as an expression is long: a chain
              * of operators nests in the first operand of each primitive, a
@@ -459,62 +461,87 @@ namespace Visual::XSharp::Core::Wire
              * expression is kept in a list while its awaited child is read,
              * and the list is folded innermost first. Every other child is
              * read by recursion, which the depth limit bounds. The bytes
-             * consumed, the levels the limit is checked at and the
-             * resulting tree are those of the recursive formulation.
+             * consumed and the resulting tree are those of the recursive
+             * formulation. The first operand of a primitive is at the level
+             * of the primitive, so a chain of operators does not count
+             * against the depth limit; every other child is one level
+             * deeper than its parent.
+             *
+             * An expression is large. The functions on the path that
+             * recurses once per level therefore hold none: an expression is
+             * read into its place, and the functions that build one from
+             * its parts are separate and return before the next level is
+             * entered.
              */
-            [[nodiscard, gnu::noinline]] auto
-            ReadExpression(std::size_t depth = 0U) -> Expression
+            [[gnu::noinline]] void
+            ReadExpressionInto(Expression &expression, std::size_t depth = 0U)
             {
                 std::vector<Pending> spine;
-                Expression expression;
+                auto level = depth;
                 for (;;)
                 {
-                    const auto level = depth + spine.size();
                     if (level > limits_.maximumExpressionDepth)
                     {
                         Fail(ErrorKind::LimitExceeded,
                              "expression",
                              "expression nesting exceeds configured limit");
-                        return {};
+                        break;
                     }
                     const auto tag = Byte("expression tag");
                     if (tag != kPrimitiveTag && tag != kLetTag
                         && tag != kConditionalExpressionTag)
                     {
-                        expression = ReadLeafOrCall(tag, level);
+                        ReadUnchained(expression, tag, level);
                         break;
                     }
                     if (!ReadPending(tag, level, spine, expression))
                         break;
+                    if (tag != kPrimitiveTag)
+                        ++level;
                 }
                 while (!spine.empty() && !error_)
                 {
-                    expression = Complete(spine.back(),
-                                          std::move(expression),
-                                          depth + spine.size());
+                    Complete(spine.back(), expression);
                     spine.pop_back();
                 }
                 if (error_)
-                    return {};
+                    Reset(expression);
+            }
+            /// Read one expression and return it. For callers that are not
+            /// on the path that recurses once per level.
+            [[nodiscard, gnu::noinline]] auto
+            ReadExpression() -> Expression
+            {
+                Expression expression;
+                ReadExpressionInto(expression);
                 return expression;
+            }
+            [[gnu::noinline]] static void
+            Reset(Expression &expression)
+            {
+                expression = Expression{};
             }
 
             /// Read the header and the leading children of a primitive, a
-            /// let or a conditional whose tag was consumed, and push it to
-            /// wait for its next child. Returns false when no child is
-            /// awaited: `expression` then holds the result, or the input
-            /// was rejected.
+            /// let or a conditional whose tag was consumed, into a new last
+            /// entry of the list, where it waits for its next child.
+            /// Returns false when no child is awaited: `expression` then
+            /// holds the result, or the input was rejected.
             [[nodiscard, gnu::noinline]] auto
             ReadPending(std::uint8_t tag,
                         std::size_t level,
                         std::vector<Pending> &spine,
                         Expression &expression) -> bool
             {
-                Pending pending;
+                // The entry is filled in place. Nothing appends to this list
+                // while its children are read, so the reference stays valid.
+                spine.emplace_back();
+                auto &pending = spine.back();
                 pending.tag = tag;
+                pending.level = level;
                 const auto primitiveTag
                     = tag == kPrimitiveTag ? Byte("primitive tag") : 0U;
-                pending.valueType = ReadType();
+                ReadTypeInto(pending.valueType);
                 if (tag == kPrimitiveTag)
                 {
                     if (primitiveTag
@@ -529,106 +556,181 @@ namespace Visual::XSharp::Core::Wire
                                              "primitive operand count");
                     if (!error_ && pending.operands == 0U)
                     {
-                        expression = Expression::InvokePrimitive(
-                            pending.primitive,
-                            {},
-                            std::move(pending.valueType));
+                        BuildPrimitive(pending, {}, expression);
+                        spine.pop_back();
                         return false;
                     }
                 }
                 else if (tag == kLetTag)
                 {
-                    pending.symbol = Symbol("let symbol");
-                    pending.bindingType = ReadType();
-                    pending.first = ReadExpression(level + 1U);
+                    ReadLetHeader(pending);
+                    ReadExpressionInto(pending.first, level + 1U);
                 }
                 else
                 {
                     // The three children have fixed positions, so the
                     // payload carries no count.
-                    pending.first = ReadExpression(level + 1U);
-                    pending.second = ReadExpression(level + 1U);
+                    ReadExpressionInto(pending.first, level + 1U);
+                    ReadExpressionInto(pending.second, level + 1U);
                 }
                 if (error_)
+                {
+                    spine.pop_back();
                     return false;
-                spine.push_back(std::move(pending));
+                }
                 return true;
+            }
+            [[gnu::noinline]] void
+            ReadTypeInto(Type &type)
+            {
+                type = ReadType();
+            }
+            [[gnu::noinline]] void
+            ReadLetHeader(Pending &pending)
+            {
+                pending.symbol = Symbol("let symbol");
+                pending.bindingType = ReadType();
             }
 
             /// Build a pending expression from the child it waited for,
-            /// reading the operands of a primitive that follow the first.
-            /// `level` is the level of its children.
-            [[nodiscard, gnu::noinline]] auto
-            Complete(Pending &pending, Expression awaited, std::size_t level)
-                -> Expression
+            /// which `expression` holds, reading the operands of a
+            /// primitive that follow the first. The result replaces the
+            /// child in `expression`.
+            [[gnu::noinline]] void
+            Complete(Pending &pending, Expression &expression)
             {
                 if (pending.tag == kLetTag)
-                    return Expression::Let(std::move(pending.symbol),
-                                           std::move(pending.bindingType),
-                                           std::move(pending.first),
-                                           std::move(awaited),
-                                           std::move(pending.valueType));
+                {
+                    BuildLet(pending, expression);
+                    return;
+                }
                 if (pending.tag == kConditionalExpressionTag)
-                    return Expression::Conditional(
-                        std::move(pending.first),
-                        std::move(pending.second),
-                        std::move(awaited),
-                        std::move(pending.valueType));
+                {
+                    BuildConditional(pending, expression);
+                    return;
+                }
                 std::vector<Expression> operands;
                 operands.reserve(pending.operands);
-                operands.push_back(std::move(awaited));
+                operands.push_back(std::move(expression));
                 for (std::size_t index = 1U;
                      index < pending.operands && !error_;
                      ++index)
-                    operands.push_back(ReadExpression(level));
-                return Expression::InvokePrimitive(
-                    pending.primitive,
-                    std::move(operands),
-                    std::move(pending.valueType));
+                {
+                    operands.emplace_back();
+                    ReadExpressionInto(operands.back(), pending.level + 1U);
+                }
+                BuildPrimitive(pending, std::move(operands), expression);
+            }
+            [[gnu::noinline]] static void
+            BuildPrimitive(Pending &pending,
+                           std::vector<Expression> operands,
+                           Expression &expression)
+            {
+                expression
+                    = Expression::InvokePrimitive(pending.primitive,
+                                                  std::move(operands),
+                                                  std::move(pending.valueType));
+            }
+            [[gnu::noinline]] static void
+            BuildLet(Pending &pending, Expression &expression)
+            {
+                expression = Expression::Let(std::move(pending.symbol),
+                                             std::move(pending.bindingType),
+                                             std::move(pending.first),
+                                             std::move(expression),
+                                             std::move(pending.valueType));
+            }
+            [[gnu::noinline]] static void
+            BuildConditional(Pending &pending, Expression &expression)
+            {
+                expression
+                    = Expression::Conditional(std::move(pending.first),
+                                              std::move(pending.second),
+                                              std::move(expression),
+                                              std::move(pending.valueType));
             }
 
             /// Read an expression that is not walked in a loop; its tag was
             /// consumed.
-            [[nodiscard, gnu::noinline]] auto
-            ReadLeafOrCall(std::uint8_t tag, std::size_t depth) -> Expression
+            [[gnu::noinline]] void
+            ReadUnchained(Expression &expression,
+                          std::uint8_t tag,
+                          std::size_t depth)
             {
-                auto valueType = ReadType();
                 switch (tag)
                 {
                     case 0:
-                        return Expression::Variable(Symbol("variable symbol"),
-                                                    std::move(valueType));
                     case 1:
-                        return Expression::Constant(ReadLiteral(),
-                                                    std::move(valueType));
+                        ReadLeaf(expression, tag);
+                        return;
                     case 2:
-                        return ReadApply(depth, std::move(valueType));
+                        ReadApply(expression, depth);
+                        return;
                     case 4:
-                        return ReadClosure(depth, std::move(valueType));
+                        ReadClosure(expression, depth);
+                        return;
                     default:
-                        Fail(ErrorKind::InvalidTag,
-                             "expression tag",
-                             "unknown Core expression tag");
-                        return {};
+                        // The type precedes the payload of every tag and is
+                        // consumed before the tag is rejected, as the
+                        // recursive formulation did.
+                        ReadLeaf(expression, tag);
+                        return;
                 }
             }
-            [[nodiscard, gnu::noinline]] auto
-            ReadApply(std::size_t depth, Type valueType) -> Expression
+            [[gnu::noinline]] void
+            ReadLeaf(Expression &expression, std::uint8_t tag)
             {
-                auto callee = ReadExpression(depth + 1U);
-                auto arguments
-                    = Vector<Expression>(limits_.maximumOperands,
-                                         "call argument count",
-                                         [this, depth] {
-                                             return ReadExpression(depth + 1U);
-                                         });
-                return Expression::Apply(std::move(callee),
-                                         std::move(arguments),
-                                         std::move(valueType));
+                auto valueType = ReadType();
+                if (tag == 0U)
+                    expression = Expression::Variable(Symbol("variable symbol"),
+                                                      std::move(valueType));
+                else if (tag == 1U)
+                    expression = Expression::Constant(ReadLiteral(),
+                                                      std::move(valueType));
+                else
+                    Fail(ErrorKind::InvalidTag,
+                         "expression tag",
+                         "unknown Core expression tag");
             }
-            [[nodiscard, gnu::noinline]] auto
-            ReadClosure(std::size_t depth, Type valueType) -> Expression
+            /// Read the operands of a call or the like into a list, each
+            /// into its place.
+            void
+            ReadOperands(std::vector<Expression> &operands,
+                         std::string_view context,
+                         std::size_t depth)
             {
+                const auto size = Count(limits_.maximumOperands, context);
+                operands.reserve(size);
+                for (std::size_t index = 0U; index < size && !error_; ++index)
+                {
+                    operands.emplace_back();
+                    ReadExpressionInto(operands.back(), depth);
+                }
+            }
+            [[gnu::noinline]] void
+            ReadApply(Expression &expression, std::size_t depth)
+            {
+                auto valueType = ReadType();
+                // The callee is read into the place of the result and moved
+                // out of it when the call is built.
+                ReadExpressionInto(expression, depth + 1U);
+                std::vector<Expression> arguments;
+                ReadOperands(arguments, "call argument count", depth + 1U);
+                BuildApply(expression, arguments, valueType);
+            }
+            [[gnu::noinline]] static void
+            BuildApply(Expression &expression,
+                       std::vector<Expression> &arguments,
+                       Type &valueType)
+            {
+                expression = Expression::Apply(std::move(expression),
+                                               std::move(arguments),
+                                               std::move(valueType));
+            }
+            [[gnu::noinline]] void
+            ReadClosure(Expression &expression, std::size_t depth)
+            {
+                auto valueType = ReadType();
                 auto captures
                     = Vector<Capture>(limits_.maximumOperands,
                                       "closure capture count",
@@ -645,11 +747,11 @@ namespace Visual::XSharp::Core::Wire
                     });
                 auto returnType = ReadType();
                 auto body = ReadBody("closure statement count");
-                return Expression::Closure(std::move(captures),
-                                           std::move(parameters),
-                                           std::move(returnType),
-                                           std::move(body),
-                                           std::move(valueType));
+                expression = Expression::Closure(std::move(captures),
+                                                 std::move(parameters),
+                                                 std::move(returnType),
+                                                 std::move(body),
+                                                 std::move(valueType));
             }
             [[nodiscard, gnu::noinline]] auto
             ReadCapture(std::size_t depth) -> Capture
@@ -659,16 +761,14 @@ namespace Visual::XSharp::Core::Wire
                     Fail(ErrorKind::InvalidTag,
                          "closure capture mode",
                          "unknown Core closure capture mode");
-                auto symbol = Symbol("closure capture symbol");
-                auto type = ReadType();
-                auto value = ReadExpression(depth);
                 Capture capture;
                 // A rejected tag never becomes an enumerator.
                 capture.mode = tag > 2U ? CaptureMode::Strong
                                         : static_cast<CaptureMode>(tag);
-                capture.symbol = std::move(symbol);
-                capture.type = std::move(type);
-                capture.value = std::make_shared<Expression>(std::move(value));
+                capture.symbol = Symbol("closure capture symbol");
+                capture.type = ReadType();
+                capture.value = std::make_shared<Expression>();
+                ReadExpressionInto(*capture.value, depth);
                 return capture;
             }
             /// Enter one level of statement nesting, or fail when the level
@@ -805,11 +905,6 @@ namespace Visual::XSharp::Core::Wire
                 statement = Statement::If(std::move(link.condition),
                                           std::move(link.whenTrue),
                                           std::move(whenFalse));
-            }
-            [[gnu::noinline]] void
-            ReadExpressionInto(Expression &expression)
-            {
-                expression = ReadExpression();
             }
 
             // Each kind of statement is read by a function of its own, so

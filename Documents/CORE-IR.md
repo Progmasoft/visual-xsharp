@@ -397,7 +397,10 @@ those paths are written to keep their frames small: a statement holds two
 expressions by value and is large, so it is read into its place and built
 by functions that return before the next level is entered, and diagnostics
 and instructions are built outside the functions that recurse. Releasing a
-module still recurses once per level and per link of a chain.
+module does not recurse along a chain either: the destructors of an
+expression and of a statement move their operands and nested statements to a
+list and release them from there. Copying a module still recurses once per
+level; the pipeline copies only the bodies of closures.
 
 Two bounds keep the recursion within the stack. The frontend rejects a
 function body that nests statements more than 256 levels or expressions more

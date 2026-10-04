@@ -1861,6 +1861,124 @@ else {
 };
 
 -- ============================================================================
+-- Example 295: 31. if and guard Bindings
+-- Demonstrates: A guard may also test a plain condition. The else block runs when the condition is false.
+
+guard (count > 0) else {
+    return 0;
+}
+
+Use(count);
+
+-- ============================================================================
+-- Example 296: 31. if and guard Bindings
+-- Demonstrates: The else block of a guard must leave the enclosing scope on every path, so the statements
+--   after the guard run only when the condition held.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+guard (ready) else {
+    Log("not ready"); -- INVALID: the block can complete normally
+}
+
+guard (ready) else {
+    if (strict) {
+        return;
+    }
+    -- INVALID: when strict is false the block completes normally
+}
+
+-- ============================================================================
+-- Example 297: 31. if and guard Bindings
+-- Demonstrates: Whether the else block leaves is decided by its control flow, not by the spelling of its last
+--   statement. return leaves the method; break and continue leave or continue the enclosing loop and are valid
+--   only where they have one; a loop that cannot end, a match all of whose arms leave and one of which always
+--   matches, and a call whose result is never also do not complete.
+-- Context note: Fail returns never.
+
+while (HasNext()) {
+    auto item = Next();
+
+    guard (item.valid) else {
+        continue;
+    }
+
+    guard (item.size < limit) else {
+        break;
+    }
+
+    guard (item.kind \= 0) else {
+        if (strict) {
+            return;
+        }
+        else {
+            Fail("unknown kind");
+        }
+    }
+
+    Use(item);
+}
+
+-- ============================================================================
+-- Example 298: 31.1 if Expressions
+-- Demonstrates: A block of an if expression may leave instead of producing a value. return leaves the
+--   enclosing method and break and continue target the enclosing loop, under the rules those statements have
+--   anywhere else. A block that leaves produces no value; the expression has the type of the block that
+--   completes.
+
+auto size = if (item.valid) {
+    item.size
+}
+else {
+    return 0;
+};
+
+while (HasNext()) {
+    total += if (Next().skip) {
+        continue;
+    }
+    else {
+        1
+    };
+}
+
+-- ============================================================================
+-- Example 299: 31.1 if Expressions
+-- Demonstrates: A block that can complete normally must end with its value.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+auto value = if (condition) {
+    Log("first"); -- INVALID: the block completes without a value
+}
+else {
+    2
+};
+
+auto other = if (condition) {
+    break; -- INVALID outside a loop: break needs a loop to leave
+}
+else {
+    2
+};
+
+-- ============================================================================
+-- Example 300: 31.1 if Expressions
+-- Demonstrates: Where a block ends with an expression that is its value, an if with an else or a match in
+--   that position is that value; no parentheses are needed. This applies to blocks used as values. It does
+--   not give a method body an implicit return: the return rules of methods are unchanged.
+
+auto sign = if (value < 0) {
+    -1
+}
+else {
+    if (value > 0) {
+        1
+    }
+    else {
+        0
+    }
+};
+
+-- ============================================================================
 -- Example 194: 32. match
 -- Demonstrates: Single-target form:
 -- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
@@ -1892,6 +2010,165 @@ match (a), (b) {
     (Type x), (_) -> {
         ...
     },
+}
+
+-- ============================================================================
+-- Example 301: 32. match
+-- Demonstrates: When no arm of a match statement matches, execution continues with the statement after it,
+--   like an if without an else.
+
+match (number) {
+    1 -> {
+        HandleOne();
+    },
+}
+
+Continue(); -- reached for every number, also when it is not 1
+
+-- ============================================================================
+-- Example 302: 32. match
+-- Demonstrates: A match used as an expression must be exhaustive: some arm must match whatever the targets
+--   are.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+auto text = match (number) { -- INVALID: no arm for other numbers
+    1 -> "one",
+    2 -> "two",
+};
+
+-- ============================================================================
+-- Example 303: 32. match
+-- Demonstrates: Exhaustiveness is established by a wildcard, by a type pattern that matches every possible
+--   value of its target, or by arms that cover both values of a bool target. An arm with a guard never
+--   counts, because its guard may be false.
+-- Expected result: the last match is rejected; the INVALID marker is normative.
+
+auto a = match (number) {
+    1 -> 10,
+    _ -> 0,
+};
+
+auto b = match (number) {
+    int n -> n * 2, -- every value of number is an int
+};
+
+auto c = match (flag) {
+    true -> 1,
+    false -> 0,
+};
+
+auto d = match (number) { -- INVALID: the only catch-all arm has a guard
+    _ if enabled -> 1,
+};
+
+-- ============================================================================
+-- Example 304: 32. match
+-- Demonstrates: A match over an enum is exhaustive when its arms cover every member; no wildcard is needed and
+--   the enum does not have to be marked [Exhaustive]. When the target may be null, null must be covered as
+--   well.
+-- Context note: Status has exactly the members NONE and READY.
+-- Expected result: the last match is rejected; the INVALID marker is normative.
+
+auto a = match (status) {
+    .NONE -> 0,
+    .READY -> 1,
+};
+
+auto b = match (maybeStatus) {
+    .NONE -> 0,
+    .READY -> 1,
+    null -> 2,
+};
+
+auto c = match (maybeStatus) { -- INVALID: null is not covered
+    .NONE -> 0,
+    .READY -> 1,
+};
+
+-- ============================================================================
+-- Example 305: 32. match
+-- Demonstrates: The comma after an arm is optional. An expression body is read like every expression, so a
+--   parenthesized pattern that follows it without a comma is read as the argument list of a call of the body.
+--   The compiler reports that reading and asks for the comma; it does not require commas elsewhere.
+-- Expected result: the second match is rejected; the INVALID marker is normative.
+
+auto a = match (number) {
+    0 -> 10
+    1 -> 20
+    _ -> 30
+};
+
+auto b = match (number) {
+    0 -> Twice
+    (1) -> 20 -- INVALID: read as Twice(1) -> 20; write `0 -> Twice,`
+    _ -> 30
+};
+
+-- ============================================================================
+-- Example 306: 32. match
+-- Demonstrates: The block of an arm of a match expression may leave instead of producing a value, like a
+--   block of an if expression. The match has the type of the arms that complete.
+
+auto size = match (kind) {
+    0 -> {
+        return 0;
+    },
+    int other -> other * 2,
+};
+
+-- ============================================================================
+-- Example 307: 32.1 Pattern Forms
+-- Demonstrates: A numeric constant pattern may be negative: a minus sign directly before a numeric literal is
+--   part of the constant. The constant must be a value of the type of its target, so the most negative value
+--   of a signed type is a valid pattern.
+-- Context note: small is a byte and code is a ubyte.
+
+match (number) {
+    -1 -> { ... },
+    0 -> { ... },
+}
+
+match (small) {
+    -128 -> { ... }, -- the least byte
+    127 -> { ... },
+}
+
+-- ============================================================================
+-- Example 308: 32.1 Pattern Forms
+-- Demonstrates: The minus sign belongs to a numeric literal only. It is not an operator, and no other
+--   expression is a pattern.
+-- Context note: small is a byte and code is a ubyte.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+match (number) {
+    -limit -> { ... }, -- INVALID: a name is not a numeric literal
+    1 + 1 -> { ... },  -- INVALID: an expression is not a pattern
+    -(1) -> { ... },   -- INVALID
+}
+
+match (small) {
+    -129 -> { ... }, -- INVALID: not a value of byte
+    128 -> { ... },  -- INVALID: not a value of byte
+}
+
+match (code) {
+    -1 -> { ... }, -- INVALID: not a value of ubyte
+}
+
+-- ============================================================================
+-- Example 309: 32.1 Pattern Forms
+-- Demonstrates: A type pattern applies no implicit numeric conversion: over a scalar target it matches only
+--   the type of the target itself. This does not restrict type patterns over reference types, which match
+--   the dynamic type of the target and its subtypes.
+-- Context note: number is an int.
+-- Expected result: the second match is rejected; the INVALID marker is normative.
+
+match (number) {
+    int n -> { Use(n); },
+}
+
+match (number) {
+    long n -> { Use(n); }, -- INVALID: an int is not matched as a long
 }
 
 -- ============================================================================

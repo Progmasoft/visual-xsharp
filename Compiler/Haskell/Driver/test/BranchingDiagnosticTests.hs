@@ -113,12 +113,27 @@ positionTests =
         , reportedAt "VXT0046" (3, 19) ["int r = if (flag) { } else { 2 };", "return r;"]
         )
     ,
-        ( "a return in a value block is reported at the block"
-        , reportedAt "VXT0047" (3, 19) ["int r = if (flag) { return 1; 2 } else { 3 };", "return r;"]
+        ( "an if expression without a value is reported at the expression"
+        , reportedAt "VXT0062" (3, 9) ["int r = if (flag) { return 1; } else { return 2; };", "return r;"]
         )
     ,
-        ( "a break out of a value block is reported at the break"
-        , reportedAt "VXT0059" (4, 21) ["while (true) {", "int r = if (flag) { break; 1 } else { 2 };", "}", "return 0;"]
+        ( "a return of the wrong type in a value block is reported at the return"
+        , reportedAt "VXT0005" (3, 21) ["int r = if (flag) { return true; } else { 3 };", "return r;"]
+        )
+    ,
+        ( "a break without a loop in a value block is reported at the break"
+        , reportedAt "VXT0025" (3, 21) ["int r = if (flag) { break; } else { 2 };", "return r;"]
+        )
+    ,
+        ( "a return in a value block inside a loop expression is reported at the block"
+        , reportedAt
+            "VXT0047"
+            (4, 19)
+            ["int r = while (true) {", "int q = if (flag) { return 1; } else { 2 };", "break q;", "};", "return r;"]
+        )
+    ,
+        ( "a break in a loop condition is reported at the break"
+        , reportedAt "VXT0059" (4, 20) ["while (flag) {", "while (if (flag) { break; } else { true }) { }", "}", "return 0;"]
         )
     ,
         ( "a guard block that does not leave is reported at the guard"

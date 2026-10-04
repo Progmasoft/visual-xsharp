@@ -10,20 +10,21 @@ deeply enough would end the compiler with a stack overflow instead of a
 diagnostic. This module rejects such a program first, at the place where the
 nesting becomes too deep.
 
-The limits are stated against the stack the compiler runs on, which it
-chooses itself (@Visual/XSharp/Support/CompilerStack.hpp@, 256 MiB) so that
-they mean the same on every platform. Measured on that stack, the native
-stages use about 12 KiB per statement level and 15 KiB per expression level
-and pass 4000 levels of either. The limits are far below that because
-sanitizer builds use about three times the stack per level, because a
-lowering may add a level of its own around a source level, and because the
-native Core reader bounds both depths at 4096. Both limits are also far above
-what hand-written code reaches.
+The limits bound real nesting only. Three shapes nest in the tree as deep as
+they are long and are walked in a loop by every stage, so they do not count:
+an @else if@ chain, whose links are all at the level of the first @if@; the
+arms of a @match@, which lower to such a chain, so that the body of an arm
+is one level below its match however many arms the match has; and a chain of
+a binary operator, whose left operand is at the level of the operator.
 
-An @else if@ chain is not nesting: every stage walks it in a loop, so its
-links all count as the level of the first @if@. The arms of a @match@ are
-not nesting either: they lower to such a chain, so the body of an arm is one
-level below its match however many arms the match has.
+What a level costs is measured, not estimated: the stack every native stage
+needs per level of nesting, in an ordinary and in a sanitizer build, is
+recorded in @Benchmarks/2026-10-04-Nesting-And-Chains.md@ and can be measured
+again with @//Compiler/Support/Tests:stack_probe@. At both limits the whole
+native pipeline needs a few megabytes of the stack the compiler runs on
+(@Visual/XSharp/Support/CompilerStack.hpp@). The native Core reader and
+writer bound both depths at 4096 for Core that does not come from this
+frontend.
 -}
 module Visual.XSharp.NestingLimits
     ( maximumStatementNesting
@@ -149,7 +150,10 @@ expressionExcess level depth expression
         MemberAccessExpression _ receiver _ _ -> operand receiver
         CallExpression _ callee arguments _ -> concatMap operand (callee : arguments)
         UnaryExpression _ _ value _ -> operand value
-        BinaryExpression _ _ left right _ -> operand left ++ operand right
+        -- The left operand of a binary operator is at the level of the
+        -- operator: `a + b + c` nests in it as deep as the chain is long,
+        -- and every stage walks that chain in a loop.
+        BinaryExpression _ _ left right _ -> expressionExcess level depth left ++ operand right
         IsPatternExpression _ subject _ _ -> operand subject
         ConditionalExpression _ condition first second _ -> concatMap operand [condition, first, second]
         CoalesceExpression _ left fallback _ -> operand left ++ operand fallback

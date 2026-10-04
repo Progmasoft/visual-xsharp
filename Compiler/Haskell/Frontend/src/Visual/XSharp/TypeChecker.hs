@@ -16,6 +16,7 @@ import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
 import Visual.XSharp.TemplateValue
 import Visual.XSharp.TypeChecker.Branching
+import Visual.XSharp.TypeChecker.Loops
 
 -- | A resolved-tree checker that produces a typed tree only when checking succeeds.
 newtype TypeChecker = TypeChecker {checkResolvedAST :: ResolvedAST -> Either [Diagnostic] TypedAST}
@@ -52,10 +53,18 @@ data TemplateContext = TemplateContext
     , templateValueNames :: [(Identifier, ResolvedName)]
     , templateCatalog :: TypeCatalog
     , templateCurrentType :: Maybe SymbolId
+    , contextReturn :: Type
+    {- ^ The type a @return@ must carry at the place being checked, or the
+    error type where it is not declared. Statements know it already; it is
+    kept here for the statements of a block used as a value, which are
+    reached through an expression.
+    -}
+    , contextLoops :: LoopContext
+    -- ^ The loops around the place being checked, for the same reason.
     }
 
 emptyTemplateContext :: TypeCatalog -> Maybe SymbolId -> TemplateContext
-emptyTemplateContext catalog owner = TemplateContext [] [] catalog owner
+emptyTemplateContext catalog owner = TemplateContext [] [] catalog owner ErrorType outsideLoops
 
 {- | Type-check every top-level declaration and collect independent diagnostics.
 No partially typed AST escapes when any declaration has an error.
@@ -153,6 +162,8 @@ templateContext catalog owner parameters =
         ]
         catalog
         owner
+        ErrorType
+        outsideLoops
 
 templateParameterAsArgument :: TemplateParameter ResolvedName annotation -> TemplateArgument
 templateParameterAsArgument parameter = case templateParameterKind parameter of
@@ -372,39 +383,13 @@ compatible ErrorType _ = True
 compatible _ ErrorType = True
 compatible left right = left == right
 
--- | How a loop is used, which decides what its @break@ statements carry.
-data LoopKind
-    = -- | A loop statement: @break@ carries no value.
-      StatementLoop
-    | {- | A loop used as an expression: every @break@ carries the loop's
-      value, typed in the context that receives it.
-      -}
-      ExpressionLoop (Maybe Type)
-    | {- | Not a loop: the edge of a block used as a value. A @break@ or
-      @continue@ inside it would have to leave the block before its value
-      exists, so neither may cross this edge.
-      -}
-      ValueBlockEdge
+-- | The context inside a block used as a value at the given place.
+insideValueBlock :: TemplateContext -> LoopContext
+insideValueBlock context = LoopContext StatementLoop (ValueBlockEdge : enclosingLoops (contextLoops context))
 
-{- | The loops around a statement, innermost first, and the kind of the loop
-statement that is about to be checked. A loop expression checks its loop
-statement with the pending kind set; every loop moves the pending kind onto
-the stack for its own body.
--}
-data LoopContext = LoopContext
-    { pendingLoop :: LoopKind
-    , enclosingLoops :: [LoopKind]
-    }
-
-outsideLoops :: LoopContext
-outsideLoops = LoopContext StatementLoop []
-
-enterLoop :: LoopContext -> LoopContext
-enterLoop loops = LoopContext StatementLoop (pendingLoop loops : enclosingLoops loops)
-
--- | The context inside a block used as a value, whatever surrounds it.
-insideValueBlock :: LoopContext
-insideValueBlock = LoopContext StatementLoop [ValueBlockEdge]
+-- | The context of the condition or the update clause of a loop.
+inLoopHeader :: TemplateContext -> TemplateContext
+inLoopHeader context = context {contextLoops = loopHeader}
 
 {- | The checker for expressions and statements as the branching rules of
 "Visual.XSharp.TypeChecker.Branching" receive it: applied to the template
@@ -420,7 +405,8 @@ branchChecker context expected =
         , branchType = \syntax -> (syntaxTypeIn context syntax, typeSyntaxProblemsIn context syntax)
         , branchLiteral = literalTypeInContext
         , branchHasEffect = effectCapable
-        , branchValueLoops = insideValueBlock
+        , branchValueLoops = insideValueBlock context
+        , branchReturnType = expected
         }
 
 -- | The context of a statement that belongs to a loop header, not its body.
@@ -450,7 +436,18 @@ checkStatementWith ::
     LoopContext ->
     Statement ResolvedName () ->
     (Statement ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
-checkStatementWith context environment expected loops statement = case statement of
+checkStatementWith outer environment expected loops =
+    checkStatementIn (outer {contextReturn = expected, contextLoops = loops}) environment expected loops
+
+-- The context already names the return type and the loops of the statement.
+checkStatementIn ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Type ->
+    LoopContext ->
+    Statement ResolvedName () ->
+    (Statement ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
+checkStatementIn context environment expected loops statement = case statement of
     BindingStatement spanValue kind syntax name _ value ->
         let declared = syntaxTypeIn context syntax
             target = if declared == ErrorType then Nothing else Just declared
@@ -497,7 +494,7 @@ checkStatementWith context environment expected loops statement = case statement
             , conditionProblems ++ conditionMismatch ++ trueProblems ++ falseProblems
             )
     WhileStatement spanValue condition body ->
-        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith (inLoopHeader context) environment condition
             conditionProblems' =
                 if booleanContextType conditionType
                     then []
@@ -510,7 +507,7 @@ checkStatementWith context environment expected loops statement = case statement
             )
     DoWhileStatement spanValue body condition ->
         let (typedBody, _, returns, bodyProblems) = checkBlockWith context environment expected (enterLoop loops) body
-            (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+            (typedCondition, conditionType, conditionProblems) = checkExpressionWith (inLoopHeader context) environment condition
             conditionProblems' =
                 if booleanContextType conditionType
                     then []
@@ -529,14 +526,14 @@ checkStatementWith context environment expected loops statement = case statement
             (typedCondition, conditionType, conditionProblems) = case condition of
                 Nothing -> (Nothing, boolType, [])
                 Just value ->
-                    let (typed, valueType, problems) = checkExpressionWith context loopEnvironment value
+                    let (typed, valueType, problems) = checkExpressionWith (inLoopHeader context) loopEnvironment value
                      in (Just typed, valueType, problems)
             conditionProblems' =
                 if booleanContextType conditionType
                     then []
                     else [problem spanValue "VXT0020" "for condition must be bool or numeric"]
             (typedBody, _, returns, bodyProblems) = checkBlockWith context loopEnvironment expected (enterLoop loops) body
-            (typedUpdates, updateProblems) = checkStatementsWith context loopEnvironment expected (enterLoop loops) updates
+            (typedUpdates, updateProblems) = checkStatementsWith context loopEnvironment expected loopHeader updates
          in ( ForStatement spanValue typedInitializer typedCondition typedUpdates typedBody
             , environment
             , returns
@@ -600,28 +597,41 @@ checkStatementWith context environment expected loops statement = case statement
         -- A break leaves the innermost loop. Whether it may, or must, carry
         -- a value is decided by how that loop is used; the value takes its
         -- context from the place that receives the loop's value.
-        let innermost = case enclosingLoops loops of
-                kind : _ -> Just kind
-                [] -> Nothing
+        let (crossesValueBlock, innermost) = transferTarget loops
             valueExpected = case innermost of
                 Just (ExpressionLoop target) -> target
                 _ -> Nothing
             (typedValue, _, valueProblems) = checkOptionalExpectedWith context environment valueExpected value
             placementProblems = case (innermost, value) of
                 (Nothing, _) -> [problem spanValue "VXT0025" "break is only valid inside a loop"]
+                (Just LoopHeaderEdge, _) ->
+                    [ problem
+                        spanValue
+                        "VXT0059"
+                        "break in the condition or the update clause of a loop is not implemented"
+                    ]
                 (Just StatementLoop, Just _) ->
                     [problem spanValue "VXT0026" "a value-carrying break is only valid in a loop used as an expression"]
                 (Just (ExpressionLoop _), Nothing) ->
                     [problem spanValue "VXT0040" "a loop used as an expression must be left by a break that carries a value"]
-                (Just ValueBlockEdge, _) ->
-                    [problem spanValue "VXT0059" "leaving a block that is used as a value with break is not implemented"]
+                (Just (ExpressionLoop _), Just _)
+                    | crossesValueBlock ->
+                        [ problem
+                            spanValue
+                            "VXT0059"
+                            "a value-carrying break out of a block used as a value is not implemented"
+                        ]
                 _ -> []
          in (BreakStatement spanValue typedValue, environment, [], placementProblems ++ valueProblems)
     ContinueStatement spanValue ->
-        let problems = case enclosingLoops loops of
-                [] -> [problem spanValue "VXT0027" "continue is only valid inside a loop"]
-                ValueBlockEdge : _ ->
-                    [problem spanValue "VXT0059" "leaving a block that is used as a value with continue is not implemented"]
+        let problems = case snd (transferTarget loops) of
+                Nothing -> [problem spanValue "VXT0027" "continue is only valid inside a loop"]
+                Just LoopHeaderEdge ->
+                    [ problem
+                        spanValue
+                        "VXT0059"
+                        "continue in the condition or the update clause of a loop is not implemented"
+                    ]
                 _ -> []
          in (ContinueStatement spanValue, environment, [], problems)
     GuardStatement spanValue condition block ->
@@ -821,8 +831,14 @@ checkExpressionExpectedWith context environment expected expression = case expre
                 ]
             ((typedFirst, firstType, firstProblems), (typedSecond, secondType, secondProblems)) =
                 checkOperandPair context environment expected first second
-            (resultType, resultProblems) =
-                selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
+            -- A block that leaves instead of completing has no value, so
+            -- the other block alone gives the expression its type.
+            (resultType, resultProblems) = case (valueBlockLeaves typedFirst, valueBlockLeaves typedSecond) of
+                (True, True) -> (ErrorType, [noValueProblem spanValue])
+                (True, False) -> (secondType, [])
+                (False, True) -> (firstType, [])
+                (False, False) ->
+                    selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
          in ( ConditionalExpression spanValue typedCondition typedFirst typedSecond resultType
             , resultType
             , conditionProblems ++ conditionMismatch ++ firstProblems ++ secondProblems ++ resultProblems
@@ -896,6 +912,8 @@ checkExpressionExpectedWith context environment expected expression = case expre
     -- is the constant true, or absent in a `for`, and every break that
     -- leaves it carries a value.
     LoopExpression spanValue loop _ ->
+        -- A return inside the loop is reported below; the error type keeps
+        -- it from being reported as a mismatch as well.
         let loops = LoopContext (ExpressionLoop expected) []
             (typedLoop, _, _, loopProblems) = checkStatementWith context environment ErrorType loops loop
             (resultType, resultProblems) = loopValueType spanValue (loopBreakTypes typedLoop)
@@ -915,10 +933,10 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , loopProblems ++ endProblems ++ returnProblems ++ resultProblems
             )
     BlockExpression spanValue block _ ->
-        checkValueBlock (branchChecker context ErrorType) environment expected spanValue block
+        checkValueBlock (branchChecker context (contextReturn context)) environment expected spanValue block
     MatchExpression spanValue subjects arms _ ->
         let (typedMatch, resultType, _, problems) =
-                checkMatch (branchChecker context ErrorType) MatchValue environment expected spanValue subjects arms
+                checkMatch (branchChecker context (contextReturn context)) MatchValue environment expected spanValue subjects arms
          in (typedMatch, resultType, problems)
     CallableExpression spanValue explicit captures parameters body _ ->
         let checkedCaptures = checkCapturesWith context environment captures
@@ -1374,12 +1392,15 @@ checkCallableBodyWith ::
     TypeEnvironment ->
     CallableBody ResolvedName () ->
     (CallableBody ResolvedName Type, Type, [Diagnostic])
-checkCallableBodyWith context environment body = case body of
+checkCallableBodyWith outer environment body = case body of
     CallableExpressionBody expression ->
-        let (typed, valueType, problems) = checkExpressionWith context environment expression
+        -- A callable is a function of its own: nothing in its body returns
+        -- from, or leaves a loop of, the function that creates it.
+        let context = outer {contextReturn = ErrorType, contextLoops = outsideLoops}
+            (typed, valueType, problems) = checkExpressionWith context environment expression
          in (CallableExpressionBody typed, valueType, problems)
     CallableBlockBody block ->
-        let (typed, _, returns, problems) = checkBlockWith context environment ErrorType outsideLoops block
+        let (typed, _, returns, problems) = checkBlockWith outer environment ErrorType outsideLoops block
             finalType = maybe (inferReturn ErrorType returns) id (finalExpressionType typed)
          in (CallableBlockBody typed, finalType, problems)
 

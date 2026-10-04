@@ -17,6 +17,9 @@ module Visual.XSharp.TypeChecker.Branching
     , checkMatch
     , guardBlockProblems
     , matchArmsAlwaysAccept
+    , blockCannotComplete
+    , valueBlockLeaves
+    , noValueProblem
     ) where
 
 import Visual.XSharp.AST
@@ -49,8 +52,12 @@ data BranchChecker loops = BranchChecker
     , branchHasEffect :: Expression ResolvedName () -> Bool
     -- ^ Whether evaluating an expression can do more than produce a value.
     , branchValueLoops :: loops
-    {- ^ The loop context inside a block used as a value: @break@ and
-    @continue@ cannot leave such a block.
+    {- ^ The loop context inside a block used as a value: the loops around
+    the expression the block belongs to, seen across the edge of the block.
+    -}
+    , branchReturnType :: Type
+    {- ^ The type a @return@ carries here, or the error type when the
+    enclosing function does not declare one.
     -}
     }
 
@@ -71,9 +78,18 @@ problem spanValue code message = Diagnostic TypeCheckerStage Error code (Just sp
 {- | Check a block used as a value.
 
 Its value is its final expression, written without a semicolon, and that
-expression is typed in the context that receives the value. A @return@ would
-leave the function from the middle of an expression; that is not supported,
-and neither is leaving the block with @break@ or @continue@.
+expression is typed in the context that receives the value. A block may
+instead leave: with @return@ it leaves the enclosing function, with @break@
+or @continue@ the enclosing loop, under the rules those statements have
+anywhere else. A block that cannot complete normally produces no value and
+needs no final expression; it is typed @void@, and the form that holds it
+takes its type from the blocks that do complete. A block that can complete
+normally must end with its value.
+
+A @return@ in such a block is checked against the declared return type of
+the enclosing function. Where that type is inferred from the returns of the
+body, a return reached through an expression is not collected yet and is
+rejected.
 -}
 checkValueBlock ::
     BranchChecker loops ->
@@ -89,17 +105,28 @@ checkValueBlock checker environment expected spanValue (Block statements) =
         (typedLeading, inner, returns, leadingProblems) =
             branchStatements checker environment (branchValueLoops checker) leading
         returnProblems =
-            [ problem spanValue "VXT0047" "return inside a block used as a value is not implemented"
+            [ problem
+                spanValue
+                "VXT0047"
+                "return inside a block used as a value requires a declared return type and is not implemented inside a loop used as an expression"
             | not (null returns)
+            , branchReturnType checker == ErrorType
             ]
      in case final of
-            Nothing ->
-                ( BlockExpression spanValue (Block typedLeading) ErrorType
-                , ErrorType
-                , leadingProblems
-                    ++ returnProblems
-                    ++ [problem spanValue "VXT0046" "a block used as a value must end with an expression that has no semicolon"]
-                )
+            Nothing
+                | blockCannotComplete (Block typedLeading) ->
+                    (BlockExpression spanValue (Block typedLeading) voidType, voidType, leadingProblems ++ returnProblems)
+                | otherwise ->
+                    ( BlockExpression spanValue (Block typedLeading) ErrorType
+                    , ErrorType
+                    , leadingProblems
+                        ++ returnProblems
+                        ++ [ problem
+                                spanValue
+                                "VXT0046"
+                                "a block used as a value must end with an expression that has no semicolon, or leave on every path"
+                           ]
+                    )
             Just (finalSpan, value) ->
                 let (typedValue, valueType, valueProblems) = branchExpression checker inner expected value
                  in ( BlockExpression
@@ -141,9 +168,14 @@ checkMatch checker use environment expected spanValue subjects arms =
                    , not (acceptsBooleanContext valueType)
                    ]
         (typedArms, armTypes, returns, armProblems) = checkArms subjectTypes expected arms
+        -- An arm whose block leaves produces no value; the arms that
+        -- complete give the match its type.
+        valueTypes = [armType | (arm, armType) <- zip typedArms armTypes, not (valueBlockLeaves (matchArmBody arm))]
         (resultType, resultProblems) = case use of
             MatchStatement _ -> (voidType, [])
-            MatchValue -> matchValueType spanValue armTypes
+            MatchValue
+                | null valueTypes && not (null typedArms) -> (ErrorType, [noValueProblem spanValue])
+                | otherwise -> matchValueType spanValue valueTypes
         coverageProblems = case use of
             MatchStatement _ -> []
             MatchValue ->
@@ -378,28 +410,131 @@ isUnguarded arm = case matchArmGuard arm of
 {- | Problems of the else block of a @guard@.
 
 The statements after a guard rely on its condition, so the block must not
-complete normally: its last statement returns, leaves a loop, continues one,
-or is an @if@ whose two branches both do, or a nested block that does.
+complete normally on any path. That is decided from its control flow by
+'blockCannotComplete', not from the spelling of its last statement.
 -}
-guardBlockProblems :: SourceSpan -> Block name annotation -> [Diagnostic]
+guardBlockProblems :: SourceSpan -> Block name Type -> [Diagnostic]
 guardBlockProblems spanValue block =
     [ problem
         spanValue
         "VXT0061"
-        "the else block of a guard must end by leaving the enclosing scope with return, break, or continue"
-    | not (blockLeaves block)
+        "the else block of a guard can complete normally; every path through it must leave the enclosing scope"
+    | not (blockCannotComplete block)
     ]
+
+-- | The diagnostic for an @if@ or a @match@ expression none of whose branches yields a value.
+noValueProblem :: SourceSpan -> Diagnostic
+noValueProblem spanValue =
+    problem
+        spanValue
+        "VXT0062"
+        "every branch of this expression leaves it, so it has no value; write it as a statement"
+
+{- | Whether a block used as a value leaves instead of yielding a value: it
+has no final expression and cannot complete normally.
+-}
+valueBlockLeaves :: Expression name Type -> Bool
+valueBlockLeaves expression = case expression of
+    BlockExpression _ block@(Block statements) _ -> not (endsWithValue statements) && blockCannotComplete block
+    _ -> False
     where
-        blockLeaves (Block statements) = case reverse statements of
-            final : _ -> statementLeaves final
-            [] -> False
-        statementLeaves statement = case statement of
-            ReturnStatement {} -> True
-            BreakStatement {} -> True
-            ContinueStatement {} -> True
-            IfStatement _ _ whenTrue (Just whenFalse) -> blockLeaves whenTrue && blockLeaves whenFalse
-            BlockStatement _ nested -> blockLeaves nested
+        endsWithValue statements = case reverse statements of
+            ExpressionStatement _ _ False : _ -> True
             _ -> False
+
+{- | Whether control can never reach the end of a block.
+
+A statement cannot complete normally when it is a @return@, a @break@ or a
+@continue@; an @if@ with an @else@ whose two blocks both cannot; a nested
+block that cannot; a loop whose condition is the constant true, or absent in
+a @for@, and that no @break@ leaves; or a statement @match@ some arm of which
+always accepts and all of whose arms are blocks that cannot. A block cannot
+complete when one of its statements cannot, because the statements after
+that one are never reached.
+
+The answer errs on the side of completing: a call is assumed to return, and
+a condition is assumed to be able to take either value unless it is the
+literal @true@. Whether a @break@ or @continue@ has a loop to leave is a
+separate rule, reported where the statement stands.
+-}
+blockCannotComplete :: Block name Type -> Bool
+blockCannotComplete (Block statements) = any statementCannotComplete statements
+
+statementCannotComplete :: Statement name Type -> Bool
+statementCannotComplete statement = case statement of
+    ReturnStatement {} -> True
+    BreakStatement {} -> True
+    ContinueStatement {} -> True
+    IfStatement _ _ whenTrue (Just whenFalse) -> blockCannotComplete whenTrue && blockCannotComplete whenFalse
+    BlockStatement _ nested -> blockCannotComplete nested
+    WhileStatement _ condition body -> isConstantTrue condition && not (blockBreaks body)
+    DoWhileStatement _ body condition -> isConstantTrue condition && not (blockBreaks body)
+    ForStatement _ _ condition _ body -> maybe True isConstantTrue condition && not (blockBreaks body)
+    ExpressionStatement _ (MatchExpression _ _ arms annotation) _
+        | annotation == voidType ->
+            matchArmsAlwaysAccept (subjectTypesOf arms) arms && all (armCannotComplete . matchArmBody) arms
+    _ -> False
+    where
+        isConstantTrue expression = case expression of
+            LiteralExpression _ (BooleanLiteral True) _ -> True
+            _ -> False
+        armCannotComplete body = case body of
+            BlockExpression _ block _ -> blockCannotComplete block
+            _ -> False
+        -- Every typed pattern carries the type of the value it accepts.
+        subjectTypesOf arms = case arms of
+            first : _ -> map matchPatternAnnotation (matchArmPatterns first)
+            [] -> []
+
+{- | Whether a @break@ in the block leaves the loop whose body the block is.
+
+Loops nested in the block keep their own breaks. A break in a block used as
+a value inside an expression leaves the same loop as one in a statement, so
+expressions are searched as well; closures and loops used as expressions
+are not, because a break in them cannot leave this loop.
+-}
+blockBreaks :: Block name annotation -> Bool
+blockBreaks (Block statements) = any statementBreaks statements
+
+statementBreaks :: Statement name annotation -> Bool
+statementBreaks statement = case statement of
+    BreakStatement {} -> True
+    BindingStatement _ _ _ _ _ value -> expressionBreaks value
+    AssignmentStatement _ _ _ value -> expressionBreaks value
+    ReturnStatement _ value -> maybe False expressionBreaks value
+    IfStatement _ condition whenTrue whenFalse ->
+        expressionBreaks condition || blockBreaks whenTrue || maybe False blockBreaks whenFalse
+    WhileStatement {} -> False
+    DoWhileStatement {} -> False
+    ForStatement _ initializer _ _ _ -> maybe False statementBreaks initializer
+    ForEachStatement _ _ _ _ _ source _ -> expressionBreaks source
+    IncrementStatement {} -> False
+    CompoundAssignmentStatement _ _ _ _ value -> expressionBreaks value
+    DiscardStatement _ value -> expressionBreaks value
+    ContinueStatement {} -> False
+    GuardStatement _ condition block -> expressionBreaks condition || blockBreaks block
+    BlockStatement _ block -> blockBreaks block
+    ExpressionStatement _ value _ -> expressionBreaks value
+
+expressionBreaks :: Expression name annotation -> Bool
+expressionBreaks expression = case expression of
+    NameExpression {} -> False
+    LiteralExpression {} -> False
+    MemberAccessExpression _ receiver _ _ -> expressionBreaks receiver
+    CallExpression _ callee arguments _ -> any expressionBreaks (callee : arguments)
+    UnaryExpression _ _ value _ -> expressionBreaks value
+    BinaryExpression _ _ left right _ -> expressionBreaks left || expressionBreaks right
+    IsPatternExpression _ subject _ _ -> expressionBreaks subject
+    ConditionalExpression _ condition first second _ -> any expressionBreaks [condition, first, second]
+    CoalesceExpression _ left fallback _ -> expressionBreaks left || expressionBreaks fallback
+    AssignmentExpression _ _ _ value _ -> expressionBreaks value
+    IncrementExpression {} -> False
+    LoopExpression {} -> False
+    BlockExpression _ block _ -> blockBreaks block
+    MatchExpression _ subjects arms _ ->
+        any expressionBreaks subjects
+            || any (\arm -> maybe False expressionBreaks (matchArmGuard arm) || expressionBreaks (matchArmBody arm)) arms
+    CallableExpression {} -> False
 
 expressionSpanOf :: Expression name annotation -> SourceSpan
 expressionSpanOf expression = case expression of

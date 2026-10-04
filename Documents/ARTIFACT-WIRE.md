@@ -228,8 +228,11 @@ payload follows in the order shown.
 
 Core wire v8 added tag 6. Its three children have fixed positions, so the
 record carries no count: a shorter payload is a truncation, never a smaller
-conditional. Each child counts one level against the expression depth limit,
-exactly like a primitive operand. The reader does not check that the arms
+conditional. Each child counts one level against the expression depth limit.
+Among the operands of a primitive only those after the first do: the first
+operand is at the level of the primitive, so a chain of operators, which
+nests in that operand as deep as it is long, is one level, and the readers
+and the writers walk it in a loop. The reader does not check that the arms
 agree with the result type; that is the Core verifier's rule and runs on every
 decoded module.
 

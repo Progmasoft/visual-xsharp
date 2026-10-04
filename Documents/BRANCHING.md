@@ -45,7 +45,7 @@ int kind = match (code), (strict) {
 
 | Pattern | Accepts | Notes |
 | --- | --- | --- |
-| a literal, `1`, `true`, `'a'` | the value equal to it | typed from its subject; has no sign |
+| a literal, `1`, `-1`, `true`, `'a'` | the value equal to it | typed from its subject and checked against its range; a `-` may precede a numeric literal only |
 | `_` | every value | |
 | `Type name` | every value of the subject's type | binds the value of the subject as a local of its arm |
 | `Type _` | every value of the subject's type | binds nothing |
@@ -106,10 +106,30 @@ int sign = if (value < 0) { 0 - 1 } else { if (value > 0) { 1 } else { 0 } };
 
 The blocks of an `if` expression and the block bodies of the arms of a match
 expression are blocks used as values. Statements before the final expression
-run in order, and names declared in the block end with it. Leaving such a
-block with `return`, `break` or `continue` is not implemented and is rejected
-(`VXT0047`, `VXT0059`); a loop inside the block may still be left with
-`break`.
+run in order, and names declared in the block end with it.
+
+A block may leave instead of yielding a value:
+
+```vxs
+int size = if (count > 0) { count * 2 } else { return 0; };
+
+while (index < limit) {
+    index += 1;
+    total += match (index) { 3 -> { continue; }, 7 -> { break; }, int n -> n };
+}
+```
+
+`return` leaves the enclosing method and carries its return type. `break` and
+`continue` target the loop around the expression and need one. A block that
+cannot complete normally has no final expression and no value; the expression
+has the type of the blocks that complete, and at least one must. Such a block
+is lowered as its statements alone: nothing is stored for it.
+
+Three cases are recognized and not implemented, each with its own
+diagnostic: a `break` or `continue` in a block used as a value in the
+condition or the update clause of a loop, a `break` that carries a value out
+of such a block, and a `return` in such a block where the enclosing return
+type is inferred or inside a loop used as an expression.
 
 ## Guard
 
@@ -119,10 +139,13 @@ guard (count > 0) else {
 }
 ```
 
-The block runs when the condition is false. It must not complete normally:
-its last statement is `return`, `break` or `continue`, an `if` whose two
-branches both end that way, or a nested block that does. The statements after
-the guard therefore run only when the condition held.
+The block runs when the condition is false. It must not complete normally on
+any path, so the statements after the guard run only when the condition held.
+That is decided from the control flow of the block, by the rule given under
+`VXT0061` in [Diagnostics](DIAGNOSTICS.md): `return`, `break` and `continue`
+leave, and so do an `if` both of whose blocks leave, a loop that cannot end,
+and a statement `match` that always selects an arm and all of whose arms
+leave. A call is assumed to return.
 
 ## Nested blocks
 
@@ -138,8 +161,12 @@ name that is in scope around it.
   the backend does not have yet. A value of a template type parameter is
   rejected for the same reason.
 - A binding in the condition of an `if`, a `guard` or a `while`, such as
-  `if (auto user = Find())`, is recognized and rejected: it requires optional
-  values.
+  `guard (auto user = Find()) else { return; }`, is recognized and rejected
+  as not implemented: it requires optional values, which the compiler does
+  not have. The plain condition is implemented.
+- A type pattern over a scalar subject names the type of the subject itself;
+  no numeric conversion is applied, so `long n` does not match an `int`.
+- A call whose result is `never` is not recognized as leaving.
 - `match` and `guard` are reserved words.
 - A match may have any number of arms: it is lowered to one chain of
   conditionals, the shape of an `else if` chain, which every stage walks in
