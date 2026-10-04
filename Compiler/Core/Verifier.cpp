@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <llvm/ADT/ArrayRef.h>
+#include <optional>
 #include <unordered_set>
 
 #include "Compiler/Artifact/SourcePath.hpp"
@@ -163,20 +164,40 @@ namespace Visual::XSharp::Core
                                           Kind::Boolean;
                     });
             }
+            /// Whether every path through the statements returns. The false
+            /// branch of an `if` is followed in a loop rather than by
+            /// recursion while it is the last statement to decide the
+            /// answer, so an `else if` chain costs no stack per link.
             [[nodiscard]] static auto
-            AlwaysReturns(const llvm::ArrayRef<Statement> statements) -> bool
+            AlwaysReturns(llvm::ArrayRef<Statement> statements) -> bool
             {
-                for (const auto &statement : statements)
+                for (;;)
                 {
-                    if (statement.kind == Statement::Kind::Return)
-                        return true;
-                    if (statement.kind == Statement::Kind::If
-                        && !statement.falseBranch.empty()
-                        && AlwaysReturns(statement.trueBranch)
-                        && AlwaysReturns(statement.falseBranch))
-                        return true;
+                    const Statement *deciding = nullptr;
+                    for (const auto &statement : statements)
+                    {
+                        if (statement.kind == Statement::Kind::Return)
+                            return true;
+                        if (statement.kind != Statement::Kind::If
+                            || statement.falseBranch.empty()
+                            || !AlwaysReturns(statement.trueBranch))
+                            continue;
+                        // This `if` returns on every path exactly when its
+                        // false branch does. Only the last such `if` needs
+                        // no recursion: an earlier one that does not return
+                        // must still let the statements after it decide.
+                        if (&statement == &statements.back())
+                        {
+                            deciding = &statement;
+                            break;
+                        }
+                        if (AlwaysReturns(statement.falseBranch))
+                            return true;
+                    }
+                    if (deciding == nullptr)
+                        return false;
+                    statements = deciding->falseBranch;
                 }
-                return false;
             }
             /// Where a `break` or `continue` would transfer to. A `for`
             /// update region is inside its loop for `break`, which leaves the
@@ -204,6 +225,70 @@ namespace Visual::XSharp::Core
                                     expectedReturnType,
                                     scope);
             }
+            /// Whether a false branch is exactly one nested `if`, which is
+            /// how an `else if` reaches Core.
+            [[nodiscard]] static auto
+            ContinuesChain(const Statement &statement) -> bool
+            {
+                return statement.falseBranch.size() == 1U
+                       && statement.falseBranch.front().kind
+                              == Statement::Kind::If;
+            }
+
+            /**
+             * @brief Verify an `if` and every `else if` that continues it.
+             *
+             * A chain of `else if` links nests one false branch inside the
+             * next, so verifying it by recursion uses stack in proportion to
+             * its length, and a long chain in valid source would overflow
+             * it. The links are walked in a loop instead. The checks, their
+             * order and the environments they see are those of the
+             * recursive formulation: each link's condition is verified in
+             * the environment of the branch that holds it, its true branch
+             * in a copy of that environment, and the final false branch in
+             * another copy. The environment of a false branch that only
+             * holds the next link is not used again, so the walk keeps one
+             * environment for the whole chain instead of copying it per
+             * link.
+             */
+            void
+            VerifyConditionalChain(const Statement &first,
+                                   Environment &environment,
+                                   const Type &expectedReturnType,
+                                   const TransferScope scope)
+            {
+                const Statement *link = &first;
+                // The first condition is verified in the caller's
+                // environment; the links after it in the chain's own copy.
+                std::optional<Environment> chainEnvironment;
+                Environment *linkEnvironment = &environment;
+                for (;;)
+                {
+                    VerifyExpression(link->expression, *linkEnvironment);
+                    if (!accepts_boolean_context(link->expression.type))
+                        Add("VXC1017",
+                            "Core condition must be bool or numeric");
+                    auto trueEnvironment = *linkEnvironment;
+                    VerifyStatements(link->trueBranch,
+                                     trueEnvironment,
+                                     expectedReturnType,
+                                     scope);
+                    if (!ContinuesChain(*link))
+                        break;
+                    if (!chainEnvironment)
+                    {
+                        chainEnvironment.emplace(environment);
+                        linkEnvironment = &*chainEnvironment;
+                    }
+                    link = &link->falseBranch.front();
+                }
+                auto falseEnvironment = *linkEnvironment;
+                VerifyStatements(link->falseBranch,
+                                 falseEnvironment,
+                                 expectedReturnType,
+                                 scope);
+            }
+
             void
             VerifyStatement(const Statement &statement,
                             Environment &environment,
@@ -273,23 +358,11 @@ namespace Visual::XSharp::Core
                                       "Core return value has the wrong type");
                         return;
                     case Statement::Kind::If:
-                    {
-                        VerifyExpression(statement.expression, environment);
-                        if (!accepts_boolean_context(statement.expression.type))
-                            Add("VXC1017",
-                                "Core condition must be bool or numeric");
-                        auto trueEnvironment = environment;
-                        auto falseEnvironment = environment;
-                        VerifyStatements(statement.trueBranch,
-                                         trueEnvironment,
-                                         expectedReturnType,
-                                         scope);
-                        VerifyStatements(statement.falseBranch,
-                                         falseEnvironment,
-                                         expectedReturnType,
-                                         scope);
+                        VerifyConditionalChain(statement,
+                                               environment,
+                                               expectedReturnType,
+                                               scope);
                         return;
-                    }
                     case Statement::Kind::Evaluate:
                         VerifyExpression(statement.expression, environment);
                         return;

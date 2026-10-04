@@ -213,6 +213,18 @@ spanTests =
     , ("empty if span includes closing block delimiter", ifSpan "if (true) {}")
     , ("empty else span includes final delimiter", ifSpan "if (true) {} else {}")
     , ("else-if span includes complete chain", ifSpan "if (true) {} else if (false) {} else {}")
+    , ("guard span runs from the keyword to the closing brace", guardSpan "guard (true) else { return 1; }")
+    , ("nested block span includes both braces", blockSpan "{ int inner = 1; }")
+    , ("empty nested block span includes both braces", blockSpan "{}")
+    , ("match statement span runs from the keyword to the closing brace", matchStatementSpan "match (1) { 1 -> { }, _ -> { } }")
+    , ("match statement without arms keeps its span", matchStatementSpan "match (1) { }")
+    , ("match expression span excludes the binding around it", matchExpressionSpan "match (1) { 1 -> 2, _ -> 3 }")
+    , ("if expression span runs from the keyword to the else block", ifExpressionSpan "if (true) { 1 } else { 2 }")
+    , ("value block span includes both braces", valueBlockSpans)
+    , ("match arm span starts at its pattern and includes its comma", armSpans)
+    , ("match arm without a comma ends at its body", lastArmSpan)
+    , ("match pattern span includes its parentheses", patternSpans)
+    , ("type pattern span covers the type and the name", typePatternSpan)
     , ("return span includes semicolon", returnSpan)
     , ("binding span starts at type", bindingSpan)
     , ("member span includes access and closing brace", memberSpan)
@@ -227,6 +239,70 @@ closureSpan spelling = case statements ("class Program { int Value() {\nauto f =
 ifSpan :: String -> Bool
 ifSpan spelling = case statements ("class Program { int Value() {\n" ++ spelling ++ "\nreturn 1; } }") of
     Just (IfStatement value _ _ _ : _) -> exactSpan value 2 1 (1 + length spelling)
+    _ -> False
+
+guardSpan :: String -> Bool
+guardSpan spelling = case statements ("class Program { int Value() {\n" ++ spelling ++ "\nreturn 1; } }") of
+    Just (GuardStatement value _ _ : _) -> exactSpan value 2 1 (1 + length spelling)
+    _ -> False
+
+blockSpan :: String -> Bool
+blockSpan spelling = case statements ("class Program { int Value() {\n" ++ spelling ++ "\nreturn 1; } }") of
+    Just (BlockStatement value _ : _) -> exactSpan value 2 1 (1 + length spelling)
+    _ -> False
+
+matchStatementSpan :: String -> Bool
+matchStatementSpan spelling = case statements ("class Program { int Value() {\n" ++ spelling ++ "\nreturn 1; } }") of
+    Just (ExpressionStatement outer (MatchExpression inner _ _ _) True : _) ->
+        exactSpan outer 2 1 (1 + length spelling) && exactSpan inner 2 1 (1 + length spelling)
+    _ -> False
+
+-- The initializer starts at column 10 of `auto r = ...;`.
+matchExpressionSpan :: String -> Bool
+matchExpressionSpan spelling = case statements ("class Program { int Value() {\nauto r = " ++ spelling ++ ";\nreturn r; } }") of
+    Just (BindingStatement _ _ _ _ _ (MatchExpression value _ _ _) : _) -> exactSpan value 2 10 (10 + length spelling)
+    _ -> False
+
+ifExpressionSpan :: String -> Bool
+ifExpressionSpan spelling = case statements ("class Program { int Value() {\nauto r = " ++ spelling ++ ";\nreturn r; } }") of
+    Just (BindingStatement _ _ _ _ _ (ConditionalExpression value _ _ _ _) : _) -> exactSpan value 2 10 (10 + length spelling)
+    _ -> False
+
+-- `auto r = if (true) { 1 } else { 2 };`: the blocks are at columns 20 to 24
+-- and 31 to 35.
+valueBlockSpans :: Bool
+valueBlockSpans = case statements "class Program { int Value() {\nauto r = if (true) { 1 } else { 2 };\nreturn r; } }" of
+    Just (BindingStatement _ _ _ _ _ (ConditionalExpression _ _ (BlockExpression first _ _) (BlockExpression second _ _) _) : _) ->
+        exactSpan first 2 20 25 && exactSpan second 2 31 36
+    _ -> False
+
+-- `auto r = match (1) { 1 -> 2, _ -> 3 };`: the first arm is `1 -> 2,` at
+-- columns 22 to 28 and the second `_ -> 3` at columns 30 to 35.
+armSpans :: Bool
+armSpans = case statements "class Program { int Value() {\nauto r = match (1) { 1 -> 2, _ -> 3 };\nreturn r; } }" of
+    Just (BindingStatement _ _ _ _ _ (MatchExpression _ _ [first, second] _) : _) ->
+        exactSpan (matchArmSpan first) 2 22 29 && exactSpan (matchArmSpan second) 2 30 36
+    _ -> False
+
+lastArmSpan :: Bool
+lastArmSpan = case statements "class Program { int Value() {\nmatch (1) { _ -> { } }\nreturn 1; } }" of
+    Just (ExpressionStatement _ (MatchExpression _ _ [arm] _) _ : _) -> exactSpan (matchArmSpan arm) 2 13 21
+    _ -> False
+
+-- `match (1), (2) { (1), _ -> { } }`: the first pattern is `(1)` at columns
+-- 18 to 20 and the second `_` at column 23.
+patternSpans :: Bool
+patternSpans = case statements "class Program { int Value() {\nmatch (1), (2) { (1), _ -> { } }\nreturn 1; } }" of
+    Just (ExpressionStatement _ (MatchExpression _ _ [arm] _) _ : _) -> case matchArmPatterns arm of
+        [first, second] -> exactSpan (matchPatternSpan first) 2 18 21 && exactSpan (matchPatternSpan second) 2 23 24
+        _ -> False
+    _ -> False
+
+typePatternSpan :: Bool
+typePatternSpan = case statements "class Program { int Value() {\nmatch (1) { int other -> { } }\nreturn 1; } }" of
+    Just (ExpressionStatement _ (MatchExpression _ _ [arm] _) _ : _) -> case matchArmPatterns arm of
+        [patternValue] -> exactSpan (matchPatternSpan patternValue) 2 13 22
+        _ -> False
     _ -> False
 
 returnSpan :: Bool

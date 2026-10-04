@@ -140,6 +140,9 @@ test-suite visual-xsharp-compiler-tests
         ConditionalExpressionTests
         CoreInterpreter
         IterationTests
+        BranchingDiagnosticTests
+        BranchingOracleTests
+        BranchingTests
         LoopExpressionTests
         LoopFlowTests
         LoopFlowOracleTests

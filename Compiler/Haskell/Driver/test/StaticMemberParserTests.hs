@@ -432,6 +432,8 @@ spanOf expression = case expression of
     AssignmentExpression spanValue _ _ _ _ -> spanValue
     IncrementExpression spanValue _ _ _ -> spanValue
     LoopExpression spanValue _ _ -> spanValue
+    BlockExpression spanValue _ _ -> spanValue
+    MatchExpression spanValue _ _ _ -> spanValue
     CallableExpression spanValue _ _ _ _ _ -> spanValue
 
 isLeft :: Either [a] b -> Bool -> Bool

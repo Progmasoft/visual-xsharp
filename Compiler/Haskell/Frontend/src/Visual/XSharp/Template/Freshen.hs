@@ -192,6 +192,9 @@ freshStatement statement = case statement of
     DiscardStatement spanValue value -> DiscardStatement spanValue <$> freshExpression value
     BreakStatement spanValue value -> BreakStatement spanValue <$> traverse freshExpression value
     ContinueStatement spanValue -> pure (ContinueStatement spanValue)
+    GuardStatement spanValue condition block ->
+        GuardStatement spanValue <$> freshExpression condition <*> freshBlock block
+    BlockStatement spanValue block -> BlockStatement spanValue <$> freshBlock block
     ExpressionStatement spanValue value terminated ->
         ExpressionStatement spanValue <$> freshExpression value <*> pure terminated
 
@@ -240,6 +243,16 @@ freshExpression expression = case expression of
         IncrementExpression spanValue isPrefix <$> freshReference name <*> freshType annotation
     LoopExpression spanValue loop annotation ->
         LoopExpression spanValue <$> freshStatement loop <*> freshType annotation
+    BlockExpression spanValue block annotation ->
+        BlockExpression spanValue <$> freshBlock block <*> freshType annotation
+    -- The subjects are evaluated in the surrounding scope. Each arm then
+    -- allocates the locals its patterns bind before its guard and its body
+    -- refer to them.
+    MatchExpression spanValue subjects arms annotation ->
+        MatchExpression spanValue
+            <$> traverse freshExpression subjects
+            <*> traverse (traverseMatchArm (traverseMatchPattern freshDefinition freshType) freshExpression) arms
+            <*> freshType annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse freshCaptureDefinition captures
         closedParameters <- traverse freshParameterDefinition parameters
@@ -341,6 +354,8 @@ statementSymbols statement = case statement of
     DiscardStatement _ value -> expressionSymbols value
     BreakStatement _ value -> maybe [] expressionSymbols value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionSymbols condition ++ blockSymbols block
+    BlockStatement _ block -> blockSymbols block
     ExpressionStatement _ value _ -> expressionSymbols value
 
 expressionSymbols :: Expression ResolvedName Type -> [Int]
@@ -363,6 +378,16 @@ expressionSymbols expression = case expression of
         nameSymbol name : expressionSymbols value ++ typeSymbols annotation
     IncrementExpression _ _ name annotation -> nameSymbol name : typeSymbols annotation
     LoopExpression _ loop annotation -> statementSymbols loop ++ typeSymbols annotation
+    BlockExpression _ block annotation -> blockSymbols block ++ typeSymbols annotation
+    MatchExpression _ subjects arms annotation ->
+        concatMap expressionSymbols (subjects ++ concatMap matchArmExpressions arms)
+            ++ concat
+                [ maybe [] ((: []) . nameSymbol) (matchPatternBinding patternValue)
+                    ++ typeSymbols (matchPatternAnnotation patternValue)
+                | arm <- arms
+                , patternValue <- matchArmPatterns arm
+                ]
+            ++ typeSymbols annotation
     CallableExpression _ _ captures parameters body annotation ->
         concatMap captureSymbols captures
             ++ concatMap parameterSymbols parameters

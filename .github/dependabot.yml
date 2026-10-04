@@ -36,4 +36,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # The type definitions must not be newer than the Node.js runtime the
+      # extension runs on: the VS Code versions it supports and the Node.js
+      # version CI uses. A major update is made by hand together with those.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 

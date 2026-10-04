@@ -15,6 +15,7 @@ cc_binary(
 cc_binary(
     name = "core_pipeline_tests",
     srcs = [
+        "ConditionalChainTests.cpp",
         "ConditionalLoweringTests.cpp",
         "CorePipelineTests.cpp",
         "LoopLoweringTests.cpp",

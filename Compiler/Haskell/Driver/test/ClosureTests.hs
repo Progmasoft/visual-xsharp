@@ -355,6 +355,8 @@ statementCallable statement = case statement of
     DiscardStatement _ value -> expressionCallable value
     BreakStatement _ value -> value >>= expressionCallable
     ContinueStatement {} -> Nothing
+    GuardStatement _ condition block -> expressionCallable condition `orElse` blockCallable block
+    BlockStatement _ block -> blockCallable block
     ExpressionStatement _ value _ -> expressionCallable value
 
 expressionCallable :: Expression name annotation -> Maybe (Expression name annotation)
@@ -411,6 +413,8 @@ symbols expression = case expression of
     AssignmentExpression _ _ name value _ -> resolvedSymbol name : symbols value
     IncrementExpression _ _ name _ -> [resolvedSymbol name]
     LoopExpression {} -> []
+    BlockExpression _ block _ -> blockSymbols block
+    MatchExpression _ subjects arms _ -> concatMap symbols (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters
@@ -439,6 +443,8 @@ statementSymbols statement = case statement of
     DiscardStatement _ value -> symbols value
     BreakStatement _ value -> maybe [] symbols value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> symbols condition ++ blockSymbols block
+    BlockStatement _ block -> blockSymbols block
     ExpressionStatement _ value _ -> symbols value
 
 coreClosure :: String -> Maybe CoreExpression

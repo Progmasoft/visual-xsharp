@@ -83,7 +83,7 @@ namespace Visual::XSharp::Fuzzing
             expected = expression.value;
             std::string body = "return " + expression.source + ";";
             std::string members;
-            const auto mode = NextByte(bytes, cursor) % 13U;
+            const auto mode = NextByte(bytes, cursor) % 14U;
             const auto limit
                 = static_cast<std::int64_t>(NextByte(bytes, cursor) % 12U);
             if (mode == 1U)
@@ -396,6 +396,67 @@ namespace Visual::XSharp::Fuzzing
                        + ") { break index + first; } }; return first * 100 + "
                          "second + (n > 4 ? while (true) { n -= 4; break n; } "
                          ": 0 - n);";
+            }
+            else if (mode == 13U)
+            {
+                // match, guard and if used as an expression. The host model
+                // below is written with plain C++ conditions, so it shares
+                // no decision structure with the compiler's lowering of the
+                // arms. The subject is shifted by the limit so that the
+                // literal arms, the guarded arm, the binding arm and the
+                // catch-all are all selected across the limits of one seed.
+                const std::int64_t n = (expression.value + limit) % 7 - 2;
+                std::int64_t kind = 0;
+                if (n == 0)
+                    kind = 10;
+                else if (n == 1 && limit > 5)
+                    kind = 20;
+                else if (n < 0)
+                    kind = 0 - n;
+                else
+                    kind = n + 30;
+                // A statement match with two subjects inside a loop: one
+                // arm continues the loop, and a guard after the match
+                // leaves it.
+                std::int64_t total = 0;
+                for (std::int64_t index = 0; index < limit; ++index)
+                {
+                    const auto remainder = index % 3;
+                    if (remainder == 0)
+                        continue;
+                    if (remainder == 1 && index > 4)
+                        total += 10;
+                    else
+                        total += index;
+                    if (!(total < 12))
+                        break;
+                }
+                std::int64_t picked = 0;
+                if (kind > total)
+                {
+                    const auto distance = kind - total;
+                    picked = distance * 2;
+                }
+                else
+                {
+                    picked = total - kind;
+                }
+                expected = kind * 1000 + total * 10 + picked;
+                const auto bound = std::to_string(limit);
+                body = "int n = ((" + expression.source + ") + " + bound
+                       + ") % 7 - 2; int kind = match (n) { 0 -> 10, 1 if "
+                       + bound
+                       + " > 5 -> 20, int below if below < 0 -> 0 - below, _ "
+                         "-> n + 30 }; int total = 0; for (int index = 0; "
+                         "index < "
+                       + bound
+                       + "; index++) { match (index % 3), (index > 4) { (0), "
+                         "(_) -> { continue; }, (1), (true) -> { total += 10; "
+                         "}, (_), (_) -> { total += index; } } guard (total < "
+                         "12) else { break; } } int picked = if (kind > total) "
+                         "{ int distance = kind - total; distance * 2 } else { "
+                         "total - kind }; return kind * 1000 + total * 10 + "
+                         "picked;";
             }
             return "namespace Fuzz;\n"
                    "class Program {\n"

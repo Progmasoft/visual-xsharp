@@ -301,6 +301,8 @@ statementDefinitionSymbols statement = case statement of
     DiscardStatement _ value -> expressionDefinitionSymbols value
     BreakStatement _ value -> maybe [] expressionDefinitionSymbols value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionDefinitionSymbols condition ++ blockDefinitionSymbols block
+    BlockStatement _ block -> blockDefinitionSymbols block
     ExpressionStatement _ expression _ -> expressionDefinitionSymbols expression
 
 expressionDefinitionSymbols :: Expression ResolvedName Type -> [SymbolId]
@@ -318,6 +320,13 @@ expressionDefinitionSymbols expression = case expression of
     AssignmentExpression _ _ _ value _ -> expressionDefinitionSymbols value
     IncrementExpression {} -> []
     LoopExpression _ loop _ -> statementDefinitionSymbols loop
+    BlockExpression _ block _ -> blockDefinitionSymbols block
+    MatchExpression _ subjects arms _ ->
+        [ resolvedSymbol name
+        | arm <- arms
+        , Just name <- map matchPatternBinding (matchArmPatterns arm)
+        ]
+            ++ concatMap expressionDefinitionSymbols (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ captures parameters body _ ->
         map (resolvedSymbol . captureName) captures
             ++ map (resolvedSymbol . parameterName) parameters
@@ -367,6 +376,8 @@ statementTypes statement = case statement of
     DiscardStatement _ value -> expressionTypes value
     BreakStatement _ value -> maybe [] expressionTypes value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionTypes condition ++ blockTypes block
+    BlockStatement _ block -> blockTypes block
     ExpressionStatement _ value _ -> expressionTypes value
 
 expressionTypes :: Expression ResolvedName Type -> [Type]
@@ -387,6 +398,11 @@ expressionTypes expression = case expression of
     AssignmentExpression _ _ _ value annotation -> annotation : expressionTypes value
     IncrementExpression _ _ _ annotation -> [annotation]
     LoopExpression _ loop annotation -> annotation : statementTypes loop
+    BlockExpression _ block annotation -> annotation : blockTypes block
+    MatchExpression _ subjects arms annotation ->
+        annotation
+            : map matchPatternAnnotation (concatMap matchArmPatterns arms)
+            ++ concatMap expressionTypes (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ captures parameters body annotation ->
         annotation
             : map captureAnnotation captures

@@ -6,6 +6,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <string_view>
 
+#include "BranchingExecutionCases.hpp"
 #include "ExpressionExecutionCases.hpp"
 #include "SourceFuzz.hpp"
 
@@ -166,6 +167,8 @@ main()
     // Hand-written results for assignments and increments used as values
     // and for loops used as expressions.
     Visual::XSharp::Fuzzing::ExerciseExpressionCases();
+    // Hand-written results for match, if expressions and guard.
+    Visual::XSharp::Fuzzing::ExerciseBranchingCases();
     llvm::errs() << "Differential smoke: mixed seed\n";
     Visual::XSharp::Fuzzing::ExerciseDifferentialOracle(expressionSeed);
     llvm::errs() << "Differential smoke: empty seed\n";
@@ -187,7 +190,7 @@ main()
     // four cycling selectors above happen to select. The two leaves are the
     // literals 0 and 4, so a form that tests its generated expression sees
     // both a false and a true value.
-    constexpr std::uint8_t kModes = 13U;
+    constexpr std::uint8_t kModes = 14U;
     constexpr std::uint8_t kLimits = 12U;
     constexpr std::array<std::uint8_t, 2U> leaves{ 0U, 4U };
     for (const auto leaf : leaves)

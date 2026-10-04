@@ -268,6 +268,96 @@ a `break` takes its context from the place that receives the loop's value.
 implemented. `VXD0002` is an internal error: it reports a value-carrying
 `break` that reached Core lowering without a loop expression to receive it.
 
+### Match, if expressions and guard
+
+`match` selects the first arm whose patterns and guard accept its subjects:
+
+```vxs
+int kind = match (code), (strict) {
+    (0), (_) -> 10,
+    (1), (true) -> 20,
+    (int other), (_) if other < 0 -> 0 - other,
+    (_), (_) -> { int rest = code - 1; rest + 30 }
+};
+```
+
+At the start of a statement `match` is the statement form: it needs no
+terminator, its arms yield no value, and it does nothing when no arm accepts.
+Anywhere else it is an expression. `if` in operand position is an expression
+over two value blocks, and `guard (condition) else { ... }` is a statement.
+
+The parser reports:
+
+| Code | Meaning |
+| --- | --- |
+| `VXP0033` | an `if` used as an expression has no `else` branch |
+| `VXP0034` | the `else` branch of an `if` used as an expression is another `if` instead of a block |
+| `VXP0035` | the condition of an `if`, `guard` or `while` is a binding such as `auto user = Find()`, which requires optional values |
+| `VXP0036` | a match arm does not start with a pattern: a literal, `_`, `null`, `.Case`, or a type followed by a name or `_` |
+| `VXP0037` | `guard (condition)` is not followed by `else` |
+| `VXP0038` | a match arm with an expression body is followed by neither `,` nor `}` |
+
+A bare name is not a pattern, so `value -> ...` is `VXP0036`: a binding always
+states its type, as in `int value -> ...`. A literal pattern has no sign.
+The comma after a block body is optional; after an expression body it is
+required unless the arm is the last one, because the parenthesized pattern of
+the next arm would otherwise continue the expression as a call. An unterminated
+match reports `VXP0002`.
+
+The renamer reports `VXR0008` when a pattern binds a name that is already in
+scope, including a name bound by an earlier pattern of the same arm. Two arms
+may bind the same name: a binding is in scope only in the guard and the body
+of its own arm.
+
+The type checker reports:
+
+| Code | Meaning |
+| --- | --- |
+| `VXT0046` | a block used as a value does not end with an expression that has no semicolon |
+| `VXT0047` | `return` inside a block used as a value, which is not supported yet |
+| `VXT0048` | a match arm does not have exactly one pattern for each subject |
+| `VXT0049` | a match guard is neither `bool` nor numeric |
+| `VXT0050` | the arms of a match used as an expression have different types |
+| `VXT0051` | the result of a match is neither `bool` nor numeric; other result types are not lowered yet |
+| `VXT0052` | a match used as an expression may accept no arm |
+| `VXT0053` | a match arm can never be selected because an earlier arm accepts everything it accepts |
+| `VXT0054` | a literal pattern cannot be compared with its subject |
+| `VXT0055` | a `null` pattern; reference subjects are not supported in `match` yet |
+| `VXT0056` | an enum case pattern such as `.Ready`; enum declarations are not implemented |
+| `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
+| `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
+| `VXT0059` | `break` or `continue` would leave a block that is used as a value |
+| `VXT0060` | a guard condition is neither `bool` nor numeric |
+| `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
+
+A match used as an expression is complete, so that `VXT0052` is not reported,
+when an arm without a guard has only `_` and type patterns, or when every
+subject is a `bool` and the arms without guards accept each combination of
+`true` and `false` between them. No other set of literals is recognized as
+complete. `VXT0053` compares an arm with every earlier arm that has no guard,
+pattern by pattern: the earlier pattern accepts every value or is the same
+literal.
+
+An arm made only of untyped numeric literals takes its type from the context
+that receives the match, and without one from the first arm that has a type.
+A literal pattern is typed as the other operand of a comparison with its
+subject. A pattern binding is immutable, so assigning it is `VXT0003`. An
+expression body in a statement match must have an effect, like any expression
+statement; a pure one is `VXT0013`.
+
+An `if` used as an expression is the conditional expression with block
+operands, so it reports `VXT0036`, `VXT0037` and `VXT0039` for its test and
+its results. The `else` block of a guard leaves when its last statement is
+`return`, `break` or `continue`, or an `if` whose two branches both leave.
+The arms of a statement match are statements of the enclosing body: they may
+`return`, and in a loop they may `break` and `continue`; in a loop used as an
+expression a `break value;` in an arm supplies the loop's value.
+
+A `{` at the start of a statement opens a nested block. It has no diagnostics
+of its own: an unterminated block is `VXP0002`, a name it declares is unknown
+after it, and declaring a name that is already in scope is `VXR0003`, as for
+any local. Two blocks side by side may declare the same name.
+
 ### Supplied token streams
 
 Embedding clients may supply a token list through `ParserInput`. An empty list
@@ -285,6 +375,12 @@ Function spans include access modifiers and the closing body delimiter. Branch
 spans include the final closing brace, including empty branches and complete
 `else if` chains. Callable spans include explicit capture brackets and their
 body delimiter, including empty closures. Return statement spans include `;`.
+A `match` runs from its keyword to its closing brace, a `guard` from its
+keyword to the closing brace of its block, and a nested block and a block
+used as a value include both braces. A match arm starts at its first pattern
+and includes the comma after it when there is one; a pattern includes its own
+parentheses. An `if` used as an expression runs from its keyword to the
+closing brace of its `else` block.
 
 These ranges support downstream diagnostics and editor selection without
 reconstructing a construct's extent from its last nonempty child. The public

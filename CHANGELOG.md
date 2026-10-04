@@ -5,6 +5,108 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## Unreleased
+
+### Language
+
+- Added `match`. The statement `match (subject) { pattern -> body, ... }` runs
+  the first arm whose patterns and guard accept the subject, and does nothing
+  when no arm accepts. In operand position `match` is an expression: every
+  arm yields a value of one type, and some arm must accept whatever the
+  subject is. Several subjects are written `match (a), (b)` with one pattern
+  for each in every arm. The subjects are evaluated once, left to right.
+- A pattern is a literal, `_`, or a type followed by a name or `_`. A type
+  pattern binds the subject for the guard and the body of its arm; the
+  binding is immutable. An arm may have a guard, `pattern if condition ->`,
+  which is evaluated only when the patterns of that arm accept.
+- An arm that can never be selected is an error: a second arm for the same
+  literals, or any arm after one that accepts every value without a guard.
+- Added `if` as an expression: `int larger = if (a > b) { a } else { b };`.
+  Both blocks are required and each ends with an expression that has no
+  semicolon. Only the selected block runs.
+- Added `guard (condition) else { ... }`. The block runs when the condition is
+  false and must leave the enclosing scope with `return`, `break` or
+  `continue`.
+- Added the block statement: a `{ ... }` at the start of a statement is a
+  nested block. The names it declares end with it, so two blocks side by side
+  may declare the same name.
+- `match` and `guard` are now reserved words and can no longer name a local,
+  a parameter, a method or a class.
+- Subjects and results of `match` and results of `if` expressions are limited
+  to `bool` and numeric types for now. The `null` pattern, enum case patterns
+  such as `.Ready`, type patterns that name another type than their
+  subject's, and a binding in the condition of `if`, `guard` or `while` are
+  recognized and rejected with dedicated diagnostics until reference
+  subjects, enums, class hierarchies and optional values exist. `return`,
+  `break` and `continue` cannot leave a block that is used as a value.
+
+### Compiler pipeline
+
+- The Desugarer lowers `match` to a chain of Core `if` statements over
+  subjects bound once, a value block to its statements followed by its final
+  expression, `guard` to an `if` with an empty first branch, and a block
+  statement to its statements in the enclosing sequence. Core, its wire
+  format, the optimizer, CorePrep and the native pipeline are unchanged.
+- A match with more than 16 arms is lowered in groups of 16 that follow each
+  other in one statement sequence, with a Boolean slot that records the taken
+  arm, so the nesting of the lowered Core does not grow with the number of
+  arms. Matches of 200 and of 2000 arms compile.
+- Fixed a stack overflow that ended the compiler without a diagnostic on an
+  `else if` chain of about 150 links. Such a chain reaches Core as one level
+  of nesting per link, and the native Core wire reader and writer, the Core
+  verifier and the Core-to-CorePrep adapter recursed once per link. They now
+  walk a chain in a loop. The bytes, the checks and the CorePrep blocks are
+  unchanged; chains of 1200 links compile.
+- The parsed, renamed, resolved and typed trees have four new nodes: the
+  match expression, the block expression, the guard statement and the block
+  statement. Closure
+  analysis, template discovery, instantiation, freshening, member
+  reachability and the specialization verifier handle them.
+
+### Verification and tooling
+
+- `ConditionalChainTests.cpp` pins the native handling of `else if` chains:
+  wire round trips and a constant byte step per link, rejection of every
+  truncated prefix, the verifier's checks in late links, the return analysis,
+  and the block numbering of the adapter, at lengths up to 600 links.
+  `source_fuzz_smoke` runs a chain of 300 links and a match of 200 arms
+  through both pipeline modes.
+- `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
+  and the values of 83 program runs on the unoptimized and the optimized
+  Core. `BranchingOracleTests.hs` generates 36 families of arm lists, writes
+  each as a match and as the `if` chain it stands for, and requires both to
+  return the same values over a domain of arguments.
+- `BranchingDiagnosticTests.hs` pins where each new diagnostic points, feeds
+  the frontend every prefix of a program that uses the new forms and that
+  program with each token removed or repeated, and pins the behavior of the
+  forms in a template body. `ParserContractTests.hs` pins the source ranges
+  of the new nodes, their arms and their patterns.
+- `source_fuzz_smoke` runs the same 83 cases through CorePrep, Xpp, Xmm,
+  LLVM and the ORC JIT in both pipeline modes, and the differential generator
+  has a fourteenth program shape that combines `match`, `guard` and an `if`
+  expression with an independent host model. The differential seed corpus is
+  renumbered for the new shape count, and source, parser and differential
+  seeds for the new forms are added.
+- Dependabot no longer proposes major updates of `@types/node` for the VS Code
+  extension. The type definitions must match the Node.js runtime the
+  extension runs on, so that update is made by hand.
+
+### Known limitations
+
+- An `else if` chain of about 2000 links still overflows the native stack,
+  now while a stage copies the nested Core statements, and so do statements
+  nested in any other way, such as an `if` inside the first branch of an `if`,
+  repeated: 60 levels compile and 100 do not. The compiler then ends without a
+  diagnostic. Neither is new in this version, and `match` is not affected.
+  The Core wire format bounds type and expression depth but has no statement
+  depth limit yet.
+
+### Upgrading from 0.4.1
+
+- Rename anything called `match` or `guard`.
+- `if (auto name = value)` and the same form in `while` now report `VXP0035`
+  instead of a generic syntax error. They were not accepted before either.
+
 ## 0.4.1 - 2026-10-03
 
 ### Language
