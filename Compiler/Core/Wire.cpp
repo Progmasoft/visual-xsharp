@@ -558,6 +558,75 @@ namespace Visual::XSharp::Core::Wire
                 capture.value = std::make_shared<Expression>(std::move(value));
                 return capture;
             }
+            /// The tag byte of a conditional statement.
+            static constexpr std::uint8_t kConditionalTag = 3U;
+
+            /**
+             * @brief Read a conditional statement whose tag was consumed,
+             * and every `else if` that continues it.
+             *
+             * An `else if` is encoded as a false branch that holds exactly
+             * one conditional statement. Reading such a chain by recursion
+             * uses stack in proportion to its length, so a long chain in
+             * valid source would overflow it. The links are read in a loop
+             * into a flat list and nested afterwards, innermost first. The
+             * bytes consumed and the resulting tree are those of the
+             * recursive formulation.
+             */
+            [[nodiscard]] auto
+            ReadConditionalChain() -> Statement
+            {
+                struct Link final
+                {
+                    Expression condition;
+                    std::vector<Statement> whenTrue;
+                };
+                std::vector<Link> links;
+                std::vector<Statement> finalBranch;
+                for (;;)
+                {
+                    auto condition = ReadExpression();
+                    auto whenTrue
+                        = Vector<Statement>(limits_.maximumStatements,
+                                            "true branch statement count",
+                                            [this] {
+                                                return ReadStatement();
+                                            });
+                    links.push_back(
+                        { std::move(condition), std::move(whenTrue) });
+                    const auto size = Count(limits_.maximumStatements,
+                                            "false branch statement count");
+                    // A false branch of one conditional is the next link:
+                    // take its tag and read it in the next iteration.
+                    if (!error_ && size == 1U && offset_ < bytes_.size()
+                        && bytes_[offset_] == kConditionalTag)
+                    {
+                        ++offset_;
+                        continue;
+                    }
+                    finalBranch.reserve(size);
+                    for (std::size_t index = 0; index < size && !error_;
+                         ++index)
+                        finalBranch.push_back(ReadStatement());
+                    break;
+                }
+                auto statement
+                    = Statement::If(std::move(links.back().condition),
+                                    std::move(links.back().whenTrue),
+                                    std::move(finalBranch));
+                links.pop_back();
+                while (!links.empty())
+                {
+                    std::vector<Statement> nested;
+                    nested.push_back(std::move(statement));
+                    statement = Statement::If(std::move(links.back().condition),
+                                              std::move(links.back().whenTrue),
+                                              std::move(nested));
+                    links.pop_back();
+                }
+                return statement;
+            }
+
             [[nodiscard]] auto
             ReadStatement() -> Statement
             {
@@ -584,24 +653,7 @@ namespace Visual::XSharp::Core::Wire
                     case 2:
                         return Statement::Return(ReadExpression());
                     case 3:
-                    {
-                        auto condition = ReadExpression();
-                        auto whenTrue
-                            = Vector<Statement>(limits_.maximumStatements,
-                                                "true branch statement count",
-                                                [this] {
-                                                    return ReadStatement();
-                                                });
-                        auto whenFalse
-                            = Vector<Statement>(limits_.maximumStatements,
-                                                "false branch statement count",
-                                                [this] {
-                                                    return ReadStatement();
-                                                });
-                        return Statement::If(std::move(condition),
-                                             std::move(whenTrue),
-                                             std::move(whenFalse));
-                    }
+                        return ReadConditionalChain();
                     case 4:
                         return Statement::Evaluate(ReadExpression());
                     case 5:
@@ -1208,20 +1260,44 @@ namespace Visual::XSharp::Core::Wire
                         WriteExpression(statement.expression);
                         return;
                     case Statement::Kind::If:
-                        WriteExpression(statement.expression);
-                        Vector(statement.trueBranch,
-                               limits_.maximumStatements,
-                               "true branch statement count",
-                               [this](const Statement &value) {
-                                   WriteStatement(value);
-                               });
-                        Vector(statement.falseBranch,
-                               limits_.maximumStatements,
-                               "false branch statement count",
-                               [this](const Statement &value) {
-                                   WriteStatement(value);
-                               });
+                    {
+                        // An `else if` chain is written in a loop for the
+                        // reason ReadConditionalChain reads it in one: a
+                        // false branch of exactly one conditional is the
+                        // next link, and its bytes are its count, its tag
+                        // and then the link itself.
+                        const Statement *link = &statement;
+                        while (!error_)
+                        {
+                            WriteExpression(link->expression);
+                            Vector(link->trueBranch,
+                                   limits_.maximumStatements,
+                                   "true branch statement count",
+                                   [this](const Statement &value) {
+                                       WriteStatement(value);
+                                   });
+                            const auto continues
+                                = link->falseBranch.size() == 1U
+                                  && link->falseBranch.front().kind
+                                         == Statement::Kind::If;
+                            if (!continues)
+                            {
+                                Vector(link->falseBranch,
+                                       limits_.maximumStatements,
+                                       "false branch statement count",
+                                       [this](const Statement &value) {
+                                           WriteStatement(value);
+                                       });
+                                break;
+                            }
+                            Count(1U,
+                                  limits_.maximumStatements,
+                                  "false branch statement count");
+                            link = &link->falseBranch.front();
+                            Byte(static_cast<std::uint8_t>(link->kind));
+                        }
                         return;
+                    }
                     case Statement::Kind::Evaluate:
                         WriteExpression(statement.expression);
                         return;

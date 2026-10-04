@@ -42,8 +42,13 @@ assignments, compound assignments, the discard statement, calls, returns, condit
 expressions over `bool` and numeric values, core operator precedence, entry-point validation, and basic CorePrep control flow.
 Assignment, compound assignment and `++` are also expressions over named locals: `a = b = 10`, `(value += 5)`, `a++`. There
 is no decrement operator; `--` always starts a comment. A `while` or classic `for` loop is an expression when a
-`break value;` supplies its value. Null coalescing `??` and `??=`, storage targets other than a named local, loop values
-that are not `bool` or numeric, and `return` inside a loop expression are not implemented.
+`break value;` supplies its value. `match` is a statement and an expression over one or more `bool` or numeric subjects,
+with literal, wildcard and binding patterns and guards; `if` is also an expression over two value blocks;
+`guard (condition) else { ... }` runs its block when the condition is false; and a `{ ... }` at the start of a
+statement is a nested block with its own scope. Null coalescing `??` and `??=`, storage
+targets other than a named local, loop, conditional and match values that are not `bool` or numeric, `return` inside a
+loop expression, `return`, `break` and `continue` out of a block used as a value, the `null` and enum case patterns, type
+patterns over class hierarchies, and bindings in conditions are not implemented.
 It does not yet implement the complete language catalog in `Spec/`.
 
 Core optimization is connected, verifier-guarded, and fixed-point driven. It performs immutable literal propagation,

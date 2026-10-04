@@ -61,6 +61,8 @@ cc_library(
 cc_binary(
     name = "source_fuzz_smoke",
     srcs = [
+        "BranchingExecutionCases.cpp",
+        "BranchingExecutionCases.hpp",
         "ExpressionExecutionCases.cpp",
         "ExpressionExecutionCases.hpp",
         "SourceFuzzSmoke.cpp",

@@ -23,6 +23,7 @@ library
         Visual.XSharp.SourceWarnings
     other-modules:
         Visual.XSharp.Parser.Cursor
+        Visual.XSharp.Parser.Match
         Visual.XSharp.Parser.Token
     hs-source-dirs: src
     build-depends:

@@ -280,6 +280,14 @@ renameStatement environment next statement = case statement of
         let (renamed, after, problems) = renameOptional environment next value
          in (BreakStatement spanValue renamed, environment, after, problems)
     ContinueStatement spanValue -> (ContinueStatement spanValue, environment, next, [])
+    GuardStatement spanValue condition block ->
+        let (renamedCondition, afterCondition, conditionProblems) = renameExpression environment next condition
+            (renamedBlock, afterBlock, blockProblems) = renameBlock environment afterCondition block
+         in (GuardStatement spanValue renamedCondition renamedBlock, environment, afterBlock, conditionProblems ++ blockProblems)
+    -- The names a nested block declares end with the block.
+    BlockStatement spanValue block ->
+        let (renamedBlock, afterBlock, problems) = renameBlock environment next block
+         in (BlockStatement spanValue renamedBlock, environment, afterBlock, problems)
     ExpressionStatement spanValue value terminated ->
         let (renamedValue, after, problems) = renameExpression environment next value
          in (ExpressionStatement spanValue renamedValue terminated, environment, after, problems)
@@ -346,6 +354,14 @@ renameExpression environment next expression = case expression of
     LoopExpression spanValue loop _ ->
         let (renamedLoop, _, after, problems) = renameStatement environment next loop
          in (LoopExpression spanValue renamedLoop (), after, problems)
+    -- Names a value block introduces are scoped to the block.
+    BlockExpression spanValue block _ ->
+        let (renamedBlock, after, problems) = renameBlock environment next block
+         in (BlockExpression spanValue renamedBlock (), after, problems)
+    MatchExpression spanValue subjects arms _ ->
+        let (renamedSubjects, afterSubjects, subjectProblems) = renameExpressions environment next subjects
+            (renamedArms, afterArms, armProblems) = renameMatchArms environment afterSubjects arms
+         in (MatchExpression spanValue renamedSubjects renamedArms (), afterArms, subjectProblems ++ armProblems)
     CallableExpression spanValue explicit sourceCaptures sourceParameters sourceBody _ ->
         let (captures, captureEnvironment, afterCaptures, captureProblems) =
                 renameCaptures environment next sourceCaptures
@@ -360,6 +376,60 @@ renameExpression environment next expression = case expression of
          in ( CallableExpression spanValue explicit captures parameters body ()
             , afterBody
             , captureProblems ++ parameterProblems ++ bodyProblems
+            )
+
+renameMatchArms ::
+    Environment -> Int -> [MatchArm Identifier ()] -> ([MatchArm RenamedName ()], Int, [Diagnostic])
+renameMatchArms _ next [] = ([], next, [])
+renameMatchArms environment next (arm : remaining) =
+    let (renamed, after, problems) = renameMatchArm environment next arm
+        (later, final, laterProblems) = renameMatchArms environment after remaining
+     in (renamed : later, final, problems ++ laterProblems)
+
+{- | Rename one arm. The names its patterns bind are in scope in its guard
+and its body and nowhere else, so every arm starts from the environment of
+the match itself.
+-}
+renameMatchArm :: Environment -> Int -> MatchArm Identifier () -> (MatchArm RenamedName (), Int, [Diagnostic])
+renameMatchArm environment next (MatchArm spanValue patterns guard body) =
+    let (renamedPatterns, armEnvironment, afterPatterns, patternProblems) = bindPatterns environment next patterns
+        (renamedGuard, afterGuard, guardProblems) = renameOptional armEnvironment afterPatterns guard
+        (renamedBody, afterBody, bodyProblems) = renameExpression armEnvironment afterGuard body
+     in ( MatchArm spanValue renamedPatterns renamedGuard renamedBody
+        , afterBody
+        , patternProblems ++ guardProblems ++ bodyProblems
+        )
+    where
+        bindPatterns env current [] = ([], env, current, [])
+        bindPatterns env current (patternValue : rest) =
+            let (renamed, nextEnv, after, problems) = renameMatchPattern env current patternValue
+                (later, finalEnv, final, laterProblems) = bindPatterns nextEnv after rest
+             in (renamed : later, finalEnv, final, problems ++ laterProblems)
+
+-- A binding pattern declares a local like any other: it receives a fresh
+-- identity and may not reuse a name that is already in scope, which includes
+-- a name bound by an earlier pattern of the same arm.
+renameMatchPattern ::
+    Environment ->
+    Int ->
+    MatchPattern Identifier () ->
+    (MatchPattern RenamedName (), Environment, Int, [Diagnostic])
+renameMatchPattern environment next patternValue = case patternValue of
+    MatchWildcardPattern spanValue _ -> (MatchWildcardPattern spanValue (), environment, next, [])
+    MatchLiteralPattern spanValue literal _ -> (MatchLiteralPattern spanValue literal (), environment, next, [])
+    MatchNullPattern spanValue _ -> (MatchNullPattern spanValue (), environment, next, [])
+    MatchCasePattern spanValue name _ -> (MatchCasePattern spanValue name (), environment, next, [])
+    MatchTypePattern spanValue syntax Nothing _ -> (MatchTypePattern spanValue syntax Nothing (), environment, next, [])
+    MatchTypePattern spanValue syntax (Just name) _ ->
+        let renamed = RenamedName name next
+            duplicateProblems =
+                [ Diagnostic RenamerStage Error "VXR0008" (Just spanValue) ("duplicate match binding " ++ identifierText name)
+                | any ((== name) . fst) environment
+                ]
+         in ( MatchTypePattern spanValue syntax (Just renamed) ()
+            , (name, renamed) : environment
+            , next + 1
+            , duplicateProblems
             )
 
 renamePattern :: Environment -> Int -> Pattern Identifier () -> (Pattern RenamedName (), Int, [Diagnostic])

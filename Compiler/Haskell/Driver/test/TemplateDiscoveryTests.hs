@@ -3,6 +3,7 @@
 
 module TemplateDiscoveryTests (templateDiscoveryTests) where
 
+import Data.Functor.Identity (runIdentity)
 import Data.List (isInfixOf)
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
@@ -280,6 +281,9 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
             DiscardStatement spanValue value -> DiscardStatement spanValue (rewriteExpression value)
             BreakStatement spanValue value -> BreakStatement spanValue (rewriteExpression <$> value)
             ContinueStatement {} -> statement
+            GuardStatement spanValue condition block ->
+                GuardStatement spanValue (rewriteExpression condition) (rewriteBlock block)
+            BlockStatement spanValue block -> BlockStatement spanValue (rewriteBlock block)
             ExpressionStatement spanValue value terminated -> ExpressionStatement spanValue (rewriteExpression value) terminated
         rewriteExpression expression = case expression of
             NameExpression spanValue name annotation -> NameExpression spanValue name (rewriteType annotation)
@@ -313,6 +317,23 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
                 IncrementExpression spanValue isPrefix name (rewriteType annotation)
             LoopExpression spanValue loop annotation ->
                 LoopExpression spanValue (rewriteStatement loop) (rewriteType annotation)
+            BlockExpression spanValue block annotation ->
+                BlockExpression spanValue (rewriteBlock block) (rewriteType annotation)
+            MatchExpression spanValue subjects arms annotation ->
+                MatchExpression
+                    spanValue
+                    (map rewriteExpression subjects)
+                    [ arm
+                        { matchArmPatterns =
+                            [ runIdentity (traverseMatchPattern pure (pure . rewriteType) patternValue)
+                            | patternValue <- matchArmPatterns arm
+                            ]
+                        , matchArmGuard = rewriteExpression <$> matchArmGuard arm
+                        , matchArmBody = rewriteExpression (matchArmBody arm)
+                        }
+                    | arm <- arms
+                    ]
+                    (rewriteType annotation)
             CallableExpression spanValue isStatic captures parameters body annotation ->
                 CallableExpression spanValue isStatic captures parameters body (rewriteType annotation)
         rewritePattern patternValue = case patternValue of

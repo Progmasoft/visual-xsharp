@@ -542,6 +542,8 @@ statementTypes statement = case statement of
     DiscardStatement _ value -> expressionTypes value
     BreakStatement _ value -> maybe [] expressionTypes value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionTypes condition ++ blockTypes block
+    BlockStatement _ block -> blockTypes block
     ExpressionStatement _ value _ -> expressionTypes value
 
 expressionTypes :: Expression ResolvedName Type -> [Type]
@@ -562,6 +564,11 @@ expressionTypes expression = case expression of
     AssignmentExpression _ _ _ value annotation -> annotation : expressionTypes value
     IncrementExpression _ _ _ annotation -> [annotation]
     LoopExpression _ loop annotation -> annotation : statementTypes loop
+    BlockExpression _ block annotation -> annotation : blockTypes block
+    MatchExpression _ subjects arms annotation ->
+        annotation
+            : map matchPatternAnnotation (concatMap matchArmPatterns arms)
+            ++ concatMap expressionTypes (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ captures parameters body annotation ->
         annotation
             : concatMap captureTypes captures

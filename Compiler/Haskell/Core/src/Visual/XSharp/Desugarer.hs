@@ -11,6 +11,7 @@ import Data.List (nub)
 import Data.Word (Word64)
 import Visual.XSharp.AST
 import Visual.XSharp.Core
+import Visual.XSharp.Desugarer.Branching
 import Visual.XSharp.Desugarer.Sequencing
 import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
 
@@ -123,6 +124,23 @@ without one, so a value-carrying break can only reach its own loop's slot.
 -}
 type BreakTarget = Maybe (ResolvedName, Type)
 
+{- | The lowering of this module as the branching forms of
+"Visual.XSharp.Desugarer.Branching" receive it. The target is where a
+@break value;@ in a statement arm stores its value; value blocks have none,
+because nothing may leave them early.
+-}
+branchLowering :: BreakTarget -> BranchLowering Lower
+branchLowering target =
+    BranchLowering
+        { branchExpression = lowerExpression
+        , branchDiscarded = lowerDiscarded
+        , branchStatements = lowerBlockInto target . Block
+        , branchOperands = sequenceOperands
+        , branchFresh = freshGenerated
+        , branchType = lowerBoundaryType
+        , branchLiteral = lowerLiteral
+        }
+
 lowerBlock :: Block ResolvedName Type -> Lower [CoreStatement]
 lowerBlock = lowerBlockInto Nothing
 
@@ -201,6 +219,19 @@ lowerStatementInto target statement = case statement of
                     ]
                 )
     ContinueStatement _ -> pure [CoreContinue]
+    -- The block runs when the condition is false and never completes
+    -- normally, so the statements after the guard follow the empty branch.
+    GuardStatement _ condition block -> do
+        (prefix, loweredCondition) <- lowerExpression condition
+        whenFalse <- lowerBlockInto target block
+        pure (prefix ++ [CoreIf loweredCondition [] whenFalse])
+    -- Core has no block statement. Every local has its own symbol, so the
+    -- statements of a nested block join the enclosing sequence unchanged.
+    BlockStatement _ block -> lowerBlockInto target block
+    -- The arms of a statement match are statements of the enclosing body:
+    -- a break in them leaves the enclosing loop and stores into its slot.
+    ExpressionStatement _ (MatchExpression _ subjects arms annotation) _
+        | annotation == voidType -> fst <$> lowerMatch (branchLowering target) annotation subjects arms
     ExpressionStatement _ value _ -> lowerDiscarded value
 
 {- | Lower a @while@ or @for@ loop whose body stores break values into the
@@ -426,6 +457,8 @@ lowerExpression expression = case expression of
             ( CoreBind (CoreBinding result loweredType True (neutralValue loweredType)) : statements
             , CoreVariable result loweredType
             )
+    BlockExpression _ block _ -> lowerValueBlock (branchLowering Nothing) block
+    MatchExpression _ subjects arms valueType -> lowerMatch (branchLowering Nothing) valueType subjects arms
     CallableExpression _ explicit captures parameters body valueType -> do
         let loweredParameters =
                 [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
@@ -485,6 +518,8 @@ expressionAnnotation expression = case expression of
     AssignmentExpression _ _ _ _ valueType -> valueType
     IncrementExpression _ _ _ valueType -> valueType
     LoopExpression _ _ valueType -> valueType
+    BlockExpression _ _ valueType -> valueType
+    MatchExpression _ _ _ valueType -> valueType
     CallableExpression _ _ _ _ _ valueType -> valueType
 
 lowerPattern :: CoreExpression -> Type -> Pattern ResolvedName Type -> CoreExpression
@@ -667,6 +702,8 @@ statementIds statement = case statement of
     DiscardStatement _ value -> expressionIds value
     BreakStatement _ value -> maybe [] expressionIds value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionIds condition ++ blockSymbolIds block
+    BlockStatement _ block -> blockSymbolIds block
     ExpressionStatement _ value _ -> expressionIds value
 
 expressionIds :: Expression ResolvedName Type -> [Int]
@@ -683,6 +720,13 @@ expressionIds expression = case expression of
     AssignmentExpression _ _ name value _ -> symbolValue name : expressionIds value
     IncrementExpression _ _ name _ -> [symbolValue name]
     LoopExpression _ loop _ -> statementIds loop
+    BlockExpression _ block _ -> blockSymbolIds block
+    MatchExpression _ subjects arms _ ->
+        [ symbolValue name
+        | arm <- arms
+        , Just name <- map matchPatternBinding (matchArmPatterns arm)
+        ]
+            ++ concatMap expressionIds (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ captures parameters body _ ->
         map (symbolValue . captureName) captures
             ++ concatMap (maybe [] expressionIds . captureInitializer) captures

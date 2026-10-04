@@ -618,6 +618,8 @@ statementTargets statement = case statement of
     DiscardStatement _ value -> expressionTargets value
     BreakStatement _ value -> maybe [] expressionTargets value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> expressionTargets condition ++ blockTargets block
+    BlockStatement _ block -> blockTargets block
     ExpressionStatement _ value _ -> expressionTargets value
 
 blockTargets :: Block ResolvedName Type -> [SymbolId]
@@ -636,6 +638,8 @@ expressionTargets expression = case expression of
             ++ case body of
                 CallableExpressionBody value -> expressionTargets value
                 CallableBlockBody block -> blockTargets block
+    BlockExpression _ block _ -> blockTargets block
+    MatchExpression _ subjects arms _ -> concatMap expressionTargets (subjects ++ concatMap matchArmExpressions arms)
     _ -> []
 
 selectedMembers :: TemplateSpecialization -> [Declaration ResolvedName Type]

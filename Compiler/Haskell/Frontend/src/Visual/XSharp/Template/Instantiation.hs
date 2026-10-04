@@ -159,6 +159,9 @@ instantiateStatement binding statement = case statement of
     BreakStatement spanValue value ->
         BreakStatement spanValue <$> traverse (instantiateExpression binding) value
     ContinueStatement spanValue -> pure (ContinueStatement spanValue)
+    GuardStatement spanValue condition block ->
+        GuardStatement spanValue <$> instantiateExpression binding condition <*> instantiateBlock binding block
+    BlockStatement spanValue block -> BlockStatement spanValue <$> instantiateBlock binding block
     ExpressionStatement spanValue value terminated ->
         ExpressionStatement spanValue <$> instantiateExpression binding value <*> pure terminated
 
@@ -214,6 +217,15 @@ instantiateExpression binding expression = case expression of
         IncrementExpression spanValue isPrefix name <$> instantiateType binding annotation
     LoopExpression spanValue loop annotation ->
         LoopExpression spanValue <$> instantiateStatement binding loop <*> instantiateType binding annotation
+    BlockExpression spanValue block annotation ->
+        BlockExpression spanValue <$> instantiateBlock binding block <*> instantiateType binding annotation
+    MatchExpression spanValue subjects arms annotation ->
+        MatchExpression spanValue
+            <$> traverse (instantiateExpression binding) subjects
+            <*> traverse
+                (traverseMatchArm (traverseMatchPattern pure (instantiateType binding)) (instantiateExpression binding))
+                arms
+            <*> instantiateType binding annotation
     CallableExpression spanValue explicit captures parameters body annotation -> do
         closedCaptures <- traverse (instantiateCapture binding) captures
         closedParameters <- traverse (instantiateParameter binding) parameters

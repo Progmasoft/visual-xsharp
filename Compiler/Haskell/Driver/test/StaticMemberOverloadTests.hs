@@ -300,6 +300,8 @@ callsInStatement statement = case statement of
     DiscardStatement _ value -> callsInExpression value
     BreakStatement _ value -> maybe [] callsInExpression value
     ContinueStatement {} -> []
+    GuardStatement _ condition block -> callsInExpression condition ++ callsInBlock block
+    BlockStatement _ block -> callsInBlock block
     ExpressionStatement _ value _ -> callsInExpression value
 
 callsInExpression :: Expression ResolvedName Type -> [Expression ResolvedName Type]
@@ -319,6 +321,8 @@ callsInExpression expression = case expression of
     AssignmentExpression _ _ _ value _ -> callsInExpression value
     IncrementExpression {} -> []
     LoopExpression _ loop _ -> callsInStatement loop
+    BlockExpression _ block _ -> callsInBlock block
+    MatchExpression _ subjects arms _ -> concatMap callsInExpression (subjects ++ concatMap matchArmExpressions arms)
     CallableExpression _ _ _ _ body _ -> callsInCallableBody body
     where
         isSelectedCall (CallExpression _ (NameExpression _ name _) _ _) = resolvedSpelling name == Identifier "Select"

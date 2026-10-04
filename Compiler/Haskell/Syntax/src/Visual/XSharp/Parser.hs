@@ -15,6 +15,7 @@ import Visual.XSharp.Diagnostic
 import Visual.XSharp.FloatingLiteral
 import Visual.XSharp.NumericLiteral
 import Visual.XSharp.Parser.Cursor
+import Visual.XSharp.Parser.Match
 import Visual.XSharp.Parser.Token
 
 -- | Tokens and diagnostic source identity for one physical input file.
@@ -393,6 +394,8 @@ requireTemplateValue expression = case expression of
     AssignmentExpression spanValue _ _ _ _ -> unsupported spanValue
     IncrementExpression spanValue _ _ _ -> unsupported spanValue
     LoopExpression spanValue _ _ -> unsupported spanValue
+    BlockExpression spanValue _ _ -> unsupported spanValue
+    MatchExpression spanValue _ _ _ -> unsupported spanValue
     CallableExpression spanValue _ _ _ _ _ -> unsupported spanValue
     where
         unsupported spanValue =
@@ -430,7 +433,14 @@ statementSpan statement = case statement of
     DiscardStatement value _ -> value
     BreakStatement value _ -> value
     ContinueStatement value -> value
+    GuardStatement value _ _ -> value
+    BlockStatement value _ -> value
     ExpressionStatement value _ _ -> value
+
+-- The branching forms of "Visual.XSharp.Parser.Match" are built from the
+-- expression, block, and type grammar of this module.
+branchGrammar :: BranchGrammar
+branchGrammar = BranchGrammar parseExpression (parseBlock True) (parseBlock False) parseTypeSyntax parsePatternLiteral
 
 parseStatement :: Bool -> P (Statement Identifier ())
 parseStatement allowFinalExpression =
@@ -447,6 +457,17 @@ parseStatement allowFinalExpression =
             first : _ | tokenKind first == KeywordToken && tokenText first == "for" -> parseFor
             first : _ | tokenKind first == KeywordToken && tokenText first == "break" -> parseBreak
             first : _ | tokenKind first == KeywordToken && tokenText first == "continue" -> parseContinue
+            first : _ | tokenKind first == KeywordToken && tokenText first == "guard" -> parseGuardStatement branchGrammar
+            -- No expression starts with a brace, so a brace that starts a
+            -- statement opens a nested block.
+            first : _ | tokenKind first == SymbolToken && tokenText first == "{" -> do
+                (block, spanValue) <- withSpan (parseBlock False)
+                pure (BlockStatement spanValue block)
+            -- A `match` that starts a statement is the statement form: it
+            -- needs no terminator and its arms need not cover every value.
+            first : _ | tokenKind first == KeywordToken && tokenText first == "match" -> do
+                value <- parseMatchExpression branchGrammar
+                pure (ExpressionStatement (expressionSpan value) value True)
             _ | startsIncrement tokens -> parseIncrementStatement
             _ | startsCompoundAssignment tokens -> parseCompoundAssignmentStatement
             _ | startsDiscard tokens -> parseDiscard
@@ -475,7 +496,7 @@ parseIf = do
     ((condition, trueBlock, falseBlock), spanValue) <- withSpan $ do
         _ <- keyword "if"
         _ <- symbol "("
-        condition <- parseExpression
+        condition <- parseCondition branchGrammar "an if"
         _ <- symbol ")"
         trueBlock <- parseBlock False
         falseBlock <- optionalParser $ do
@@ -493,7 +514,7 @@ parseWhile = do
     ((condition, body), spanValue) <- withSpan $ do
         _ <- keyword "while"
         _ <- symbol "("
-        condition <- parseExpression
+        condition <- parseCondition branchGrammar "a while"
         _ <- symbol ")"
         body <- parseBlock False
         pure (condition, body)
@@ -1038,6 +1059,10 @@ parsePrimary = do
         Just token | tokenKind token == KeywordToken && tokenText token `elem` ["while", "for"] -> do
             loop <- if tokenText token == "while" then parseWhile else parseFor
             pure (LoopExpression (statementSpan loop) loop ())
+        -- `if` and `match` in operand position are expressions. At the start
+        -- of a statement the statement parsers have already taken them.
+        Just token | tokenKind token == KeywordToken && tokenText token == "if" -> parseIfExpression branchGrammar
+        Just token | tokenKind token == KeywordToken && tokenText token == "match" -> parseMatchExpression branchGrammar
         Just token | tokenKind token == IntegerToken -> do
             _ <- takeToken
             case parseIntegerSpelling (tokenText token) of
@@ -1247,6 +1272,8 @@ expressionSpan expression = case expression of
     AssignmentExpression value _ _ _ _ -> value
     IncrementExpression value _ _ _ -> value
     LoopExpression value _ _ -> value
+    BlockExpression value _ _ -> value
+    MatchExpression value _ _ _ -> value
     CallableExpression value _ _ _ _ _ -> value
 
 patternSpan :: Pattern name annotation -> SourceSpan

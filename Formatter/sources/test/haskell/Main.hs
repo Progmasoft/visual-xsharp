@@ -32,6 +32,7 @@ main = do
     check "formatter rejects a non-positive tab width" rejectsTabWidth
     check "block formatting reaches a fixed point" formattingIsIdempotent
     check "pattern combinators remain intact while their block is indented" formatsPatternCombinators
+    check "match arms, value blocks and nested blocks are indented by their braces" formatsBranchingForms
     checkIO "encoding conversion follows explicit input and output settings" encodingRoundTrip
     checkIO "UTF-8 input rejects malformed byte sequences" rejectsMalformedUtf8
 
@@ -243,6 +244,64 @@ formatsPatternCombinators =
         defaultFormatOptions
         "class Program {\nbool Match(_ String value) {\nreturn value is null or String and not null;\n}\n}\n"
         "class Program {\n    bool Match(_ String value) {\n        return value is null or String and not null;\n    }\n}\n"
+
+-- The layout follows braces only, so the arms of a match, the blocks of an
+-- if expression and of a guard, and a nested block indent like any other
+-- block, and an expression arm keeps the depth of its match.
+formatsBranchingForms :: Bool
+formatsBranchingForms =
+    formats
+        defaultFormatOptions
+        ( concat
+            [ "class Program {\n"
+            , "int Kind(_ int code) {\n"
+            , "guard (code >= 0) else {\n"
+            , "return 0;\n"
+            , "}\n"
+            , "{\n"
+            , "int unused = code;\n"
+            , "}\n"
+            , "int larger = if (code > 5) {\n"
+            , "code\n"
+            , "} else {\n"
+            , "5\n"
+            , "};\n"
+            , "return match (code) {\n"
+            , "0 -> 10,\n"
+            , "int other if other > larger -> {\n"
+            , "other * 2\n"
+            , "},\n"
+            , "_ -> 30\n"
+            , "};\n"
+            , "}\n"
+            , "}\n"
+            ]
+        )
+        ( concat
+            [ "class Program {\n"
+            , "    int Kind(_ int code) {\n"
+            , "        guard (code >= 0) else {\n"
+            , "            return 0;\n"
+            , "        }\n"
+            , "        {\n"
+            , "            int unused = code;\n"
+            , "        }\n"
+            , "        int larger = if (code > 5) {\n"
+            , "            code\n"
+            , "        } else {\n"
+            , "            5\n"
+            , "        };\n"
+            , "        return match (code) {\n"
+            , "            0 -> 10,\n"
+            , "            int other if other > larger -> {\n"
+            , "                other * 2\n"
+            , "            },\n"
+            , "            _ -> 30\n"
+            , "        };\n"
+            , "    }\n"
+            , "}\n"
+            ]
+        )
 
 formats :: FormatOptions -> String -> String -> Bool
 formats options source expected = case formatSource options (CompilerInput "Program.vxs" source) of
