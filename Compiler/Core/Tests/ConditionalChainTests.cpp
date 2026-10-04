@@ -334,7 +334,8 @@ TEST_CASE("the verifier checks every link of a chain", "[core][verify][chain]")
         std::vector<Core::Statement> body;
         body.push_back(Chain(39U, std::move(last)));
         body.push_back(Give(0));
-        CHECK(HasIssue(Module(std::move(body)), "VXC1017"));
+        const auto module = Module(std::move(body));
+        CHECK(HasIssue(module, "VXC1017"));
         CHECK_FALSE(HasIssue(OpenChain(40U), "VXC1017"));
     }
 
@@ -350,7 +351,8 @@ TEST_CASE("the verifier checks every link of a chain", "[core][verify][chain]")
         std::vector<Core::Statement> body;
         body.push_back(Chain(39U, std::move(last)));
         body.push_back(Give(0));
-        CHECK(HasIssue(Module(std::move(body)), "VXC1016"));
+        const auto module = Module(std::move(body));
+        CHECK(HasIssue(module, "VXC1016"));
         CHECK_FALSE(HasIssue(OpenChain(40U), "VXC1016"));
     }
 }
@@ -366,7 +368,8 @@ TEST_CASE("a chain returns on every path only when its last link has an else",
         // Without an else the function falls off its end.
         std::vector<Core::Statement> open;
         open.push_back(Chain(links, {}));
-        CHECK(HasIssue(Module(std::move(open)), "VXC1005"));
+        const auto checked = Module(std::move(open));
+        CHECK(HasIssue(checked, "VXC1005"));
     }
 
     SECTION("a link whose true branch does not return keeps the path open")
@@ -382,7 +385,8 @@ TEST_CASE("a chain returns on every path only when its last link has an else",
         rest.push_back(std::move(middle));
         std::vector<Core::Statement> body;
         body.push_back(Chain(2U, std::move(rest)));
-        CHECK(HasIssue(Module(std::move(body)), "VXC1005"));
+        const auto module = Module(std::move(body));
+        CHECK(HasIssue(module, "VXC1005"));
     }
 
     SECTION("statements after an open chain still decide")
