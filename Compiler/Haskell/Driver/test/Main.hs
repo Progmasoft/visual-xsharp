@@ -27,6 +27,7 @@ import LoopExpressionTests (loopExpressionTests)
 import LoopFlowOracleTests (loopFlowOracleTests)
 import LoopFlowTests (loopFlowTests)
 import MonomorphizationTests (monomorphizationTests)
+import NestingLimitTests (nestingLimitTests)
 import Numeric (readHex)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
@@ -177,6 +178,7 @@ main = do
     mapM_ (uncurry check) branchingTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests
+    mapM_ (uncurry check) nestingLimitTests
     mapM_ (uncurry check) specializationTests
     mapM_ (uncurry check) voidTests
 

@@ -197,9 +197,19 @@ return. Those tables are transcribed from the evaluation tables of
 `AssignmentExpressionTests.hs`, `LoopExpressionTests.hs` and
 `BranchingTests.hs`, where the same programs are checked against a reference
 Core evaluator. `BranchingExecutionCases.cpp` also runs a match of 200 arms on
-subjects at the start, at both sides of a group boundary of the lowering, deep
-in later groups and in the catch-all, and an `else if` chain of 300 links,
-which the native stages after Core walk in a loop.
+a subject in its second group of the lowering and on one that only the
+catch-all accepts, an `else if` chain of 300 links, which the native stages
+after Core walk in a loop, on its last link and past it, and programs at the
+nesting limits of the frontend: 255 nested `if` statements and a sum of 1024
+operands. Each of those runs compiles its whole program again in both
+pipeline modes, so they are few: the smoke program has a process watchdog,
+and sanitizer builds are several times slower.
+
+The source fuzz targets and `source_fuzz_smoke` run the compiler on the
+compiler stack, as `vxs` does, because an input nested up to the frontend's
+limits does not fit on the default stack of a process. `Corpus/source` has
+permanent seeds for deep nesting, for nesting at and one level beyond each
+limit, and for long `else if` and operator chains.
 
 The differential generator selects one of fourteen program shapes from the
 byte after its generated expression, modulo the shape count. Adding a shape

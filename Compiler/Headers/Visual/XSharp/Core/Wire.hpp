@@ -36,6 +36,10 @@ namespace Visual::XSharp::Core::Wire
         std::size_t maximumTypeDepth{ 128U };
         /// Maximum recursive expression nesting depth.
         std::size_t maximumExpressionDepth{ 4096U };
+        /// Maximum nesting depth of statement bodies: function, branch,
+        /// loop and closure bodies. The links of an `else if` chain share
+        /// one level. The frontend limits source nesting far below this.
+        std::size_t maximumStatementDepth{ 4096U };
         /// Maximum encoded magnitude bytes in one numeric literal.
         std::size_t maximumNumericBytes{ 4096U };
     };

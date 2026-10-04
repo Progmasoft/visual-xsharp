@@ -22,6 +22,7 @@ library
         visual-xsharp-syntax:Visual.XSharp.Diagnostic.Protocol,
         visual-xsharp-syntax:Visual.XSharp.FloatingLiteral,
         visual-xsharp-syntax:Visual.XSharp.Lexer,
+        visual-xsharp-syntax:Visual.XSharp.NestingLimits,
         visual-xsharp-syntax:Visual.XSharp.NumericLiteral,
         visual-xsharp-syntax:Visual.XSharp.Parser,
         visual-xsharp-syntax:Visual.XSharp.SourceText,
@@ -151,6 +152,7 @@ test-suite visual-xsharp-compiler-tests
         NumericTests
         PatternTests
         MonomorphizationTests
+        NestingLimitTests
         ParserContractTests
         ScalarWireTests
         ShortCircuitTests

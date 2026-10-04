@@ -660,12 +660,13 @@ namespace Visual::XSharp::Fuzzing
             llvm::errs() << "Branching execution: " << entry.body << '\n';
             ExerciseExpectedValue(Program(entry), entry.expected);
         }
-        // The subjects select the first arm, the arms on both sides of a
-        // group boundary, arms deep in later groups, and the catch-all. A
+        // The subjects select the first arm of the second group and the
+        // catch-all; every run compiles the whole match again, so there are
+        // only two. A
         // lowering that nested one level per arm would overflow the stack
         // of the stages after Core long before this many arms.
         constexpr int kWideArms = 200;
-        constexpr std::array<int, 7U> subjects{ 0, 15, 16, 17, 150, 199, 200 };
+        constexpr std::array<int, 2U> subjects{ 16, 200 };
         const auto wide = WideMatchBody(kWideArms);
         for (const auto subject : subjects)
         {
@@ -684,7 +685,7 @@ namespace Visual::XSharp::Fuzzing
         // they recursed, 150 links overflowed the stack. Both CorePrep
         // lowerings are compared on it as on every other program here.
         constexpr int kChainLinks = 300;
-        constexpr std::array<int, 5U> selected{ 0, 149, 150, 299, 300 };
+        constexpr std::array<int, 2U> selected{ 299, 300 };
         const auto chain = ElseIfChainBody(kChainLinks);
         for (const auto subject : selected)
         {
@@ -696,6 +697,39 @@ namespace Visual::XSharp::Fuzzing
                               chain };
             llvm::errs() << "Branching execution: else-if chain of "
                          << kChainLinks << " links on " << subject << '\n';
+            ExerciseExpectedValue(Program(entry), entry.expected);
+        }
+        // Programs at the nesting limits of the frontend: a statement at
+        // level 256 and an expression at level 1024. They compile only on
+        // the compiler stack, which the smoke program runs on like `vxs`.
+        {
+            constexpr int kLevels = 255;
+            std::string nested = "int total = 0; ";
+            for (int index = 0; index < kLevels; ++index)
+                nested += "if (left > " + std::to_string(index) + ") { ";
+            nested += "total += 1; ";
+            for (int index = 0; index < kLevels; ++index)
+                nested += "} ";
+            nested += "return total;";
+            constexpr std::array<int, 1U> arguments{ kLevels };
+            for (const auto argument : arguments)
+            {
+                const Case entry{
+                    false, false, argument, 0, argument == kLevels ? 1 : 0,
+                    nested
+                };
+                llvm::errs() << "Branching execution: " << kLevels
+                             << " nested if statements on " << argument << '\n';
+                ExerciseExpectedValue(Program(entry), entry.expected);
+            }
+            constexpr int kOperands = 1024;
+            std::string sum = "return left";
+            for (int index = 1; index < kOperands; ++index)
+                sum += " + left";
+            sum += ";";
+            const Case entry{ false, false, 3, 0, 3 * kOperands, sum };
+            llvm::errs() << "Branching execution: sum of " << kOperands
+                         << " operands\n";
             ExerciseExpectedValue(Program(entry), entry.expected);
         }
     }

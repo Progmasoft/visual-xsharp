@@ -30,6 +30,8 @@ module Visual.XSharp.AST
     , matchPatternSpan
     , matchPatternAnnotation
     , matchPatternBinding
+    , statementSourceSpan
+    , expressionSourceSpan
     , traverseMatchArm
     , traverseMatchPattern
     , CallableBody (..)
@@ -376,6 +378,45 @@ data MatchPattern name annotation
     | -- | @.Case@ names an enum case of the subject's type.
       MatchCasePattern SourceSpan Identifier annotation
     deriving stock (Eq, Ord, Read, Show)
+
+-- | Source range of a statement.
+statementSourceSpan :: Statement name annotation -> SourceSpan
+statementSourceSpan statement = case statement of
+    BindingStatement value _ _ _ _ _ -> value
+    AssignmentStatement value _ _ _ -> value
+    ReturnStatement value _ -> value
+    IfStatement value _ _ _ -> value
+    WhileStatement value _ _ -> value
+    DoWhileStatement value _ _ -> value
+    ForStatement value _ _ _ _ -> value
+    ForEachStatement value _ _ _ _ _ _ -> value
+    IncrementStatement value _ _ -> value
+    CompoundAssignmentStatement value _ _ _ _ -> value
+    DiscardStatement value _ -> value
+    BreakStatement value _ -> value
+    ContinueStatement value -> value
+    GuardStatement value _ _ -> value
+    BlockStatement value _ -> value
+    ExpressionStatement value _ _ -> value
+
+-- | Source range of an expression.
+expressionSourceSpan :: Expression name annotation -> SourceSpan
+expressionSourceSpan expression = case expression of
+    NameExpression value _ _ -> value
+    LiteralExpression value _ _ -> value
+    MemberAccessExpression value _ _ _ -> value
+    CallExpression value _ _ _ -> value
+    UnaryExpression value _ _ _ -> value
+    BinaryExpression value _ _ _ _ -> value
+    IsPatternExpression value _ _ _ -> value
+    ConditionalExpression value _ _ _ _ -> value
+    CoalesceExpression value _ _ _ -> value
+    AssignmentExpression value _ _ _ _ -> value
+    IncrementExpression value _ _ _ -> value
+    LoopExpression value _ _ -> value
+    BlockExpression value _ _ -> value
+    MatchExpression value _ _ _ -> value
+    CallableExpression value _ _ _ _ _ -> value
 
 -- | The guard, when present, and the body of an arm, in evaluation order.
 matchArmExpressions :: MatchArm name annotation -> [Expression name annotation]

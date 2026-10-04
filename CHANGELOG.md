@@ -71,6 +71,14 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   and the block numbering of the adapter, at lengths up to 600 links.
   `source_fuzz_smoke` runs a chain of 300 links and a match of 200 arms
   through both pipeline modes.
+- `NestingLimitTests.hs` nests every construct that holds statements or
+  operands to the limit and one level beyond, checks the position of the
+  diagnostic, and runs the accepted programs. `NestingLimitTests.cpp` pins
+  the wire statement depth limit and walks 1500 levels and a chain of 3000
+  links through the native Core stages on the compiler stack.
+  `source_fuzz_smoke` runs 255 nested `if` statements
+  and a sum of 1024 operands through both pipeline modes, and the source
+  corpus has permanent seeds at and beyond both limits.
 - `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
   and the values of 83 program runs on the unoptimized and the optimized
   Core. `BranchingOracleTests.hs` generates 36 families of arm lists, writes
@@ -91,15 +99,49 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   extension. The type definitions must match the Node.js runtime the
   extension runs on, so that update is made by hand.
 
+### Nesting limits
+
+- Deep nesting no longer ends the compiler with a stack overflow. Before
+  this change a sum of 100 operands, 100 nested parentheses, an `if` nested
+  100 levels deep and an `else if` chain of about 1500 links each overflowed
+  the one-megabyte stack a process starts with on Windows, with no
+  diagnostic.
+- `vxs` and `vxsi` now run the compiler on a thread whose stack they choose
+  themselves, 256 MiB of reserved address space, so that how deep a program
+  may nest is the same on every platform and does not depend on the stack
+  the operating system gives the process. Pages are committed as they are
+  used. The fuzz targets and the smoke program use the same stack. Starting
+  that thread costs a few milliseconds per run: `vxs check` on small
+  programs measured 3 to 8 ms slower than before on Windows, and a program
+  of 300 statements measured the same.
+- The frontend rejects a function body that nests statements more than 256
+  levels deep (`VXP0039`) or expressions more than 1024 levels deep
+  (`VXP0040`), at the first node that is too deep. An `else if` chain is not
+  nesting. The body of a `match` arm counts one level for each arm of its
+  match, up to seventeen, because that is how deep its lowering nests.
+  Measured on the compiler stack, the native stages pass 4000 levels of
+  either kind; the limits leave room for sanitizer builds, which use about
+  three times the stack per level.
+- The native Core wire reader and writer bound the nesting of statement
+  bodies at 4096 levels, as they already bounded expression depth. A `.core`
+  file nested deeper is rejected as exceeding a limit instead of being
+  walked.
+- The Core-to-CorePrep adapter no longer copies every function before
+  preparing it. Copying nested statements recurses once per level, which is
+  what overflowed the stack on long `else if` chains; chains of 5000 links
+  now compile.
+
 ### Known limitations
 
-- An `else if` chain of about 2000 links still overflows the native stack,
-  now while a stage copies the nested Core statements, and so do statements
-  nested in any other way, such as an `if` inside the first branch of an `if`,
-  repeated: 60 levels compile and 100 do not. The compiler then ends without a
-  diagnostic. Neither is new in this version, and `match` is not affected.
-  The Core wire format bounds type and expression depth but has no statement
-  depth limit yet.
+- Compile time grows faster than the program in three cases, all in the
+  frontend and none new in this version: an `else if` chain of 2000 links
+  takes about 10 seconds and one of 5000 about a minute; 2000 sequential
+  `if` statements take about 4 seconds; and each additional level of nested
+  loops multiplies the time by about 1.4, so 14 nested loops take 2 seconds
+  and 50 do not finish. The nesting limits do not bound the last case.
+- An `if` or a `match` at the start of a statement is the statement form,
+  also as the last item of a block that is used as a value. Write it in
+  parentheses to use it as the value of the block.
 
 ### Upgrading from 0.4.1
 

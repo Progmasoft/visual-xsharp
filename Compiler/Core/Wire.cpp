@@ -77,6 +77,7 @@ namespace Visual::XSharp::Core::Wire
             std::span<const std::uint8_t> bytes_;
             const Limits &limits_;
             std::size_t offset_{};
+            std::size_t statementDepth_{};
             std::optional<Module> module_;
             std::optional<Error> error_;
 
@@ -495,12 +496,7 @@ namespace Visual::XSharp::Core::Wire
                                                   std::move(parameter.type) };
                             });
                         auto returnType = ReadType();
-                        auto body
-                            = Vector<Statement>(limits_.maximumStatements,
-                                                "closure statement count",
-                                                [this] {
-                                                    return ReadStatement();
-                                                });
+                        auto body = ReadBody("closure statement count");
                         return Expression::Closure(std::move(captures),
                                                    std::move(parameters),
                                                    std::move(returnType),
@@ -558,6 +554,53 @@ namespace Visual::XSharp::Core::Wire
                 capture.value = std::make_shared<Expression>(std::move(value));
                 return capture;
             }
+            /// Enter one level of statement nesting, or fail when the level
+            /// is beyond the limit. Every successful call is paired with
+            /// LeaveBody.
+            [[nodiscard]] auto
+            EnterBody(std::string_view context) -> bool
+            {
+                if (statementDepth_ >= limits_.maximumStatementDepth)
+                {
+                    Fail(ErrorKind::LimitExceeded,
+                         std::string(context),
+                         "statement nesting exceeds configured limit");
+                    return false;
+                }
+                ++statementDepth_;
+                return true;
+            }
+            void
+            LeaveBody()
+            {
+                --statementDepth_;
+            }
+            /**
+             * @brief Read the statements of a function, branch, loop or
+             * closure body, one nesting level below the current one.
+             *
+             * The reader recurses once per level, so the level is bounded
+             * like type and expression depth are: input that nests deeper
+             * than the limit is rejected before it can exhaust the stack.
+             * The level is reader state rather than a parameter because a
+             * closure body is reached through an expression.
+             */
+            [[nodiscard]] auto
+            ReadBody(std::string_view context) -> std::vector<Statement>
+            {
+                // An empty body holds nothing to recurse into, so it is
+                // accepted at any level, as the writer writes it.
+                const auto size = Count(limits_.maximumStatements, context);
+                std::vector<Statement> statements;
+                if (size == 0U || !EnterBody(context))
+                    return statements;
+                statements.reserve(size);
+                for (std::size_t index = 0; index < size && !error_; ++index)
+                    statements.push_back(ReadStatement());
+                LeaveBody();
+                return statements;
+            }
+
             /// The tag byte of a conditional statement.
             static constexpr std::uint8_t kConditionalTag = 3U;
 
@@ -586,12 +629,7 @@ namespace Visual::XSharp::Core::Wire
                 for (;;)
                 {
                     auto condition = ReadExpression();
-                    auto whenTrue
-                        = Vector<Statement>(limits_.maximumStatements,
-                                            "true branch statement count",
-                                            [this] {
-                                                return ReadStatement();
-                                            });
+                    auto whenTrue = ReadBody("true branch statement count");
                     links.push_back(
                         { std::move(condition), std::move(whenTrue) });
                     const auto size = Count(limits_.maximumStatements,
@@ -604,10 +642,16 @@ namespace Visual::XSharp::Core::Wire
                         ++offset_;
                         continue;
                     }
-                    finalBranch.reserve(size);
-                    for (std::size_t index = 0; index < size && !error_;
-                         ++index)
-                        finalBranch.push_back(ReadStatement());
+                    // The links of a chain share one level; the last false
+                    // branch is a body one level below it.
+                    if (size != 0U && EnterBody("false branch statement count"))
+                    {
+                        finalBranch.reserve(size);
+                        for (std::size_t index = 0; index < size && !error_;
+                             ++index)
+                            finalBranch.push_back(ReadStatement());
+                        LeaveBody();
+                    }
                     break;
                 }
                 auto statement
@@ -659,41 +703,21 @@ namespace Visual::XSharp::Core::Wire
                     case 5:
                     {
                         auto condition = ReadExpression();
-                        auto body
-                            = Vector<Statement>(limits_.maximumStatements,
-                                                "while body statement count",
-                                                [this] {
-                                                    return ReadStatement();
-                                                });
+                        auto body = ReadBody("while body statement count");
                         return Statement::While(std::move(condition),
                                                 std::move(body));
                     }
                     case 6:
                     {
-                        auto body
-                            = Vector<Statement>(limits_.maximumStatements,
-                                                "do/while body statement count",
-                                                [this] {
-                                                    return ReadStatement();
-                                                });
+                        auto body = ReadBody("do/while body statement count");
                         return Statement::DoWhile(std::move(body),
                                                   ReadExpression());
                     }
                     case 7:
                     {
                         auto condition = ReadExpression();
-                        auto body
-                            = Vector<Statement>(limits_.maximumStatements,
-                                                "for body statement count",
-                                                [this] {
-                                                    return ReadStatement();
-                                                });
-                        auto update
-                            = Vector<Statement>(limits_.maximumStatements,
-                                                "for update statement count",
-                                                [this] {
-                                                    return ReadStatement();
-                                                });
+                        auto body = ReadBody("for body statement count");
+                        auto update = ReadBody("for update statement count");
                         return Statement::For(std::move(condition),
                                               std::move(body),
                                               std::move(update));
@@ -727,11 +751,7 @@ namespace Visual::XSharp::Core::Wire
                                             return ReadParameter();
                                         });
                 function.returnType = ReadType();
-                function.body = Vector<Statement>(limits_.maximumStatements,
-                                                  "statement count",
-                                                  [this] {
-                                                      return ReadStatement();
-                                                  });
+                function.body = ReadBody("statement count");
                 return function;
             }
         };
@@ -776,6 +796,7 @@ namespace Visual::XSharp::Core::Wire
         private:
             const Limits &limits_;
             std::vector<std::uint8_t> bytes_;
+            std::size_t statementDepth_{};
             std::optional<Error> error_;
 
             void
@@ -1206,12 +1227,8 @@ namespace Visual::XSharp::Core::Wire
                                  "Core closure must contain a body");
                             return;
                         }
-                        Vector(*expression.closureBody,
-                               limits_.maximumStatements,
-                               "closure statement count",
-                               [this](const Statement &statement) {
-                                   WriteStatement(statement);
-                               });
+                        WriteBody(*expression.closureBody,
+                                  "closure statement count");
                         return;
                     case Expression::Kind::Let:
                         Symbol(expression.letSymbol, "let symbol");
@@ -1239,6 +1256,36 @@ namespace Visual::XSharp::Core::Wire
                             WriteExpression(operand, depth + 1U);
                         return;
                 }
+            }
+            /**
+             * @brief Write the statements of a body, one nesting level below
+             * the current one, with the limit the reader enforces. A module
+             * the reader would reject is not written.
+             */
+            void
+            WriteBody(const std::vector<Statement> &statements,
+                      std::string_view context)
+            {
+                if (statements.empty())
+                {
+                    Count(0U, limits_.maximumStatements, context);
+                    return;
+                }
+                if (statementDepth_ >= limits_.maximumStatementDepth)
+                {
+                    Fail(ErrorKind::LimitExceeded,
+                         std::string(context),
+                         "statement nesting exceeds wire limit");
+                    return;
+                }
+                ++statementDepth_;
+                Vector(statements,
+                       limits_.maximumStatements,
+                       context,
+                       [this](const Statement &value) {
+                           WriteStatement(value);
+                       });
+                --statementDepth_;
             }
             void
             WriteStatement(const Statement &statement)
@@ -1270,24 +1317,16 @@ namespace Visual::XSharp::Core::Wire
                         while (!error_)
                         {
                             WriteExpression(link->expression);
-                            Vector(link->trueBranch,
-                                   limits_.maximumStatements,
-                                   "true branch statement count",
-                                   [this](const Statement &value) {
-                                       WriteStatement(value);
-                                   });
+                            WriteBody(link->trueBranch,
+                                      "true branch statement count");
                             const auto continues
                                 = link->falseBranch.size() == 1U
                                   && link->falseBranch.front().kind
                                          == Statement::Kind::If;
                             if (!continues)
                             {
-                                Vector(link->falseBranch,
-                                       limits_.maximumStatements,
-                                       "false branch statement count",
-                                       [this](const Statement &value) {
-                                           WriteStatement(value);
-                                       });
+                                WriteBody(link->falseBranch,
+                                          "false branch statement count");
                                 break;
                             }
                             Count(1U,
@@ -1303,36 +1342,20 @@ namespace Visual::XSharp::Core::Wire
                         return;
                     case Statement::Kind::While:
                         WriteExpression(statement.expression);
-                        Vector(statement.loopBody,
-                               limits_.maximumStatements,
-                               "while body statement count",
-                               [this](const Statement &value) {
-                                   WriteStatement(value);
-                               });
+                        WriteBody(statement.loopBody,
+                                  "while body statement count");
                         return;
                     case Statement::Kind::DoWhile:
-                        Vector(statement.loopBody,
-                               limits_.maximumStatements,
-                               "do/while body statement count",
-                               [this](const Statement &value) {
-                                   WriteStatement(value);
-                               });
+                        WriteBody(statement.loopBody,
+                                  "do/while body statement count");
                         WriteExpression(statement.expression);
                         return;
                     case Statement::Kind::For:
                         WriteExpression(statement.expression);
-                        Vector(statement.loopBody,
-                               limits_.maximumStatements,
-                               "for body statement count",
-                               [this](const Statement &value) {
-                                   WriteStatement(value);
-                               });
-                        Vector(statement.loopUpdate,
-                               limits_.maximumStatements,
-                               "for update statement count",
-                               [this](const Statement &value) {
-                                   WriteStatement(value);
-                               });
+                        WriteBody(statement.loopBody,
+                                  "for body statement count");
+                        WriteBody(statement.loopUpdate,
+                                  "for update statement count");
                         return;
                     case Statement::Kind::Break:
                     case Statement::Kind::Continue:
@@ -1352,12 +1375,7 @@ namespace Visual::XSharp::Core::Wire
                            WriteType(parameter.type);
                        });
                 WriteType(function.returnType);
-                Vector(function.body,
-                       limits_.maximumStatements,
-                       "statement count",
-                       [this](const Statement &statement) {
-                           WriteStatement(statement);
-                       });
+                WriteBody(function.body, "statement count");
             }
         };
     } // namespace

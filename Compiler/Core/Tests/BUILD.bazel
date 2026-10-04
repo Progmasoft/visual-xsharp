@@ -19,6 +19,7 @@ cc_binary(
         "ConditionalLoweringTests.cpp",
         "CorePipelineTests.cpp",
         "LoopLoweringTests.cpp",
+        "NestingLimitTests.cpp",
         "ShortCircuitLoweringTests.cpp",
         "SymbolAllocationTests.cpp",
         "TemplateTests.cpp",
@@ -26,6 +27,7 @@ cc_binary(
     deps = [
         "//Compiler/Core:core",
         "//Compiler/Driver:core_pipeline",
+        "//Compiler/Support:compiler_stack",
         "//Compiler/Headers/Visual/XSharp:pipeline_api",
         "//Compiler/Headers/Visual/XSharp/Core:template_api",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",

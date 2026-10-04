@@ -377,8 +377,20 @@ links in a loop instead of recursing, because recursion would use stack in
 proportion to the length of the chain. The encoding, the verifier's checks
 and the block numbering of CorePrep are those of the nested formulation; the
 Haskell CorePrep lowering and the native adapter are compared on such chains
-like on any other program. Other deep nesting is still walked recursively,
-and the wire format has no statement depth limit yet.
+like on any other program.
+
+Other nesting is walked recursively, one level of recursion per level of
+nesting, in the wire codec, the verifier and the adapter. Two bounds keep
+that within the stack. The frontend rejects a function body that nests
+statements more than 256 levels or expressions more than 1024 levels deep,
+with a source position, before Core exists. The native wire reader and
+writer bound statement bodies and expressions at 4096 levels each, so Core
+from a file is bounded as well. Both bounds are stated against the stack the
+compiler runs on, `Visual/XSharp/Support/CompilerStack.hpp`: `vxs`, `vxsi`
+and the fuzz programs run the pipeline on a thread with 256 MiB of reserved
+stack instead of the stack the operating system gives the process, which is
+one megabyte on Windows. A program that hosts the pipeline on another thread
+must give it that stack or accept a lower depth.
 
 `Visual.XSharp.Desugarer.Sequencing` and `Visual.XSharp.Desugarer.Branching`
 hold these rules. Result slots are

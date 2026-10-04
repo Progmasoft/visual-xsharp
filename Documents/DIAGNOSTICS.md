@@ -358,6 +358,32 @@ of its own: an unterminated block is `VXP0002`, a name it declares is unknown
 after it, and declaring a name that is already in scope is `VXR0003`, as for
 any local. Two blocks side by side may declare the same name.
 
+### Nesting limits
+
+The stages after Core recurse once per level of nesting, so the frontend
+bounds how deep a function body may nest and reports the place where it
+becomes too deep:
+
+| Code | Meaning |
+| --- | --- |
+| `VXP0039` | a statement is nested more than 256 levels deep in other statements |
+| `VXP0040` | an expression is nested more than 1024 levels deep in other expressions |
+
+The statements of a function body are at level 1, and an expression that is
+not an operand is at level 1. A block, a branch, a loop body, a `guard`
+block, a block used as a value and a closure body are each one statement
+level below what holds them. The links of an `else if` chain are all at the
+level of the first `if`, and so are the `if` statements of `else { if ... }`.
+The body of a `match` arm is as many levels below its match as the match has
+arms, up to seventeen. Expressions inside a statement that is itself inside
+an expression keep counting from that expression. Each function reports each
+code at most once, at the first node in source order that is one level
+beyond the limit, and nothing below that node is examined.
+
+Operands of a left-associative operator nest one level each: the first
+operand of `a + b + c` is at level 3. A sum of 1025 operands is therefore
+`VXP0040`; compute part of it in a statement of its own.
+
 ### Supplied token streams
 
 Embedding clients may supply a token list through `ParserInput`. An empty list

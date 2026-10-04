@@ -55,6 +55,7 @@ cc_library(
         "//Compiler/Driver:pipeline",
         "//Compiler/Headers/Visual/XSharp/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
+        "//Compiler/Support:compiler_stack",
     ],
 )
 

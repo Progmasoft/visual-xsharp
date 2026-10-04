@@ -7,5 +7,8 @@ package(default_visibility = ["//visibility:public"])
 cc_binary(
     name = "vxs",
     srcs = ["Main.cpp"],
-    deps = ["//Compiler/Cli/Commands:commands"],
+    deps = [
+        "//Compiler/Cli/Commands:commands",
+        "//Compiler/Support:compiler_stack",
+    ],
 )

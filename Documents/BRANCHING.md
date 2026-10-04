@@ -127,10 +127,31 @@ name that is in scope around it.
   values.
 - `match` and `guard` are reserved words.
 - A match may have any number of arms: the lowering groups them, so its
-  nesting does not grow with the number of arms. Statements nested by the
-  programmer, such as an `if` inside the first branch of an `if`, are still
-  limited by the stack of the native stages after Core; see the known
-  limitations in the changelog.
+  nesting does not grow with the number of arms. Statements may nest 256
+  levels deep and expressions 1024; the body of a match arm counts one level
+  for each arm of its match, up to seventeen. See the nesting limits in
+  [Diagnostics](DIAGNOSTICS.md).
+- An `if` or a `match` at the start of a statement is the statement form,
+  also as the last item of a block used as a value. To use one as the value
+  of a block, write it in parentheses.
+
+## Choices the specification does not fix
+
+The specification gives examples for these forms, not complete rules. The
+implementation makes the following choices where it is silent. They are
+provisional: each is pinned by a test so that changing it is a deliberate
+act, and none is a statement of the language design.
+
+| Choice | Basis |
+| --- | --- |
+| A statement `match` may select no arm; an expression `match` must always select one. | By analogy with `if` used as an expression, which the specification requires to have an `else`. The specification also has an `[Exhaustive]` attribute for data and enum types whose effect on `match` it does not state. |
+| A name bound by a type pattern is immutable. | None. Other bindings, including the binding of `for (:)`, may be rebound unless they are `final`. |
+| A literal pattern has no sign. | The grammar: a pattern is a `literal`, and a literal has no sign. A negative constant cannot be matched. |
+| The comma after an expression body is required unless the arm is the last one. | Stricter than the grammar, which makes the comma optional after every arm. Without it the parenthesized pattern of the next arm parses as a call of the body. |
+| The `else` block of a `guard` must end by leaving the enclosing scope. | The specification shows only `return;` there and says the binding of a guard is available after it. |
+| `return`, `break` and `continue` cannot leave a block used as a value. | An implementation limit, not a rule: the lowering has no place to carry them yet. |
+| `guard` and `if` accept a plain condition. | The grammar. The specification shows `guard` only with a binding, which is recognized and rejected until optional values exist. |
+| A type pattern over a scalar must name the subject's own type and then always accepts. | The specification shows type patterns for class hierarchies only. |
 
 ## Where it is implemented and tested
 

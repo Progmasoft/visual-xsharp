@@ -233,6 +233,17 @@ exactly like a primitive operand. The reader does not check that the arms
 agree with the result type; that is the Core verifier's rule and runs on every
 decoded module.
 
+The native reader and writer also bound the nesting of statement bodies, with
+the same default of 4096 levels. A function body is level 1, and a branch, a
+loop body and a closure body are each one level below the statement or
+expression that holds them. A false branch that holds exactly one conditional
+statement is an `else if`: the reader and the writer walk such a chain in a
+loop, and its links share one level. An empty body costs no level. Input that
+nests deeper is rejected with a limit error before it is walked. The limit is
+a property of the reader, not of the format: it changes no byte of a valid
+document, and the Haskell codec, whose stack grows on demand, does not need
+it.
+
 CorePrep, Xpp, and Xmm have no conditional-expression record. The expression
 is lowered to blocks, a branch, and assignments to one slot before CorePrep is
 serialized, so their versions did not change.
