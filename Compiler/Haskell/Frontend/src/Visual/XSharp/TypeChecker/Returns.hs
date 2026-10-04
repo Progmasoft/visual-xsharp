@@ -95,13 +95,14 @@ expressionReturnTypes expression = case expression of
         armReturnTypes arm = maybe [] expressionReturnTypes (matchArmGuard arm) ++ expressionReturnTypes (matchArmBody arm)
 
 {- | The types of the values carried by the breaks that leave this loop
-itself, from its body and from its condition, also out of blocks used as
-values. Breaks of nested loops leave those loops.
+itself, from its body, its condition and its update clause, also out of
+blocks used as values. Breaks of nested loops leave those loops.
 -}
 loopBreakTypes :: Statement name Type -> [Type]
 loopBreakTypes loop = [typedExpressionType value | BreakStatement _ (Just value) <- transfers]
     where
         transfers = case loop of
             WhileStatement _ condition body -> expressionTransfers condition ++ blockTransfers body
-            ForStatement _ _ condition _ body -> maybe [] expressionTransfers condition ++ blockTransfers body
+            ForStatement _ _ condition updates body ->
+                maybe [] expressionTransfers condition ++ blockTransfers body ++ concatMap statementTransfers updates
             _ -> []

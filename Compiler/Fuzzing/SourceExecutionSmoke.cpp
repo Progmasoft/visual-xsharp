@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "BranchingExecutionCases.hpp"
+#include "ExecutionCases.hpp"
 #include "ExpressionExecutionCases.hpp"
 #include "LeavingExecutionCases.hpp"
 #include "SourceFuzz.hpp"
@@ -29,7 +30,7 @@ namespace
     // owns, or released it twice, is rejected. The two CorePrep lowerings
     // are compared on them as well. They are compiled and verified, not
     // run: the JIT of this harness does not link lifted closures.
-    constexpr std::array<std::string_view, 7U> kOwnershipCases{ {
+    constexpr std::array<std::string_view, 11U> kOwnershipCases{ {
         // An initializer that never completes, after a closure was created.
         "namespace Fuzz; class Program { "
         "public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) "
@@ -108,7 +109,102 @@ namespace
         "} else { false }; return b; }; "
         "int q = if (positive(a)) { return twice(a); } else { 20 }; "
         "return q; } }",
+        // A continue in a loop condition and a break in a loop update,
+        // each with a closure alive at the transfer.
+        "namespace Fuzz; class Program { "
+        "public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) "
+        ": 0; } "
+        "public static int Evaluate() { int a = Step(4); int c = 0; "
+        "auto limit = [of = a] \\ -> of; int n = 0; "
+        "while (if ((c += 1) < limit()) { continue; } else { n < 2 }) { "
+        "auto tick = [by = n] \\ -> by + 1; n = tick(); } "
+        "for (int i = 0; i < 9; i += if (i == limit()) { break; } else { 1 "
+        "}) { auto add = [by = i] \\(int w) -> w + by; n = add(n); } "
+        "return c * 100 + n; } }",
+        // A callable created inside a callable: the inner one reads a
+        // parameter of the outer one and a local of the method, which the
+        // outer one must capture for it and nothing else.
+        "namespace Fuzz; class Program { "
+        "public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) "
+        ": 0; } "
+        "public static int Evaluate() { int k = Step(4); "
+        "auto outer = \\(int v) -> { auto inner = \\(int w) -> w + k + v; "
+        "return inner(v) * 2; }; return outer(k); } }",
+        // Three levels, with explicit and implicit captures mixed.
+        "namespace Fuzz; class Program { "
+        "public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) "
+        ": 0; } "
+        "public static int Evaluate() { int k = Step(4); "
+        "auto a = [k] \\(int v) -> { auto b = \\(int w) -> { "
+        "auto c = [k, v, w] \\(int x) -> x + w * 10 + v * 100 + k * 1000; "
+        "return c(1); }; return b(2); }; return a(3); } }",
+        // An inner callable that outlives the call that created it.
+        "namespace Fuzz; class Program { "
+        "public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) "
+        ": 0; } "
+        "public static int Evaluate() { int k = Step(4); "
+        "auto make = \\(int v) -> { auto inner = \\(int w) -> w + v; "
+        "return inner; }; auto f = make(k); auto g = make(k + 2); "
+        "return f(2) * 100 + g(2); } }",
     } };
+
+    // Methods whose return type is inferred, called from the bodies below.
+    // A chain is declared against the order of its inference, and two
+    // methods return each other.
+    constexpr std::string_view kInferredHelpers
+        = "    public static auto Twice(_ int value) { return value + "
+          "value; }\n"
+          "    public static auto Factorial(_ int value) { if (value <= 1) "
+          "{ return 1; } return value * Factorial(value - 1); }\n"
+          "    public static auto First(_ int v) { return Second(v) + 1; "
+          "}\n"
+          "    public static auto Second(_ int v) { return Third(v) + 10; "
+          "}\n"
+          "    public static auto Third(_ int v) { return v * 2; }\n"
+          "    public static auto Even(_ int v) { if (v == 0) { return "
+          "true; } return Odd(v - 1); }\n"
+          "    public static auto Odd(_ int v) { if (v == 0) { return "
+          "false; } return Even(v - 1); }\n"
+          "    public static auto Pick(_ int v) { int q = if (v > 0) { "
+          "return v * 3; } else { 5 }; return q + 1; }\n"
+          "    public static auto Scan(_ int v) { int q = while (true) { "
+          "if (v > 3) { return 7; } break 2; }; return q + v; }\n";
+
+    // Written here by hand, apart from the generated tables and from the
+    // frontend tests: the expected values are worked out from the methods
+    // above, so these runs do not share an expectation with any other
+    // table.
+    constexpr auto kInferredCases = std::to_array<
+        Visual::XSharp::Fuzzing::ExecutionCase>({
+        { false, false, 3, 4, 30, "return Twice(left) + Factorial(right);" },
+        { false, false, 0, 1, 1, "return Twice(left) + Factorial(right);" },
+        { false, false, 4, 0, 19, "return First(left);" },
+        { false,
+          false,
+          4,
+          0,
+          12,
+          "return (Even(left) ? 10 : 20) + (Odd(left) ? 1 : 2);" },
+        { false,
+          false,
+          3,
+          0,
+          21,
+          "return (Even(left) ? 10 : 20) + (Odd(left) ? 1 : 2);" },
+        { false, false, 2, 0, 66, "return Pick(left) * 10 + Pick(0 - left);" },
+        { false,
+          false,
+          1,
+          0,
+          307,
+          "return Scan(left) * 100 + Scan(left + 3);" },
+        { false,
+          false,
+          3,
+          0,
+          6,
+          "int x = Twice(left); bool b = Even(x); return b ? x : 0 - x;" },
+    });
 
     int
     Smoke()
@@ -121,6 +217,12 @@ namespace
         // Hand-written results for expressions that leave instead of
         // yielding a value.
         Visual::XSharp::Fuzzing::ExerciseLeavingCases();
+        // Hand-written results for calls of methods whose return type is
+        // inferred.
+        Visual::XSharp::Fuzzing::ExerciseExecutionCases(
+            "Inferred return execution",
+            kInferredCases,
+            kInferredHelpers);
         for (const auto text : kOwnershipCases)
         {
             llvm::errs() << "Ownership verification: " << text << '\n';

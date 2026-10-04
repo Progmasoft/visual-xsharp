@@ -135,12 +135,15 @@ positionTests =
             ["int r = while (true) {", "int q = if (flag) { break; } else { 2 };", "break q;", "};", "return r;"]
         )
     ,
-        ( "a continue in a loop condition is reported at the continue"
-        , reportedAt "VXT0059" (4, 20) ["while (flag) {", "while (if (flag) { continue; } else { true }) { }", "}", "return 0;"]
+        ( "a continue inside a callable in a loop is reported at the continue"
+        , reportedAt
+            "VXT0027"
+            (4, 37)
+            ["while (flag) {", "auto f = \\(int v) -> { if (v > 0) { continue; } return v; };", "}", "return 0;"]
         )
     ,
-        ( "a break in a loop update is reported at the break"
-        , reportedAt "VXT0059" (3, 41) ["for (int i = 0; i < 3; i += if (flag) { break; } else { 1 }) { }", "return 0;"]
+        ( "a value-carrying break in the update of a loop statement is reported at the break"
+        , reportedAt "VXT0026" (3, 41) ["for (int i = 0; i < 3; i += if (flag) { break 1; } else { 1 }) { }", "return 0;"]
         )
     ,
         ( "a guard block that does not leave is reported at the guard"

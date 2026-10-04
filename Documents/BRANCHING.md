@@ -130,9 +130,14 @@ the expression has the type of the blocks that complete. Such a block is
 lowered as its statements alone: nothing is stored for it.
 
 A value block may also stand in the condition or the update clause of a
-loop. The condition belongs to its loop, so a `break` there leaves that
-loop, with the effects of the condition up to it. A `continue` in the update
-clause ends the update, and the condition is tested next.
+loop. Both belong to their loop, as examples 79 to 83 of
+`Spec/Language/Iteration.vxs` state. A `break` in either leaves that loop,
+with the effects of the condition or the update up to it. A `continue` in
+the condition abandons the rest of the condition and evaluates it again,
+without running the body or, in a `for`, the update; a condition that always
+continues is an endless loop. A `continue` in the update clause ends the
+update, and the condition is tested next. A callable is not inside the loops
+around the place that creates it.
 
 ```vxs
 while (if (index >= limit) { break; } else { true }) { index += 1; }

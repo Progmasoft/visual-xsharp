@@ -56,10 +56,24 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   yields a value, what would have received the value is not lowered, and no
   result slot or placeholder is created for it.
 - Such a block may stand in a loop header and in a loop used as an
-  expression. A `break` in the condition of a loop leaves that loop; a
+  expression. The condition and the update clause belong to their loop: a
+  `break` in either leaves that loop; a `continue` in the condition
+  evaluates the condition again without running the body or the update; a
   `continue` in the update clause of a `for` ends the update, and the
   condition is tested next; a `break` may carry a value to the loop
-  expression around the block.
+  expression around the block. A callable is not inside the loops around
+  the place that creates it. `Spec/Language/Iteration.vxs` gains examples
+  79 to 83 for these rules, and `VXT0059` is retired.
+- A method declared with `auto` can be called. Return types are inferred
+  before any caller is checked, across classes and against declaration
+  order, through chains and mutual recursion; a method with no result
+  independent of itself is `VXT0063`, and one whose returns disagree is
+  `VXT0062`. Such calls used to pass the frontend and fail in the Core
+  verifier with `VXC1018`.
+- A callable may be created inside a callable. The outer one captures what
+  the inner one reads from further out, and nothing that belongs to the
+  inner one; it used to capture the inner parameters and fail in the Core
+  verifier with `VXC1020`.
 - `return` is accepted inside a loop used as an expression, and a loop
   expression that returns and never breaks is valid. `VXT0045` and `VXT0047`
   are retired.
@@ -127,6 +141,10 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   the single program had grown to 221 seconds; apart, each takes 77 to 110
   seconds on the same machine. The new program also compiles and verifies
   programs that own closures while control leaves through a value block.
+- The branching and leaving tables of both harnesses are generated from the
+  case files under `Compiler/Fuzzing/Cases` by the new Go helper
+  `execution-cases`, whose `check` command and tests fail on a stale table.
+  The reference Core evaluator of the frontend tests runs closures.
 - `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
   and the values of 83 program runs on the unoptimized and the optimized
   Core. `BranchingOracleTests.hs` generates 36 families of arm lists, writes
@@ -237,14 +255,13 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   implemented. They are pending work, listed with their diagnostics under
   "Pending branching and loop forms" in `Documents/IMPLEMENTATION.md`: a
   binding in the condition of `if`, `guard` or `while`, which needs optional
-  values; a call that does not return as a way of leaving; `continue` out of
-  a value block in the condition of a loop; and `break` out of a value block
-  in the update clause of a loop.
-- A call of a method whose return type is written `auto`, and a callable
-  created inside another callable, pass the frontend and are rejected by the
-  Core verifier (`VXC1018`, `VXC1020`), as on `main`. Closures are compiled
-  and verified by the tests but run by neither the reference evaluator nor
-  the JIT of the smoke programs.
+  values, and a call that does not return as a way of leaving.
+- Closures run in the reference Core evaluator of the frontend tests and are
+  compiled through every native stage, but the JIT of the smoke programs
+  does not link them, so no test runs a closure through LLVM.
+- The nesting limits of 256 and 1024 and the compiler stack reservation of
+  256 MiB are the limits this version ships with. Stack use at the limits
+  is measured on Windows only.
 - The statements after a statement that never completes are checked but no
   longer lowered to Core.
 

@@ -32,7 +32,12 @@ data Value
     = IntegerValue Integer
     | BooleanValue Bool
     | UnitValue
-    deriving (Eq, Ord, Show)
+    | {- | A closure: the values its captures had when it was created, the
+      symbols of its parameters, and its body. A capture initializer is
+      evaluated once, where the closure is created.
+      -}
+      ClosureValue [(Int, Value)] [Int] [CoreStatement]
+    deriving (Eq, Show)
 
 -- Local values keyed by symbol identity. Core symbols are unique within a
 -- function, so one flat table is a faithful model of its locals.
@@ -160,9 +165,13 @@ loop moduleValue budget locals condition body update testFirst
                     (updateFlow, afterUpdate, updateBudget) <- executeAll moduleValue bodyBudget afterBody update
                     case updateFlow of
                         Proceed -> loop moduleValue updateBudget afterUpdate condition body update True
-                        -- Leaving the loop from its update clause has no
-                        -- defined meaning in this evaluator.
-                        _ -> Nothing
+                        -- A break in the update clause leaves the loop,
+                        -- and a return leaves the function.
+                        BreakLoop -> Just (Proceed, afterUpdate, updateBudget)
+                        ReturnValue _ -> Just (updateFlow, afterUpdate, updateBudget)
+                        -- The Core verifier rejects a continue placed
+                        -- directly in an update clause.
+                        ContinueLoop -> Nothing
 
 store :: Int -> Value -> Locals -> Locals
 store symbol value locals = (symbol, value) : filter ((/= symbol) . fst) locals
@@ -172,6 +181,7 @@ truth value = case value of
     BooleanValue flag -> Just flag
     IntegerValue number -> Just (number /= 0)
     UnitValue -> Nothing
+    ClosureValue {} -> Nothing
 
 evaluate :: CoreModule -> Budget -> Locals -> CoreExpression -> Maybe (Value, Locals, Budget)
 evaluate moduleValue budget locals expression
@@ -196,19 +206,41 @@ evaluate moduleValue budget locals expression
             (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals operands
             value <- applyPrimitive primitive valueType values
             Just (value, afterLocals, afterBudget)
-        CoreApply (CoreVariable callee _) arguments _ -> do
-            function <-
-                firstJust
-                    [ candidate
-                    | candidate <- coreModuleFunctions moduleValue
-                    , symbolOf (coreFunctionName candidate) == symbolOf callee
-                    ]
-            (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals arguments
-            (value, callBudget) <- call moduleValue afterBudget function values
+        CoreApply (CoreVariable callee _) arguments _
+            | function : _ <-
+                [ candidate
+                | candidate <- coreModuleFunctions moduleValue
+                , symbolOf (coreFunctionName candidate) == symbolOf callee
+                ] -> do
+                (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals arguments
+                (value, callBudget) <- call moduleValue afterBudget function values
+                Just (value, afterLocals, callBudget)
+        -- The callee is evaluated before the arguments, like any operand.
+        CoreApply callee arguments _ -> do
+            (target, calleeLocals, calleeBudget) <- evaluate moduleValue budget locals callee
+            (values, afterLocals, afterBudget) <- evaluateMany moduleValue calleeBudget calleeLocals arguments
+            (value, callBudget) <- callClosure target values afterBudget
             Just (value, afterLocals, callBudget)
-        CoreApply {} -> Nothing
-        CoreClosure {} -> Nothing
+        CoreClosure captures parameters _ body _ -> do
+            (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals (map coreCaptureValue captures)
+            Just
+                ( ClosureValue (zip (map (symbolOf . coreCaptureName) captures) values) (map (symbolOf . fst) parameters) body
+                , afterLocals
+                , afterBudget
+                )
     where
+        -- A closure runs on its captures and its arguments alone: it sees
+        -- no local of the function that calls it.
+        callClosure target values currentBudget = case target of
+            ClosureValue captured parameters body
+                | currentBudget > 0 && length parameters == length values -> do
+                    (flow, _, remaining) <-
+                        executeAll moduleValue (currentBudget - 1) (zip parameters values ++ captured) body
+                    case flow of
+                        ReturnValue value -> Just (value, remaining)
+                        Proceed -> Just (UnitValue, remaining)
+                        _ -> Nothing
+            _ -> Nothing
         -- The right operand runs only when the left one does not decide.
         shortCircuit decidingValue left right = do
             (leftValue, afterLeft, leftBudget) <- evaluate moduleValue budget locals left

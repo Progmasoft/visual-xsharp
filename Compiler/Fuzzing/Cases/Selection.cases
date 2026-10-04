@@ -1,0 +1,207 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+#
+# Which arm, block or body is selected, and how often each part runs.
+#
+# This file is the source of the cases. `go -C helpers run ./cmd/execution-cases
+# generate` writes them into the Haskell and the C++ test tables, and
+# `check` fails when a table is not what this file generates.
+#
+# A case is the body of `int Run(bool flag, bool other, int left, int right)`
+# and its runs. The expected value of every run is written by hand from the
+# language rules, never taken from a compiler.
+#
+#     body: <one line of source>
+#     run: plain <left> <right> -> <expected>
+#     run: flags <flag> <other> <left> <right> -> <expected>
+#
+# Lines that start with `#` before a body are its comment.
+
+body: return match (left) { 1 -> 10, 2 -> 20, _ -> 30 };
+run: plain 1 0 -> 10
+run: plain 2 0 -> 20
+run: plain 5 0 -> 30
+
+# Negative constants.
+body: int v = 0 - left; return match (v) { -1 -> 10, -2 -> 20, 0 -> 5, _ -> 7 };
+run: plain 1 0 -> 10
+run: plain 2 0 -> 20
+run: plain 0 0 -> 5
+run: plain 3 0 -> 7
+
+body: int v = 0 - left - 9223372036854775807; return match (v) { -9223372036854775808 -> 1, -9223372036854775807 -> 2, _ -> 0 };
+run: plain 1 0 -> 1
+run: plain 0 0 -> 2
+
+body: int v = right - left; return match (v), (flag) { (-1), (true) -> 1, (-1), (_) -> 2, (_), (_) -> 3 };
+run: flags true false 3 2 -> 1
+run: flags false false 3 2 -> 2
+run: flags true false 2 2 -> 3
+
+# Two bool subjects covered without a catch-all arm.
+body: return match (flag), (other) { (true), (_) -> 1, (false), (true) -> 2, (false), (false) -> 3 };
+run: flags true true 0 0 -> 1
+run: flags true false 0 0 -> 1
+run: flags false true 0 0 -> 2
+run: flags false false 0 0 -> 3
+
+body: return match (flag), (other) { (true), (true) -> 3, (true), (_) -> 2, (_), (true) -> 1, (_), (_) -> 0 };
+run: flags true true 0 0 -> 3
+run: flags true false 0 0 -> 2
+run: flags false true 0 0 -> 1
+run: flags false false 0 0 -> 0
+
+# The subject is evaluated once, whichever arm accepts.
+body: int n = left; int r = match (n += 1) { 1 -> 100, 2 -> 200, _ -> 300 }; return r + n;
+run: plain 0 0 -> 101
+run: plain 1 0 -> 202
+run: plain 5 0 -> 306
+
+# Subjects are evaluated left to right, before any arm is tested.
+body: int n = left; return match (n += 1), (n * 10) { (2), (20) -> 1, (_), (_) -> 0 };
+run: plain 1 0 -> 1
+run: plain 2 0 -> 0
+
+# A guard runs only when the patterns of its arm accept.
+body: int calls = 0; int r = match (left) { 1 if (calls += 1) > 0 -> 10, 2 if (calls += 10) > 0 -> 20, _ -> 30 }; return r * 100 + calls;
+run: plain 1 0 -> 1001
+run: plain 2 0 -> 2010
+run: plain 3 0 -> 3000
+
+# A guard that is false passes the value on to the arms after it.
+body: return match (left) { 1 if flag -> 1, 1 -> 2, _ -> 3 };
+run: flags true false 1 0 -> 1
+run: flags false false 1 0 -> 2
+run: flags true false 9 0 -> 3
+
+# A numeric guard is tested in Boolean context.
+body: return match (left) { 1 if right -> 1, _ -> 0 };
+run: plain 1 5 -> 1
+run: plain 1 0 -> 0
+run: plain 2 5 -> 0
+
+# Only the body of the accepting arm runs.
+body: int n = 0; int r = match (left) { 1 -> (n += 1), 2 -> (n += 10), _ -> (n += 100) }; return r * 1000 + n;
+run: plain 1 0 -> 1001
+run: plain 2 0 -> 10010
+run: plain 3 0 -> 100100
+
+body: return match (Twice(left)) { 4 -> 1, 6 -> 2, _ -> 0 };
+run: plain 2 0 -> 1
+run: plain 3 0 -> 2
+run: plain 4 0 -> 0
+
+body: long wide = 5; return match (wide) { 5 -> 1, _ -> 0 };
+run: plain 0 0 -> 1
+
+body: long wide = match (left) { 1 -> 10, _ -> 20 }; return wide > 15 ? 1 : 0;
+run: plain 1 0 -> 0
+run: plain 2 0 -> 1
+
+body: int r = 0; match (left) { 1 -> r = 5, _ -> r = Twice(left) } return r;
+run: plain 1 0 -> 5
+run: plain 4 0 -> 8
+
+body: return match (left) { 1 -> if (flag) { 5 } else { 6 }, _ -> match (right) { 0 -> 7, _ -> 8 } };
+run: flags true false 1 0 -> 5
+run: flags false false 1 0 -> 6
+run: plain 2 0 -> 7
+run: plain 2 3 -> 8
+
+body: return match (left) { 1 -> { int t = right * 2; t + 1 }, _ -> { int t = right * 3; t - 1 } };
+run: plain 1 4 -> 9
+run: plain 2 4 -> 11
+
+# A statement arm may continue or leave the enclosing loop.
+body: int total = 0; for (int i = 0; i < left; i++) { match (i) { 2 -> { continue; }, 5 -> { break; }, _ -> { total += i; } } } return total;
+run: plain 10 0 -> 8
+run: plain 3 0 -> 1
+run: plain 0 0 -> 0
+
+# A statement arm may supply the value of an enclosing loop expression.
+body: int n = 0; int r = while (true) { n += 1; match (n) { 4 -> { break n * 10; }, _ -> { } } }; return r;
+run: plain 0 0 -> 40
+
+body: match (left) { 1 -> { return 100; }, _ -> { } } return 5;
+run: plain 1 0 -> 100
+run: plain 2 0 -> 5
+
+body: match (left) { } return 5;
+run: plain 1 0 -> 5
+
+body: int r = if (left > right) { left } else { right }; return r;
+run: plain 3 5 -> 5
+run: plain 9 2 -> 9
+
+body: int r = if (flag) { int t = left * 2; t + 1 } else { int t = right * 3; t - 1 }; return r;
+run: flags true false 4 0 -> 9
+run: flags false false 0 5 -> 14
+
+# Only the selected block of an if expression runs.
+body: int n = 0; int r = if (flag) { n += 1; 10 } else { n += 100; 20 }; return r * 1000 + n;
+run: flags true false 0 0 -> 10001
+run: flags false false 0 0 -> 20100
+
+body: return (if (flag) { left } else { right }) + (if (other) { 100 } else { 200 });
+run: flags true true 1 2 -> 101
+run: flags false false 1 2 -> 202
+
+body: guard (left > 0) else { return 0 - 1; } return left * 2;
+run: plain 3 0 -> 6
+run: plain 0 0 -> -1
+
+body: int total = 0; for (int i = 0; i < left; i++) { guard (i % 2 == 0) else { continue; } total += i; } return total;
+run: plain 6 0 -> 6
+run: plain 1 0 -> 0
+
+body: int n = 0; while (true) { guard (n < left) else { break; } n += 1; } return n;
+run: plain 4 0 -> 4
+run: plain 0 0 -> 0
+
+body: int total = 0; { int part = left * 2; total += part; } { int part = right * 3; total += part; } return total;
+run: plain 2 3 -> 13
+run: plain 0 0 -> 0
+
+body: int n = 0; while (true) { { n += 1; if (n > left) { break; } } } { { return n * 10; } }
+run: plain 3 0 -> 40
+run: plain 0 0 -> 10
+
+body: int total = 0; for (int i = 0; i < left; i++) { { if (i == 1) { continue; } } { int step = i * 2; total += step; } } return total;
+run: plain 4 0 -> 10
+run: plain 1 0 -> 0
+
+body: return match (left) { 1 -> 10 2 -> 20 _ -> 30 };
+run: plain 1 0 -> 10
+run: plain 2 0 -> 20
+run: plain 9 0 -> 30
+
+# A pattern binding is a local of its arm and may be assigned.
+body: return match (left) { int value if value > 2 -> { value = value * 2; value }, int value -> { value += 1; value } };
+run: plain 5 0 -> 10
+run: plain 1 0 -> 2
+
+# Assigning a binding does not change the subject the later arms test.
+body: int r = 0; match (left) { int value if (value = 7) > 9 -> { r = 1; }, 3 -> { r = 2; }, _ -> { r = 3; } } return r;
+run: plain 3 0 -> 2
+run: plain 4 0 -> 3
+
+body: int r = if (flag) { if (other) { 1 } else { 2 } } else { match (left) { 1 -> 10, _ -> 20 } }; return r;
+run: flags true true 0 0 -> 1
+run: flags true false 0 0 -> 2
+run: flags false false 1 0 -> 10
+run: flags false false 2 0 -> 20
+
+body: int n = 0; int r = if (flag) { if (other) { n += 1; } else { n += 2; } match (left) { 1 -> { n += 10; } } n } else { 0 }; return r;
+run: flags true true 1 0 -> 11
+run: flags true false 2 0 -> 2
+run: flags false false 1 0 -> 0
+
+body: match (left) { 1 -> { match (right) { 2 -> { return 12; } } }, _ -> { } } return 5;
+run: plain 1 2 -> 12
+run: plain 1 3 -> 5
+run: plain 2 2 -> 5
+
+# A guard condition with a store runs once, before the block decision.
+body: int n = left; guard ((n += 1) > 3) else { return n * 10; } return n;
+run: plain 5 0 -> 6
+run: plain 1 0 -> 20

@@ -46,9 +46,10 @@ is no decrement operator; `--` always starts a comment. A `while` or classic `fo
 with literal, wildcard and binding patterns and guards; `if` is also an expression over two value blocks;
 `guard (condition) else { ... }` runs its block when the condition is false; and a `{ ... }` at the start of a
 statement is a nested block with its own scope. Null coalescing `??` and `??=`, storage
-targets other than a named local, loop, conditional and match values that are not `bool` or numeric, `return` inside a
-loop expression, `return`, `break` and `continue` out of a block used as a value, the `null` and enum case patterns, type
-patterns over class hierarchies, and bindings in conditions are not implemented.
+targets other than a named local, loop, conditional and match values that are not `bool` or numeric, the `null` and
+enum case patterns, type patterns over class hierarchies, and bindings in conditions are not implemented. `return`,
+`break` and `continue` out of a block used as a value are implemented, in loop bodies, loop headers and loops used as
+expressions; "Pending branching and loop forms" below lists what is still owed.
 It does not yet implement the complete language catalog in `Spec/`.
 
 Core optimization is connected, verifier-guarded, and fixed-point driven. It performs immutable literal propagation,
@@ -90,23 +91,24 @@ the specification is not changed to match them.
 | --- | --- | --- | --- |
 | a binding in the condition of `if`, `guard` or `while`, as in `guard (auto user = Find()) else { return; }` | `Spec/Language/Decls.vxs`, examples 190 to 192 | `VXP0035` | optional values |
 | a call that does not return as a way of leaving a `guard` block or a block used as a value | example 297 | every call is assumed to return, so the block is taken to complete: `VXT0061` or `VXT0046` | a way to know that a call does not return; how that is expressed in the language is not decided here |
-| `continue` out of a block used as a value in the condition of a loop | no rule in the specification states its target | `VXT0059` | a decision on the target, then its lowering |
-| `break` out of a block used as a value in the update clause of a loop | the rule that `break` leaves the nearest loop | `VXT0059` | a lowering that leaves the loop from inside the update region |
 | exhaustiveness of a `match` over an enum or a nullable subject | example 304 | `VXT0056`, `VXT0055` | enum declarations; nullable subjects |
 | type patterns over class hierarchies | examples 198 to 203 | `VXT0057` | class hierarchies |
-| a call of a method whose return type is written `auto` | `Spec/Language/Decls.vxs`, example 139 and the other `auto` return examples of section 22 | the frontend accepts it and the Core verifier rejects the module with `VXC1018` | not investigated beyond reproducing it; `main` behaves the same |
-| a callable created inside another callable | the callable literals of the specification | the frontend accepts it and the Core verifier rejects the module with `VXC1020` | not investigated beyond reproducing it; `main` behaves the same |
 
-Implemented and verified through native execution: `return`, `break` and
-`continue` out of a block used as a value, in loop bodies; a `break` in a
-loop condition; a `continue` in a `for` update clause; a `break` that carries
-a value out of a block used as a value to a loop used as an expression;
-`return` out of a loop used as an expression, directly and from a block used
-as a value; an `if` or `match` expression none of whose branches completes.
-Implemented and verified through the whole pipeline but not executed,
-because neither the reference evaluator nor the JIT of the smoke programs
-runs closures: the inference of a callable's return type from returns in
-blocks used as values and in loop expressions.
+Implemented and verified through native execution, unoptimized and
+optimized: `return`, `break` and `continue` out of a block used as a value,
+in loop bodies; `break` and `continue` in a loop condition; `break` and
+`continue` in a `for` update clause; a `break` that carries a value out of a
+block used as a value to a loop used as an expression; `return` out of a
+loop used as an expression, directly and from a block used as a value; an
+`if` or `match` expression none of whose branches completes; and calls of
+methods whose return type is inferred, in the same class, in another class,
+through chains of such methods and through mutual recursion.
+
+Implemented, run in the reference Core evaluator of the frontend tests, and
+compiled through every native stage and its verifier, but not run through
+LLVM, because the JIT of the smoke programs does not link closures: the
+inference of a callable's return type from returns inside its expressions,
+and callables created inside callables.
 
 The full `Spec/` catalog is not implemented. Object/value layout, the complete standard-library surface, cross-namespace
 imports, template declaration cloning and constraint selection, exception lowering, ownership runtime operations, generators, FFI, assembly, and

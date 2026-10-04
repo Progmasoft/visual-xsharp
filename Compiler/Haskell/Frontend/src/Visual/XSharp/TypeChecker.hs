@@ -11,11 +11,11 @@ module Visual.XSharp.TypeChecker (TypeChecker (..), defaultTypeChecker, runTypeC
 
 import Visual.XSharp.AST
 import Visual.XSharp.BuiltinTypes
-import Visual.XSharp.ConstantEvaluation
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
 import Visual.XSharp.TemplateValue
 import Visual.XSharp.TypeChecker.Branching
+import Visual.XSharp.TypeChecker.Literals
 import Visual.XSharp.TypeChecker.Loops
 import Visual.XSharp.TypeChecker.Returns
 
@@ -43,6 +43,11 @@ data MethodCandidate = MethodCandidate
 data TypeCatalog = TypeCatalog
     { catalogTypes :: [(SymbolId, ResolvedName)]
     , catalogMethods :: [MethodCandidate]
+    , catalogInferredReturns :: [((SymbolId, SourceSpan), Type)]
+    {- ^ The return types inferred for the methods declared with @auto@, by
+    the symbol and the place of the declaration. A method that is absent has
+    no return type that is known yet.
+    -}
     }
 
 -- Type syntax deliberately keeps source spellings.  This side environment is
@@ -72,7 +77,7 @@ No partially typed AST escapes when any declaration has an error.
 -}
 checkTree :: ResolvedAST -> Either [Diagnostic] TypedAST
 checkTree (ResolvedAST (SyntaxTree namespace declarations)) =
-    let catalog = catalogDeclarations declarations
+    let catalog = inferAutoReturns declarations (catalogDeclarations declarations)
         checked = map (checkTopDeclaration catalog) declarations
         problems = concatMap snd checked
      in if null problems then Right (TypedAST (SyntaxTree namespace (map fst checked))) else Left problems
@@ -90,6 +95,7 @@ catalogDeclarations declarations =
         , member <- typeMembersOf owner
         , case member of FunctionDeclaration {} -> True; _ -> False
         ]
+        []
     where
         isTypeDeclaration TypeDeclaration {} = True
         isTypeDeclaration TemplateTypeDeclaration {} = True
@@ -98,12 +104,84 @@ catalogDeclarations declarations =
         typeMembersOf TemplateTypeDeclaration {typeMembers = members} = members
         typeMembersOf _ = []
 
+{- | Infer the return types of the methods declared with @auto@ before any
+caller is checked against them.
+
+A method's return type comes from its own returns, and those may be calls of
+other such methods, in any class and declared later. The bodies are therefore
+checked in rounds. In a round, a call of a method whose type is not known yet
+has no type and takes no part in the inference, so a method is inferred as
+soon as one of its returns is independent of the methods still unknown: a
+recursive method from its base case, and a chain of methods from its end
+towards its start. A round that learns nothing ends the inference; every
+round before it resolves at least one method, so there are at most as many
+rounds as methods. A method that is still unknown then has no independent
+result, which is reported when its declaration is checked. The diagnostics
+of the rounds are dropped: every body is checked once more against the
+final catalog.
+-}
+inferAutoReturns :: [Declaration ResolvedName ()] -> TypeCatalog -> TypeCatalog
+inferAutoReturns declarations = rounds (length inferable)
+    where
+        inferable =
+            [ (owner, member)
+            | owner <- declarations
+            , member <- membersOf owner
+            , FunctionDeclaration {declarationReturnSyntax = AutoType} <- [member]
+            ]
+        membersOf declaration = case declaration of
+            TypeDeclaration {typeMembers = members} -> members
+            TemplateTypeDeclaration {typeMembers = members} -> members
+            _ -> []
+        rounds :: Int -> TypeCatalog -> TypeCatalog
+        rounds remaining catalog
+            | remaining <= 0 || learned == catalogInferredReturns catalog = catalog
+            | otherwise = rounds (remaining - 1) catalog {catalogInferredReturns = learned}
+            where
+                learned =
+                    [ (inferredReturnKey member, result)
+                    | (owner, member) <- inferable
+                    , let (context, globals) = memberScope catalog owner
+                    , FunctionDeclaration {declarationAnnotation = FunctionType _ result} <-
+                        [fst (checkDeclarationWith context globals member)]
+                    , result /= ErrorType
+                    ]
+
+-- | What identifies a method declaration among its overloads.
+inferredReturnKey :: Declaration ResolvedName annotation -> (SymbolId, SourceSpan)
+inferredReturnKey declaration = (resolvedSymbol (declarationName declaration), declarationSpan declaration)
+
+{- | The context and the names in scope of the members of a type: the
+signatures of its members and, for a template, its value parameters.
+-}
+memberScope :: TypeCatalog -> Declaration ResolvedName () -> (TemplateContext, TypeEnvironment)
+memberScope catalog declaration = case declaration of
+    TemplateTypeDeclaration _ name _ parameters members ->
+        let context = templateContext catalog (Just (resolvedSymbol name)) parameters
+            templateValues =
+                [ (resolvedSymbol (templateParameterName parameter), (templateParameterAnnotation parameter, False))
+                | parameter <- map (typeTemplateParameter context) parameters
+                , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
+                ]
+         in (context, templateValues ++ signaturesOf context members)
+    TypeDeclaration _ name _ members ->
+        let context = emptyTemplateContext catalog (Just (resolvedSymbol name))
+         in (context, signaturesOf context members)
+    _ -> (emptyTemplateContext catalog Nothing, [])
+    where
+        signaturesOf context members =
+            [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
+
 signature :: TemplateContext -> Declaration ResolvedName () -> Type
 signature context declaration = case declaration of
     FunctionDeclaration _ _ _ returnSyntax parameters _ _ _ ->
         FunctionType
             (map (syntaxTypeIn context . parameterTypeSyntax) parameters)
-            (syntaxTypeIn context returnSyntax)
+            ( case returnSyntax of
+                AutoType ->
+                    maybe ErrorType id (lookup (inferredReturnKey declaration) (catalogInferredReturns (templateCatalog context)))
+                _ -> syntaxTypeIn context returnSyntax
+            )
     TypeDeclaration _ name _ _ -> NamedType (QualifiedName [resolvedSpelling name]) []
     TemplateTypeDeclaration _ name _ parameters _ ->
         NamedType
@@ -113,24 +191,15 @@ signature context declaration = case declaration of
 checkTopDeclaration :: TypeCatalog -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
 checkTopDeclaration catalog declaration = case declaration of
     TypeDeclaration spanValue name _ members ->
-        let owner = resolvedSymbol name
-            context = emptyTemplateContext catalog (Just owner)
-            signatures = [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
+        let (context, signatures) = memberScope catalog declaration
             checked = map (checkDeclarationWith context signatures) members
             overloadProblems = duplicateOverloadProblems context members
             valueType = NamedType (QualifiedName [resolvedSpelling name]) []
          in (TypeDeclaration spanValue name valueType (map fst checked), overloadProblems ++ concatMap snd checked)
     TemplateTypeDeclaration spanValue name _ parameters members ->
-        let owner = resolvedSymbol name
-            context = (templateContext catalog (Just owner) parameters)
+        let (context, scope) = memberScope catalog declaration
             typedTemplateParameters = map (typeTemplateParameter context) parameters
-            templateValues =
-                [ (resolvedSymbol (templateParameterName parameter), (templateParameterAnnotation parameter, False))
-                | parameter <- typedTemplateParameters
-                , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
-                ]
-            signatures = [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
-            checked = map (checkDeclarationWith context (templateValues ++ signatures)) members
+            checked = map (checkDeclarationWith context scope) members
             parameterProblems = validateTemplateParameters context parameters
             overloadProblems = duplicateOverloadProblems context members
             valueType =
@@ -309,17 +378,31 @@ checkDeclarationWith context globals declaration@FunctionDeclaration {} =
         -- expression; the returns of a nested callable are its own.
         returns = blockReturnTypes body ++ maybe [] (: []) finalReturn
         inferred = inferReturn expected returns
-        returnProblems =
-            if expected /= ErrorType && any (not . compatible expected) returns
-                then
-                    [ Diagnostic
-                        TypeCheckerStage
-                        Error
-                        "VXT0001"
-                        (Just (declarationSpan declaration))
-                        "return expression does not match the declared function type"
-                    ]
-                else []
+        isInferred = case declarationReturnSyntax declaration of AutoType -> True; _ -> False
+        returnProblems
+            | expected /= ErrorType && any (not . compatible expected) returns =
+                [ Diagnostic
+                    TypeCheckerStage
+                    Error
+                    "VXT0001"
+                    (Just (declarationSpan declaration))
+                    "return expression does not match the declared function type"
+                ]
+            | isInferred && any (not . compatible inferred) returns =
+                [ problem
+                    (declarationSpan declaration)
+                    "VXT0062"
+                    "the return statements of this method carry values of different types"
+                ]
+            -- Every result of the method is a call that depends on the
+            -- method itself: nothing gives it a type.
+            | isInferred && inferred == ErrorType && null problems =
+                [ problem
+                    (declarationSpan declaration)
+                    "VXT0063"
+                    "the return type of this method cannot be inferred: no result is independent of the method itself"
+                ]
+            | otherwise = []
         typedParameters = map (typeParameterWith context) (declarationParameters declaration)
         signatureProblems =
             typeSyntaxProblemsIn context (declarationReturnSyntax declaration)
@@ -605,6 +688,7 @@ checkStatementIn context environment expected loops statement = case statement o
             valueExpected = case target of
                 Just (ExpressionLoop expectedValue) -> expectedValue
                 Just (LoopCondition (ExpressionLoop expectedValue)) -> expectedValue
+                Just (LoopUpdate (ExpressionLoop expectedValue)) -> expectedValue
                 _ -> Nothing
             (typedValue, _, valueProblems) = checkOptionalExpectedWith context environment valueExpected value
             placement kind = case (kind, value) of
@@ -612,22 +696,21 @@ checkStatementIn context environment expected loops statement = case statement o
                     [problem spanValue "VXT0026" "a value-carrying break is only valid in a loop used as an expression"]
                 (ExpressionLoop _, Nothing) ->
                     [problem spanValue "VXT0040" "a loop used as an expression must be left by a break that carries a value"]
-                -- A break in the condition of a loop leaves that loop.
+                -- A break in the condition or the update clause of a loop
+                -- leaves that loop.
                 (LoopCondition loop, _) -> placement loop
-                (LoopUpdate _, _) ->
-                    [problem spanValue "VXT0059" "break in the update clause of a loop is not implemented"]
+                (LoopUpdate loop, _) -> placement loop
                 _ -> []
             placementProblems = case target of
                 Nothing -> [problem spanValue "VXT0025" "break is only valid inside a loop"]
                 Just kind -> placement kind
          in (BreakStatement spanValue typedValue, environment, [], placementProblems ++ valueProblems)
     ContinueStatement spanValue ->
+        -- A continue in the condition of a loop evaluates that condition
+        -- again, and one in the update clause ends the update: the
+        -- condition of the loop is tested next.
         let problems = case transferTarget loops of
                 Nothing -> [problem spanValue "VXT0027" "continue is only valid inside a loop"]
-                Just (LoopCondition _) ->
-                    [problem spanValue "VXT0059" "continue in the condition of a loop is not implemented"]
-                -- A continue in the update clause ends the update: the
-                -- condition of the loop is tested next.
                 _ -> []
          in (ContinueStatement spanValue, environment, [], problems)
     GuardStatement spanValue condition block ->
@@ -1383,55 +1466,7 @@ checkCallableBodyWith outer environment body = case body of
 booleanContextType :: Type -> Bool
 booleanContextType valueType = valueType == ErrorType || acceptsBooleanContext valueType
 
-literalTypeInContext :: SourceSpan -> Maybe Type -> Literal -> (Type, [Diagnostic])
-literalTypeInContext spanValue expected literal = case literal of
-    IntegerLiteral value -> integerLiteralType spanValue expected value
-    FloatingLiteral _ -> floatingLiteralType expected
-    CharacterLiteral _ -> (scalarTypeToType CharacterScalar, [])
-    BooleanLiteral _ -> (boolType, [])
-    StringLiteral _ -> (stringType, [])
-    UnitLiteral -> (unitType, [])
-
-integerLiteralType :: SourceSpan -> Maybe Type -> Integer -> (Type, [Diagnostic])
-integerLiteralType spanValue expected value =
-    let context = maybe NoNumericContext targetContext expected
-        rule = integerLiteralRule context value
-        code = case numericRuleError rule of Just (UntargetedIntegerOutsideInt _) -> "VXT0017"; _ -> "VXT0016"
-     in (numericRuleType rule, ruleProblems spanValue code rule)
-    where
-        targetContext target | target == boolType = BooleanNumericContext
-        targetContext target = TargetNumericType target
-
-floatingLiteralType :: Maybe Type -> (Type, [Diagnostic])
-floatingLiteralType expected =
-    let context = maybe NoNumericContext TargetNumericType expected
-        rule = floatingLiteralRule context
-     in (numericRuleType rule, [])
-
-ruleProblems :: SourceSpan -> String -> NumericRuleResult -> [Diagnostic]
-ruleProblems spanValue code rule = case numericRuleError rule of
-    Nothing -> []
-    Just issue -> [problem spanValue code (renderNumericRuleError issue)]
-
-constantRangeProblems :: SourceSpan -> Type -> Expression ResolvedName Type -> [Diagnostic]
-constantRangeProblems spanValue target expression = case evaluateConstantInteger expression of
-    Left issue -> [problem spanValue "VXT0019" (renderConstantIntegerError issue)]
-    Right (Just value) -> case typeToScalarType target of
-        Just scalar
-            | scalarTypeFamily scalar `elem` [SignedIntegerFamily, UnsignedIntegerFamily]
-            , not (integerFits scalar value) ->
-                [ problem
-                    spanValue
-                    "VXT0018"
-                    ("constant expression result " ++ show value ++ " does not fit " ++ scalarTypeName scalar)
-                ]
-        _ -> []
-    Right Nothing -> []
-
 safeIndex :: [a] -> Int -> Maybe a
 safeIndex values index
     | index < 0 = Nothing
     | otherwise = case drop index values of value : _ -> Just value; [] -> Nothing
-
-problem :: SourceSpan -> String -> String -> Diagnostic
-problem spanValue code message = Diagnostic TypeCheckerStage Error code (Just spanValue) message

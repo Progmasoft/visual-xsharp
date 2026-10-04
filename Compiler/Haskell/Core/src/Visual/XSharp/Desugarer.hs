@@ -32,7 +32,7 @@ defaultDesugarer = Desugarer lowerTree
 
 lowerTree :: TypedAST -> Either [Diagnostic] CoreModule
 lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
-    evalStateT lowerModule (LowerState (1 + maximum (0 : syntaxSymbolIds tree)) Nothing [CoreContinue])
+    evalStateT lowerModule (LowerState (1 + maximum (0 : syntaxSymbolIds tree)) Nothing [CoreContinue] [CoreBreak])
     where
         defaultName = QualifiedName [Identifier "Main"]
         sourceFiles = nub (map portableSourcePath (concatMap declarationSourceFiles declarations))
@@ -97,6 +97,12 @@ data LowerState = LowerState
     @continue@ in a loop body, and a @break@ of the enclosing one-pass loop
     in an update clause, where it ends the update.
     -}
+    , lowerLeave :: [CoreStatement]
+    {- ^ What a @break@ of the statement being lowered becomes, after the
+    store of its value if it carries one: the Core @break@, preceded in an
+    update clause that is wrapped in a one-pass loop by the store that makes
+    the loop around it leave as well.
+    -}
     }
 
 type Lower = StateT LowerState (Either [Diagnostic])
@@ -110,14 +116,23 @@ targeting target action = do
     modify (\current -> current {lowerBreakTarget = previous})
     pure result
 
--- | Lower with the given lowering of @continue@, and restore the previous one after.
-continuingWith :: [CoreStatement] -> Lower a -> Lower a
-continuingWith statements action = do
-    previous <- gets lowerContinue
-    modify (\current -> current {lowerContinue = statements})
+{- | Lower with the given lowerings of @continue@ and of @break@, and restore
+the previous ones after.
+-}
+transferringWith :: [CoreStatement] -> [CoreStatement] -> Lower a -> Lower a
+transferringWith continues leaves action = do
+    previousContinue <- gets lowerContinue
+    previousLeave <- gets lowerLeave
+    modify (\current -> current {lowerContinue = continues, lowerLeave = leaves})
     result <- action
-    modify (\current -> current {lowerContinue = previous})
+    modify (\current -> current {lowerContinue = previousContinue, lowerLeave = previousLeave})
     pure result
+
+{- | Lower a part of a Core loop in which the transfers of the source loop
+are the transfers of that Core loop: its body, and its condition.
+-}
+inCoreLoop :: Lower a -> Lower a
+inCoreLoop = transferringWith [CoreContinue] [CoreBreak]
 
 {- | The branching forms as they are lowered at the current place: a
 @break value;@ in a block used as a value stores where one in the statement
@@ -273,8 +288,8 @@ lowerStatementWith target statement = case statement of
     -- A loop statement has no slot for break values, and a continue in its
     -- body or condition is its own.
     DoWhileStatement _ body condition -> do
-        loweredBody <- continuingWith [CoreContinue] (lowerBlock body)
-        loweredCondition <- continuingWith [CoreContinue] (targeting Nothing (lowerExpression condition))
+        loweredBody <- inCoreLoop (lowerBlock body)
+        loweredCondition <- inCoreLoop (targeting Nothing (lowerExpression condition))
         if null (fst loweredCondition)
             then pure [CoreDoWhile loweredBody (snd loweredCondition)]
             else do
@@ -297,11 +312,12 @@ lowerStatementWith target statement = case statement of
          in pure [stepStatement name loweredType (CoreVariable name loweredType)]
     CompoundAssignmentStatement _ operator name valueType value -> lowerCompound operator name valueType value
     DiscardStatement _ value -> lowerDiscarded value
-    BreakStatement _ Nothing -> pure [CoreBreak]
+    BreakStatement _ Nothing -> gets lowerLeave
     BreakStatement spanValue (Just value) -> case target of
         Just (slot, _) -> do
             (prefix, lowered) <- lowerExpression value
-            pure (prefix ++ [CoreAssign slot lowered, CoreBreak])
+            leave <- gets lowerLeave
+            pure (prefix ++ [CoreAssign slot lowered] ++ leave)
         Nothing ->
             lift
                 ( Left
@@ -337,30 +353,80 @@ A @break@ in the condition leaves the loop. The statements of a condition
 that has any stand at the top of the Core loop body, so the Core @break@
 there leaves the right loop without further work.
 
+A @continue@ in the condition abandons the rest of the condition and
+evaluates the condition again; in a @for@ loop the update clause does not
+run. In a @while@ loop the condition stands at the top of the Core loop
+body, where the Core @continue@ does exactly that. In a @for@ loop the Core
+@continue@ would run the update, so a condition that holds a @continue@ is
+evaluated in a loop of its own, which the @continue@ repeats and which is
+left once the condition has a result. A @break@ in such a condition leaves
+that inner loop with the result still false, which leaves the @for@.
+
 A @continue@ in the update clause ends the update, and the condition is
 tested next. Core has no such transfer inside an update region, so an update
 clause that holds one is wrapped in a loop that runs once: its statements,
 then a @break@. The @continue@ becomes a @break@ of that loop.
+
+A @break@ in the update clause leaves the loop, which the Core @break@ in an
+update region does. In an update clause that is wrapped, it first sets a
+flag that is bound before the loop, and the loop is left after the wrapper
+when the flag is set.
 -}
 lowerLoop :: BreakTarget -> Statement ResolvedName Type -> Lower [CoreStatement]
 lowerLoop target loop = case loop of
     WhileStatement _ condition body -> do
         loweredCondition <- inLoop (lowerExpression condition)
-        loweredBody <- continuingWith [CoreContinue] (lowerBlockInto target body)
+        loweredBody <- inCoreLoop (lowerBlockInto target body)
         pure [whileLoop loweredCondition loweredBody]
     ForStatement _ initializer condition updates body -> do
         loweredInitializer <- maybe (pure []) lowerStatement initializer
-        loweredCondition <- maybe (pure ([], CoreLiteral (CoreBoolean True) boolType)) (inLoop . lowerExpression) condition
-        loweredBody <- continuingWith [CoreContinue] (lowerBlockInto target body)
-        loweredUpdates <- continuingWith [CoreBreak] (lowerBlock (Block updates))
-        let updateRegion =
-                if any isContinue (concatMap statementTransfers updates)
-                    then [CoreWhile (CoreLiteral (CoreBoolean True) boolType) (loweredUpdates ++ [CoreBreak])]
-                    else loweredUpdates
-        pure (loweredInitializer ++ [forLoop loweredCondition loweredBody updateRegion])
+        evaluatedCondition <- maybe (pure ([], alwaysTrue)) (inLoop . lowerExpression) condition
+        loweredCondition <-
+            if maybe False (any isContinue . expressionTransfers) condition
+                then repeatable evaluatedCondition
+                else pure evaluatedCondition
+        loweredBody <- inCoreLoop (lowerBlockInto target body)
+        let updateTransfers = concatMap statementTransfers updates
+            inUpdate = lowerBlockInto target (Block updates)
+        (bindings, updateRegion) <-
+            if any isContinue updateTransfers
+                then
+                    if any isBreak updateTransfers
+                        then do
+                            leave <- freshGenerated "$leave"
+                            let leaving = CoreVariable leave boolType
+                            loweredUpdates <-
+                                transferringWith [CoreBreak] [CoreAssign leave alwaysTrue, CoreBreak] inUpdate
+                            pure
+                                ( [CoreBind (CoreBinding leave boolType True alwaysFalse)]
+                                ,
+                                    [ CoreWhile alwaysTrue (loweredUpdates ++ [CoreBreak])
+                                    , CoreIf leaving [CoreBreak] []
+                                    ]
+                                )
+                        else do
+                            loweredUpdates <- transferringWith [CoreBreak] [CoreBreak] inUpdate
+                            pure ([], [CoreWhile alwaysTrue (loweredUpdates ++ [CoreBreak])])
+                else do
+                    loweredUpdates <- inCoreLoop inUpdate
+                    pure ([], loweredUpdates)
+        pure (loweredInitializer ++ bindings ++ [forLoop loweredCondition loweredBody updateRegion])
     _ -> lowerStatement loop
     where
-        inLoop = continuingWith [CoreContinue] . targeting target
+        inLoop = inCoreLoop . targeting target
+        alwaysTrue = CoreLiteral (CoreBoolean True) boolType
+        alwaysFalse = CoreLiteral (CoreBoolean False) boolType
+        -- The condition in a loop of its own, which a continue repeats. Its
+        -- result is a flag, because the condition may be numeric.
+        repeatable (prefix, value) = do
+            holds <- freshGenerated "$holds"
+            pure
+                (
+                    [ CoreBind (CoreBinding holds boolType True alwaysFalse)
+                    , CoreWhile alwaysTrue (prefix ++ [CoreIf value [CoreAssign holds alwaysTrue] [], CoreBreak])
+                    ]
+                , CoreVariable holds boolType
+                )
 
 {- | Lower an expression whose value is dropped.
 
@@ -625,7 +691,7 @@ lowerExpression expression = case expression of
                 [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
         -- A callable is a function of its own: no loop of the function
         -- that creates it is around its body.
-        loweredBody <- continuingWith [CoreContinue] (targeting Nothing (lowerCallableBody body))
+        loweredBody <- inCoreLoop (targeting Nothing (lowerCallableBody body))
         (prefix, loweredCaptures) <- lowerCaptures captures
         let returnType = case valueType of
                 FunctionType _ result -> lowerBoundaryType result
@@ -792,7 +858,18 @@ expressionReads expression = case expression of
         expressionReads value ++ filter ((/= resolvedSymbol name) . resolvedSymbol . fst) (expressionReads body)
     CoreConditional condition whenTrue whenFalse _ ->
         expressionReads condition ++ expressionReads whenTrue ++ expressionReads whenFalse
-    CoreClosure captures _ _ body _ -> concatMap (expressionReads . coreCaptureValue) captures ++ statementReads body
+    -- A closure reads, from the place that creates it, its capture
+    -- initializers and whatever its body reads that is not its own: its
+    -- parameters, its captures and its locals belong to the closure. Without
+    -- that, a closure around this one would capture them as if they were
+    -- names of its surroundings.
+    CoreClosure captures parameters _ body _ ->
+        let own =
+                map (resolvedSymbol . fst) parameters
+                    ++ map (resolvedSymbol . coreCaptureName) captures
+                    ++ localSymbols body
+         in concatMap (expressionReads . coreCaptureValue) captures
+                ++ filter ((`notElem` own) . resolvedSymbol . fst) (statementReads body)
 
 uniqueReads :: [(ResolvedName, Type)] -> [(ResolvedName, Type)]
 uniqueReads = foldl append []

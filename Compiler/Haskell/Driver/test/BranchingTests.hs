@@ -761,13 +761,29 @@ typeTests =
         ( "a break in a value block does not leave a loop from inside a callable in that loop"
         , rejectedWith "VXT0025" (body "while (flag) { auto f = \\(int v) -> { int q = if (v > 0) { break; } else { 2 }; return q; }; } return 0;")
         )
-    , -- Still pending: recognized and reported as not implemented.
-        ( "a continue in the condition of a loop is not implemented"
-        , rejectedWith "VXT0059" (body "while (if (flag) { continue; } else { true }) { } return 0;")
+    ,
+        ( "a continue in a value block does not reach a loop from inside a callable in that loop"
+        , rejectedWith "VXT0027" (body "while (flag) { auto f = \\(int v) -> { int q = if (v > 0) { continue; } else { 2 }; return q; }; } return 0;")
         )
     ,
-        ( "a break in the update of a loop is not implemented"
-        , rejectedWith "VXT0059" (body "for (int i = 0; i < 3; i += if (flag) { break; } else { 1 }) { } return 0;")
+        ( "a continue in the condition of a loop is accepted"
+        , accepted (body "int n = 0; while (if ((n += 1) < left) { continue; } else { n < right }) { } return n;")
+        )
+    ,
+        ( "a break in the update of a loop is accepted"
+        , accepted (body "for (int i = 0; i < 3; i += if (flag) { break; } else { 1 }) { } return 0;")
+        )
+    ,
+        ( "a break in the update of a loop statement carries no value"
+        , rejectedWith "VXT0026" (body "for (int i = 0; i < 3; i += if (flag) { break 1; } else { 1 }) { } return 0;")
+        )
+    ,
+        ( "a break in the update of a loop expression carries a value"
+        , rejectedWith "VXT0040" (body "int r = for (int i = 0; ; i += if (flag) { break; } else { 1 }) { break 2; }; return r;")
+        )
+    ,
+        ( "a continue in the condition of a loop needs that loop and no other"
+        , rejectedWith "VXT0027" (body "int q = if (flag) { continue; } else { 2 }; return q;")
         )
     ,
         ( "a loop inside a value block may still be left"

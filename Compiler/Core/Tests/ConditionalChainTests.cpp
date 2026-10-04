@@ -509,7 +509,8 @@ TEST_CASE("a loop that cannot be left never falls off the end of a body",
         };
         std::vector<Core::Statement> leaves;
         leaves.push_back(Core::Statement::Break());
-        CHECK(HasIssue(around(std::move(leaves)), "VXC1005"));
+        const auto left = around(std::move(leaves));
+        CHECK(HasIssue(left, "VXC1005"));
         CHECK_FALSE(HasIssue(around({}), "VXC1005"));
     }
 

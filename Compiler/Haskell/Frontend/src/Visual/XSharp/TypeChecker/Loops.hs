@@ -34,11 +34,13 @@ data LoopKind
       -}
       ValueBlockEdge
     | {- | The condition of a loop of the given kind. A @break@ there leaves
-      that loop, like one in its body.
+      that loop, like one in its body. A @continue@ there abandons the rest
+      of the condition and evaluates the condition of that loop again.
       -}
       LoopCondition LoopKind
     | {- | The update clause of a loop of the given kind. A @continue@ there
-      ends the update, and the condition of the loop is tested next.
+      ends the update, and the condition of the loop is tested next. A
+      @break@ there leaves that loop.
       -}
       LoopUpdate LoopKind
 

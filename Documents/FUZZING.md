@@ -216,6 +216,20 @@ closures while control leaves through a block used as a value, so that the
 ownership verifiers of Xpp and Xmm see those paths; they are compiled and
 verified, not run, because the JIT of the harness does not link closures.
 
+The branching and leaving tables are generated. Their cases are written in
+`Compiler/Fuzzing/Cases/Selection.cases` and `Leaving.cases`: a body, its
+runs and the value each run must return, written by hand from the language
+rules. `go -C helpers run ./cmd/execution-cases generate` writes the rows
+under `Compiler/Fuzzing/Generated` and the Haskell module
+`BranchingEvaluationCases.hs` from them, and `check` fails when a committed
+table differs; the helper tests and CI run that check. One source keeps the
+two tables equal. It does not make them independent: a wrong expectation in
+a case file is wrong in both. The independent checks are the hand-written
+tables that do not come from these files, `ExpressionExecutionCases.cpp` and
+the inferred-return table of `SourceExecutionSmoke.cpp`, the oracle tests of
+`BranchingOracleTests.hs`, which compare each `match` with the `if` chain it
+stands for, and the differential generator with its host model.
+
 The tables are a program of their own because each smoke program is one
 deterministic check under one process watchdog. As one program, in the
 fuzzing configuration, the tables took 107 seconds and the differential

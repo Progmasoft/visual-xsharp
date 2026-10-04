@@ -332,10 +332,10 @@ The type checker reports:
 | `VXT0056` | an enum case pattern such as `.Ready`; enum declarations are not implemented |
 | `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
 | `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
-| `VXT0059` | a transfer out of a block used as a value that is not implemented: `continue` in the condition of a loop, or `break` in the update clause of a loop |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
-| `VXT0062` | the `return` statements of a callable whose result type is inferred carry values of different types |
+| `VXT0062` | the `return` statements of a method or callable whose result type is inferred carry values of different types |
+| `VXT0063` | the return type of a method declared with `auto` cannot be inferred: every result is a call that depends on the method itself |
 
 A block used as a value may leave instead of yielding a value: `return`
 leaves the enclosing method and is checked against its return type
@@ -343,11 +343,19 @@ leaves the enclosing method and is checked against its return type
 `continue` target the nearest loop around the expression and need one
 (`VXT0025`, `VXT0027`). A `break` follows the rules of that loop: it carries
 a value to a loop used as an expression (`VXT0040` without one) and none to a
-loop statement (`VXT0026`). The condition of a loop belongs to the loop, so a
-`break` in a block used as a value there leaves that loop; a `continue` in
-the update clause of a `for` ends the update. The returns of a callable whose
+loop statement (`VXT0026`). The condition and the update clause of a loop
+belong to the loop: a `break` in a block used as a value there leaves that
+loop, a `continue` in the condition evaluates the condition again, and a
+`continue` in the update clause of a `for` ends the update. A callable is
+not inside the loops around the place that creates it, so a `break` or
+`continue` in its body is `VXT0025` or `VXT0027` unless a loop of its own
+encloses it. The returns of a callable whose
 result type is inferred are collected through expressions as well and must
-agree (`VXT0062`); the returns of a nested callable are its own. A block that cannot complete normally
+agree (`VXT0062`); the returns of a nested callable are its own. A method
+declared with `auto` is inferred the same way before its callers are
+checked, wherever it is declared; calls of methods that are not inferred yet
+take no part, so a recursive method is inferred from its base case, and a
+method all of whose results depend on itself is `VXT0063`. A block that cannot complete normally
 needs no final expression and gives its expression no type; the blocks that
 complete do. When no block completes, the expression never yields a value.
 That is valid: the place that would have received the value is not held to a
@@ -400,7 +408,11 @@ frontend bounds how deep a function body may nest and reports the place where
 it becomes too deep. The check runs before any analysis of the body. The two
 values are resource limits of this implementation, chosen against the
 measured cost of a level in every native stage; the specification states no
-nesting limit, and they are not language rules:
+nesting limit, and they are not language rules. They are the limits this
+version of the compiler ships with, together with a compiler stack
+reservation of 256 MiB. A program at the limits commits a few mebibytes of
+that stack on Windows, about 5 MiB in a sanitizer build; stack use on Linux
+and macOS is not measured, and the reservation is the margin for it:
 
 | Code | Meaning |
 | --- | --- |

@@ -21,6 +21,7 @@ import DiagnosticProtocolTests (diagnosticProtocolTests)
 import DiagnosticSideChannelTests (diagnosticSideChannelTests)
 import FloatingOptimizerTests (floatingOptimizerTests)
 import IntegerEvaluationTests (integerEvaluationTests)
+import InferredReturnTests (inferredReturnTests)
 import IntegerFlowTests (integerFlowTests)
 import IterationTests (iterationTests)
 import LoopExpressionTests (loopExpressionTests)
@@ -176,6 +177,7 @@ main = do
     mapM_ (uncurry check) assignmentExpressionTests
     mapM_ (uncurry check) loopExpressionTests
     mapM_ (uncurry check) branchingTests
+    mapM_ (uncurry check) inferredReturnTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests
     mapM_ (uncurry check) nestingLimitTests

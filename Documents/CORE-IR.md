@@ -248,7 +248,16 @@ nested inside an update list has its own body and continuation point, so
 clause ends the update, and the frontend lowers it without `CoreContinue`:
 an update clause that holds one becomes a loop that runs once, its
 statements followed by `CoreBreak`, and the `continue` becomes a `CoreBreak`
-of that loop. The rule protects Core built or transformed by other means.
+of that loop. A source `break` in an update clause is the Core `CoreBreak`
+there; in an update clause that is wrapped it sets a flag bound before the
+loop, and the loop is left after the wrapper when the flag is set. A source
+`continue` in the condition of a `for` must not run the update, which the
+Core `CoreContinue` of the loop would: such a condition is evaluated in a
+loop of its own, which the `continue` repeats and which is left once the
+condition has a result. In a `while` or `do`/`while` loop the condition
+already stands at the top of the Core loop body, where `CoreContinue` does
+what the source asks. The rule protects Core built or transformed by other
+means.
 
 A function that returns a value must not fall off the end of its body
 (`VXC1005`). A body does not when every path returns or runs into a loop
