@@ -13,8 +13,9 @@ import Visual.XSharp.AST
 import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
-import Visual.XSharp.TemplateValue
 import Visual.XSharp.TypeChecker.Branching
+import Visual.XSharp.TypeChecker.Context
+import Visual.XSharp.TypeChecker.Enums
 import Visual.XSharp.TypeChecker.Literals
 import Visual.XSharp.TypeChecker.Loops
 import Visual.XSharp.TypeChecker.Returns
@@ -29,48 +30,6 @@ runTypeChecker = checkResolvedAST
 -- | The production checker for the currently implemented Visual X# subset.
 defaultTypeChecker :: TypeChecker
 defaultTypeChecker = TypeChecker checkTree
-
-type TypeEnvironment = [(SymbolId, (Type, Bool))]
-
--- The type checker owns a whole source-set catalog before it checks any body.
--- That permits calls to later-declared classes without making parsing depend
--- on declaration order or mutating the Renamer's lexical environment.
-data MethodCandidate = MethodCandidate
-    { candidateOwner :: SymbolId
-    , candidateDeclaration :: Declaration ResolvedName ()
-    }
-
-data TypeCatalog = TypeCatalog
-    { catalogTypes :: [(SymbolId, ResolvedName)]
-    , catalogMethods :: [MethodCandidate]
-    , catalogInferredReturns :: [((SymbolId, SourceSpan), Type)]
-    {- ^ The return types inferred for the methods declared with @auto@, by
-    the symbol and the place of the declaration. A method that is absent has
-    no return type that is known yet.
-    -}
-    }
-
--- Type syntax deliberately keeps source spellings.  This side environment is
--- the bridge from those spellings to the SymbolIds assigned by the renamer.
--- Type and value parameters are separate because `T` in a type position and
--- `N` in `[T; N]` have different semantic representations.
-data TemplateContext = TemplateContext
-    { templateTypeNames :: [(Identifier, ResolvedName)]
-    , templateValueNames :: [(Identifier, ResolvedName)]
-    , templateCatalog :: TypeCatalog
-    , templateCurrentType :: Maybe SymbolId
-    , contextReturn :: Type
-    {- ^ The type a @return@ must carry at the place being checked, or the
-    error type where it is not declared. Statements know it already; it is
-    kept here for the statements of a block used as a value, which are
-    reached through an expression.
-    -}
-    , contextLoops :: LoopContext
-    -- ^ The loops around the place being checked, for the same reason.
-    }
-
-emptyTemplateContext :: TypeCatalog -> Maybe SymbolId -> TemplateContext
-emptyTemplateContext catalog owner = TemplateContext [] [] catalog owner ErrorType outsideLoops
 
 {- | Type-check every top-level declaration and collect independent diagnostics.
 No partially typed AST escapes when any declaration has an error.
@@ -95,6 +54,7 @@ catalogDeclarations declarations =
         , member <- typeMembersOf owner
         , case member of FunctionDeclaration {} -> True; _ -> False
         ]
+        (enumInfos declarations)
         []
     where
         isTypeDeclaration TypeDeclaration {} = True
@@ -187,6 +147,11 @@ signature context declaration = case declaration of
         NamedType
             (QualifiedName [resolvedSpelling name])
             (map templateParameterAsArgument parameters)
+    EnumDeclaration _ name _ _ _ -> enumTypeOf (templateCatalog context) name
+
+-- | The type of the values of a declared enum.
+enumTypeOf :: TypeCatalog -> ResolvedName -> Type
+enumTypeOf catalog name = maybe ErrorType enumInfoType (enumBySymbol (catalogEnums catalog) (resolvedSymbol name))
 
 checkTopDeclaration :: TypeCatalog -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
 checkTopDeclaration catalog declaration = case declaration of
@@ -210,159 +175,10 @@ checkTopDeclaration catalog declaration = case declaration of
             , parameterProblems ++ overloadProblems ++ concatMap snd checked
             )
     FunctionDeclaration {} -> checkDeclarationWith (emptyTemplateContext catalog Nothing) [] declaration
-
-{- | Keep type and value parameters in separate lookup tables.
-Identical source spelling in the two categories must not collapse their roles.
--}
-templateContext :: TypeCatalog -> Maybe SymbolId -> [TemplateParameter ResolvedName annotation] -> TemplateContext
-templateContext catalog owner parameters =
-    TemplateContext
-        [ (resolvedSpelling name, name)
-        | parameter <- parameters
-        , case templateParameterKind parameter of
-            TemplateTypeParameter -> True
-            TemplateTemplateParameter _ -> True
-            _ -> False
-        , let name = templateParameterName parameter
-        ]
-        [ (resolvedSpelling name, name)
-        | parameter <- parameters
-        , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
-        , let name = templateParameterName parameter
-        ]
-        catalog
-        owner
-        ErrorType
-        outsideLoops
-
-templateParameterAsArgument :: TemplateParameter ResolvedName annotation -> TemplateArgument
-templateParameterAsArgument parameter = case templateParameterKind parameter of
-    TemplateValueParameterKind _ -> ValueTemplateArgument (TemplateValueParameter (templateParameterName parameter))
-    _ -> TypeTemplateArgument (TypeVariable (templateParameterName parameter))
-
-syntaxTypeIn :: TemplateContext -> TypeSyntax -> Type
-syntaxTypeIn _ AutoType = ErrorType
-syntaxTypeIn context (QualifiedTypeSyntax name arguments) =
-    case name of
-        QualifiedName [identifier] | Just resolved <- lookup identifier (templateTypeNames context) -> TypeVariable resolved
-        _ -> NamedType name (map (syntaxTemplateArgumentIn context) arguments)
-syntaxTypeIn context (BuiltinArrayTypeSyntax element) =
-    -- `[]T` is a language type, not a public class invented by the compiler.
-    -- Its structural spelling keeps that distinction visible through Core
-    -- until ownership-aware lowering assigns the final runtime layout.
-    NamedType (QualifiedName [Identifier "[]"]) [TypeTemplateArgument (syntaxTypeIn context element)]
-syntaxTypeIn context (ArrayTypeSyntax element) =
-    NamedType
-        (QualifiedName [Identifier "System", Identifier "Array"])
-        [TypeTemplateArgument (syntaxTypeIn context element)]
-syntaxTypeIn context (FixedArrayTypeSyntax element size) =
-    NamedType
-        (QualifiedName [Identifier "System", Identifier "Array"])
-        [TypeTemplateArgument (syntaxTypeIn context element), ValueTemplateArgument (syntaxTemplateValueIn context size)]
-syntaxTypeIn context (DictionaryTypeSyntax key value) =
-    NamedType
-        (QualifiedName [Identifier "System", Identifier "Dictionary"])
-        [TypeTemplateArgument (syntaxTypeIn context key), TypeTemplateArgument (syntaxTypeIn context value)]
-syntaxTypeIn context (CallableTypeSyntax parameters result) = FunctionType (map (syntaxTypeIn context) parameters) (syntaxTypeIn context result)
-syntaxTypeIn context (ExplicitType identifier@(Identifier name)) = case lookup identifier (templateTypeNames context) of
-    Just resolved -> TypeVariable resolved
-    Nothing -> case name of
-        "String" -> stringType
-        "unit" -> unitType
-        "void" -> voidType
-        _ -> maybe (NamedType (QualifiedName [Identifier name]) []) scalarTypeToType (lookupScalar name)
-    where
-        lookupScalar spelling = lookup spelling [(scalarTypeName scalar, scalar) | scalar <- scalarTypes]
-
-syntaxTemplateArgumentIn :: TemplateContext -> TemplateArgumentSyntax -> TemplateArgument
-syntaxTemplateArgumentIn context argument = case argument of
-    TemplateTypeSyntax valueType -> TypeTemplateArgument (syntaxTypeIn context valueType)
-    TemplateValueArgumentSyntax value -> ValueTemplateArgument (syntaxTemplateValueIn context value)
-
--- Parser construction guarantees the expression tree is side-effect free.
--- Exact evaluation here gives every concrete specialization one canonical
--- identity. Invalid arithmetic becomes a sentinel and is diagnosed by the
--- type-syntax validation pass before Core can be emitted.
-
-{- | Canonicalize a template argument before it contributes to specialization identity.
-The fallback value is only a recovery sentinel; validation reports the original
-invalid expression before a specialization plan is emitted.
--}
-syntaxTemplateValueIn :: TemplateContext -> TemplateValueSyntax -> TemplateValue
-syntaxTemplateValueIn context value = case value of
-    TemplateNameSyntax _ (QualifiedName [identifier])
-        | Just resolved <- lookup identifier (templateValueNames context) -> TemplateValueParameter resolved
-    _ -> case evaluateTemplateValue value of
-        Right result -> result
-        _ -> IntegerTemplateValue 0
-
-typeTemplateParameter :: TemplateContext -> TemplateParameter ResolvedName () -> TemplateParameter ResolvedName Type
-typeTemplateParameter context parameter =
-    TemplateParameter
-        (templateParameterSpan parameter)
-        (templateParameterName parameter)
-        annotation
-        (templateParameterKind parameter)
-        (templateParameterIsPack parameter)
-        (templateParameterDefault parameter)
-    where
-        annotation = case templateParameterKind parameter of
-            TemplateValueParameterKind valueType -> syntaxTypeIn context valueType
-            _ -> TypeVariable (templateParameterName parameter)
-
-validateTemplateParameters :: TemplateContext -> [TemplateParameter ResolvedName ()] -> [Diagnostic]
-validateTemplateParameters context = concatMap validate
-    where
-        validate parameter =
-            kindProblems parameter
-                ++ defaultProblems parameter
-                ++ packDefaultProblems parameter
-        kindProblems parameter = case templateParameterKind parameter of
-            TemplateTypeParameter -> []
-            TemplateValueParameterKind valueType -> typeSyntaxProblemsIn context valueType
-            TemplateTemplateParameter shapes -> concatMap shapeProblems shapes
-        shapeProblems shape = case templateParameterShapeKind shape of
-            TemplateTypeParameterShape -> []
-            TemplateValueParameterShape valueType -> typeSyntaxProblemsIn context valueType
-            TemplateTemplateParameterShape shapes -> concatMap shapeProblems shapes
-        defaultProblems parameter = case templateParameterDefault parameter of
-            Nothing -> []
-            Just (TemplateTypeDefault valueType) -> typeSyntaxProblemsIn context valueType
-            Just (TemplateValueDefault value) -> templateValueProblemsIn context "VXT0020" value
-        packDefaultProblems parameter
-            | templateParameterIsPack parameter
-            , Just _ <- templateParameterDefault parameter =
-                [problem (templateParameterSpan parameter) "VXT0019" "a template parameter pack cannot have a default"]
-            | otherwise = []
-
-typeSyntaxProblemsIn :: TemplateContext -> TypeSyntax -> [Diagnostic]
-typeSyntaxProblemsIn context syntax = case syntax of
-    ExplicitType _ -> []
-    AutoType -> []
-    BuiltinArrayTypeSyntax element -> typeSyntaxProblemsIn context element
-    ArrayTypeSyntax element -> typeSyntaxProblemsIn context element
-    DictionaryTypeSyntax key value -> typeSyntaxProblemsIn context key ++ typeSyntaxProblemsIn context value
-    CallableTypeSyntax parameters result -> concatMap (typeSyntaxProblemsIn context) parameters ++ typeSyntaxProblemsIn context result
-    QualifiedTypeSyntax _ arguments -> concatMap (templateArgumentProblemsIn context) arguments
-    FixedArrayTypeSyntax element size ->
-        typeSyntaxProblemsIn context element
-            ++ case syntaxTemplateValueIn context size of
-                TemplateValueParameter _ -> []
-                _ -> case evaluateFixedArraySize size of
-                    Left issue -> [problem (templateValueSyntaxSpan size) "VXT0016" (renderTemplateValueError issue)]
-                    Right _ -> []
-
-templateArgumentProblemsIn :: TemplateContext -> TemplateArgumentSyntax -> [Diagnostic]
-templateArgumentProblemsIn context argument = case argument of
-    TemplateTypeSyntax valueType -> typeSyntaxProblemsIn context valueType
-    TemplateValueArgumentSyntax value -> templateValueProblemsIn context "VXT0017" value
-
-templateValueProblemsIn :: TemplateContext -> String -> TemplateValueSyntax -> [Diagnostic]
-templateValueProblemsIn context code value = case syntaxTemplateValueIn context value of
-    TemplateValueParameter _ -> []
-    _ -> case evaluateTemplateValue value of
-        Left issue -> [problem (templateValueSyntaxSpan value) code (renderTemplateValueError issue)]
-        Right _ -> []
+    EnumDeclaration spanValue name _ underlying cases ->
+        ( EnumDeclaration spanValue name (enumTypeOf catalog name) underlying cases
+        , enumDeclarationProblems declaration
+        )
 
 checkDeclarationWith ::
     TemplateContext -> TypeEnvironment -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
@@ -421,6 +237,7 @@ checkDeclarationWith context globals declaration@FunctionDeclaration {} =
         )
 checkDeclarationWith context _ declaration@TypeDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
 checkDeclarationWith context _ declaration@TemplateTypeDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
+checkDeclarationWith context _ declaration@EnumDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
 
 -- A method overload is distinguished only by its ordered parameter types.
 -- Access, return type, and static-ness intentionally do not rescue duplicate
@@ -492,6 +309,7 @@ branchChecker context expected =
              in (typed, final, returns, problems)
         , branchType = \syntax -> (syntaxTypeIn context syntax, typeSyntaxProblemsIn context syntax)
         , branchLiteral = literalTypeInContext
+        , branchEnumMember = enumMemberValue (catalogEnums (templateCatalog context))
         , branchHasEffect = effectCapable
         , branchValueLoops = insideValueBlock context
         }
@@ -825,6 +643,27 @@ checkExpressionExpectedWith context environment expected expression = case expre
     LiteralExpression spanValue literal _ ->
         let (valueType, problems) = literalTypeInContext spanValue expected literal
          in (LiteralExpression spanValue literal valueType, valueType, problems)
+    -- @Enum.Member@ is the value of that member. It is a constant of the
+    -- enum's type, and it is kept as the integer literal it stands for.
+    MemberAccessExpression spanValue (NameExpression _ name _) member _
+        | Just info <- enumBySymbol (catalogEnums (templateCatalog context)) (resolvedSymbol name) ->
+            let valueType = enumInfoType info
+             in case lookup member (enumInfoMembers info) of
+                    Just value -> (LiteralExpression spanValue (IntegerLiteral value) valueType, valueType, [])
+                    Nothing ->
+                        ( LiteralExpression spanValue (IntegerLiteral 0) valueType
+                        , ErrorType
+                        ,
+                            [ problem
+                                spanValue
+                                "VXT0064"
+                                ( "the enum "
+                                    ++ identifierText (resolvedSpelling name)
+                                    ++ " has no member named "
+                                    ++ identifierText member
+                                )
+                            ]
+                        )
     MemberAccessExpression spanValue receiver member _ ->
         let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
             memberProblems = [problem spanValue "VXT0034" "member selection is currently supported only as a type-qualified method call"]
@@ -877,10 +716,24 @@ checkExpressionExpectedWith context environment expected expression = case expre
             rule = binaryNumericRule operator leftType rightType
             -- An operand without a type was reported already, or never
             -- yields a value; either way the operator has nothing to check.
-            (resultType, mismatch) =
-                if leftType == ErrorType || rightType == ErrorType
-                    then (if booleanResult operator then boolType else ErrorType, [])
-                    else (numericRuleType rule, ruleProblems spanValue "VXT0012" rule)
+            -- Values of an enum are compared for equality with values of
+            -- the same enum, and take part in no other operation.
+            (resultType, mismatch)
+                | leftType == ErrorType || rightType == ErrorType =
+                    (if booleanResult operator then boolType else ErrorType, [])
+                | isEnumType leftType || isEnumType rightType =
+                    if operator `elem` [Equal, NotEqual] && leftType == rightType
+                        then (boolType, [])
+                        else
+                            ( if booleanResult operator then boolType else ErrorType
+                            ,
+                                [ problem
+                                    spanValue
+                                    "VXT0065"
+                                    "values of an enum are only compared, with == and \\=, with values of the same enum"
+                                ]
+                            )
+                | otherwise = (numericRuleType rule, ruleProblems spanValue "VXT0012" rule)
          in ( BinaryExpression spanValue operator typedLeft typedRight resultType
             , resultType
             , leftProblems ++ rightProblems ++ mismatch

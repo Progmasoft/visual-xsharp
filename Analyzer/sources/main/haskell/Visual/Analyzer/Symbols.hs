@@ -38,6 +38,28 @@ declarationSymbol source tokens insideType declaration =
             typeSymbol spanValue name members
         TemplateTypeDeclaration spanValue name _ _ members ->
             typeSymbol spanValue name members
+        EnumDeclaration spanValue name _ _ cases ->
+            Lsp.DocumentSymbol
+                (Text.pack (identifierText name))
+                Nothing
+                Lsp.SymbolKind_Enum
+                Nothing
+                Nothing
+                (spanRange source spanValue)
+                (selectionRange source tokens spanValue name)
+                ( Just
+                    [ Lsp.DocumentSymbol
+                        (Text.pack (identifierText (enumCaseName member)))
+                        Nothing
+                        Lsp.SymbolKind_EnumMember
+                        Nothing
+                        Nothing
+                        (spanRange source (enumCaseSpan member))
+                        (spanRange source (enumCaseSpan member))
+                        Nothing
+                    | member <- cases
+                    ]
+                )
         FunctionDeclaration spanValue name _ _ parameters _ isStatic _ ->
             let symbolRange = spanRange source spanValue
                 selection = selectionRange source tokens spanValue name

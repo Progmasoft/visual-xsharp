@@ -517,6 +517,7 @@ declarationCalls declaration = case declaration of
     TypeDeclaration {typeMembers = members} -> concatMap declarationCalls members
     TemplateTypeDeclaration {typeMembers = members} -> concatMap declarationCalls members
     FunctionDeclaration {declarationBody = body} -> blockCalls body
+    EnumDeclaration {} -> []
 
 blockCalls :: Block ResolvedName Type -> [Expression ResolvedName Type]
 blockCalls (Block statements) = concatMap statementCalls statements

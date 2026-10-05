@@ -191,6 +191,13 @@ name that is in scope around it.
   `bool` or numeric. Other types need storage rules for the result slot that
   the backend does not have yet. A value of a template type parameter is
   rejected for the same reason.
+- A `match` over a classic enum uses case patterns, `.Member`. The pattern
+  accepts the value of the member, so two members with one value are one
+  case and the second arm for it can never be selected (`VXT0053`). The
+  match accepts every value, and needs no `_` arm, when its arms without
+  guards name every value of the enum; with several subjects, every
+  combination of the values of enums and `bool` subjects, up to 256
+  combinations.
 - Parts of these forms that the specification has and the compiler does not
   implement yet are listed, with their diagnostics, under "Pending branching
   and loop forms" in [Implementation status](IMPLEMENTATION.md).

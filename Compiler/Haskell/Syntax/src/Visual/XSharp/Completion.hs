@@ -160,39 +160,45 @@ acceptsEveryValue patternValue = case patternValue of
 {- | Whether some arm is certain to accept, whatever the subjects are.
 
 That is the case when an arm without a guard has only patterns that accept
-every value. It is also the case when every subject is a @bool@ and the arms
-without guards accept each combination of @true@ and @false@ between them;
-the combinations are enumerated, which is bounded by 'maximumBoolSubjects'.
-Nothing else is recognized: a guard may be false, and the literals of a wider
-type are never listed in full.
+every value. It is also the case when every subject has a closed set of
+values, a @bool@ or an enum, and the arms without guards accept each
+combination of those values between them; the combinations are enumerated,
+up to 'maximumEnumeratedCombinations' of them. Nothing else is recognized: a
+guard may be false, and the literals of a wider type are never listed in
+full.
 -}
 matchArmsAlwaysAccept :: [Type] -> [MatchArm name annotation] -> Bool
-matchArmsAlwaysAccept subjectTypes arms = any catchAll unguarded || coversBooleans
+matchArmsAlwaysAccept subjectTypes arms = any catchAll unguarded || coversClosedValues
     where
         unguarded = filter isUnguarded arms
         catchAll arm = all acceptsEveryValue (matchArmPatterns arm)
-        coversBooleans =
-            not (null subjectTypes)
-                && length subjectTypes <= maximumBoolSubjects
-                && all (== boolType) subjectTypes
-                && all (\values -> any (`acceptsBooleans` values) unguarded) (combinations (length subjectTypes))
-        combinations :: Int -> [[Bool]]
-        combinations count = sequence (replicate count [True, False])
+        coversClosedValues = case traverse closedValues subjectTypes of
+            Just domains
+                | not (null domains)
+                , product (map length domains) <= maximumEnumeratedCombinations ->
+                    all (\values -> any (`acceptsLiterals` values) unguarded) (sequence domains)
+            _ -> False
 
-{- | The most @bool@ subjects whose combinations are enumerated to decide
+-- | The values of a type that has a closed set of them, as the literals a pattern names.
+closedValues :: Type -> Maybe [Literal]
+closedValues valueType
+    | valueType == boolType = Just [BooleanLiteral True, BooleanLiteral False]
+    | otherwise = map IntegerLiteral <$> enumMemberValues valueType
+
+{- | The most combinations of subject values that are enumerated to decide
 whether a match accepts every value. A match with more is complete only
 through a catch-all arm; the bound keeps the check linear in practice.
 -}
-maximumBoolSubjects :: Int
-maximumBoolSubjects = 8
+maximumEnumeratedCombinations :: Int
+maximumEnumeratedCombinations = 256
 
--- | Whether an arm's patterns accept the given values of @bool@ subjects.
-acceptsBooleans :: MatchArm name annotation -> [Bool] -> Bool
-acceptsBooleans arm values =
+-- | Whether an arm's patterns accept the given values of its subjects.
+acceptsLiterals :: MatchArm name annotation -> [Literal] -> Bool
+acceptsLiterals arm values =
     length (matchArmPatterns arm) == length values && and (zipWith accepts (matchArmPatterns arm) values)
     where
         accepts patternValue value = case patternValue of
-            MatchLiteralPattern _ (BooleanLiteral literal) _ -> literal == value
+            MatchLiteralPattern _ literal _ -> literal == value
             _ -> acceptsEveryValue patternValue
 
 -- | Whether an arm has no guard.

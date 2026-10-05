@@ -120,6 +120,11 @@ renameDeclarationsWithBindings globals next (declaration : remaining) (assignedN
                 , final
                 , templateProblems ++ duplicateProblems ++ memberProblems ++ restProblems
                 )
+        -- The members of an enum are named by spelling under their enum
+        -- and take no symbols of their own.
+        EnumDeclaration spanValue _ _ underlying cases ->
+            let (rest, final, restProblems) = renameDeclarationsWithBindings globals next remaining assignedRemaining
+             in (EnumDeclaration spanValue assignedName () underlying cases : rest, final, restProblems)
         FunctionDeclaration spanValue _ _ returnSyntax sourceParameters sourceBody isStatic access ->
             let name = assignedName
                 (parameters, parameterEnvironment, afterParameters, parameterProblems) = renameParameters globals next sourceParameters

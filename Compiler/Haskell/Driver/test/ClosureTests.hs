@@ -331,6 +331,7 @@ declarationCallable declaration = case declaration of
     TypeDeclaration {typeMembers = members} -> firstJust (map declarationCallable members)
     TemplateTypeDeclaration {typeMembers = members} -> firstJust (map declarationCallable members)
     FunctionDeclaration {declarationBody = body} -> blockCallable body
+    EnumDeclaration {} -> Nothing
 
 blockCallable :: Block name annotation -> Maybe (Expression name annotation)
 blockCallable (Block statements) = firstJust (map statementCallable statements)

@@ -335,6 +335,7 @@ memberCalls owner declaration = case declaration of
     -- not accidentally pull siblings into the enclosing template closure.
     TypeDeclaration {} -> []
     TemplateTypeDeclaration {} -> []
+    EnumDeclaration {} -> []
 
 blockCalls :: SymbolId -> Block ResolvedName Type -> [TemplateMemberCall]
 blockCalls owner (Block statements) = concatMap (statementCalls owner) statements

@@ -398,6 +398,50 @@ match (status) {
 }
 
 -- ============================================================================
+-- Example 311: 7.4 Operations on Enum Values
+-- Demonstrates: The values of a classic enum are compared with == and \=, with values of the same enum.
+--   Two members with the same numeric value are equal.
+
+Status.READY == status  -- bool
+status \= Status.NONE   -- bool
+
+-- ============================================================================
+-- Example 312: 7.4 Operations on Enum Values
+-- Demonstrates: A classic enum has no order and no arithmetic. Its members are names for values, and the
+--   numeric value behind a name is not a quantity.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Status.NONE < Status.READY   -- INVALID: enum values are not ordered
+Status.NONE + Status.READY   -- INVALID: enum values are not added
+Status.NONE == Level.LOW     -- INVALID: values of different enums
+
+-- ============================================================================
+-- Example 313: 7.5 Enums and Integers
+-- Demonstrates: A classic enum is a type of its own. There is no implicit conversion between an enum and an
+--   integer in either direction, whatever its underlying type is.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+int code = Status.READY;  -- INVALID: an enum value is not an integer
+Status status = 1;        -- INVALID: an integer is not an enum value
+Status.NONE == 0          -- INVALID: an enum value is not compared with an integer
+
+-- ============================================================================
+-- Example 314: 7.6 Access to Members
+-- Demonstrates: The target-typed .Member spelling is the same for a classic enum as for an enum class: it
+--   names a member of the enum that the context expects, in a match pattern and in an expression whose
+--   target type is known.
+
+Status first = Status.READY;
+Status second = .READY;
+
+-- ============================================================================
+-- Example 315: 7.6 Access to Members
+-- Demonstrates: Target-typed .Member syntax requires a known target type, for a classic enum as well.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+auto status = .READY; -- INVALID
+
+-- ============================================================================
 -- Example 44: 8. enum class
 -- Demonstrates: An enum class is an AARC reference type whose cases are singleton instances.
 

@@ -422,6 +422,7 @@ declarationSources = Map.fromList . concatMap collect
             (resolvedSymbol (declarationName declaration), declaration) : concatMap collect (typeMembers declaration)
         collect TypeDeclaration {typeMembers = members} = concatMap collect members
         collect FunctionDeclaration {} = []
+        collect EnumDeclaration {} = []
 
 attachDependencies :: [TemplateSpecialization] -> [TemplateSpecialization]
 attachDependencies specializations = map attach specializations
@@ -515,6 +516,7 @@ declarationTypes declaration = case declaration of
     FunctionDeclaration _ _ annotation _ parameters body _ _ ->
         annotation : concatMap parameterTypes parameters ++ blockTypes body
     TemplateTypeDeclaration {} -> []
+    EnumDeclaration {} -> []
 
 parameterTypes :: Parameter ResolvedName Type -> [Type]
 parameterTypes parameter = [parameterAnnotation parameter]

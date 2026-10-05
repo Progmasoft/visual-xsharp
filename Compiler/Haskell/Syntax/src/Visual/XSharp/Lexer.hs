@@ -244,6 +244,7 @@ keywords =
     , "do"
     , "for"
     , "else"
+    , "enum"
     , "false"
     , "final"
     , "guard"

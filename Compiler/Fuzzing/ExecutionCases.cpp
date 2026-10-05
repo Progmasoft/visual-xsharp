@@ -59,14 +59,15 @@ namespace Visual::XSharp::Fuzzing
         }
 
         [[nodiscard]] auto
-        Program(const std::vector<Method> &methods, std::string_view helpers)
-            -> std::string
+        Program(const std::vector<Method> &methods,
+                std::string_view helpers,
+                std::string_view declarations) -> std::string
         {
-            std::string program
-                = "namespace Fuzz;\n"
-                  "class Program {\n"
-                  "    public static int Id(_ int n) { return n > 0 ? 1 + "
-                  "Id(n - 1) : 0; }\n";
+            std::string program = "namespace Fuzz;\n";
+            program += declarations;
+            program += "class Program {\n"
+                       "    public static int Id(_ int n) { return n > 0 ? 1 + "
+                       "Id(n - 1) : 0; }\n";
             program += helpers;
             for (std::size_t method = 0U; method < methods.size(); ++method)
             {
@@ -92,7 +93,8 @@ namespace Visual::XSharp::Fuzzing
         void
         Exercise(std::string_view label,
                  const std::vector<Method> &methods,
-                 std::string_view helpers)
+                 std::string_view helpers,
+                 std::string_view declarations)
         {
             std::size_t bit = 0U;
             for (const auto &method : methods)
@@ -108,21 +110,22 @@ namespace Visual::XSharp::Fuzzing
             }
             // A result other than 0 is the sum of the run numbers printed
             // above whose value differed.
-            ExerciseExpectedValue(Program(methods, helpers), 0);
+            ExerciseExpectedValue(Program(methods, helpers, declarations), 0);
         }
     } // namespace
 
     void
     ExerciseExecutionCases(std::string_view label,
                            std::span<const ExecutionCase> cases,
-                           std::string_view helpers)
+                           std::string_view helpers,
+                           std::string_view declarations)
     {
         std::vector<bool> taken(cases.size(), false);
         std::vector<Method> methods;
         std::size_t runs = 0U;
         const auto flush = [&] {
             if (!methods.empty())
-                Exercise(label, methods, helpers);
+                Exercise(label, methods, helpers, declarations);
             methods.clear();
             runs = 0U;
         };

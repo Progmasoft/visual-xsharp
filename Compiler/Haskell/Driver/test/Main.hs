@@ -19,6 +19,7 @@ import Data.List (isInfixOf)
 import Data.Word (Word8)
 import DiagnosticProtocolTests (diagnosticProtocolTests)
 import DiagnosticSideChannelTests (diagnosticSideChannelTests)
+import EnumTests (enumTests)
 import FloatingOptimizerTests (floatingOptimizerTests)
 import IntegerEvaluationTests (integerEvaluationTests)
 import InferredReturnTests (inferredReturnTests)
@@ -178,6 +179,7 @@ main = do
     mapM_ (uncurry check) loopExpressionTests
     mapM_ (uncurry check) branchingTests
     mapM_ (uncurry check) inferredReturnTests
+    mapM_ (uncurry check) enumTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests
     mapM_ (uncurry check) nestingLimitTests

@@ -49,6 +49,8 @@ data BranchChecker loops = BranchChecker
     -- ^ Resolve a type written in source.
     , branchLiteral :: SourceSpan -> Maybe Type -> Literal -> (Type, [Diagnostic])
     -- ^ Type a literal in the context of an expected type.
+    , branchEnumMember :: Type -> Identifier -> Maybe Integer
+    -- ^ The value of a member of the enum with the given type.
     , branchHasEffect :: Expression ResolvedName () -> Bool
     -- ^ Whether evaluating an expression can do more than produce a value.
     , branchValueLoops :: loops
@@ -155,10 +157,11 @@ checkMatch checker use environment expected spanValue subjects arms =
                 ++ [ problem
                         (expressionSpanOf typed)
                         "VXT0058"
-                        "match subjects currently support only bool and numeric values"
+                        "match subjects currently support only bool, numeric and enum values"
                    | (typed, valueType) <- zip typedSubjects subjectTypes
                    , valueType /= ErrorType
                    , not (acceptsBooleanContext valueType)
+                   , Nothing <- [enumUnderlyingType valueType]
                    ]
         (typedArms, armTypes, returns, armProblems) = checkArms subjectTypes expected arms
         -- An arm that does not complete produces no value; the arms that
@@ -295,10 +298,23 @@ checkMatchPattern checker subjectType patternValue = case patternValue of
         ( MatchNullPattern spanValue subjectType
         , [problem spanValue "VXT0055" "a null pattern requires a reference subject, which match does not support yet"]
         )
-    MatchCasePattern spanValue name _ ->
-        ( MatchCasePattern spanValue name subjectType
-        , [problem spanValue "VXT0056" "enum case patterns require enum declarations, which are not implemented"]
-        )
+    -- @.Member@ names a member of the subject's enum. It accepts the value
+    -- of that member, so it is kept as the literal pattern of that value:
+    -- two members with one value are then one pattern, and the second of
+    -- them can never be selected.
+    MatchCasePattern spanValue name _ -> case (enumUnderlyingType subjectType, branchEnumMember checker subjectType name) of
+        (Just _, Just value) -> (MatchLiteralPattern spanValue (IntegerLiteral value) subjectType, [])
+        (Just _, Nothing) ->
+            ( MatchCasePattern spanValue name subjectType
+            , [problem spanValue "VXT0064" ("the enum of the subject has no member named " ++ identifierText name)]
+            )
+        (Nothing, _) ->
+            ( MatchCasePattern spanValue name subjectType
+            ,
+                [ problem spanValue "VXT0056" "an enum case pattern requires a subject of an enum type"
+                | subjectType /= ErrorType
+                ]
+            )
     MatchTypePattern spanValue syntax name _ ->
         let (namedTypeValue, syntaxProblems) = branchType checker syntax
             relationProblems =
@@ -326,8 +342,9 @@ matchValueType spanValue armTypes = case filter (/= ErrorType) armTypes of
     first : remaining
         | any (/= first) remaining ->
             (first, [problem spanValue "VXT0050" "the arms of a match used as an expression must have the same type"])
-        | not (acceptsBooleanContext first) ->
-            (first, [problem spanValue "VXT0051" "match expressions currently support only bool and numeric results"])
+        | not (acceptsBooleanContext first)
+        , Nothing <- enumUnderlyingType first ->
+            (first, [problem spanValue "VXT0051" "match expressions currently support only bool, numeric and enum results"])
         | otherwise -> (first, [])
 
 {- | Arms that can never be selected because an earlier arm without a guard

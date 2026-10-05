@@ -133,6 +133,7 @@ walkDeclaration state declaration = case declaration of
     -- relationships before and after concrete declaration instantiation.
     TemplateTypeDeclaration {typeMembers = members} -> foldl walkDeclaration state members
     FunctionDeclaration {declarationBody = body} -> walkBlock Nothing state body
+    EnumDeclaration {} -> state
 
 walkBlock :: Maybe ClosureId -> WalkState -> Block ResolvedName Type -> WalkState
 walkBlock parent state block = foldStatements parent (blockStatements block) state

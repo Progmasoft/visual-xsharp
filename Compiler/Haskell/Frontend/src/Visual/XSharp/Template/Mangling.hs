@@ -127,6 +127,7 @@ mangleTemplateMember limits owner member = do
                 )
         TypeDeclaration {} -> nestedTypeMember ownerName member
         TemplateTypeDeclaration {} -> Left ExpectedMangleableMemberDeclaration
+        EnumDeclaration {} -> Left ExpectedMangleableMemberDeclaration
     where
         nestedTypeMember ownerName declaration = do
             name <- encodeIdentifier (resolvedSpelling (declarationName declaration))

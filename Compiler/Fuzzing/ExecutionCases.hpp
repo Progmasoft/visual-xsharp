@@ -42,9 +42,12 @@ namespace Visual::XSharp::Fuzzing
      * @param cases Runs in table order; equal bodies need not be adjacent.
      * @param helpers Source of additional methods of the class the body may
      * call.
+     * @param declarations Source of declarations that stand before the
+     * class, such as the enums the bodies use.
      */
     void
     ExerciseExecutionCases(std::string_view label,
                            std::span<const ExecutionCase> cases,
-                           std::string_view helpers);
+                           std::string_view helpers,
+                           std::string_view declarations = {});
 } // namespace Visual::XSharp::Fuzzing

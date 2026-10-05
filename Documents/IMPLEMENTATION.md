@@ -91,7 +91,11 @@ the specification is not changed to match them.
 | --- | --- | --- | --- |
 | a binding in the condition of `if`, `guard` or `while`, as in `guard (auto user = Find()) else { return; }` | `Spec/Language/Decls.vxs`, examples 190 to 192 | `VXP0035` | optional values |
 | a call that does not return as a way of leaving a `guard` block or a block used as a value | example 297 | every call is assumed to return, so the block is taken to complete: `VXT0061` or `VXT0046` | a way to know that a call does not return; how that is expressed in the language is not decided here |
-| exhaustiveness of a `match` over an enum or a nullable subject | example 304 | `VXT0056`, `VXT0055` | enum declarations; nullable subjects |
+| a `match` over a subject that may be null | example 304 | `VXT0055` | nullable subjects |
+| the target-typed `.Member` spelling in an expression, as in `Status second = .READY;` | examples 53 and 314 | `VXP0004`; the spelling is implemented in match patterns | an expression form for it and its typing from the expected type |
+| an enum declared inside a class | the nested declarations of section 9 | `VXP0006` | qualified type names |
+| a constant expression as the value of an enum member, as in `B = A + 1` | the `enum-member` rule of the grammar | `VXP0041`; an integer literal with an optional minus sign is implemented | constant evaluation of member values |
+| `enum class`, the enum with payloads | section 8 | not parsed | the object model |
 | type patterns over class hierarchies | examples 198 to 203 | `VXT0057` | class hierarchies |
 
 Implemented and verified through native execution, unoptimized and
@@ -100,7 +104,9 @@ in loop bodies; `break` and `continue` in a loop condition; `break` and
 `continue` in a `for` update clause; a `break` that carries a value out of a
 block used as a value to a loop used as an expression; `return` out of a
 loop used as an expression, directly and from a block used as a value; an
-`if` or `match` expression none of whose branches completes; calls of
+`if` or `match` expression none of whose branches completes; classic enums,
+with their numbering, their comparison and `match` over them, complete
+without a catch-all arm when every value is named; calls of
 methods whose return type is inferred, in the same class, in another class,
 through chains of such methods and through mutual recursion; the inference
 of a callable's return type from returns inside its expressions; and

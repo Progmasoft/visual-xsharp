@@ -67,6 +67,7 @@ declarationProblems declaration = case declaration of
     FunctionDeclaration {declarationBody = body} -> report (blockExcess 1 0 body)
     TypeDeclaration {typeMembers = members} -> concatMap declarationProblems members
     TemplateTypeDeclaration {typeMembers = members} -> concatMap declarationProblems members
+    EnumDeclaration {} -> []
     where
         report found =
             take 1 [statementProblem spanValue | StatementExcess spanValue <- found]

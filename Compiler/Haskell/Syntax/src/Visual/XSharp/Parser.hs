@@ -71,7 +71,47 @@ manyUntilEof parser = do
 parseDeclaration :: P (Declaration Identifier ())
 parseDeclaration = do
     isTemplate <- peekText "template"
-    if isTemplate then parseTemplateDeclaration else parseOrdinaryTypeDeclaration
+    isEnum <- peekText "enum"
+    if isTemplate
+        then parseTemplateDeclaration
+        else if isEnum then parseEnumDeclaration else parseOrdinaryTypeDeclaration
+
+{- | Parse a classic enum: @enum Name { A, B = 2, C }@, with an optional
+underlying type written as @enum Name = byte { ... }@. A comma separates the
+members and may follow the last one. The value of a member is read as an
+integer literal with an optional minus sign; other constant expressions are
+not implemented yet.
+-}
+parseEnumDeclaration :: P (Declaration Identifier ())
+parseEnumDeclaration = do
+    start <- keyword "enum"
+    (name, _) <- identifier
+    hasUnderlying <- optionalSymbol "="
+    underlying <- if hasUnderlying then Just <$> parseTypeSyntax else pure Nothing
+    _ <- symbol "{"
+    cases <- parseCases
+    close <- symbol "}"
+    pure (EnumDeclaration (mergeSpan (tokenSpan start) (tokenSpan close)) name () underlying cases)
+    where
+        parseCases = do
+            done <- peekText "}"
+            if done
+                then pure []
+                else do
+                    (caseName, caseSpan) <- identifier
+                    hasValue <- optionalSymbol "="
+                    value <- if hasValue then Just <$> parseCaseValue else pure Nothing
+                    comma <- optionalSymbol ","
+                    remaining <- if comma then parseCases else pure []
+                    pure (EnumCase caseSpan caseName value : remaining)
+        parseCaseValue = do
+            negative <- optionalSymbol "-"
+            token <- takeToken
+            if tokenKind token == IntegerToken
+                then case parseIntegerSpelling (tokenText token) of
+                    Right parsed -> pure ((if negative then negate else id) (parsedIntegerValue parsed))
+                    Left issue -> failAt (tokenSpan token) "VXP0010" (renderIntegerLiteralError issue)
+                else failAt (tokenSpan token) "VXP0041" "the value of an enum member is supported only as an integer literal"
 
 parseOrdinaryTypeDeclaration :: P (Declaration Identifier ())
 parseOrdinaryTypeDeclaration = do

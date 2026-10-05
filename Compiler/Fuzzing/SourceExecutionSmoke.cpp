@@ -393,6 +393,138 @@ namespace
           "    public static int Plain(_ int value) { return value + value; "
           "}\n";
 
+    // Classic enums. A value of an enum is its underlying integer in the
+    // generated code, so these runs show that the numbering of members, the
+    // comparison of values and the selection of a match arm by member
+    // survive every native stage.
+    constexpr std::string_view kEnumDeclarations
+        = "enum Status { NONE, UNKNOWN = 0, READY }\n"
+          "enum Level = byte { LOW = 1, MID, HIGH = 10, TOP }\n";
+    constexpr std::string_view kEnumHelpers
+        = "    public static Status Pick(_ int v) { if (v > 0) { return "
+          "Status.READY; } return Status.NONE; }\n"
+          "    public static int Rank(_ Level l) { return match (l) { .LOW "
+          "-> 1, .MID -> 2, .HIGH -> 10, .TOP -> 11 }; }\n"
+          "    public static Level Raise(_ Level l) { return match (l) { "
+          ".LOW -> Level.MID, .MID -> Level.HIGH, _ -> Level.TOP }; }\n";
+    constexpr auto kEnumCases
+        = std::to_array<Visual::XSharp::Fuzzing::ExecutionCase>({
+            { false,
+              false,
+              3,
+              0,
+              1,
+              "Status s = Pick(left); return s == Status.READY ? 1 : 2;" },
+            { false,
+              false,
+              0,
+              0,
+              2,
+              "Status s = Pick(left); return s == Status.READY ? 1 : 2;" },
+            { false,
+              false,
+              0,
+              0,
+              2,
+              "Status s = Pick(left); return s \\= Status.NONE ? 1 : 2;" },
+            { false,
+              false,
+              0,
+              0,
+              1,
+              "return Status.NONE == Status.UNKNOWN ? 1 : 2;" },
+            { false,
+              false,
+              0,
+              0,
+              12021,
+              "return Rank(Level.LOW) + Rank(Level.MID) * 10 + "
+              "Rank(Level.HIGH) * 100 + Rank(Level.TOP) * 1000;" },
+            { false,
+              false,
+              3,
+              0,
+              20,
+              "return match (Pick(left)) { .NONE -> 10, .READY -> 20 };" },
+            { false,
+              false,
+              0,
+              0,
+              10,
+              "return match (Pick(left)) { .NONE -> 10, .READY -> 20 };" },
+            { false,
+              false,
+              0,
+              0,
+              10,
+              "return match (Pick(left)) { .UNKNOWN -> 10, .READY -> 20 };" },
+            { false,
+              false,
+              1,
+              1,
+              1,
+              "return match (Pick(left)) { .READY if (right > 0) -> 1, "
+              ".READY -> 2, .NONE -> 3 };" },
+            { false,
+              false,
+              1,
+              0,
+              2,
+              "return match (Pick(left)) { .READY if (right > 0) -> 1, "
+              ".READY -> 2, .NONE -> 3 };" },
+            { false,
+              false,
+              0,
+              5,
+              3,
+              "return match (Pick(left)) { .READY if (right > 0) -> 1, "
+              ".READY -> 2, .NONE -> 3 };" },
+            { false,
+              false,
+              0,
+              0,
+              1011,
+              "return Rank(Raise(Raise(Level.LOW))) * 100 + "
+              "Rank(Raise(Level.HIGH));" },
+            { false,
+              false,
+              1,
+              0,
+              1,
+              "Status s = match (left) { 1 -> Status.READY, _ -> Status.NONE "
+              "}; return s == Status.READY ? 1 : 0;" },
+            { false,
+              false,
+              0,
+              1,
+              1,
+              "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, "
+              "(.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) "
+              "-> 4 };" },
+            { false,
+              false,
+              1,
+              0,
+              4,
+              "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, "
+              "(.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) "
+              "-> 4 };" },
+            { false,
+              false,
+              0,
+              0,
+              3,
+              "Level l = Level.LOW; int n = 0; while (l \\= Level.TOP) { "
+              "l = Raise(l); n += 1; } return n;" },
+            { false,
+              false,
+              2,
+              0,
+              56,
+              "auto f = \\(Status s) -> s == Status.READY ? 5 : 6; "
+              "return f(Pick(left)) * 10 + f(Status.NONE);" },
+        });
+
     // Written here by hand, apart from the generated tables and from the
     // frontend tests: the expected values are worked out from the methods
     // above, so these runs do not share an expectation with any other
@@ -446,6 +578,11 @@ namespace
             "Inferred return execution",
             kInferredCases,
             kInferredHelpers);
+        // Hand-written results for classic enums.
+        Visual::XSharp::Fuzzing::ExerciseExecutionCases("Enum execution",
+                                                        kEnumCases,
+                                                        kEnumHelpers,
+                                                        kEnumDeclarations);
         // The JIT finds the runtime of the closure cases in this process.
         // The call also keeps the runtime in the program where the linker
         // would otherwise leave an unreferenced library out.

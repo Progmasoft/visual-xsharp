@@ -49,6 +49,9 @@ resolveDeclaration declaration = case declaration of
                 (map fst resolvedMembers)
             , snd name ++ concatMap snd parameters ++ concatMap snd resolvedMembers
             )
+    EnumDeclaration spanValue sourceName _ underlying cases ->
+        let name = resolveName spanValue sourceName
+         in (EnumDeclaration spanValue (fst name) () underlying cases, snd name)
     FunctionDeclaration spanValue sourceName _ returnSyntax sourceParameters sourceBody isStatic access ->
         let name = resolveName spanValue sourceName
             parameters = map resolveParameter sourceParameters

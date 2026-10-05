@@ -85,6 +85,7 @@ instantiateMember binding declaration = case declaration of
         -- outer binding blindly would capture same-spelled inner parameters.
         -- Nested instantiation will be selected independently by the planner.
         pure declaration
+    EnumDeclaration {} -> pure declaration
 
 -- | Instantiate one parameter annotation while preserving its source syntax.
 instantiateParameter ::

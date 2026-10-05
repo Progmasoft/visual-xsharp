@@ -33,6 +33,8 @@ library
         Visual.XSharp.TypeClassification
         Visual.XSharp.TypeChecker
         Visual.XSharp.TypeChecker.Branching
+        Visual.XSharp.TypeChecker.Context
+        Visual.XSharp.TypeChecker.Enums
         Visual.XSharp.TypeChecker.Literals
         Visual.XSharp.TypeChecker.Loops
         Visual.XSharp.TypeChecker.Returns

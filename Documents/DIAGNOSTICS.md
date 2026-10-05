@@ -329,13 +329,18 @@ The type checker reports:
 | `VXT0053` | a match arm can never be selected because an earlier arm accepts everything it accepts |
 | `VXT0054` | a literal pattern cannot be compared with its subject |
 | `VXT0055` | a `null` pattern; reference subjects are not supported in `match` yet |
-| `VXT0056` | an enum case pattern such as `.Ready`; enum declarations are not implemented |
+| `VXT0056` | an enum case pattern such as `.Ready` for a subject that is not of an enum type |
 | `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
 | `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
 | `VXT0062` | the `return` statements of a method or callable whose result type is inferred carry values of different types |
 | `VXT0063` | the return type of a method declared with `auto` cannot be inferred: every result is a call that depends on the method itself |
+| `VXT0064` | an enum has no member of the given name, in `Enum.Member` or in a case pattern |
+| `VXT0065` | an operation on a value of an enum other than `==` or `\=` with a value of the same enum |
+| `VXT0066` | the underlying type of an enum is not an integer type |
+| `VXT0067` | an enum names a member twice |
+| `VXT0068` | the value of an enum member does not fit the underlying type of the enum |
 
 A block used as a value may leave instead of yielding a value: `return`
 leaves the enclosing method and is checked against its return type
@@ -419,6 +424,10 @@ at most 5.5 MiB in a sanitizer build; the measurements are in
 | --- | --- |
 | `VXP0039` | a statement is nested more than 256 levels deep in other statements |
 | `VXP0040` | an expression is nested more than 1024 levels deep in other expressions |
+
+`VXP0041` reports a value of an enum member that is not an integer literal
+with an optional minus sign. The grammar allows a constant expression there;
+other constant expressions are not implemented yet.
 
 The statements of a function body are at level 1, and an expression that is
 not an operand is at level 1. A block, a branch, a loop body, a `guard`

@@ -57,6 +57,7 @@ declarationSourceFiles declaration = case declaration of
         portableSpanSource declaration : concatMap declarationSourceFiles members
     TemplateTypeDeclaration {typeMembers = members} ->
         portableSpanSource declaration : concatMap declarationSourceFiles members
+    EnumDeclaration {} -> [portableSpanSource declaration]
 
 -- Artifact paths always use portable separators, even when discovery ran on
 -- Windows; these names become stable wire and output identities.
@@ -73,6 +74,7 @@ functionSources = concatMap declarationFunctionSources
             FunctionDeclaration {} -> owner declaration
             TypeDeclaration {typeMembers = members} -> concatMap declarationFunctionSources members
             TemplateTypeDeclaration {typeMembers = members} -> concatMap declarationFunctionSources members
+            EnumDeclaration {} -> []
         owner declaration =
             [
                 ( symbolIdValue (resolvedSymbol (declarationName declaration))
@@ -159,6 +161,9 @@ lowerTop TypeDeclaration {typeMembers = members} = mapM lowerDeclaration members
 -- concrete arguments. Lowering them here would leak unresolved type variables
 -- into Core and create one fake unspecialized native function.
 lowerTop TemplateTypeDeclaration {} = pure []
+-- An enum has no code: its members are constants of its underlying type,
+-- which the type checker has put where they are used.
+lowerTop EnumDeclaration {} = pure []
 lowerTop function@FunctionDeclaration {} = (: []) <$> lowerDeclaration function
 
 lowerDeclaration :: Declaration ResolvedName Type -> Lower CoreFunction
@@ -177,6 +182,7 @@ lowerDeclaration declaration@FunctionDeclaration {} = do
         returnType = lowerBoundaryType $ case declarationAnnotation declaration of FunctionType _ result -> result; value -> value
 lowerDeclaration TypeDeclaration {} = error "type declarations are lowered through lowerTop"
 lowerDeclaration TemplateTypeDeclaration {} = error "template declarations require specialization before Core lowering"
+lowerDeclaration EnumDeclaration {} = error "enum declarations are lowered through lowerTop"
 
 {- | Where a @break value;@ stores its value: the result slot of the loop
 expression it leaves. A loop statement has no slot, and its body is lowered
@@ -897,6 +903,10 @@ lowerBoundaryType valueType
     | valueType == voidType = unitType
     | FunctionType parameters result <- valueType =
         FunctionType (map lowerBoundaryType parameters) (lowerBoundaryType result)
+    -- A value of an enum is a value of its underlying integer type. An enum
+    -- must not cross into Core as a named type: named types are references
+    -- there, and an enum is not one.
+    | Just underlying <- enumUnderlyingType valueType = underlying
     | NamedType name arguments <- valueType = NamedType name (map lowerTemplateArgument arguments)
     | otherwise = valueType
 
@@ -920,6 +930,7 @@ declarationSymbolIds declaration =
                 map (symbolValue . templateParameterName) parameters ++ concatMap declarationSymbolIds members
             FunctionDeclaration {declarationParameters = parameters, declarationBody = body} ->
                 map (symbolValue . parameterName) parameters ++ blockSymbolIds body
+            EnumDeclaration {} -> []
 
 blockSymbolIds :: Block ResolvedName Type -> [Int]
 blockSymbolIds (Block statements) = concatMap statementIds statements

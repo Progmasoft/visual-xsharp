@@ -274,6 +274,7 @@ declarationDefinitionSymbols declaration = case declaration of
             : map (resolvedSymbol . parameterName) parameters
             ++ blockDefinitionSymbols body
     TemplateTypeDeclaration {} -> []
+    EnumDeclaration _ name _ _ _ -> [resolvedSymbol name]
 
 blockDefinitionSymbols :: Block ResolvedName Type -> [SymbolId]
 blockDefinitionSymbols (Block statements) = concatMap statementDefinitionSymbols statements
@@ -352,6 +353,7 @@ declarationTypes declaration = case declaration of
         annotation : map parameterAnnotation parameters ++ blockTypes body
     TemplateTypeDeclaration _ _ annotation parameters members ->
         annotation : map templateParameterAnnotation parameters ++ concatMap declarationTypes members
+    EnumDeclaration _ _ annotation _ _ -> [annotation]
 
 blockTypes :: Block ResolvedName Type -> [Type]
 blockTypes (Block statements) = concatMap statementTypes statements

@@ -13,6 +13,10 @@ module Visual.XSharp.AST
     , SourceSpan (..)
     , SyntaxTree (..)
     , Declaration (..)
+    , EnumCase (..)
+    , enumType
+    , enumUnderlyingType
+    , enumMemberValues
     , TemplateParameter (..)
     , TemplateParameterKind (..)
     , TemplateParameterShape (..)
@@ -149,6 +153,26 @@ data Declaration name annotation
         , declarationTemplateParameters :: [TemplateParameter name annotation]
         , typeMembers :: [Declaration name annotation]
         }
+    | {- | A classic enum: a value type whose members are named integers.
+      The underlying type is absent when the source does not write one.
+      -}
+      EnumDeclaration
+        { declarationSpan :: SourceSpan
+        , declarationName :: name
+        , declarationAnnotation :: annotation
+        , enumUnderlying :: Maybe TypeSyntax
+        , enumCases :: [EnumCase]
+        }
+    deriving stock (Eq, Ord, Read, Show)
+
+{- | A member of a classic enum. A member without a written value takes the
+value after that of the member before it, and the first takes zero.
+-}
+data EnumCase = EnumCase
+    { enumCaseSpan :: SourceSpan
+    , enumCaseName :: Identifier
+    , enumCaseValue :: Maybe Integer
+    }
     deriving stock (Eq, Ord, Read, Show)
 
 {- | Generic parameter with its declaration span, category, pack flag, and default.
@@ -607,6 +631,35 @@ namedType value = NamedType (QualifiedName [Identifier value]) []
 -- | Canonical built-in Boolean type.
 boolType :: Type
 boolType = namedType "bool"
+
+{- | The type of a classic enum.
+
+An enum is a type of its own, and it is a value of its underlying integer
+type with a closed set of values. Both facts are needed after type checking:
+the lowering stores an enum as its underlying type, and a @match@ over an
+enum is complete when its arms name every value. The type therefore carries
+them: its name under the reserved root @enum@, which no source can spell
+because @enum@ is a keyword, then the underlying type, then the distinct
+values of its members in ascending order.
+-}
+enumType :: Identifier -> Type -> [Integer] -> Type
+enumType name underlying values =
+    NamedType
+        (QualifiedName [Identifier "enum", name])
+        (TypeTemplateArgument underlying : map (ValueTemplateArgument . IntegerTemplateValue) values)
+
+-- | The underlying integer type of an enum type, and nothing for any other type.
+enumUnderlyingType :: Type -> Maybe Type
+enumUnderlyingType valueType = case valueType of
+    NamedType (QualifiedName [Identifier "enum", _]) (TypeTemplateArgument underlying : _) -> Just underlying
+    _ -> Nothing
+
+-- | The distinct member values of an enum type, and nothing for any other type.
+enumMemberValues :: Type -> Maybe [Integer]
+enumMemberValues valueType = case valueType of
+    NamedType (QualifiedName [Identifier "enum", _]) (TypeTemplateArgument _ : values) ->
+        Just [value | ValueTemplateArgument (IntegerTemplateValue value) <- values]
+    _ -> Nothing
 
 -- | Canonical built-in signed integer type used by the current frontend.
 intType :: Type

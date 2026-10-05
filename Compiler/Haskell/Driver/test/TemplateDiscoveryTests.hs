@@ -244,6 +244,7 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
                     isStatic
                     access
             TemplateTypeDeclaration {} -> declaration
+            EnumDeclaration {} -> declaration
         rewriteParameter parameter = parameter {parameterAnnotation = rewriteType (parameterAnnotation parameter)}
         rewriteBlock (Block statements) = Block (map rewriteStatement statements)
         rewriteStatement statement = case statement of

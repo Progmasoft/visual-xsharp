@@ -120,6 +120,8 @@ freshDeclaration declaration = case declaration of
         -- A nested template introduces a separate substitution/freshening
         -- environment. It will be selected independently when demanded.
         pure declaration
+    -- An enum has no body and no template parameter in it.
+    EnumDeclaration {} -> pure declaration
 
 reserveDeclarationName :: Declaration ResolvedName Type -> Fresh ()
 reserveDeclarationName declaration = case declaration of
@@ -129,6 +131,7 @@ reserveDeclarationName declaration = case declaration of
         -- Nested templates own a separate specialization environment and must
         -- not leak definitions into the enclosing concrete type's map.
         pure ()
+    EnumDeclaration {} -> pure ()
 
 freshParameterDefinition :: Parameter ResolvedName Type -> Fresh (Parameter ResolvedName Type)
 freshParameterDefinition parameter = do
@@ -321,6 +324,7 @@ declarationSymbols declaration = case declaration of
             : typeSymbols annotation
             ++ concatMap templateParameterSymbols parameters
             ++ concatMap declarationSymbols members
+    EnumDeclaration _ name annotation _ _ -> nameSymbol name : typeSymbols annotation
 
 templateParameterSymbols :: TemplateParameter ResolvedName Type -> [Int]
 templateParameterSymbols parameter =

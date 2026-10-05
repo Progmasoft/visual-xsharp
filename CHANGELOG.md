@@ -64,6 +64,17 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   expression around the block. A callable is not inside the loops around
   the place that creates it. `Spec/Language/Iteration.vxs` gains examples
   79 to 83 for these rules, and `VXT0059` is retired.
+- Added classic enums: `enum Name { A, B = 2, C }`, with an optional
+  underlying integer type written `enum Name = byte { ... }`. Members are
+  numbered from zero, a member without a value follows the one before it,
+  and two members may share a value. `Name.Member` is a value of the enum.
+  Values are compared with `==` and `\=` with values of the same enum and
+  take part in no other operation; there is no conversion between an enum
+  and an integer in either direction. `match` over an enum uses `.Member`
+  patterns and needs no catch-all arm when every value is named; a second
+  arm for the same value is unreachable. `Spec/Language/Decls.vxs` gains
+  examples 311 to 315 for the operations, the absence of conversions and
+  the target-typed `.Member` spelling. `enum` is now a reserved word.
 - A method declared with `auto` can be called. Return types are inferred
   before any caller is checked, across classes and against declaration
   order, through chains and mutual recursion; a method with no result
@@ -272,7 +283,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   implemented. They are pending work, listed with their diagnostics under
   "Pending branching and loop forms" in `Documents/IMPLEMENTATION.md`: a
   binding in the condition of `if`, `guard` or `while`, which needs optional
-  values, and a call that does not return as a way of leaving.
+  values, a call that does not return as a way of leaving, the target-typed
+  `.Member` spelling in an expression, enums declared inside a class, and
+  `enum class`.
 - The nesting limits of 256 and 1024 and the compiler stack reservation of
   256 MiB are the limits this version ships with. `CommittedStackBytes`
   reports on Linux and macOS as well, from the resident pages of the stack
@@ -284,7 +297,7 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Upgrading from 0.4.1
 
-- Rename anything called `match` or `guard`.
+- Rename anything called `match`, `guard` or `enum`.
 - `if (auto name = value)` and the same form in `while` now report `VXP0035`
   instead of a generic syntax error. They were not accepted before either.
 
