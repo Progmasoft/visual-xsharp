@@ -525,6 +525,124 @@ namespace
               "return f(Pick(left)) * 10 + f(Status.NONE);" },
         });
 
+    // Evaluation by need. A value that is never needed is never computed, so
+    // a division by zero and a call that never returns do nothing when
+    // nothing reads their value; run through LLVM, the first would end the
+    // process and the second would never end. A store happens where it is
+    // written, and a value means what its variables held where it was
+    // bound.
+    constexpr std::string_view kLazyHelpers
+        = "    public static int Never(_ int v) { return Never(v + 1); }\n"
+          "    public static int Half(_ int v) { return v / 2; }\n";
+    constexpr auto kLazyCases = std::to_array<
+        Visual::XSharp::Fuzzing::ExecutionCase>({
+        { false, false, 1, 0, 5, "int x = left / right; return 5;" },
+        { false, false, 1, 0, 5, "int x = Never(left); return 5;" },
+        { false,
+          false,
+          6,
+          0,
+          7,
+          "int x = left / right; if (right > 0) { return x; } return 7;" },
+        { false,
+          false,
+          6,
+          3,
+          2,
+          "int x = left / right; if (right > 0) { return x; } return 7;" },
+        { false,
+          false,
+          6,
+          0,
+          1,
+          "int x = left / right; return match (right) { 0 -> 1, _ -> x };" },
+        { false,
+          false,
+          6,
+          2,
+          3,
+          "int x = left / right; return match (right) { 0 -> 1, _ -> x };" },
+        { false,
+          false,
+          6,
+          0,
+          2,
+          "int x = left / right; return right > 0 && x > 1 ? 1 : 2;" },
+        { false,
+          false,
+          6,
+          3,
+          1,
+          "int x = left / right; return right > 0 && x > 1 ? 1 : 2;" },
+        { false,
+          false,
+          6,
+          0,
+          9,
+          "int x = left / right; int y = x + 1; return right > 0 ? y : 9;" },
+        { false,
+          false,
+          6,
+          3,
+          3,
+          "int x = left / right; int y = x + 1; return right > 0 ? y : 9;" },
+        { false,
+          false,
+          0,
+          1,
+          1,
+          "int x = Never(left); int y = x + 1; int z = y * 2; "
+          "return right > 0 ? 1 : 2;" },
+        { false,
+          false,
+          12,
+          0,
+          10,
+          "int t = 0; for (int i = 0; i <= 3; i += 1) { int x = left / i; "
+          "if (i > 1) { t += x; } } return t;" },
+        { false,
+          false,
+          6,
+          0,
+          0,
+          "int limit = left / right; int n = 0; "
+          "while (right > 0 && n < limit) { n += 1; } return n;" },
+        { false,
+          false,
+          6,
+          2,
+          3,
+          "int limit = left / right; int n = 0; "
+          "while (right > 0 && n < limit) { n += 1; } return n;" },
+        { false,
+          false,
+          8,
+          0,
+          12100,
+          "int a = left; int x = Half(a) + a; a = 100; "
+          "return x * 1000 + a;" },
+        { false,
+          false,
+          8,
+          1,
+          4,
+          "int a = left; int x = Half(a); a = a + 100; "
+          "if (right > 0) { return x; } return a;" },
+        { false,
+          false,
+          8,
+          0,
+          108,
+          "int a = left; int x = Half(a); a = a + 100; "
+          "if (right > 0) { return x; } return a;" },
+        { false,
+          false,
+          1,
+          0,
+          10,
+          "int n = 0; int x = (n += 1) + left; return n * 10;" },
+    });
+
     // Written here by hand, apart from the generated tables and from the
     // frontend tests: the expected values are worked out from the methods
     // above, so these runs do not share an expectation with any other
@@ -578,6 +696,10 @@ namespace
             "Inferred return execution",
             kInferredCases,
             kInferredHelpers);
+        // Hand-written results for evaluation by need.
+        Visual::XSharp::Fuzzing::ExerciseExecutionCases("Lazy execution",
+                                                        kLazyCases,
+                                                        kLazyHelpers);
         // Hand-written results for classic enums.
         Visual::XSharp::Fuzzing::ExerciseExecutionCases("Enum execution",
                                                         kEnumCases,

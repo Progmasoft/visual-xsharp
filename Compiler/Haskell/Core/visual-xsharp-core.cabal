@@ -30,6 +30,7 @@ library
         Visual.XSharp.Core.Wire
         Visual.XSharp.Desugarer
         Visual.XSharp.Desugarer.Branching
+        Visual.XSharp.Desugarer.Laziness
         Visual.XSharp.Desugarer.Sequencing
     other-modules:
         Visual.XSharp.Core.Optimizer.Analysis

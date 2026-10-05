@@ -9,6 +9,17 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Language
 
+- Visual X# is a lazy language with call-by-need evaluation, and the
+  specification now says so in `Spec/Language/Evaluation.vxs`: a value is
+  computed when it is first needed and at most once, a value that is never
+  needed is never computed, effects happen where they are written, and
+  neither thunks nor effects have any notation in the source. The compiler
+  implements the first part of it: a local binding of `bool`, numeric or
+  enum type whose initializer has no effect is computed by its first read
+  and not at all when nothing reads it, so `int x = left / right; return 5;`
+  no longer divides. Arguments, results, other types and assigned or
+  captured variables are still computed where they are written;
+  `Documents/EVALUATION.md` lists what is pending.
 - Added `match`. The statement `match (subject) { pattern -> body, ... }` runs
   the first arm whose patterns and guard accept the subject, and does nothing
   when no arm accepts. In operand position `match` is an expression: every
@@ -297,6 +308,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Upgrading from 0.4.1
 
+- A program that relied on an unused value being computed, for its failure
+  or for the time it takes, no longer gets either: a value nothing reads is
+  not computed.
 - Rename anything called `match`, `guard` or `enum`.
 - `if (auto name = value)` and the same form in `while` now report `VXP0035`
   instead of a generic syntax error. They were not accepted before either.

@@ -71,6 +71,8 @@ following vocabulary:
   transport.
 - [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, Core wire v8, Xpp, Xmm, and LLVM.
 - [Artifact wire](ARTIFACT-WIRE.md) defines the bounded internal Core and CorePrep transport contracts.
+- [Evaluation by need](EVALUATION.md) says how much of the lazy evaluation of the language the compiler implements,
+  how a value is deferred, and what is pending.
 - [Match, if expressions, guard and nested blocks](BRANCHING.md) describes the implemented subset of those forms, their
   evaluation order and their limits.
 - [Control-flow safety](CONTROL-FLOW-SAFETY.md) defines short-circuit lowering and the shared Xpp/Xmm

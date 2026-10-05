@@ -25,6 +25,7 @@ import IntegerEvaluationTests (integerEvaluationTests)
 import InferredReturnTests (inferredReturnTests)
 import IntegerFlowTests (integerFlowTests)
 import IterationTests (iterationTests)
+import LazyEvaluationTests (lazyEvaluationTests)
 import LoopExpressionTests (loopExpressionTests)
 import LoopFlowOracleTests (loopFlowOracleTests)
 import LoopFlowTests (loopFlowTests)
@@ -180,6 +181,7 @@ main = do
     mapM_ (uncurry check) branchingTests
     mapM_ (uncurry check) inferredReturnTests
     mapM_ (uncurry check) enumTests
+    mapM_ (uncurry check) lazyEvaluationTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests
     mapM_ (uncurry check) nestingLimitTests

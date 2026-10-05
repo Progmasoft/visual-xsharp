@@ -90,6 +90,7 @@ the specification is not changed to match them.
 | Pending | Specified by | Today | Needs |
 | --- | --- | --- | --- |
 | a binding in the condition of `if`, `guard` or `while`, as in `guard (auto user = Find()) else { return; }` | `Spec/Language/Decls.vxs`, examples 190 to 192 | `VXP0035` | optional values |
+| evaluation by need beyond local bindings of scalar type: arguments, results, other types, assigned and captured variables | `Spec/Language/Evaluation.vxs` | computed where they are written; see [Evaluation by need](EVALUATION.md) | thunks as values in the IR and the runtime |
 | a call that does not return as a way of leaving a `guard` block or a block used as a value | example 297 | every call is assumed to return, so the block is taken to complete: `VXT0061` or `VXT0046` | a way to know that a call does not return; how that is expressed in the language is not decided here |
 | a `match` over a subject that may be null | example 304 | `VXT0055` | nullable subjects |
 | the target-typed `.Member` spelling in an expression, as in `Status second = .READY;` | examples 53 and 314 | `VXP0004`; the spelling is implemented in match patterns | an expression form for it and its typing from the expected type |

@@ -1,0 +1,152 @@
+-- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+-- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+{- | Tests for evaluation by need.
+
+Visual X# computes a value when it is first needed and at most once, and
+never computes a value that is not needed. The tests observe that through
+the only things that tell a computed value from one that was not: a division
+by zero, a call that never returns, and the number of steps a program takes.
+The reference evaluator of "CoreInterpreter" gives no result for a division
+by zero and for a program that exceeds its step budget, so a value computed
+without need shows as a missing result.
+
+The effects of a program are not lazy. A store into a variable happens where
+it is written, whether or not the value around it is ever read, and a value
+means what its variables held where it was bound, however late it is
+computed. The tests pin both.
+
+The expected values are written by hand.
+-}
+module LazyEvaluationTests (lazyEvaluationTests) where
+
+import CoreInterpreter
+import Data.List (isInfixOf)
+import Visual.XSharp.Compiler
+import Visual.XSharp.Core
+import Visual.XSharp.Core.CorePrep.Verifier
+import Visual.XSharp.Core.Verifier
+import Visual.XSharp.Diagnostic
+
+lazyEvaluationTests :: [(String, Bool)]
+lazyEvaluationTests =
+    concat
+        [ [ ("unoptimized Core computes " ++ label, runs artifactCore statements arguments == Just expected)
+          , ("optimized Core computes " ++ label, runs artifactOptimizedCore statements arguments == Just expected)
+          ]
+        | (statements, runsOfCase) <- evaluationCases
+        , (arguments, expected) <- runsOfCase
+        , let label = show expected ++ " for " ++ show arguments ++ ": " ++ statements
+        ]
+        ++ [ ("every lazy program verifies as Core and as CorePrep", all (verifies . fst) evaluationCases)
+           , -- A value that is needed and cannot be computed is still a failure.
+             ("a needed division by zero has no result", runs artifactCore "int x = left / right; return x;" (1, 0) == Nothing)
+           ,
+               ( "a needed division by zero has no result on one path"
+               , runs artifactCore neededOnOnePath (6, 0) == Just 7 && runs artifactCore neededOnOnePath (6, 3) == Just 2
+               )
+           , -- A value that is never needed leaves nothing behind in Core.
+             ("a value that is never read is not in the lowered Core", not (mentions "CoreDivide" artifactCore "int x = left / right; return 5;"))
+           , -- A value that the next statement is certain to need is
+             -- computed where it is bound, without a flag.
+             ("a value needed at once is computed in place", not (mentions "$known" artifactCore "int x = Half(left); return x + x;"))
+           , ("a value needed on one path only keeps its flag", mentions "$known" artifactCore neededOnOnePath)
+           , -- A value needed fifty times is computed once: the budget that
+             -- suffices for one computation does not suffice for fifty.
+             ("a value is computed at most once", runsWithin 2000 neededOften (100, 1) == Just 5000)
+           , ("the same work fifty times exceeds that budget", runsWithin 2000 computedOften (100, 1) == Nothing)
+           ]
+    where
+        neededOnOnePath = "int x = left / right; if (right > 0) { return x; } return 7;"
+        neededOften = "int x = Step(left); int t = 0; for (int i = 0; i < 50; i += 1) { if (right > 0) { t += x; } } return t;"
+        computedOften = "int t = 0; for (int i = 0; i < 50; i += 1) { if (right > 0) { t += Step(left); } } return t;"
+
+-- | A program around the given body of @Evaluate@.
+program :: String -> String
+program statements =
+    unlines
+        [ "namespace Test;"
+        , "class Program {"
+        , "    public static int Never(_ int v) { return Never(v + 1); }"
+        , "    public static int Half(_ int v) { return v / 2; }"
+        , "    public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) : 0; }"
+        , "    public static int Evaluate(_ int left, _ int right) {"
+        , "        " ++ statements
+        , "    }"
+        , "}"
+        ]
+
+-- | Bodies of @Evaluate@, the arguments to run them on, and the value each run must return.
+evaluationCases :: [(String, [((Integer, Integer), Integer)])]
+evaluationCases =
+    [ -- A value that is never needed is never computed: not a division by
+      -- zero, and not a call that never returns.
+      ("int x = left / right; return 5;", [((1, 0), 5)])
+    , ("int x = Never(left); return 5;", [((1, 0), 5)])
+    , -- A value is computed on the path that needs it and not on the other.
+      ("int x = left / right; if (right > 0) { return x; } return 7;", [((6, 0), 7), ((6, 3), 2)])
+    , ("int x = left / right; return match (right) { 0 -> 1, _ -> x };", [((6, 0), 1), ((6, 2), 3)])
+    , ("int x = left / right; return right > 0 && x > 1 ? 1 : 2;", [((6, 0), 2), ((6, 3), 1), ((1, 3), 2)])
+    , ("int x = left / right; int r = if (right > 0) { x + 1 } else { 0 }; return r;", [((6, 0), 0), ((6, 2), 4)])
+    , -- A value computed from a value that is not needed is not needed either.
+      ("int x = left / right; int y = x + 1; return right > 0 ? y : 9;", [((6, 0), 9), ((6, 3), 3)])
+    , ("int x = Never(left); int y = x + 1; int z = y * 2; return right > 0 ? 1 : 2;", [((0, 1), 1), ((0, 0), 2)])
+    , -- In a loop, each pass has its own value, computed if that pass needs it.
+        ( "int t = 0; for (int i = 0; i <= 3; i += 1) { int x = left / i; if (i > 1) { t += x; } } return t;"
+        , [((12, 0), 10)]
+        )
+    , ("int limit = left / right; int n = 0; while (right > 0 && n < limit) { n += 1; } return n;", [((6, 0), 0), ((6, 2), 3)])
+    , -- A value means what its variables held where it was bound.
+      ("int a = left; int x = Half(a) + a; a = 100; return x * 1000 + a;", [((8, 0), 12100)])
+    ,
+        ( "int a = left; int x = Half(a); a = a + 100; if (right > 0) { return x; } return a;"
+        , [((8, 1), 4), ((8, 0), 108)]
+        )
+    , ("int t = 0; for (int i = 1; i <= 3; i += 1) { int x = Half(i * 10); if (i == 2) { t = x; } } return t;", [((0, 0), 10)])
+    , -- A store happens where it is written, whether or not the value
+      -- around it is ever read.
+      ("int n = 0; int x = (n += 1) + left; return n * 10;", [((1, 0), 10)])
+    , ("int n = left; int x = n++ + Half(n); return n;", [((4, 0), 5)])
+    , -- Needed values give what they always gave.
+      ("int x = Half(left); return x + x + x;", [((8, 0), 12)])
+    , ("int x = Step(left); int y = Step(right); return x * 10 + y;", [((3, 4), 34)])
+    ]
+
+compileSource :: String -> Either [Diagnostic] FrontendArtifacts
+compileSource text = compileToCorePrep (CompilerInput "lazy.vxs" text)
+
+runs :: (FrontendArtifacts -> CoreModule) -> String -> (Integer, Integer) -> Maybe Integer
+runs select statements (left, right) = case compileSource (program statements) of
+    Right artifacts -> case runFunction (select artifacts) "Evaluate" [IntegerValue left, IntegerValue right] of
+        Just (IntegerValue value) -> Just value
+        _ -> Nothing
+    Left _ -> Nothing
+
+-- | The result of the unoptimized program within the given number of steps.
+runsWithin :: Int -> String -> (Integer, Integer) -> Maybe Integer
+runsWithin budget statements (left, right) = case compileSource (program statements) of
+    Right artifacts ->
+        case runFunctionWithBudget budget (artifactCore artifacts) "Evaluate" [IntegerValue left, IntegerValue right] of
+            Just (IntegerValue value) -> Just value
+            _ -> Nothing
+    Left _ -> Nothing
+
+-- | Whether the Core of @Evaluate@ mentions the given constructor or generated name.
+mentions :: String -> (FrontendArtifacts -> CoreModule) -> String -> Bool
+mentions needle select statements = case compileSource (program statements) of
+    Right artifacts ->
+        any
+            ((needle `isInfixOf`) . show . coreFunctionBody)
+            [ function
+            | function <- coreModuleFunctions (select artifacts)
+            , "Evaluate" `isInfixOf` show (coreFunctionName function)
+            ]
+    Left _ -> False
+
+verifies :: String -> Bool
+verifies statements = case compileSource (program statements) of
+    Right artifacts ->
+        verifyCore (artifactCore artifacts) == Right (artifactCore artifacts)
+            && verifyCore (artifactOptimizedCore artifacts) == Right (artifactOptimizedCore artifacts)
+            && verifyCorePrep (artifactCorePrep artifacts) == Right (artifactCorePrep artifacts)
+    Left _ -> False

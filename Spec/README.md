@@ -24,6 +24,7 @@ See [the specification guide](../Documents/SPECIFICATION.md) for the topic map a
 ### Language
 
 - [Declarations](Language/Decls.vxs) and [attributes](Language/Attributes.vxs)
+- [Evaluation](Language/Evaluation.vxs): evaluation by need and effects
 - [Operators](Language/Operators.vxs), [iteration](Language/Iteration.vxs), and [unsafe behavior](Language/Unsafe.vxs)
 - [String](Language/String.vxs), [Optional](Language/Optional.vxs), and [exceptions](Language/Exceptions.vxs)
 

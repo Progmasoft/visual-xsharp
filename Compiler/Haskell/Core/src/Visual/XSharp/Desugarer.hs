@@ -12,7 +12,9 @@ import Data.Word (Word64)
 import Visual.XSharp.AST
 import Visual.XSharp.Completion
 import Visual.XSharp.Core
+import Visual.XSharp.Core.Scalar (isCoreNumericType)
 import Visual.XSharp.Desugarer.Branching
+import Visual.XSharp.Desugarer.Laziness
 import Visual.XSharp.Desugarer.Sequencing
 import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
 
@@ -32,7 +34,7 @@ defaultDesugarer = Desugarer lowerTree
 
 lowerTree :: TypedAST -> Either [Diagnostic] CoreModule
 lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
-    evalStateT lowerModule (LowerState (1 + maximum (0 : syntaxSymbolIds tree)) Nothing [CoreContinue] [CoreBreak])
+    evalStateT lowerModule (LowerState (1 + maximum (0 : syntaxSymbolIds tree)) Nothing [CoreContinue] [CoreBreak] Nothing [] [])
     where
         defaultName = QualifiedName [Identifier "Main"]
         sourceFiles = nub (map portableSourcePath (concatMap declarationSourceFiles declarations))
@@ -105,9 +107,43 @@ data LowerState = LowerState
     update clause that is wrapped in a one-pass loop by the store that makes
     the loop around it leave as well.
     -}
+    , lowerSettled :: Maybe [SymbolId]
+    {- ^ Whether bindings are evaluated by need, and if so which locals are
+    not: those that are assigned after their binding and those a closure
+    captures. Without a list every binding is evaluated where it stands.
+    -}
+    , lowerFollowing :: [Statement ResolvedName Type]
+    -- ^ The statements that follow the one being lowered in its block.
+    , lowerDeferred :: [(SymbolId, (ResolvedName, Expression ResolvedName Type))]
+    {- ^ The bindings whose value is computed by need: for each, the flag
+    that says whether it has been computed and the expression that computes
+    it.
+    -}
     }
 
 type Lower = StateT LowerState (Either [Diagnostic])
+
+{- | Lower with every binding evaluated where it stands. The body of a
+function is lowered this way once, to learn which of its locals are assigned
+and which a closure captures, and the body of a callable always is.
+-}
+inPlace :: Lower a -> Lower a
+inPlace = evaluatingWith Nothing
+
+{- | Lower with bindings evaluated by need, except those of the given locals,
+which are assigned later or captured by a closure.
+-}
+byNeed :: [SymbolId] -> Lower a -> Lower a
+byNeed settled = evaluatingWith (Just settled)
+
+evaluatingWith :: Maybe [SymbolId] -> Lower a -> Lower a
+evaluatingWith settled action = do
+    previousSettled <- gets lowerSettled
+    previousDeferred <- gets lowerDeferred
+    modify (\current -> current {lowerSettled = settled, lowerDeferred = []})
+    result <- action
+    modify (\current -> current {lowerSettled = previousSettled, lowerDeferred = previousDeferred})
+    pure result
 
 -- | Lower with the given break target, and restore the previous one after.
 targeting :: BreakTarget -> Lower a -> Lower a
@@ -168,7 +204,16 @@ lowerTop function@FunctionDeclaration {} = (: []) <$> lowerDeclaration function
 
 lowerDeclaration :: Declaration ResolvedName Type -> Lower CoreFunction
 lowerDeclaration declaration@FunctionDeclaration {} = do
-    body <- lowerFunctionBlock returnType (declarationBody declaration)
+    -- The body is lowered twice. The first lowering evaluates every binding
+    -- where it stands and is kept only for what it shows: the locals that
+    -- are assigned after their binding and the locals a closure captures,
+    -- which must have their values in place. The second evaluates every
+    -- other binding by need.
+    inPlaceBody <- inPlace (lowerFunctionBlock returnType (declarationBody declaration))
+    body <-
+        byNeed
+            (assignedSymbols inPlaceBody ++ capturedSymbols inPlaceBody)
+            (lowerFunctionBlock returnType (declarationBody declaration))
     pure
         ( CoreFunction
             (declarationName declaration)
@@ -219,14 +264,28 @@ statements after it, which are never reached, are not lowered. Nothing is
 invented for a value that does not exist.
 -}
 lowerBlockInto :: BreakTarget -> Block ResolvedName Type -> Lower [CoreStatement]
-lowerBlockInto target (Block statements) = go statements
+lowerBlockInto target = lowerBlockBefore target []
+
+{- | Lower the statements of a block that the given statements follow. The
+followers are not lowered here; they are what a binding at the end of the
+block looks at to learn whether its value is needed at once.
+-}
+lowerBlockBefore :: BreakTarget -> [Statement ResolvedName Type] -> Block ResolvedName Type -> Lower [CoreStatement]
+lowerBlockBefore target followers (Block statements) = go statements
     where
         go [] = pure []
         go (statement : remaining) = case neverCompletingExpression statement of
             Just (before, expression) -> do
                 leading <- concat <$> mapM (lowerStatementInto target) before
                 (leading ++) <$> lowerNeverCompleting (branchLowering target) expression
-            Nothing -> (++) <$> lowerStatementInto target statement <*> go remaining
+            Nothing -> do
+                -- Only a statement lowered from here knows what follows it.
+                -- Any other lowering of a statement sees no follower, and a
+                -- binding there is computed by need.
+                modify (\current -> current {lowerFollowing = remaining ++ followers})
+                lowered <- lowerStatementInto target statement
+                modify (\current -> current {lowerFollowing = []})
+                (lowered ++) <$> go remaining
 
 {- | The expression of a statement that is always evaluated and never
 completes, with the statements that run before it as part of the same
@@ -256,15 +315,19 @@ neverCompletingExpression statement = case statement of
         only value = if doesNotComplete value then Just ([], value) else Nothing
 
 lowerFunctionBlock :: Type -> Block ResolvedName Type -> Lower [CoreStatement]
-lowerFunctionBlock returnType (Block statements) = case reverse statements of
+lowerFunctionBlock returnType (Block statements) = case statementsFromEnd of
     ExpressionStatement _ expression False : remaining
         | returnType /= unitType
         , not (blockCannotComplete (Block (reverse remaining)))
         , not (doesNotComplete expression) -> do
-            prefix <- lowerBlock (Block (reverse remaining))
+            -- The final expression is the value the function returns, so
+            -- it follows the statements before it as a return would.
+            prefix <- lowerBlockBefore Nothing (take 1 statementsFromEnd) (Block (reverse remaining))
             (valuePrefix, value) <- lowerExpression expression
             pure (prefix ++ valuePrefix ++ [CoreReturn value])
     _ -> lowerBlock (Block statements)
+    where
+        statementsFromEnd = reverse statements
 
 lowerStatement :: Statement ResolvedName Type -> Lower [CoreStatement]
 lowerStatement = lowerStatementInto Nothing
@@ -276,8 +339,37 @@ lowerStatementInto target statement = targeting target (lowerStatementWith targe
 lowerStatementWith :: BreakTarget -> Statement ResolvedName Type -> Lower [CoreStatement]
 lowerStatementWith target statement = case statement of
     BindingStatement _ kind _ name valueType value -> do
-        (prefix, lowered) <- lowerExpression value
-        pure (prefix ++ [CoreBind (CoreBinding name (lowerBoundaryType valueType) (kind == MutableBinding) lowered)])
+        settled <- gets lowerSettled
+        deferred <- gets lowerDeferred
+        following <- gets lowerFollowing
+        let loweredType = lowerBoundaryType valueType
+            -- A binding must compute its value where it stands when it is
+            -- assigned later or captured, when its value is not a scalar,
+            -- and when its initializer has an effect.
+            mustStand inPlaceLocals bound boundType initializer =
+                resolvedSymbol bound `elem` inPlaceLocals
+                    || not (scalar (lowerBoundaryType boundType))
+                    || not (deferrableExpression initializer)
+            -- A binding is certain to be evaluated when it must stand in
+            -- place or the statement after it is certain to need it. Only
+            -- such a binding makes the values its initializer reads needed.
+            certain inPlaceLocals bound boundType initializer later =
+                mustStand inPlaceLocals bound boundType initializer
+                    || neededNext (certain inPlaceLocals) bound later
+            -- Nothing can tell where a value is computed that cannot fail
+            -- and that reads no value computed by need.
+            indifferent initializer =
+                not (worthDeferring initializer)
+                    && not (any ((`elem` map fst deferred) . resolvedSymbol . fst) (expressionNames initializer))
+            scalar lowered = lowered == boolType || isCoreNumericType lowered
+        case settled of
+            Just inPlaceLocals
+                | not (certain inPlaceLocals name valueType value following)
+                , not (indifferent value) ->
+                    deferBinding inPlaceLocals name loweredType value
+            _ -> do
+                (prefix, lowered) <- lowerExpression value
+                pure (prefix ++ [CoreBind (CoreBinding name loweredType (kind == MutableBinding) lowered)])
     AssignmentStatement _ name _ value -> do
         (prefix, lowered) <- lowerExpression value
         pure (prefix ++ [CoreAssign name lowered])
@@ -351,6 +443,42 @@ lowerStatementWith target statement = case statement of
         | annotation == voidType -> fst <$> lowerMatch (branchLowering target) annotation subjects arms
     ExpressionStatement _ value _ -> lowerDiscarded value
 
+{- | Bind a local whose value is computed by need.
+
+The binding computes nothing. It declares the local, a flag that says the
+value has not been computed, and a copy of each variable the initializer
+reads that is assigned somewhere in the function: the initializer means the
+values those variables have here, whenever it is evaluated. The first read
+of the local that is reached computes the value and sets the flag, and no
+later read computes it again; see the lowering of a name.
+-}
+deferBinding ::
+    [SymbolId] -> ResolvedName -> Type -> Expression ResolvedName Type -> Lower [CoreStatement]
+deferBinding inPlaceLocals name loweredType value = do
+    let changing =
+            nub
+                [ (seen, lowerBoundaryType seenType)
+                | (seen, seenType) <- expressionNames value
+                , resolvedSymbol seen `elem` inPlaceLocals
+                ]
+    copies <- mapM (const (freshGenerated "$seen")) changing
+    known <- freshGenerated "$known"
+    let renames = zip (map (resolvedSymbol . fst) changing) copies
+        rename seen = maybe seen id (lookup (resolvedSymbol seen) renames)
+        false = CoreLiteral (CoreBoolean False) boolType
+    modify
+        ( \current ->
+            current {lowerDeferred = (resolvedSymbol name, (known, renameNames rename value)) : lowerDeferred current}
+        )
+    pure
+        ( [ CoreBind (CoreBinding copy seenType False (CoreVariable seen seenType))
+          | ((seen, seenType), copy) <- zip changing copies
+          ]
+            ++ [ CoreBind (CoreBinding known boolType True false)
+               , CoreBind (CoreBinding name loweredType True (neutralValue loweredType))
+               ]
+        )
+
 {- | Lower a @while@ or @for@ loop whose body and condition store break
 values into the given target. Loops nested in the body are statements of
 their own and are lowered without a target.
@@ -385,6 +513,7 @@ lowerLoop target loop = case loop of
         loweredBody <- inCoreLoop (lowerBlockInto target body)
         pure [whileLoop loweredCondition loweredBody]
     ForStatement _ initializer condition updates body -> do
+        modify (\current -> current {lowerFollowing = []})
         loweredInitializer <- maybe (pure []) lowerStatement initializer
         evaluatedCondition <- maybe (pure ([], alwaysTrue)) (inLoop . lowerExpression) condition
         loweredCondition <-
@@ -510,7 +639,28 @@ and its Core expression is the direct translation of the source.
 -}
 lowerExpression :: Expression ResolvedName Type -> Lower Lowered
 lowerExpression expression = case expression of
-    NameExpression _ name valueType -> pure ([], CoreVariable name (lowerBoundaryType valueType))
+    -- A read of a local whose value is computed by need computes it if no
+    -- earlier read has, and reads it.
+    NameExpression _ name valueType -> do
+        deferred <- gets lowerDeferred
+        let loweredType = lowerBoundaryType valueType
+        case lookup (resolvedSymbol name) deferred of
+            Nothing -> pure ([], CoreVariable name loweredType)
+            Just (known, initializer) -> do
+                (prefix, computed) <- lowerExpression initializer
+                pure
+                    (
+                        [ CoreIf
+                            (CoreVariable known boolType)
+                            []
+                            ( prefix
+                                ++ [ CoreAssign name computed
+                                   , CoreAssign known (CoreLiteral (CoreBoolean True) boolType)
+                                   ]
+                            )
+                        ]
+                    , CoreVariable name loweredType
+                    )
     LiteralExpression _ literal valueType ->
         let loweredType = lowerBoundaryType valueType
          in pure ([], CoreLiteral (lowerLiteral loweredType literal) loweredType)
@@ -697,7 +847,7 @@ lowerExpression expression = case expression of
                 [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
         -- A callable is a function of its own: no loop of the function
         -- that creates it is around its body.
-        loweredBody <- inCoreLoop (targeting Nothing (lowerCallableBody body))
+        loweredBody <- inPlace (inCoreLoop (targeting Nothing (lowerCallableBody body)))
         (prefix, loweredCaptures) <- lowerCaptures captures
         let returnType = case valueType of
                 FunctionType _ result -> lowerBoundaryType result
