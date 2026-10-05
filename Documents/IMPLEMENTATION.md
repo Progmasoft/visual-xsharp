@@ -100,15 +100,12 @@ in loop bodies; `break` and `continue` in a loop condition; `break` and
 `continue` in a `for` update clause; a `break` that carries a value out of a
 block used as a value to a loop used as an expression; `return` out of a
 loop used as an expression, directly and from a block used as a value; an
-`if` or `match` expression none of whose branches completes; and calls of
+`if` or `match` expression none of whose branches completes; calls of
 methods whose return type is inferred, in the same class, in another class,
-through chains of such methods and through mutual recursion.
-
-Implemented, run in the reference Core evaluator of the frontend tests, and
-compiled through every native stage and its verifier, but not run through
-LLVM, because the JIT of the smoke programs does not link closures: the
-inference of a callable's return type from returns inside its expressions,
-and callables created inside callables.
+through chains of such methods and through mutual recursion; the inference
+of a callable's return type from returns inside its expressions; and
+callables created inside callables, called, returned and kept, with the
+AARC runtime that owns them.
 
 The full `Spec/` catalog is not implemented. Object/value layout, the complete standard-library surface, cross-namespace
 imports, template declaration cloning and constraint selection, exception lowering, ownership runtime operations, generators, FFI, assembly, and

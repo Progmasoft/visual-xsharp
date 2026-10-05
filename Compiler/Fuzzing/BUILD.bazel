@@ -84,7 +84,34 @@ cc_binary(
         "LeavingExecutionCases.hpp",
         "SourceExecutionSmoke.cpp",
     ],
-    deps = [":source_fuzz_harness"],
+    # The programs that create closures call the AARC runtime. The JIT
+    # resolves a runtime symbol in the process that hosts it, so this program
+    # links the runtime and exports its entry points.
+    linkopts = select({
+        "@platforms//os:windows": [
+            "/EXPORT:vxs_aarc_abi_version",
+            "/EXPORT:vxs_aarc_allocate",
+            "/EXPORT:vxs_aarc_copy_unowned",
+            "/EXPORT:vxs_aarc_copy_weak",
+            "/EXPORT:vxs_aarc_is_exact_type",
+            "/EXPORT:vxs_aarc_load_unowned",
+            "/EXPORT:vxs_aarc_lock_weak",
+            "/EXPORT:vxs_aarc_make_unowned",
+            "/EXPORT:vxs_aarc_make_weak",
+            "/EXPORT:vxs_aarc_release_strong",
+            "/EXPORT:vxs_aarc_release_unowned",
+            "/EXPORT:vxs_aarc_release_weak",
+            "/EXPORT:vxs_aarc_retain_strong",
+            "/EXPORT:vxs_aarc_string_literal",
+        ],
+        "@platforms//os:macos": [],
+        "//conditions:default": ["-rdynamic"],
+    }),
+    deps = [
+        ":source_fuzz_harness",
+        "//Compiler/Headers/Visual/XSharp/Runtime:aarc_api",
+        "//Compiler/Runtime/AARC:aarc",
+    ],
 )
 
 # A measuring instrument, not a test: it compiles one source file on a stack

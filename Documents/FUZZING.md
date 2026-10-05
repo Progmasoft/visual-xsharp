@@ -213,8 +213,11 @@ Compiling dominates the cost of these cases under sanitizers, and the smoke
 program has a process watchdog, so the runs of a body are not worth a
 compilation each. `source_execution_smoke` also compiles programs that own
 closures while control leaves through a block used as a value, so that the
-ownership verifiers of Xpp and Xmm see those paths; they are compiled and
-verified, not run, because the JIT of the harness does not link closures.
+ownership verifiers of Xpp and Xmm see those paths, and runs a hand-written
+table of closures: created, called, nested, returned and alive across loop
+transfers. A closure calls the AARC runtime, and the JIT resolves a runtime
+symbol in the process that hosts it, so this program links the runtime and
+exports its entry points. The other fuzz programs do not link it.
 
 The branching and leaving tables are generated. Their cases are written in
 `Compiler/Fuzzing/Cases/Selection.cases` and `Leaving.cases`: a body, its

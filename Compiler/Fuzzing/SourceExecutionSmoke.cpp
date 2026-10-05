@@ -11,6 +11,7 @@
 #include "ExpressionExecutionCases.hpp"
 #include "LeavingExecutionCases.hpp"
 #include "SourceFuzz.hpp"
+#include "Visual/XSharp/Runtime/AARC.h"
 #include "Visual/XSharp/Support/CompilerStack.hpp"
 
 // The executable regressions with hand-written results: every program of the
@@ -28,8 +29,8 @@ namespace
     // as a value. The ownership-flow verifiers of Xpp and Xmm run on every
     // program compiled here, so a path that left without releasing what it
     // owns, or released it twice, is rejected. The two CorePrep lowerings
-    // are compared on them as well. They are compiled and verified, not
-    // run: the JIT of this harness does not link lifted closures.
+    // are compared on them as well. These are compiled and verified; the
+    // table of closure cases below runs closures.
     constexpr std::array<std::string_view, 11U> kOwnershipCases{ {
         // An initializer that never completes, after a closure was created.
         "namespace Fuzz; class Program { "
@@ -170,6 +171,102 @@ namespace
           "    public static auto Scan(_ int v) { int q = while (true) { "
           "if (v > 3) { return 7; } break 2; }; return q + v; }\n";
 
+    // Closures that are created and called. Each expected value is worked
+    // out by hand from the capture rules: a capture initializer is
+    // evaluated once, where the closure is created; a closure created
+    // inside another reads the names around both through the outer one;
+    // and a closure keeps what it captured after the call that created it
+    // has returned.
+    constexpr auto kClosureCases
+        = std::to_array<Visual::XSharp::Fuzzing::ExecutionCase>({
+            { false,
+              false,
+              3,
+              0,
+              8,
+              "auto outer = \\(int v) -> { auto inner = \\(int w) -> w + 1; "
+              "return inner(v) * 2; }; return outer(left);" },
+            { false,
+              false,
+              3,
+              3,
+              18,
+              "int k = left; auto outer = \\(int v) -> { auto inner = "
+              "\\(int w) -> w + k + v; return inner(v) * 2; }; "
+              "return outer(right);" },
+            { false,
+              false,
+              5,
+              1,
+              14,
+              "int k = left; auto outer = \\(int v) -> { auto inner = "
+              "\\(int w) -> w + k + v; return inner(v) * 2; }; "
+              "return outer(right);" },
+            { false,
+              false,
+              3,
+              3,
+              9,
+              "int k = left; auto outer = [k] \\(int v) -> { auto inner = "
+              "[k, v] \\(int w) -> w + k + v; return inner(v); }; "
+              "return outer(right);" },
+            { false,
+              false,
+              4,
+              0,
+              4321,
+              "int k = left; auto a = \\(int v) -> { auto b = \\(int w) -> { "
+              "auto c = \\(int x) -> x + w * 10 + v * 100 + k * 1000; "
+              "return c(1); }; return b(2); }; return a(3);" },
+            { false,
+              false,
+              5,
+              7,
+              709,
+              "auto make = \\(int v) -> { auto inner = \\(int w) -> w + v; "
+              "return inner; }; auto f = make(left); auto g = make(right); "
+              "return f(2) * 100 + g(2);" },
+            { false,
+              false,
+              1,
+              0,
+              111,
+              "int k = left; auto held = [kept = k] \\ -> kept; k += 10; "
+              "return held() * 100 + k;" },
+            { false,
+              false,
+              3,
+              0,
+              12,
+              "auto pick = \\(int v) -> { int q = if (v > 0) { return 1; } "
+              "else { 2 }; return q; }; "
+              "return pick(left) * 10 + pick(0 - left);" },
+            { false,
+              false,
+              1,
+              0,
+              307,
+              "auto scan = \\(int v) -> { int q = while (true) { "
+              "if (v > 3) { return 7; } break 2; }; return q + v; }; "
+              "return scan(left) * 100 + scan(left + 3);" },
+            { false,
+              false,
+              3,
+              0,
+              6,
+              "int n = 0; int t = 0; while (if (n >= left) { break; } else { "
+              "true }) { auto step = [by = n] \\ -> by + 1; n = step(); "
+              "t += n; } return t;" },
+            { false,
+              false,
+              3,
+              0,
+              6,
+              "int t = 0; for (int i = 0; i < 10; i += if (i == left) { "
+              "break; } else { 1 }) { auto add = [by = i] \\(int w) -> w + "
+              "by; t = add(t); } return t;" },
+        });
+
     // Written here by hand, apart from the generated tables and from the
     // frontend tests: the expected values are worked out from the methods
     // above, so these runs do not share an expectation with any other
@@ -223,6 +320,19 @@ namespace
             "Inferred return execution",
             kInferredCases,
             kInferredHelpers);
+        // The JIT finds the runtime of the closure cases in this process.
+        // The call also keeps the runtime in the program where the linker
+        // would otherwise leave an unreferenced library out.
+        if (vxs_aarc_abi_version() != VXS_AARC_ABI_VERSION)
+        {
+            llvm::errs() << "the linked AARC runtime has another ABI version\n";
+            return 1;
+        }
+        // Hand-written results for closures: created, called, nested and
+        // returned, through LLVM and the runtime that owns them.
+        Visual::XSharp::Fuzzing::ExerciseExecutionCases("Closure execution",
+                                                        kClosureCases,
+                                                        "");
         for (const auto text : kOwnershipCases)
         {
             llvm::errs() << "Ownership verification: " << text << '\n';

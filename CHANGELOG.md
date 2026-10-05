@@ -144,7 +144,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 - The branching and leaving tables of both harnesses are generated from the
   case files under `Compiler/Fuzzing/Cases` by the new Go helper
   `execution-cases`, whose `check` command and tests fail on a stale table.
-  The reference Core evaluator of the frontend tests runs closures.
+  The reference Core evaluator of the frontend tests runs closures, and
+  `source_execution_smoke` links the AARC runtime and runs closures through
+  LLVM: created, called, nested, returned and alive across loop transfers.
 - `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
   and the values of 83 program runs on the unoptimized and the optimized
   Core. `BranchingOracleTests.hs` generates 36 families of arm lists, writes
@@ -256,9 +258,6 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   "Pending branching and loop forms" in `Documents/IMPLEMENTATION.md`: a
   binding in the condition of `if`, `guard` or `while`, which needs optional
   values, and a call that does not return as a way of leaving.
-- Closures run in the reference Core evaluator of the frontend tests and are
-  compiled through every native stage, but the JIT of the smoke programs
-  does not link them, so no test runs a closure through LLVM.
 - The nesting limits of 256 and 1024 and the compiler stack reservation of
   256 MiB are the limits this version ships with. Stack use at the limits
   is measured on Windows only.
