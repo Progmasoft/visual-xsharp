@@ -498,6 +498,14 @@ main()
     // The programs include ones nested up to the frontend's limits, which
     // only compile on the stack the compiler runs on in `vxs`.
     return Visual::XSharp::Support::RunOnCompilerStack([] {
-        return Smoke();
+        const auto result = Smoke();
+        // What the compiler stack held for all of the above, the programs
+        // at the nesting limits among them. The line is how the figure is
+        // read on platforms where nobody measures by hand; zero means the
+        // platform does not report it.
+        llvm::errs() << "compiler stack committed: "
+                     << Visual::XSharp::Support::CommittedStackBytes() / 1024U
+                     << " KiB\n";
+        return result;
     });
 }

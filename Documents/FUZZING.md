@@ -201,7 +201,12 @@ Core evaluator. `BranchingExecutionCases.cpp` also runs a match of 200 arms on
 seven subjects, from its first arm to the catch-all, an `else if` chain of
 300 links, which the native stages after Core walk in a loop, on five
 subjects, and programs at the nesting limits of the frontend: 255 nested
-`if` statements, entered and not entered, and a sum of 1024 operands.
+`if` statements, entered and not entered, 1023 calls nested in each other's
+arguments, and a sum of 1024 operands. The nested calls are the shape that
+costs most compiler stack for each level. `source_execution_smoke` ends by
+printing `compiler stack committed: N KiB`, the stack its compiler thread
+committed for all of its programs, so that the figure can be read from the
+log of any platform that reports it: Windows, Linux and macOS.
 
 A body that several runs share is compiled once, and up to eight small
 bodies share a program. `ExecutionCases.cpp` puts each body in a method of

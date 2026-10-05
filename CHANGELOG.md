@@ -274,8 +274,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   binding in the condition of `if`, `guard` or `while`, which needs optional
   values, and a call that does not return as a way of leaving.
 - The nesting limits of 256 and 1024 and the compiler stack reservation of
-  256 MiB are the limits this version ships with. Stack use at the limits
-  is measured on Windows only.
+  256 MiB are the limits this version ships with. `CommittedStackBytes`
+  reports on Linux and macOS as well, from the resident pages of the stack
+  mapping, and `source_execution_smoke` prints the figure after compiling a
+  program of 1023 nested calls; the recorded measurements are still those
+  taken on Windows.
 - The statements after a statement that never completes are checked but no
   longer lowered to Core.
 

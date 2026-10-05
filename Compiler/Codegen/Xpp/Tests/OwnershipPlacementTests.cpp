@@ -432,21 +432,25 @@ TEST_CASE("the model rejects what the pass must not produce",
     };
     std::vector<IR::Block> leak;
     leak.push_back(Block(0U, { Call(10U) }, Return()));
-    CHECK(check(std::move(leak)).has_value());
+    const auto leaked = check(std::move(leak));
+    CHECK(leaked.has_value());
 
     std::vector<IR::Block> twice;
     twice.push_back(
         Block(0U, { Call(10U), release(10U), release(10U) }, Return()));
-    CHECK(check(std::move(twice)).has_value());
+    const auto releasedTwice = check(std::move(twice));
+    CHECK(releasedTwice.has_value());
 
     std::vector<IR::Block> late;
     late.push_back(
         Block(0U, { Call(10U), release(10U), Call(11U, { 10U }) }, Return()));
-    CHECK(check(std::move(late)).has_value());
+    const auto usedLate = check(std::move(late));
+    CHECK(usedLate.has_value());
 
     std::vector<IR::Block> balanced;
     balanced.push_back(Block(0U, { Call(10U), release(10U) }, Return()));
-    CHECK_FALSE(check(std::move(balanced)).has_value());
+    const auto sound = check(std::move(balanced));
+    CHECK_FALSE(sound.has_value());
 }
 
 TEST_CASE("a value is released after its last use on a straight path",

@@ -16,6 +16,9 @@
 #    include <windows.h>
 #else
 #    include <pthread.h>
+#    include <sys/mman.h>
+#    include <unistd.h>
+#    include <vector>
 #endif
 
 namespace Visual::XSharp::Support
@@ -114,6 +117,42 @@ namespace Visual::XSharp::Support
             cursor += information.RegionSize;
         }
         // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        return committed;
+#elif defined(__APPLE__) || defined(__linux__)
+        // A thread stack is mapped lazily, so the pages that are resident
+        // are the pages the thread has touched. The stack of the initial
+        // thread is not one mapping; for it the query fails and nothing is
+        // reported.
+        void *low = nullptr;
+        std::size_t size = 0U;
+#    if defined(__APPLE__)
+        const auto self = pthread_self();
+        size = pthread_get_stacksize_np(self);
+        // The address the system reports is the high end of the stack.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        low = static_cast<char *>(pthread_get_stackaddr_np(self)) - size;
+        using PageState = char;
+#    else
+        pthread_attr_t attributes;
+        if (pthread_getattr_np(pthread_self(), &attributes) != 0)
+            return 0U;
+        const auto found = pthread_attr_getstack(&attributes, &low, &size);
+        pthread_attr_destroy(&attributes);
+        if (found != 0)
+            return 0U;
+        using PageState = unsigned char;
+#    endif
+        const auto pageSize = sysconf(_SC_PAGESIZE);
+        if (pageSize <= 0 || size == 0U || low == nullptr)
+            return 0U;
+        const auto page = static_cast<std::size_t>(pageSize);
+        std::vector<PageState> states((size + page - 1U) / page);
+        if (mincore(low, size, states.data()) != 0)
+            return 0U;
+        std::size_t committed = 0U;
+        for (const auto state : states)
+            if ((static_cast<unsigned char>(state) & 1U) != 0U)
+                committed += page;
         return committed;
 #else
         return 0U;

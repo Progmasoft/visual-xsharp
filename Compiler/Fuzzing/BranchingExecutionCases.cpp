@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -74,6 +75,19 @@ namespace Visual::XSharp::Fuzzing
             return body + "return total;";
         }
 
+        // `Id(Id(...Id(left)...))`: calls nested in arguments, which is
+        // the shape that costs most compiler stack for each level.
+        [[nodiscard]] auto
+        NestedCallBody(int levels) -> std::string
+        {
+            std::string body = "return ";
+            for (int index = 0; index < levels; ++index)
+                body += "Id(";
+            body += "left";
+            body.append(static_cast<std::size_t>(levels), ')');
+            return body + ";";
+        }
+
         // `left + left + ... + left`
         [[nodiscard]] auto
         SumBody(int operands) -> std::string
@@ -141,6 +155,11 @@ namespace Visual::XSharp::Fuzzing
                               0,
                               argument == kLevels ? 1 : 0,
                               nested });
+        // 1023 calls nested in each other's arguments put the innermost
+        // operand at expression level 1024.
+        constexpr int kNestedCalls = 1023;
+        const auto calls = NestedCallBody(kNestedCalls);
+        large.push_back({ false, false, 3, 0, 3, calls });
         constexpr int kOperands = 1024;
         const auto sum = SumBody(kOperands);
         large.push_back(

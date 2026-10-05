@@ -68,8 +68,13 @@ namespace Visual::XSharp::Support
      * include frames that a sanitizer keeps on a heap-allocated fake stack.
      * Measuring tools call this at the end of the work they measure.
      *
-     * @return The committed bytes, or zero on a platform where this is not
-     * determined; it is determined on Windows.
+     * On Windows the figure is the committed part of the stack allocation.
+     * On Linux and macOS it is the resident pages of the stack mapping,
+     * which are the pages the thread has touched; there it has no guard
+     * page in it, and it is zero for the initial thread of a process, whose
+     * stack is not one mapping.
+     *
+     * @return The committed bytes, or zero where this is not determined.
      */
     [[nodiscard]] auto
     CommittedStackBytes() -> std::size_t;
