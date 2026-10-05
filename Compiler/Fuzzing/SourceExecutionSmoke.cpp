@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <llvm/Support/raw_ostream.h>
+#include <span>
 #include <string_view>
 
 #include "BranchingExecutionCases.hpp"
@@ -11,7 +12,7 @@
 #include "ExpressionExecutionCases.hpp"
 #include "LeavingExecutionCases.hpp"
 #include "SourceFuzz.hpp"
-#include "Visual/XSharp/Runtime/AARC.h"
+#include "Visual/XSharp/Runtime/AARC.hpp"
 #include "Visual/XSharp/Support/CompilerStack.hpp"
 
 // The executable regressions with hand-written results: every program of the
@@ -177,95 +178,220 @@ namespace
     // inside another reads the names around both through the outer one;
     // and a closure keeps what it captured after the call that created it
     // has returned.
-    constexpr auto kClosureCases
-        = std::to_array<Visual::XSharp::Fuzzing::ExecutionCase>({
-            { false,
-              false,
-              3,
-              0,
-              8,
-              "auto outer = \\(int v) -> { auto inner = \\(int w) -> w + 1; "
-              "return inner(v) * 2; }; return outer(left);" },
-            { false,
-              false,
-              3,
-              3,
-              18,
-              "int k = left; auto outer = \\(int v) -> { auto inner = "
-              "\\(int w) -> w + k + v; return inner(v) * 2; }; "
-              "return outer(right);" },
-            { false,
-              false,
-              5,
-              1,
-              14,
-              "int k = left; auto outer = \\(int v) -> { auto inner = "
-              "\\(int w) -> w + k + v; return inner(v) * 2; }; "
-              "return outer(right);" },
-            { false,
-              false,
-              3,
-              3,
-              9,
-              "int k = left; auto outer = [k] \\(int v) -> { auto inner = "
-              "[k, v] \\(int w) -> w + k + v; return inner(v); }; "
-              "return outer(right);" },
-            { false,
-              false,
-              4,
-              0,
-              4321,
-              "int k = left; auto a = \\(int v) -> { auto b = \\(int w) -> { "
-              "auto c = \\(int x) -> x + w * 10 + v * 100 + k * 1000; "
-              "return c(1); }; return b(2); }; return a(3);" },
-            { false,
-              false,
-              5,
-              7,
-              709,
-              "auto make = \\(int v) -> { auto inner = \\(int w) -> w + v; "
-              "return inner; }; auto f = make(left); auto g = make(right); "
-              "return f(2) * 100 + g(2);" },
-            { false,
-              false,
-              1,
-              0,
-              111,
-              "int k = left; auto held = [kept = k] \\ -> kept; k += 10; "
-              "return held() * 100 + k;" },
-            { false,
-              false,
-              3,
-              0,
-              12,
-              "auto pick = \\(int v) -> { int q = if (v > 0) { return 1; } "
-              "else { 2 }; return q; }; "
-              "return pick(left) * 10 + pick(0 - left);" },
-            { false,
-              false,
-              1,
-              0,
-              307,
-              "auto scan = \\(int v) -> { int q = while (true) { "
-              "if (v > 3) { return 7; } break 2; }; return q + v; }; "
-              "return scan(left) * 100 + scan(left + 3);" },
-            { false,
-              false,
-              3,
-              0,
-              6,
-              "int n = 0; int t = 0; while (if (n >= left) { break; } else { "
-              "true }) { auto step = [by = n] \\ -> by + 1; n = step(); "
-              "t += n; } return t;" },
-            { false,
-              false,
-              3,
-              0,
-              6,
-              "int t = 0; for (int i = 0; i < 10; i += if (i == left) { "
-              "break; } else { 1 }) { auto add = [by = i] \\(int w) -> w + "
-              "by; t = add(t); } return t;" },
-        });
+    constexpr auto kClosureCases = std::to_array<
+        Visual::XSharp::Fuzzing::ExecutionCase>({
+        { false,
+          false,
+          3,
+          0,
+          8,
+          "auto outer = \\(int v) -> { auto inner = \\(int w) -> w + 1; "
+          "return inner(v) * 2; }; return outer(left);" },
+        { false,
+          false,
+          3,
+          3,
+          18,
+          "int k = left; auto outer = \\(int v) -> { auto inner = "
+          "\\(int w) -> w + k + v; return inner(v) * 2; }; "
+          "return outer(right);" },
+        { false,
+          false,
+          5,
+          1,
+          14,
+          "int k = left; auto outer = \\(int v) -> { auto inner = "
+          "\\(int w) -> w + k + v; return inner(v) * 2; }; "
+          "return outer(right);" },
+        { false,
+          false,
+          3,
+          3,
+          9,
+          "int k = left; auto outer = [k] \\(int v) -> { auto inner = "
+          "[k, v] \\(int w) -> w + k + v; return inner(v); }; "
+          "return outer(right);" },
+        { false,
+          false,
+          4,
+          0,
+          4321,
+          "int k = left; auto a = \\(int v) -> { auto b = \\(int w) -> { "
+          "auto c = \\(int x) -> x + w * 10 + v * 100 + k * 1000; "
+          "return c(1); }; return b(2); }; return a(3);" },
+        { false,
+          false,
+          5,
+          7,
+          709,
+          "auto make = \\(int v) -> { auto inner = \\(int w) -> w + v; "
+          "return inner; }; auto f = make(left); auto g = make(right); "
+          "return f(2) * 100 + g(2);" },
+        { false,
+          false,
+          1,
+          0,
+          111,
+          "int k = left; auto held = [kept = k] \\ -> kept; k += 10; "
+          "return held() * 100 + k;" },
+        { false,
+          false,
+          3,
+          0,
+          12,
+          "auto pick = \\(int v) -> { int q = if (v > 0) { return 1; } "
+          "else { 2 }; return q; }; "
+          "return pick(left) * 10 + pick(0 - left);" },
+        { false,
+          false,
+          1,
+          0,
+          307,
+          "auto scan = \\(int v) -> { int q = while (true) { "
+          "if (v > 3) { return 7; } break 2; }; return q + v; }; "
+          "return scan(left) * 100 + scan(left + 3);" },
+        { false,
+          false,
+          3,
+          0,
+          6,
+          "int n = 0; int t = 0; while (if (n >= left) { break; } else { "
+          "true }) { auto step = [by = n] \\ -> by + 1; n = step(); "
+          "t += n; } return t;" },
+        { false,
+          false,
+          3,
+          0,
+          6,
+          "int t = 0; for (int i = 0; i < 10; i += if (i == left) { "
+          "break; } else { 1 }) { auto add = [by = i] \\(int w) -> w + "
+          "by; t = add(t); } return t;" },
+        // A closure passed to a method, made by one and returned by one.
+        { false, false, 4, 0, 12, "return Apply(\\(int w) -> w * 3, left);" },
+        { false,
+          false,
+          5,
+          2,
+          711,
+          "auto add = Adder(left); auto ten = Adder(10); "
+          "return add(right) * 100 + ten(1);" },
+        { false,
+          false,
+          3,
+          0,
+          8,
+          "auto f = \\(int w) -> w + 1; auto g = Pass(f); "
+          "return g(left) + f(left);" },
+        { false,
+          false,
+          5,
+          1,
+          6,
+          "auto a = \\(int w) -> w + 1; auto b = \\(int w) -> w * 2; "
+          "auto c = Choose(left > right, a, b); return c(left);" },
+        { false,
+          false,
+          5,
+          9,
+          10,
+          "auto a = \\(int w) -> w + 1; auto b = \\(int w) -> w * 2; "
+          "auto c = Choose(left > right, a, b); return c(left);" },
+        // A method named where a value is expected.
+        { false,
+          false,
+          3,
+          4,
+          14,
+          "auto f = Plain; return Apply(f, left) + Apply(Plain, right);" },
+        // A closure variable assigned again, in a loop and from itself.
+        { false,
+          false,
+          3,
+          0,
+          103,
+          "auto f = Adder(0); for (int i = 1; i <= left; i += 1) { "
+          "f = Adder(i); } return f(100);" },
+        { false,
+          false,
+          0,
+          0,
+          100,
+          "auto f = Adder(0); for (int i = 1; i <= left; i += 1) { "
+          "f = Adder(i); } return f(100);" },
+        { false,
+          false,
+          5,
+          0,
+          7,
+          "auto f = Adder(1); f = Compose2(f); return f(left);" },
+        // Closures that exist on one branch only.
+        { false,
+          false,
+          4,
+          1,
+          5,
+          "int r = 0; if (left > right) { auto f = Adder(left); "
+          "r = f(1); } else { auto g = Adder(right); "
+          "auto h = Compose2(g); r = h(1); } return r;" },
+        { false,
+          false,
+          1,
+          3,
+          7,
+          "int r = 0; if (left > right) { auto f = Adder(left); "
+          "r = f(1); } else { auto g = Adder(right); "
+          "auto h = Compose2(g); r = h(1); } return r;" },
+        // A closure result that nothing receives.
+        { false,
+          false,
+          5,
+          0,
+          7,
+          "_ = Adder(left); auto f = Adder(2); _ = Adder(3); "
+          "return f(left);" },
+        // A closure kept alive only by the closure that captured it.
+        { false,
+          false,
+          5,
+          1,
+          12,
+          "auto inner = Adder(left); auto outer = \\(int w) -> "
+          "inner(w) * 2; return outer(right);" },
+        // A closure made in every pass of a loop that returns from
+        // its middle.
+        { false,
+          false,
+          4,
+          0,
+          103,
+          "for (int i = 0; i < 5; i += 1) { auto f = Adder(i); "
+          "if (f(left) > 6) { return f(100); } } return 0;" },
+        { false,
+          false,
+          0,
+          0,
+          0,
+          "for (int i = 0; i < 5; i += 1) { auto f = Adder(i); "
+          "if (f(left) > 6) { return f(100); } } return 0;" },
+    });
+
+    // Methods that take, make and return closures. A parameter is borrowed
+    // and a result is owned, so `Pass` and `Choose` must hand out a
+    // reference of their own, and the closure of `Compose2` must keep the
+    // closure it was given.
+    constexpr std::string_view kClosureHelpers
+        = "    public static int Apply(_ (int) -> int f, _ int v) { return "
+          "f(v); }\n"
+          "    public static (int) -> int Adder(_ int n) { return \\(int w) "
+          "-> w + n; }\n"
+          "    public static (int) -> int Pass(_ (int) -> int f) { return "
+          "f; }\n"
+          "    public static (int) -> int Choose(_ bool c, _ (int) -> int a, "
+          "_ (int) -> int b) { if (c) { return a; } return b; }\n"
+          "    public static (int) -> int Compose2(_ (int) -> int f) { "
+          "return \\(int w) -> f(f(w)); }\n"
+          "    public static int Plain(_ int value) { return value + value; "
+          "}\n";
 
     // Written here by hand, apart from the generated tables and from the
     // frontend tests: the expected values are worked out from the methods
@@ -330,9 +456,28 @@ namespace
         }
         // Hand-written results for closures: created, called, nested and
         // returned, through LLVM and the runtime that owns them.
-        Visual::XSharp::Fuzzing::ExerciseExecutionCases("Closure execution",
-                                                        kClosureCases,
-                                                        "");
+        // Each case is a program of its own, and the runtime must hold no
+        // more allocations after it than before: a closure that is not
+        // released, or a capture its destructor does not release, is a
+        // failure here on every platform, with the program that leaked.
+        for (const auto &closureCase : kClosureCases)
+        {
+            const auto before
+                = Visual::XSharp::Runtime::Aarc::LiveAllocations();
+            Visual::XSharp::Fuzzing::ExerciseExecutionCases(
+                "Closure execution",
+                std::span(&closureCase, 1U),
+                kClosureHelpers);
+            const auto after = Visual::XSharp::Runtime::Aarc::LiveAllocations();
+            if (after != before)
+            {
+                llvm::errs()
+                    << "closure case left " << (after - before)
+                    << " AARC allocation(s) behind: " << closureCase.body
+                    << '\n';
+                return 1;
+            }
+        }
         for (const auto text : kOwnershipCases)
         {
             llvm::errs() << "Ownership verification: " << text << '\n';

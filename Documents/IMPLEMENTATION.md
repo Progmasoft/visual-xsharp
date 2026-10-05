@@ -127,6 +127,7 @@ The repository contains:
 - Xpp control-flow, self-copy, and liveness-based dead `Define Copy` optimization;
 - shared directional worklist scheduling, dense definite-initialization facts, and packed AARC ownership states;
 - an Xpp-owned verifier for module/function identity, storage declarations, typed operands, and CFG targets;
+- Xpp ownership placement: explicit retains and releases for every AARC value, and closures for methods used as values;
 - Xpp-to-Xmm lowering; and
 - Xmm virtual-register move and dead materialization optimization;
 - an Xmm-owned verifier with register, signature, call, operand, result, and control-flow diagnostics, exposed through the

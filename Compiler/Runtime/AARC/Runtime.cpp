@@ -67,6 +67,11 @@ namespace Visual::XSharp::Runtime::Aarc
             return false;
         }
 
+        // Allocations made and not yet reclaimed. The count orders nothing:
+        // it is read only where no allocation is in flight.
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+        std::atomic<std::uint64_t> liveAllocations{ 0U };
+
         void
         ReleaseControl(ObjectHeader *header) noexcept
         {
@@ -74,6 +79,7 @@ namespace Visual::XSharp::Runtime::Aarc
                 || header->weakCount.fetch_sub(1U, std::memory_order_acq_rel)
                        != 1U)
                 return;
+            liveAllocations.fetch_sub(1U, std::memory_order_relaxed);
 
             // The acquire side of the final decrement observes the destructor
             // and all preceding handle releases before reclaiming the combined
@@ -105,6 +111,12 @@ namespace Visual::XSharp::Runtime::Aarc
     } // namespace
 
     auto
+    LiveAllocations() noexcept -> std::uint64_t
+    {
+        return liveAllocations.load(std::memory_order_relaxed);
+    }
+
+    auto
     Allocate(const TypeMetadata &metadata) noexcept -> void *
     {
         if (metadata.abiVersion != kAbiVersion || metadata.instanceSize == 0U
@@ -128,6 +140,7 @@ namespace Visual::XSharp::Runtime::Aarc
         auto *header = new (allocation) ObjectHeader{};
         header->metadata = &metadata;
         header->allocation = allocation;
+        liveAllocations.fetch_add(1U, std::memory_order_relaxed);
 
         // Advance to the next multiple of the alignment without turning an
         // integer back into a pointer, which would discard provenance.

@@ -53,6 +53,17 @@ namespace Visual::XSharp::Runtime::Aarc
     [[nodiscard]] auto
     Allocate(const TypeMetadata &metadata) noexcept -> void *;
 
+    /** Count the allocations whose storage has not been reclaimed.
+     *
+     * An allocation is reclaimed when its last strong, weak and unowned
+     * handle is gone. A program that balances its references returns this
+     * count to the value it had before the program ran, which is how tests
+     * observe a missing release on every platform. The count is not part of
+     * the C ABI.
+     */
+    [[nodiscard]] auto
+    LiveAllocations() noexcept -> std::uint64_t;
+
     /** Retain the live object, returning null if its strong lifetime has ended.
      */
     auto

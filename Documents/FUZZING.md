@@ -217,7 +217,11 @@ ownership verifiers of Xpp and Xmm see those paths, and runs a hand-written
 table of closures: created, called, nested, returned and alive across loop
 transfers. A closure calls the AARC runtime, and the JIT resolves a runtime
 symbol in the process that hosts it, so this program links the runtime and
-exports its entry points. The other fuzz programs do not link it.
+exports its entry points. The other fuzz programs do not link it. Each
+closure program runs alone, and the runtime must hold no more allocations
+after it than before it, so a closure or a capture that is not released
+fails the program that leaked on every platform, not only where a leak
+sanitizer runs.
 
 The branching and leaving tables are generated. Their cases are written in
 `Compiler/Fuzzing/Cases/Selection.cases` and `Leaving.cases`: a body, its

@@ -187,9 +187,22 @@ evaluate :: CoreModule -> Budget -> Locals -> CoreExpression -> Maybe (Value, Lo
 evaluate moduleValue budget locals expression
     | budget <= 0 = Nothing
     | otherwise = case expression of
-        CoreVariable name _ -> do
-            value <- lookup (symbolOf name) locals
-            Just (value, locals, budget)
+        CoreVariable name _ -> case lookup (symbolOf name) locals of
+            Just value -> Just (value, locals, budget)
+            -- A method named where a value is expected is a closure
+            -- without captures.
+            Nothing -> do
+                method <-
+                    firstJust
+                        [ candidate
+                        | candidate <- coreModuleFunctions moduleValue
+                        , symbolOf (coreFunctionName candidate) == symbolOf name
+                        ]
+                Just
+                    ( ClosureValue [] (map (symbolOf . fst) (coreFunctionParameters method)) (coreFunctionBody method)
+                    , locals
+                    , budget
+                    )
         CoreLiteral literal valueType -> do
             value <- literalValue literal valueType
             Just (value, locals, budget)

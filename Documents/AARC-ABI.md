@@ -136,11 +136,12 @@ introducing UTF-8 storage.
 
 ## Current boundary
 
-This slice does not yet insert whole-program retain/release placement for every
-source binding, package the runtime into every final native link, or collect
-cycles. It establishes the checked IR vocabulary, concrete object ABI, runtime
-primitives, String and first-class closure invocation lowering, and regression
-coverage that those later passes target. The future concurrent Bacon–Rajan plus
+Retains and releases are placed for every AARC value of a function by the Xpp
+ownership placement pass, described in [Ownership flow](OWNERSHIP-FLOW.md).
+This slice does not yet package the runtime into every final native link or
+collect cycles. `Visual::XSharp::Runtime::Aarc::LiveAllocations` counts the
+allocations whose storage has not been reclaimed; it is a C++ entry point for
+tests and is not part of the C ABI. The future concurrent Bacon–Rajan plus
 trial-deletion collector remains opt-in with `-Cycle-Collector true`. The
 ordinary acyclic path must not pay its cost when disabled, and no trial begins
 when no candidate exists or the program has already broken the candidate cycle.

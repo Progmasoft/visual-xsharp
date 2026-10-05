@@ -8,6 +8,7 @@ cc_library(
         "ControlFlow.cpp",
         "Lower.cpp",
         "Optimize.cpp",
+        "OwnershipPlacement.cpp",
         "OwnershipVerifier.cpp",
         "Verifier.cpp",
         "Wire.cpp",

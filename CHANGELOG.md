@@ -113,9 +113,24 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   statement. Closure
   analysis, template discovery, instantiation, freshening, member
   reachability and the specialization verifier handle them.
+- Ownership placement. The compiler created AARC objects and never released
+  them: no stage wrote a retain or a release. A new Xpp pass gives every AARC
+  value an owner and writes the operations: parameters are borrowed, results
+  are owned, a local is released after its last use on each path, including
+  on the edge of a branch on which it dies, a copy retains or takes over the
+  reference, and a closure owns its captures. The ownership verifiers of Xpp
+  and Xmm check its output.
+- A method used as a value is a closure without captures. Before, the value
+  was the address of the method's code, and calling it read an invoke
+  pointer out of that code.
 
 ### Verification and tooling
 
+- `OwnershipPlacementTests.cpp` runs every placed function on an independent
+  reference-count model along all of its paths. `source_execution_smoke`
+  runs 26 closure programs through LLVM and the AARC runtime, one at a time,
+  and fails a program that leaves an allocation behind; the runtime counts
+  its live allocations for that purpose.
 - `ConditionalChainTests.cpp` pins the native handling of `else if` chains:
   wire round trips and a constant byte step per link, rejection of every
   truncated prefix, the verifier's checks in late links, the return analysis,

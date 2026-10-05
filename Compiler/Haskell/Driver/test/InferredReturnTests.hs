@@ -66,6 +66,12 @@ methods statements =
         , "    public static auto Scan(_ int v) { int q = while (true) { if (v > 3) { return 7; } break 2; }; return q + v; }"
         , "    public static auto Base() { return 1; }"
         , "    public static auto Nothing() { }"
+        , "    public static int Apply(_ (int) -> int f, _ int v) { return f(v); }"
+        , "    public static (int) -> int Adder(_ int n) { return \\(int w) -> w + n; }"
+        , "    public static (int) -> int Pass(_ (int) -> int f) { return f; }"
+        , "    public static (int) -> int Choose(_ bool c, _ (int) -> int a, _ (int) -> int b) { if (c) { return a; } return b; }"
+        , "    public static (int) -> int Compose2(_ (int) -> int f) { return \\(int w) -> f(f(w)); }"
+        , "    public static int Plain(_ int value) { return value + value; }"
         , "    public static int Evaluate(_ int left, _ int right) {"
         , "        " ++ statements
         , "    }"
@@ -128,6 +134,33 @@ closureCases =
     ,
         ( "auto scan = \\(int v) -> { int q = while (true) { if (v > 3) { return 7; } break 2; }; return q + v; }; return scan(left) * 100 + scan(left + 3);"
         , [((1, 0), 307)]
+        )
+    , -- A callable passed to a method, made by one and returned by one.
+      ("return Apply(\\(int w) -> w * 3, left);", [((4, 0), 12)])
+    , ("auto add = Adder(left); auto ten = Adder(10); return add(right) * 100 + ten(1);", [((5, 2), 711)])
+    , ("auto f = \\(int w) -> w + 1; auto g = Pass(f); return g(left) + f(left);", [((3, 0), 8)])
+    ,
+        ( "auto a = \\(int w) -> w + 1; auto b = \\(int w) -> w * 2; auto c = Choose(left > right, a, b); return c(left);"
+        , [((5, 1), 6), ((5, 9), 10)]
+        )
+    , -- A method named where a value is expected.
+      ("auto f = Plain; return Apply(f, left) + Apply(Plain, right);", [((3, 4), 14)])
+    , -- A callable variable assigned again, in a loop and from itself.
+        ( "auto f = Adder(0); for (int i = 1; i <= left; i += 1) { f = Adder(i); } return f(100);"
+        , [((3, 0), 103), ((0, 0), 100)]
+        )
+    , ("auto f = Adder(1); f = Compose2(f); return f(left);", [((5, 0), 7)])
+    , -- Callables that exist on one branch only.
+        ( "int r = 0; if (left > right) { auto f = Adder(left); r = f(1); } else { auto g = Adder(right); auto h = Compose2(g); r = h(1); } return r;"
+        , [((4, 1), 5), ((1, 3), 7)]
+        )
+    , -- A callable result that nothing receives.
+      ("_ = Adder(left); auto f = Adder(2); _ = Adder(3); return f(left);", [((5, 0), 7)])
+    , -- A callable kept alive only by the callable that captured it.
+      ("auto inner = Adder(left); auto outer = \\(int w) -> inner(w) * 2; return outer(right);", [((5, 1), 12)])
+    , -- A callable made in every pass of a loop that returns from its middle.
+        ( "for (int i = 0; i < 5; i += 1) { auto f = Adder(i); if (f(left) > 6) { return f(100); } } return 0;"
+        , [((4, 0), 103), ((0, 0), 0)]
         )
     , -- Callables alive across the transfers of a loop header.
         ( "int n = 0; int t = 0; while (if (n >= left) { break; } else { true }) { auto step = [by = n] \\ -> by + 1; n = step(); t += n; } return t;"

@@ -196,6 +196,38 @@ TEST_CASE("strong references destroy the payload exactly once")
     CHECK(destructions.load() == 1U);
 }
 
+TEST_CASE("the live allocation count follows storage, not strong lifetime")
+{
+    const auto before = Aarc::LiveAllocations();
+    auto *first = static_cast<Payload *>(Aarc::Allocate(kMetadata));
+    auto *second = static_cast<Payload *>(Aarc::Allocate(kMetadata));
+    REQUIRE(first != nullptr);
+    REQUIRE(second != nullptr);
+    CHECK(Aarc::LiveAllocations() == before + 2U);
+
+    // A retained object stays one allocation.
+    CHECK(Aarc::RetainStrong(first) == first);
+    CHECK(Aarc::LiveAllocations() == before + 2U);
+    Aarc::ReleaseStrong(first);
+    CHECK(Aarc::LiveAllocations() == before + 2U);
+    Aarc::ReleaseStrong(first);
+    CHECK(Aarc::LiveAllocations() == before + 1U);
+
+    // A weak handle keeps the storage after the payload is destroyed.
+    const auto weak = Aarc::MakeWeak(second);
+    Aarc::ReleaseStrong(second);
+    CHECK(Aarc::LiveAllocations() == before + 1U);
+    Aarc::ReleaseWeak(weak);
+    CHECK(Aarc::LiveAllocations() == before);
+
+    // A failed allocation and a null release count nothing.
+    auto invalid = kMetadata;
+    invalid.instanceSize = 0U;
+    CHECK(Aarc::Allocate(invalid) == nullptr);
+    Aarc::ReleaseStrong(nullptr);
+    CHECK(Aarc::LiveAllocations() == before);
+}
+
 TEST_CASE("exact type tests use stable metadata identity and reject null")
 {
     auto *payload = static_cast<Payload *>(Aarc::Allocate(kMetadata));
