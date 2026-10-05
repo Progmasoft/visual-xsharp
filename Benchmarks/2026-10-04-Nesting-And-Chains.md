@@ -244,18 +244,45 @@ thread per process.
 
 ### What the measurements do and do not support
 
-All of these figures are from one machine: Windows, x86-64, clang-cl, an
+The figures above are from one machine: Windows, x86-64, clang-cl, an
 ordinary build and an AddressSanitizer build with UndefinedBehaviorSanitizer.
-The stack code for Linux and macOS is built and tested by CI, but stack use
-has not been measured there, and frame sizes differ between compilers and
-ABIs. ThreadSanitizer and MemorySanitizer builds were not measured either.
+Frame sizes differ between compilers and ABIs, so one shape was measured on
+the other platforms as well, in CI, on commit `a0b435a3`.
+
+### The other platforms
+
+`source_execution_smoke` compiles all of its programs on one compiler
+thread and prints what that thread committed at the end. The largest of its
+programs for the stack is 1023 calls nested in each other's arguments, the
+worst shape of the table above, so the figure is the committed stack at the
+expression limit. Each figure is one run on a hosted CI runner, in KiB:
+
+| Platform | Ordinary build | ASan and UBSan | TSan |
+| --- | ---: | ---: | ---: |
+| Windows Server, x86-64, clang-cl | 2580 | 4736 | not run |
+| Ubuntu 26.04, x86-64, clang | 2588 | 3060 | 2880 |
+| Fedora 43, x86-64, clang | 2588 | 3060 | not run |
+| macOS 15, arm64, clang | 2480 | 5536 | 2752 |
+| macOS 26, arm64, clang | 2480 | 5536 | 2768 |
+
+On Windows the figure is the committed part of the stack allocation, guard
+page included; on Linux and macOS it is the resident pages of the stack
+mapping. The Windows row agrees with the 2572 and 4720 KiB measured by hand
+for the same shape. The ordinary builds are within 5 percent of each other
+on three operating systems and two architectures. The Linux sanitizer figure
+is lower than the others because the sanitizer runtime moves frames to a
+fake stack on the heap by default there, which this figure leaves out, as
+said above; it is not evidence that the sanitized compiler needs less stack
+on Linux. The largest figure on any platform is 5536 KiB, 2.1 percent of the
+256 MiB reservation. MemorySanitizer builds were not measured, and the
+shapes other than nested calls were measured on Windows only.
 
 Against these figures a reservation of 64 MiB would be about 12 times the
 largest commit at the frontend limits under the sanitizers and about 2.4
 times the extrapolated worst case of wire-fed Core. That is an argument for
-a smaller reservation, not a decision: it rests on one platform and on one
-extrapolation, the cost of a reservation was measured to be address space
-only, and the values in the code are unchanged.
+a smaller reservation, not a decision: it rests on one extrapolation, the
+cost of a reservation was measured to be address space only, and the values
+in the code are unchanged.
 
 ## Haskell Core operations
 

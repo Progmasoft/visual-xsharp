@@ -410,9 +410,10 @@ values are resource limits of this implementation, chosen against the
 measured cost of a level in every native stage; the specification states no
 nesting limit, and they are not language rules. They are the limits this
 version of the compiler ships with, together with a compiler stack
-reservation of 256 MiB. A program at the limits commits a few mebibytes of
-that stack on Windows, about 5 MiB in a sanitizer build; stack use on Linux
-and macOS is not measured, and the reservation is the margin for it:
+reservation of 256 MiB. A program at the expression limit commits about
+2.5 MiB of that stack in an ordinary build on Windows, Linux and macOS, and
+at most 5.5 MiB in a sanitizer build; the measurements are in
+`Benchmarks/2026-10-04-Nesting-And-Chains.md`:
 
 | Code | Meaning |
 | --- | --- |

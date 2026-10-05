@@ -277,8 +277,8 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   256 MiB are the limits this version ships with. `CommittedStackBytes`
   reports on Linux and macOS as well, from the resident pages of the stack
   mapping, and `source_execution_smoke` prints the figure after compiling a
-  program of 1023 nested calls; the recorded measurements are still those
-  taken on Windows.
+  program of 1023 nested calls. Measured in CI: about 2.5 MiB in an ordinary
+  build on Windows, Linux and macOS, and at most 5.5 MiB under a sanitizer.
 - The statements after a statement that never completes are checked but no
   longer lowered to Core.
 
