@@ -6,6 +6,7 @@ duplicate declarations while preserving overload-family semantics.
 -}
 module Visual.XSharp.Resolver.Renamer (Renamer (..), defaultRenamer, runRenamer) where
 
+import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
 
@@ -23,7 +24,23 @@ runRenamer = renameParsedAST
 defaultRenamer :: Renamer
 defaultRenamer = Renamer renameTree
 
-type Environment = [(Identifier, RenamedName)]
+{- | The names in scope, each with the binding a use of it refers to. A
+binding made later replaces an earlier one of the same spelling, which is
+how an inner scope shadows an outer one.
+
+It is a map and not a list of pairs: a type with thousands of members made
+every lookup and every duplicate check walk all of them, and renaming grew
+with the square of the member count.
+-}
+type Environment = Map.Map Identifier RenamedName
+
+-- | The scope with one more binding, which shadows an earlier one.
+bind :: Identifier -> RenamedName -> Environment -> Environment
+bind = Map.insert
+
+-- | The inner scope laid over the outer one; inner bindings shadow outer ones.
+over :: Environment -> Environment -> Environment
+over = Map.union
 
 renameTree :: ParsedAST -> Either [Diagnostic] RenamedAST
 renameTree (ParsedAST (SyntaxTree namespace declarations)) =
@@ -32,7 +49,7 @@ renameTree (ParsedAST (SyntaxTree namespace declarations)) =
                 RenamerStage
                 "VXR0001"
                 1
-                []
+                Map.empty
                 [(declarationName declaration, declarationSpan declaration) | declaration <- declarations]
         (renamed, _, problems) = renameDeclarations globals next declarations
         allProblems = duplicateProblems ++ problems
@@ -42,11 +59,11 @@ declareMany ::
     DiagnosticStage -> String -> Int -> Environment -> [(Identifier, SourceSpan)] -> (Environment, Int, [Diagnostic])
 declareMany _ _ next environment [] = (environment, next, [])
 declareMany stage code next environment ((name, spanValue) : remaining) =
-    let duplicate = case lookup name environment of
+    let duplicate = case Map.lookup name environment of
             Just _ -> [Diagnostic stage Error code (Just spanValue) ("duplicate declaration " ++ identifierText name)]
             Nothing -> []
         renamed = RenamedName name next
-        (final, after, problems) = declareMany stage code (next + 1) ((name, renamed) : environment) remaining
+        (final, after, problems) = declareMany stage code (next + 1) (bind name renamed environment) remaining
      in (final, after, duplicate ++ problems)
 
 -- Methods with one spelling are a single overload family. Other declarations
@@ -54,13 +71,13 @@ declareMany stage code next environment ((name, spanValue) : remaining) =
 -- a field-like or nested declaration of the same name. Each overload receives
 -- its own SymbolId; the type checker later validates signature uniqueness.
 declareMembers :: Int -> [Declaration Identifier ()] -> (Environment, [RenamedName], Int, [Diagnostic])
-declareMembers next declarations = go [] [] next declarations
+declareMembers next declarations = go Map.empty Map.empty next declarations
     where
         go environment _ current [] = (environment, [], current, [])
         go environment seen current (declaration : remaining) =
             let name = declarationName declaration
                 isMethod = case declaration of FunctionDeclaration {} -> True; _ -> False
-                collision = case lookup name seen of
+                collision = case Map.lookup name seen of
                     Nothing -> []
                     Just previousWasMethod
                         | previousWasMethod && isMethod -> []
@@ -74,7 +91,7 @@ declareMembers next declarations = go [] [] next declarations
                             ]
                 renamed = RenamedName name current
                 (finalEnvironment, laterNames, finalNext, laterProblems) =
-                    go ((name, renamed) : environment) ((name, isMethod) : seen) (current + 1) remaining
+                    go (bind name renamed environment) (Map.insert name isMethod seen) (current + 1) remaining
              in (finalEnvironment, renamed : laterNames, finalNext, collision ++ laterProblems)
 
 renameDeclarations ::
@@ -102,7 +119,7 @@ renameDeclarationsWithBindings globals next (declaration : remaining) (assignedN
             let name = assignedName
                 (declaredMembers, memberNames, afterMembers, duplicateProblems) = declareMembers next members
                 (renamedMembers, afterBody, memberProblems) =
-                    renameDeclarationsWithBindings (declaredMembers ++ globals) afterMembers members memberNames
+                    renameDeclarationsWithBindings (declaredMembers `over` globals) afterMembers members memberNames
                 renamed = TypeDeclaration spanValue name () renamedMembers
                 (rest, final, restProblems) = renameDeclarationsWithBindings globals afterBody remaining assignedRemaining
              in (renamed : rest, final, duplicateProblems ++ memberProblems ++ restProblems)
@@ -111,7 +128,7 @@ renameDeclarationsWithBindings globals next (declaration : remaining) (assignedN
                 (templateParameters, templateEnvironment, afterTemplateParameters, templateProblems) =
                     renameTemplateParameters globals next sourceTemplateParameters
                 (declaredMembers, memberNames, afterMembers, duplicateProblems) = declareMembers afterTemplateParameters members
-                memberEnvironment = declaredMembers ++ templateEnvironment
+                memberEnvironment = declaredMembers `over` templateEnvironment
                 (renamedMembers, afterBody, memberProblems) =
                     renameDeclarationsWithBindings memberEnvironment afterMembers members memberNames
                 renamed = TemplateTypeDeclaration spanValue name () templateParameters renamedMembers
@@ -176,11 +193,11 @@ renameParameters environment next parameters = go environment next parameters []
         go env current [] output problems = (reverse output, env, current, reverse problems)
         go env current (Parameter spanValue name _ syntax : rest) output problems =
             let duplicate =
-                    if any ((== name) . fst) (take (length output) env)
+                    if any (\(Parameter _ earlier _ _) -> renamedSpelling earlier == name) output
                         then Diagnostic RenamerStage Error "VXR0002" (Just spanValue) ("duplicate parameter " ++ identifierText name) : problems
                         else problems
                 renamed = RenamedName name current
-             in go ((name, renamed) : env) (current + 1) rest (Parameter spanValue renamed () syntax : output) duplicate
+             in go (bind name renamed env) (current + 1) rest (Parameter spanValue renamed () syntax : output) duplicate
 
 renameBlock :: Environment -> Int -> Block Identifier () -> (Block RenamedName (), Int, [Diagnostic])
 renameBlock environment next (Block statements) = let (values, _, final, problems) = go environment next statements in (Block values, final, problems)
@@ -196,14 +213,14 @@ renameStatement ::
 renameStatement environment next statement = case statement of
     BindingStatement spanValue kind syntax name _ value ->
         let (renamedValue, afterValue, problems) = renameExpression environment next value
-            duplicate = any ((== name) . fst) environment
+            duplicate = Map.member name environment
             renamed = RenamedName name afterValue
             duplicateProblems =
                 if duplicate
                     then [Diagnostic RenamerStage Error "VXR0003" (Just spanValue) ("duplicate local " ++ identifierText name)]
                     else []
          in ( BindingStatement spanValue kind syntax renamed () renamedValue
-            , (name, renamed) : environment
+            , bind name renamed environment
             , afterValue + 1
             , problems ++ duplicateProblems
             )
@@ -256,14 +273,14 @@ renameStatement environment next statement = case statement of
             )
     ForEachStatement spanValue kind syntax sourceName _ source body ->
         let (renamedSource, afterSource, sourceProblems) = renameExpression environment next source
-            duplicate = any ((== sourceName) . fst) environment
+            duplicate = Map.member sourceName environment
             renamedName = RenamedName sourceName afterSource
             duplicateProblems =
                 if duplicate
                     then [Diagnostic RenamerStage Error "VXR0003" (Just spanValue) ("duplicate loop binding " ++ identifierText sourceName)]
                     else []
             (renamedBody, afterBody, bodyProblems) =
-                renameBlock ((sourceName, renamedName) : environment) (afterSource + 1) body
+                renameBlock (bind sourceName renamedName environment) (afterSource + 1) body
          in ( ForEachStatement spanValue kind syntax renamedName () renamedSource renamedBody
             , environment
             , afterBody
@@ -373,7 +390,7 @@ renameExpression environment next expression = case expression of
             bodyOuterEnvironment =
                 if explicit
                     then captureEnvironment
-                    else captureEnvironment ++ environment
+                    else captureEnvironment `over` environment
             (parameters, parameterEnvironment, afterParameters, parameterProblems) =
                 renameParameters bodyOuterEnvironment afterCaptures sourceParameters
             (body, afterBody, bodyProblems) =
@@ -429,10 +446,10 @@ renameMatchPattern environment next patternValue = case patternValue of
         let renamed = RenamedName name next
             duplicateProblems =
                 [ Diagnostic RenamerStage Error "VXR0008" (Just spanValue) ("duplicate match binding " ++ identifierText name)
-                | any ((== name) . fst) environment
+                | Map.member name environment
                 ]
          in ( MatchTypePattern spanValue syntax (Just renamed) ()
-            , (name, renamed) : environment
+            , bind name renamed environment
             , next + 1
             , duplicateProblems
             )
@@ -464,7 +481,7 @@ renameCaptures ::
     Int ->
     [Capture Identifier ()] ->
     ([Capture RenamedName ()], Environment, Int, [Diagnostic])
-renameCaptures environment next captures = go next captures [] [] []
+renameCaptures environment next captures = go next captures [] Map.empty []
     where
         go current [] output localEnvironment problems =
             (reverse output, localEnvironment, current, reverse problems)
@@ -474,7 +491,7 @@ renameCaptures environment next captures = go next captures [] [] []
                     Nothing -> NameExpression spanValue name ()
                 (renamedInitializer, afterInitializer, initializerProblems) =
                     renameExpression environment current sourceExpression
-                duplicate = any ((== name) . fst) localEnvironment
+                duplicate = Map.member name localEnvironment
                 duplicateProblems =
                     if duplicate
                         then
@@ -492,7 +509,7 @@ renameCaptures environment next captures = go next captures [] [] []
                     (afterInitializer + 1)
                     remaining
                     (renamedCapture : output)
-                    ((name, renamedName) : localEnvironment)
+                    (bind name renamedName localEnvironment)
                     (reverse initializerProblems ++ duplicateProblems)
 
 renameCallableBody ::
@@ -517,4 +534,4 @@ renameExpressions environment next (value : rest) =
      in (renamed : remaining, final, problems ++ restProblems)
 
 valueOrMissing :: Identifier -> Environment -> RenamedName
-valueOrMissing name environment = maybe (RenamedName name (-1)) id (lookup name environment)
+valueOrMissing name environment = maybe (RenamedName name (-1)) id (Map.lookup name environment)

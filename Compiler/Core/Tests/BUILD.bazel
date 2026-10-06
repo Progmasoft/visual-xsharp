@@ -18,6 +18,7 @@ cc_binary(
         "ConditionalChainTests.cpp",
         "ConditionalLoweringTests.cpp",
         "CorePipelineTests.cpp",
+        "CorePrepVerifierTests.cpp",
         "LoopLoweringTests.cpp",
         "NestingLimitTests.cpp",
         "ShortCircuitLoweringTests.cpp",

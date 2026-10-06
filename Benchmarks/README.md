@@ -66,3 +66,5 @@ statistical comparisons once it can provide fixed CPU frequency, warm-up policy,
 - `2026-09-28-Core-Loop-Integer-Flow.md` records loop-header widening and loop-carried Core fact costs.
 - `2026-10-04-Nesting-And-Chains.md` records the stack the native Core stages use per level of nesting, and the cost
   of nested loops and of long `else if` chains, before and after they were reduced.
+- `2026-10-07-Many-Methods.md` records the compile time of a class by its number of methods, which grew with the
+  square of that number in five places, before and after.

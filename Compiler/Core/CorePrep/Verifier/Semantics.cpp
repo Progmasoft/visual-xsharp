@@ -22,23 +22,89 @@ namespace visual_xsharp::core
             bool callable{};
         };
 
-        using Definitions = std::unordered_map<SymbolId, Definition>;
+        using SpellingMap = std::unordered_map<SymbolId, std::u32string>;
 
-        [[nodiscard]] auto
-        captured_parameter_symbols(const CorePrepModule &module,
-                                   SymbolId function)
-            -> std::unordered_set<SymbolId>
+        // What every function of a module sees of the module around it: the
+        // functions it may call, their spellings, and the parameters that
+        // closures fill. It is built once for the module. Building it again
+        // for every function made verification quadratic in the number of
+        // functions: 2000 small methods took 14 seconds here alone.
+        struct ModuleCatalog final
         {
-            std::unordered_set<SymbolId> symbols;
-            for (const auto &owner : module.functions)
-                for (const auto &block : owner.blocks)
-                    for (const auto &instruction : block.instructions)
-                        if (instruction.operation == Operation::MakeClosure
-                            && instruction.closure_function.id == function)
-                            for (const auto &capture : instruction.captures)
-                                symbols.insert(capture.symbol.id);
-            return symbols;
-        }
+            std::unordered_map<SymbolId, Definition> functions;
+            SpellingMap spellings;
+            // Function symbols whose spelling differs from that of an
+            // earlier function with the same id.
+            std::size_t conflicting_spellings{};
+            // For a lifted function, the parameters its closures capture into.
+            std::unordered_map<SymbolId, std::unordered_set<SymbolId>>
+                captured_parameters;
+        };
+
+        // The symbols a function may refer to: the functions of its module
+        // and what the function itself defines. A function of the module
+        // takes precedence over a local definition with the same id, as it
+        // did when both were entered into one table, functions first.
+        class Definitions final
+        {
+        public:
+            explicit Definitions(const ModuleCatalog &catalog) noexcept
+                : module_functions(&catalog.functions)
+            {}
+
+            void
+            emplace(SymbolId id, Definition definition)
+            {
+                local.emplace(id, std::move(definition));
+            }
+
+            [[nodiscard]] auto
+            find(SymbolId id) const -> const Definition *
+            {
+                if (const auto found = module_functions->find(id);
+                    found != module_functions->end())
+                    return &found->second;
+                if (const auto found = local.find(id); found != local.end())
+                    return &found->second;
+                return nullptr;
+            }
+
+        private:
+            const std::unordered_map<SymbolId, Definition> *module_functions;
+            std::unordered_map<SymbolId, Definition> local;
+        };
+
+        // The spelling each symbol id carries where a function can see it:
+        // the function's own, then the spellings of the module's functions,
+        // then the first spelling the function uses for any other id.
+        class Spellings final
+        {
+        public:
+            Spellings(const ModuleCatalog &catalog,
+                      const SymbolName &function) noexcept
+                : module_spellings(&catalog.spellings)
+                , own(&function)
+            {}
+
+            // The spelling recorded for the id; the given one is recorded
+            // when the id had none.
+            [[nodiscard]] auto
+            record(SymbolId id, const std::u32string &spelling)
+                -> const std::u32string &
+            {
+                if (id == own->id && !own->spelling.empty())
+                    return own->spelling;
+                if (const auto found = module_spellings->find(id);
+                    found != module_spellings->end())
+                    return found->second;
+                return local.emplace(id, spelling).first->second;
+            }
+
+        private:
+            const SpellingMap *module_spellings;
+            const SymbolName *own;
+            SpellingMap local;
+        };
 
         auto
         issue(std::string code,
@@ -73,21 +139,17 @@ namespace visual_xsharp::core
         }
 
         void
-        verify_symbol_spelling(
-            const SymbolName &symbol,
-            const Function &function,
-            BlockId block,
-            std::unordered_map<SymbolId, std::u32string> &spellings,
-            std::vector<VerificationIssue> &issues)
+        verify_symbol_spelling(const SymbolName &symbol,
+                               const Function &function,
+                               BlockId block,
+                               Spellings &spellings,
+                               std::vector<VerificationIssue> &issues)
         {
             if (symbol.id == 0)
                 return;
             if (symbol.spelling.empty())
                 return;
-            const auto [found, inserted]
-                = spellings.emplace(symbol.id, symbol.spelling);
-            if (!inserted && !found->second.empty()
-                && found->second != symbol.spelling)
+            if (spellings.record(symbol.id, symbol.spelling) != symbol.spelling)
                 issues.push_back(
                     issue("VXC1014",
                           "one symbol id carries conflicting spellings",
@@ -100,7 +162,7 @@ namespace visual_xsharp::core
                     const Function &function,
                     BlockId block,
                     std::size_t depth,
-                    std::unordered_map<SymbolId, std::u32string> &spellings,
+                    Spellings &spellings,
                     std::vector<VerificationIssue> &issues)
         {
             // This boundary also accepts CorePrep assembled by tooling rather
@@ -248,7 +310,7 @@ namespace visual_xsharp::core
                     const Function &function,
                     BlockId block,
                     const Definitions &definitions,
-                    std::unordered_map<SymbolId, std::u32string> &spellings,
+                    Spellings &spellings,
                     std::vector<VerificationIssue> &issues)
         {
             verify_type(atom.type, function, block, 0, spellings, issues);
@@ -259,14 +321,14 @@ namespace visual_xsharp::core
                                        block,
                                        spellings,
                                        issues);
-                const auto found = definitions.find(atom.symbol.id);
-                if (found == definitions.end())
+                const auto *const found = definitions.find(atom.symbol.id);
+                if (found == nullptr)
                     issues.push_back(
                         issue("VXC1021",
                               "atom references an undefined symbol",
                               function,
                               block));
-                else if (found->second.type != atom.type)
+                else if (found->type != atom.type)
                     issues.push_back(
                         issue("VXC1022",
                               "atom type differs from its symbol definition",
@@ -339,13 +401,12 @@ namespace visual_xsharp::core
         }
 
         void
-        verify_operation(
-            const Instruction &instruction,
-            const Function &function,
-            BlockId block,
-            const Definitions &definitions,
-            std::unordered_map<SymbolId, std::u32string> &spellings,
-            std::vector<VerificationIssue> &issues)
+        verify_operation(const Instruction &instruction,
+                         const Function &function,
+                         BlockId block,
+                         const Definitions &definitions,
+                         Spellings &spellings,
+                         std::vector<VerificationIssue> &issues)
         {
             for (const auto &operand : instruction.operands)
                 verify_atom(operand,
@@ -362,9 +423,9 @@ namespace visual_xsharp::core
                                        block,
                                        spellings,
                                        issues);
-                const auto target
+                const auto *const target
                     = definitions.find(instruction.closure_function.id);
-                if (target == definitions.end() || !target->second.callable)
+                if (target == nullptr || !target->callable)
                     issues.push_back(issue(
                         "VXC1040",
                         "closure target is not a declared lifted function",
@@ -413,9 +474,9 @@ namespace visual_xsharp::core
                                   block));
                 }
 
-                if (target != definitions.end() && target->second.callable)
+                if (target != nullptr && target->callable)
                 {
-                    const auto &lifted = target->second.type.components;
+                    const auto &lifted = target->type.components;
                     if (lifted.size() <= instruction.captures.size())
                         issues.push_back(
                             issue("VXC1045",
@@ -642,27 +703,64 @@ namespace visual_xsharp::core
             }
         }
 
-        void
-        collect_definitions(
-            const CorePrepModule &module,
-            const Function &function,
-            Definitions &definitions,
-            std::unordered_map<SymbolId, std::u32string> &spellings,
-            std::vector<VerificationIssue> &issues)
+        [[nodiscard]] auto
+        catalog_module(const CorePrepModule &module) -> ModuleCatalog
         {
-            const auto capturedParameters
-                = captured_parameter_symbols(module, function.symbol.id);
+            ModuleCatalog catalog;
+            catalog.functions.reserve(module.functions.size());
+            catalog.spellings.reserve(module.functions.size());
             for (const auto &candidate : module.functions)
             {
-                verify_symbol_spelling(candidate.symbol,
-                                       function,
-                                       0,
-                                       spellings,
-                                       issues);
-                definitions.emplace(
+                if (candidate.symbol.id != 0
+                    && !candidate.symbol.spelling.empty())
+                {
+                    const auto [found, inserted]
+                        = catalog.spellings.emplace(candidate.symbol.id,
+                                                    candidate.symbol.spelling);
+                    if (!inserted && found->second != candidate.symbol.spelling)
+                        ++catalog.conflicting_spellings;
+                }
+                catalog.functions.emplace(
                     candidate.symbol.id,
                     Definition{ function_type(candidate), false, true });
+                for (const auto &block : candidate.blocks)
+                    for (const auto &instruction : block.instructions)
+                        if (instruction.operation == Operation::MakeClosure)
+                        {
+                            auto &captured
+                                = catalog.captured_parameters
+                                      [instruction.closure_function.id];
+                            for (const auto &capture : instruction.captures)
+                                captured.insert(capture.symbol.id);
+                        }
             }
+            return catalog;
+        }
+
+        void
+        collect_definitions(const ModuleCatalog &catalog,
+                            const Function &function,
+                            Definitions &definitions,
+                            Spellings &spellings,
+                            std::vector<VerificationIssue> &issues)
+        {
+            const auto captured
+                = catalog.captured_parameters.find(function.symbol.id);
+            const auto isCaptured = [&](SymbolId parameter) {
+                return captured != catalog.captured_parameters.end()
+                       && captured->second.contains(parameter);
+            };
+            // A conflict among the function symbols of the module is a fault
+            // of every function that sees them, as it was when each function
+            // entered them into its own table.
+            for (std::size_t conflict = 0;
+                 conflict < catalog.conflicting_spellings;
+                 ++conflict)
+                issues.push_back(
+                    issue("VXC1014",
+                          "one symbol id carries conflicting spellings",
+                          function,
+                          0));
             for (const auto &parameter : function.parameters)
             {
                 verify_symbol_spelling(parameter.symbol,
@@ -681,8 +779,7 @@ namespace visual_xsharp::core
                 // lowering introduces storage.
                 definitions.emplace(parameter.symbol.id,
                                     Definition{ parameter.type,
-                                                capturedParameters.contains(
-                                                    parameter.symbol.id),
+                                                isCaptured(parameter.symbol.id),
                                                 false });
             }
             for (const auto &block : function.blocks)
@@ -709,12 +806,12 @@ namespace visual_xsharp::core
         }
 
         void
-        verify_function(const CorePrepModule &module,
+        verify_function(const ModuleCatalog &catalog,
                         const Function &function,
                         std::vector<VerificationIssue> &issues)
         {
-            Definitions definitions;
-            std::unordered_map<SymbolId, std::u32string> spellings;
+            Definitions definitions{ catalog };
+            Spellings spellings{ catalog, function.symbol };
             verify_symbol_spelling(function.symbol,
                                    function,
                                    function.entry,
@@ -726,7 +823,7 @@ namespace visual_xsharp::core
                         0,
                         spellings,
                         issues);
-            collect_definitions(module,
+            collect_definitions(catalog,
                                 function,
                                 definitions,
                                 spellings,
@@ -743,23 +840,23 @@ namespace visual_xsharp::core
                                                block.id,
                                                spellings,
                                                issues);
-                        const auto target
+                        const auto *const target
                             = definitions.find(instruction.destination.id);
-                        if (target == definitions.end())
+                        if (target == nullptr)
                             issues.push_back(
                                 issue("VXC1035",
                                       "assignment targets an undefined symbol",
                                       function,
                                       block.id));
-                        else if (!target->second.mutable_binding)
+                        else if (!target->mutable_binding)
                             issues.push_back(
                                 issue("VXC1036",
                                       "assignment targets an immutable symbol",
                                       function,
                                       block.id));
                         if (instruction.operands.size() == 1U
-                            && target != definitions.end()
-                            && target->second.type
+                            && target != nullptr
+                            && target->type
                                    != instruction.operands.front().type)
                             issues.push_back(issue(
                                 "VXC1037",
@@ -812,8 +909,9 @@ namespace visual_xsharp::core
         -> std::vector<VerificationIssue>
     {
         std::vector<VerificationIssue> issues;
+        const auto catalog = catalog_module(module);
         for (const auto &function : module.functions)
-            verify_function(module, function, issues);
+            verify_function(catalog, function, issues);
         return issues;
     }
 } // namespace visual_xsharp::core

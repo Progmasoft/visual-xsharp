@@ -126,19 +126,27 @@ prepareCore moduleValue =
             (functions, _) = prepareFunctionQueue initial work
         pure (CorePrepModule (coreModuleName verified) functions (coreModuleSourceFiles verified))
 
--- Closure conversion appends lifted functions together with their source
--- owner. Processing the queue to exhaustion also supports nested closures
--- without a separate whole-module mutation pass or a filename guess.
+-- Closure conversion yields lifted functions together with their source
+-- owner. They are prepared after every function that was already waiting, in
+-- the order they were found, and the functions lifted out of them after
+-- those: that supports nested closures without a separate whole-module pass
+-- or a filename guess.
+--
+-- The lifted functions wait in batches of their own, newest first. Appending
+-- them to the functions still waiting wrapped that list once more for every
+-- function prepared, also when nothing was lifted, and taking the next
+-- function then cost time with the number of functions before it.
 prepareFunctionQueue :: PrepState -> [(CoreFunction, FilePath)] -> ([CorePrepFunction], PrepState)
-prepareFunctionQueue state [] = case pendingFunctions state of
-    [] -> ([], state)
-    pending -> prepareFunctionQueue (state {pendingFunctions = []}) pending
-prepareFunctionQueue state ((function, sourceFile) : remaining) =
-    let (prepared, afterFunction) = prepareFunction (state {nextBlock = 1, currentSourceFile = sourceFile}) function
-        pending = pendingFunctions afterFunction
-        nextState = afterFunction {pendingFunctions = []}
-        (later, final) = prepareFunctionQueue nextState (remaining ++ pending)
-     in (prepared : later, final)
+prepareFunctionQueue initial work = go initial work []
+    where
+        go state [] [] = ([], state)
+        go state [] lifted = go state (concat (reverse lifted)) []
+        go state ((function, sourceFile) : remaining) lifted =
+            let (prepared, afterFunction) = prepareFunction (state {nextBlock = 1, currentSourceFile = sourceFile}) function
+                pending = pendingFunctions afterFunction
+                nextState = afterFunction {pendingFunctions = []}
+                (later, final) = go nextState remaining (if null pending then lifted else pending : lifted)
+             in (prepared : later, final)
 
 prepareFunction :: PrepState -> CoreFunction -> (CorePrepFunction, PrepState)
 prepareFunction state function =

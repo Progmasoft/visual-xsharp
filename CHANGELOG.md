@@ -302,6 +302,22 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   condition has at most 256 nodes; a chain of 200 comparisons joined by `&&`
   went from 47 seconds to 1.1, on `main` as well as on this branch.
 
+- A class with many methods no longer compiles in time with the square of
+  their number. 1000 small methods took 4.3 seconds, 2000 took 16 and 4000
+  took 73; they now take 1.4, 2.9 and 4.8 seconds, and 8000 take 10. The
+  native CorePrep verifier built a table of every function of the module,
+  with the function type of each, once for every function, and searched the
+  module for capturing closures as often; it collects both once. The
+  renamer kept the names in scope as a list of pairs and now keeps a map.
+  The type checker compared a method with every earlier member to find a
+  duplicate overload and now compares it with the methods of its name. The
+  Haskell Core verifier searched a list of source owners for every
+  function, and the CorePrep lowering re-wrapped the list of waiting
+  functions once for every function. What each stage accepts and reports is
+  unchanged. `Benchmarks/2026-10-07-Many-Methods.md` has the measurements,
+  `CorePrepVerifierTests.cpp` pins what a function sees of its module, and
+  the CorePrep benchmarks have a case by number of functions.
+
 ### Known limitations
 
 - Compile time still grows faster than the program on very long functions:

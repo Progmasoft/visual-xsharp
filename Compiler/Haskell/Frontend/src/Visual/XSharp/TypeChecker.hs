@@ -9,6 +9,7 @@ used as a substitute for symbol identity.
 -}
 module Visual.XSharp.TypeChecker (TypeChecker (..), defaultTypeChecker, runTypeChecker) where
 
+import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.Diagnostic
@@ -245,28 +246,29 @@ checkDeclarationWith context _ declaration@EnumDeclaration {} = checkTopDeclarat
 duplicateOverloadProblems :: TemplateContext -> [Declaration ResolvedName ()] -> [Diagnostic]
 duplicateOverloadProblems context members = reverse problems
     where
-        (_, problems) = foldl inspect ([], []) members
+        -- The signatures seen so far are kept by method name, so that a
+        -- method is compared with its own overloads only. Comparing it with
+        -- every earlier member made a type with thousands of methods take
+        -- time with the square of their number.
+        (_, problems) = foldl inspect (Map.empty, []) members
         inspect (seen, diagnostics) declaration@FunctionDeclaration {} =
-            let duplicate = any (sameSignature declaration) seen
+            let spelling = resolvedSpelling (declarationName declaration)
+                parameterTypes = methodParameterTypes declaration
+                duplicate = parameterTypes `elem` Map.findWithDefault [] spelling seen
                 currentDiagnostics =
                     if duplicate
                         then
                             [ problem
                                 (declarationSpan declaration)
                                 "VXT0028"
-                                ( "method overload has a duplicate parameter signature: "
-                                    ++ identifierText (resolvedSpelling (declarationName declaration))
-                                )
+                                ("method overload has a duplicate parameter signature: " ++ identifierText spelling)
                             ]
                         else []
-             in (declaration : seen, reverse currentDiagnostics ++ diagnostics)
+             in (Map.insertWith (++) spelling [parameterTypes] seen, reverse currentDiagnostics ++ diagnostics)
         inspect state _ = state
-        sameSignature current previous =
-            resolvedSpelling (declarationName previous) == resolvedSpelling (declarationName current)
-                && methodParameterTypes context previous == methodParameterTypes context current
-        methodParameterTypes valueContext FunctionDeclaration {declarationParameters = parameters} =
-            map (syntaxTypeIn valueContext . parameterTypeSyntax) parameters
-        methodParameterTypes _ _ = []
+        methodParameterTypes FunctionDeclaration {declarationParameters = parameters} =
+            map (syntaxTypeIn context . parameterTypeSyntax) parameters
+        methodParameterTypes _ = []
 
 typeParameterWith :: TemplateContext -> Parameter ResolvedName () -> Parameter ResolvedName Type
 typeParameterWith context parameter =

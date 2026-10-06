@@ -9,6 +9,7 @@ module Visual.XSharp.Core.Verifier (verifyCore) where
 
 import Data.List (group, sort)
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Scalar
@@ -41,14 +42,19 @@ moduleProblems moduleValue =
                 ++ duplicates "VXC1032" "duplicate Core function source owner" (map fst sourceOwners)
                 ++ [ problem "VXC1033" "Core function source owner is absent from the module source catalog"
                    | (_, path) <- sourceOwners
-                   , path `notElem` sourceFiles
+                   , path `Set.notMember` sourceFileSet
                    ]
                 ++ [ problem "VXC1034" "Core function has no source owner"
                    | not (null sourceFiles)
                    , function <- functions
                    , let identifier = symbolIdValue (resolvedSymbol (coreFunctionName function))
-                   , identifier `notElem` map fst sourceOwners
+                   , identifier `Set.notMember` ownedFunctions
                    ]
+        -- Sets, because both checks run once for every function: against
+        -- lists, a module of thousands of functions was verified in time
+        -- with the square of their number.
+        sourceFileSet = Set.fromList sourceFiles
+        ownedFunctions = Set.fromList (map fst sourceOwners)
         invalidPath path = null path || '\0' `elem` path
         functionEnvironment =
             Map.fromList
