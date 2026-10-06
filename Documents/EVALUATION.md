@@ -21,8 +21,9 @@ hold:
 - the binding is never assigned after it is declared;
 - no closure captures it;
 - its initializer is built from names, literals, operators, tests,
-  conditionals and calls, with no store, no transfer of control and no block;
-- the binding is in a method, not in the body of a callable.
+  conditionals and calls, with no store, no transfer of control and no block.
+
+That holds in the body of a method and in the body of a callable alike.
 
 Such a value is computed by the first read that is reached, and by no later
 one. A binding whose initializer is never read computes nothing, so a division
@@ -51,6 +52,10 @@ runs. The stages after the frontend see ordinary locals, stores and branches.
 The body of a method is lowered twice. The first lowering evaluates every
 binding in place and is kept only for what it shows: which locals are assigned
 after their binding and which a closure captures. The second lowering defers.
+
+An expression written as a statement of its own, and a value assigned to the
+discard, are evaluated: the statement is the need. That is the rule of the
+language, example 12 of the specification file, not a restriction.
 
 ## Where laziness cannot be observed
 
@@ -83,16 +88,27 @@ restriction of the language.
 | results returned by need | a returned value is computed before the method returns |
 | values of other types by need: `String`, callables, objects | computed where they are written |
 | a variable that is assigned again | the binding and every assignment are computed in place |
-| a binding that a closure captures, and bindings in the body of a callable | computed in place |
-| a value that is discarded, as in `_ = value;` | computed |
+| a binding that a closure captures | computed in place |
 | a thunk as a value of its own in Core, Xpp and Xmm, with runtime support | a flag and a slot in the frame of one function |
+| the computation of a value by need stated once | every read carries it; see below |
 | effects other than stores and transfers of control | none exist in the implemented subset: it has no input, output or shared state |
+
+A read of a value by need carries the computation of that value, guarded by
+its flag, because the frame of one function is all a value by need has
+today. An expression that is certain to read such a value more than once
+computes it once ahead of itself, so a chain of values of which each reads
+the one before it several times grows with its length. Reads that stand in
+different branches of one expression are not certain and each carries the
+computation: `int b = (c ? a : 0) + (d ? a : 1);` holds the computation of
+`a` twice, and a chain of such bindings doubles with every link. That is a
+cost in compile time and code size, never in what a program computes, and it
+ends when a thunk is a value that a read can call.
 
 ## Verification
 
 `LazyEvaluationTests.hs` observes laziness through what tells a computed value
 from one that was not: a division by zero, a call that never returns, and the
 number of steps a program takes in the reference Core evaluator, which is how
-"at most once" is checked. `source_execution_smoke` runs the same programs
+"at most once" is checked. `source_feature_smoke` runs the same programs
 through LLVM in both pipeline modes, where a division by zero that was
 computed would end the process and a call that never returns would never end.

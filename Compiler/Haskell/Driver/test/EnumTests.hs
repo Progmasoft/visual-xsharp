@@ -121,6 +121,18 @@ evaluationCases =
       ("Status s = Status.NONE; s = Status.READY; return s == Status.READY ? 7 : 8;", [((0, 0), 7)])
     , ("return Rank(Raise(Raise(Level.LOW))) * 100 + Rank(Raise(Level.HIGH));", [((0, 0), 1011)])
     , ("Status s = match (left) { 1 -> Status.READY, _ -> Status.NONE }; return s == Status.READY ? 1 : 0;", [((1, 0), 1), ((2, 0), 0)])
+    , -- The target-typed spelling names a member of the enum the place
+      -- expects: a declared type, a parameter, a return type, the other
+      -- operand of a comparison, the variable assigned to.
+      ("Status s = .READY; return s == Status.READY ? 1 : 2;", [((0, 0), 1)])
+    , ("Status s = Pick(left); return s == .READY ? 1 : 2;", [((3, 0), 1), ((0, 0), 2)])
+    , ("return Rank(.HIGH) + Rank(.LOW);", [((0, 0), 11)])
+    , ("Level l = .LOW; l = .TOP; return Rank(l);", [((0, 0), 11)])
+    , ("Status s = match (left) { 1 -> .READY, _ -> .NONE }; return s == .READY ? 1 : 0;", [((1, 0), 1), ((2, 0), 0)])
+    , -- A conditional, an if expression and a loop expression yield an enum.
+      ("Status s = left > 0 ? .READY : .NONE; return s == .READY ? 1 : 0;", [((1, 0), 1), ((0, 0), 0)])
+    , ("Level l = if (left > 0) { Level.HIGH } else { Level.LOW }; return Rank(l);", [((1, 0), 10), ((0, 0), 1)])
+    , ("Level l = while (true) { if (left > 0) { break Level.TOP; } break Level.MID; }; return Rank(l);", [((1, 0), 11), ((0, 0), 2)])
     , -- Two subjects with closed sets of values are complete together.
         ( "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, (.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) -> 4 };"
         , [((0, 1), 1), ((0, 0), 2), ((1, 1), 3), ((1, 0), 4)]
@@ -147,6 +159,11 @@ rejectedBodies =
     , ("a value of an enum is not an integer", "VXT0002", "int x = Status.READY; return x;")
     , ("an integer is not a value of an enum", "VXT0002", "Status s = 1; return 0;")
     , ("a value of an enum is not a condition", "VXT0006", "if (Status.READY) { return 1; } return 2;")
+    , ("the target-typed spelling needs a known target type", "VXT0069", "auto s = .READY; return 0;")
+    , ("the target-typed spelling needs an enum as its target", "VXT0069", "int x = .READY; return x;")
+    , ("the left operand of a comparison has no target type", "VXT0069", "Status s = Pick(left); return .NONE == s ? 1 : 2;")
+    , ("the target-typed spelling names a member of the expected enum", "VXT0064", "Status s = .LOW; return 0;")
+    , ("a call through the target-typed spelling has no type to call on", "VXT0032", ".Pick(left); return 0;")
     , ("a value of one enum is not a value of another", "VXT0002", "Level l = Status.NONE; return 0;")
     ]
 

@@ -23,6 +23,7 @@ module Visual.XSharp.Desugarer.Laziness
     , renameNames
     , capturedSymbols
     , alwaysReads
+    , neededTwice
     , neededNext
     ) where
 
@@ -124,6 +125,40 @@ alwaysReads name expression = case expression of
     ConditionalExpression _ condition _ _ _ -> alwaysReads name condition
     AssignmentExpression _ _ _ value _ -> alwaysReads name value
     _ -> False
+
+{- | The reads of the given values by need that an expression is certain to
+evaluate and holds more than once, one read for each such value.
+
+Computing those values ahead of the expression changes nothing that can be
+observed except which of two computations fails first when both fail: the
+expression has no effect, and it evaluates each of them whenever it is
+evaluated.
+-}
+neededTwice ::
+    [SymbolId] -> Expression ResolvedName annotation -> [(ResolvedName, Expression ResolvedName annotation)]
+neededTwice deferred expression
+    | null deferred || not (deferrableExpression expression) = []
+    | otherwise = go [] (nameReads expression)
+    where
+        go _ [] = []
+        go seen ((name, found) : remaining)
+            | symbol `elem` seen = go seen remaining
+            | symbol `elem` deferred
+            , symbol `elem` map (resolvedSymbol . fst) remaining
+            , alwaysReads name expression =
+                (name, found) : go (symbol : seen) remaining
+            | otherwise = go (symbol : seen) remaining
+            where
+                symbol = resolvedSymbol name
+        nameReads value = case value of
+            NameExpression _ name _ -> [(name, value)]
+            MemberAccessExpression _ receiver _ _ -> nameReads receiver
+            CallExpression _ callee arguments _ -> concatMap nameReads (callee : arguments)
+            UnaryExpression _ _ operand _ -> nameReads operand
+            BinaryExpression _ _ left right _ -> nameReads left ++ nameReads right
+            IsPatternExpression _ subject _ _ -> nameReads subject
+            ConditionalExpression _ condition first second _ -> concatMap nameReads [condition, first, second]
+            _ -> []
 
 {- | Whether the statement that follows a binding is certain to read it.
 

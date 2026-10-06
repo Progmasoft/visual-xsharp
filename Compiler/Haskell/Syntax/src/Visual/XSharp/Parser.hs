@@ -1192,6 +1192,19 @@ parsePrimary = do
     next <- peekToken
     case next of
         Just token | tokenKind token == SymbolToken && tokenText token `elem` ["\\", "["] -> parseCallable
+        -- `.Member` names a member of the enum that the context expects.
+        -- It is a member selection without a receiver; the place of the
+        -- receiver holds the unit literal, which no source can write.
+        Just token | tokenKind token == SymbolToken && tokenText token == "." -> do
+            _ <- takeToken
+            (member, memberSpan) <- identifier
+            pure
+                ( MemberAccessExpression
+                    (mergeSpan (tokenSpan token) memberSpan)
+                    (LiteralExpression (tokenSpan token) UnitLiteral ())
+                    member
+                    ()
+                )
         -- A loop in operand position is a loop expression: its value is
         -- supplied by `break value;`. The statement parsers are reused, so
         -- both forms have exactly one grammar.

@@ -49,6 +49,14 @@ int next = quotient + 1;     -- needs quotient only if next is needed
 return right > 0 ? next : 0; -- when right is zero, nothing divides
 
 -- ============================================================================
+-- Example 12: 1. Evaluation by Need
+-- Demonstrates: An expression written as a statement of its own is evaluated, and so is a value assigned to
+--   the discard. A statement exists to be carried out; nothing else could ever need its value.
+
+Validate(input);    -- evaluated: the statement is the need
+_ = left / right;   -- evaluated: if right is zero, the failure is here
+
+-- ============================================================================
 -- Example 5: 1. Evaluation by Need
 -- Demonstrates: An argument is passed by need. The method computes it if it needs it and at most once, however
 --   many times its parameter is read.

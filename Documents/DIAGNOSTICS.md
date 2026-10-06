@@ -218,7 +218,7 @@ The type checker reports:
 | `VXT0036` | a conditional test is neither `bool` nor numeric |
 | `VXT0037` | the two results of a conditional have different types |
 | `VXT0038` | the two operands of truthy coalescing have different types |
-| `VXT0039` | the result of a conditional form is neither `bool` nor numeric; other result types are not lowered yet |
+| `VXT0039` | the result of a conditional form is neither `bool`, numeric nor an enum; other result types are not lowered yet |
 
 A compound assignment otherwise reuses the assignment and operator
 diagnostics: `VXT0003` for an immutable target and `VXT0012` for operands the
@@ -258,7 +258,7 @@ reports:
 | `VXT0041` | the condition of a loop used as an expression is not the constant `true` (or, for `for`, absent), so the loop could end without a value |
 | `VXT0042` | a loop used as an expression has no `break` that carries a value |
 | `VXT0043` | the `break` values of one loop have different types |
-| `VXT0044` | the loop value is neither `bool` nor numeric; other result types are not lowered yet |
+| `VXT0044` | the loop value is neither `bool`, numeric nor an enum; other result types are not lowered yet |
 
 A `return` inside a loop used as an expression leaves the method. A loop that
 no `break` leaves and that returns never yields a value, which is valid; a
@@ -341,6 +341,7 @@ The type checker reports:
 | `VXT0066` | the underlying type of an enum is not an integer type |
 | `VXT0067` | an enum names a member twice |
 | `VXT0068` | the value of an enum member does not fit the underlying type of the enum |
+| `VXT0069` | a target-typed `.Member` stands where no enum type is expected: the type of the place is inferred, or is not an enum |
 
 A block used as a value may leave instead of yielding a value: `return`
 leaves the enclosing method and is checked against its return type

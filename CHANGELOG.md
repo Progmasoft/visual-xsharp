@@ -17,8 +17,10 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   implements the first part of it: a local binding of `bool`, numeric or
   enum type whose initializer has no effect is computed by its first read
   and not at all when nothing reads it, so `int x = left / right; return 5;`
-  no longer divides. Arguments, results, other types and assigned or
-  captured variables are still computed where they are written;
+  no longer divides. That holds in the body of a callable as in the body of
+  a method. An expression written as a statement, and a value assigned to
+  the discard, are evaluated. Arguments, results, other types and assigned
+  or captured variables are still computed where they are written;
   `Documents/EVALUATION.md` lists what is pending.
 - Added `match`. The statement `match (subject) { pattern -> body, ... }` runs
   the first arm whose patterns and guard accept the subject, and does nothing
@@ -86,6 +88,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   arm for the same value is unreachable. `Spec/Language/Decls.vxs` gains
   examples 311 to 315 for the operations, the absence of conversions and
   the target-typed `.Member` spelling. `enum` is now a reserved word.
+  `.Member` is accepted in an expression wherever an enum type is expected:
+  a declared type, a parameter, a return type, the right operand of a
+  comparison, the variable assigned to; elsewhere it is `VXT0069`. A
+  conditional, an `if` expression, a `match` and a loop expression may
+  yield an enum.
 - A method declared with `auto` can be called. Return types are inferred
   before any caller is checked, across classes and against declaration
   order, through chains and mutual recursion; a method with no result
@@ -149,7 +156,7 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 ### Verification and tooling
 
 - `OwnershipPlacementTests.cpp` runs every placed function on an independent
-  reference-count model along all of its paths. `source_execution_smoke`
+  reference-count model along all of its paths. `source_feature_smoke`
   runs 26 closure programs through LLVM and the AARC runtime, one at a time,
   and fails a program that leaves an allocation behind; the runtime counts
   its live allocations for that purpose.
@@ -178,11 +185,19 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   the single program had grown to 221 seconds; apart, each takes 77 to 110
   seconds on the same machine. The new program also compiles and verifies
   programs that own closures while control leaves through a value block.
+- The tables written by hand for single features, which are inferred return
+  types, evaluation by need, enums and closures, are a third smoke program,
+  `source_feature_smoke`. With them `source_execution_smoke` ran past the
+  unchanged watchdog in the fuzzing configuration; no case was removed.
+- An expression that is certain to read a value by need more than once
+  computes it once ahead of itself. Each read carried the whole computation,
+  so the Core of a chain of bindings that each read the one before twice
+  doubled with every link; it now grows with the length of the chain.
 - The branching and leaving tables of both harnesses are generated from the
   case files under `Compiler/Fuzzing/Cases` by the new Go helper
   `execution-cases`, whose `check` command and tests fail on a stale table.
   The reference Core evaluator of the frontend tests runs closures, and
-  `source_execution_smoke` links the AARC runtime and runs closures through
+  `source_feature_smoke` links the AARC runtime and runs closures through
   LLVM: created, called, nested, returned and alive across loop transfers.
 - `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
   and the values of 83 program runs on the unoptimized and the optimized
@@ -294,9 +309,8 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   implemented. They are pending work, listed with their diagnostics under
   "Pending branching and loop forms" in `Documents/IMPLEMENTATION.md`: a
   binding in the condition of `if`, `guard` or `while`, which needs optional
-  values, a call that does not return as a way of leaving, the target-typed
-  `.Member` spelling in an expression, enums declared inside a class, and
-  `enum class`.
+  values, a call that does not return as a way of leaving, enums declared
+  inside a class, and `enum class`.
 - The nesting limits of 256 and 1024 and the compiler stack reservation of
   256 MiB are the limits this version ships with. `CommittedStackBytes`
   reports on Linux and macOS as well, from the resident pages of the stack

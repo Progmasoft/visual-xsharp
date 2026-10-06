@@ -34,6 +34,7 @@ var nativeTargets = []string{
 	"//Compiler/Runtime/AARC/Tests:aarc_c_abi_tests",
 	"//Compiler/Fuzzing:source_fuzz_smoke",
 	"//Compiler/Fuzzing:source_execution_smoke",
+	"//Compiler/Fuzzing:source_feature_smoke",
 	"//Compiler/Fuzzing/Tests:coreprep_parity_tests",
 	"//Compiler/ProjectSystem/Bridge/Tests:project_registry_tests",
 	"//Interactive/Tests:interactive_tests",

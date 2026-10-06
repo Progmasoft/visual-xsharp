@@ -193,7 +193,7 @@ Five layers protect the contract:
    reference must be released exactly once and nothing may be used after its
    last release. The model is first shown to reject a leak, a double release
    and a use after release.
-5. `source_execution_smoke` runs closure programs through LLVM with the AARC
+5. `source_feature_smoke` runs closure programs through LLVM with the AARC
    runtime, one program at a time, and requires the runtime to hold no more
    allocations after a program than before it, in both pipeline modes. Without
    the placement pass that check fails on the first program.

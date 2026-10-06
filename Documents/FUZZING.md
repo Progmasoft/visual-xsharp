@@ -216,7 +216,11 @@ each run that differs; the program must return zero from both
 pipeline modes, and a result that is not zero names the runs that failed.
 Compiling dominates the cost of these cases under sanitizers, and the smoke
 program has a process watchdog, so the runs of a body are not worth a
-compilation each. `source_execution_smoke` also compiles programs that own
+compilation each.
+
+`source_feature_smoke` runs the tables that are written by hand for single
+features: methods with inferred return types, evaluation by need and classic
+enums. It also compiles programs that own
 closures while control leaves through a block used as a value, so that the
 ownership verifiers of Xpp and Xmm see those paths, and runs a hand-written
 table of closures: created, called, nested, returned and alive across loop
@@ -238,7 +242,7 @@ table differs; the helper tests and CI run that check. One source keeps the
 two tables equal. It does not make them independent: a wrong expectation in
 a case file is wrong in both. The independent checks are the hand-written
 tables that do not come from these files, `ExpressionExecutionCases.cpp` and
-the inferred-return table of `SourceExecutionSmoke.cpp`, the oracle tests of
+the inferred-return table of `SourceFeatureSmoke.cpp`, the oracle tests of
 `BranchingOracleTests.hs`, which compare each `match` with the `if` chain it
 stands for, and the differential generator with its host model.
 
@@ -256,7 +260,16 @@ that was broken down 23 were the expression table, 35 the branching table,
 on the machine during these runs, so the spread is not the programs' own.
 In an ordinary build each takes about 7 seconds.
 
-The source fuzz targets and both source smoke programs run the compiler on the
+The feature tables became a third program for the same reason. With the
+tables for evaluation by need and enums, `source_execution_smoke` ran past
+the watchdog in the fuzzing configuration. Apart, on the same Windows
+machine in that configuration with nothing else running,
+`source_execution_smoke` takes 91 seconds, of which 24 are the expression
+table, 45 the branching table and 22 the leaving table, and
+`source_feature_smoke` takes 45 seconds, of which 28 are the closure
+programs. The watchdog is unchanged, and no case was removed.
+
+The source fuzz targets and the source smoke programs run the compiler on the
 compiler stack, as `vxs` does, because an input nested up to the frontend's
 limits does not fit on the default stack of a process. `Corpus/source` has
 permanent seeds for deep nesting, for nesting at and one level beyond each

@@ -664,6 +664,28 @@ checkExpressionExpectedWith context environment expected expression = case expre
                                 )
                             ]
                         )
+    -- @.Member@ is the member of that name of the enum the place expects.
+    -- Without an expected enum type there is nothing to select from.
+    MemberAccessExpression spanValue (LiteralExpression _ UnitLiteral _) member _ ->
+        let enums = catalogEnums (templateCatalog context)
+         in case [valueType | Just valueType <- [expected], isEnumType valueType] of
+                valueType : _ -> case enumMemberValue enums valueType member of
+                    Just value -> (LiteralExpression spanValue (IntegerLiteral value) valueType, valueType, [])
+                    Nothing ->
+                        ( LiteralExpression spanValue (IntegerLiteral 0) valueType
+                        , ErrorType
+                        , [problem spanValue "VXT0064" ("the expected enum has no member named " ++ identifierText member)]
+                        )
+                [] ->
+                    ( LiteralExpression spanValue (IntegerLiteral 0) ErrorType
+                    , ErrorType
+                    ,
+                        [ problem
+                            spanValue
+                            "VXT0069"
+                            "a target-typed .Member needs a place whose type is known to be an enum"
+                        ]
+                    )
     MemberAccessExpression spanValue receiver member _ ->
         let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
             memberProblems = [problem spanValue "VXT0034" "member selection is currently supported only as a type-qualified method call"]
@@ -927,8 +949,9 @@ loopValueType spanValue breakTypes = case filter (/= ErrorType) breakTypes of
     first : remaining
         | any (/= first) remaining ->
             (first, [problem spanValue "VXT0043" "the break values of a loop used as an expression must have the same type"])
-        | not (booleanContextType first) ->
-            (first, [problem spanValue "VXT0044" "loop expressions currently support only bool and numeric results"])
+        | not (booleanContextType first)
+        , not (isEnumType first) ->
+            (first, [problem spanValue "VXT0044" "loop expressions currently support only bool, numeric and enum results"])
         | otherwise -> (first, [])
 
 -- | Whether the loop can finish by its condition becoming false.
@@ -996,9 +1019,10 @@ selectedValueType spanValue mismatchCode mismatchMessage firstType secondType
     | firstType == ErrorType = (secondType, [])
     | secondType == ErrorType = (firstType, [])
     | firstType /= secondType = (firstType, [problem spanValue mismatchCode mismatchMessage])
-    | not (booleanContextType firstType) =
+    | not (booleanContextType firstType)
+    , not (isEnumType firstType) =
         ( firstType
-        , [problem spanValue "VXT0039" "conditional expressions currently support only bool and numeric results"]
+        , [problem spanValue "VXT0039" "conditional expressions currently support only bool, numeric and enum results"]
         )
     | otherwise = (firstType, [])
 

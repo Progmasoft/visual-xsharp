@@ -59,6 +59,7 @@ func TestFuzzProcessWatchdogDoesNotLimitBuildTools(t *testing.T) {
 	}{
 		{"source_fuzz_smoke.exe", nil, 240},
 		{"source_execution_smoke.exe", nil, 240},
+		{"source_feature_smoke.exe", nil, 240},
 		{"wire_fuzzer", []string{"-max_total_time=30"}, 120},
 		{"frontend-fuzz.exe", []string{"parser", "900"}, 1200},
 		{"cabal", []string{"build", "all"}, 0},

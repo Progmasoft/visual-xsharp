@@ -93,7 +93,6 @@ the specification is not changed to match them.
 | evaluation by need beyond local bindings of scalar type: arguments, results, other types, assigned and captured variables | `Spec/Language/Evaluation.vxs` | computed where they are written; see [Evaluation by need](EVALUATION.md) | thunks as values in the IR and the runtime |
 | a call that does not return as a way of leaving a `guard` block or a block used as a value | example 297 | every call is assumed to return, so the block is taken to complete: `VXT0061` or `VXT0046` | a way to know that a call does not return; how that is expressed in the language is not decided here |
 | a `match` over a subject that may be null | example 304 | `VXT0055` | nullable subjects |
-| the target-typed `.Member` spelling in an expression, as in `Status second = .READY;` | examples 53 and 314 | `VXP0004`; the spelling is implemented in match patterns | an expression form for it and its typing from the expected type |
 | an enum declared inside a class | the nested declarations of section 9 | `VXP0006` | qualified type names |
 | a constant expression as the value of an enum member, as in `B = A + 1` | the `enum-member` rule of the grammar | `VXP0041`; an integer literal with an optional minus sign is implemented | constant evaluation of member values |
 | `enum class`, the enum with payloads | section 8 | not parsed | the object model |

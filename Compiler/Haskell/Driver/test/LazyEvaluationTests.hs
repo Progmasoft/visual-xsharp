@@ -45,6 +45,7 @@ lazyEvaluationTests =
                ( "a needed division by zero has no result on one path"
                , runs artifactCore neededOnOnePath (6, 0) == Just 7 && runs artifactCore neededOnOnePath (6, 3) == Just 2
                )
+           , ("a discarded value is evaluated", runs artifactCore "_ = left / right; return 5;" (1, 0) == Nothing)
            , -- A value that is never needed leaves nothing behind in Core.
              ("a value that is never read is not in the lowered Core", not (mentions "CoreDivide" artifactCore "int x = left / right; return 5;"))
            , -- A value that the next statement is certain to need is
@@ -55,6 +56,10 @@ lazyEvaluationTests =
              -- suffices for one computation does not suffice for fifty.
              ("a value is computed at most once", runsWithin 2000 neededOften (100, 1) == Just 5000)
            , ("the same work fifty times exceeds that budget", runsWithin 2000 computedOften (100, 1) == Nothing)
+           , -- A value that reads another value by need twice does not
+             -- carry the computation of that value twice: the Core of a
+             -- chain grows with its length, not with a power of it.
+             ("a chain of values read twice each grows linearly", coreSize (sharedChain 12) < 3 * coreSize (sharedChain 6))
            ]
     where
         neededOnOnePath = "int x = left / right; if (right > 0) { return x; } return 7;"
@@ -107,10 +112,59 @@ evaluationCases =
       -- around it is ever read.
       ("int n = 0; int x = (n += 1) + left; return n * 10;", [((1, 0), 10)])
     , ("int n = left; int x = n++ + Half(n); return n;", [((4, 0), 5)])
+    , -- The body of a callable evaluates by need as the body of a method
+      -- does, also when the callable stands inside another.
+        ( "auto f = \\(int v, int d) -> { int q = v / d; if (d > 0) { return q; } return 7; }; return f(left, right);"
+        , [((6, 0), 7), ((6, 3), 2)]
+        )
+    , ("auto f = \\(int v) -> { int q = Never(v); return 5; }; return f(left);", [((1, 0), 5)])
+    ,
+        ( "auto f = \\(int v, int d) -> { auto g = \\(int w) -> { int q = w / d; return d > 0 ? q : 9; }; return g(v); }; return f(left, right);"
+        , [((6, 0), 9), ((6, 2), 3)]
+        )
+    , ("auto f = \\(int v) -> { int a = v; int q = Half(a + 2); a = 100; return q * 1000 + a; }; return f(left);", [((8, 0), 5100)])
+    , -- A value that needs another value twice computes it once, also
+      -- through a long chain of such values.
+      (sharedChain 40, [((6, 0), 7), ((6, 3), 1)])
+    , ("int x = left / right; int y = right > 0 ? x / 1 + x / 2 : 0; return right > 1 ? y : 9;", [((6, 0), 9), ((6, 1), 9), ((6, 3), 3)])
+    , -- A value by need is computed where a loop header or a guard reads it.
+        ( "int x = left / right; int t = 0; for (int i = 0; right > 0 && i < 3; i += x) { t += 1; } return t;"
+        , [((6, 0), 0), ((6, 3), 2)]
+        )
+    , ("int x = left / right; int n = 0; do { n += 1; } while (right > 0 && n < x); return n;", [((6, 0), 1), ((6, 2), 3)])
+    , ("int x = left / right; return match (right) { 0 -> 1, _ if x > 1 -> 2, _ -> 3 };", [((6, 0), 1), ((6, 3), 2), ((6, 6), 3)])
+    , -- An expression written as a statement is evaluated: that is all a
+      -- statement can be for.
+      ("int n = 0; _ = (n += 1) + left; return n;", [((1, 0), 1)])
     , -- Needed values give what they always gave.
       ("int x = Half(left); return x + x + x;", [((8, 0), 12)])
     , ("int x = Step(left); int y = Step(right); return x * 10 + y;", [((3, 4), 34)])
     ]
+
+{- | A chain of values of which each reads the one before it twice, and of
+which only the last is read, on one path.
+-}
+sharedChain :: Int -> String
+sharedChain links =
+    "int z0 = left / right; "
+        ++ concat
+            [ "int z" ++ show link ++ " = z" ++ show (link - 1) ++ " / 1 - z" ++ show (link - 1) ++ " / 2; "
+            | link <- [1 .. links]
+            ]
+        ++ "if (right > 0) { return z"
+        ++ show links
+        ++ "; } return 7;"
+
+-- | The size of the unoptimized Core of @Evaluate@ for the given body.
+coreSize :: String -> Int
+coreSize statements = case compileSource (program statements) of
+    Right artifacts ->
+        sum
+            [ length (show (coreFunctionBody function))
+            | function <- coreModuleFunctions (artifactCore artifacts)
+            , "Evaluate" `isInfixOf` show (coreFunctionName function)
+            ]
+    Left _ -> 0
 
 compileSource :: String -> Either [Diagnostic] FrontendArtifacts
 compileSource text = compileToCorePrep (CompilerInput "lazy.vxs" text)

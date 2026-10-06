@@ -125,7 +125,7 @@ type Lower = StateT LowerState (Either [Diagnostic])
 
 {- | Lower with every binding evaluated where it stands. The body of a
 function is lowered this way once, to learn which of its locals are assigned
-and which a closure captures, and the body of a callable always is.
+and which a closure captures, and so is the body of a callable.
 -}
 inPlace :: Lower a -> Lower a
 inPlace = evaluatingWith Nothing
@@ -638,7 +638,27 @@ An expression without assignment or increment operands has no statements,
 and its Core expression is the direct translation of the source.
 -}
 lowerExpression :: Expression ResolvedName Type -> Lower Lowered
-lowerExpression expression = case expression of
+lowerExpression expression = do
+    deferred <- gets lowerDeferred
+    case neededTwice (map fst deferred) expression of
+        [] -> lowerOperands expression
+        shared -> do
+            -- Each read of a value by need carries the computation of that
+            -- value. An expression that is certain to read one several
+            -- times computes it once, ahead of itself, and then reads it as
+            -- an ordinary local; otherwise a chain of such values would
+            -- grow with a power of its length.
+            forced <- concat <$> mapM (fmap fst . lowerOperands . snd) shared
+            modify
+                ( \current ->
+                    current {lowerDeferred = filter ((`notElem` map (resolvedSymbol . fst) shared) . fst) deferred}
+                )
+            (prefix, lowered) <- lowerOperands expression
+            modify (\current -> current {lowerDeferred = deferred})
+            pure (forced ++ prefix, lowered)
+
+lowerOperands :: Expression ResolvedName Type -> Lower Lowered
+lowerOperands expression = case expression of
     -- A read of a local whose value is computed by need computes it if no
     -- earlier read has, and reads it.
     NameExpression _ name valueType -> do
@@ -847,7 +867,16 @@ lowerExpression expression = case expression of
                 [(parameterName parameter, lowerBoundaryType (parameterAnnotation parameter)) | parameter <- parameters]
         -- A callable is a function of its own: no loop of the function
         -- that creates it is around its body.
-        loweredBody <- inPlace (inCoreLoop (targeting Nothing (lowerCallableBody body)))
+        -- Its bindings are computed by need like those of a method, from
+        -- its own assigned and captured locals. While the function around
+        -- it is lowered in place, to learn its locals, so is the callable.
+        settled <- gets lowerSettled
+        let lowerBody = inCoreLoop (targeting Nothing (lowerCallableBody body))
+        loweredBody <- case settled of
+            Nothing -> inPlace lowerBody
+            Just _ -> do
+                inPlaceBody <- inPlace lowerBody
+                byNeed (assignedSymbols inPlaceBody ++ capturedSymbols inPlaceBody) lowerBody
         (prefix, loweredCaptures) <- lowerCaptures captures
         let returnType = case valueType of
                 FunctionType _ result -> lowerBoundaryType result
