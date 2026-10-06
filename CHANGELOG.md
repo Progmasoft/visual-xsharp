@@ -22,6 +22,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   the discard, are evaluated. Arguments, results, other types and assigned
   or captured variables are still computed where they are written;
   `Documents/EVALUATION.md` lists what is pending.
+- When one statement needs several values that cannot be computed, which
+  failure the program meets is not determined, and a value that runs without
+  end counts as one that cannot be computed. Whether the program fails is
+  determined, and so is the order of statements and of effects. Example 13
+  of `Spec/Language/Evaluation.vxs` states the rule.
 - Added `match`. The statement `match (subject) { pattern -> body, ... }` runs
   the first arm whose patterns and guard accept the subject, and does nothing
   when no arm accepts. In operand position `match` is an expression: every

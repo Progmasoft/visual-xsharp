@@ -70,8 +70,13 @@ program can tell:
   `&&` and `||` and outside the branches of a conditional.
 
 In the second case one thing differs: when the value and an operand evaluated
-before it in that statement both fail, the value fails first. A program that
-fails either way is not told which of two failures it meets.
+before it in that statement both fail, the value fails first. The language
+leaves that open. Example 13 of `Spec/Language/Evaluation.vxs` says that
+whether a program fails is determined and which of several failures one
+statement meets is not, and that a value which runs without end counts as one
+that cannot be computed. The order of statements and of effects is
+determined. The same rule covers a value that an expression is certain to
+read more than once, which is computed ahead of that expression.
 
 The second case assumes that a call needs its arguments. That is true of the
 compiler today and not of the language, so the case has to be narrowed when

@@ -77,6 +77,22 @@ int quotient = left / right; -- no failure here, whatever right is
 Use(quotient);               -- if right is zero, the failure is here
 
 -- ============================================================================
+-- Example 13: 2. Failure
+-- Demonstrates: Whether a program fails is determined: it fails when it needs a value that cannot be computed.
+--   Which failure it meets is not, when one statement needs several such values. The values a statement needs
+--   have no order among themselves that a program may rely on, and a value that runs without end is one that
+--   cannot be computed: a statement that needs it and a value that fails may fail or may never end.
+--   Statements are still carried out in the order they are written, and so are effects.
+
+int first = left / zero;      -- cannot be computed
+int second = Parse(text);     -- cannot be computed either, for this text
+
+return first + second;        -- the program fails; which of the two failures it reports is not determined
+
+Use(first);                   -- as two statements the order is determined:
+Use(second);                  -- the failure is that of first, and this statement is never reached
+
+-- ============================================================================
 -- Example 7: 3. Suspended Computations
 -- Demonstrates: A value that has not been computed yet is a suspended computation, a thunk. Thunks are not
 --   part of the source language: there is no syntax that creates, tests or forces one, and the type of a name
