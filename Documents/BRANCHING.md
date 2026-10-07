@@ -56,9 +56,10 @@ subject. Two arms may bind the same name; one arm may not bind a name twice, and
 not reuse a name that is already in scope. A bare name is not a pattern: a
 binding always states its type.
 
-`null`, enum case patterns such as `.Ready`, and type patterns that name
-another type than their subject's are parsed and rejected, because reference
-subjects, enum declarations and class hierarchies are not implemented.
+`null` and type patterns that name another type than their subject's are
+parsed and rejected, because reference subjects and class hierarchies are
+not implemented. Enum case patterns such as `.Ready` are implemented; see
+"Limits of the implemented subset" below.
 
 ### Statement and expression
 

@@ -93,6 +93,13 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   arm for the same value is unreachable. `Spec/Language/Decls.vxs` gains
   examples 311 to 315 for the operations, the absence of conversions and
   the target-typed `.Member` spelling. `enum` is now a reserved word.
+  The value of a member is a constant integer expression over integer
+  literals and earlier members of the same enum, as in `WRITE = READ << 1`
+  and `ALL = READ | WRITE`: inside its own declaration the name of a member
+  stands for its number, and nowhere else. The expression is computed in
+  the underlying type by the constant evaluator of the language; examples
+  316 and 317 specify it, and `VXT0070` reports a value that is not such an
+  expression. `VXP0041`, which allowed only an integer literal, is retired.
   `.Member` is accepted in an expression wherever an enum type is expected:
   a declared type, a parameter, a return type, the right operand of a
   comparison, the variable assigned to; elsewhere it is `VXT0069`. A

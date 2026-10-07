@@ -55,6 +55,10 @@ enums =
     unlines
         [ "enum Status { NONE, UNKNOWN = 0, READY }"
         , "enum Level = byte { LOW = 1, MID, HIGH = 10, TOP }"
+        , -- Values computed from earlier members: 1, 2, 4, 7, 8, 2, 250, 5.
+          "enum Flag = ubyte { READ = 1, WRITE = READ << 1, EXECUTE = WRITE * 2, ALL = READ | WRITE | EXECUTE, NEXT,"
+            ++ " HALF = EXECUTE / 2, REST = !(EXECUTE + 1), ROUNDED = 9 // 2 }"
+        , "enum Offset = int { BASE = -3, ABOVE = BASE + 5, POWER = 2 ** 10, MODULO = -7 % 4, MIX = (ABOVE ^ 7) & 6 }"
         ]
 
 -- | A program around the given body of @Evaluate@.
@@ -67,6 +71,8 @@ program statements =
             , "    public static Status Pick(_ int v) { if (v > 0) { return Status.READY; } return Status.NONE; }"
             , "    public static int Rank(_ Level l) { return match (l) { .LOW -> 1, .MID -> 2, .HIGH -> 10, .TOP -> 11 }; }"
             , "    public static Level Raise(_ Level l) { return match (l) { .LOW -> Level.MID, .MID -> Level.HIGH, _ -> Level.TOP }; }"
+            , "    public static Flag Bit(_ int v) { return match (v) { 1 -> .READ, 2 -> .WRITE, 4 -> .EXECUTE, 7 -> .ALL, 8 -> .NEXT, 250 -> .REST, 5 -> .ROUNDED, _ -> .HALF }; }"
+            , "    public static Offset At(_ int v) { return match (v) { -3 -> .BASE, 2 -> .ABOVE, 1024 -> .POWER, _ -> .MODULO }; }"
             , "    public static int Evaluate(_ int left, _ int right) {"
             , "        " ++ statements
             , "    }"
@@ -81,12 +87,13 @@ emptyProgram = "class Program { public static int Evaluate(_ int left, _ int rig
 parserTests :: [(String, Bool)]
 parserTests =
     [ ("an enum declaration keeps its members in order", memberNames "enum Direction { NORTH, EAST, SOUTH, WEST, }" == Just ["NORTH", "EAST", "SOUTH", "WEST"])
-    , ("a member keeps the value written for it", memberValues "enum Value = int { FIRST = 5, SECOND, THIRD = 10, FOURTH }" == Just [Just 5, Nothing, Just 10, Nothing])
-    , ("a member value may be negative", memberValues "enum Signed { LOW = -5 }" == Just [Just (-5)])
+    , ("a member keeps the value written for it", memberValues "enum Value = int { FIRST = 5, SECOND, THIRD = 10, FOURTH }" == Just [Just "5", Nothing, Just "10", Nothing])
+    , ("a member value may be negative", memberValues "enum Signed { LOW = -5 }" == Just [Just "-5"])
+    , -- A value is an expression; a comma ends it and the next member begins.
+      ("a member value is an expression", memberValues "enum Bits { A = 1, B = A << 1, C = (A | B) + 2 * 3, D }" == Just [Just "1", Just "A<<1", Just "A|B+2*3", Nothing])
+    , ("a member value is not an assignment", not (parses "enum Bad { A = 1, B = A = 2 }"))
     , ("the underlying type is kept", underlying "enum Status = byte { PENDING = 0 }" == Just (Just (ExplicitType (Identifier "byte"))))
     , ("the underlying type may be absent", underlying "enum Status { PENDING }" == Just Nothing)
-    , ("a member value must be an integer literal", parseFailsWith "VXP0041" "enum Status { PENDING = 1.5 }")
-    , ("a member value is not an expression", parseFailsWith "VXP0041" "enum Status { PENDING = left }")
     , ("enum is a reserved word", not (parses "class enum { }"))
     ]
     where
@@ -95,7 +102,21 @@ parserTests =
             Right (ParsedAST (SyntaxTree _ (EnumDeclaration _ _ _ written members : _))) -> Just (written, members)
             _ -> Nothing
         memberNames text = map (identifierText . enumCaseName) . snd <$> declaration text
-        memberValues text = map enumCaseValue . snd <$> declaration text
+        memberValues text = map (fmap spelled . enumCaseValue) . snd <$> declaration text
+        -- The operators and operands of a value in the order they are written.
+        spelled :: Expression Identifier () -> String
+        spelled value = case value of
+            LiteralExpression _ (IntegerLiteral number) _ -> show number
+            NameExpression _ name _ -> identifierText name
+            UnaryExpression _ UnaryNegate operand _ -> "-" ++ spelled operand
+            BinaryExpression _ operator left right _ -> spelled left ++ sign operator ++ spelled right
+            _ -> "?"
+        sign operator = case operator of
+            Add -> "+"
+            Multiply -> "*"
+            ShiftLeft -> "<<"
+            BitwiseOr -> "|"
+            _ -> "?"
         underlying text = fst <$> declaration text
 
 -- -------------------------------------------------------------- evaluation
@@ -137,6 +158,28 @@ evaluationCases =
         ( "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, (.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) -> 4 };"
         , [((0, 1), 1), ((0, 0), 2), ((1, 1), 3), ((1, 0), 4)]
         )
+    , -- A member has the value its expression computes from the members
+      -- before it. Two members are equal exactly when their values are, so
+      -- comparing a member with the one a number selects reads its value.
+      ("return Bit(left) == Flag.WRITE ? 1 : 0;", [((2, 0), 1), ((1, 0), 0), ((4, 0), 0)])
+    , ("return Bit(left) == Flag.EXECUTE ? 1 : 0;", [((4, 0), 1), ((2, 0), 0)])
+    , ("return Bit(left) == Flag.ALL ? 1 : 0;", [((7, 0), 1), ((4, 0), 0)])
+    , -- A member without a value follows a computed one: ALL is 7, NEXT is 8.
+      ("return Bit(left) == Flag.NEXT ? 1 : 0;", [((8, 0), 1), ((7, 0), 0)])
+    , -- HALF is 4 / 2, the value of WRITE: the two names are one value.
+      ("return Flag.HALF == Flag.WRITE ? 1 : 0;", [((0, 0), 1)])
+    , -- The complement is that of the underlying type: !5 in ubyte is 250.
+      ("return Bit(left) == Flag.REST ? 1 : 0;", [((250, 0), 1), ((5, 0), 0)])
+    , -- 9 // 2 rounds to the nearest integer, away from zero at a half.
+      ("return Bit(left) == Flag.ROUNDED ? 1 : 0;", [((5, 0), 1), ((4, 0), 0)])
+    , ("return At(left) == Offset.ABOVE ? 1 : 0;", [((2, 0), 1), ((-3, 0), 0)])
+    , ("return At(left) == Offset.POWER ? 1 : 0;", [((1024, 0), 1), ((2, 0), 0)])
+    , -- -7 % 4 is -3, the value of BASE; (2 ^ 7) & 6 is 4.
+      ("return Offset.MODULO == Offset.BASE ? 1 : 0;", [((0, 0), 1)])
+    , ("return Offset.MIX == Offset.ABOVE ? 1 : 0;", [((0, 0), 0)])
+    , -- A match over an enum with computed values is complete when every
+      -- value is named, through whichever of its names.
+      ("return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, .ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };", [((1, 0), 1), ((2, 0), 2), ((4, 0), 3), ((7, 0), 4), ((8, 0), 5), ((250, 0), 6), ((5, 0), 7)])
     , -- An enum in a callable and in a loop.
       ("auto f = \\(Status s) -> s == Status.READY ? 5 : 6; return f(Pick(left)) * 10 + f(Status.NONE);", [((2, 0), 56)])
     , ("Level l = Level.LOW; int n = 0; while (l \\= Level.TOP) { l = Raise(l); n += 1; } return n;", [((0, 0), 3)])
@@ -174,6 +217,23 @@ rejectedDeclarations =
     , ("a member value fits the underlying type", "VXT0068", "enum A = byte { X = 300 }\n")
     , ("a numbered member fits the underlying type", "VXT0068", "enum A = byte { X = 127, Y }\n")
     , ("an unsigned underlying type has no negative member", "VXT0068", "enum A = ubyte { X = -1 }\n")
+    , ("a computed member value fits the underlying type", "VXT0068", "enum A = byte { X = 100, Y = X + X }\n")
+    , ("a member value is an integer", "VXT0070", "enum A { X = 1.5 }\n")
+    , ("a member value names earlier members only", "VXT0070", "enum A { X = Y, Y = 1 }\n")
+    , ("a member value does not name the member itself", "VXT0070", "enum A { X = X + 1 }\n")
+    , ("a member value does not name a member of another enum", "VXT0070", "enum A { X = 1 }\nenum B { Y = A.X }\n")
+    , ("a member value is not a call", "VXT0070", "enum A { X = Program.Evaluate(1, 2) }\n")
+    , ("a member value is not a comparison", "VXT0070", "enum A { X = 1, Y = X < 2 }\n")
+    , ("a member value does not divide by zero", "VXT0070", "enum A { X = 0, Y = 4 / X }\n")
+    , ("a member value has no negative exponent", "VXT0070", "enum A { X = 2 ** -1 }\n")
+    , -- The value of a member is an expression like any other for the
+      -- nesting limit: 1100 negations in one another are deeper than 1024
+      -- levels.
+        ( "a member value is within the expression nesting limit"
+        , "VXP0040"
+        , "enum A { X = " ++ concat (replicate 1100 "-(") ++ "1" ++ replicate 1100 ')' ++ " }\n"
+        )
+    , ("the match of a member with a computed value is unreachable after its other name", "VXT0053", "enum A { X = 1, Y = X }\nclass P { public static int F(_ A a) { return match (a) { .X -> 1, .Y -> 2 }; } }\n")
     , ("an enum is declared once", "VXR0001", "enum A { X }\nenum A { Y }\n")
     , ("an enum and a class do not share a name", "VXR0001", "enum A { X }\nclass A { }\n")
     ]
@@ -187,11 +247,6 @@ parseSource text = do
 
 parses :: String -> Bool
 parses = either (const False) (const True) . parseSource
-
-parseFailsWith :: String -> String -> Bool
-parseFailsWith code text = case parseSource text of
-    Left problems -> any ((== code) . diagnosticCode) problems
-    Right _ -> False
 
 compileSource :: String -> Either [Diagnostic] FrontendArtifacts
 compileSource text = compileToCorePrep (CompilerInput "enum.vxs" text)

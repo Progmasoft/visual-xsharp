@@ -399,161 +399,222 @@ namespace
     // survive every native stage.
     constexpr std::string_view kEnumDeclarations
         = "enum Status { NONE, UNKNOWN = 0, READY }\n"
-          "enum Level = byte { LOW = 1, MID, HIGH = 10, TOP }\n";
+          "enum Level = byte { LOW = 1, MID, HIGH = 10, TOP }\n"
+          // Values computed from earlier members: 1, 2, 4, 7, 8, 2, 250, 5.
+          "enum Flag = ubyte { READ = 1, WRITE = READ << 1, EXECUTE = WRITE * "
+          "2, ALL = READ | WRITE | EXECUTE, NEXT, HALF = EXECUTE / 2, REST = "
+          "!(EXECUTE + 1), ROUNDED = 9 // 2 }\n";
     constexpr std::string_view kEnumHelpers
         = "    public static Status Pick(_ int v) { if (v > 0) { return "
           "Status.READY; } return Status.NONE; }\n"
           "    public static int Rank(_ Level l) { return match (l) { .LOW "
           "-> 1, .MID -> 2, .HIGH -> 10, .TOP -> 11 }; }\n"
           "    public static Level Raise(_ Level l) { return match (l) { "
-          ".LOW -> Level.MID, .MID -> Level.HIGH, _ -> Level.TOP }; }\n";
-    constexpr auto kEnumCases
-        = std::to_array<Visual::XSharp::Fuzzing::ExecutionCase>({
-            { false,
-              false,
-              3,
-              0,
-              1,
-              "Status s = Pick(left); return s == Status.READY ? 1 : 2;" },
-            { false,
-              false,
-              0,
-              0,
-              2,
-              "Status s = Pick(left); return s == Status.READY ? 1 : 2;" },
-            { false,
-              false,
-              0,
-              0,
-              2,
-              "Status s = Pick(left); return s \\= Status.NONE ? 1 : 2;" },
-            { false,
-              false,
-              0,
-              0,
-              1,
-              "return Status.NONE == Status.UNKNOWN ? 1 : 2;" },
-            { false,
-              false,
-              0,
-              0,
-              12021,
-              "return Rank(Level.LOW) + Rank(Level.MID) * 10 + "
-              "Rank(Level.HIGH) * 100 + Rank(Level.TOP) * 1000;" },
-            { false,
-              false,
-              3,
-              0,
-              20,
-              "return match (Pick(left)) { .NONE -> 10, .READY -> 20 };" },
-            { false,
-              false,
-              0,
-              0,
-              10,
-              "return match (Pick(left)) { .NONE -> 10, .READY -> 20 };" },
-            { false,
-              false,
-              0,
-              0,
-              10,
-              "return match (Pick(left)) { .UNKNOWN -> 10, .READY -> 20 };" },
-            { false,
-              false,
-              1,
-              1,
-              1,
-              "return match (Pick(left)) { .READY if (right > 0) -> 1, "
-              ".READY -> 2, .NONE -> 3 };" },
-            { false,
-              false,
-              1,
-              0,
-              2,
-              "return match (Pick(left)) { .READY if (right > 0) -> 1, "
-              ".READY -> 2, .NONE -> 3 };" },
-            { false,
-              false,
-              0,
-              5,
-              3,
-              "return match (Pick(left)) { .READY if (right > 0) -> 1, "
-              ".READY -> 2, .NONE -> 3 };" },
-            { false,
-              false,
-              0,
-              0,
-              1011,
-              "return Rank(Raise(Raise(Level.LOW))) * 100 + "
-              "Rank(Raise(Level.HIGH));" },
-            { false,
-              false,
-              1,
-              0,
-              1,
-              "Status s = match (left) { 1 -> Status.READY, _ -> Status.NONE "
-              "}; return s == Status.READY ? 1 : 0;" },
-            { false,
-              false,
-              0,
-              1,
-              1,
-              "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, "
-              "(.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) "
-              "-> 4 };" },
-            { false,
-              false,
-              1,
-              0,
-              4,
-              "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, "
-              "(.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) "
-              "-> 4 };" },
-            { false,
-              false,
-              0,
-              0,
-              3,
-              "Level l = Level.LOW; int n = 0; while (l \\= Level.TOP) { "
-              "l = Raise(l); n += 1; } return n;" },
-            { false,
-              false,
-              2,
-              0,
-              56,
-              "auto f = \\(Status s) -> s == Status.READY ? 5 : 6; "
-              "return f(Pick(left)) * 10 + f(Status.NONE);" },
-            // The target-typed spelling, and enums as the value of a
-            // conditional and of a loop expression.
-            { false,
-              false,
-              3,
-              0,
-              1,
-              "Status s = Pick(left); return s == .READY ? 1 : 2;" },
-            { false, false, 0, 0, 11, "return Rank(.HIGH) + Rank(.LOW);" },
-            { false,
-              false,
-              1,
-              0,
-              1,
-              "Status s = left > 0 ? .READY : .NONE; "
-              "return s == .READY ? 1 : 0;" },
-            { false,
-              false,
-              1,
-              0,
-              11,
-              "Level l = while (true) { if (left > 0) { break Level.TOP; } "
-              "break Level.MID; }; return Rank(l);" },
-            { false,
-              false,
-              0,
-              0,
-              2,
-              "Level l = while (true) { if (left > 0) { break Level.TOP; } "
-              "break Level.MID; }; return Rank(l);" },
-        });
+          ".LOW -> Level.MID, .MID -> Level.HIGH, _ -> Level.TOP }; }\n"
+          "    public static Flag Bit(_ int v) { return match (v) { 1 -> "
+          ".READ, 2 -> .WRITE, 4 -> .EXECUTE, 7 -> .ALL, 8 -> .NEXT, 250 -> "
+          ".REST, 5 -> .ROUNDED, _ -> .HALF }; }\n";
+    constexpr auto kEnumCases = std::to_array<
+        Visual::XSharp::Fuzzing::ExecutionCase>({
+        // A member has the value its expression computes from the
+        // members before it; a match over them is complete when every
+        // value is named.
+        { false,
+          false,
+          1,
+          0,
+          1,
+          "return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, "
+          ".ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };" },
+        { false,
+          false,
+          2,
+          0,
+          2,
+          "return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, "
+          ".ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };" },
+        { false,
+          false,
+          4,
+          0,
+          3,
+          "return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, "
+          ".ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };" },
+        { false,
+          false,
+          7,
+          0,
+          4,
+          "return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, "
+          ".ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };" },
+        { false,
+          false,
+          8,
+          0,
+          5,
+          "return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, "
+          ".ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };" },
+        { false,
+          false,
+          250,
+          0,
+          6,
+          "return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, "
+          ".ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };" },
+        { false,
+          false,
+          5,
+          0,
+          7,
+          "return match (Bit(left)) { .READ -> 1, .HALF -> 2, .EXECUTE -> 3, "
+          ".ALL -> 4, .NEXT -> 5, .REST -> 6, .ROUNDED -> 7 };" },
+        { false, false, 0, 0, 1, "return Flag.HALF == Flag.WRITE ? 1 : 0;" },
+        { false, false, 0, 0, 0, "return Flag.NEXT == Flag.ALL ? 1 : 0;" },
+        { false,
+          false,
+          3,
+          0,
+          1,
+          "Status s = Pick(left); return s == Status.READY ? 1 : 2;" },
+        { false,
+          false,
+          0,
+          0,
+          2,
+          "Status s = Pick(left); return s == Status.READY ? 1 : 2;" },
+        { false,
+          false,
+          0,
+          0,
+          2,
+          "Status s = Pick(left); return s \\= Status.NONE ? 1 : 2;" },
+        { false,
+          false,
+          0,
+          0,
+          1,
+          "return Status.NONE == Status.UNKNOWN ? 1 : 2;" },
+        { false,
+          false,
+          0,
+          0,
+          12021,
+          "return Rank(Level.LOW) + Rank(Level.MID) * 10 + "
+          "Rank(Level.HIGH) * 100 + Rank(Level.TOP) * 1000;" },
+        { false,
+          false,
+          3,
+          0,
+          20,
+          "return match (Pick(left)) { .NONE -> 10, .READY -> 20 };" },
+        { false,
+          false,
+          0,
+          0,
+          10,
+          "return match (Pick(left)) { .NONE -> 10, .READY -> 20 };" },
+        { false,
+          false,
+          0,
+          0,
+          10,
+          "return match (Pick(left)) { .UNKNOWN -> 10, .READY -> 20 };" },
+        { false,
+          false,
+          1,
+          1,
+          1,
+          "return match (Pick(left)) { .READY if (right > 0) -> 1, "
+          ".READY -> 2, .NONE -> 3 };" },
+        { false,
+          false,
+          1,
+          0,
+          2,
+          "return match (Pick(left)) { .READY if (right > 0) -> 1, "
+          ".READY -> 2, .NONE -> 3 };" },
+        { false,
+          false,
+          0,
+          5,
+          3,
+          "return match (Pick(left)) { .READY if (right > 0) -> 1, "
+          ".READY -> 2, .NONE -> 3 };" },
+        { false,
+          false,
+          0,
+          0,
+          1011,
+          "return Rank(Raise(Raise(Level.LOW))) * 100 + "
+          "Rank(Raise(Level.HIGH));" },
+        { false,
+          false,
+          1,
+          0,
+          1,
+          "Status s = match (left) { 1 -> Status.READY, _ -> Status.NONE "
+          "}; return s == Status.READY ? 1 : 0;" },
+        { false,
+          false,
+          0,
+          1,
+          1,
+          "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, "
+          "(.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) "
+          "-> 4 };" },
+        { false,
+          false,
+          1,
+          0,
+          4,
+          "return match (Pick(left)), (right > 0) { (.NONE), (true) -> 1, "
+          "(.NONE), (false) -> 2, (.READY), (true) -> 3, (.READY), (false) "
+          "-> 4 };" },
+        { false,
+          false,
+          0,
+          0,
+          3,
+          "Level l = Level.LOW; int n = 0; while (l \\= Level.TOP) { "
+          "l = Raise(l); n += 1; } return n;" },
+        { false,
+          false,
+          2,
+          0,
+          56,
+          "auto f = \\(Status s) -> s == Status.READY ? 5 : 6; "
+          "return f(Pick(left)) * 10 + f(Status.NONE);" },
+        // The target-typed spelling, and enums as the value of a
+        // conditional and of a loop expression.
+        { false,
+          false,
+          3,
+          0,
+          1,
+          "Status s = Pick(left); return s == .READY ? 1 : 2;" },
+        { false, false, 0, 0, 11, "return Rank(.HIGH) + Rank(.LOW);" },
+        { false,
+          false,
+          1,
+          0,
+          1,
+          "Status s = left > 0 ? .READY : .NONE; "
+          "return s == .READY ? 1 : 0;" },
+        { false,
+          false,
+          1,
+          0,
+          11,
+          "Level l = while (true) { if (left > 0) { break Level.TOP; } "
+          "break Level.MID; }; return Rank(l);" },
+        { false,
+          false,
+          0,
+          0,
+          2,
+          "Level l = while (true) { if (left > 0) { break Level.TOP; } "
+          "break Level.MID; }; return Rank(l);" },
+    });
 
     // Evaluation by need. A value that is never needed is never computed, so
     // a division by zero and a call that never returns do nothing when

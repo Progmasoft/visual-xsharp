@@ -100,18 +100,12 @@ parseEnumDeclaration = do
                 else do
                     (caseName, caseSpan) <- identifier
                     hasValue <- optionalSymbol "="
-                    value <- if hasValue then Just <$> parseCaseValue else pure Nothing
+                    -- A value is an expression without assignment; which
+                    -- expressions are constant is the type checker's rule.
+                    value <- if hasValue then Just <$> parseConditional else pure Nothing
                     comma <- optionalSymbol ","
                     remaining <- if comma then parseCases else pure []
                     pure (EnumCase caseSpan caseName value : remaining)
-        parseCaseValue = do
-            negative <- optionalSymbol "-"
-            token <- takeToken
-            if tokenKind token == IntegerToken
-                then case parseIntegerSpelling (tokenText token) of
-                    Right parsed -> pure ((if negative then negate else id) (parsedIntegerValue parsed))
-                    Left issue -> failAt (tokenSpan token) "VXP0010" (renderIntegerLiteralError issue)
-                else failAt (tokenSpan token) "VXP0041" "the value of an enum member is supported only as an integer literal"
 
 parseOrdinaryTypeDeclaration :: P (Declaration Identifier ())
 parseOrdinaryTypeDeclaration = do

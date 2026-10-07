@@ -370,6 +370,37 @@ enum Value = int {
 }
 
 -- ============================================================================
+-- Example 316: 7.2 Member Values
+-- Demonstrates: The value of a member is a constant integer expression: integer literals and earlier members
+--   of the same enum, joined by the arithmetic, shift and bitwise operators. Inside the declaration of its
+--   enum the name of a member stands for its number; this is where the numbers behind the names are defined.
+--   The expression is computed in the underlying type, and a member without a value follows the computed one.
+
+enum Access = ubyte {
+    READ = 1,
+    WRITE = READ << 1,              -- 2
+    EXECUTE = WRITE * 2,            -- 4
+    ALL = READ | WRITE | EXECUTE,   -- 7
+    NEXT,                           -- 8
+    REST = !(EXECUTE + 1),          -- 250: the complement of 5 in ubyte
+}
+
+-- ============================================================================
+-- Example 317: 7.2 Member Values
+-- Demonstrates: A member value names earlier members only, of its own enum only, and is nothing but integer
+--   arithmetic. Outside the declaration a member is a value of the enum and never a number.
+-- Expected result: compile-time rejection; each INVALID marker is normative.
+
+enum Order {
+    FIRST = SECOND,          -- INVALID: SECOND is declared later
+    SECOND = SECOND + 1,     -- INVALID: a member does not name itself
+    THIRD = Access.READ,     -- INVALID: a member of another enum is not a number here
+    FOURTH = Compute(),      -- INVALID: a call is not a constant
+    FIFTH = 4 / 0,           -- INVALID: a constant division by zero
+    SIXTH = 1 < 2,           -- INVALID: a comparison is not an integer
+}
+
+-- ============================================================================
 -- Example 41: 7.3 Duplicate Numeric Values
 -- Demonstrates: Different enum members may have the same numeric value.
 

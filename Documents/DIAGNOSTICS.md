@@ -342,6 +342,7 @@ The type checker reports:
 | `VXT0067` | an enum names a member twice |
 | `VXT0068` | the value of an enum member does not fit the underlying type of the enum |
 | `VXT0069` | a target-typed `.Member` stands where no enum type is expected: the type of the place is inferred, or is not an enum |
+| `VXT0070` | the value written for an enum member is not a constant integer expression, names something that is not an earlier member of the same enum, or has no value, as a division by zero has none |
 
 A block used as a value may leave instead of yielding a value: `return`
 leaves the enclosing method and is checked against its return type
@@ -426,9 +427,9 @@ at most 5.5 MiB in a sanitizer build; the measurements are in
 | `VXP0039` | a statement is nested more than 256 levels deep in other statements |
 | `VXP0040` | an expression is nested more than 1024 levels deep in other expressions |
 
-`VXP0041` reports a value of an enum member that is not an integer literal
-with an optional minus sign. The grammar allows a constant expression there;
-other constant expressions are not implemented yet.
+`VXP0041` is no longer reported. It refused a value of an enum member that
+was not an integer literal; a member value is now any constant integer
+expression, and `VXT0070` reports one that is not.
 
 The statements of a function body are at level 1, and an expression that is
 not an operand is at level 1. A block, a branch, a loop body, a `guard`

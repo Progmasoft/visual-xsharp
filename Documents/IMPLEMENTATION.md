@@ -46,8 +46,8 @@ is no decrement operator; `--` always starts a comment. A `while` or classic `fo
 with literal, wildcard and binding patterns and guards; `if` is also an expression over two value blocks;
 `guard (condition) else { ... }` runs its block when the condition is false; and a `{ ... }` at the start of a
 statement is a nested block with its own scope. Null coalescing `??` and `??=`, storage
-targets other than a named local, loop, conditional and match values that are not `bool` or numeric, the `null` and
-enum case patterns, type patterns over class hierarchies, and bindings in conditions are not implemented. `return`,
+targets other than a named local, loop, conditional and match values that are not `bool`, numeric or an enum, the
+`null` pattern, type patterns over class hierarchies, and bindings in conditions are not implemented. `return`,
 `break` and `continue` out of a block used as a value are implemented, in loop bodies, loop headers and loops used as
 expressions; "Pending branching and loop forms" below lists what is still owed.
 It does not yet implement the complete language catalog in `Spec/`.
@@ -94,7 +94,6 @@ the specification is not changed to match them.
 | a call that does not return as a way of leaving a `guard` block or a block used as a value | example 297 | every call is assumed to return, so the block is taken to complete: `VXT0061` or `VXT0046` | a way to know that a call does not return; how that is expressed in the language is not decided here |
 | a `match` over a subject that may be null | example 304 | `VXT0055` | nullable subjects |
 | an enum declared inside a class | the nested declarations of section 9 | `VXP0006` | qualified type names |
-| a constant expression as the value of an enum member, as in `B = A + 1` | the `enum-member` rule of the grammar | `VXP0041`; an integer literal with an optional minus sign is implemented | constant evaluation of member values |
 | `enum class`, the enum with payloads | section 8 | not parsed | the object model |
 | type patterns over class hierarchies | examples 198 to 203 | `VXT0057` | class hierarchies |
 
@@ -105,7 +104,8 @@ in loop bodies; `break` and `continue` in a loop condition; `break` and
 block used as a value to a loop used as an expression; `return` out of a
 loop used as an expression, directly and from a block used as a value; an
 `if` or `match` expression none of whose branches completes; classic enums,
-with their numbering, their comparison and `match` over them, complete
+with their numbering, member values computed from earlier members, their
+comparison and `match` over them, complete
 without a catch-all arm when every value is named; calls of
 methods whose return type is inferred, in the same class, in another class,
 through chains of such methods and through mutual recursion; the inference

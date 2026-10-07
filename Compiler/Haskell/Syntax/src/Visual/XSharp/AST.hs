@@ -167,11 +167,16 @@ data Declaration name annotation
 
 {- | A member of a classic enum. A member without a written value takes the
 value after that of the member before it, and the first takes zero.
+
+A written value is a constant integer expression. It is kept as it was
+parsed in every stage: the names in it are earlier members of the same enum,
+which are named by their spelling and take no symbols, so no later stage has
+anything to add to it. The type checker computes its value.
 -}
 data EnumCase = EnumCase
     { enumCaseSpan :: SourceSpan
     , enumCaseName :: Identifier
-    , enumCaseValue :: Maybe Integer
+    , enumCaseValue :: Maybe (Expression Identifier ())
     }
     deriving stock (Eq, Ord, Read, Show)
 
