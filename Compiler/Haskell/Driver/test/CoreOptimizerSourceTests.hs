@@ -3,6 +3,7 @@
 
 module CoreOptimizerSourceTests (coreOptimizerSourceTests) where
 
+import CoreInterpreter
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
@@ -40,7 +41,7 @@ coreOptimizerSourceTests =
     , ("source immutable helper locals inline", sourceInlineLocal)
     , ("source dependent helper locals inline", sourceInlineDependentLocals)
     , ("source primitive arguments remain single evaluations", sourceInlinePrimitiveArgument)
-    , ("source failing unused arguments remain explicit", sourceInlineFailingArgument)
+    , ("source failing unused arguments are never computed", sourceUnusedFailingArgument)
     , ("source argument order survives generated lets", sourceInlineArgumentOrder)
     , ("source mutable helper bodies retain calls", sourceRejectsMutableHelper)
     , ("source branching helper bodies retain calls", sourceRejectsBranchHelper)
@@ -297,15 +298,16 @@ sourceInlinePrimitiveArgument = case compiledProgram members of
             , "int Value() { return Identity(20 + 22); }"
             ]
 
-sourceInlineFailingArgument :: Bool
-sourceInlineFailingArgument = case compiledProgram members of
-    Just artifacts -> case lastReturn artifacts of
-        Just (CoreLet _ bindingType value result resultType) ->
-            bindingType == intType
-                && value == CorePrimitive CoreDivide [integer 1, integer 0] intType
-                && result == integer 42
-                && resultType == intType
-        _ -> False
+{- | An argument the method never needs is never computed. The call yields
+the method's result, in the Core the Desugarer produced and in the Core the
+optimizer left: no division is carried out on the way.
+-}
+sourceUnusedFailingArgument :: Bool
+sourceUnusedFailingArgument = case compiledProgram members of
+    Just artifacts ->
+        all
+            (\core -> runFunction core "Value" [] == Just (IntegerValue 42))
+            [artifactCore artifacts, artifactOptimizedCore artifacts]
     Nothing -> False
     where
         members =

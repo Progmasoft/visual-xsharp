@@ -576,7 +576,7 @@ TEST_CASE("the Core verifier enforces the conditional contract",
     }
 }
 
-TEST_CASE("Core wire v8 round-trips conditional expressions",
+TEST_CASE("Core wire v9 round-trips conditional expressions",
           "[core][wire][conditional]")
 {
     const auto module = Returning(
@@ -594,7 +594,7 @@ TEST_CASE("Core wire v8 round-trips conditional expressions",
     REQUIRE(Core::Verify(module).empty());
     const auto encoded = Core::Wire::Encode(module);
     REQUIRE(encoded);
-    CHECK(encoded.bytes.at(4) == 8U);
+    CHECK(encoded.bytes.at(4) == 9U);
     const auto decoded = Core::Wire::Decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == module);

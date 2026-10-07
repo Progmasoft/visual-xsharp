@@ -81,6 +81,8 @@ namespace visual_xsharp::xpp
                     return Opcode::BitwiseNot;
                 case core::Operation::TypeIs:
                     return Opcode::TypeIs;
+                case core::Operation::Memoize:
+                    return Opcode::Memoize;
                 case core::Operation::MakeClosure:
                     return Opcode::MakeClosure;
             }

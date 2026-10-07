@@ -11,8 +11,8 @@ shares no lowering or rewriting code with the compiler.
 
 The subset is the one the tests need: integer and Boolean values, the
 arithmetic, comparison, bitwise and logical primitives, expression-local
-bindings, conditional expressions, direct calls of module functions and all
-statement forms. Integers are unbounded; a test that depends on overflow
+bindings, conditional expressions, direct calls of module functions,
+closures, callables that remember their result, and all statement forms. Integers are unbounded; a test that depends on overflow
 belongs to the native execution tests instead. Anything outside the subset,
 and any run that exceeds its step budget, yields 'Nothing' rather than a
 guess.
@@ -37,16 +37,38 @@ data Value
       evaluated once, where the closure is created.
       -}
       ClosureValue [(Int, Value)] [Int] [CoreStatement]
+    | {- | A callable that remembers its result: the cell that holds the
+      result once there is one, and the callable that computes it. Copies of
+      the value name the same cell, which is how they share the result.
+      -}
+      MemoValue Int Value
     deriving (Eq, Show)
 
 -- Local values keyed by symbol identity. Core symbols are unique within a
 -- function, so one flat table is a faithful model of its locals.
 type Locals = [(Int, Value)]
 
--- Remaining statement and call budget. It bounds every run, so a lowering
--- error that turns a loop into an endless one fails the test instead of
--- hanging the suite.
-type Budget = Int
+{- | What a run carries from step to step besides its locals.
+
+The steps left bound every run, so a lowering error that turns a loop into
+an endless one fails the test instead of hanging the suite. The cells hold
+the results that callables have remembered; they belong to the run and not
+to a function, because a callable is passed between functions and must find
+its result wherever it is called.
+-}
+data Budget = Budget
+    { stepsLeft :: Int
+    , cells :: [(Int, Value)]
+    , nextCell :: Int
+    }
+
+-- | Whether no step is left.
+exhausted :: Budget -> Bool
+exhausted budget = stepsLeft budget <= 0
+
+-- | The budget after one step.
+step :: Budget -> Budget
+step budget = budget {stepsLeft = stepsLeft budget - 1}
 
 data Flow
     = Proceed
@@ -61,10 +83,10 @@ runFunction = runFunctionWithBudget 200000
 {- | Run a function by name; 'Nothing' when it is missing, leaves the
 supported subset, or exhausts the budget.
 -}
-runFunctionWithBudget :: Budget -> CoreModule -> String -> [Value] -> Maybe Value
-runFunctionWithBudget budget moduleValue name arguments = do
+runFunctionWithBudget :: Int -> CoreModule -> String -> [Value] -> Maybe Value
+runFunctionWithBudget steps moduleValue name arguments = do
     function <- firstJust [function | function <- coreModuleFunctions moduleValue, functionSpelling function == name]
-    fst <$> call moduleValue budget function arguments
+    fst <$> call moduleValue (Budget steps [] 0) function arguments
 
 functionSpelling :: CoreFunction -> String
 functionSpelling = identifierText . resolvedSpelling . coreFunctionName
@@ -79,11 +101,11 @@ symbolOf = symbolIdValue . resolvedSymbol
 
 call :: CoreModule -> Budget -> CoreFunction -> [Value] -> Maybe (Value, Budget)
 call moduleValue budget function arguments
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | length arguments /= length (coreFunctionParameters function) = Nothing
     | otherwise = do
         let locals = zip (map (symbolOf . fst) (coreFunctionParameters function)) arguments
-        (flow, _, remaining) <- executeAll moduleValue (budget - 1) locals (coreFunctionBody function)
+        (flow, _, remaining) <- executeAll moduleValue (step budget) locals (coreFunctionBody function)
         case flow of
             ReturnValue value -> Just (value, remaining)
             Proceed -> Just (UnitValue, remaining)
@@ -99,7 +121,7 @@ executeAll moduleValue budget locals (statement : remaining) = do
 
 execute :: CoreModule -> Budget -> Locals -> CoreStatement -> Maybe (Flow, Locals, Budget)
 execute moduleValue budget locals statement
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | otherwise = case statement of
         CoreBind binding -> do
             (value, afterLocals, afterBudget) <- evaluate moduleValue spent locals (coreBindingValue binding)
@@ -126,7 +148,7 @@ execute moduleValue budget locals statement
         CoreBreak -> Just (BreakLoop, locals, spent)
         CoreContinue -> Just (ContinueLoop, locals, spent)
     where
-        spent = budget - 1
+        spent = step budget
 
 {- | Run one structured loop.
 
@@ -144,7 +166,7 @@ loop ::
     Bool ->
     Maybe (Flow, Locals, Budget)
 loop moduleValue budget locals condition body update testFirst
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | testFirst = do
         (enter, afterLocals, afterBudget) <- test budget locals
         if enter then iteration afterBudget afterLocals else Just (Proceed, afterLocals, afterBudget)
@@ -157,7 +179,7 @@ loop moduleValue budget locals condition body update testFirst
                 selected <- truth value
                 Just (selected, afterLocals, afterBudget)
         iteration currentBudget currentLocals = do
-            (flow, afterBody, bodyBudget) <- executeAll moduleValue (currentBudget - 1) currentLocals body
+            (flow, afterBody, bodyBudget) <- executeAll moduleValue (step currentBudget) currentLocals body
             case flow of
                 BreakLoop -> Just (Proceed, afterBody, bodyBudget)
                 ReturnValue _ -> Just (flow, afterBody, bodyBudget)
@@ -182,10 +204,11 @@ truth value = case value of
     IntegerValue number -> Just (number /= 0)
     UnitValue -> Nothing
     ClosureValue {} -> Nothing
+    MemoValue {} -> Nothing
 
 evaluate :: CoreModule -> Budget -> Locals -> CoreExpression -> Maybe (Value, Locals, Budget)
 evaluate moduleValue budget locals expression
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | otherwise = case expression of
         CoreVariable name _ -> case lookup (symbolOf name) locals of
             Just value -> Just (value, locals, budget)
@@ -215,6 +238,18 @@ evaluate moduleValue budget locals expression
             evaluate moduleValue afterBudget afterLocals (if selected then whenTrue else whenFalse)
         CorePrimitive CoreLogicalAnd [left, right] _ -> shortCircuit False left right
         CorePrimitive CoreLogicalOr [left, right] _ -> shortCircuit True left right
+        -- Remembering takes a cell that no other callable has. Nothing is
+        -- computed here: the callable is not called.
+        CorePrimitive CoreMemoize [operand] _ -> do
+            (target, afterLocals, afterBudget) <- evaluate moduleValue budget locals operand
+            case target of
+                ClosureValue _ [] _ ->
+                    Just
+                        ( MemoValue (nextCell afterBudget) target
+                        , afterLocals
+                        , afterBudget {nextCell = nextCell afterBudget + 1}
+                        )
+                _ -> Nothing
         CorePrimitive primitive operands valueType -> do
             (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals operands
             value <- applyPrimitive primitive valueType values
@@ -246,13 +281,22 @@ evaluate moduleValue budget locals expression
         -- no local of the function that calls it.
         callClosure target values currentBudget = case target of
             ClosureValue captured parameters body
-                | currentBudget > 0 && length parameters == length values -> do
+                | not (exhausted currentBudget) && length parameters == length values -> do
                     (flow, _, remaining) <-
-                        executeAll moduleValue (currentBudget - 1) (zip parameters values ++ captured) body
+                        executeAll moduleValue (step currentBudget) (zip parameters values ++ captured) body
                     case flow of
                         ReturnValue value -> Just (value, remaining)
                         Proceed -> Just (UnitValue, remaining)
                         _ -> Nothing
+            -- The first call computes the result and keeps it in the cell;
+            -- every later call, of any copy, reads the cell. A call that
+            -- does not finish leaves the cell empty.
+            MemoValue cell computation
+                | not (exhausted currentBudget) && null values -> case lookup cell (cells currentBudget) of
+                    Just remembered -> Just (remembered, step currentBudget)
+                    Nothing -> do
+                        (value, remaining) <- callClosure computation [] (step currentBudget)
+                        Just (value, remaining {cells = (cell, value) : cells remaining})
             _ -> Nothing
         -- The right operand runs only when the left one does not decide.
         shortCircuit decidingValue left right = do
@@ -304,6 +348,8 @@ applyPrimitive primitive valueType values = case (primitive, values) of
     (CoreEqual, [left, right]) -> Just (BooleanValue (left == right))
     (CoreNotEqual, [left, right]) -> Just (BooleanValue (left /= right))
     (CoreLogicalNot, [operand]) -> BooleanValue . not <$> truth operand
+    -- Remembering needs the cells of the run; 'evaluate' handles it.
+    (CoreMemoize, _) -> Nothing
     _ -> Nothing
     where
         -- A primitive whose result type is bool yields a Boolean even when

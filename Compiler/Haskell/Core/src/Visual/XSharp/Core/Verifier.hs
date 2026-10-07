@@ -293,7 +293,7 @@ primitiveProblems primitive arguments resultType =
         ++ operandProblems
         ++ typeMismatch "VXC1028" "Core primitive result has the wrong type" expectedResult resultType
     where
-        unary = primitive `elem` [CoreNegate, CoreLogicalNot, CoreBitwiseNot]
+        unary = primitive `elem` [CoreNegate, CoreLogicalNot, CoreBitwiseNot, CoreMemoize]
         logical = primitive `elem` [CoreLogicalAnd, CoreLogicalOr, CoreLogicalNot]
         integerOnly = primitive `elem` [CoreShiftLeft, CoreShiftRight, CoreBitwiseAnd, CoreBitwiseXor, CoreBitwiseOr, CoreBitwiseNot]
         comparison = primitive `elem` [CoreLessThan, CoreLessEqual, CoreGreaterThan, CoreGreaterEqual, CoreEqual, CoreNotEqual]
@@ -310,6 +310,14 @@ primitiveProblems primitive arguments resultType =
                     | isReferenceLike subjectType && identityType == namedType "uint" -> []
                     | otherwise -> [problem "VXC1044" "Core type test requires a reference subject and uint identity"]
                 _ -> []
+            -- A remembered result lives in the callable itself, in a slot
+            -- that owns nothing: only a result without ownership is kept.
+            | primitive == CoreMemoize = case argumentTypes of
+                [FunctionType [] result]
+                    | result == boolType || isCoreNumericType result -> []
+                    | otherwise -> [memoizeProblem]
+                [_] -> [memoizeProblem]
+                _ -> []
             | logical && not operandsBoolean = [problem "VXC1027" "Core logical primitive requires bool or numeric operands"]
             | integerOnly && not operandsInteger = [problem "VXC1027" "Core bitwise primitive requires integer operands"]
             | primitive `elem` [CoreEqual, CoreNotEqual]
@@ -323,6 +331,8 @@ primitiveProblems primitive arguments resultType =
             | logical || comparison || primitive == CoreTypeIs = boolType
             | primitive == CoreFloorDivide && isCoreFloatingType firstType = intType
             | otherwise = firstType
+        memoizeProblem =
+            problem "VXC1073" "Core memoization requires a callable without parameters whose result is bool or numeric"
         isReferenceLike valueType = case valueType of
             FunctionType _ _ -> True
             NamedType _ _ -> not (isCoreNumericType valueType) && valueType /= unitType

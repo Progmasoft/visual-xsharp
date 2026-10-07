@@ -150,7 +150,8 @@ prepareFunctionQueue initial work = go initial work []
 
 prepareFunction :: PrepState -> CoreFunction -> (CorePrepFunction, PrepState)
 prepareFunction state function =
-    let (blocks, after) = prepareStatements (state {loopTargets = []}) (OpenBlock 0 []) (coreFunctionBody function)
+    let (blocks, after) =
+            prepareStatementsTo fallingOff (state {loopTargets = []}) (OpenBlock 0 []) (coreFunctionBody function) []
      in ( CorePrepFunction
             (coreFunctionName function)
             (currentSourceFile state)
@@ -160,6 +161,14 @@ prepareFunction state function =
             blocks
         , after
         )
+    where
+        -- A function without a result may end without a return: reaching
+        -- the end of its body returns. A function with a result returns on
+        -- every path, which Core verification has established, so the end
+        -- of its body is not reached and is marked as such.
+        fallingOff
+            | coreFunctionReturnType function == unitType = CorePrepReturn (CorePrepLiteral CoreUnit unitType)
+            | otherwise = CorePrepUnreachable
 
 {- | Every symbol identity a function mentions.
 
@@ -209,9 +218,6 @@ expressionSymbolIds expression rest = case expression of
     where
         symbol = symbolIdValue . resolvedSymbol
         expressions values after = foldr expressionSymbolIds after values
-
-prepareStatements :: PrepState -> OpenBlock -> [CoreStatement] -> ([CorePrepBlock], PrepState)
-prepareStatements state open statements = prepareStatementsTo CorePrepUnreachable state open statements []
 
 {- | Lower statements into blocks, ending the last open block with the given
 terminator and placing the given blocks after the ones produced.

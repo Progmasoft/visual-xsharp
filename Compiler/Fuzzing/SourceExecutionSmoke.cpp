@@ -4,31 +4,25 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include "BranchingExecutionCases.hpp"
-#include "ExpressionExecutionCases.hpp"
-#include "LeavingExecutionCases.hpp"
 #include "Visual/XSharp/Support/CompilerStack.hpp"
 
-// The executable regressions of the three large tables: every program of the
-// expression, branching and leaving tables runs through CorePrep, Xpp, Xmm,
-// LLVM and the ORC JIT, unoptimized and optimized, and must return its expected
-// value from both. They are a program of their own, beside `source_fuzz_smoke`
-// and `source_feature_smoke`, because each is a deterministic check under one
-// process watchdog, and a watchdog is meant to end a run that never
-// finishes, not to bound the size of a test table.
+// The executable regressions of the branching table: every program of it
+// runs through CorePrep, Xpp, Xmm, LLVM and the ORC JIT, unoptimized and
+// optimized, and must return its expected value from both. The expression
+// and leaving tables are `source_expression_smoke`. They are programs of
+// their own, beside `source_fuzz_smoke` and `source_feature_smoke`, because
+// each is a deterministic check under one process watchdog, and a watchdog
+// is meant to end a run that never finishes, not to bound the size of a
+// test table.
 
 namespace
 {
     int
     Smoke()
     {
-        // Hand-written results for assignments and increments used as values
-        // and for loops used as expressions.
-        Visual::XSharp::Fuzzing::ExerciseExpressionCases();
-        // Hand-written results for match, if expressions and guard.
+        // Hand-written results for match, if expressions and guard, and
+        // the programs at the nesting limits of the frontend.
         Visual::XSharp::Fuzzing::ExerciseBranchingCases();
-        // Hand-written results for expressions that leave instead of
-        // yielding a value.
-        Visual::XSharp::Fuzzing::ExerciseLeavingCases();
         return 0;
     }
 } // namespace

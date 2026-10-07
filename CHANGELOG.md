@@ -19,9 +19,24 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   and not at all when nothing reads it, so `int x = left / right; return 5;`
   no longer divides. That holds in the body of a callable as in the body of
   a method. An expression written as a statement, and a value assigned to
-  the discard, are evaluated. Arguments, results, other types and assigned
+  the discard, are evaluated. Results, other types and assigned
   or captured variables are still computed where they are written;
   `Documents/EVALUATION.md` lists what is pending.
+- Arguments are passed by need. An argument of `bool`, numeric or enum type
+  that has no effect is computed when the method first needs it, at most
+  once however often the method reads it and however many methods it is
+  handed through, and not at all when no method needs it:
+  `Choose(true, 1, left / right)` no longer divides when `Choose` returns
+  its second parameter. A value the caller needs as well is computed once
+  for both. An argument of a call through a callable, an argument a closure
+  of the method captures, and arguments of other types are still computed
+  at the call.
+- An integer quotient or remainder by zero and a shift by an amount that is
+  negative or not less than the width of the shifted value have no value,
+  and a program that needs one stops. Example 14 of
+  `Spec/Language/Evaluation.vxs` states the rule. Before, generated code gave
+  these operations no meaning and an optimized program could run on past
+  them with a result that was never computed.
 - When one statement needs several values that cannot be computed, which
   failure the program meets is not determined, and a value that runs without
   end counts as one that cannot be computed. Whether the program fails is
@@ -165,8 +180,56 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   was the address of the method's code, and calling it read an invoke
   pointer out of that code.
 
+- Core has a new primitive, `Memoize`: a callable without parameters whose
+  result is `bool` or numeric becomes a callable of the same type that calls
+  it at most once and remembers the result. It is how a value by need
+  reaches another function. CorePrep, Xpp and Xmm carry it under their own
+  names, each verifier checks its rule, and LLVM lowers it to an AARC object
+  with an invoke thunk and a destructor of its own. The wire versions are
+  now Core 9, CorePrep 7, Xpp 6 and Xmm 6; artifacts of earlier versions are
+  rejected at the version field and have to be produced again.
+- A method with a parameter that is passed by need has a second function
+  that takes suspended computations in place of those parameters. The
+  method's own function is unchanged, and a call that has nothing worth
+  suspending still uses it.
+- Fixed native executables that stopped instead of ending. A method without
+  a result whose body ended without a `return` was closed with an
+  unreachable marker by both Core-to-CorePrep adapters, so a `Main` written
+  without a final `return;` executed an invalid instruction. Reaching the
+  end of such a body now returns.
+- Fixed native executables that did not link. An executable is linked
+  without any library, and code that creates a closure calls the ownership
+  runtime. The module that holds the entry now defines allocation, retain
+  and release itself, over a 64 MiB arena whose released blocks are reused.
+  Weak and unowned handles, strings and type tests still need the runtime
+  library and do not link in an executable.
+- Fixed `vxs run -File Name.vxs` with a relative path: the executable it had
+  just built was looked for on `PATH` and not found.
+- Integer division, remainder and shifts are preceded by a check that stops
+  the program when the operation has no value. The least value of a signed
+  type divided by minus one is carried out so that it wraps like a sum that
+  does not fit, where the processor's instruction would stop the program.
+
 ### Verification and tooling
 
+- The expression and leaving tables run in a program of their own,
+  `source_expression_smoke`. With arguments passed by need the programs of
+  the three execution tables together ran past the 240 second watchdog under
+  the sanitizers. The watchdog is unchanged and no case was removed.
+- `executable_run_tests` builds programs into native executables and runs
+  them as processes, which no test did before: every other execution test
+  runs generated code inside the compiler's process. It covers a `Main`
+  that ends without a return, arguments by need, closures, a quotient by
+  zero that is needed and one that is not, and two million objects created
+  and released in a loop. The linker is the Windows one, so these cases run
+  on Windows.
+- `MemoizeTests.hs`, `MemoizePipelineTests.cpp`, `FallThroughTests.hs`,
+  `FallThroughTests.cpp` and `ComputabilityExecutionTests.cpp` cover the
+  remembering callable at every stage, the end of a body without a result
+  in both adapters, and the checks before division and shifts.
+  `source_feature_smoke` runs 23 programs that pass arguments by need
+  through LLVM in both pipeline modes and requires each to leave no object
+  of the runtime behind.
 - `OwnershipPlacementTests.cpp` runs every placed function on an independent
   reference-count model along all of its paths. `source_feature_smoke`
   runs 26 closure programs through LLVM and the AARC runtime, one at a time,
@@ -287,6 +350,10 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Compile time
 
+- The native Core verifier no longer copies every visible definition when it
+  enters a branch, a loop body, a let or a closure. It did, so its time grew
+  with the square of a function's size: a function of 400 calls that each
+  pass four suspended arguments took 2.05 seconds to verify and takes 0.04.
 - Nested loops no longer multiply the time of the integer analysis. It
   repeated the fixed point of an inner loop on every pass over the loop
   around it, so 14 nested loops took a second and 50 did not finish. It now
@@ -327,6 +394,15 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Known limitations
 
+- An argument passed by need costs two objects of the runtime and two
+  functions of generated code where it is suspended. A program whose calls
+  pass many arguments that are themselves calls compiles to several times
+  the code it did before and takes correspondingly longer to compile.
+- A program that stops because it needs a value that cannot be computed
+  ends with the status of a process that executed an invalid instruction.
+  It reports nothing about which value or where.
+- A native executable can hold 64 MiB of closures and suspended
+  computations at one time and stops when it would hold more.
 - Compile time still grows faster than the program on very long functions:
   from 2000 to 4000 `else if` links the time of `vxs check` grows from 3.3
   to 10.4 seconds, and from 2000 to 4000 sequential `if` statements from 2.8
@@ -352,7 +428,9 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 - A program that relied on an unused value being computed, for its failure
   or for the time it takes, no longer gets either: a value nothing reads is
-  not computed.
+  not computed. That now includes an argument the method does not read.
+- Core, CorePrep, Xpp and Xmm artifacts written by an earlier compiler are
+  rejected. Build them again from source.
 - Rename anything called `match`, `guard` or `enum`.
 - `if (auto name = value)` and the same form in `while` now report `VXP0035`
   instead of a generic syntax error. They were not accepted before either.

@@ -25,13 +25,81 @@ namespace Visual::XSharp::Core
             bool mutableBinding{};
             std::u32string spelling;
         };
-        using Environment = ADTs::DenseIdMap<SymbolId, Definition>;
+        using Definitions = ADTs::DenseIdMap<SymbolId, Definition>;
+
+        /// The local definitions visible at one point of a function.
+        ///
+        /// A branch, a loop body, a let and a closure each see what is
+        /// defined around them and add definitions that end with them. An
+        /// environment therefore holds only what its own region defines and
+        /// refers to the environment of the region around it. Entering a
+        /// region costs nothing that depends on how much is already
+        /// defined; a copy of everything visible, which is what this
+        /// replaced, made a function with many branches or closures cost
+        /// the product of the two.
+        ///
+        /// The environment around a region must outlive the region's own
+        /// and must not gain definitions while the inner one is in use.
+        /// The verifier walks regions strictly inside one another, so both
+        /// hold.
+        class Environment final
+        {
+        public:
+            Environment() = default;
+            Environment(const Environment &) = delete;
+            Environment(Environment &&) = default;
+            auto
+            operator=(const Environment &) -> Environment & = delete;
+            auto
+            operator=(Environment &&) -> Environment & = delete;
+            ~Environment() = default;
+
+            /// The environment of a region inside this one.
+            [[nodiscard]] auto
+            Extend() const -> Environment
+            {
+                Environment inner;
+                inner.outer_ = this;
+                return inner;
+            }
+
+            /// The definition of a symbol in this region or, failing that,
+            /// in the nearest region around it that defines it.
+            [[nodiscard]] auto
+            Find(const SymbolId symbol) const -> const Definition *
+            {
+                for (const auto *region = this; region != nullptr;
+                     region = region->outer_)
+                    if (const auto *found = region->own_.Find(symbol))
+                        return found;
+                return nullptr;
+            }
+
+            [[nodiscard]] auto
+            Contains(const SymbolId symbol) const -> bool
+            {
+                return Find(symbol) != nullptr;
+            }
+
+            /// Define a symbol in this region. It hides a definition of
+            /// the same symbol in a region around this one until this
+            /// region ends.
+            void
+            InsertOrAssign(const SymbolId symbol, Definition definition)
+            {
+                own_.InsertOrAssign(symbol, std::move(definition));
+            }
+
+        private:
+            const Environment *outer_{};
+            Definitions own_;
+        };
 
         class FunctionVerifier final
         {
         public:
             FunctionVerifier(const Function &function,
-                             const Environment &functions,
+                             const Definitions &functions,
                              std::vector<VerificationIssue> &issues)
                 : function_(function)
                 , functions_(functions)
@@ -79,7 +147,7 @@ namespace Visual::XSharp::Core
 
         private:
             const Function &function_;
-            const Environment &functions_;
+            const Definitions &functions_;
             Environment environment_;
             std::vector<VerificationIssue> &issues_;
 
@@ -321,7 +389,7 @@ namespace Visual::XSharp::Core
                     if (!accepts_boolean_context(link->expression.type))
                         Add("VXC1017",
                             "Core condition must be bool or numeric");
-                    auto trueEnvironment = *linkEnvironment;
+                    auto trueEnvironment = linkEnvironment->Extend();
                     VerifyStatements(link->trueBranch,
                                      trueEnvironment,
                                      expectedReturnType,
@@ -330,12 +398,12 @@ namespace Visual::XSharp::Core
                         break;
                     if (!chainEnvironment)
                     {
-                        chainEnvironment.emplace(environment);
+                        chainEnvironment.emplace(environment.Extend());
                         linkEnvironment = &*chainEnvironment;
                     }
                     link = &link->falseBranch.front();
                 }
-                auto falseEnvironment = *linkEnvironment;
+                auto falseEnvironment = linkEnvironment->Extend();
                 VerifyStatements(link->falseBranch,
                                  falseEnvironment,
                                  expectedReturnType,
@@ -456,14 +524,14 @@ namespace Visual::XSharp::Core
                 if (!accepts_boolean_context(statement.expression.type))
                     Add("VXC1017",
                         "Core loop condition must be bool or numeric");
-                auto loopEnvironment = environment;
+                auto loopEnvironment = environment.Extend();
                 VerifyStatements(statement.loopBody,
                                  loopEnvironment,
                                  expectedReturnType,
                                  TransferScope::InLoopBody);
                 if (statement.kind == Statement::Kind::For)
                 {
-                    auto updateEnvironment = environment;
+                    auto updateEnvironment = environment.Extend();
                     VerifyStatements(statement.loopUpdate,
                                      updateEnvironment,
                                      expectedReturnType,
@@ -585,7 +653,7 @@ namespace Visual::XSharp::Core
                               expression.letValue->type,
                               "VXC1048",
                               "Core let value has the wrong type");
-                auto bodyEnvironment = environment;
+                auto bodyEnvironment = environment.Extend();
                 bodyEnvironment.InsertOrAssign(
                     expression.letSymbol.id,
                     Definition{ expression.letType,
@@ -685,10 +753,12 @@ namespace Visual::XSharp::Core
                 for (std::size_t index = 1U; index < expression.operands.size();
                      ++index)
                     VerifyExpression(expression.operands[index], environment);
+                const auto memoize = expression.primitive == Primitive::Memoize;
                 const auto unary
                     = expression.primitive == Primitive::Negate
                       || expression.primitive == Primitive::LogicalNot
-                      || expression.primitive == Primitive::BitwiseNot;
+                      || expression.primitive == Primitive::BitwiseNot
+                      || memoize;
                 const auto logical
                     = expression.primitive == Primitive::LogicalAnd
                       || expression.primitive == Primitive::LogicalOr
@@ -718,7 +788,22 @@ namespace Visual::XSharp::Core
                             "VXC1027",
                             "Core primitive operands must have matching types");
 
-                if (typeTest)
+                if (memoize)
+                {
+                    // The remembered result is kept in the callable, in a
+                    // slot that owns nothing.
+                    const auto remembers
+                        = operandType.kind == Type::Kind::Function
+                          && operandType.components.size() == 1U
+                          && (operandType.components.front().kind
+                                  == Type::Kind::Bool
+                              || is_numeric(operandType.components.front()));
+                    if (!remembers)
+                        Add("VXC1073",
+                            "Core memoization requires a callable without "
+                            "parameters whose result is bool or numeric");
+                }
+                else if (typeTest)
                 {
                     if (expression.operands.size() == 2U)
                     {
@@ -783,7 +868,7 @@ namespace Visual::XSharp::Core
                 CheckType(expression.closureReturnType,
                           "VXC1032",
                           "Core closure has an unresolved return type");
-                Environment closureEnvironment = outerEnvironment;
+                auto closureEnvironment = outerEnvironment.Extend();
                 ADTs::DenseIdSet<SymbolId> localSymbols;
                 localSymbols.Reserve(expression.captures.size()
                                      + expression.closureParameters.size());
@@ -911,7 +996,7 @@ namespace Visual::XSharp::Core
                                    0U });
         }
 
-        Environment functions;
+        Definitions functions;
         functions.Reserve(module.functions.size());
         for (const auto &function : module.functions)
         {

@@ -148,6 +148,8 @@ test-suite visual-xsharp-compiler-tests
         BranchingOracleTests
         BranchingTests
         LazyEvaluationTests
+        FallThroughTests
+        MemoizeTests
         LoopExpressionTests
         LoopFlowTests
         LoopFlowOracleTests

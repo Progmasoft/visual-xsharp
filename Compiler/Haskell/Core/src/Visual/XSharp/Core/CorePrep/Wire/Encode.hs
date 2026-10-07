@@ -299,6 +299,7 @@ primitiveTag primitive = case primitive of
     CoreBitwiseOr -> 24
     CoreBitwiseNot -> 25
     CoreTypeIs -> 26
+    CoreMemoize -> 27
 
 encodeVector :: WireLimits -> String -> Int -> (a -> Encoder) -> [a] -> Encoder
 encodeVector limits context maximumCount encode values = do

@@ -85,7 +85,7 @@ explicit single-file module may omit project ownership metadata. A project
 object/assembly build requires a complete, valid catalog and owners for every
 function in the selected module.
 
-Current wire versions are Core v8, CorePrep v6, Xpp v5, and Xmm v5. Older
+Current wire versions are Core v9, CorePrep v7, Xpp v6, and Xmm v6. Older
 versions are rejected by their owning reader. The new fields are part of the
 schema and are not silently defaulted when reading an older project artifact.
 See [Artifact wire contracts](ARTIFACT-WIRE.md) for field order, decoding
@@ -233,7 +233,7 @@ The relevant tests are kept with their owners:
 
 - `Compiler/Artifact/Tests/SourcePathTests.cpp` covers canonical source identity
   and portable path rejection.
-- `Compiler/Core/Tests/CorePipelineTests.cpp` covers the non-empty Haskell v8
+- `Compiler/Core/Tests/CorePipelineTests.cpp` covers the non-empty Haskell v9
   golden, metadata propagation through Xpp/Xmm, per-source object and assembly
   output, empty source units, and collision preservation.
 - `Compiler/Driver/Tests/ProjectArtifactTests.cpp` covers flattening,

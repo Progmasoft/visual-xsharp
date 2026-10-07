@@ -43,10 +43,37 @@ cc_library(
     deps = ["//Compiler/Headers/Visual/XSharp/Core:core"],
 )
 
+# A compiled program may call the AARC runtime: a closure does, and so does an
+# argument that is passed by need. The JIT resolves a runtime symbol in the
+# process that hosts it, so every program that runs compiled programs links
+# the runtime and exports its entry points. The options are those of the
+# harness, which they all link.
+AARC_HOST_LINKOPTS = select({
+    "@platforms//os:windows": [
+        "/EXPORT:vxs_aarc_abi_version",
+        "/EXPORT:vxs_aarc_allocate",
+        "/EXPORT:vxs_aarc_copy_unowned",
+        "/EXPORT:vxs_aarc_copy_weak",
+        "/EXPORT:vxs_aarc_is_exact_type",
+        "/EXPORT:vxs_aarc_load_unowned",
+        "/EXPORT:vxs_aarc_lock_weak",
+        "/EXPORT:vxs_aarc_make_unowned",
+        "/EXPORT:vxs_aarc_make_weak",
+        "/EXPORT:vxs_aarc_release_strong",
+        "/EXPORT:vxs_aarc_release_unowned",
+        "/EXPORT:vxs_aarc_release_weak",
+        "/EXPORT:vxs_aarc_retain_strong",
+        "/EXPORT:vxs_aarc_string_literal",
+    ],
+    "@platforms//os:macos": [],
+    "//conditions:default": ["-rdynamic"],
+})
+
 cc_library(
     name = "source_fuzz_harness",
     srcs = ["SourceFuzz.cpp"],
     hdrs = ["SourceFuzz.hpp"],
+    linkopts = AARC_HOST_LINKOPTS,
     deps = [
         ":coreprep_parity",
         "//Compiler/Backend/LLVM:llvm_backend",
@@ -55,6 +82,8 @@ cc_library(
         "//Compiler/Driver:pipeline",
         "//Compiler/Headers/Visual/XSharp/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
+        "//Compiler/Headers/Visual/XSharp/Runtime:aarc_api",
+        "//Compiler/Runtime/AARC:aarc",
         "//Compiler/Support:compiler_stack",
     ],
 )
@@ -67,8 +96,9 @@ cc_binary(
     deps = [":source_fuzz_harness"],
 )
 
-# The three large tables of programs with hand-written results. A program of
-# its own, so that it and the other smoke programs each run under one process
+# The large tables of programs with hand-written results: the branching
+# table here, the expression and leaving tables in source_expression_smoke.
+# Programs of their own, so that each smoke program runs under one process
 # watchdog.
 cc_binary(
     name = "source_execution_smoke",
@@ -77,13 +107,23 @@ cc_binary(
         "BranchingExecutionCases.hpp",
         "ExecutionCases.cpp",
         "ExecutionCases.hpp",
+        "Generated/SelectionCases.inc",
+        "SourceExecutionSmoke.cpp",
+    ],
+    deps = [":source_fuzz_harness"],
+)
+
+cc_binary(
+    name = "source_expression_smoke",
+    srcs = [
+        "ExecutionCases.cpp",
+        "ExecutionCases.hpp",
         "ExpressionExecutionCases.cpp",
         "ExpressionExecutionCases.hpp",
         "Generated/LeavingCases.inc",
-        "Generated/SelectionCases.inc",
         "LeavingExecutionCases.cpp",
         "LeavingExecutionCases.hpp",
-        "SourceExecutionSmoke.cpp",
+        "SourceExpressionSmoke.cpp",
     ],
     deps = [":source_fuzz_harness"],
 )
@@ -97,29 +137,6 @@ cc_binary(
         "ExecutionCases.hpp",
         "SourceFeatureSmoke.cpp",
     ],
-    # The programs that create closures call the AARC runtime. The JIT
-    # resolves a runtime symbol in the process that hosts it, so this program
-    # links the runtime and exports its entry points.
-    linkopts = select({
-        "@platforms//os:windows": [
-            "/EXPORT:vxs_aarc_abi_version",
-            "/EXPORT:vxs_aarc_allocate",
-            "/EXPORT:vxs_aarc_copy_unowned",
-            "/EXPORT:vxs_aarc_copy_weak",
-            "/EXPORT:vxs_aarc_is_exact_type",
-            "/EXPORT:vxs_aarc_load_unowned",
-            "/EXPORT:vxs_aarc_lock_weak",
-            "/EXPORT:vxs_aarc_make_unowned",
-            "/EXPORT:vxs_aarc_make_weak",
-            "/EXPORT:vxs_aarc_release_strong",
-            "/EXPORT:vxs_aarc_release_unowned",
-            "/EXPORT:vxs_aarc_release_weak",
-            "/EXPORT:vxs_aarc_retain_strong",
-            "/EXPORT:vxs_aarc_string_literal",
-        ],
-        "@platforms//os:macos": [],
-        "//conditions:default": ["-rdynamic"],
-    }),
     deps = [
         ":source_fuzz_harness",
         "//Compiler/Headers/Visual/XSharp/Runtime:aarc_api",

@@ -4,18 +4,24 @@
 -- | Lower the typed source AST into target-independent, source-attributed Core.
 module Visual.XSharp.Desugarer (Desugarer (..), defaultDesugarer, runDesugarer) where
 
+import Control.Monad (forM, zipWithM)
 import Control.Monad.State.Strict
 import Data.Bits (xor)
 import Data.Char (ord)
 import Data.List (nub)
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
 import Data.Word (Word64)
 import Visual.XSharp.AST
 import Visual.XSharp.Completion
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Scalar (isCoreNumericType)
 import Visual.XSharp.Desugarer.Branching
+import Visual.XSharp.Desugarer.Captures
+import Visual.XSharp.Desugarer.Handing
 import Visual.XSharp.Desugarer.Laziness
 import Visual.XSharp.Desugarer.Sequencing
+import Visual.XSharp.Desugarer.Workers
 import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
 
 -- | Pluggable desugaring pass from typed source semantics into Core IR.
@@ -34,19 +40,44 @@ defaultDesugarer = Desugarer lowerTree
 
 lowerTree :: TypedAST -> Either [Diagnostic] CoreModule
 lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
-    evalStateT lowerModule (LowerState (1 + maximum (0 : syntaxSymbolIds tree)) Nothing [CoreContinue] [CoreBreak] Nothing [] [])
+    evalStateT lowerModule initial
     where
         defaultName = QualifiedName [Identifier "Main"]
         sourceFiles = nub (map portableSourcePath (concatMap declarationSourceFiles declarations))
+        methods = methodDeclarations declarations
+        initial =
+            LowerState
+                { lowerNextSymbol = 1 + maximum (0 : syntaxSymbolIds tree)
+                , lowerBreakTarget = Nothing
+                , lowerContinue = [CoreContinue]
+                , lowerLeave = [CoreBreak]
+                , lowerSettled = Nothing
+                , lowerFollowing = []
+                , lowerDeferred = []
+                , lowerMethods = methods
+                , lowerNeeds = methodNeeds (scalarType . lowerBoundaryType) methods
+                , lowerHanded = []
+                , lowerSuspended = []
+                , lowerWorkers = Map.empty
+                , lowerPendingWorkers = []
+                }
         lowerModule = do
             functions <- concat <$> mapM lowerTop declarations
+            -- The functions that receive suspended computations are lowered
+            -- after the methods, once it is known which of them a call asks
+            -- for; lowering one may ask for more.
+            workers <- lowerWorkersUntilNone
             pure
                 ( CoreModuleWithSources
                     (maybe defaultName id namespace)
-                    functions
+                    (functions ++ map fst workers)
                     sourceFiles
-                    (functionSources declarations)
+                    (functionSources declarations ++ map snd workers)
                 )
+
+-- | Whether a lowered type is one whose values are computed by need.
+scalarType :: Type -> Bool
+scalarType lowered = lowered == boolType || isCoreNumericType lowered
 
 -- Keep the physical file catalog even for a declaration that does not yet
 -- lower to executable code.  The project driver uses it to produce stable,
@@ -119,6 +150,26 @@ data LowerState = LowerState
     that says whether it has been computed and the expression that computes
     it.
     -}
+    , lowerMethods :: Map SymbolId (Declaration ResolvedName Type)
+    -- ^ The methods a call can name directly.
+    , lowerNeeds :: MethodNeeds
+    -- ^ Which parameters of which methods are passed by need.
+    , lowerHanded :: [SymbolId]
+    {- ^ The locals of the function being lowered whose values may be handed
+    on by need. Such a local is suspended in a callable of its own.
+    -}
+    , lowerSuspended :: [(SymbolId, (ResolvedName, Type))]
+    {- ^ The names whose value is a suspended computation: for each, the
+    callable that computes it and remembers it, with its type. A read of
+    the name is a call of the callable.
+    -}
+    , lowerWorkers :: Map SymbolId (ResolvedName, Type)
+    {- ^ For each method that a call has handed a suspended computation,
+    the function that receives suspended computations in its place, with
+    its type.
+    -}
+    , lowerPendingWorkers :: [SymbolId]
+    -- ^ The methods whose such function has been named and is not lowered yet.
     }
 
 type Lower = StateT LowerState (Either [Diagnostic])
@@ -140,9 +191,22 @@ evaluatingWith :: Maybe [SymbolId] -> Lower a -> Lower a
 evaluatingWith settled action = do
     previousSettled <- gets lowerSettled
     previousDeferred <- gets lowerDeferred
-    modify (\current -> current {lowerSettled = settled, lowerDeferred = []})
+    previousSuspended <- gets lowerSuspended
+    modify (\current -> current {lowerSettled = settled, lowerDeferred = [], lowerSuspended = []})
     result <- action
-    modify (\current -> current {lowerSettled = previousSettled, lowerDeferred = previousDeferred})
+    modify
+        ( \current ->
+            current {lowerSettled = previousSettled, lowerDeferred = previousDeferred, lowerSuspended = previousSuspended}
+        )
+    pure result
+
+-- | Lower with the given locals as the ones that may be handed on by need.
+handing :: [SymbolId] -> Lower a -> Lower a
+handing handed action = do
+    previous <- gets lowerHanded
+    modify (\current -> current {lowerHanded = handed})
+    result <- action
+    modify (\current -> current {lowerHanded = previous})
     pure result
 
 -- | Lower with the given break target, and restore the previous one after.
@@ -210,10 +274,12 @@ lowerDeclaration declaration@FunctionDeclaration {} = do
     -- which must have their values in place. The second evaluates every
     -- other binding by need.
     inPlaceBody <- inPlace (lowerFunctionBlock returnType (declarationBody declaration))
+    needs <- gets lowerNeeds
     body <-
-        byNeed
-            (assignedSymbols inPlaceBody ++ capturedSymbols inPlaceBody)
-            (lowerFunctionBlock returnType (declarationBody declaration))
+        handing (handedLocals needs (declarationBody declaration)) $
+            byNeed
+                (assignedSymbols inPlaceBody ++ capturedSymbols inPlaceBody)
+                (lowerFunctionBlock returnType (declarationBody declaration))
     pure
         ( CoreFunction
             (declarationName declaration)
@@ -342,31 +408,41 @@ lowerStatementWith target statement = case statement of
         settled <- gets lowerSettled
         deferred <- gets lowerDeferred
         following <- gets lowerFollowing
+        suspended <- gets lowerSuspended
+        handed <- gets lowerHanded
+        needs <- gets (argumentNeeds . lowerNeeds)
         let loweredType = lowerBoundaryType valueType
             -- A binding must compute its value where it stands when it is
             -- assigned later or captured, when its value is not a scalar,
             -- and when its initializer has an effect.
             mustStand inPlaceLocals bound boundType initializer =
                 resolvedSymbol bound `elem` inPlaceLocals
-                    || not (scalar (lowerBoundaryType boundType))
+                    || not (scalarType (lowerBoundaryType boundType))
                     || not (deferrableExpression initializer)
             -- A binding is certain to be evaluated when it must stand in
             -- place or the statement after it is certain to need it. Only
             -- such a binding makes the values its initializer reads needed.
             certain inPlaceLocals bound boundType initializer later =
                 mustStand inPlaceLocals bound boundType initializer
-                    || neededNext (certain inPlaceLocals) bound later
+                    || neededNext needs (certain inPlaceLocals) bound later
             -- Nothing can tell where a value is computed that cannot fail
             -- and that reads no value computed by need.
             indifferent initializer =
                 not (worthDeferring initializer)
-                    && not (any ((`elem` map fst deferred) . resolvedSymbol . fst) (expressionNames initializer))
-            scalar lowered = lowered == boolType || isCoreNumericType lowered
+                    && not
+                        ( any
+                            ((`elem` map fst deferred ++ map fst suspended) . resolvedSymbol . fst)
+                            (expressionNames initializer)
+                        )
         case settled of
             Just inPlaceLocals
                 | not (certain inPlaceLocals name valueType value following)
                 , not (indifferent value) ->
-                    deferBinding inPlaceLocals name loweredType value
+                    -- A value that may be handed to another function is
+                    -- suspended where that function can reach it.
+                    if resolvedSymbol name `elem` handed
+                        then suspendBinding name loweredType value
+                        else deferBinding inPlaceLocals name loweredType value
             _ -> do
                 (prefix, lowered) <- lowerExpression value
                 pure (prefix ++ [CoreBind (CoreBinding name loweredType (kind == MutableBinding) lowered)])
@@ -640,7 +716,8 @@ and its Core expression is the direct translation of the source.
 lowerExpression :: Expression ResolvedName Type -> Lower Lowered
 lowerExpression expression = do
     deferred <- gets lowerDeferred
-    case neededTwice (map fst deferred) expression of
+    needs <- gets (argumentNeeds . lowerNeeds)
+    case neededTwice needs (map fst deferred) expression of
         [] -> lowerOperands expression
         shared -> do
             -- Each read of a value by need carries the computation of that
@@ -663,8 +740,14 @@ lowerOperands expression = case expression of
     -- earlier read has, and reads it.
     NameExpression _ name valueType -> do
         deferred <- gets lowerDeferred
+        suspended <- gets lowerSuspended
         let loweredType = lowerBoundaryType valueType
         case lookup (resolvedSymbol name) deferred of
+            -- A read of a suspended value calls its callable, which
+            -- computes the value if nothing has, here or anywhere else.
+            Nothing
+                | Just (computation, computationType) <- lookup (resolvedSymbol name) suspended ->
+                    pure ([], CoreApply (CoreVariable computation computationType) [] loweredType)
             Nothing -> pure ([], CoreVariable name loweredType)
             Just (known, initializer) -> do
                 (prefix, computed) <- lowerExpression initializer
@@ -695,6 +778,17 @@ lowerOperands expression = case expression of
                     "an unresolved member selector reached Core lowering"
                 ]
             )
+    -- A call that hands a value on by need goes to the function that
+    -- receives suspended computations.
+    CallExpression _ (NameExpression _ callee _) arguments valueType -> do
+        byNeedFlags <- handsOnByNeed callee arguments
+        case byNeedFlags of
+            Just flags -> lowerHandingCall callee flags arguments (lowerBoundaryType valueType)
+            Nothing -> do
+                loweredCallee <- lowerExpression (calleeOf expression)
+                loweredArguments <- mapM lowerExpression arguments
+                (prefix, calleeValue, argumentValues) <- sequenceAfter loweredCallee loweredArguments
+                pure (prefix, CoreApply calleeValue argumentValues (lowerBoundaryType valueType))
     CallExpression _ callee arguments valueType -> do
         loweredCallee <- lowerExpression callee
         loweredArguments <- mapM lowerExpression arguments
@@ -888,6 +982,261 @@ lowerOperands expression = case expression of
                 then (prefix, closure loweredCaptures)
                 else ([], closure (discoverImplicitCaptures loweredParameters loweredBody))
 
+-- | The callee of a call expression.
+calleeOf :: Expression ResolvedName Type -> Expression ResolvedName Type
+calleeOf expression = case expression of
+    CallExpression _ callee _ _ -> callee
+    _ -> expression
+
+-- | The type of a suspended computation of a value of the given lowered type.
+suspendedType :: Type -> Type
+suspendedType = FunctionType []
+
+{- | Whether an argument is handed on by need when its parameter allows it:
+computing it later gives what computing it now would give, and it either
+may fail or run without end, or reads a value that is itself computed by
+need. Any other argument is computed at the call, where it costs least.
+-}
+handedOn :: Expression ResolvedName Type -> Lower Bool
+handedOn argument = do
+    deferred <- gets (map fst . lowerDeferred)
+    suspended <- gets (map fst . lowerSuspended)
+    pure
+        ( deferrableExpression argument
+            && ( worthDeferring argument
+                    || any ((`elem` deferred ++ suspended) . resolvedSymbol . fst) (expressionNames argument)
+               )
+        )
+
+{- | Whether a call hands a value on by need, and if so which parameters of
+the method are passed by need.
+
+Only a call lowered for its own sake does: while a body is lowered in place,
+to learn its locals, every argument is computed at the call.
+-}
+handsOnByNeed :: ResolvedName -> [Expression ResolvedName Type] -> Lower (Maybe [Bool])
+handsOnByNeed callee arguments = do
+    settled <- gets lowerSettled
+    needs <- gets lowerNeeds
+    case (settled, Map.lookup (resolvedSymbol callee) needs) of
+        (Just _, Just flags) | length flags == length arguments -> do
+            handed <- mapM handedOn arguments
+            pure (if or (zipWith (&&) flags handed) then Just flags else Nothing)
+        _ -> pure Nothing
+
+{- | Lower a call of the function that receives suspended computations in
+place of a method.
+
+An argument of a parameter that is passed by need becomes a callable. One
+that is handed on by need is suspended: nothing of it is computed here. One
+that is already a suspended value is passed as it is, so a value handed
+through several methods is still computed once. Any other argument is
+computed here, as it always was, and its callable returns that value.
+-}
+lowerHandingCall :: ResolvedName -> [Bool] -> [Expression ResolvedName Type] -> Type -> Lower Lowered
+lowerHandingCall callee flags arguments resultType = do
+    (worker, workerType) <- workerOf callee flags
+    operands <- zipWithM operand flags arguments
+    (prefix, values) <- sequenceOperands operands
+    pure (prefix, CoreApply (CoreVariable worker workerType) values resultType)
+    where
+        operand False argument = lowerExpression argument
+        operand True argument = do
+            suspended <- gets lowerSuspended
+            lazily <- handedOn argument
+            let loweredType = lowerBoundaryType (expressionAnnotation argument)
+                callableType = suspendedType loweredType
+            case argument of
+                NameExpression _ name _
+                    | Just (computation, computationType) <- lookup (resolvedSymbol name) suspended ->
+                        pure ([], CoreVariable computation computationType)
+                _
+                    | lazily -> do
+                        (prefix, computation) <- suspend loweredType argument
+                        pure (prefix, CoreVariable computation callableType)
+                    | otherwise -> do
+                        (prefix, value) <- lowerExpression argument
+                        kept <- freshGenerated "$value"
+                        computation <- freshGenerated "$computed"
+                        let keptValue = CoreVariable kept loweredType
+                            closure =
+                                CoreClosure
+                                    [CoreCapture StrongCapture kept loweredType keptValue]
+                                    []
+                                    loweredType
+                                    [CoreReturn keptValue]
+                                    callableType
+                        pure
+                            ( prefix
+                                ++ [ CoreBind (CoreBinding kept loweredType False value)
+                                   , CoreBind (CoreBinding computation callableType False closure)
+                                   ]
+                            , CoreVariable computation callableType
+                            )
+
+{- | Suspend an expression: bind a callable that computes it when it is first
+called and remembers the result, and return the name of the callable.
+
+The callable takes the values of the variables the expression reads when it
+is created, so the expression means what its variables hold here, whenever
+it is computed. A suspended value the expression reads is taken as its
+callable, and computed only if this one is. The functions of the module are
+not taken: a callable calls them as any function does.
+-}
+suspend :: Type -> Expression ResolvedName Type -> Lower ([CoreStatement], ResolvedName)
+suspend loweredType value = do
+    deferred <- gets lowerDeferred
+    -- A value in a flag and a slot of this frame cannot be computed from
+    -- another function. The locals an argument reads are suspended instead,
+    -- see 'handedLocals'; one that is not is computed before it is read.
+    let framed =
+            foldr
+                (\seen others -> if resolvedSymbol (fst seen) `elem` map (resolvedSymbol . fst) others then others else seen : others)
+                []
+                [seen | seen <- expressionNames value, resolvedSymbol (fst seen) `elem` map fst deferred]
+    forced <-
+        concat <$> mapM (\(name, nameType) -> fst <$> lowerOperands (NameExpression (expressionSourceSpan value) name nameType)) framed
+    modify (\current -> current {lowerDeferred = filter ((`notElem` map (resolvedSymbol . fst) framed) . fst) deferred})
+    following <- gets lowerFollowing
+    modify (\current -> current {lowerFollowing = []})
+    (bodyPrefix, result) <- inCoreLoop (targeting Nothing (lowerExpression value))
+    modify (\current -> current {lowerDeferred = deferred, lowerFollowing = following})
+    methods <- gets (Map.keys . lowerMethods)
+    workers <- gets (map (resolvedSymbol . fst) . Map.elems . lowerWorkers)
+    computation <- freshGenerated "$suspended"
+    let body = bodyPrefix ++ [CoreReturn result]
+        callableType = suspendedType loweredType
+        captures =
+            [ capture
+            | capture <- discoverImplicitCaptures [] body
+            , resolvedSymbol (coreCaptureName capture) `notElem` methods ++ workers
+            ]
+        closure = CoreClosure captures [] loweredType body callableType
+    pure
+        ( forced ++ [CoreBind (CoreBinding computation callableType False (CorePrimitive CoreMemoize [closure] callableType))]
+        , computation
+        )
+
+{- | Bind a local whose value may be handed to another function by need: its
+value is a suspended computation, and every read of the local calls it.
+-}
+suspendBinding :: ResolvedName -> Type -> Expression ResolvedName Type -> Lower [CoreStatement]
+suspendBinding name loweredType value = do
+    (prefix, computation) <- suspend loweredType value
+    modify
+        ( \current ->
+            current {lowerSuspended = (resolvedSymbol name, (computation, suspendedType loweredType)) : lowerSuspended current}
+        )
+    pure prefix
+
+{- | The function that receives suspended computations in place of the given
+method, named on the first call that asks for it and lowered later.
+-}
+workerOf :: ResolvedName -> [Bool] -> Lower (ResolvedName, Type)
+workerOf method flags = do
+    workers <- gets lowerWorkers
+    case Map.lookup (resolvedSymbol method) workers of
+        Just worker -> pure worker
+        Nothing -> do
+            declaration <- gets ((Map.! resolvedSymbol method) . lowerMethods)
+            identifier <- gets lowerNextSymbol
+            let spelling = identifierText (resolvedSpelling method) ++ "$need" ++ show identifier
+                worker = ResolvedName (SymbolId identifier) (Identifier spelling)
+                parameterTypes =
+                    [ if flag then suspendedType parameterType else parameterType
+                    | (flag, parameter) <- zip flags (methodParameters declaration)
+                    , let parameterType = lowerBoundaryType (parameterAnnotation parameter)
+                    ]
+                workerType = FunctionType parameterTypes (declarationResultType declaration)
+            modify
+                ( \current ->
+                    current
+                        { lowerNextSymbol = identifier + 1
+                        , lowerWorkers = Map.insert (resolvedSymbol method) (worker, workerType) (lowerWorkers current)
+                        , lowerPendingWorkers = lowerPendingWorkers current ++ [resolvedSymbol method]
+                        }
+                )
+            pure (worker, workerType)
+
+-- | The lowered result type of a method.
+declarationResultType :: Declaration ResolvedName Type -> Type
+declarationResultType declaration =
+    lowerBoundaryType $ case declarationAnnotation declaration of FunctionType _ result -> result; value -> value
+
+-- | Lower the functions that were asked for until no call asks for another.
+lowerWorkersUntilNone :: Lower [(CoreFunction, (Int, FilePath))]
+lowerWorkersUntilNone = do
+    pending <- gets lowerPendingWorkers
+    case pending of
+        [] -> pure []
+        method : later -> do
+            modify (\current -> current {lowerPendingWorkers = later})
+            worker <- lowerWorker method
+            (worker :) <$> lowerWorkersUntilNone
+
+{- | Lower the function that receives suspended computations in place of a
+method.
+
+It is the method's body once more, with the parameters that are passed by
+need as suspended values: a read of one calls its callable. A parameter that
+a closure of the body captures is computed when the function is entered,
+because a closure takes the values of its captures when it is created.
+Everything the function defines takes a fresh symbol, since the method has
+been lowered from the same statements.
+-}
+lowerWorker :: SymbolId -> Lower (CoreFunction, (Int, FilePath))
+lowerWorker method = do
+    declaration <- gets ((Map.! method) . lowerMethods)
+    flags <- gets ((Map.! method) . lowerNeeds)
+    (worker, _) <- gets ((Map.! method) . lowerWorkers)
+    needs <- gets lowerNeeds
+    let returnType = declarationResultType declaration
+        body = methodBody declaration
+    inPlaceBody <- inPlace (lowerFunctionBlock returnType body)
+    let captured = capturedSymbols inPlaceBody
+    received <-
+        forM (zip flags (methodParameters declaration)) $ \(flag, parameter) -> do
+            let name = parameterName parameter
+                parameterType = lowerBoundaryType (parameterAnnotation parameter)
+            if flag
+                then do
+                    computation <- freshGenerated "$argument"
+                    pure (name, parameterType, Just computation)
+                else pure (name, parameterType, Nothing)
+    let entered =
+            [ CoreBind (CoreBinding name valueType False (CoreApply (CoreVariable computation (suspendedType valueType)) [] valueType))
+            | (name, valueType, Just computation) <- received
+            , resolvedSymbol name `elem` captured
+            ]
+        suspendedParameters =
+            [ (resolvedSymbol name, (computation, suspendedType valueType))
+            | (name, valueType, Just computation) <- received
+            , resolvedSymbol name `notElem` captured
+            ]
+    lowered <-
+        handing (handedLocals needs body) $
+            byNeed (assignedSymbols inPlaceBody ++ captured) $ do
+                modify (\current -> current {lowerSuspended = suspendedParameters})
+                lowerFunctionBlock returnType body
+    let statements = entered ++ lowered
+        own = nub ([name | (name, _, Nothing) <- received] ++ definedNames statements)
+    replacements <- Map.fromList <$> mapM (\name -> (,) (resolvedSymbol name) <$> freshLike name) own
+    let parameters =
+            [ case suspendedBy of
+                Just computation -> (computation, suspendedType valueType)
+                Nothing -> (Map.findWithDefault name (resolvedSymbol name) replacements, valueType)
+            | (name, valueType, suspendedBy) <- received
+            ]
+    pure
+        ( CoreFunction worker parameters returnType (renameSymbols replacements statements)
+        , (symbolIdValue (resolvedSymbol worker), portableSpanSource declaration)
+        )
+    where
+        freshLike name = do
+            identifier <- gets lowerNextSymbol
+            modify (\current -> current {lowerNextSymbol = identifier + 1})
+            pure (ResolvedName (SymbolId identifier) (resolvedSpelling name))
+
 -- Capture initializers are evaluated in order when the closure is created,
 -- like the operands of any other expression.
 lowerCaptures :: [Capture ResolvedName Type] -> Lower ([CoreStatement], [CoreCapture])
@@ -1000,69 +1349,6 @@ joinWith separator (value : rest) = value ++ separator ++ joinWith separator res
 -- analysis is deliberately performed after desugaring so syntactic sugar
 -- cannot hide a read.  Locals introduced by the callable and its parameters
 -- are removed before stable first-use ordering is assigned.
-discoverImplicitCaptures :: [(ResolvedName, Type)] -> [CoreStatement] -> [CoreCapture]
-discoverImplicitCaptures parameters statements =
-    let bound = map (resolvedSymbol . fst) parameters ++ localSymbols statements
-        free = filter (\(name, _) -> resolvedSymbol name `notElem` bound) (statementReads statements)
-     in [CoreCapture StrongCapture name valueType (CoreVariable name valueType) | (name, valueType) <- uniqueReads free]
-
-localSymbols :: [CoreStatement] -> [SymbolId]
-localSymbols = concatMap collect
-    where
-        collect statement = case statement of
-            CoreBind binding -> [resolvedSymbol (coreBindingName binding)]
-            CoreIf _ yes no -> localSymbols yes ++ localSymbols no
-            CoreWhile _ body -> localSymbols body
-            CoreDoWhile body _ -> localSymbols body
-            CoreFor _ body update -> localSymbols body ++ localSymbols update
-            _ -> []
-
-statementReads :: [CoreStatement] -> [(ResolvedName, Type)]
-statementReads = concatMap collect
-    where
-        collect statement = case statement of
-            CoreBind binding -> expressionReads (coreBindingValue binding)
-            CoreAssign _ value -> expressionReads value
-            CoreReturn value -> expressionReads value
-            CoreIf condition yes no -> expressionReads condition ++ statementReads yes ++ statementReads no
-            CoreWhile condition body -> expressionReads condition ++ statementReads body
-            CoreDoWhile body condition -> statementReads body ++ expressionReads condition
-            CoreFor condition body update ->
-                expressionReads condition ++ statementReads body ++ statementReads update
-            CoreEvaluate value -> expressionReads value
-            CoreBreak -> []
-            CoreContinue -> []
-
-expressionReads :: CoreExpression -> [(ResolvedName, Type)]
-expressionReads expression = case expression of
-    CoreVariable name valueType -> [(name, valueType)]
-    CoreLiteral _ _ -> []
-    CoreApply callee arguments _ -> expressionReads callee ++ concatMap expressionReads arguments
-    CorePrimitive _ arguments _ -> concatMap expressionReads arguments
-    CoreLet name _ value body _ ->
-        expressionReads value ++ filter ((/= resolvedSymbol name) . resolvedSymbol . fst) (expressionReads body)
-    CoreConditional condition whenTrue whenFalse _ ->
-        expressionReads condition ++ expressionReads whenTrue ++ expressionReads whenFalse
-    -- A closure reads, from the place that creates it, its capture
-    -- initializers and whatever its body reads that is not its own: its
-    -- parameters, its captures and its locals belong to the closure. Without
-    -- that, a closure around this one would capture them as if they were
-    -- names of its surroundings.
-    CoreClosure captures parameters _ body _ ->
-        let own =
-                map (resolvedSymbol . fst) parameters
-                    ++ map (resolvedSymbol . coreCaptureName) captures
-                    ++ localSymbols body
-         in concatMap (expressionReads . coreCaptureValue) captures
-                ++ filter ((`notElem` own) . resolvedSymbol . fst) (statementReads body)
-
-uniqueReads :: [(ResolvedName, Type)] -> [(ResolvedName, Type)]
-uniqueReads = foldl append []
-    where
-        append output value@(name, _)
-            | any ((== resolvedSymbol name) . resolvedSymbol . fst) output = output
-            | otherwise = output ++ [value]
-
 lowerLiteral :: Type -> Literal -> CoreLiteral
 lowerLiteral valueType literal = case literal of
     IntegerLiteral value

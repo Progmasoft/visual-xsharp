@@ -22,6 +22,7 @@ module Visual.XSharp.Desugarer.Laziness
     , expressionNames
     , renameNames
     , capturedSymbols
+    , ArgumentNeeds
     , alwaysReads
     , neededTwice
     , neededNext
@@ -107,24 +108,38 @@ renameNames rename expression = case expression of
             annotation
     _ -> expression
 
-{- | Whether evaluating an expression always reads the given name, whatever
-values it meets: the name stands where neither a short-circuit operator nor
-a conditional can skip it. Blocks, matches, loops and callables used as
-values are not searched; the answer for them is that it is not known.
+{- | For the name of a method whose parameters may be passed by need, which
+of them are, in declaration order; nothing for any other name. A call of
+such a method does not read an argument it passes by need: the method may
+never need it.
 -}
-alwaysReads :: (Eq name) => name -> Expression name annotation -> Bool
-alwaysReads name expression = case expression of
+type ArgumentNeeds name = name -> Maybe [Bool]
+
+{- | Whether evaluating an expression always reads the given name, whatever
+values it meets: the name stands where neither a short-circuit operator, nor
+a conditional, nor a parameter that is passed by need can skip it. Blocks,
+matches, loops and callables used as values are not searched; the answer for
+them is that it is not known.
+-}
+alwaysReads :: (Eq name) => ArgumentNeeds name -> name -> Expression name annotation -> Bool
+alwaysReads needs name expression = case expression of
     NameExpression _ found _ -> found == name
-    MemberAccessExpression _ receiver _ _ -> alwaysReads name receiver
-    CallExpression _ callee arguments _ -> any (alwaysReads name) (callee : arguments)
-    UnaryExpression _ _ value _ -> alwaysReads name value
+    MemberAccessExpression _ receiver _ _ -> always receiver
+    CallExpression _ (NameExpression _ callee _) arguments _
+        | Just flags <- needs callee
+        , length flags == length arguments ->
+            any always [argument | (False, argument) <- zip flags arguments]
+    CallExpression _ callee arguments _ -> any always (callee : arguments)
+    UnaryExpression _ _ value _ -> always value
     BinaryExpression _ operator left right _
-        | operator `elem` [LogicalAnd, LogicalOr] -> alwaysReads name left
-        | otherwise -> alwaysReads name left || alwaysReads name right
-    IsPatternExpression _ subject _ _ -> alwaysReads name subject
-    ConditionalExpression _ condition _ _ _ -> alwaysReads name condition
-    AssignmentExpression _ _ _ value _ -> alwaysReads name value
+        | operator `elem` [LogicalAnd, LogicalOr] -> always left
+        | otherwise -> always left || always right
+    IsPatternExpression _ subject _ _ -> always subject
+    ConditionalExpression _ condition _ _ _ -> always condition
+    AssignmentExpression _ _ _ value _ -> always value
     _ -> False
+    where
+        always = alwaysReads needs name
 
 {- | The reads of the given values by need that an expression is certain to
 evaluate and holds more than once, one read for each such value.
@@ -135,8 +150,11 @@ expression has no effect, and it evaluates each of them whenever it is
 evaluated.
 -}
 neededTwice ::
-    [SymbolId] -> Expression ResolvedName annotation -> [(ResolvedName, Expression ResolvedName annotation)]
-neededTwice deferred expression
+    ArgumentNeeds ResolvedName ->
+    [SymbolId] ->
+    Expression ResolvedName annotation ->
+    [(ResolvedName, Expression ResolvedName annotation)]
+neededTwice needs deferred expression
     | null deferred || not (deferrableExpression expression) = []
     | otherwise = go [] (nameReads expression)
     where
@@ -145,7 +163,7 @@ neededTwice deferred expression
             | symbol `elem` seen = go seen remaining
             | symbol `elem` deferred
             , symbol `elem` map (resolvedSymbol . fst) remaining
-            , alwaysReads name expression =
+            , alwaysReads needs name expression =
                 (name, found) : go (symbol : seen) remaining
             | otherwise = go (symbol : seen) remaining
             where
@@ -175,25 +193,28 @@ decides for it from the statements after it.
 -}
 neededNext ::
     (Eq name) =>
+    ArgumentNeeds name ->
     -- | Whether a later binding is evaluated in place, given what follows it.
     (name -> annotation -> Expression name annotation -> [Statement name annotation] -> Bool) ->
     name ->
     [Statement name annotation] ->
     Bool
-neededNext inPlaceBinding name following = case following of
+neededNext needs inPlaceBinding name following = case following of
     next : later -> case next of
         BindingStatement _ _ _ bound annotation value ->
-            alwaysReads name value && inPlaceBinding bound annotation value later
-        AssignmentStatement _ _ _ value -> alwaysReads name value
-        CompoundAssignmentStatement _ _ _ _ value -> alwaysReads name value
-        ReturnStatement _ (Just value) -> alwaysReads name value
-        IfStatement _ condition _ _ -> alwaysReads name condition
-        GuardStatement _ condition _ -> alwaysReads name condition
-        WhileStatement _ condition _ -> alwaysReads name condition
-        DiscardStatement _ value -> alwaysReads name value
-        ExpressionStatement _ value _ -> alwaysReads name value
+            always value && inPlaceBinding bound annotation value later
+        AssignmentStatement _ _ _ value -> always value
+        CompoundAssignmentStatement _ _ _ _ value -> always value
+        ReturnStatement _ (Just value) -> always value
+        IfStatement _ condition _ _ -> always condition
+        GuardStatement _ condition _ -> always condition
+        WhileStatement _ condition _ -> always condition
+        DiscardStatement _ value -> always value
+        ExpressionStatement _ value _ -> always value
         _ -> False
     [] -> False
+    where
+        always = alwaysReads needs name
 
 {- | Every local that a closure created by the statements captures, at any
 depth. A closure takes the value of a capture when it is created, so a

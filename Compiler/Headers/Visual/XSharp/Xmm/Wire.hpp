@@ -13,7 +13,7 @@
 namespace Visual::XSharp::Xmm::Wire
 {
     /// Current Xmm wire schema version; decoders require an exact match.
-    inline constexpr std::uint16_t kCurrentVersion = 5U;
+    inline constexpr std::uint16_t kCurrentVersion = 6U;
     /// Shared resource ceilings for Xmm wire operations.
     using Limits = Artifact::Wire::Limits;
     /// Structured wire failure with byte offset and field context.

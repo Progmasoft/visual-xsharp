@@ -137,6 +137,7 @@ each other:
 | result | the caller, which receives one reference and releases it |
 | local | the function, from the definition to the last use on each path |
 | strong capture | the closure, which takes its own reference when it is created and releases it in its destructor |
+| computation of a callable that remembers its result | that callable, which takes its own reference when it is created and releases it in its destructor |
 
 From that follow the operations the pass writes:
 
@@ -196,7 +197,9 @@ Five layers protect the contract:
 5. `source_feature_smoke` runs closure programs through LLVM with the AARC
    runtime, one program at a time, and requires the runtime to hold no more
    allocations after a program than before it, in both pipeline modes. Without
-   the placement pass that check fails on the first program.
+   the placement pass that check fails on the first program. The programs
+   that pass arguments by need are held to the same check: each suspended
+   computation is two objects, one of which owns the other.
 
 Tests construct a complete operation sequence. Merely asserting that an opcode
 exists does not prove its handle precondition, result representation, or

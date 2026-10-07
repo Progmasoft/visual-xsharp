@@ -24,6 +24,19 @@ cc_binary(
     ],
 )
 
+# Programs built into native executables and started as processes. The test
+# drives the command line in its own process, so the Haskell frontend library
+# has to stand beside it, where the development helper stages it.
+cc_binary(
+    name = "executable_run_tests",
+    srcs = ["ExecutableRunTests.cpp"],
+    deps = [
+        "//Compiler/Cli/Commands:commands",
+        "@catch3//:catch2_main",
+        "@catch3//src/Progmasoft:catch3",
+    ],
+)
+
 # Compile the ABI header with a real C11 frontend to keep C++ types outside the
 # boundary. This is a test-only C translation unit, never production code.
 cc_library(

@@ -545,7 +545,7 @@ namespace Visual::XSharp::Core::Wire
                 if (tag == kPrimitiveTag)
                 {
                     if (primitiveTag
-                        > static_cast<std::uint8_t>(Primitive::TypeIs))
+                        > static_cast<std::uint8_t>(Primitive::Memoize))
                         Fail(ErrorKind::InvalidTag,
                              "primitive tag",
                              "unknown Core primitive tag");

@@ -190,7 +190,8 @@ coverage. `source_fuzz_smoke` checks valid-source lowering and then runs the
 differential oracle on every generated program shape at trip counts 0 through
 11, once with a zero and once with a nonzero generated expression, before
 mutation campaigns begin. `source_execution_smoke` runs the programs of
-`ExpressionExecutionCases.cpp`, `BranchingExecutionCases.cpp` and
+`BranchingExecutionCases.cpp`, and `source_expression_smoke` those of
+`ExpressionExecutionCases.cpp` and
 `LeavingExecutionCases.cpp`: assignments,
 increments and loops used as values, and `match`, `if` expressions and
 `guard`, each with a hand-written result that both native pipeline modes must
@@ -219,8 +220,10 @@ program has a process watchdog, so the runs of a body are not worth a
 compilation each.
 
 `source_feature_smoke` runs the tables that are written by hand for single
-features: methods with inferred return types, evaluation by need and classic
-enums. It also compiles programs that own
+features: methods with inferred return types, evaluation by need, arguments
+passed by need and classic enums. A program that passes an argument by need
+creates objects of the runtime, so each of those runs alone under the
+allocation check described below. It also compiles programs that own
 closures while control leaves through a block used as a value, so that the
 ownership verifiers of Xpp and Xmm see those paths, and runs a hand-written
 table of closures: created, called, nested, returned and alive across loop
@@ -268,6 +271,24 @@ machine in that configuration with nothing else running,
 table, 45 the branching table and 22 the leaving table, and
 `source_feature_smoke` takes 45 seconds, of which 28 are the closure
 programs. The watchdog is unchanged, and no case was removed.
+
+The expression and leaving tables became a fourth program,
+`source_expression_smoke`, when arguments came to be passed by need. Every
+run of a body passes its inputs as calls, so that no stage can fold them, and
+each such argument is now a suspended computation: two objects, a function
+for its body and an entry it is called through. The programs of the three
+tables grew with that. In an ordinary build they took 27 seconds together
+where they had taken 7, and 344 seconds in the fuzzing configuration, past
+the watchdog with every case passing. Three changes brought the ordinary
+build to 21 seconds: a module has one entry, one destructor and one metadata
+record for the callables that remember a result of one type, where it had
+them for each such callable; a closure that owns nothing has no destructor;
+and the native Core verifier no longer copies every visible definition for
+each branch and each closure, which had made its time grow with the square
+of a function's size. That was not enough for the fuzzing configuration, so
+the tables are two programs. The watchdog is unchanged, and no case was
+removed. What an argument by need costs in generated code is a cost of the
+current lowering, listed in `EVALUATION.md`.
 
 The source fuzz targets and the source smoke programs run the compiler on the
 compiler stack, as `vxs` does, because an input nested up to the frontend's

@@ -11,10 +11,10 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 
 | Contract | Magic | Current version | Producer | Consumer |
 | --- | --- | ---: | --- | --- |
-| Core | `VXCR` | 7 | Haskell frontend | native Core reader |
-| CorePrep | `VXCP` | 6 | CorePrep adapter | native pipeline tools |
-| Xpp | `VXPP` | 5 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
-| Xmm | `VXMM` | 5 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
+| Core | `VXCR` | 9 | Haskell frontend | native Core reader |
+| CorePrep | `VXCP` | 7 | CorePrep adapter | native pipeline tools |
+| Xpp | `VXPP` | 6 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
+| Xmm | `VXMM` | 6 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
 The contracts have related scalar encodings but separate structural schemas.
 Their magic values must never be treated as aliases.
@@ -91,7 +91,7 @@ the bit pattern is identical.
 
 ### Core scalar tags (introduced in v5)
 
-The native and Haskell Core codecs retain these assignments in version 8. This
+The native and Haskell Core codecs retain these assignments in version 9. This
 table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
@@ -115,7 +115,7 @@ declared scalar type.
 ### CorePrep scalar tags (introduced in v5)
 
 CorePrep retains historical `int` and `long` positions before the extended
-catalog. Version 6 adds provenance without changing these tags; assignments
+catalog. Versions 6 and 7 change none of these tags; assignments
 must therefore not be copied blindly from Core:
 
 | Tag | Type | Tag | Type |
@@ -251,11 +251,32 @@ CorePrep, Xpp, and Xmm have no conditional-expression record. The expression
 is lowered to blocks, a branch, and assignments to one slot before CorePrep is
 serialized, so their versions did not change.
 
+### The remembering operation
+
+Core v9, CorePrep v7, Xpp v6 and Xmm v6 add one operation: a callable that
+remembers its result, `Memoize`. It is not a new record. It is one more value
+of the operation field every stage already writes, with one operand and a
+result, and it takes the next free tag of each catalog:
+
+| Contract | Field | Tag |
+| --- | --- | ---: |
+| Core | primitive | 24 |
+| CorePrep | operation | 27 |
+| Xpp | opcode | next after the type test |
+| Xmm | opcode | next after the type test |
+
+A reader of an earlier version does not know the tag, which is why all four
+versions changed together: a document that holds the operation must not be
+read as one that cannot. The readers check only that the tag is known. That
+the operand is a callable without parameters whose result is `bool` or
+numeric, and that the result has the operand's type, is the rule of each
+stage's verifier, which runs on every decoded module.
+
 ### Version transition
 
 Versions are strict, not feature-negotiated. Core readers accept only version
-8, CorePrep readers accept only version 6, and Xpp/Xmm readers accept only
-version 5. Every older or future version fails at the version field before
+9, CorePrep readers accept only version 7, and Xpp/Xmm readers accept only
+version 6. Every older or future version fails at the version field before
 body decoding. The compiler does not
 guess whether a document happens to contain only fields from an older schema.
 Recompile the owning source or regenerate the intermediate artifact with the
@@ -396,7 +417,7 @@ when written; decoding never recreates a host-width alternative.
 
 ## Xpp document order
 
-An Xpp v5 document contains:
+An Xpp v6 document contains:
 
 1. `VXPP`, version, and zero reserved flags;
 2. qualified module name;
@@ -418,7 +439,7 @@ dedicated symbol field rather than an untyped extra operand.
 
 ## Xmm document order
 
-An Xmm v5 document contains:
+An Xmm v6 document contains:
 
 1. `VXMM`, version, and zero reserved flags;
 2. qualified module name;
@@ -463,11 +484,13 @@ verified again before serialization or forward lowering.
 The version field describes the entire schema. Core v6 and CorePrep v6 added
 project source catalogs and per-function ownership; Core v7 additionally added
 structured `while`, `do/while`, classic `for`, `break`, and `continue` records,
-and Core v8 adds the conditional expression record.
+Core v8 adds the conditional expression record, and Core v9 with CorePrep v7
+adds the remembering operation.
 Xpp/Xmm began independently at
-version 1; their current version 5 retains the explicit ownership operations,
+version 1; version 5 retains the explicit ownership operations,
 template values, and type-test operation, and adds source catalogs and function
-owners. The intermediate versions remain strict historical contracts; their
+owners, and their current version 6 adds the remembering operation.
+The intermediate versions remain strict historical contracts; their
 documents are not guessed or accepted by the current readers. Every current
 reader rejects earlier and future versions for its own magic.
 

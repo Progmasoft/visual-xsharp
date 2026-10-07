@@ -13,8 +13,9 @@
 #include "Visual/XSharp/Support/CompilerStack.hpp"
 
 // Executable regressions for the features whose tables are written by hand in
-// this file: methods with inferred return types, evaluation by need, classic
-// enums, closures with the runtime that owns them, and programs that own
+// this file: methods with inferred return types, evaluation by need,
+// arguments passed by need, classic enums, closures with the runtime that
+// owns them, and programs that own
 // closures while control leaves through a block used as a value. Every
 // program runs through CorePrep, Xpp, Xmm, LLVM and the ORC JIT, unoptimized
 // and optimized, and must return its expected value from both.
@@ -622,6 +623,141 @@ namespace
     // process and the second would never end. A store happens where it is
     // written, and a value means what its variables held where it was
     // bound.
+    // Arguments passed by need. A method computes an argument when it first
+    // needs it, at most once, and never when it does not need it; a value
+    // the caller needs as well is computed once for both. Such a value is
+    // an object of the runtime, so each case is a program of its own and
+    // must leave no allocation behind.
+    constexpr std::string_view kByNeedHelpers
+        = "    public static int Never(_ int v) { return Never(v + 1); "
+          "}\n"
+          "    public static int Half(_ int v) { return v / 2; }\n"
+          "    public static int Step(_ int n) { return n > 0 ? 1 + "
+          "Step(n - 1) : 0; }\n"
+          "    public static int Pick(_ int flag, _ int value) { if "
+          "(flag > 0) { return value; } return 7; }\n"
+          "    public static int Pass(_ int flag, _ int value) { return"
+          " Pick(flag, value); }\n"
+          "    public static int Both(_ int flag, _ int first, _ int "
+          "second) { if (flag > 0) { return first; } return second; }\n"
+          "    public static int Kept(_ int flag, _ int value) { auto "
+          "read = \\(int more) -> value + more; if (flag > 0) { return "
+          "read(1); } return 3; }\n"
+          "    public static int Often(_ int flag, _ int value) { int "
+          "total = 0; for (int i = 0; i < 50; i += 1) { if (flag > 0) {"
+          " total += value; } } return total; }\n"
+          "    public static int Down(_ int n, _ int spare) { if (n <= "
+          "0) { return 0; } return 1 + Down(n - 1, spare / 0); }\n";
+    constexpr auto kByNeedCases = std::to_array<
+        Visual::XSharp::Fuzzing::ExecutionCase>({
+        // An argument that the method never needs is never computed.
+        { false, false, 6, 0, 7, "return Pick(right, left / right);" },
+        { false, false, 6, 3, 2, "return Pick(right, left / right);" },
+        { false, false, 1, 0, 7, "return Pick(right, Never(left));" },
+        { false,
+          false,
+          8,
+          0,
+          11,
+          "return Pick(0, Never(left)) + Pick(1, Half(left));" },
+        { false, false, 5, 0, 6, "return Both(right, Never(left), left + 1);" },
+        { false,
+          false,
+          6,
+          3,
+          2,
+          "return Both(right, left / right, Never(left));" },
+        // A value handed through one method to another, and through a method
+        // that calls itself.
+        { false, false, 6, 0, 7, "return Pass(right, left / right);" },
+        { false, false, 6, 3, 2, "return Pass(right, left / right);" },
+        { false,
+          false,
+          6,
+          2,
+          4,
+          "return Pick(right, Pick(right, left / right) + 1);" },
+        { false, false, 5, 0, 5, "return Down(left, right);" },
+        // A local by need that is handed on, and that the caller needs as
+        // well.
+        { false,
+          false,
+          1,
+          0,
+          7,
+          "int x = Never(left); int y = Pick(right, x); return y;" },
+        { false,
+          false,
+          6,
+          0,
+          14,
+          "int x = left / right; return Pick(right, x) + Pick(right, x "
+          "+ 1);" },
+        { false,
+          false,
+          6,
+          3,
+          5,
+          "int x = left / right; return Pick(right, x) + Pick(right, x "
+          "+ 1);" },
+        { false,
+          false,
+          30,
+          1,
+          60,
+          "int x = Step(left); int y = Pick(right, x); return right > 0"
+          " ? x + y : y;" },
+        { false,
+          false,
+          30,
+          0,
+          7,
+          "int x = Step(left); int y = Pick(right, x); return right > 0"
+          " ? x + y : y;" },
+        { false,
+          false,
+          6,
+          3,
+          6,
+          "int x = left / right; int y = x + 1; return Pass(right, y * "
+          "2);" },
+        { false,
+          false,
+          6,
+          0,
+          7,
+          "int x = left / right; int y = x + 1; return Pass(right, y * "
+          "2);" },
+        // An argument means what its variables held at the call, and a store
+        // in it happens there.
+        { false,
+          false,
+          8,
+          1,
+          12100,
+          "int a = left; int r = Pick(right, Half(a) + a); a = 100; "
+          "return r * 1000 + a;" },
+        { false,
+          false,
+          1,
+          0,
+          17,
+          "int n = 0; int r = Pick(0, (n += 1) + left); return n * 10 +"
+          " r;" },
+        // An argument the method reads often, one a closure of the method
+        // captures, and one for each pass of a loop.
+        { false, false, 8, 1, 200, "return Often(right, Half(left));" },
+        { false, false, 8, 0, 0, "return Often(right, Half(left));" },
+        { false, false, 6, 3, 3, "return Kept(1, left / right);" },
+        { false,
+          false,
+          12,
+          0,
+          29,
+          "int t = 0; for (int i = 0; i <= 3; i += 1) { t += Pick(i, "
+          "left / i); } return t;" },
+    });
+
     constexpr std::string_view kLazyHelpers
         = "    public static int Never(_ int v) { return Never(v + 1); }\n"
           "    public static int Half(_ int v) { return v / 2; }\n";
@@ -901,6 +1037,24 @@ namespace
                 llvm::errs()
                     << "closure case left " << (after - before)
                     << " AARC allocation(s) behind: " << closureCase.body
+                    << '\n';
+                return 1;
+            }
+        }
+        for (const auto &byNeedCase : kByNeedCases)
+        {
+            const auto before
+                = Visual::XSharp::Runtime::Aarc::LiveAllocations();
+            Visual::XSharp::Fuzzing::ExerciseExecutionCases(
+                "By-need execution",
+                std::span(&byNeedCase, 1U),
+                kByNeedHelpers);
+            const auto after = Visual::XSharp::Runtime::Aarc::LiveAllocations();
+            if (after != before)
+            {
+                llvm::errs()
+                    << "by-need case left " << (after - before)
+                    << " AARC allocation(s) behind: " << byNeedCase.body
                     << '\n';
                 return 1;
             }

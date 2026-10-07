@@ -110,6 +110,8 @@ namespace Visual::XSharp::Core::CorePrep
                     return Prepared::Operation::BitwiseNot;
                 case Primitive::TypeIs:
                     return Prepared::Operation::TypeIs;
+                case Primitive::Memoize:
+                    return Prepared::Operation::Memoize;
             }
             // Reaching this point means the Core enum and adapter diverged.
             // C++20 has no std::unreachable; abort explicitly instead of
@@ -1099,11 +1101,26 @@ namespace Visual::XSharp::Core::CorePrep
             }
             Cursor cursor{ State{ nextSymbol, 1U, {}, {} }, 0U, {}, {}, true };
             PrepareStatements(cursor, function.body);
-            // Core verification proves every path returns. A body that still
-            // falls off its end is marked instead of given an invented value.
+            // A function without a result may end without a return:
+            // reaching the end of its body returns. For a function with a
+            // result Core verification proves every path returns, so a body
+            // that still falls off its end is marked instead of given an
+            // invented value.
             if (cursor.open)
-                cursor.Close(
-                    { Prepared::Terminator::Kind::Unreachable, {}, 0U, 0U });
+            {
+                if (function.returnType.kind == Prepared::Type::Kind::Unit)
+                    cursor.Close(
+                        { Prepared::Terminator::Kind::Return,
+                          Prepared::Atom::constant(Prepared::Literal{},
+                                                   Prepared::Type::unit()),
+                          0U,
+                          0U });
+                else
+                    cursor.Close({ Prepared::Terminator::Kind::Unreachable,
+                                   {},
+                                   0U,
+                                   0U });
+            }
             return {
                 Prepared::Function{ function.symbol,
                                     std::move(parameters),

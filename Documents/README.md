@@ -69,7 +69,7 @@ following vocabulary:
 - [Template monomorphization](MONOMORPHIZATION.md) defines concrete specialization identity, placement, demand discovery, and current limits.
 - [Numeric types](NUMERIC-TYPES.md) records fixed scalar widths and the gap between frontend semantics and the current Core
   transport.
-- [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, Core wire v8, Xpp, Xmm, and LLVM.
+- [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, Core wire v9, Xpp, Xmm, and LLVM.
 - [Artifact wire](ARTIFACT-WIRE.md) defines the bounded internal Core and CorePrep transport contracts.
 - [Evaluation by need](EVALUATION.md) says how much of the lazy evaluation of the language the compiler implements,
   how a value is deferred, and what is pending.

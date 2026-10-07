@@ -88,6 +88,17 @@ data CorePrimitive
       CoreBitwiseNot
     | -- | Runtime type-membership predicate.
       CoreTypeIs
+    | {- | A callable that remembers its result.
+
+      The operand is a callable without parameters. The result is a callable
+      of the same type that calls the operand the first time it is called,
+      keeps what the operand returned, and returns that again on every later
+      call without calling the operand. Every copy of the result shares the
+      one remembered value. This is the suspended computation of evaluation
+      by need: a value that is computed when it is first needed, at most
+      once, wherever the need arises.
+      -}
+      CoreMemoize
     deriving (Eq, Ord, Read, Show)
 
 -- | Typed expression graph consumed by Core verification and optimization.

@@ -493,6 +493,32 @@ Arithmetic operands must be numeric and use the same type. Comparisons return
 `bool`. Logical operands accept bool or numeric context and return `bool`.
 Unary primitives take one operand; other primitives take two.
 
+An integer quotient or remainder by zero, and a shift by an amount that is
+negative or not less than the width of its left operand, have no value. Core
+says nothing about them; the optimizer does not fold them, and generated code
+stops when it reaches one. `EVALUATION.md` has the details.
+
+#### Memoize
+
+`CoreMemoize` is a unary primitive whose operand is a callable. It is how a
+value by need is handed from one function to another; `EVALUATION.md` says
+when the frontend produces it.
+
+- The operand is a callable without parameters whose result is `bool` or
+  numeric.
+- The result is a callable of the same type. The first call of it calls the
+  operand and remembers what it returned; every later call returns the
+  remembered value and does not call the operand again.
+- The result is a value like any other callable: it may be bound, passed,
+  captured and returned, and every copy shares the one remembered value.
+
+The Core verifiers reject any other operand with `VXC1073`. The native
+CorePrep verifier reports `VXC1074` and the Haskell one `VXC0025`, the Xpp
+verifier `VXP1047` and the Xmm verifier `VXL1053`; each of the last four also
+requires the result to have the operand's type. The optimizer does not fold
+the primitive, and `MemoizeTests.hs` pins that it neither repeats a remembered
+computation nor turns one remembering callable into two.
+
 ### Let
 
 `CoreLet` binds one immutable symbol to a value and evaluates a body with that

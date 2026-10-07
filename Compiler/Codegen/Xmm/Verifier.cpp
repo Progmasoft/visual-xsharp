@@ -172,6 +172,7 @@ namespace Visual::XSharp::Xmm
                 case xmm::Opcode::Negate:
                 case xmm::Opcode::NotBool:
                 case xmm::Opcode::BitwiseNot:
+                case xmm::Opcode::Memoize:
                 case xmm::Opcode::RetainStrong:
                 case xmm::Opcode::ReleaseStrong:
                 case xmm::Opcode::MakeWeak:
@@ -539,6 +540,31 @@ namespace Visual::XSharp::Xmm
                                     "VXL1050",
                                     "bitwise instruction operands and result "
                                     "must use one integer type");
+                }
+                else if (instruction.opcode == xmm::Opcode::Memoize)
+                {
+                    const auto remembers
+                        = instruction.operands.size() == 1U
+                          && instruction.operands.front().type.kind
+                                 == core::Type::Kind::Function
+                          && instruction.operands.front().type.components.size()
+                                 == 1U
+                          && (instruction.operands.front()
+                                      .type.components.front()
+                                      .kind
+                                  == core::Type::Kind::Bool
+                              || core::is_numeric(
+                                  instruction.operands.front()
+                                      .type.components.front()));
+                    if (!remembers
+                        || instruction.result_type
+                               != instruction.operands.front().type)
+                        context.add(
+                            IssueKind::OperandType,
+                            "VXL1053",
+                            "memoization requires one callable without "
+                            "parameters whose result is Bool or numeric, and "
+                            "yields a callable of the same type");
                 }
                 else if (instruction.opcode == xmm::Opcode::FloorDivide)
                 {

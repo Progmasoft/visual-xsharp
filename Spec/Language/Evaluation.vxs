@@ -93,6 +93,19 @@ Use(first);                   -- as two statements the order is determined:
 Use(second);                  -- the failure is that of first, and this statement is never reached
 
 -- ============================================================================
+-- Example 14: 2. Failure
+-- Demonstrates: Some values cannot be computed at all. An integer quotient or remainder by zero has no value,
+--   with /, with // and with %. A shift has no value when its amount is negative or is not less than the width
+--   of the shifted value. A program that needs such a value stops there; it does not continue with some other
+--   value in its place, and nothing after that point happens.
+
+int quotient = total / count;  -- no value when count is zero
+int rest = total % count;      -- no value when count is zero
+int bit = 1 << position;       -- no value when position is negative, or 64 or more for an int
+
+Use(quotient);                 -- when count is zero the program stops here
+
+-- ============================================================================
 -- Example 7: 3. Suspended Computations
 -- Demonstrates: A value that has not been computed yet is a suspended computation, a thunk. Thunks are not
 --   part of the source language: there is no syntax that creates, tests or forces one, and the type of a name

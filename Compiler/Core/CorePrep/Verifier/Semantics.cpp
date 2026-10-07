@@ -391,6 +391,7 @@ namespace visual_xsharp::core
                 case Operation::BitwiseXor:
                 case Operation::BitwiseOr:
                 case Operation::BitwiseNot:
+                case Operation::Memoize:
                     return operands.empty()
                                ? std::nullopt
                                : std::optional<Type>(operands.front().type);
@@ -398,6 +399,17 @@ namespace visual_xsharp::core
                     return std::nullopt;
             }
             return std::nullopt;
+        }
+
+        // Whether a callable of this type can remember its result: it takes
+        // no parameters, and its result owns nothing.
+        [[nodiscard]] auto
+        remembers_result(const Type &type) -> bool
+        {
+            return type.kind == Type::Kind::Function
+                   && type.components.size() == 1U
+                   && (type.components.front().kind == Type::Kind::Bool
+                       || is_numeric(type.components.front()));
         }
 
         void
@@ -620,6 +632,16 @@ namespace visual_xsharp::core
                         issues.push_back(
                             issue("VXC1052",
                                   "bitwise not requires one integer operand",
+                                  function,
+                                  block));
+                    break;
+                case Operation::Memoize:
+                    if (arity != 1U
+                        || !remembers_result(instruction.operands.front().type))
+                        issues.push_back(
+                            issue("VXC1074",
+                                  "memoization requires one callable without "
+                                  "parameters whose result is bool or numeric",
                                   function,
                                   block));
                     break;

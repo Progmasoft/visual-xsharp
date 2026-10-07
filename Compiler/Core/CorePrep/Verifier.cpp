@@ -48,6 +48,7 @@ namespace visual_xsharp::core
                 case Operation::Negate:
                 case Operation::LogicalNot:
                 case Operation::BitwiseNot:
+                case Operation::Memoize:
                     return 1;
                 default:
                     return 2;

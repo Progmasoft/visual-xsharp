@@ -58,7 +58,11 @@ namespace visual_xsharp::xpp
         BitwiseXor,     ///< Bitwise exclusive disjunction.
         BitwiseOr,      ///< Bitwise inclusive disjunction.
         BitwiseNot,     ///< Bitwise complement.
-        TypeIs          ///< Runtime type test.
+        TypeIs,         ///< Runtime type test.
+        /// A callable that remembers its result. The operand is a callable
+        /// without parameters; the result calls it at most once, at its
+        /// own first call, and returns what it returned from then on.
+        Memoize
     };
 
     /// Typed input to an Xpp instruction.

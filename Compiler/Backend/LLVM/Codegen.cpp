@@ -898,6 +898,9 @@ namespace Visual::XSharp::Backend::LLVM
             // the owning generator retains one shared LLVM context and state.
 #include "CodegenOperations.inc"
 
+            // The ownership runtime an executable carries in its own module.
+#include "CodegenFreestandingRuntime.inc"
+
             [[nodiscard]] auto
             DefineFunction(FunctionState &state) -> bool
             {
@@ -970,6 +973,9 @@ namespace Visual::XSharp::Backend::LLVM
                 builder.CreateCall(entry->type, entry->value);
                 builder.CreateRet(
                     llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0));
+                // An executable is linked from its own modules alone, so the
+                // module with the entry also holds the ownership runtime.
+                DefineFreestandingRuntime();
                 return true;
             }
         };

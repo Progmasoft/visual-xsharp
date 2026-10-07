@@ -103,7 +103,8 @@ verifyPrimitive primitive atoms resultType
     | any ((== ErrorType) . atomType) atoms = [problem "VXC0008" "CorePrep primitive contains an unresolved type"]
     | otherwise = operandProblems ++ resultProblems
     where
-        expectedArity = if primitive `elem` [Core.CoreNegate, Core.CoreLogicalNot, Core.CoreBitwiseNot] then 1 else 2
+        expectedArity =
+            if primitive `elem` [Core.CoreNegate, Core.CoreLogicalNot, Core.CoreBitwiseNot, Core.CoreMemoize] then 1 else 2
         comparisonOrLogical =
             if primitive
                 `elem` [ Core.CoreLessThan
@@ -142,6 +143,13 @@ verifyPrimitive primitive atoms resultType
                     | referenceLike subjectType && typeSpelling identityType == "uint" -> []
                     | otherwise -> [problem "VXC0024" "CorePrep type test requires a reference subject and uint identity"]
                 _ -> []
+            | primitive == Core.CoreMemoize = case operandTypes of
+                [FunctionType [] result] | result == boolType || isNumericType result -> []
+                _ ->
+                    [ problem
+                        "VXC0025"
+                        "CorePrep memoization requires a callable without parameters whose result is bool or numeric"
+                    ]
             | not operandsAgree = [problem "VXC0019" "CorePrep primitive operand types do not agree"]
             | logical && not booleanContext = [problem "VXC0020" "CorePrep logical primitive requires bool or numeric operands"]
             | integerOnly && not integer = [problem "VXC0022" "CorePrep bitwise primitive requires integer operands"]

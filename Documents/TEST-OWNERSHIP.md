@@ -77,6 +77,7 @@ Representative labels are:
 //Compiler/Cli/Tests:cli_parser_tests
 //Compiler/Cli/Commands/Tests:execution_status_tests
 //Compiler/Cli/Commands/Tests:cli_command_tests
+//Compiler/Cli/Commands/Tests:executable_run_tests
 //Compiler/Core/Tests:core_pipeline_tests
 //Compiler/Driver/Tests:closure_pipeline_tests
 //Compiler/Driver/Tests:project_artifact_tests

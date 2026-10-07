@@ -16,6 +16,12 @@ it is written, whether or not the value around it is ever read, and a value
 means what its variables held where it was bound, however late it is
 computed. The tests pin both.
 
+An argument is a value like any other. A method receives it by need: it is
+computed when the method first needs it, at most once however often the
+method reads it and however many methods it is handed through, and not at
+all when no one needs it. The caller and the method share the one
+computation when both need the value.
+
 The expected values are written by hand.
 -}
 module LazyEvaluationTests (lazyEvaluationTests) where
@@ -56,6 +62,26 @@ lazyEvaluationTests =
              -- suffices for one computation does not suffice for fifty.
              ("a value is computed at most once", runsWithin 2000 neededOften (100, 1) == Just 5000)
            , ("the same work fifty times exceeds that budget", runsWithin 2000 computedOften (100, 1) == Nothing)
+           , -- An argument the method reads fifty times is computed once.
+             ("an argument is computed at most once", runsWithin 2000 "return Often(right, Step(left));" (100, 1) == Just 5000)
+           , -- The caller and the method it calls need the same value:
+             -- whoever needs it first computes it for both. The budget that
+             -- suffices for one computation does not suffice for two.
+             ("a value the caller and the method both need is computed once", runsWithin 800 sharedWithCallee (300, 1) == Just 600)
+           , ("the same work in the caller and in the method exceeds that budget", runsWithin 800 computedTwice (300, 1) == Nothing)
+           , -- An argument that may fail is handed on as a suspended
+             -- computation; one that cannot is passed as the value it is.
+             ("an argument that may fail is suspended", mentions "CoreMemoize" artifactCore "return Pick(right, left / right);")
+           , ("an argument that cannot fail is passed as a value", not (mentions "CoreMemoize" artifactCore "return Pick(right, left + 1);"))
+           , -- The method itself is unchanged: it still takes values, for
+             -- every caller that has them.
+             ("a method with a parameter by need still takes values", calls "Pick" [1, 5] == Just 5 && calls "Pick" [0, 5] == Just 7)
+           , -- Pending, and pinned so that a change shows: a callable
+             -- receives its arguments as values, and an argument that a
+             -- closure of the method captures is computed when the method
+             -- is entered.
+             ("an argument of a callable is still computed at the call", runs artifactCore throughCallable (6, 0) == Nothing)
+           , ("a captured argument is still computed on entry", runs artifactCore "return Kept(0, left / right);" (1, 0) == Nothing)
            , -- A value that reads another value by need twice does not
              -- carry the computation of that value twice: the Core of a
              -- chain grows with its length, not with a power of it.
@@ -65,6 +91,14 @@ lazyEvaluationTests =
         neededOnOnePath = "int x = left / right; if (right > 0) { return x; } return 7;"
         neededOften = "int x = Step(left); int t = 0; for (int i = 0; i < 50; i += 1) { if (right > 0) { t += x; } } return t;"
         computedOften = "int t = 0; for (int i = 0; i < 50; i += 1) { if (right > 0) { t += Step(left); } } return t;"
+        sharedWithCallee = "int x = Step(left); int y = Pick(right, x); return right > 0 ? x + y : y;"
+        computedTwice = "return Step(left) + Pick(right, Step(left));"
+        throughCallable = "auto f = \\(int a, int b) -> a > 0 ? b : 7; return f(right, left / right);"
+        calls name arguments = case compileSource (program "return 0;") of
+            Right artifacts -> case runFunction (artifactCore artifacts) name (map IntegerValue arguments) of
+                Just (IntegerValue value) -> Just value
+                _ -> Nothing
+            Left _ -> Nothing
 
 -- | A program around the given body of @Evaluate@.
 program :: String -> String
@@ -75,6 +109,12 @@ program statements =
         , "    public static int Never(_ int v) { return Never(v + 1); }"
         , "    public static int Half(_ int v) { return v / 2; }"
         , "    public static int Step(_ int n) { return n > 0 ? 1 + Step(n - 1) : 0; }"
+        , "    public static int Pick(_ int flag, _ int value) { if (flag > 0) { return value; } return 7; }"
+        , "    public static int Pass(_ int flag, _ int value) { return Pick(flag, value); }"
+        , "    public static int Both(_ int flag, _ int first, _ int second) { if (flag > 0) { return first; } return second; }"
+        , "    public static int Kept(_ int flag, _ int value) { auto read = \\(int more) -> value + more; if (flag > 0) { return read(1); } return 3; }"
+        , "    public static int Often(_ int flag, _ int value) { int total = 0; for (int i = 0; i < 50; i += 1) { if (flag > 0) { total += value; } } return total; }"
+        , "    public static int Down(_ int n, _ int spare) { if (n <= 0) { return 0; } return 1 + Down(n - 1, spare / 0); }"
         , "    public static int Evaluate(_ int left, _ int right) {"
         , "        " ++ statements
         , "    }"
@@ -133,6 +173,41 @@ evaluationCases =
         )
     , ("int x = left / right; int n = 0; do { n += 1; } while (right > 0 && n < x); return n;", [((6, 0), 1), ((6, 2), 3)])
     , ("int x = left / right; return match (right) { 0 -> 1, _ if x > 1 -> 2, _ -> 3 };", [((6, 0), 1), ((6, 3), 2), ((6, 6), 3)])
+    , -- An argument that the method never needs is never computed: not a
+      -- division by zero, and not a call that never returns.
+      ("return Pick(right, left / right);", [((6, 0), 7), ((6, 3), 2)])
+    , ("return Pick(right, Never(left));", [((1, 0), 7)])
+    , ("return Pick(0, Never(left)) + Pick(1, Half(left));", [((8, 0), 11)])
+    , ("return Both(right, Never(left), left + 1);", [((5, 0), 6)])
+    , ("return Both(right, left / right, Never(left));", [((6, 3), 2)])
+    , -- A value handed through one method to another is computed by the
+      -- one that needs it, if any does.
+      ("return Pass(right, left / right);", [((6, 0), 7), ((6, 3), 2)])
+    , ("return Pick(right, Pick(right, left / right) + 1);", [((6, 0), 7), ((6, 2), 4)])
+    , -- A method that calls itself hands a value on at every level; none
+      -- of them is ever needed.
+      ("return Down(left, right);", [((5, 0), 5), ((0, 0), 0)])
+    , -- A local by need is handed on by need, alone and inside a larger
+      -- argument, and to several methods.
+      ("int x = Never(left); int y = Pick(right, x); return y;", [((1, 0), 7)])
+    , ("int x = left / right; return Pick(right, x) + Pick(right, x + 1);", [((6, 0), 14), ((6, 3), 5)])
+    , ("int x = Step(left); int y = Pick(right, x); return right > 0 ? x + y : y;", [((30, 1), 60), ((30, 0), 7)])
+    , ("int x = left / right; int y = x + 1; return Pass(right, y * 2);", [((6, 0), 7), ((6, 3), 6)])
+    , -- An argument means what its variables held at the call.
+      ("int a = left; int r = Pick(right, Half(a) + a); a = 100; return r * 1000 + a;", [((8, 1), 12100), ((8, 0), 7100)])
+    , -- A store in an argument happens at the call, whether or not the
+      -- method ever reads the argument.
+      ("int n = 0; int r = Pick(0, (n += 1) + left); return n * 10 + r;", [((1, 0), 17)])
+    , -- A method reads an argument often and it is one value.
+      ("return Often(right, Half(left));", [((8, 1), 200), ((8, 0), 0)])
+    , -- An argument that a closure of the method captures is a value of
+      -- the closure.
+      ("return Kept(1, left / right);", [((6, 3), 3)])
+    , ("return Kept(0, left / right);", [((6, 3), 3)])
+    , -- In a loop every pass hands on a value of its own.
+        ( "int t = 0; for (int i = 0; i <= 3; i += 1) { t += Pick(i, left / i); } return t;"
+        , [((12, 0), 29)]
+        )
     , -- An expression written as a statement is evaluated: that is all a
       -- statement can be for.
       ("int n = 0; _ = (n += 1) + left; return n;", [((1, 0), 1)])

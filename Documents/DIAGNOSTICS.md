@@ -532,6 +532,21 @@ Xpp and Xmm have bounded public readers. Malformed artifacts report framing, ver
 at decode. Structurally valid but semantically invalid artifacts report the owning Xpp or Xmm verifier failure before
 optimization or lowering.
 
+A callable that remembers its result is checked by every stage that carries it. Each stage reports under its own code
+that the operand is not a callable without parameters whose result is `bool` or numeric, or that the result does not
+have the operand's type:
+
+| Code | Stage |
+| --- | --- |
+| `VXC1073` | Core, in the Haskell and the native verifier |
+| `VXC0025` | CorePrep, in the Haskell verifier |
+| `VXC1074` | CorePrep, in the native verifier |
+| `VXP1047` | Xpp |
+| `VXL1053` | Xmm |
+
+None of them can be reached from source: the frontend produces the operation only in a form that passes. They report a
+malformed artifact or a defect of a stage.
+
 ## Safe output behavior
 
 Failure must not make an old file look newly built.

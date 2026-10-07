@@ -56,6 +56,10 @@ namespace visual_xsharp::xmm
         BitwiseOr,           ///< Bitwise inclusive disjunction.
         BitwiseNot,          ///< Bitwise complement.
         TypeIs,              ///< Runtime type test.
+        /// A callable that remembers its result. The operand is a callable
+        /// without parameters; the result calls it at most once, at its
+        /// own first call, and returns what it returned from then on.
+        Memoize,
 
         // Source-compatible names for pre-v3 native clients. They intentionally
         // alias the typed operations; width and signedness now come from

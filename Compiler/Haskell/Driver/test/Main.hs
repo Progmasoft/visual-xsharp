@@ -26,6 +26,8 @@ import InferredReturnTests (inferredReturnTests)
 import IntegerFlowTests (integerFlowTests)
 import IterationTests (iterationTests)
 import LazyEvaluationTests (lazyEvaluationTests)
+import FallThroughTests (fallThroughTests)
+import MemoizeTests (memoizeTests)
 import LoopExpressionTests (loopExpressionTests)
 import LoopFlowOracleTests (loopFlowOracleTests)
 import LoopFlowTests (loopFlowTests)
@@ -125,14 +127,14 @@ main = do
     check "Core wire rejects trailing bytes" coreWireRejectsTrailingInput
     check "Core wire rejects unresolved types" coreWireRejectsUnresolvedType
     check "Core wire preserves Unicode scalar values" coreWirePreservesUnicode
-    check "Core wire v8 provenance fields remain stable" coreWireGoldenDocument
-    check "Core wire v8 preserves non-empty source-owner field order" coreWireProjectSourceGolden
+    check "Core wire v9 provenance fields remain stable" coreWireGoldenDocument
+    check "Core wire v9 preserves non-empty source-owner field order" coreWireProjectSourceGolden
     check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
     check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
     check "CorePrep wire codec rejects unsupported types" wireRejectsUnsupportedType
     check "CorePrep wire codec preserves Unicode scalar values" wirePreservesUnicode
-    check "CorePrep wire v6 provenance fields remain stable" wireGoldenDocument
+    check "CorePrep wire v7 provenance fields remain stable" wireGoldenDocument
     checkIO "real Core artifact round-trips through .core I/O" coreArtifactRoundTrip
     checkIO "Core artifact rejects an invalid Core module" coreArtifactRejectsInvalidModule
     checkIO "Core artifact rejects a non-.core path" coreArtifactRejectsExtension
@@ -182,6 +184,8 @@ main = do
     mapM_ (uncurry check) inferredReturnTests
     mapM_ (uncurry check) enumTests
     mapM_ (uncurry check) lazyEvaluationTests
+    mapM_ (uncurry check) memoizeTests
+    mapM_ (uncurry check) fallThroughTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests
     mapM_ (uncurry check) nestingLimitTests
@@ -552,7 +556,7 @@ coreWireGoldenDocument =
         moduleValue = CoreModuleWithSources (QualifiedName [Identifier "Demo"]) [mainFunction] [] []
         bytes =
             upgradeSimpleV5
-                0x08
+                0x09
                 [ 0x56
                 , 0x58
                 , 0x43
@@ -647,7 +651,7 @@ coreWireProjectSourceGolden =
                 [(symbolIdValue (resolvedSymbol mainName), source)]
         goldenHex =
             unwords
-                [ "56 58 43 52 08 00 00 00 01 00 00 00"
+                [ "56 58 43 52 09 00 00 00 01 00 00 00"
                 , "04 00 00 00 44 00 00 00 65 00 00 00"
                 , "6d 00 00 00 6f 00 00 00 01 00 00 00"
                 , "10 00 00 00 53 00 00 00 6f 00 00 00"
@@ -678,7 +682,7 @@ coreWireProjectSourceGolden =
             _ -> Nothing
 
 -- Adding the empty source catalog and function owner to the compact v5 golden
--- shape gives an independent byte-level v8 expectation. The owner follows the
+-- shape gives an independent byte-level v9 expectation. The owner follows the
 -- function symbol, before its parameter vector, matching the wire contract.
 upgradeSimpleV5 :: Word8 -> [Word8] -> [Word8]
 upgradeSimpleV5 currentVersion v5Bytes =
@@ -748,7 +752,7 @@ goldenModule =
 goldenBytes :: [Word8]
 goldenBytes =
     upgradeSimpleV5
-        0x06
+        0x07
         [ 0x56
         , 0x58
         , 0x43
@@ -850,7 +854,7 @@ coreArtifactRoundTrip = case compile sample of
     Left _ -> pure False
     Right artifacts -> do
         temporary <- getTemporaryDirectory
-        let path = temporary </> "visual-xsharp-core-wire-v8.core"
+        let path = temporary </> "visual-xsharp-core-wire-v9.core"
             cleanup = doesFileExist path >>= \exists -> if exists then removeFile path else pure ()
             value = artifactOptimizedCore artifacts
         ( do

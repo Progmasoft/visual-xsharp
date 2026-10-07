@@ -200,7 +200,7 @@ namespace
     }
 
     [[nodiscard]] auto
-    ReadGoldenHex(std::string_view filename = "wire-v8.hex")
+    ReadGoldenHex(std::string_view filename = "wire-v9.hex")
         -> std::vector<std::uint8_t>
     {
         const auto path = std::filesystem::path(__FILE__).parent_path()
@@ -234,7 +234,7 @@ namespace
     }
 } // namespace
 
-TEST_CASE("native VXCR v8 codec matches the Haskell golden contract")
+TEST_CASE("native VXCR v9 codec matches the Haskell golden contract")
 {
     const auto expected = ReadGoldenHex();
     const auto encoded = Core::Wire::Encode(GoldenModule());
@@ -284,7 +284,7 @@ TEST_CASE("VXCR reader rejects malformed boundaries and configured limits")
     }
 }
 
-TEST_CASE("VXCR v8 carries Haskell Core closure and source-owner fields")
+TEST_CASE("VXCR v9 carries Haskell Core closure and source-owner fields")
 {
     const auto source = ClosureModule();
     REQUIRE(Core::Verify(source).empty());
@@ -309,7 +309,7 @@ TEST_CASE("native pipeline consumes a closure artifact emitted by Haskell")
     // This golden file is emitted from closure-boundary.vxs by vxs-frontend,
     // rather than re-encoded by the C++ model. It therefore locks the actual
     // cross-language expression tag and field order that production uses.
-    const auto bytes = ReadGoldenHex("wire-v8-closure.hex");
+    const auto bytes = ReadGoldenHex("wire-v9-closure.hex");
     const auto decoded = Core::Wire::Decode(bytes);
     REQUIRE(decoded);
     REQUIRE(Core::Verify(*decoded.module).empty());
@@ -359,7 +359,7 @@ TEST_CASE("native pipeline preserves non-empty Haskell source ownership bytes")
 {
     // Both owner fields are non-empty in this golden so field order cannot be
     // accidentally hidden by interchangeable zero-length encodings.
-    const auto bytes = ReadGoldenHex("wire-v8-project-source.hex");
+    const auto bytes = ReadGoldenHex("wire-v9-project-source.hex");
     const auto decoded = Core::Wire::Decode(bytes);
     REQUIRE(decoded);
     REQUIRE(Core::Verify(*decoded.module).empty());
@@ -547,7 +547,7 @@ TEST_CASE("Core adapter creates explicit CorePrep CFG and temporaries")
     REQUIRE(visual_xsharp::core::verify(prepared).empty());
 }
 
-TEST_CASE("Core v8 loops round-trip and lower to explicit back-edges")
+TEST_CASE("Core v9 loops round-trip and lower to explicit back-edges")
 {
     const auto integer = [](std::int64_t value) {
         return Core::Expression::Constant(value, Core::Type::int64());
@@ -599,7 +599,7 @@ TEST_CASE("Core v8 loops round-trip and lower to explicit back-edges")
     };
     const Core::Module module{ { U"Iteration" }, { std::move(function) } };
 
-    CHECK(Core::Wire::kCurrentVersion == 8U);
+    CHECK(Core::Wire::kCurrentVersion == 9U);
     REQUIRE(Core::Verify(module).empty());
     const auto encoded = Core::Wire::Encode(module);
     REQUIRE(encoded);

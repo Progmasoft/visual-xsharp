@@ -70,6 +70,7 @@ namespace Visual::XSharp::Xpp
                 case IR::Opcode::Negate:
                 case IR::Opcode::LogicalNot:
                 case IR::Opcode::BitwiseNot:
+                case IR::Opcode::Memoize:
                 case IR::Opcode::RetainStrong:
                 case IR::Opcode::ReleaseStrong:
                 case IR::Opcode::MakeWeak:
@@ -341,6 +342,26 @@ namespace Visual::XSharp::Xpp
                     context.Add("VXP1045",
                                 "type test requires a reference subject, uint "
                                 "identity and Bool result");
+            }
+            else if (value.opcode == IR::Opcode::Memoize)
+            {
+                // The result is a new owner of the same callable type; the
+                // remembered value is kept in it and owns nothing.
+                const auto remembers
+                    = value.operands.size() == 1U
+                      && value.operands.front().type.kind
+                             == Core::Type::Kind::Function
+                      && value.operands.front().type.components.size() == 1U
+                      && (value.operands.front().type.components.front().kind
+                              == Core::Type::Kind::Bool
+                          || Core::is_numeric(
+                              value.operands.front().type.components.front()));
+                if (!remembers
+                    || value.result_type != value.operands.front().type)
+                    context.Add("VXP1047",
+                                "memoization requires one callable without "
+                                "parameters whose result is Bool or numeric, "
+                                "and yields a callable of the same type");
             }
             else if (value.opcode == IR::Opcode::FloorDivide)
             {
