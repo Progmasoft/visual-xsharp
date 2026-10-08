@@ -37,5 +37,7 @@ int
 main()
 {
     // The compiler runs on the stack it runs on in `vxs`.
-    return Visual::XSharp::Support::RunOnCompilerStack([] { return Smoke(); });
+    return Visual::XSharp::Support::RunOnCompilerStack([] {
+        return Smoke();
+    });
 }
