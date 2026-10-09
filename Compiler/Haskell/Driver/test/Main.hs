@@ -26,6 +26,8 @@ import InferredReturnTests (inferredReturnTests)
 import IntegerFlowTests (integerFlowTests)
 import IterationTests (iterationTests)
 import LazyEvaluationTests (lazyEvaluationTests)
+import ConsoleTests (consoleTests)
+import RuntimeCallTests (runtimeCallTests)
 import FallThroughTests (fallThroughTests)
 import MemoizeTests (memoizeTests)
 import LoopExpressionTests (loopExpressionTests)
@@ -127,8 +129,8 @@ main = do
     check "Core wire rejects trailing bytes" coreWireRejectsTrailingInput
     check "Core wire rejects unresolved types" coreWireRejectsUnresolvedType
     check "Core wire preserves Unicode scalar values" coreWirePreservesUnicode
-    check "Core wire v9 provenance fields remain stable" coreWireGoldenDocument
-    check "Core wire v9 preserves non-empty source-owner field order" coreWireProjectSourceGolden
+    check "Core wire v10 provenance fields remain stable" coreWireGoldenDocument
+    check "Core wire v10 preserves non-empty source-owner field order" coreWireProjectSourceGolden
     check "CorePrep wire codec round-trips the frontend result" wireRoundTrip
     check "CorePrep wire codec rejects truncated input" wireRejectsTruncation
     check "CorePrep wire codec rejects trailing input" wireRejectsTrailingInput
@@ -186,6 +188,8 @@ main = do
     mapM_ (uncurry check) lazyEvaluationTests
     mapM_ (uncurry check) memoizeTests
     mapM_ (uncurry check) fallThroughTests
+    mapM_ (uncurry check) runtimeCallTests
+    mapM_ (uncurry check) consoleTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests
     mapM_ (uncurry check) nestingLimitTests
@@ -556,7 +560,7 @@ coreWireGoldenDocument =
         moduleValue = CoreModuleWithSources (QualifiedName [Identifier "Demo"]) [mainFunction] [] []
         bytes =
             upgradeSimpleV5
-                0x09
+                0x0a
                 [ 0x56
                 , 0x58
                 , 0x43
@@ -651,7 +655,7 @@ coreWireProjectSourceGolden =
                 [(symbolIdValue (resolvedSymbol mainName), source)]
         goldenHex =
             unwords
-                [ "56 58 43 52 09 00 00 00 01 00 00 00"
+                [ "56 58 43 52 0A 00 00 00 01 00 00 00"
                 , "04 00 00 00 44 00 00 00 65 00 00 00"
                 , "6d 00 00 00 6f 00 00 00 01 00 00 00"
                 , "10 00 00 00 53 00 00 00 6f 00 00 00"
@@ -682,7 +686,7 @@ coreWireProjectSourceGolden =
             _ -> Nothing
 
 -- Adding the empty source catalog and function owner to the compact v5 golden
--- shape gives an independent byte-level v9 expectation. The owner follows the
+-- shape gives an independent byte-level v10 expectation. The owner follows the
 -- function symbol, before its parameter vector, matching the wire contract.
 upgradeSimpleV5 :: Word8 -> [Word8] -> [Word8]
 upgradeSimpleV5 currentVersion v5Bytes =
@@ -752,7 +756,7 @@ goldenModule =
 goldenBytes :: [Word8]
 goldenBytes =
     upgradeSimpleV5
-        0x07
+        0x08
         [ 0x56
         , 0x58
         , 0x43
@@ -854,7 +858,7 @@ coreArtifactRoundTrip = case compile sample of
     Left _ -> pure False
     Right artifacts -> do
         temporary <- getTemporaryDirectory
-        let path = temporary </> "visual-xsharp-core-wire-v9.core"
+        let path = temporary </> "visual-xsharp-core-wire-v10.core"
             cleanup = doesFileExist path >>= \exists -> if exists then removeFile path else pure ()
             value = artifactOptimizedCore artifacts
         ( do

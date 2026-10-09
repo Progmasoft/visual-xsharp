@@ -60,6 +60,11 @@ namespace visual_xsharp::xmm
         /// without parameters; the result calls it at most once, at its
         /// own first call, and returns what it returned from then on.
         Memoize,
+        /// A call of a function of the runtime. The first operand is an
+        /// integer literal, the identity of the function in the catalog of
+        /// `Visual/XSharp/Core/RuntimeCall.hpp`; the operands after it are
+        /// the arguments.
+        RuntimeCall,
 
         // Source-compatible names for pre-v3 native clients. They intentionally
         // alias the typed operations; width and signedness now come from

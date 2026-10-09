@@ -84,11 +84,11 @@ symbol validity, parameter uniqueness, nested expressions, and return behavior.
 Optimization recursively folds capture initializers and closure bodies without
 reordering captures.
 
-Core wire version 9 serializes ownership, captures, parameters, return type,
+Core wire version 10 serializes ownership, captures, parameters, return type,
 nested statements, and structured loop statements. Existing byte, count,
 type-depth, and expression-depth limits also apply to closures.
 
-The native VXCR v9 reader and writer carry the same closure expression tag and
+The native VXCR v10 reader and writer carry the same closure expression tag and
 field order as the Haskell frontend. The C++ Core verifier validates capture
 ownership, callable shape, nested body returns, and capture mutation before
 CorePrep lifting. This keeps callable-containing `.vxs` input on the ordinary
@@ -106,14 +106,14 @@ CorePrep converts each closure by:
 6. processing that queue until nested closures are also lifted.
 
 CorePrep verification checks callable result type, lifted target, capture atom
-types, symbol validity, and non-owning restrictions. CorePrep wire v7 preserves
+types, symbol validity, and non-owning restrictions. CorePrep wire v8 preserves
 this lifted closure metadata. Xpp wire v3 gives closure creation a dedicated
 operation tag; a function symbol is never encoded as a fake data operand. Xpp and
-Xmm wire v6 also retain source catalog and function ownership metadata.
+Xmm wire v7 also retain source catalog and function ownership metadata.
 
 ## Native C++ stages
 
-The C++20 Xpp/Xmm decoders consume their version 6 contracts. Xpp retains the
+The C++20 Xpp/Xmm decoders consume their version 7 contracts. Xpp retains the
 lifted symbol, ordered operands, ownership vector, and callable result. Its
 verifier checks the target's hidden parameter prefix against captures.
 

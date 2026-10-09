@@ -170,6 +170,25 @@ CreateClosureDestructor(llvm::StructType *payload,
     return destructor;
 }
 
+/// The LLVM type of the metadata record an allocation is described by; it
+/// mirrors `VxsAarcTypeMetadata` of the public runtime ABI.
+[[nodiscard]] auto
+ObjectMetadataType() -> llvm::StructType *
+{
+    auto *pointer = llvm::PointerType::get(context, 0);
+    auto *sizeType = llvm::Triple(module.getTargetTriple()).isArch64Bit()
+                         ? llvm::Type::getInt64Ty(context)
+                         : llvm::Type::getInt32Ty(context);
+    std::array<llvm::Type *, 7U> fields{ llvm::Type::getInt32Ty(context),
+                                         llvm::Type::getInt32Ty(context),
+                                         llvm::Type::getInt64Ty(context),
+                                         sizeType,
+                                         sizeType,
+                                         pointer,
+                                         pointer };
+    return llvm::StructType::get(context, fields, false);
+}
+
 /// Allocates an AARC object with the given payload and destructor.
 ///
 /// TypeMetadata mirrors the public runtime ABI. Size is expressed as an
@@ -551,11 +570,142 @@ RequireShiftAmount(llvm::IRBuilder<> &builder, llvm::Value *amount)
         { amount, llvm::ConstantInt::get(type, type->getBitWidth()) });
 }
 
+/// Lowers a call of a function of the runtime.
+///
+/// The verifiers have checked the call against its row of the catalog. An
+/// argument that the row gives a family of types is widened here to the one
+/// representation the runtime function is written for: a signed integer is
+/// sign-extended and an unsigned one zero-extended to sixty-four bits, and a
+/// floating-point number is extended to a `double`. None of these changes
+/// the value. A string result arrives with a reference the caller owns; when
+/// nothing takes it, it is released here. A Boolean result arrives as the
+/// byte the C ABI returns and is narrowed to the one bit a Bool is here.
+[[nodiscard]] auto
+LowerRuntimeCall(llvm::IRBuilder<> &builder,
+                 FunctionState &state,
+                 const xmm::Instruction &instruction) -> bool
+{
+    namespace runtime = core::runtime;
+    if (instruction.operands.empty()
+        || instruction.operands.front().kind != xmm::Value::Kind::Immediate)
+        return false;
+    const auto identity
+        = runtime::IdentityOf(instruction.operands.front().immediate,
+                              instruction.operands.front().type);
+    const auto *signature = identity ? runtime::Find(*identity) : nullptr;
+    if (signature == nullptr
+        || instruction.operands.size() != signature->parameters.size() + 1U)
+        return false;
+
+    auto *pointer = llvm::PointerType::get(context, 0);
+    auto *word = llvm::Type::getInt64Ty(context);
+    std::vector<llvm::Type *> parameterTypes;
+    std::vector<llvm::Value *> arguments;
+    parameterTypes.reserve(signature->parameters.size());
+    arguments.reserve(signature->parameters.size());
+    for (std::size_t index = 0U; index < signature->parameters.size(); ++index)
+    {
+        auto *value
+            = LoadValue(builder, state, instruction.operands[index + 1U]);
+        if (value == nullptr)
+            return false;
+        llvm::Type *expected = word;
+        switch (signature->parameters[index])
+        {
+            case runtime::Parameter::Signed:
+            case runtime::Parameter::Count:
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value
+                    = builder.CreateSExtOrTrunc(value, word, "runtime.signed");
+                break;
+            case runtime::Parameter::Unsigned:
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value = builder.CreateZExtOrTrunc(value,
+                                                  word,
+                                                  "runtime.unsigned");
+                break;
+            case runtime::Parameter::Floating:
+                expected = llvm::Type::getDoubleTy(context);
+                if (!value->getType()->isFloatingPointTy())
+                    return false;
+                if (value->getType() != expected)
+                    value = builder.CreateFPExt(value,
+                                                expected,
+                                                "runtime.floating");
+                break;
+            case runtime::Parameter::Bool:
+                // The C ABI passes a `bool` as a byte that is zero or one.
+                expected = llvm::Type::getInt8Ty(context);
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value = builder.CreateZExtOrTrunc(value,
+                                                  expected,
+                                                  "runtime.bool");
+                break;
+            case runtime::Parameter::Char:
+                expected = llvm::Type::getInt32Ty(context);
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value = builder.CreateZExtOrTrunc(value,
+                                                  expected,
+                                                  "runtime.char");
+                break;
+            case runtime::Parameter::Text:
+                expected = pointer;
+                if (!value->getType()->isPointerTy())
+                    return false;
+                break;
+        }
+        parameterTypes.push_back(expected);
+        arguments.push_back(value);
+    }
+
+    const auto yieldsText = signature->result == runtime::Result::Text;
+    const auto yieldsTruth = signature->result == runtime::Result::Truth;
+    auto callee = module.getOrInsertFunction(
+        std::string(signature->symbol),
+        llvm::FunctionType::get(yieldsText    ? pointer
+                                : yieldsTruth ? llvm::Type::getInt8Ty(context)
+                                              : llvm::Type::getVoidTy(context),
+                                parameterTypes,
+                                false));
+    auto *result = builder.CreateCall(callee,
+                                      arguments,
+                                      yieldsText    ? "runtime.text"
+                                      : yieldsTruth ? "runtime.truth"
+                                                    : "");
+    if (yieldsTruth)
+    {
+        if (instruction.has_result)
+            builder.CreateStore(
+                builder.CreateICmpNE(
+                    result,
+                    llvm::ConstantInt::get(result->getType(), 0U),
+                    "runtime.bool"),
+                state.slots.at(instruction.destination));
+        return true;
+    }
+    if (!yieldsText)
+        return true;
+    if (instruction.has_result)
+        builder.CreateStore(result, state.slots.at(instruction.destination));
+    else
+        builder.CreateCall(RuntimeFunction("vxs_aarc_release_strong",
+                                           llvm::Type::getVoidTy(context),
+                                           { pointer }),
+                           { result });
+    return true;
+}
+
 [[nodiscard]] auto
 LowerInstruction(llvm::IRBuilder<> &builder,
                  FunctionState &state,
                  const xmm::Instruction &instruction) -> bool
 {
+    if (instruction.opcode == xmm::Opcode::RuntimeCall)
+        return LowerRuntimeCall(builder, state, instruction);
     if (instruction.opcode == xmm::Opcode::Call)
     {
         auto *result = LowerCall(builder, state, instruction);
@@ -797,6 +947,7 @@ LowerInstruction(llvm::IRBuilder<> &builder,
         case xmm::Opcode::Call:
         case xmm::Opcode::MakeClosure:
         case xmm::Opcode::Memoize:
+        case xmm::Opcode::RuntimeCall:
         case xmm::Opcode::RetainStrong:
         case xmm::Opcode::ReleaseStrong:
         case xmm::Opcode::MakeWeak:

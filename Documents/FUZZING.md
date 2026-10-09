@@ -272,6 +272,14 @@ table, 45 the branching table and 22 the leaving table, and
 `source_feature_smoke` takes 45 seconds, of which 28 are the closure
 programs. The watchdog is unchanged, and no case was removed.
 
+`source_console_smoke` runs programs that write: console output, the
+conversions of a format, and the joining and comparing of strings. Each is
+compiled from source in both pipeline modes and run under the JIT with the
+runtime library this program links, whose output goes to a sink instead of
+the streams of the process. What a program wrote is compared with text
+written by hand, and the runtime must hold no more allocations after a
+program than before it, because every string is one of its objects.
+
 The expression and leaving tables became a fourth program,
 `source_expression_smoke`, when arguments came to be passed by need. Every
 run of a body passes its inputs as calls, so that no stage can fold them, and

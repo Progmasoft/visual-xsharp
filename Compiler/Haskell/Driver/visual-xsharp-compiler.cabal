@@ -25,6 +25,7 @@ library
         visual-xsharp-syntax:Visual.XSharp.NestingLimits,
         visual-xsharp-syntax:Visual.XSharp.NumericLiteral,
         visual-xsharp-syntax:Visual.XSharp.Parser,
+        visual-xsharp-syntax:Visual.XSharp.RuntimeCall,
         visual-xsharp-syntax:Visual.XSharp.SourceText,
         visual-xsharp-syntax:Visual.XSharp.SourceWarnings,
         visual-xsharp-frontend:Visual.XSharp.Frontend,
@@ -148,7 +149,10 @@ test-suite visual-xsharp-compiler-tests
         BranchingOracleTests
         BranchingTests
         LazyEvaluationTests
+        ConsoleTests
         FallThroughTests
+        RuntimeCallTests
+        RuntimeText
         MemoizeTests
         LoopExpressionTests
         LoopFlowTests

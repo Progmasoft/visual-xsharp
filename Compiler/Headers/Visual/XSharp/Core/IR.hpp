@@ -54,7 +54,12 @@ namespace Visual::XSharp::Core
         /// A callable that remembers its result. The operand is a callable
         /// without parameters; the result calls it at most once, at its
         /// own first call, and returns what it returned from then on.
-        Memoize
+        Memoize,
+        /// A call of a function of the runtime. The first operand is an
+        /// integer literal, the identity of the function in the catalog of
+        /// `Visual/XSharp/Core/RuntimeCall.hpp`; the operands after it are
+        /// the arguments.
+        RuntimeCall
     };
 
     /// Closure capture ownership contract shared with CorePrep.

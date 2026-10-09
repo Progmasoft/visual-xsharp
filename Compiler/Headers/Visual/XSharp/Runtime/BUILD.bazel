@@ -14,3 +14,16 @@ cc_library(
     strip_include_prefix = "/Compiler/Headers",
     deps = [":aarc_c_api"],
 )
+
+cc_library(
+    name = "text_c_api",
+    hdrs = ["Text.h"],
+    strip_include_prefix = "/Compiler/Headers",
+)
+
+cc_library(
+    name = "text_api",
+    hdrs = ["Text.hpp"],
+    strip_include_prefix = "/Compiler/Headers",
+    deps = [":text_c_api"],
+)

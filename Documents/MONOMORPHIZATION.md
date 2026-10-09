@@ -26,7 +26,7 @@ The implemented slice includes:
 - unambiguous literal value arguments such as `Buffer<32>`;
 - exact integer, character, Boolean, unary, and binary constant evaluation;
 - an ordered `TemplateArgument` sum in typed AST, Core, CorePrep, Xpp, and Xmm;
-- strict Core v9, CorePrep v7, and Xpp/Xmm v6 codecs;
+- strict Core v10, CorePrep v8, and Xpp/Xmm v7 codecs;
 - recursive structural validation and parameter collection;
 - independent type-parameter and value-parameter substitution;
 - deterministic structural identity rendering;

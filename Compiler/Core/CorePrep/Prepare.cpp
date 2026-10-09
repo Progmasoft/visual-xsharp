@@ -112,6 +112,8 @@ namespace Visual::XSharp::Core::CorePrep
                     return Prepared::Operation::TypeIs;
                 case Primitive::Memoize:
                     return Prepared::Operation::Memoize;
+                case Primitive::RuntimeCall:
+                    return Prepared::Operation::RuntimeCall;
             }
             // Reaching this point means the Core enum and adapter diverged.
             // C++20 has no std::unreachable; abort explicitly instead of

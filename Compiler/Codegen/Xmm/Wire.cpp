@@ -161,7 +161,7 @@ namespace Visual::XSharp::Xmm::Wire
             IR::Instruction instruction;
             instruction.opcode = static_cast<IR::Opcode>(
                 ReadTag(reader,
-                        static_cast<std::uint8_t>(IR::Opcode::Memoize),
+                        static_cast<std::uint8_t>(IR::Opcode::RuntimeCall),
                         "Xmm opcode"));
             instruction.destination = reader.U32("Xmm destination register");
             instruction.result_type = reader.Type("Xmm instruction result");

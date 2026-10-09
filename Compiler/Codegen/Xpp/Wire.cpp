@@ -145,7 +145,7 @@ namespace Visual::XSharp::Xpp::Wire
                 ReadTag(reader, 2U, "Xpp instruction effect"));
             instruction.opcode = static_cast<IR::Opcode>(
                 ReadTag(reader,
-                        static_cast<std::uint8_t>(IR::Opcode::Memoize),
+                        static_cast<std::uint8_t>(IR::Opcode::RuntimeCall),
                         "Xpp opcode"));
             instruction.destination = reader.U64("Xpp destination");
             instruction.result_type = reader.Type("Xpp instruction result");

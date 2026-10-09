@@ -13,6 +13,7 @@ import Visual.XSharp.Core qualified as Core
 import Visual.XSharp.Core.CorePrep
 import Visual.XSharp.Core.Template
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.RuntimeCall
 
 -- | Return the unchanged module when valid, or every discovered invariant error.
 verifyCorePrep :: CorePrepModule -> Either [Diagnostic] CorePrepModule
@@ -98,6 +99,15 @@ verifyCapture (CorePrepCapture mode name valueType atom) =
             _ -> False
 
 verifyPrimitive :: Core.CorePrimitive -> [CorePrepAtom] -> Type -> [Diagnostic]
+verifyPrimitive Core.CoreRuntimeCall atoms resultType =
+    -- The first atom names the function; the rest are its arguments.
+    case runtimeCallDefect named (map atomType (drop 1 atoms)) resultType of
+        Just defect -> [problem "VXC0026" ("CorePrep " ++ runtimeDefectText defect)]
+        Nothing -> []
+    where
+        named = case atoms of
+            CorePrepLiteral (Core.CoreInteger identity) valueType : _ | valueType == intType -> runtimeFunctionOf identity
+            _ -> Nothing
 verifyPrimitive primitive atoms resultType
     | length atoms /= expectedArity = [problem "VXC0007" "CorePrep primitive has the wrong arity"]
     | any ((== ErrorType) . atomType) atoms = [problem "VXC0008" "CorePrep primitive contains an unresolved type"]

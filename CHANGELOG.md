@@ -31,6 +31,37 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   for both. An argument of a call through a callable, an argument a closure
   of the method captures, and arguments of other types are still computed
   at the call.
+- Programs write to the console. `Console.Print` and `Console.Println` write
+  a value, `Console.Printf` and `Console.Printfn` a format with its
+  conversions applied, `Console.Error`, `Errorln`, `Errorf` and `Errorfn` do
+  the same to standard error, and `Console.Format` returns the string and
+  writes nothing. `System` is imported implicitly, so `Console` needs no
+  qualification; `System.Console` is accepted. The example
+  `Examples/HelloWorld/HelloWorld.vxs` compiles to a native executable and
+  runs.
+- A format is a string literal and is checked when the program is compiled.
+  The conversions are `%d`, `%u`, `%x`, `%f`, `%s`, `%c` and `%b`, with `%n`
+  for the line terminator of the platform and `%%` for a percent sign; the
+  flags are `-`, `0`, `+`, space, `#` and `'`; a width or a precision may be
+  written as `*` and is then an `int` argument before the value. A
+  conversion that does not exist, a flag a conversion does not take, a
+  missing or a surplus argument and an argument of the wrong type are
+  errors, `VXT0071` to `VXT0079`. Examples 69 to 85 of
+  `Spec/StandardLibrary/IO/ConsoleIO.vxs` state what the specification left
+  open: which flags each conversion takes, that `%b` writes a `bool`, that
+  `%f` rounds the exact value with a tie to the even digit, and that a line
+  ends with the terminator of the platform.
+- `+` joins two strings, and writes a value that is not a string as text
+  first when the other side is one: an integer in decimal, a `bool` as
+  `true` or `false`, a `char` as itself. `+=` appends to a string variable.
+  `==` and `\=` on two strings compare the characters they hold; before,
+  they compared where the strings were kept. Examples 86 to 89 of
+  `Spec/Language/Operators.vxs`.
+- Output is an effect, and effects are not lazy: an expression that writes,
+  itself or through a method it calls, is evaluated where it is written and
+  in the order it is written, whether or not its value is ever needed. A
+  value that only computes is still computed by need in the same program.
+  Examples 15 and 16 of `Spec/Language/Evaluation.vxs`.
 - An integer quotient or remainder by zero and a shift by an amount that is
   negative or not less than the width of the shifted value have no value,
   and a program that needs one stops. Example 14 of
@@ -188,6 +219,29 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   with an invoke thunk and a destructor of its own. The wire versions are
   now Core 9, CorePrep 7, Xpp 6 and Xmm 6; artifacts of earlier versions are
   rejected at the version field and have to be produced again.
+- Core has a second new primitive, the runtime call: a call of a function of
+  the Visual X# runtime, named by a literal first operand that is the
+  function's identity in a catalog of thirteen. CorePrep, Xpp and Xmm carry
+  it, every verifier checks a call against the catalog (`VXC1075`,
+  `VXC0026`, `VXC1076`, `VXP1048`, `VXL1054`), and LLVM lowers it to a call
+  of the function's symbol, widening an integer or a floating-point argument
+  to 64 bits. The wire versions are now Core 10, CorePrep 8, Xpp 7 and
+  Xmm 7.
+- The type checker rewrites a console call and the string operators into
+  runtime calls, so no stage after it knows what a format is. The frontend
+  infers which methods may write, from all methods of a program together,
+  and evaluates an expression that calls one where it stands.
+- A native executable is linked with `vxs-runtime.lib`, the ownership
+  runtime and the new text and console runtime as one object that needs no
+  C runtime. It replaces the ownership functions the compiler generated into
+  each executable, and with them their limits: memory comes from the heap of
+  the process, and weak and unowned references, strings and type tests link.
+  The library stands beside the compiler, where the development helper and
+  the release bundle put it. It imports seven functions of kernel32, for
+  which the linker makes the import library from a list of names.
+- Fixed a leak: a string literal passed directly as an argument was never
+  released. Ownership placement now gives such a literal a symbol of its
+  own.
 - A method with a parameter that is passed by need has a second function
   that takes suspended computations in place of those parameters. The
   method's own function is unchanged, and a call that has nothing worth
@@ -212,6 +266,20 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Verification and tooling
 
+- `ConsoleTests.hs` runs some 180 programs that write in the reference Core
+  evaluator, before and after optimization, against text written by hand,
+  and holds about a hundred programs that must be rejected. The evaluator's
+  text functions are a second implementation, in `RuntimeText.hs`.
+  `RuntimeCallTests.hs` pins the runtime catalog and the reading of formats.
+- `text_runtime_tests` calls the runtime library as generated code does and
+  compares the digits of `%f` with those of the host's C library.
+  `RuntimeCallPipelineTests.cpp` and `RuntimeCallVerifierTests.cpp` break a
+  runtime call in each way it can be broken at each native stage.
+- `source_console_smoke` compiles 83 programs that write through LLVM and
+  the JIT in both pipeline modes, reads their output through a sink, and
+  requires each to leave no object of the runtime behind.
+  `executable_run_tests` now runs executables with their standard streams
+  sent to files and compares the bytes.
 - The expression and leaving tables run in a program of their own,
   `source_expression_smoke`. With arguments passed by need the programs of
   the three execution tables together ran past the 240 second watchdog under
@@ -401,8 +469,13 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 - A program that stops because it needs a value that cannot be computed
   ends with the status of a process that executed an invalid instruction.
   It reports nothing about which value or where.
-- A native executable can hold 64 MiB of closures and suspended
-  computations at one time and stops when it would hold more.
+- Console input, the stream objects `Console.Stdout()` and its siblings,
+  `%A` and `%O`, a text form of a floating-point number outside `%f`, and
+  128-bit numbers as text are specified and not implemented; each reports
+  `VXT0079`. `Documents/CONSOLE-IO.md` lists them.
+- A string has `+`, `+=`, `==` and `\=` and nothing else yet: no length, no
+  indexing and no ordering.
+- Native executables are linked on Windows only.
 - Compile time still grows faster than the program on very long functions:
   from 2000 to 4000 `else if` links the time of `vxs check` grows from 3.3
   to 10.4 seconds, and from 2000 to 4000 sequential `if` statements from 2.8
@@ -431,6 +504,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   not computed. That now includes an argument the method does not read.
 - Core, CorePrep, Xpp and Xmm artifacts written by an earlier compiler are
   rejected. Build them again from source.
+- `==` on two strings now compares their characters. A program that relied
+  on two equal strings comparing unequal because they were two objects
+  compares them equal.
+- A program named a class `Console` or `System` keeps its own: the names the
+  language declares stand outside the program's.
 - Rename anything called `match`, `guard` or `enum`.
 - `if (auto name = value)` and the same form in `while` now report `VXP0035`
   instead of a generic syntax error. They were not accepted before either.

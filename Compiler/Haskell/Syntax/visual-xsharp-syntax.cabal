@@ -21,6 +21,7 @@ library
         Visual.XSharp.NestingLimits
         Visual.XSharp.NumericLiteral
         Visual.XSharp.Parser
+        Visual.XSharp.RuntimeCall
         Visual.XSharp.SourceText
         Visual.XSharp.SourceWarnings
     other-modules:

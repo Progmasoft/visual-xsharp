@@ -60,7 +60,7 @@ build:linux --host_cxxopt=-std=c++20
 # These profiles are implementation details of helpers/cmd/develop. Keeping the
 # compiler and linker flags here makes sanitizer builds reproducible while the
 # command presents host-aware names and diagnostics to developers.
-build:asan-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fsanitize=address
+build:asan-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*,-^Compiler/Runtime/Freestanding/.*@/clang:-fsanitize=address
 build:asan-windows --repo_env=VXS_LLVM_SYSTEM_ALLOCATOR=1
 # Clang's implicit absolute ignorelist otherwise appears as an undeclared input
 # to Bazel's Windows include scanner. The project currently owns no suppressions.
@@ -82,14 +82,14 @@ build:asan-windows --linkopt=/WHOLEARCHIVE:clang_rt.asan_static_runtime_thunk-x8
 
 # lld-link does not infer Clang's UBSan libraries. Link the runtime matching
 # clang-cl's resource directory; never silently substitute trap-only checks.
-build:ubsan-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fsanitize=undefined
+build:ubsan-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*,-^Compiler/Runtime/Freestanding/.*@/clang:-fsanitize=undefined
 build:ubsan-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fno-sanitize-recover=all
 build:ubsan-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fno-sanitize-ignorelist
 build:ubsan-windows --linkopt=/DEFAULTLIB:clang_rt.ubsan_standalone-x86_64.lib
 build:ubsan-windows --linkopt=/DEFAULTLIB:clang_rt.ubsan_standalone_cxx-x86_64.lib
 build:asan-ubsan-windows --config=asan-windows
 build:asan-ubsan-windows --config=ubsan-windows
-build:asan-ubsan-windows '--per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fsanitize=address\\,undefined'
+build:asan-ubsan-windows '--per_file_copt=^(Compiler|Interactive|Benchmarks)/.*,-^Compiler/Runtime/Freestanding/.*@/clang:-fsanitize=address\\,undefined'
 
 build:asan-macos --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-fsanitize=address
 build:asan-macos --linkopt=-fsanitize=address
@@ -114,7 +114,7 @@ build:asan-ubsan-linux --linkopt=-fsanitize=address,undefined
 
 # Coverage-guided decoder campaigns instrument owned native translation units,
 # then link libFuzzer's main only into the dedicated driver binary.
-build:fuzz-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@/clang:-fsanitize=fuzzer-no-link
+build:fuzz-windows --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*,-^Compiler/Runtime/Freestanding/.*@/clang:-fsanitize=fuzzer-no-link
 build:fuzz-windows --linkopt=/DEFAULTLIB:clang_rt.fuzzer-x86_64.lib
 build:fuzz-macos --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-fsanitize=fuzzer-no-link
 build:fuzz-linux --per_file_copt=^(Compiler|Interactive|Benchmarks)/.*@-fsanitize=fuzzer-no-link

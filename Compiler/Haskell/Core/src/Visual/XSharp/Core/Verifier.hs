@@ -15,6 +15,7 @@ import Visual.XSharp.Core
 import Visual.XSharp.Core.Scalar
 import Visual.XSharp.Core.Template
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.RuntimeCall
 
 type Environment = Map.Map SymbolId (Type, Bool)
 
@@ -288,6 +289,16 @@ callProblems callee arguments resultType = case expressionType callee of
     _ -> [problem "VXC1025" "Core call target is not a function"]
 
 primitiveProblems :: CorePrimitive -> [CoreExpression] -> Type -> [Diagnostic]
+primitiveProblems CoreRuntimeCall arguments resultType =
+    -- The first operand names the function and the rest are checked against
+    -- the row of the catalog that function has.
+    case runtimeCallDefect named (map expressionType (drop 1 arguments)) resultType of
+        Just defect -> [problem "VXC1075" ("Core " ++ runtimeDefectText defect)]
+        Nothing -> []
+    where
+        named = case arguments of
+            CoreLiteral (CoreInteger identity) valueType : _ | valueType == intType -> runtimeFunctionOf identity
+            _ -> Nothing
 primitiveProblems primitive arguments resultType =
     [problem "VXC1026" "Core primitive has the wrong operand count" | length arguments /= arity]
         ++ operandProblems

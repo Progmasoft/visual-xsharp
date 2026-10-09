@@ -135,6 +135,29 @@ int quotient = left / right; -- computes a value: evaluated by need
 count += 1;                  -- has an effect: happens here
 
 -- ============================================================================
+-- Example 15: 4. Effects
+-- Demonstrates: Output is an effect. An expression that writes to the console, itself or through a method it
+--   calls, is evaluated where it is written and in the order it is written, whether or not its value is
+--   ever needed. A value that only computes is still computed by need beside it.
+
+static int Log(_ int value) {
+    Console.Println(value);
+    return value;
+}
+
+int unused = Log(1);        -- writes 1 here
+int skipped = left / zero;  -- computes nothing: the value is never needed
+
+Console.Println(2);         -- 1 has already been written
+
+-- ============================================================================
+-- Example 16: 4. Effects
+-- Demonstrates: An argument that has an effect is evaluated at the call, in the order the arguments are
+--   written, whether or not the method reads its parameter.
+
+Choose(true, Log(1), Log(2)); -- writes 1 and then 2; the method reads only its second parameter
+
+-- ============================================================================
 -- Example 10: 4. Effects
 -- Demonstrates: A value means what its variables held where it was written, however late it is computed. A
 --   later store into a variable does not change a value that was bound before the store.

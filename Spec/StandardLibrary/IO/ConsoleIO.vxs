@@ -542,3 +542,171 @@ Console.Stdin().Readf("%.2f", value);
 Object value;
 
 Console.Stdin().Readf("%A", value);
+
+-- ============================================================================
+-- Example 69: 2.1 Plain output
+-- Demonstrates: Print, Println, Error and Errorln take one value. A value that is not a String is written as
+--   text: an integer in decimal with a minus sign when it is negative, a bool as true or false, and a char
+--   as the character itself. This is the text the + operator joins to a String.
+
+Console.Println(42);     -- 42
+Console.Println(-7);     -- -7
+Console.Println(true);   -- true
+Console.Println('x');    -- x
+
+-- ============================================================================
+-- Example 70: 2.2 Line-output forms
+-- Demonstrates: Println, Printfn, Errorln and Errorfn end the line with the line terminator of the platform,
+--   which is what %n writes: a carriage return and a line feed on Windows, and a line feed elsewhere. An
+--   escape written in a String is the character it names on every platform.
+
+Console.Println("Hello");   -- Hello, and the line terminator of the platform
+Console.Print("Hello\n");   -- Hello, and a line feed
+
+-- ============================================================================
+-- Example 71: 4.1 Conversions
+-- Demonstrates: The conversions of the output format grammar. Each takes one argument, except %n and %%,
+--   which take none. %A and %O take an object.
+
+Console.Printf("%d", count);    -- a signed integer in decimal
+Console.Printf("%u", size);     -- an unsigned integer in decimal
+Console.Printf("%x", mask);     -- an integer in hexadecimal, with lowercase digits
+Console.Printf("%f", ratio);    -- a floating-point number with a fixed number of digits after the point
+Console.Printf("%s", name);     -- a String
+Console.Printf("%c", initial);  -- a char
+Console.Printf("%b", ready);    -- a bool, as true or false
+Console.Printf("%n");           -- the line terminator of the platform
+Console.Printf("100%%");        -- a percent sign: 100%
+
+-- ============================================================================
+-- Example 72: 4.1 Conversions
+-- Demonstrates: A sequence that begins with % and is not a conversion is a compile-time error, and so is a
+--   format that ends inside one.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Console.Printf("%q", value);   -- INVALID: no such conversion
+Console.Printf("100%");        -- INVALID: the format ends inside a conversion
+
+-- ============================================================================
+-- Example 73: 4.1 Conversions
+-- Demonstrates: The arguments of a format are the ones its conversions take, in the order of the
+--   conversions, no more and no fewer.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Console.Printf("%d and %d", first);           -- INVALID: an argument is missing
+Console.Printf("%d", first, second);          -- INVALID: an argument is left over
+
+-- ============================================================================
+-- Example 74: 4.1 Conversions
+-- Demonstrates: An argument has the type its conversion takes. %s takes a String, %c a char and %b a bool;
+--   %x takes a signed or an unsigned integer.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Console.Printf("%s", 42);      -- INVALID: %s takes a String
+Console.Printf("%c", 65);      -- INVALID: %c takes a char
+Console.Printf("%b", 1);       -- INVALID: %b takes a bool
+Console.Printf("%x", 1.5);     -- INVALID: %x takes an integer
+
+-- ============================================================================
+-- Example 75: 4.3 Floating-point values
+-- Demonstrates: %f writes six digits after the point unless a precision says otherwise. The digits are those
+--   of the exact value of the number, rounded to the nearest; a value exactly between two rounds to the one
+--   whose last digit is even.
+
+Console.Printf("%f", 12.5);     -- 12.500000
+Console.Printf("%.2f", 12.5);   -- 12.50
+Console.Printf("%.0f", 2.5);    -- 2
+Console.Printf("%.0f", 3.5);    -- 4
+
+-- ============================================================================
+-- Example 76: 4.3 Floating-point values
+-- Demonstrates: A value that is not a finite number is written as a word: nan, inf or -inf.
+
+Console.Printf("%f", ratio);   -- inf when ratio is positive infinity
+
+-- ============================================================================
+-- Example 77: 5.1 Flags
+-- Demonstrates: The flags, and the conversions that take each. - puts the value at the left of its field and
+--   is taken by every conversion that has a width. 0 pads a number with zeros after its sign. + writes a
+--   plus sign before a number that is not negative, and a space writes a space there. # writes 0x before a
+--   hexadecimal number. ' groups the integer digits of a decimal number.
+
+Console.Printf("%-8d|", 42);     -- 42      |
+Console.Printf("%08d", -42);     -- -0000042
+Console.Printf("%+d", 42);       -- +42
+Console.Printf("% d", 42);       --  42
+Console.Printf("%#x", 255);      -- 0xff
+Console.Printf("%'d", 1234567);  -- 1'234'567
+
+-- ============================================================================
+-- Example 78: 5.1 Flags
+-- Demonstrates: 0 is taken by %d, %u, %x and %f. + and the space are taken by %d and %f. # is taken by %x.
+--   ' is taken by %d, %u and %f. A flag written twice is an error.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Console.Printf("%+u", size);    -- INVALID: an unsigned number has no sign
+Console.Printf("%0c", initial); -- INVALID
+Console.Printf("%#f", ratio);   -- INVALID
+Console.Printf("%++d", count);  -- INVALID: the flag is written twice
+
+-- ============================================================================
+-- Example 79: 4.2 Integers
+-- Demonstrates: %x writes the magnitude of the number. A negative number has a minus sign before its
+--   magnitude, and the # prefix stands between the sign and the digits.
+
+Console.Printf("%x", 255);    -- ff
+Console.Printf("%x", -255);   -- -ff
+Console.Printf("%#x", -255);  -- -0xff
+
+-- ============================================================================
+-- Example 80: 6. Width
+-- Demonstrates: A width is the least number of characters a conversion writes; a value that needs more is
+--   written whole. A width and a precision count characters, not bytes. %n and %% take neither.
+-- Expected result: the last two lines are rejected at compile time; the INVALID marker is normative.
+
+Console.Printf("%2d", 12345);  -- 12345
+Console.Printf("%5%");         -- INVALID
+Console.Printf("%-n");         -- INVALID
+
+-- ============================================================================
+-- Example 81: 6. Width
+-- Demonstrates: A width or a precision written as * is an int argument that stands before the value. The
+--   arguments of a format are evaluated in the order they are written.
+
+Console.Printf("%*d", width, value);              -- width is evaluated first, then value
+Console.Printf("%*.*f", width, precision, value); -- width, then precision, then value
+
+-- ============================================================================
+-- Example 82: 6. Width
+-- Demonstrates: The argument of a * is an int.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+uint width = 8;
+
+Console.Printf("%*d", width, value); -- INVALID
+
+-- ============================================================================
+-- Example 83: 7. Precision
+-- Demonstrates: A precision is taken by %f, where it is the number of digits after the point, by %s, where
+--   it is the most characters written, and by %A. Any other conversion with a precision is an error.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Console.Printf("%.2d", count);   -- INVALID
+Console.Printf("%.1c", initial); -- INVALID
+
+-- ============================================================================
+-- Example 84: 5.2 Digit grouping
+-- Demonstrates: Grouping applies to the digits before the point. Zeros that pad a number are not grouped.
+
+Console.Printf("%'.2f", 1234567.891);  -- 1'234'567.89
+Console.Printf("%'d", 123);            -- 123
+
+-- ============================================================================
+-- Example 85: 3.1 Compile-time format requirement
+-- Demonstrates: A format is known when the program is compiled. A String that is computed is not a format.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+String format = "%d";
+
+Console.Printf(format, value);          -- INVALID
+Console.Printf("%d" + suffix, value);   -- INVALID

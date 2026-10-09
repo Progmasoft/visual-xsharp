@@ -547,6 +547,21 @@ have the operand's type:
 None of them can be reached from source: the frontend produces the operation only in a form that passes. They report a
 malformed artifact or a defect of a stage.
 
+A call of a runtime function is checked the same way, by every stage, against the runtime catalog: that its first operand
+is a literal that names a function, that it has that function's number of arguments, that each argument has a type the
+function takes, and that the call has the type the function returns.
+
+| Code | Stage |
+| --- | --- |
+| `VXC1075` | Core, in the Haskell and the native verifier |
+| `VXC0026` | CorePrep, in the Haskell verifier |
+| `VXC1076` | CorePrep, in the native verifier |
+| `VXP1048` | Xpp |
+| `VXL1054` | Xmm |
+
+These cannot be reached from source either. What a program can get wrong about the console and about strings is reported
+by the type checker, with `VXT0071` to `VXT0079`; [Console output and strings](CONSOLE-IO.md) lists them.
+
 ## Safe output behavior
 
 Failure must not make an old file look newly built.

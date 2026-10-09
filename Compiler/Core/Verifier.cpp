@@ -11,6 +11,7 @@
 #include "Compiler/Artifact/SourcePath.hpp"
 #include "Visual/XSharp/ADTs/DenseIdMap.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
+#include "Visual/XSharp/Core/RuntimeCall.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Core/Template.hpp"
 #include "Visual/XSharp/Core/Verifier.hpp"
@@ -744,6 +745,33 @@ namespace Visual::XSharp::Core
                     "VXC1024",
                     "Core call result type disagrees with the callee");
             }
+            /// A call of a runtime function: the first operand is the
+            /// literal that names the function, and the rest are checked
+            /// against the row of the catalog that function has.
+            [[gnu::noinline]] void
+            VerifyRuntimeCall(const Expression &expression)
+            {
+                namespace runtime = ::visual_xsharp::core::runtime;
+                const runtime::Signature *signature = nullptr;
+                if (!expression.operands.empty()
+                    && expression.operands.front().kind
+                           == Expression::Kind::Literal)
+                    if (const auto identity = runtime::IdentityOf(
+                            expression.operands.front().literal,
+                            expression.operands.front().type))
+                        signature = runtime::Find(*identity);
+                std::vector<Type::Kind> arguments;
+                arguments.reserve(expression.operands.size());
+                for (std::size_t index = 1U; index < expression.operands.size();
+                     ++index)
+                    arguments.push_back(expression.operands[index].type.kind);
+                const auto defect = runtime::Check(signature,
+                                                   arguments,
+                                                   expression.type.kind);
+                if (defect != runtime::Defect::None)
+                    Add("VXC1075",
+                        "Core " + std::string(runtime::Describe(defect)));
+            }
             /// Verify the operands of a primitive after the first, which
             /// the caller has verified, and then the primitive itself.
             [[gnu::noinline]] void
@@ -753,6 +781,11 @@ namespace Visual::XSharp::Core
                 for (std::size_t index = 1U; index < expression.operands.size();
                      ++index)
                     VerifyExpression(expression.operands[index], environment);
+                if (expression.primitive == Primitive::RuntimeCall)
+                {
+                    VerifyRuntimeCall(expression);
+                    return;
+                }
                 const auto memoize = expression.primitive == Primitive::Memoize;
                 const auto unary
                     = expression.primitive == Primitive::Negate

@@ -113,4 +113,29 @@ namespace Visual::XSharp::Runtime::Aarc
     [[nodiscard]] auto
     IsExactType(const void *object, std::uint64_t typeIdentity) noexcept
         -> bool;
+
+    /** The scalars of a string object, borrowed for as long as the string
+     * is alive. */
+    struct StringScalars final
+    {
+        /** The first scalar, or null for the empty string. */
+        const char32_t *scalars{};
+        /** How many scalars the string holds. */
+        std::size_t count{};
+    };
+
+    /** Read the scalars of a live `System.String`.
+     *
+     * A null reference, and an object that is not a string, read as the
+     * empty string: the text routines of the runtime treat a string that is
+     * not there as one without characters.
+     */
+    [[nodiscard]] auto
+    ViewString(const void *string) noexcept -> StringScalars;
+
+    /** Create a `System.String` that holds a copy of the given scalars and
+     * return its initial strong owner, or null when the scalars are not
+     * Unicode scalar values or memory is exhausted. */
+    [[nodiscard]] auto
+    MakeString(const char32_t *scalars, std::size_t count) noexcept -> void *;
 } // namespace Visual::XSharp::Runtime::Aarc

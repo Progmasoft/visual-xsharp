@@ -32,6 +32,8 @@ module Visual.XSharp.Desugarer.Handing
     , methodParameters
     , methodBody
     , handedLocals
+    , blockExpressions
+    , within
     ) where
 
 import Data.Map.Strict (Map)
@@ -86,8 +88,13 @@ under which a call reads the fewest arguments, and is computed again from
 its own result until it no longer changes. Each round can only find more
 parameters that are certain to be read, so the rounds end.
 -}
-methodNeeds :: (Type -> Bool) -> Map SymbolId (Declaration ResolvedName Type) -> MethodNeeds
-methodNeeds suspendable methods = Map.filter or (settle (Map.map suspendableParameters methods))
+methodNeeds ::
+    (Type -> Bool) ->
+    -- | Whether evaluating an expression may do something observable.
+    (Expression ResolvedName Type -> Bool) ->
+    Map SymbolId (Declaration ResolvedName Type) ->
+    MethodNeeds
+methodNeeds suspendable acts methods = Map.filter or (settle (Map.map suspendableParameters methods))
     where
         suspendableParameters declaration =
             [suspendable (parameterAnnotation parameter) | parameter <- methodParameters declaration]
@@ -96,7 +103,7 @@ methodNeeds suspendable methods = Map.filter or (settle (Map.map suspendablePara
              in if next == current then current else settle next
         refine current symbol flags = case Map.lookup symbol methods of
             Just declaration@FunctionDeclaration {declarationBody = Block statements} ->
-                [ flag && not (neededFirst (argumentNeeds current) (parameterName parameter) statements)
+                [ flag && not (neededFirst (argumentNeeds current) acts (parameterName parameter) statements)
                 | (flag, parameter) <- zip flags (methodParameters declaration)
                 ]
             _ -> flags
@@ -118,13 +125,18 @@ A parameter this holds for may be computed at the call. A caller can tell
 only which of two failures it meets when the argument and the statement
 that needs it both fail, and the language leaves that open.
 -}
-neededFirst :: ArgumentNeeds ResolvedName -> ResolvedName -> [Statement ResolvedName Type] -> Bool
-neededFirst needs parameter = go [parameter]
+neededFirst ::
+    ArgumentNeeds ResolvedName ->
+    (Expression ResolvedName Type -> Bool) ->
+    ResolvedName ->
+    [Statement ResolvedName Type] ->
+    Bool
+neededFirst needs acts parameter = go [parameter]
     where
         go _ [] = False
         go names (statement : later) = case statement of
             BindingStatement _ _ _ bound _ value
-                | deferrableExpression value -> go (if needing names value then bound : names else names) later
+                | deferrable value -> go (if needing names value then bound : names else names) later
                 | otherwise -> evaluated names value later
             -- A remembered name that is stored into is a local that is
             -- computed where it is bound, which is where it needed the
@@ -140,7 +152,10 @@ neededFirst needs parameter = go [parameter]
             WhileStatement _ condition _ -> needing names condition
             _ -> False
         evaluated names value later = needing names value || (quiet value && go names later)
-        quiet value = deferrableExpression value && not (worthDeferring value)
+        quiet value = deferrable value && not (worthDeferring value)
+        -- An expression that acts is evaluated where it stands: what it
+        -- does happens before anything after it.
+        deferrable value = deferrableExpression value && not (acts value)
         needing names value = any (\name -> alwaysReads needs name value) names
 
 -- | The needs of a method by its name, as the laziness analysis asks for them.
@@ -155,8 +170,8 @@ suspended computation of the one reads the other, from wherever it runs.
 The result may name locals that turn out to be computed where they stand;
 for those it has no consequence.
 -}
-handedLocals :: MethodNeeds -> Block ResolvedName Type -> [SymbolId]
-handedLocals needs body = Set.toList (close seeds)
+handedLocals :: MethodNeeds -> (Expression ResolvedName Type -> Bool) -> Block ResolvedName Type -> [SymbolId]
+handedLocals needs acts body = Set.toList (close seeds)
     where
         expressions = blockExpressions body
         initializers =
@@ -164,6 +179,7 @@ handedLocals needs body = Set.toList (close seeds)
                 [ (resolvedSymbol name, map (resolvedSymbol . fst) (expressionNames value))
                 | (name, value) <- blockBindings body
                 , deferrableExpression value
+                , not (acts value)
                 ]
         seeds =
             Set.fromList
@@ -173,6 +189,7 @@ handedLocals needs body = Set.toList (close seeds)
                 , length flags == length arguments
                 , (True, argument) <- zip flags arguments
                 , deferrableExpression argument
+                , not (acts argument)
                 , (name, _) <- expressionNames argument
                 ]
         close :: Set SymbolId -> Set SymbolId

@@ -5,11 +5,22 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "Compiler/Cli/Commands/Commands.hpp"
+
+#ifdef _WIN32
+#    ifndef WIN32_LEAN_AND_MEAN
+#        define WIN32_LEAN_AND_MEAN
+#    endif
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    include <windows.h>
+#endif
 
 // Programs built into native executables and run as processes.
 //
@@ -24,6 +35,12 @@
 // two numbers differ. A wrong result therefore stops the program, and one
 // case confirms that it does, so that the others cannot pass by checking
 // nothing.
+//
+// A program that writes is run with its standard output and standard error
+// sent to files, and the bytes it wrote are compared with bytes written by
+// hand. That is the only place the whole of console output is tested as a
+// user meets it: the runtime library an executable is linked with, the
+// import of the system functions it calls, and the bytes on the stream.
 
 namespace
 {
@@ -82,6 +99,86 @@ namespace
     Run(std::string_view name, std::string_view members) -> int
     {
         return Drive("run", name, members);
+    }
+
+    /// What a process did: how it ended and what it wrote.
+    struct Outcome final
+    {
+        int status{ -1 };
+        std::string output;
+        std::string error;
+    };
+
+    [[nodiscard]] auto
+    ReadAll(const std::filesystem::path &path) -> std::string
+    {
+        std::ifstream stream(path, std::ios::binary);
+        return { std::istreambuf_iterator<char>(stream),
+                 std::istreambuf_iterator<char>() };
+    }
+
+    /// A file a child process may write to through an inherited handle.
+    [[nodiscard]] auto
+    InheritableFile(const std::filesystem::path &path) -> HANDLE
+    {
+        SECURITY_ATTRIBUTES attributes{};
+        attributes.nLength = sizeof(attributes);
+        attributes.bInheritHandle = TRUE;
+        return CreateFileW(path.c_str(),
+                           GENERIC_WRITE,
+                           FILE_SHARE_READ,
+                           &attributes,
+                           CREATE_ALWAYS,
+                           FILE_ATTRIBUTE_NORMAL,
+                           nullptr);
+    }
+
+    /// Builds the program into an executable, runs the executable with its
+    /// standard streams sent to files, and returns what it wrote.
+    [[nodiscard]] auto
+    RunCapturing(std::string_view name, std::string_view members) -> Outcome
+    {
+        REQUIRE(Drive("build", name, members) == 0);
+        const auto executable = Directory() / (std::string(name) + ".vxse");
+        const auto outputPath = Directory() / (std::string(name) + ".out");
+        const auto errorPath = Directory() / (std::string(name) + ".err");
+        REQUIRE(std::filesystem::is_regular_file(executable));
+
+        auto *output = InheritableFile(outputPath);
+        auto *error = InheritableFile(errorPath);
+        REQUIRE(output != INVALID_HANDLE_VALUE);
+        REQUIRE(error != INVALID_HANDLE_VALUE);
+
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = nullptr;
+        startup.hStdOutput = output;
+        startup.hStdError = error;
+        PROCESS_INFORMATION process{};
+        auto commandLine = L'"' + executable.wstring() + L'"';
+        const auto started = CreateProcessW(executable.c_str(),
+                                            commandLine.data(),
+                                            nullptr,
+                                            nullptr,
+                                            TRUE,
+                                            0,
+                                            nullptr,
+                                            nullptr,
+                                            &startup,
+                                            &process);
+        CloseHandle(output);
+        CloseHandle(error);
+        REQUIRE(started != 0);
+        CloseHandle(process.hThread);
+        REQUIRE(WaitForSingleObject(process.hProcess, 120000U)
+                == WAIT_OBJECT_0);
+        DWORD status = 0U;
+        REQUIRE(GetExitCodeProcess(process.hProcess, &status) != 0);
+        CloseHandle(process.hProcess);
+        return { static_cast<int>(status),
+                 ReadAll(outputPath),
+                 ReadAll(errorPath) };
     }
 #endif
 } // namespace
@@ -249,6 +346,230 @@ TEST_CASE("an executable holds many objects at one time")
               "    }\n"
               "    public static void Main() { Check(Deep(4000), 4000); }\n")
           == 0);
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable writes to standard output")
+{
+    // The example program of the repository, as it is written there.
+    const auto hello
+        = RunCapturing("HelloWorld",
+                       "    public static void Main() {\n"
+                       "        String language = \"Visual X#\";\n"
+                       "        Console.Println(\"Hello from \" + language"
+                       " + \"!\");\n"
+                       "    }\n");
+    CHECK(hello.status == 0);
+    CHECK(hello.output == "Hello from Visual X#!\r\n");
+    CHECK(hello.error.empty());
+
+    // Print ends no line, Println ends one with the line terminator of the
+    // platform, and a line feed written in a string is a line feed.
+    const auto lines = RunCapturing("Lines",
+                                    "    public static void Main() {\n"
+                                    "        Console.Print(\"a\");\n"
+                                    "        Console.Print(\"b\");\n"
+                                    "        Console.Println(\"\");\n"
+                                    "        Console.Println(42);\n"
+                                    "        Console.Println(true);\n"
+                                    "        Console.Println('x');\n"
+                                    "    }\n");
+    CHECK(lines.status == 0);
+    CHECK(lines.output == "ab\r\n42\r\ntrue\r\nx\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable keeps standard output and standard error apart")
+{
+    const auto outcome
+        = RunCapturing("Streams",
+                       "    public static void Main() {\n"
+                       "        Console.Print(\"out one, \");\n"
+                       "        Console.Errorln(\"error one\");\n"
+                       "        Console.Println(\"out two\");\n"
+                       "        Console.Errorfn(\"error %d\", 2);\n"
+                       "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "out one, out two\r\n");
+    CHECK(outcome.error == "error one\r\nerror 2\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable writes to a file as UTF-8")
+{
+    // One character of two bytes and one of three, written in the source.
+    const auto outcome
+        = RunCapturing("Encoded",
+                       "    public static void Main() {\n"
+                       "        Console.Println(\"\xc3\xa9\xe2\x82\xac\");\n"
+                       "        Console.Printf(\"%4s|\", \"\xc3\xa9\");\n"
+                       "    }\n");
+    CHECK(outcome.status == 0);
+    // The width counts characters, not bytes: three spaces before one
+    // character of two bytes.
+    CHECK(outcome.output == "\xc3\xa9\xe2\x82\xac\r\n   \xc3\xa9|");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable applies the conversions of a format")
+{
+    const auto outcome = RunCapturing(
+        "Formats",
+        "    public static void Main() {\n"
+        "        Console.Printfn(\"gcd(%d, %d) = %d\", 1071, 462, 21);\n"
+        "        Console.Printfn(\"%5d|%-5d|%05d\", 42, 42, 0 - 42);\n"
+        "        Console.Printfn(\"%+d %'d\", 42, 0 - 1234567);\n"
+        "        Console.Printfn(\"%x %#x %x\", 255, 255, 0 - 255);\n"
+        "        uint size = 4294967295;\n"
+        "        Console.Printfn(\"%u %x\", size, size);\n"
+        "        Console.Printfn(\"%10s|%-10s|%.2s\", \"abc\", \"abc\","
+        " \"abcdef\");\n"
+        "        Console.Printfn(\"%c%3c|%b %6b|\", 'q', 'q', true, false);\n"
+        "        Console.Printfn(\"%d%% done%n%s\", 50, \"next\");\n"
+        "        Console.Printfn(\"%*d|%.*f|%*.*f|\", 5, 42, 2, 3.14159, 8, 2,"
+        " 3.14159);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output
+          == "gcd(1071, 462) = 21\r\n"
+             "   42|42   |-0042\r\n"
+             "+42 -1'234'567\r\n"
+             "ff 0xff -ff\r\n"
+             "4294967295 ffffffff\r\n"
+             "       abc|abc       |ab\r\n"
+             "q  q|true  false|\r\n"
+             "50% done\r\nnext\r\n"
+             "   42|3.14|    3.14|\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable writes floating-point numbers exactly")
+{
+    const auto outcome = RunCapturing(
+        "Floating",
+        "    public static void Main() {\n"
+        "        Console.Printfn(\"%f\", 12.5);\n"
+        "        Console.Printfn(\"%.2f %.0f %.0f\", 12.5, 2.5, 3.5);\n"
+        "        Console.Printfn(\"%010.3f|%-10.3f|\", 3.14159, 3.14159);\n"
+        "        Console.Printfn(\"%'.2f\", 1234567.5);\n"
+        "        Console.Printfn(\"%.20f\", 0.1);\n"
+        "        float price = 19.99;\n"
+        "        Console.Printfn(\"Price: %.2f\", price);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output
+          == "12.500000\r\n"
+             "12.50 2 4\r\n"
+             "000003.142|3.142     |\r\n"
+             "1'234'567.50\r\n"
+             "0.10000000000000000555\r\n"
+             "Price: 19.99\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable joins and compares strings")
+{
+    const auto outcome = RunCapturing(
+        "Strings",
+        "    public static String Twice(_ String s) { return s + s; }\n"
+        "    public static void Main() {\n"
+        "        String line = \"x\";\n"
+        "        line += \"y\";\n"
+        "        line += 3;\n"
+        "        Console.Println(Twice(line));\n"
+        "        Console.Println(\"n=\" + 5 + \" b=\" + true + \" c=\" + "
+        "'z');\n"
+        "        String first = \"ab\";\n"
+        "        String second = \"a\" + \"b\";\n"
+        "        Console.Println(first == second);\n"
+        "        Console.Println(first \\= second);\n"
+        "        Console.Println(first == \"abc\");\n"
+        "        String made = Console.Format(\"%05d-%s\", 42, first);\n"
+        "        Console.Println(made);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output
+          == "xy3xy3\r\n"
+             "n=5 b=true c=z\r\n"
+             "true\r\nfalse\r\nfalse\r\n"
+             "00042-ab\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable writes where the program says, in the order it "
+          "says")
+{
+    // Output is an effect: a binding that writes is carried out where it
+    // stands, and a value that only computes is still computed by need.
+    const auto outcome = RunCapturing(
+        "Effects",
+        "    public static int Log(_ int v) { Console.Println(v);"
+        " return v; }\n"
+        "    public static void Main() {\n"
+        "        int unused = Log(1);\n"
+        "        int never = 8 / Zero(3);\n"
+        "        Console.Println(Pick(0, Log(5)));\n"
+        "        Console.Printf(\"%*d|%n\", Log(3), Log(4));\n"
+        "        Console.Println(Pick(0, never));\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "1\r\n5\r\n7\r\n3\r\n4\r\n  4|\r\n7\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable has written what came before it stopped")
+{
+    // The runtime keeps no buffer, so nothing is lost when a program stops.
+    const auto outcome
+        = RunCapturing("Stopped",
+                       "    public static void Main() {\n"
+                       "        Console.Println(\"before\");\n"
+                       "        Console.Error(\"also before\");\n"
+                       "        Check(1, 2);\n"
+                       "        Console.Println(\"after\");\n"
+                       "    }\n");
+    CHECK(outcome.status == kStopped);
+    CHECK(outcome.output == "before\r\n");
+    CHECK(outcome.error == "also before");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable releases the strings it makes")
+{
+    // Each pass makes and releases several strings. A million passes hold
+    // far more than a process may if none is released; the last line shows
+    // the loop ran to its end.
+    const auto outcome = RunCapturing(
+        "Many",
+        "    public static void Main() {\n"
+        "        int total = 0;\n"
+        "        for (int i = 0; i < 1000000; i += 1) {\n"
+        "            String text = \"value \" + i;\n"
+        "            String made = Console.Format(\"%08d|%s\", i, text);\n"
+        "            if (made == text) { total += 1; }\n"
+        "            total += 1;\n"
+        "        }\n"
+        "        Console.Println(total);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "1000000\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable writes many lines")
+{
+    const auto outcome
+        = RunCapturing("Loop",
+                       "    public static void Main() {\n"
+                       "        for (int i = 0; i < 20000; i += 1) {\n"
+                       "            Console.Printfn(\"line %d\", i);\n"
+                       "        }\n"
+                       "    }\n");
+    CHECK(outcome.status == 0);
+    std::string expected;
+    for (int index = 0; index < 20000; ++index)
+        expected += "line " + std::to_string(index) + "\r\n";
+    CHECK(outcome.output == expected);
     std::filesystem::remove_all(Directory());
 }
 

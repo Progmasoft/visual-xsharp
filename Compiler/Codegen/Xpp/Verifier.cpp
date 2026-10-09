@@ -15,6 +15,7 @@
 #include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
+#include "Visual/XSharp/Core/RuntimeCall.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Xpp/OwnershipVerifier.hpp"
 #include "Visual/XSharp/Xpp/Verifier.hpp"
@@ -342,6 +343,32 @@ namespace Visual::XSharp::Xpp
                     context.Add("VXP1045",
                                 "type test requires a reference subject, uint "
                                 "identity and Bool result");
+            }
+            else if (value.opcode == IR::Opcode::RuntimeCall)
+            {
+                // The function is named by a literal, never by a value that
+                // is computed: what is called is fixed when the program is
+                // compiled.
+                namespace runtime = Core::runtime;
+                const runtime::Signature *signature = nullptr;
+                if (!value.operands.empty()
+                    && value.operands.front().kind
+                           == IR::Operand::Kind::Literal)
+                    if (const auto identity
+                        = runtime::IdentityOf(value.operands.front().literal,
+                                              value.operands.front().type))
+                        signature = runtime::Find(*identity);
+                std::vector<Core::Type::Kind> arguments;
+                arguments.reserve(value.operands.size());
+                for (std::size_t index = 1U; index < value.operands.size();
+                     ++index)
+                    arguments.push_back(value.operands[index].type.kind);
+                const auto defect = runtime::Check(signature,
+                                                   arguments,
+                                                   value.result_type.kind);
+                if (defect != runtime::Defect::None)
+                    context.Add("VXP1048",
+                                std::string(runtime::Describe(defect)));
             }
             else if (value.opcode == IR::Opcode::Memoize)
             {

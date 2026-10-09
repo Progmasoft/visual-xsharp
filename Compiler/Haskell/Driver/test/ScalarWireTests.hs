@@ -24,8 +24,8 @@ scalarWireTests =
 
 versionTests :: [(String, Bool)]
 versionTests =
-    [ ("Core wire current version is 9", currentCoreWireVersion == CoreWireVersion 9)
-    , ("CorePrep wire current version is 7", currentWireVersion == WireVersion 7)
+    [ ("Core wire current version is 10", currentCoreWireVersion == CoreWireVersion 10)
+    , ("CorePrep wire current version is 8", currentWireVersion == WireVersion 8)
     , ("Core numeric payload default is bounded", maximumCoreNumericBytes defaultCoreWireLimits == 4096)
     , ("CorePrep numeric payload default is bounded", maximumNumericBytes defaultWireLimits == 4096)
     ]
@@ -286,11 +286,11 @@ discardedFloorDivideModule leftType left rightType right =
 malformedWireTests :: [(String, Bool)]
 malformedWireTests =
     [ ("Core wire rejects v2 input", rejectsCoreVersion 2)
-    , ("Core wire rejects the previous v8 schema", rejectsCoreVersion 8)
-    , ("Core wire rejects future input", rejectsCoreVersion 10)
+    , ("Core wire rejects the previous v9 schema", rejectsCoreVersion 9)
+    , ("Core wire rejects future input", rejectsCoreVersion 11)
     , ("CorePrep wire rejects v2 input", rejectsCorePrepVersion 2)
-    , ("CorePrep wire rejects the previous v6 schema", rejectsCorePrepVersion 6)
-    , ("CorePrep wire rejects future input", rejectsCorePrepVersion 8)
+    , ("CorePrep wire rejects the previous v7 schema", rejectsCorePrepVersion 7)
+    , ("CorePrep wire rejects future input", rejectsCorePrepVersion 9)
     , ("Core wire enforces numeric byte limit", coreNumericLimit)
     , ("CorePrep wire enforces numeric byte limit", corePrepNumericLimit)
     ]

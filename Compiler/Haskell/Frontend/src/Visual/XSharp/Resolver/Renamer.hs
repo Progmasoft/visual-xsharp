@@ -9,6 +9,7 @@ module Visual.XSharp.Resolver.Renamer (Renamer (..), defaultRenamer, runRenamer)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.RuntimeCall (builtinConsoleSymbol, builtinSystemSymbol)
 
 -- | Pluggable pass that assigns declaration and local-binding identities.
 newtype Renamer = Renamer
@@ -51,9 +52,22 @@ renameTree (ParsedAST (SyntaxTree namespace declarations)) =
                 1
                 Map.empty
                 [(declarationName declaration, declarationSpan declaration) | declaration <- declarations]
-        (renamed, _, problems) = renameDeclarations globals next declarations
+        -- What the language declares for every program stands outside
+        -- the program's own names, which shadow it.
+        (renamed, _, problems) = renameDeclarations (globals `over` predeclared) next declarations
         allProblems = duplicateProblems ++ problems
      in if null allProblems then Right (RenamedAST (SyntaxTree namespace renamed)) else Left allProblems
+
+{- | The names every program may use without declaring them: @System@, and
+@Console@, because @System@ is imported implicitly. Each has a reserved
+symbol, which no declaration of a program can have.
+-}
+predeclared :: Environment
+predeclared =
+    Map.fromList
+        [ (Identifier "System", RenamedName (Identifier "System") (symbolIdValue builtinSystemSymbol))
+        , (Identifier "Console", RenamedName (Identifier "Console") (symbolIdValue builtinConsoleSymbol))
+        ]
 
 declareMany ::
     DiagnosticStage -> String -> Int -> Environment -> [(Identifier, SourceSpan)] -> (Environment, Int, [Diagnostic])

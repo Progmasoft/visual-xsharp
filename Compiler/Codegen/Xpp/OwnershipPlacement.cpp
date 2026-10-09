@@ -238,6 +238,10 @@ namespace Visual::XSharp::Xpp
              * A method named where a value is expected becomes a closure
              * without captures. The callee of a direct call stays a
              * method: such a call needs no closure.
+             *
+             * A string literal used as an operand becomes a local in the
+             * same pass, for the same reason: both are objects created at
+             * a use, and an object needs a symbol to be released by.
              */
             void
             MaterializeMethodValues()
@@ -261,6 +265,31 @@ namespace Visual::XSharp::Xpp
                             rewritten.push_back(std::move(closure));
                             continue;
                         }
+                        // A string literal that is an operand creates a
+                        // string where it is used. Unless the instruction
+                        // is the binding of that string, nothing names the
+                        // new object and nothing could release it, so it
+                        // gets a symbol of its own first.
+                        const auto binds
+                            = instruction.opcode == IR::Opcode::Copy
+                              && instruction.effect != Effect::Discard
+                              && instruction.operands.size() == 1U;
+                        if (!binds)
+                            for (auto &operand : instruction.operands)
+                            {
+                                if (operand.kind != IR::Operand::Kind::Literal
+                                    || !IsAarc(operand.type))
+                                    continue;
+                                const auto created = Fresh();
+                                IR::Instruction literal;
+                                literal.effect = Effect::Define;
+                                literal.opcode = IR::Opcode::Copy;
+                                literal.destination = created;
+                                literal.result_type = operand.type;
+                                literal.operands.push_back(operand);
+                                rewritten.push_back(std::move(literal));
+                                operand = SymbolOperand(created, operand.type);
+                            }
                         const std::size_t first
                             = instruction.opcode == IR::Opcode::Call ? 1U : 0U;
                         for (std::size_t index = first;
@@ -315,7 +344,9 @@ namespace Visual::XSharp::Xpp
                     for (auto &instruction : block.instructions)
                     {
                         if (instruction.effect == Effect::Discard
-                            && instruction.opcode == IR::Opcode::Call
+                            && (instruction.opcode == IR::Opcode::Call
+                                || instruction.opcode
+                                       == IR::Opcode::RuntimeCall)
                             && IsAarc(instruction.result_type))
                         {
                             instruction.effect = Effect::Define;

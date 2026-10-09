@@ -99,6 +99,14 @@ data CorePrimitive
       once, wherever the need arises.
       -}
       CoreMemoize
+    | {- | A call of a function of the runtime.
+
+      The first operand is an integer literal, the identity of the function
+      in the catalog of "Visual.XSharp.RuntimeCall"; the operands after it
+      are the arguments. The function is fixed when the program is compiled:
+      the first operand is never a value that is computed.
+      -}
+      CoreRuntimeCall
     deriving (Eq, Ord, Read, Show)
 
 -- | Typed expression graph consumed by Core verification and optimization.

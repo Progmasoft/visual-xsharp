@@ -8,6 +8,7 @@
 
 #include "Visual/XSharp/Core/CorePrep/Verifier/Semantics.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
+#include "Visual/XSharp/Core/RuntimeCall.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Core/Template.hpp"
 
@@ -344,6 +345,20 @@ namespace visual_xsharp::core
                           block));
         }
 
+        /// The row of the runtime catalog a runtime call names with its
+        /// first operand, or null when that operand names none.
+        [[nodiscard]] auto
+        runtime_signature(const std::vector<Atom> &operands)
+            -> const runtime::Signature *
+        {
+            if (operands.empty()
+                || operands.front().kind != Atom::Kind::Literal)
+                return nullptr;
+            const auto identity = runtime::IdentityOf(operands.front().literal,
+                                                      operands.front().type);
+            return identity ? runtime::Find(*identity) : nullptr;
+        }
+
         auto
         expected_primitive_result(Operation operation,
                                   const std::vector<Atom> &operands)
@@ -396,6 +411,14 @@ namespace visual_xsharp::core
                                ? std::nullopt
                                : std::optional<Type>(operands.front().type);
                 case Operation::MakeClosure:
+                    return std::nullopt;
+                case Operation::RuntimeCall:
+                    if (const auto *signature = runtime_signature(operands))
+                        return signature->result == runtime::Result::Text
+                                   ? Type::string()
+                               : signature->result == runtime::Result::Truth
+                                   ? Type::boolean()
+                                   : Type::unit();
                     return std::nullopt;
             }
             return std::nullopt;
@@ -635,6 +658,25 @@ namespace visual_xsharp::core
                                   function,
                                   block));
                     break;
+                case Operation::RuntimeCall:
+                {
+                    std::vector<Type::Kind> arguments;
+                    arguments.reserve(arity);
+                    for (std::size_t index = 1U; index < arity; ++index)
+                        arguments.push_back(
+                            instruction.operands[index].type.kind);
+                    const auto defect = runtime::Check(
+                        runtime_signature(instruction.operands),
+                        arguments,
+                        instruction.type.kind);
+                    if (defect != runtime::Defect::None)
+                        issues.push_back(
+                            issue("VXC1076",
+                                  std::string(runtime::Describe(defect)),
+                                  function,
+                                  block));
+                    break;
+                }
                 case Operation::Memoize:
                     if (arity != 1U
                         || !remembers_result(instruction.operands.front().type))

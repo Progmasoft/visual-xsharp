@@ -311,8 +311,8 @@ Artifact ownership is explicit:
 `check` writes no artifact. Binary emission creates the required entry bridge, writes a temporary object, invokes LLD with a
 typed argument vector rather than a shell string, validates the resulting executable, and removes its temporary object.
 
-Project binary builds produce one executable. The entry namespace's Core v9
-preserves source ownership through CorePrep v7, Xpp v6, and Xmm v6. Project
+Project binary builds produce one executable. The entry namespace's Core v10
+preserves source ownership through CorePrep v8, Xpp v7, and Xmm v7. Project
 object and assembly emission lowers each source in that selected namespace's
 source catalog into a separate `.o` or `.asm` in the selected output directory.
 A source with no declarations still receives an output; functions defined by

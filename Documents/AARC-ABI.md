@@ -115,7 +115,7 @@ reference.
 
 ## Xpp, Xmm, and LLVM
 
-Xpp and Xmm wire version 6 preserve `RetainStrong`, `ReleaseStrong`, `MakeWeak`,
+Xpp and Xmm wire version 7 preserve `RetainStrong`, `ReleaseStrong`, `MakeWeak`,
 `LockWeak`, `ReleaseWeak`, `MakeUnowned`, `LoadUnowned`, and `ReleaseUnowned`.
 Producing operations preserve the operand's language type. Release operations
 have no destination and carry `Unit` as the result marker. Both stage verifiers
@@ -154,8 +154,8 @@ introducing UTF-8 storage.
 
 Retains and releases are placed for every AARC value of a function by the Xpp
 ownership placement pass, described in [Ownership flow](OWNERSHIP-FLOW.md).
-This slice does not collect cycles, and it does not link the runtime library
-into a native executable; see "Native executables" below.
+This slice does not collect cycles. A native executable is linked with the
+runtime library; see "Native executables" below.
 `Visual::XSharp::Runtime::Aarc::LiveAllocations` counts the
 allocations whose storage has not been reclaimed; it is a C++ entry point for
 tests and is not part of the C ABI. The future concurrent Bacon–Rajan plus
@@ -165,32 +165,30 @@ when no candidate exists or the program has already broken the candidate cycle.
 
 ## Native executables
 
-A native executable is linked without a C runtime and without any library: it
-is the code of its own modules. Code generated for a closure, or for a
-callable that remembers its result, calls `vxs_aarc_allocate`,
-`vxs_aarc_retain_strong` and `vxs_aarc_release_strong`. In a process that
-hosts the JIT those are the entry points of the runtime library. An executable
-has no library to find them in, and until this was addressed a program that
-created a closure did not link.
+A native executable is linked without a C runtime. What its code calls of the
+runtime, it finds in `vxs-runtime.lib`, which the compiler links from the
+directory of its own executable: the ownership runtime of this document and
+the text and console runtime, as one object.
 
-The module that holds the entry of an executable therefore defines the three
-functions itself, with the meaning the library gives them: an object starts
-with one strong reference, retaining adds one and releasing removes one, the
-destructor named by the object's metadata runs when the last reference is
-released, and a null reference is retained and released without effect. The
-functions keep external linkage, so the other objects of a project linked from
-several sources find them in that module.
+That object is built from the sources a host process links,
+`Compiler/Runtime/AARC` and `Compiler/Runtime/Text`, in one translation unit
+with the few things those sources take from a C runtime when there is one:
+the non-throwing allocation functions, over the heap of the process, the
+memory functions a compiler may call for a loop or an initialization, and the
+tag object of the non-throwing forms. It is compiled without stack cookies
+and without instrumentation of any kind, in a sanitizer build of the compiler
+as well, because the programs it is linked into are not sanitizer builds.
 
-The memory comes from one arena of 64 MiB in the zero-initialized data of the
-executable, because without a library there is no system allocator to ask. An
-object is laid out as a count, the address of its metadata and its payload,
-rounded up to sixteen bytes. A released block of up to a kilobyte is kept in a
-list for its size and reused before the arena grows, so a program that creates
-and releases objects in a loop stays within what it holds at one time. A
-program that holds more than the arena at one time stops with a trap.
+An executable therefore has the whole ownership ABI: strong, weak and unowned
+references, strings and type tests, counted with the same atomic operations
+as in a host. It imports seven functions of kernel32 and nothing else. The
+linker makes the import library for them from a list of names, so that
+linking a program needs neither the libraries of a C runtime nor those of a
+Windows SDK.
 
-This is not the runtime library. It counts without atomic operations, because
-a freestanding executable has one thread, and it implements strong ownership
-only: weak and unowned handles, strings and type tests remain entry points of
-the library, and an executable that needs them does not link. Linking the
-library itself into executables is pending.
+A program that calls nothing of the runtime takes nothing from the library.
+When the library is not installed beside the compiler, such a program still
+links, and any other fails with a diagnostic that names the library.
+
+The native linker is the Windows one; executables on Linux and macOS are
+pending, and with them the same library for those systems.

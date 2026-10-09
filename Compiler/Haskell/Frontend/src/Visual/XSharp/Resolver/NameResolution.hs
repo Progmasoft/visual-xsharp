@@ -8,6 +8,7 @@ module Visual.XSharp.Resolver.NameResolution (NameResolution (..), defaultNameRe
 
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.RuntimeCall (builtinConsoleSymbol, builtinSystemSymbol)
 
 -- | Pluggable name-resolution pass over a fully renamed syntax tree.
 newtype NameResolution = NameResolution
@@ -270,6 +271,9 @@ resolveCallableBody body = case body of
 resolveName :: SourceSpan -> RenamedName -> (ResolvedName, [Diagnostic])
 resolveName spanValue name
     | renamedUnique name > 0 = (ResolvedName (SymbolId (renamedUnique name)) (renamedSpelling name), [])
+    -- The names the language declares for every program.
+    | SymbolId (renamedUnique name) `elem` [builtinSystemSymbol, builtinConsoleSymbol] =
+        (ResolvedName (SymbolId (renamedUnique name)) (renamedSpelling name), [])
     | renamedUnique name == 0 =
         ( ResolvedName (SymbolId 0) (renamedSpelling name)
         ,

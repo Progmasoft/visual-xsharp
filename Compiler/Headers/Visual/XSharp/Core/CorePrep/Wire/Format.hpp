@@ -11,7 +11,7 @@ namespace visual_xsharp::core::wire
     /// Four-byte identifier at the beginning of each CorePrep wire document.
     inline constexpr std::uint8_t magic[] = { 'V', 'X', 'C', 'P' };
     /// Current CorePrep wire schema version.
-    inline constexpr std::uint16_t current_version = 7;
+    inline constexpr std::uint16_t current_version = 8;
 
     /// Resource ceilings checked while encoding or decoding CorePrep data.
     struct Limits final

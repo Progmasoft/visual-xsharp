@@ -1,3 +1,4 @@
+load("//Compiler/Runtime:host.bzl", "RUNTIME_HOST_DEPS", "RUNTIME_HOST_LINKOPTS")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
@@ -43,37 +44,14 @@ cc_library(
     deps = ["//Compiler/Headers/Visual/XSharp/Core:core"],
 )
 
-# A compiled program may call the AARC runtime: a closure does, and so does an
-# argument that is passed by need. The JIT resolves a runtime symbol in the
-# process that hosts it, so every program that runs compiled programs links
-# the runtime and exports its entry points. The options are those of the
-# harness, which they all link.
-AARC_HOST_LINKOPTS = select({
-    "@platforms//os:windows": [
-        "/EXPORT:vxs_aarc_abi_version",
-        "/EXPORT:vxs_aarc_allocate",
-        "/EXPORT:vxs_aarc_copy_unowned",
-        "/EXPORT:vxs_aarc_copy_weak",
-        "/EXPORT:vxs_aarc_is_exact_type",
-        "/EXPORT:vxs_aarc_load_unowned",
-        "/EXPORT:vxs_aarc_lock_weak",
-        "/EXPORT:vxs_aarc_make_unowned",
-        "/EXPORT:vxs_aarc_make_weak",
-        "/EXPORT:vxs_aarc_release_strong",
-        "/EXPORT:vxs_aarc_release_unowned",
-        "/EXPORT:vxs_aarc_release_weak",
-        "/EXPORT:vxs_aarc_retain_strong",
-        "/EXPORT:vxs_aarc_string_literal",
-    ],
-    "@platforms//os:macos": [],
-    "//conditions:default": ["-rdynamic"],
-})
-
+# A compiled program calls the runtime, and the JIT resolves a runtime symbol
+# in the process that hosts it. The options and libraries are those of every
+# such host; see //Compiler/Runtime:host.bzl.
 cc_library(
     name = "source_fuzz_harness",
     srcs = ["SourceFuzz.cpp"],
     hdrs = ["SourceFuzz.hpp"],
-    linkopts = AARC_HOST_LINKOPTS,
+    linkopts = RUNTIME_HOST_LINKOPTS,
     deps = [
         ":coreprep_parity",
         "//Compiler/Backend/LLVM:llvm_backend",
@@ -82,10 +60,8 @@ cc_library(
         "//Compiler/Driver:pipeline",
         "//Compiler/Headers/Visual/XSharp/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
-        "//Compiler/Headers/Visual/XSharp/Runtime:aarc_api",
-        "//Compiler/Runtime/AARC:aarc",
         "//Compiler/Support:compiler_stack",
-    ],
+    ] + RUNTIME_HOST_DEPS,
 )
 
 cc_binary(
@@ -142,6 +118,15 @@ cc_binary(
         "//Compiler/Headers/Visual/XSharp/Runtime:aarc_api",
         "//Compiler/Runtime/AARC:aarc",
     ],
+)
+
+# Programs that write to the console, with the text each must write. The
+# harness links the runtime the generated code calls; its output is read
+# through a sink.
+cc_binary(
+    name = "source_console_smoke",
+    srcs = ["SourceConsoleSmoke.cpp"],
+    deps = [":source_fuzz_harness"] + RUNTIME_HOST_DEPS,
 )
 
 # A measuring instrument, not a test: it compiles one source file on a stack

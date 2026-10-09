@@ -71,6 +71,17 @@ An expression written as a statement of its own, and a value assigned to the
 discard, are evaluated: the statement is the need. That is the rule of the
 language, example 12 of the specification file, not a restriction.
 
+## Output is an effect
+
+A store shows in the expression that makes it. Console output does not:
+`int x = Log(1);` writes only because of what the body of `Log` does. The
+frontend therefore finds the methods a call of which may write, from all
+methods of the program together, and an expression that contains such a call
+is evaluated where it stands: its binding computes its value in place, and as
+an argument it is computed at the call. Examples 15 and 16 of the
+specification file state the rule, and `CONSOLE-IO.md` describes the analysis
+and what it errs on.
+
 ## How an argument is passed by need
 
 A value that one function hands to another cannot live in a flag and a slot of
@@ -173,7 +184,7 @@ restriction of the language.
 | a binding that a closure captures | computed in place |
 | every value by need as a suspended computation | a value that stays in one function is a flag and a slot in its frame; only a value that may be handed on is a suspended computation |
 | the computation of a value by need stated once | every read carries it; see below |
-| effects other than stores and transfers of control | none exist in the implemented subset: it has no input, output or shared state |
+| effects other than stores, transfers of control and console output | none exist in the implemented subset: it has no input and no shared state |
 
 A read of a value by need carries the computation of that value, guarded by
 its flag, because the frame of one function is all a value by need has

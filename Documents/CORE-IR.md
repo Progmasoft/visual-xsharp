@@ -512,7 +512,36 @@ when the frontend produces it.
 - The result is a value like any other callable: it may be bound, passed,
   captured and returned, and every copy shares the one remembered value.
 
-The Core verifiers reject any other operand with `VXC1073`. The native
+#### Runtime call
+
+`CoreRuntimeCall` is a call of a function of the runtime: joining two
+strings, a conversion of the output format grammar, a console write. It is
+the one primitive whose arity depends on its first operand.
+
+- The first operand is an integer literal of type `int`, the identity of the
+  function in the runtime catalog. It is never a value that is computed: what
+  a program calls is fixed when the program is compiled.
+- The operands after it are the arguments, in the order the function takes
+  them, and they are evaluated in that order.
+- The type of the expression is the one the function returns: `String`,
+  `bool` or no value.
+
+The catalog is `Visual.XSharp.RuntimeCall` in the frontend and
+`Visual/XSharp/Core/RuntimeCall.hpp` in the native stages; `ARTIFACT-WIRE.md`
+lists its rows. A call that names no function, has the wrong number of
+arguments, an argument of a type its function does not take, or a type other
+than the function's result is rejected: `VXC1075` by the Core verifiers,
+`VXC0026` by the Haskell and `VXC1076` by the native CorePrep verifier,
+`VXP1048` by Xpp and `VXL1054` by Xmm.
+
+A console write is an effect. The optimizer treats it as a call of a function
+it knows nothing about: it is not removed when nothing uses its result, not
+repeated and not moved. The other runtime calls compute a string and nothing
+else. The frontend produces the
+primitive for `System.Console` and for `+`, `==` and `\=` on strings;
+`CONSOLE-IO.md` says how.
+
+The Core verifiers reject any other operand of a remembering callable with `VXC1073`. The native
 CorePrep verifier reports `VXC1074` and the Haskell one `VXC0025`, the Xpp
 verifier `VXP1047` and the Xmm verifier `VXL1053`; each of the last four also
 requires the result to have the operand's type. The optimizer does not fold

@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 -- | Lower the typed source AST into target-independent, source-attributed Core.
-module Visual.XSharp.Desugarer (Desugarer (..), defaultDesugarer, runDesugarer) where
+module Visual.XSharp.Desugarer (Desugarer (..), defaultDesugarer, desugarerWithin, runDesugarer) where
 
 import Control.Monad (forM, zipWithM)
 import Control.Monad.State.Strict
@@ -18,11 +18,14 @@ import Visual.XSharp.Core
 import Visual.XSharp.Core.Scalar (isCoreNumericType)
 import Visual.XSharp.Desugarer.Branching
 import Visual.XSharp.Desugarer.Captures
+import Visual.XSharp.Desugarer.Effects
 import Visual.XSharp.Desugarer.Handing
 import Visual.XSharp.Desugarer.Laziness
 import Visual.XSharp.Desugarer.Sequencing
+import Visual.XSharp.Desugarer.Symbols
 import Visual.XSharp.Desugarer.Workers
 import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
+import Visual.XSharp.RuntimeCall (runtimeFunctionIdentity, runtimeFunctionOfName)
 
 -- | Pluggable desugaring pass from typed source semantics into Core IR.
 newtype Desugarer = Desugarer
@@ -36,12 +39,21 @@ runDesugarer = desugarTypedAST
 
 -- | Default Core lowerer used by the compiler pipeline.
 defaultDesugarer :: Desugarer
-defaultDesugarer = Desugarer lowerTree
+defaultDesugarer = Desugarer (\typed -> lowerTree [typed] typed)
 
-lowerTree :: TypedAST -> Either [Diagnostic] CoreModule
-lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
+{- | The lowerer for one tree of a program that is lowered as several: the
+methods of ordinary types and the specializations of templates. Which calls
+have an effect is decided from all the trees together, because a method of
+one may call a method of another.
+-}
+desugarerWithin :: [TypedAST] -> Desugarer
+desugarerWithin program = Desugarer (lowerTree program)
+
+lowerTree :: [TypedAST] -> TypedAST -> Either [Diagnostic] CoreModule
+lowerTree program (TypedAST tree@(SyntaxTree namespace declarations)) =
     evalStateT lowerModule initial
     where
+        effects = programEffects [programDeclarations | TypedAST (SyntaxTree _ programDeclarations) <- program]
         defaultName = QualifiedName [Identifier "Main"]
         sourceFiles = nub (map portableSourcePath (concatMap declarationSourceFiles declarations))
         methods = methodDeclarations declarations
@@ -55,7 +67,8 @@ lowerTree (TypedAST tree@(SyntaxTree namespace declarations)) =
                 , lowerFollowing = []
                 , lowerDeferred = []
                 , lowerMethods = methods
-                , lowerNeeds = methodNeeds (scalarType . lowerBoundaryType) methods
+                , lowerNeeds = methodNeeds (scalarType . lowerBoundaryType) (expressionActs effects) methods
+                , lowerEffects = effects
                 , lowerHanded = []
                 , lowerSuspended = []
                 , lowerWorkers = Map.empty
@@ -153,6 +166,8 @@ data LowerState = LowerState
     , lowerMethods :: Map SymbolId (Declaration ResolvedName Type)
     -- ^ The methods a call can name directly.
     , lowerNeeds :: MethodNeeds
+    , lowerEffects :: Effects
+    -- ^ Which calls of the program do something that can be observed.
     -- ^ Which parameters of which methods are passed by need.
     , lowerHanded :: [SymbolId]
     {- ^ The locals of the function being lowered whose values may be handed
@@ -275,8 +290,9 @@ lowerDeclaration declaration@FunctionDeclaration {} = do
     -- other binding by need.
     inPlaceBody <- inPlace (lowerFunctionBlock returnType (declarationBody declaration))
     needs <- gets lowerNeeds
+    acts <- gets (expressionActs . lowerEffects)
     body <-
-        handing (handedLocals needs (declarationBody declaration)) $
+        handing (handedLocals needs acts (declarationBody declaration)) $
             byNeed
                 (assignedSymbols inPlaceBody ++ capturedSymbols inPlaceBody)
                 (lowerFunctionBlock returnType (declarationBody declaration))
@@ -411,6 +427,7 @@ lowerStatementWith target statement = case statement of
         suspended <- gets lowerSuspended
         handed <- gets lowerHanded
         needs <- gets (argumentNeeds . lowerNeeds)
+        acts <- gets (expressionActs . lowerEffects)
         let loweredType = lowerBoundaryType valueType
             -- A binding must compute its value where it stands when it is
             -- assigned later or captured, when its value is not a scalar,
@@ -419,6 +436,7 @@ lowerStatementWith target statement = case statement of
                 resolvedSymbol bound `elem` inPlaceLocals
                     || not (scalarType (lowerBoundaryType boundType))
                     || not (deferrableExpression initializer)
+                    || acts initializer
             -- A binding is certain to be evaluated when it must stand in
             -- place or the statement after it is certain to need it. Only
             -- such a binding makes the values its initializer reads needed.
@@ -778,6 +796,14 @@ lowerOperands expression = case expression of
                     "an unresolved member selector reached Core lowering"
                 ]
             )
+    -- A call of a runtime function: its identity, and then its arguments
+    -- in order.
+    CallExpression _ (NameExpression _ callee _) arguments valueType
+        | Just function <- runtimeFunctionOfName callee -> do
+            loweredArguments <- mapM lowerExpression arguments
+            (prefix, values) <- sequenceOperands loweredArguments
+            let identity = CoreLiteral (CoreInteger (runtimeFunctionIdentity function)) intType
+            pure (prefix, CorePrimitive CoreRuntimeCall (identity : values) (lowerBoundaryType valueType))
     -- A call that hands a value on by need goes to the function that
     -- receives suspended computations.
     CallExpression _ (NameExpression _ callee _) arguments valueType -> do
@@ -1001,8 +1027,10 @@ handedOn :: Expression ResolvedName Type -> Lower Bool
 handedOn argument = do
     deferred <- gets (map fst . lowerDeferred)
     suspended <- gets (map fst . lowerSuspended)
+    acts <- gets (expressionActs . lowerEffects)
     pure
         ( deferrableExpression argument
+            && not (acts argument)
             && ( worthDeferring argument
                     || any ((`elem` deferred ++ suspended) . resolvedSymbol . fst) (expressionNames argument)
                )
@@ -1190,6 +1218,7 @@ lowerWorker method = do
     flags <- gets ((Map.! method) . lowerNeeds)
     (worker, _) <- gets ((Map.! method) . lowerWorkers)
     needs <- gets lowerNeeds
+    effects <- gets lowerEffects
     let returnType = declarationResultType declaration
         body = methodBody declaration
     inPlaceBody <- inPlace (lowerFunctionBlock returnType body)
@@ -1214,7 +1243,7 @@ lowerWorker method = do
             , resolvedSymbol name `notElem` captured
             ]
     lowered <-
-        handing (handedLocals needs body) $
+        handing (handedLocals needs (expressionActs effects) body) $
             byNeed (assignedSymbols inPlaceBody ++ captured) $ do
                 modify (\current -> current {lowerSuspended = suspendedParameters})
                 lowerFunctionBlock returnType body
@@ -1379,109 +1408,3 @@ lowerTemplateArgument :: TemplateArgument -> TemplateArgument
 lowerTemplateArgument argument = case argument of
     TypeTemplateArgument valueType -> TypeTemplateArgument (lowerBoundaryType valueType)
     ValueTemplateArgument value -> ValueTemplateArgument value
-
--- Generated Core bindings must never collide with source symbols. Gathering
--- the complete typed tree once is cheaper and more robust than reserving a
--- magic numeric range or deriving identities from source positions.
-syntaxSymbolIds :: SyntaxTree ResolvedName Type -> [Int]
-syntaxSymbolIds (SyntaxTree _ declarations) = concatMap declarationSymbolIds declarations
-
-declarationSymbolIds :: Declaration ResolvedName Type -> [Int]
-declarationSymbolIds declaration =
-    symbolValue (declarationName declaration)
-        : case declaration of
-            TypeDeclaration {typeMembers = members} -> concatMap declarationSymbolIds members
-            TemplateTypeDeclaration {declarationTemplateParameters = parameters, typeMembers = members} ->
-                map (symbolValue . templateParameterName) parameters ++ concatMap declarationSymbolIds members
-            FunctionDeclaration {declarationParameters = parameters, declarationBody = body} ->
-                map (symbolValue . parameterName) parameters ++ blockSymbolIds body
-            EnumDeclaration {} -> []
-
-blockSymbolIds :: Block ResolvedName Type -> [Int]
-blockSymbolIds (Block statements) = concatMap statementIds statements
-
-statementIds :: Statement ResolvedName Type -> [Int]
-statementIds statement = case statement of
-    BindingStatement _ _ _ name _ value -> symbolValue name : expressionIds value
-    AssignmentStatement _ name _ value -> symbolValue name : expressionIds value
-    ReturnStatement _ value -> maybe [] expressionIds value
-    IfStatement _ condition yes no -> expressionIds condition ++ blockSymbolIds yes ++ maybe [] blockSymbolIds no
-    WhileStatement _ condition body -> expressionIds condition ++ blockSymbolIds body
-    DoWhileStatement _ body condition -> blockSymbolIds body ++ expressionIds condition
-    ForStatement _ initializer condition updates body ->
-        maybe [] statementIds initializer
-            ++ maybe [] expressionIds condition
-            ++ concatMap statementIds updates
-            ++ blockSymbolIds body
-    ForEachStatement _ _ _ name _ source body ->
-        symbolValue name : expressionIds source ++ blockSymbolIds body
-    IncrementStatement _ name _ -> [symbolValue name]
-    CompoundAssignmentStatement _ _ name _ value -> symbolValue name : expressionIds value
-    DiscardStatement _ value -> expressionIds value
-    BreakStatement _ value -> maybe [] expressionIds value
-    ContinueStatement {} -> []
-    GuardStatement _ condition block -> expressionIds condition ++ blockSymbolIds block
-    BlockStatement _ block -> blockSymbolIds block
-    ExpressionStatement _ value _ -> expressionIds value
-
-expressionIds :: Expression ResolvedName Type -> [Int]
-expressionIds expression = case expression of
-    NameExpression _ name _ -> [symbolValue name]
-    LiteralExpression {} -> []
-    MemberAccessExpression _ receiver _ _ -> expressionIds receiver
-    CallExpression _ callee arguments _ -> expressionIds callee ++ concatMap expressionIds arguments
-    UnaryExpression _ _ value _ -> expressionIds value
-    BinaryExpression _ _ left right _ -> expressionIds left ++ expressionIds right
-    IsPatternExpression _ subject _ _ -> expressionIds subject
-    ConditionalExpression _ condition first second _ -> concatMap expressionIds [condition, first, second]
-    CoalesceExpression _ left fallback _ -> expressionIds left ++ expressionIds fallback
-    AssignmentExpression _ _ name value _ -> symbolValue name : expressionIds value
-    IncrementExpression _ _ name _ -> [symbolValue name]
-    LoopExpression _ loop _ -> statementIds loop
-    BlockExpression _ block _ -> blockSymbolIds block
-    MatchExpression _ subjects arms _ ->
-        [ symbolValue name
-        | arm <- arms
-        , Just name <- map matchPatternBinding (matchArmPatterns arm)
-        ]
-            ++ concatMap expressionIds (subjects ++ concatMap matchArmExpressions arms)
-    CallableExpression _ _ captures parameters body _ ->
-        map (symbolValue . captureName) captures
-            ++ concatMap (maybe [] expressionIds . captureInitializer) captures
-            ++ map (symbolValue . parameterName) parameters
-            ++ callableBodyIds body
-
-callableBodyIds :: CallableBody ResolvedName Type -> [Int]
-callableBodyIds body = case body of
-    CallableExpressionBody expression -> expressionIds expression
-    CallableBlockBody block -> blockSymbolIds block
-
-symbolValue :: ResolvedName -> Int
-symbolValue = symbolIdValue . resolvedSymbol
-lowerUnary :: UnaryOperator -> CorePrimitive
-lowerUnary UnaryNegate = CoreNegate
-lowerUnary LogicalNot = CoreLogicalNot
-lowerUnary BitwiseNot = CoreBitwiseNot
-lowerUnary UnaryPlus = CoreAdd
-lowerBinary :: BinaryOperator -> CorePrimitive
-lowerBinary operator = case operator of
-    Add -> CoreAdd
-    Subtract -> CoreSubtract
-    Multiply -> CoreMultiply
-    Divide -> CoreDivide
-    FloorDivide -> CoreFloorDivide
-    Remainder -> CoreRemainder
-    Power -> CorePower
-    ShiftLeft -> CoreShiftLeft
-    ShiftRight -> CoreShiftRight
-    BitwiseAnd -> CoreBitwiseAnd
-    BitwiseXor -> CoreBitwiseXor
-    BitwiseOr -> CoreBitwiseOr
-    LessThan -> CoreLessThan
-    LessEqual -> CoreLessEqual
-    GreaterThan -> CoreGreaterThan
-    GreaterEqual -> CoreGreaterEqual
-    Equal -> CoreEqual
-    NotEqual -> CoreNotEqual
-    LogicalAnd -> CoreLogicalAnd
-    LogicalOr -> CoreLogicalOr

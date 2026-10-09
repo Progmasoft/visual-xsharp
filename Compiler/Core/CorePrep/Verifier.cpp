@@ -70,6 +70,7 @@ namespace visual_xsharp::core
                           block));
             if (instruction.operation != Operation::Call
                 && instruction.operation != Operation::MakeClosure
+                && instruction.operation != Operation::RuntimeCall
                 && instruction.operands.size()
                        != expected_arity(instruction.operation))
                 issues.push_back(issue("VXC1007",

@@ -146,7 +146,7 @@ The repository contains:
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The production frontend boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
-contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v6 codecs now own public Xpp/Xmm disk
+contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v7 codecs now own public Xpp/Xmm disk
 artifacts and forward-only pipeline resumption. LLVM target-machine emission and typed C++20 LLD invocation produce `.o`,
 `.asm`, and `.vxse` artifacts. Project object and assembly requests produce one flattened output per source in the selected
 entry namespace; each owner boundary verifies the source catalog, and the driver replaces the set through a recoverable
@@ -157,7 +157,7 @@ unit.
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| bounded VXCR v9 decode | connected | C++20 Core reader, closure records, template arguments, source ownership, and scalar payload validation |
+| bounded VXCR v10 decode | connected | C++20 Core reader, closure records, template arguments, source ownership, and scalar payload validation |
 | native Core semantic verification | connected | `Compiler/Core` |
 | Core-to-CorePrep atomization/CFG | connected | dedicated adapter |
 | CorePrep structural/semantic verification | connected | native CorePrep verifier |
@@ -169,10 +169,12 @@ unit.
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
 | closure object ABI | connected | Xpp/Xmm, LLVM, and AARC runtime boundary |
 | callable that remembers its result | connected | Core, CorePrep, Xpp, Xmm and LLVM carry `Memoize`; the frontend produces it for arguments passed by need |
-| ownership in a native executable | connected for strong ownership | the entry module defines allocation, retain and release over an arena; the runtime library is not linked |
+| runtime calls | connected | one operation with a catalog of functions in Core, CorePrep, Xpp, Xmm and LLVM |
+| console output, string concatenation and equality | connected | `Console.Print`, `Println`, `Printf`, `Printfn`, the four `Error` forms and `Format`; see [Console output and strings](CONSOLE-IO.md) |
+| the runtime in a native executable | connected | `vxs-runtime.lib`, the ownership and text runtime without a C runtime, linked with every executable |
 | integer division by zero and shifts outside the width | connected | a check before the instruction stops the program |
 | recursive constructed-type classification | Haskell/native semantic models complete, process connection pending | frontend and Core nominal catalogs |
-| Xpp/Xmm disk codecs | connected | bounded v6 `VXPP`/`VXMM` readers and writers |
+| Xpp/Xmm disk codecs | connected | bounded v7 `VXPP`/`VXMM` readers and writers |
 | project per-source object/assembly emission | connected for the selected namespace | source ownership through CorePrep, Xpp, and Xmm |
 | VXCI `-Header` | registered and rejected explicitly | export/ABI semantics and a header writer are not connected |
 

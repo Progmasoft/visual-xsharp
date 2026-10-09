@@ -83,6 +83,8 @@ namespace visual_xsharp::xpp
                     return Opcode::TypeIs;
                 case core::Operation::Memoize:
                     return Opcode::Memoize;
+                case core::Operation::RuntimeCall:
+                    return Opcode::RuntimeCall;
                 case core::Operation::MakeClosure:
                     return Opcode::MakeClosure;
             }

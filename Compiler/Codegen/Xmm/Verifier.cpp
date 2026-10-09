@@ -16,6 +16,7 @@
 #include "Visual/XSharp/Analysis/DefiniteInitialization.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
+#include "Visual/XSharp/Core/RuntimeCall.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 #include "Visual/XSharp/Xmm/OwnershipVerifier.hpp"
 #include "Visual/XSharp/Xmm/Verifier.hpp"
@@ -206,6 +207,7 @@ namespace Visual::XSharp::Xmm
                     return 2;
                 case xmm::Opcode::Call:
                 case xmm::Opcode::MakeClosure:
+                case xmm::Opcode::RuntimeCall:
                     return 0;
             }
             return 0;
@@ -461,6 +463,35 @@ namespace Visual::XSharp::Xmm
                                 "producing ownership instruction must preserve "
                                 "its operand type");
             }
+            else if (instruction.opcode == xmm::Opcode::RuntimeCall)
+            {
+                // The function is named by an immediate, never by a
+                // register: what is called is fixed when the program is
+                // compiled.
+                namespace runtime = core::runtime;
+                const runtime::Signature *signature = nullptr;
+                if (!instruction.operands.empty()
+                    && instruction.operands.front().kind
+                           == xmm::Value::Kind::Immediate)
+                    if (const auto identity = runtime::IdentityOf(
+                            instruction.operands.front().immediate,
+                            instruction.operands.front().type))
+                        signature = runtime::Find(*identity);
+                std::vector<core::Type::Kind> arguments;
+                arguments.reserve(instruction.operands.size());
+                for (std::size_t index = 1U;
+                     index < instruction.operands.size();
+                     ++index)
+                    arguments.push_back(instruction.operands[index].type.kind);
+                const auto defect
+                    = runtime::Check(signature,
+                                     arguments,
+                                     instruction.result_type.kind);
+                if (defect != runtime::Defect::None)
+                    context.add(IssueKind::OperandType,
+                                "VXL1054",
+                                std::string(runtime::Describe(defect)));
+            }
             else
             {
                 const auto expected = ExpectedOperandCount(instruction.opcode);
@@ -616,6 +647,7 @@ namespace Visual::XSharp::Xmm
             }
             else if (instruction.result_type.kind != core::Type::Kind::Unit
                      && instruction.opcode != xmm::Opcode::Call
+                     && instruction.opcode != xmm::Opcode::RuntimeCall
                      && instruction.opcode != xmm::Opcode::MakeClosure)
                 context.add(
                     IssueKind::ResultType,

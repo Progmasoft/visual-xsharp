@@ -53,7 +53,7 @@ func fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime string
 	if macRuntime != "" {
 		campaign = append(campaign, "--linkopt="+macRuntime)
 	}
-	smoke = append(smoke, "//Compiler/Fuzzing:wire_fuzz_smoke", "//Compiler/Fuzzing:source_fuzz_smoke", "//Compiler/Fuzzing:source_execution_smoke", "//Compiler/Fuzzing:source_expression_smoke", "//Compiler/Fuzzing:source_feature_smoke")
+	smoke = append(smoke, "//Compiler/Fuzzing:wire_fuzz_smoke", "//Compiler/Fuzzing:source_fuzz_smoke", "//Compiler/Fuzzing:source_execution_smoke", "//Compiler/Fuzzing:source_expression_smoke", "//Compiler/Fuzzing:source_feature_smoke", "//Compiler/Fuzzing:source_console_smoke")
 	for _, target := range nativeFuzzTargets() {
 		campaign = append(campaign, target.label)
 	}
@@ -180,6 +180,10 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	smokeFeature := filepath.Join(filepath.Dir(smokeSource), "source_feature_smoke"+currentHost.executable)
 	if err := runner.Run(repository, selectedEnvironment, smokeFeature); err != nil {
 		return fmt.Errorf("source feature smoke failed; preserved %q: %w", work, err)
+	}
+	smokeConsole := filepath.Join(filepath.Dir(smokeSource), "source_console_smoke"+currentHost.executable)
+	if err := runner.Run(repository, selectedEnvironment, smokeConsole); err != nil {
+		return fmt.Errorf("source console smoke failed; preserved %q: %w", work, err)
 	}
 	// Run smoke tests before changing Bazel's instrumentation configuration and
 	// staging the campaign binaries into the same host output tree.

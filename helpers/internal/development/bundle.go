@@ -77,6 +77,14 @@ func buildBundle(repository string, currentHost host, runner commandRunner, baze
 	if err := copyFile(frontend, filepath.Join(stagingDirectory, frontendLibraryName), 0o755); err != nil {
 		return fmt.Errorf("cannot stage the Haskell frontend shared library: %w", err)
 	}
+	// A program the bundled compiler links needs the runtime library beside
+	// the compiler.
+	if runtimeLibraryTarget != "" {
+		if err := copyFile(builtRuntimeLibrary(repository), filepath.Join(stagingDirectory, runtimeLibraryName), 0o644); err != nil {
+			return fmt.Errorf("cannot stage the runtime library: %w", err)
+		}
+		stagedFiles = append(stagedFiles, runtimeLibraryName)
+	}
 	for _, relative := range bundleFiles {
 		if err := copyFile(filepath.Join(repository, filepath.FromSlash(relative)), filepath.Join(stagingDirectory, filepath.FromSlash(relative)), 0o644); err != nil {
 			return fmt.Errorf("cannot stage %s: %w", relative, err)

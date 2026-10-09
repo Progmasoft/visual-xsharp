@@ -104,7 +104,7 @@ const smokeProcessSeconds = 240
 
 func fuzzProcessSeconds(name string, arguments []string) int {
 	binary := strings.TrimSuffix(filepath.Base(name), ".exe")
-	if binary == "source_fuzz_smoke" || binary == "source_execution_smoke" || binary == "source_expression_smoke" || binary == "source_feature_smoke" || binary == "wire_fuzz_smoke" {
+	if binary == "source_fuzz_smoke" || binary == "source_execution_smoke" || binary == "source_expression_smoke" || binary == "source_feature_smoke" || binary == "source_console_smoke" || binary == "wire_fuzz_smoke" {
 		return smokeProcessSeconds
 	}
 	if binary == "frontend-fuzz" && len(arguments) >= 2 {

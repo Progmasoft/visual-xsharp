@@ -436,8 +436,8 @@ TEST_CASE(
     const auto decodedXmm = XmmWire::Decode(encodedXmm.bytes);
     REQUIRE(decodedXmm);
     REQUIRE(*decodedXmm.module == xmm);
-    CHECK(XppWire::kCurrentVersion == 6U);
-    CHECK(XmmWire::kCurrentVersion == 6U);
+    CHECK(XppWire::kCurrentVersion == 7U);
+    CHECK(XmmWire::kCurrentVersion == 7U);
 }
 
 TEST_CASE("Xpp v6 wire preserves ordered type and value template arguments")
@@ -445,7 +445,7 @@ TEST_CASE("Xpp v6 wire preserves ordered type and value template arguments")
     const auto original = XppModule(TemplateModule());
     const auto encoded = XppWire::Encode(original);
     REQUIRE(encoded);
-    CHECK(encoded.bytes[4] == 6U);
+    CHECK(encoded.bytes[4] == 7U);
     const auto decoded = XppWire::Decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == original);
@@ -469,7 +469,7 @@ TEST_CASE("Xmm v6 wire preserves ordered type and value template arguments")
     const auto original = XmmModule(XppModule(TemplateModule()));
     const auto encoded = XmmWire::Encode(original);
     REQUIRE(encoded);
-    CHECK(encoded.bytes[4] == 6U);
+    CHECK(encoded.bytes[4] == 7U);
     const auto decoded = XmmWire::Decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == original);

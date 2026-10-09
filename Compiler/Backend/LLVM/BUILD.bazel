@@ -6,7 +6,6 @@ cc_library(
     name = "llvm_backend",
     srcs = ["Artifact.cpp", "Codegen.cpp", "JitSession.cpp", "Verifier.cpp"],
     textual_hdrs = [
-        "CodegenFreestandingRuntime.inc",
         "CodegenOperations.inc",
     ],
     deps = [

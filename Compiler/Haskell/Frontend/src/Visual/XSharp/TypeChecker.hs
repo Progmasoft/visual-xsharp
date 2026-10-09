@@ -15,6 +15,7 @@ import Visual.XSharp.BuiltinTypes
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
 import Visual.XSharp.TypeChecker.Branching
+import Visual.XSharp.TypeChecker.Console
 import Visual.XSharp.TypeChecker.Context
 import Visual.XSharp.TypeChecker.Enums
 import Visual.XSharp.TypeChecker.Literals
@@ -474,6 +475,20 @@ checkStatementIn context environment expected loops statement = case statement o
                     then []
                     else [problem spanValue "VXT0024" "increment target must have a numeric type"]
          in (IncrementStatement spanValue name targetType, environment, [], writableProblems ++ numericProblems)
+    CompoundAssignmentStatement spanValue Add name _ value
+        | Just (targetType, writable) <- lookup (resolvedSymbol name) environment
+        , targetType == stringType ->
+            -- `text += value` is `text = text + value`: the value is
+            -- written as text and joined to what the target holds.
+            let (typedValue, valueType, problems) = checkExpressionWith context environment value
+                (joined, _, joinProblems) =
+                    concatenation spanValue (NameExpression spanValue name stringType, stringType) (typedValue, valueType)
+                immutable = [problem spanValue "VXT0003" "cannot assign to an immutable binding" | not writable]
+             in ( AssignmentStatement spanValue name stringType joined
+                , environment
+                , []
+                , problems ++ immutable ++ joinProblems
+                )
     CompoundAssignmentStatement spanValue operator name _ value ->
         -- `target op= value` has the typing of `target = target op value`:
         -- the operator rule is applied to the target type and the result
@@ -735,9 +750,17 @@ checkExpressionExpectedWith context environment expected expression = case expre
                 (FloorDivide, _) -> checkExpressionWith context environment left
                 _ -> checkExpressionExpectedWith context environment (if booleanResult operator then Nothing else expected) left
             (typedLeft, leftType, leftProblems) = leftResult
-            rightExpected = if operator `elem` [LogicalAnd, LogicalOr] then Nothing else Just leftType
+            -- The other side of a string is whatever it is by itself: `+`
+            -- writes it as text, so it does not borrow the string's type.
+            rightExpected =
+                if operator `elem` [LogicalAnd, LogicalOr] || leftType == stringType then Nothing else Just leftType
             (typedRight, rightType, rightProblems) = checkExpressionExpectedWith context environment rightExpected right
             rule = binaryNumericRule operator leftType rightType
+            typed = leftType /= ErrorType && rightType /= ErrorType
+            -- `+` with a string on either side joins the two as text, and
+            -- `==` and `\=` on two strings compare their characters.
+            joins = typed && operator == Add && (leftType == stringType || rightType == stringType)
+            comparesText = typed && operator `elem` [Equal, NotEqual] && leftType == stringType && rightType == stringType
             -- An operand without a type was reported already, or never
             -- yields a value; either way the operator has nothing to check.
             -- Values of an enum are compared for equality with values of
@@ -758,10 +781,17 @@ checkExpressionExpectedWith context environment expected expression = case expre
                                 ]
                             )
                 | otherwise = (numericRuleType rule, ruleProblems spanValue "VXT0012" rule)
-         in ( BinaryExpression spanValue operator typedLeft typedRight resultType
-            , resultType
-            , leftProblems ++ rightProblems ++ mismatch
-            )
+            withOperands (value, valueType, problems) = (value, valueType, leftProblems ++ rightProblems ++ problems)
+         in if joins
+                then withOperands (concatenation spanValue (typedLeft, leftType) (typedRight, rightType))
+                else
+                    if comparesText
+                        then withOperands (textEquality spanValue (operator == Equal) typedLeft typedRight)
+                        else
+                            ( BinaryExpression spanValue operator typedLeft typedRight resultType
+                            , resultType
+                            , leftProblems ++ rightProblems ++ mismatch
+                            )
     IsPatternExpression spanValue subject patternValue _ ->
         let (typedSubject, subjectType, subjectProblems) = checkExpressionWith context environment subject
             (typedPattern, patternProblems) = checkPatternWith context subjectType patternValue
@@ -825,6 +855,16 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , targetType
             , problems ++ immutable ++ mismatch
             )
+    AssignmentExpression spanValue (Just Add) name value _
+        | target@(Just (targetType, _)) <- lookup (resolvedSymbol name) environment
+        , targetType == stringType ->
+            let (typedValue, valueType, problems) = checkExpressionWith context environment value
+                (joined, _, joinProblems) =
+                    concatenation spanValue (NameExpression spanValue name stringType, stringType) (typedValue, valueType)
+             in ( AssignmentExpression spanValue Nothing name joined stringType
+                , stringType
+                , problems ++ immutableTargetProblems spanValue target ++ joinProblems
+                )
     AssignmentExpression spanValue (Just operator) name value _ ->
         let target = lookup (resolvedSymbol name) environment
             targetType = maybe ErrorType fst target
@@ -1088,6 +1128,9 @@ checkTypeQualifiedCall ::
     Identifier ->
     [Expression ResolvedName ()] ->
     (Expression ResolvedName Type, Type, [Diagnostic])
+checkTypeQualifiedCall context environment _ callSpan receiver member arguments
+    | consoleReceiver receiver =
+        checkConsoleCall (checkExpressionExpectedWith context environment) callSpan member arguments
 checkTypeQualifiedCall context environment expected callSpan receiver member arguments =
     case typeQualifiedReceiver receiver of
         Just typeName

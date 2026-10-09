@@ -31,9 +31,11 @@ library
         Visual.XSharp.Desugarer
         Visual.XSharp.Desugarer.Branching
         Visual.XSharp.Desugarer.Captures
+        Visual.XSharp.Desugarer.Effects
         Visual.XSharp.Desugarer.Handing
         Visual.XSharp.Desugarer.Laziness
         Visual.XSharp.Desugarer.Sequencing
+        Visual.XSharp.Desugarer.Symbols
         Visual.XSharp.Desugarer.Workers
     other-modules:
         Visual.XSharp.Core.Optimizer.Analysis

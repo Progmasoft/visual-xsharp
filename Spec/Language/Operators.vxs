@@ -104,6 +104,36 @@ a ? b : c ? d : e
 a ? b : (c ? d : e)
 
 -- ============================================================================
+-- Example 87: 4. Addition and String Concatenation +
+-- Demonstrates: + joins two Strings. When one operand is a String and the other is not, the other is written
+--   as text first and the result is a String: an integer in decimal, a bool as true or false, a char as the
+--   character itself. + associates to the left.
+
+"Hello from " + language + "!"   -- one String
+"Age: " + age                    -- Age: 36
+"" + true                        -- true
+"a" + 1 + 2                      -- a12
+1 + 2 + "a"                      -- 3a
+
+-- ============================================================================
+-- Example 88: 4. Addition and String Concatenation +
+-- Demonstrates: += appends to a String variable, with the same rule for a value that is not a String.
+
+String line = "x";
+
+line += "y";
+line += 3;   -- xy3
+
+-- ============================================================================
+-- Example 89: 4. Addition and String Concatenation +
+-- Demonstrates: A String has no other arithmetic operator and no ordering operator.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+"a" - "b"   -- INVALID
+"a" * 2     -- INVALID
+"a" < "b"   -- INVALID
+
+-- ============================================================================
 -- Example 17: 5. Rounded Integer Division //
 -- Demonstrates: Its result is always an integer.
 
@@ -234,6 +264,18 @@ a < b && b < c -- VALID
 -- Expected result: compile-time rejection; the INVALID marker is normative.
 
 a == b == c -- INVALID
+
+-- ============================================================================
+-- Example 86: 12. Equality Operators
+-- Demonstrates: Two Strings are equal when they hold the same characters in the same order. Where each is
+--   kept does not matter: a String is compared by what it holds.
+
+String first = "ab";
+String second = "a" + "b";
+
+first == second   -- true
+first \= second   -- false
+"a" == "ab"       -- false
 
 -- ============================================================================
 -- Example 33: 14. Null Coalescing ??

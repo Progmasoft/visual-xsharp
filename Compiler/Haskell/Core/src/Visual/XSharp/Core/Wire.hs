@@ -33,7 +33,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
 
 -- | Schema version emitted by the current Core writer.
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 9
+currentCoreWireVersion = CoreWireVersion 10
 
 -- | Finite bounds for total bytes, recursion, and individual collections.
 data CoreWireLimits = CoreWireLimits
@@ -820,6 +820,7 @@ decodePrimitive tag = case drop (fromIntegral tag) primitives of
             , CoreBitwiseNot
             , CoreTypeIs
             , CoreMemoize
+            , CoreRuntimeCall
             ]
 
 primitiveTag :: CorePrimitive -> Word8
@@ -851,6 +852,7 @@ primitiveTag primitive = fromIntegral (index primitive primitives)
             , CoreBitwiseNot
             , CoreTypeIs
             , CoreMemoize
+            , CoreRuntimeCall
             ]
         index :: CorePrimitive -> [CorePrimitive] -> Int
         index value (candidate : remaining) = if value == candidate then 0 else 1 + index value remaining

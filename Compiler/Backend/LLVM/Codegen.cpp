@@ -38,6 +38,7 @@
 #include "Visual/XSharp/Backend/LLVM.hpp"
 #include "Visual/XSharp/Core/Callable.hpp"
 #include "Visual/XSharp/Core/Ownership.hpp"
+#include "Visual/XSharp/Core/RuntimeCall.hpp"
 #include "Visual/XSharp/Core/Scalar.hpp"
 
 namespace Visual::XSharp::Backend::LLVM
@@ -899,7 +900,6 @@ namespace Visual::XSharp::Backend::LLVM
 #include "CodegenOperations.inc"
 
             // The ownership runtime an executable carries in its own module.
-#include "CodegenFreestandingRuntime.inc"
 
             [[nodiscard]] auto
             DefineFunction(FunctionState &state) -> bool
@@ -973,9 +973,8 @@ namespace Visual::XSharp::Backend::LLVM
                 builder.CreateCall(entry->type, entry->value);
                 builder.CreateRet(
                     llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0));
-                // An executable is linked from its own modules alone, so the
-                // module with the entry also holds the ownership runtime.
-                DefineFreestandingRuntime();
+                // What the program calls of the runtime, it finds in the
+                // runtime library the executable is linked with.
                 return true;
             }
         };

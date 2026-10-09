@@ -11,10 +11,10 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 
 | Contract | Magic | Current version | Producer | Consumer |
 | --- | --- | ---: | --- | --- |
-| Core | `VXCR` | 9 | Haskell frontend | native Core reader |
-| CorePrep | `VXCP` | 7 | CorePrep adapter | native pipeline tools |
-| Xpp | `VXPP` | 6 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
-| Xmm | `VXMM` | 6 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
+| Core | `VXCR` | 10 | Haskell frontend | native Core reader |
+| CorePrep | `VXCP` | 8 | CorePrep adapter | native pipeline tools |
+| Xpp | `VXPP` | 7 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
+| Xmm | `VXMM` | 7 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
 The contracts have related scalar encodings but separate structural schemas.
 Their magic values must never be treated as aliases.
@@ -91,7 +91,7 @@ the bit pattern is identical.
 
 ### Core scalar tags (introduced in v5)
 
-The native and Haskell Core codecs retain these assignments in version 9. This
+The native and Haskell Core codecs retain these assignments in version 10. This
 table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
@@ -272,11 +272,55 @@ the operand is a callable without parameters whose result is `bool` or
 numeric, and that the result has the operand's type, is the rule of each
 stage's verifier, which runs on every decoded module.
 
+### The runtime call
+
+Core v10, CorePrep v8, Xpp v7 and Xmm v7 add one more operation: a call of a
+function of the runtime. Like the remembering operation it is a value of the
+operation field every stage already writes, and it takes the next free tag:
+
+| Contract | Field | Tag |
+| --- | --- | ---: |
+| Core | primitive | 25 |
+| CorePrep | operation | 28 |
+| Xpp | opcode | next after the remembering operation |
+| Xmm | opcode | next after the remembering operation |
+
+The operation has no field of its own. Its first operand is an integer
+literal of type `int`, the identity of the function; the operands after it
+are the arguments. The identities are those of the runtime catalog:
+
+| Identity | Function | Arguments | Result |
+| ---: | --- | --- | --- |
+| 1 | join two strings | `String`, `String` | `String` |
+| 2 | a signed integer as text | signed integer | `String` |
+| 3 | an unsigned integer as text | unsigned integer | `String` |
+| 4 | a Boolean as text | `bool` | `String` |
+| 5 | a character as text | `char` | `String` |
+| 6 | `%d` and `%x` of a signed integer | flags, width, precision, signed integer | `String` |
+| 7 | `%u` and `%x` of an unsigned integer | flags, width, precision, unsigned integer | `String` |
+| 8 | `%f` | flags, width, precision, floating-point number | `String` |
+| 9 | `%s` | flags, width, precision, `String` | `String` |
+| 10 | `%c` | flags, width, precision, `char` | `String` |
+| 11 | the line terminator of the platform | none | `String` |
+| 12 | write to the console | `String`, target | none |
+| 13 | whether two strings are equal | `String`, `String` | `bool` |
+
+Flags, a width, a precision and a target are of type `int`. A signed or an
+unsigned integer argument is of any width up to 64 bits, and a floating-point
+argument of any up to 64. An identity is never reused or renumbered: a new
+function takes the next number, and the document versions change with it,
+because an older reader does not know the function.
+
+The readers check that the tag is known and decode the operands as they
+decode any others. That the first operand names a function, and that the
+arguments and the result are the ones that function has, is the rule of each
+stage's verifier.
+
 ### Version transition
 
 Versions are strict, not feature-negotiated. Core readers accept only version
-9, CorePrep readers accept only version 7, and Xpp/Xmm readers accept only
-version 6. Every older or future version fails at the version field before
+10, CorePrep readers accept only version 8, and Xpp/Xmm readers accept only
+version 7. Every older or future version fails at the version field before
 body decoding. The compiler does not
 guess whether a document happens to contain only fields from an older schema.
 Recompile the owning source or regenerate the intermediate artifact with the
@@ -417,7 +461,7 @@ when written; decoding never recreates a host-width alternative.
 
 ## Xpp document order
 
-An Xpp v6 document contains:
+An Xpp v7 document contains:
 
 1. `VXPP`, version, and zero reserved flags;
 2. qualified module name;
@@ -439,7 +483,7 @@ dedicated symbol field rather than an untyped extra operand.
 
 ## Xmm document order
 
-An Xmm v6 document contains:
+An Xmm v7 document contains:
 
 1. `VXMM`, version, and zero reserved flags;
 2. qualified module name;
@@ -489,7 +533,8 @@ adds the remembering operation.
 Xpp/Xmm began independently at
 version 1; version 5 retains the explicit ownership operations,
 template values, and type-test operation, and adds source catalogs and function
-owners, and their current version 6 adds the remembering operation.
+owners, version 6 adds the remembering operation, and their current
+version 7, with Core v10 and CorePrep v8, adds the runtime call.
 The intermediate versions remain strict historical contracts; their
 documents are not guessed or accepted by the current readers. Every current
 reader rejects earlier and future versions for its own magic.

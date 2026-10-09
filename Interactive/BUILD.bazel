@@ -1,3 +1,4 @@
+load("//Compiler/Runtime:host.bzl", "RUNTIME_HOST_DEPS", "RUNTIME_HOST_LINKOPTS")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
@@ -7,6 +8,9 @@ cc_library(
     name = "interactive_runtime",
     srcs = ["Runtime/History.cpp", "Runtime/ReplInput.cpp", "Runtime/Session.cpp", "Runtime/Source.cpp", "Runtime/Value.cpp"],
     hdrs = ["Runtime/Source.hpp", "Runtime/Value.hpp"],
+    # A cell is compiled and run in this process, which therefore holds the
+    # runtime its code calls.
+    linkopts = RUNTIME_HOST_LINKOPTS,
     deps = [
         "//Compiler/Backend/LLVM:llvm_backend",
         "//Compiler/Cli/Commands:frontend",
@@ -15,7 +19,7 @@ cc_library(
         "//Interactive/Headers/Visual/XSharp/Interactive:repl_input",
         "//Compiler/Headers/Visual/XSharp/Core:scalar",
         "@fmt//:fmt",
-    ],
+    ] + RUNTIME_HOST_DEPS,
 )
 
 cc_library(
