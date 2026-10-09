@@ -32,6 +32,8 @@ staticMemberSemanticTests =
     , ("a missing member reports the member-not-found diagnostic", missingMethod)
     , ("a case-mismatched member reports the member-not-found diagnostic", caseSensitiveMember)
     , ("a bare member selector is rejected until it denotes a method call", bareMethodSelector)
+    , ("a method reference is the method and not its result", methodReferenceAsResult)
+    , ("a member selected on a value is rejected until members of values exist", valueMemberSelector)
     , ("an overload call with too few arguments reports arity", tooFewArguments)
     , ("an overload call with too many arguments reports arity", tooManyArguments)
     , ("an overload call rejects a mismatched argument type", mismatchedArgumentType)
@@ -135,6 +137,20 @@ bareMethodSelector =
     hasCode
         "VXT0034"
         "class Catalog { public static int Read() { return 7; } } class Caller { int Use() { return Catalog.Read; } }"
+
+-- The reference is the method itself, so returning it as an int is a
+-- mismatch of types.
+methodReferenceAsResult :: Bool
+methodReferenceAsResult =
+    hasCode
+        "VXT0005"
+        "class Catalog { public static int Read() { return 7; } } class Caller { int Use() { return Catalog::Read; } }"
+
+valueMemberSelector :: Bool
+valueMemberSelector =
+    hasCode
+        "VXT0034"
+        "class Catalog { public static int Read() { return 7; } } class Caller { int Use() { int value = 1; return value.Read; } }"
 
 tooFewArguments :: Bool
 tooFewArguments =
@@ -550,6 +566,7 @@ expressionCalls expression = case expression of
     NameExpression {} -> []
     LiteralExpression {} -> []
     MemberAccessExpression _ receiver _ _ -> expressionCalls receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionCalls receiver
     CallExpression _ callee arguments _ ->
         [expression | isCall expression] ++ expressionCalls callee ++ concatMap expressionCalls arguments
     UnaryExpression _ _ value _ -> expressionCalls value

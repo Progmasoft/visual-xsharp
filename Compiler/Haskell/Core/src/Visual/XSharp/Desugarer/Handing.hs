@@ -283,6 +283,7 @@ within expression = expression : concatMap within (children expression)
             NameExpression {} -> []
             LiteralExpression {} -> []
             MemberAccessExpression _ receiver _ _ -> [receiver]
+            MethodReferenceExpression _ receiver _ _ -> [receiver]
             CallExpression _ callee arguments _ -> callee : arguments
             UnaryExpression _ _ operand _ -> [operand]
             BinaryExpression _ _ left right _ -> [left, right]

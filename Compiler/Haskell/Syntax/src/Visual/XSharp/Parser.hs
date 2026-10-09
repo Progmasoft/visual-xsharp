@@ -412,6 +412,7 @@ requireTemplateValue :: Expression Identifier () -> P TemplateValueSyntax
 requireTemplateValue expression = case expression of
     NameExpression spanValue name _ -> pure (TemplateNameSyntax spanValue (QualifiedName [name]))
     MemberAccessExpression spanValue _ _ _ -> unsupported spanValue
+    MethodReferenceExpression spanValue _ _ _ -> unsupported spanValue
     LiteralExpression spanValue literal _ -> case literal of
         IntegerLiteral value -> pure (TemplateIntegerSyntax spanValue value)
         CharacterLiteral value -> pure (TemplateCharacterSyntax spanValue value)
@@ -1166,6 +1167,11 @@ parsePostfix = parsePrimary >>= calls
                     (member, memberSpan) <- identifier
                     let selected = MemberAccessExpression (mergeSpan (expressionSpan callee) memberSpan) callee member ()
                     calls selected
+                -- `::` names a method without calling it.
+                Just token | tokenText token == "::" -> do
+                    _ <- symbol "::"
+                    (member, memberSpan) <- identifier
+                    calls (MethodReferenceExpression (mergeSpan (expressionSpan callee) memberSpan) callee member ())
                 Just token | tokenText token == "(" -> do
                     _ <- symbol "("
                     arguments <- separated "," parseExpression
@@ -1409,6 +1415,7 @@ expressionSpan expression = case expression of
     NameExpression value _ _ -> value
     LiteralExpression value _ _ -> value
     MemberAccessExpression value _ _ _ -> value
+    MethodReferenceExpression value _ _ _ -> value
     CallExpression value _ _ _ -> value
     UnaryExpression value _ _ _ -> value
     BinaryExpression value _ _ _ _ -> value

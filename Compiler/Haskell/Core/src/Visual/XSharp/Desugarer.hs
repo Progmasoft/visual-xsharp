@@ -796,6 +796,17 @@ lowerOperands expression = case expression of
                     "an unresolved member selector reached Core lowering"
                 ]
             )
+    MethodReferenceExpression spanValue _ _ _ ->
+        lift
+            ( Left
+                [ Diagnostic
+                    DesugarerStage
+                    Error
+                    "VXD0003"
+                    (Just spanValue)
+                    "an unresolved member selector reached Core lowering"
+                ]
+            )
     -- A call of a runtime function: its identity, and then its arguments
     -- in order.
     CallExpression _ (NameExpression _ callee _) arguments valueType
@@ -883,7 +894,10 @@ lowerOperands expression = case expression of
         loweredFirst <- lowerExpression first
         loweredSecond <- lowerExpression second
         let loweredType = lowerBoundaryType valueType
-        if null (fst loweredFirst) && null (fst loweredSecond)
+        -- A string is an object that is owned: it is selected into a
+        -- variable, which the rules of ownership for an assignment cover,
+        -- and not by an expression that would hold two objects at once.
+        if null (fst loweredFirst) && null (fst loweredSecond) && loweredType /= stringType
             then
                 pure
                     ( conditionPrefix
@@ -1303,6 +1317,7 @@ expressionAnnotation expression = case expression of
     NameExpression _ _ valueType -> valueType
     LiteralExpression _ _ valueType -> valueType
     MemberAccessExpression _ _ _ valueType -> valueType
+    MethodReferenceExpression _ _ _ valueType -> valueType
     CallExpression _ _ _ valueType -> valueType
     UnaryExpression _ _ _ valueType -> valueType
     BinaryExpression _ _ _ _ valueType -> valueType

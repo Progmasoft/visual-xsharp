@@ -66,6 +66,7 @@ expressionIds expression = case expression of
     NameExpression _ name _ -> [symbolValue name]
     LiteralExpression {} -> []
     MemberAccessExpression _ receiver _ _ -> expressionIds receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionIds receiver
     CallExpression _ callee arguments _ -> expressionIds callee ++ concatMap expressionIds arguments
     UnaryExpression _ _ value _ -> expressionIds value
     BinaryExpression _ _ left right _ -> expressionIds left ++ expressionIds right

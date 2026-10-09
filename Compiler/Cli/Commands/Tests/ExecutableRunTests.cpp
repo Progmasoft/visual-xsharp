@@ -668,6 +668,49 @@ TEST_CASE("a link leaves only the executable beside the source")
     std::filesystem::remove_all(Directory());
 }
 
+TEST_CASE("an executable selects one of two strings")
+{
+    // Every pass selects a string and replaces the one before it; a
+    // million passes would exhaust a process that released none.
+    const auto outcome = RunCapturing(
+        "Select",
+        "    public static String Name() { return \"Visual X#\"; }\n"
+        "    public static void Main() {\n"
+        "        String s = Zero(3) > 0 ? \"a\" : \"b\";\n"
+        "        Console.Println(s);\n"
+        "        Console.Println(Zero(3) == 0 ? Name() : \"nobody\");\n"
+        "        int evens = 0;\n"
+        "        for (int i = 0; i < 1000000; i += 1) {\n"
+        "            String kind = i % 2 == 0 ? \"even \" + i : \"odd\";\n"
+        "            if (kind \\= \"odd\") { evens += 1; }\n"
+        "        }\n"
+        "        Console.Println(evens);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "b\r\nVisual X#\r\n500000\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable names methods through the namespace and the type")
+{
+    const auto outcome = RunCapturing(
+        "Qualified",
+        "    public static int Log(_ int v) { Console.Println(v);"
+        " return v; }\n"
+        "    public static int Run(_ (int) -> int f) { return f(3); }\n"
+        "    public static void Main() {\n"
+        "        Check(Demo.Program.Pick(1, 4), 4);\n"
+        "        int first = Demo.Program.Log(1);\n"
+        "        int second = Run(Program::Log);\n"
+        "        auto held = Demo.Program::Log;\n"
+        "        int third = held(5);\n"
+        "        Console.Println(9);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "1\r\n3\r\n5\r\n9\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
 TEST_CASE("an executable writes many lines")
 {
     const auto outcome

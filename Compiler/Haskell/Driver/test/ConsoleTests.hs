@@ -276,6 +276,16 @@ outputs =
     , ("String made = Twice(Name() + \"!\"); Console.Println(Pick(0, 8 / Zero()));", "7\n")
     , ("Console.Println(Console.Format(\"[%s]\", Console.Format(\"%5s\", Console.Format(\"%d\", 42))));", "[   42]\n")
     , ("Console.Println(Twice(Twice(\"ab\")) == \"abababab\");", "true\n")
+    , -- A conditional selects one of two strings; the other is never made.
+      ("String s = Zero() > 0 ? \"a\" : \"b\"; Console.Println(s);", "b\n")
+    , ("Console.Println(Zero() == 0 ? Name() : Twice(\"x\"));", "Visual X#\n")
+    , ("String a = \"x\"; String b = \"y\"; String c = Zero() > 0 ? a : b; Console.Println(c + a + b);", "yxy\n")
+    , ("Console.Println(Zero() > 0 ? \"a\" : Zero() == 0 ? \"b\" : \"c\");", "b\n")
+    , ("String s = Zero() > 0 ? \"\" + Log(1) : \"\" + Log(2); Console.Println(s);", "2\n2\n")
+    , ("String s = \"\"; for (int i = 0; i < 4; i += 1) { s += i % 2 == 0 ? \"e\" : \"o\"; } Console.Println(s);", "eoeo\n")
+    , ("Console.Println(\"<\" + (Zero() == 0 ? \"yes\" : \"no\") + \">\");", "<yes>\n")
+    , ("Greet(Zero() == 0 ? Name() : \"nobody\");", "Hello, Visual X#!\n")
+    , ("String s = \"keep\"; s = Zero() > 0 ? \"lost\" : s; Console.Println(s);", "keep\n")
     ]
 
 -- | Programs and what they write to standard error.

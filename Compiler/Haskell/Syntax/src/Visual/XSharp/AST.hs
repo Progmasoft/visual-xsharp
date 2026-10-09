@@ -322,6 +322,10 @@ data Expression name annotation
       -- the checker knows whether the receiver denotes a type or a value. The
       -- current executable subset accepts only type-qualified method calls.
       MemberAccessExpression SourceSpan (Expression name annotation) Identifier annotation
+    | -- @Receiver::Member@: the method of that name as a callable value,
+      -- without a call of it. The checker replaces a reference it can
+      -- resolve with the name of the method, so no later stage sees one.
+      MethodReferenceExpression SourceSpan (Expression name annotation) Identifier annotation
     | CallExpression SourceSpan (Expression name annotation) [Expression name annotation] annotation
     | UnaryExpression SourceSpan UnaryOperator (Expression name annotation) annotation
     | BinaryExpression SourceSpan BinaryOperator (Expression name annotation) (Expression name annotation) annotation
@@ -434,6 +438,7 @@ expressionSourceSpan expression = case expression of
     NameExpression value _ _ -> value
     LiteralExpression value _ _ -> value
     MemberAccessExpression value _ _ _ -> value
+    MethodReferenceExpression value _ _ _ -> value
     CallExpression value _ _ _ -> value
     UnaryExpression value _ _ _ -> value
     BinaryExpression value _ _ _ _ -> value

@@ -151,6 +151,7 @@ expressionExcess level depth expression
         NameExpression {} -> []
         LiteralExpression {} -> []
         MemberAccessExpression _ receiver _ _ -> operand receiver
+        MethodReferenceExpression _ receiver _ _ -> operand receiver
         CallExpression _ callee arguments _ -> concatMap operand (callee : arguments)
         UnaryExpression _ _ value _ -> operand value
         -- The left operand of a binary operator is at the level of the

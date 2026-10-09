@@ -31,6 +31,22 @@ published; the number is skipped, not withdrawn.
 
 ### Language
 
+- A method reference `Type::Method` is the static method as a callable
+  value: `auto f = Counter::Next;`, `Apply(Counter::Next)`. Where the method
+  has overloads, the type the place expects selects one, and `VXT0080`
+  reports a place that selects none. A reference through a value,
+  `counter::Next`, reports `VXT0081` until values have members. A selector
+  with a dot and no call, `Counter.Next`, stays rejected with `VXT0034`.
+- A declaration may be named through the namespace it is declared in:
+  inside `namespace Demo;`, `Demo.Program.Run()` is `Program.Run()`,
+  `Demo.Color.Red` is `Color.Red` and `Demo.Program::Run` is
+  `Program::Run`. A namespace of several parts is written whole. A name of
+  the program spelled like the first part hides the namespace. Other
+  namespaces, and a qualified name in a type position, are not connected.
+- The conditional expression selects strings:
+  `String kind = count > 0 ? "some" : "none";`. Only the selected operand
+  is evaluated. `?:` is unchanged, because its left operand is also its
+  test and a string is not one.
 - Visual X# is a lazy language with call-by-need evaluation, and the
   specification now says so in `Spec/Language/Evaluation.vxs`: a value is
   computed when it is first needed and at most once, a value that is never
@@ -299,6 +315,11 @@ published; the number is skipped, not withdrawn.
   the host over 44 400 fields of deterministic pseudo-random values, and
   `%f` over 3000 numbers drawn from every exponent and 80 020 that lie on
   or beside a rounding tie.
+- `QualifiedNameTests.hs` runs programs that name declarations through
+  their namespace and methods through `::`, before and after optimization,
+  and holds the forms that must be rejected. The leak-checked smoke program
+  and the tests that run a linked executable select strings in a loop of a
+  million passes and call methods through references.
 - `ConsoleTests.hs` runs some 180 programs that write in the reference Core
   evaluator, before and after optimization, against text written by hand,
   and holds about a hundred programs that must be rejected. The evaluator's

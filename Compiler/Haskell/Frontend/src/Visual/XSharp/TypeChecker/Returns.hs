@@ -24,6 +24,7 @@ typedExpressionType expression = case expression of
     NameExpression _ _ valueType -> valueType
     LiteralExpression _ _ valueType -> valueType
     MemberAccessExpression _ _ _ valueType -> valueType
+    MethodReferenceExpression _ _ _ valueType -> valueType
     CallExpression _ _ _ valueType -> valueType
     UnaryExpression _ _ _ valueType -> valueType
     BinaryExpression _ _ _ _ valueType -> valueType
@@ -77,6 +78,7 @@ expressionReturnTypes expression = case expression of
     NameExpression {} -> []
     LiteralExpression {} -> []
     MemberAccessExpression _ receiver _ _ -> expressionReturnTypes receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionReturnTypes receiver
     CallExpression _ callee arguments _ -> concatMap expressionReturnTypes (callee : arguments)
     UnaryExpression _ _ value _ -> expressionReturnTypes value
     BinaryExpression _ _ left right _ -> expressionReturnTypes left ++ expressionReturnTypes right

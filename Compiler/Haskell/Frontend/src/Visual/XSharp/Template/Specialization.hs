@@ -553,6 +553,7 @@ expressionTypes expression = case expression of
     NameExpression _ _ annotation -> [annotation]
     LiteralExpression _ _ annotation -> [annotation]
     MemberAccessExpression _ receiver _ annotation -> annotation : expressionTypes receiver
+    MethodReferenceExpression _ receiver _ annotation -> annotation : expressionTypes receiver
     CallExpression _ callee arguments annotation ->
         annotation : expressionTypes callee ++ concatMap expressionTypes arguments
     UnaryExpression _ _ value annotation -> annotation : expressionTypes value

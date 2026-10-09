@@ -156,6 +156,9 @@ resolveExpression expression = case expression of
     MemberAccessExpression spanValue receiver member _ ->
         let (resolvedReceiver, problems) = resolveExpression receiver
          in (MemberAccessExpression spanValue resolvedReceiver member (), problems)
+    MethodReferenceExpression spanValue receiver member _ ->
+        let (resolvedReceiver, problems) = resolveExpression receiver
+         in (MethodReferenceExpression spanValue resolvedReceiver member (), problems)
     CallExpression spanValue callee arguments _ ->
         let (resolvedCallee, firstProblems) = resolveExpression callee; values = map resolveExpression arguments
          in (CallExpression spanValue resolvedCallee (map fst values) (), firstProblems ++ concatMap snd values)

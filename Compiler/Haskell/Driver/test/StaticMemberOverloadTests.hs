@@ -311,6 +311,7 @@ callsInExpression expression = case expression of
     NameExpression {} -> []
     LiteralExpression {} -> []
     MemberAccessExpression _ receiver _ _ -> callsInExpression receiver
+    MethodReferenceExpression _ receiver _ _ -> callsInExpression receiver
     CallExpression _ callee arguments _ ->
         [expression | isSelectedCall expression]
             ++ callsInExpression callee

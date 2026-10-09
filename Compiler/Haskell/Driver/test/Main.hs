@@ -41,6 +41,7 @@ import Numeric (readHex)
 import NumericTests (numericTests)
 import ParserContractTests (parserContractTests)
 import PatternTests (patternTests)
+import QualifiedNameTests (qualifiedNameTests)
 import ScalarWireTests (scalarWireTests)
 import ShortCircuitTests (shortCircuitTests)
 import SourceSetTests (sourceSetTests)
@@ -193,6 +194,7 @@ main = do
     mapM_ (uncurry check) runtimeCallTests
     mapM_ (uncurry check) consoleTests
     mapM_ (uncurry check) effectTests
+    mapM_ (uncurry check) qualifiedNameTests
     mapM_ (uncurry check) formatSweepTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests

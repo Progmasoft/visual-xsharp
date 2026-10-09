@@ -243,6 +243,48 @@ namespace
         { "Console.Println(Twice(Twice(\"ab\")) == \"abababab\");",
           "true\n",
           "" },
+        // A conditional selects one of two strings; the other is never
+        // made, and the one that is replaced is released.
+        { "String s = Zero() > 0 ? \"a\" : \"b\"; Console.Println(s);",
+          "b\n",
+          "" },
+        { "Console.Println(Zero() == 0 ? Name() : Twice(\"x\"));",
+          "Visual X#\n",
+          "" },
+        { "String a = \"x\"; String b = \"y\";"
+          " String c = Zero() > 0 ? a : b; Console.Println(c + a + b);",
+          "yxy\n",
+          "" },
+        { "Console.Println(Zero() > 0 ? \"a\""
+          " : Zero() == 0 ? \"b\" : \"c\");",
+          "b\n",
+          "" },
+        { "String s = Zero() > 0 ? \"\" + Log(1) : \"\" + Log(2);"
+          " Console.Println(s);",
+          "2\n2\n",
+          "" },
+        { "String s = \"\"; for (int i = 0; i < 4; i += 1)"
+          " { s += i % 2 == 0 ? \"e\" : \"o\"; } Console.Println(s);",
+          "eoeo\n",
+          "" },
+        { "Greet(Zero() == 0 ? Name() : \"nobody\");",
+          "Hello, Visual X#!\n",
+          "" },
+        { "String s = \"keep\"; s = Zero() > 0 ? \"lost\" : s;"
+          " Console.Println(s);",
+          "keep\n",
+          "" },
+        // A selected string nothing reads is released all the same.
+        { "String s = Zero() == 0 ? Twice(\"ab\") : Name();"
+          " Console.Println(\"x\");",
+          "x\n",
+          "" },
+        // Names written through the namespace and the type.
+        { "Console.Println(Fuzz.Program.Half(8));", "4\n", "" },
+        { "auto f = Program::Log; int x = f(1); Console.Println(9);",
+          "1\n9\n",
+          "" },
+        { "auto f = Fuzz.Program::Half; Console.Println(f(10));", "5\n", "" },
         // A string that is made and never written is released as well.
         { "String t = Console.Format(\"%d\", 1); Console.Println(\"x\");",
           "x\n",

@@ -151,6 +151,7 @@ test-suite visual-xsharp-compiler-tests
         LazyEvaluationTests
         ConsoleTests
         EffectTests
+        QualifiedNameTests
         FormatSweepTests
         FallThroughTests
         RuntimeCallTests

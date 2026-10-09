@@ -391,6 +391,7 @@ expressionSpanOf expression = case expression of
     NameExpression spanValue _ _ -> spanValue
     LiteralExpression spanValue _ _ -> spanValue
     MemberAccessExpression spanValue _ _ _ -> spanValue
+    MethodReferenceExpression spanValue _ _ _ -> spanValue
     CallExpression spanValue _ _ _ -> spanValue
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue

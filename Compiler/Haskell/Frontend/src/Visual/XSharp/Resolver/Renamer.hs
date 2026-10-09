@@ -6,6 +6,7 @@ duplicate declarations while preserving overload-family semantics.
 -}
 module Visual.XSharp.Resolver.Renamer (Renamer (..), defaultRenamer, runRenamer) where
 
+import Data.List (intercalate)
 import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
@@ -54,7 +55,8 @@ renameTree (ParsedAST (SyntaxTree namespace declarations)) =
                 [(declarationName declaration, declarationSpan declaration) | declaration <- declarations]
         -- What the language declares for every program stands outside
         -- the program's own names, which shadow it.
-        (renamed, _, problems) = renameDeclarations (globals `over` predeclared) next declarations
+        (renamed, _, problems) =
+            renameDeclarations (globals `over` qualified namespace globals `over` predeclared) next declarations
         allProblems = duplicateProblems ++ problems
      in if null allProblems then Right (RenamedAST (SyntaxTree namespace renamed)) else Left allProblems
 
@@ -68,6 +70,34 @@ predeclared =
         [ (Identifier "System", RenamedName (Identifier "System") (symbolIdValue builtinSystemSymbol))
         , (Identifier "Console", RenamedName (Identifier "Console") (symbolIdValue builtinConsoleSymbol))
         ]
+
+{- | The declarations of a namespace under their qualified names:
+@Demo.Program@ beside @Program@ in the namespace @Demo@. A qualified name
+is kept as one spelling with its dots, which no identifier of a program
+has, so nothing a program declares can replace it.
+-}
+qualified :: Maybe QualifiedName -> Environment -> Environment
+qualified namespace globals = case namespace of
+    Just (QualifiedName parts@(_ : _)) ->
+        Map.mapKeys (\name -> Identifier (intercalate "." (map identifierText parts ++ [identifierText name]))) globals
+    _ -> Map.empty
+
+{- | The qualified name a selector spells, when it spells one that is
+declared: @Demo.Program@ for the selector of @Program@ on @Demo@. A name of
+the program that is spelled like the first part hides the namespace, as an
+inner name hides an outer one.
+-}
+qualifiedSelector :: Environment -> Expression Identifier () -> Maybe RenamedName
+qualifiedSelector environment expression = do
+    parts@(first : _ : _) <- path expression
+    case Map.lookup first environment of
+        Just _ -> Nothing
+        Nothing -> Map.lookup (Identifier (intercalate "." (map identifierText parts))) environment
+    where
+        path value = case value of
+            NameExpression _ name _ -> Just [name]
+            MemberAccessExpression _ receiver member _ -> (++ [member]) <$> path receiver
+            _ -> Nothing
 
 declareMany ::
     DiagnosticStage -> String -> Int -> Environment -> [(Identifier, SourceSpan)] -> (Environment, Int, [Diagnostic])
@@ -345,9 +375,15 @@ renameExpression :: Environment -> Int -> Expression Identifier () -> (Expressio
 renameExpression environment next expression = case expression of
     NameExpression spanValue name _ -> (NameExpression spanValue (valueOrMissing name environment) (), next, [])
     LiteralExpression spanValue literal _ -> (LiteralExpression spanValue literal (), next, [])
+    -- A declaration named through its namespace is that declaration.
+    MemberAccessExpression spanValue _ _ _
+        | Just name <- qualifiedSelector environment expression -> (NameExpression spanValue name (), next, [])
     MemberAccessExpression spanValue receiver member _ ->
         let (renamedReceiver, afterReceiver, problems) = renameExpression environment next receiver
          in (MemberAccessExpression spanValue renamedReceiver member (), afterReceiver, problems)
+    MethodReferenceExpression spanValue receiver member _ ->
+        let (renamedReceiver, afterReceiver, problems) = renameExpression environment next receiver
+         in (MethodReferenceExpression spanValue renamedReceiver member (), afterReceiver, problems)
     CallExpression spanValue callee arguments _ ->
         let (renamedCallee, afterCallee, firstProblems) = renameExpression environment next callee
             (renamedArguments, after, problems) = renameExpressions environment afterCallee arguments

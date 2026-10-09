@@ -44,6 +44,7 @@ deferrableExpression expression = case expression of
     NameExpression {} -> True
     LiteralExpression {} -> True
     MemberAccessExpression _ receiver _ _ -> deferrableExpression receiver
+    MethodReferenceExpression _ receiver _ _ -> deferrableExpression receiver
     CallExpression _ callee arguments _ -> all deferrableExpression (callee : arguments)
     UnaryExpression _ _ value _ -> deferrableExpression value
     BinaryExpression _ _ left right _ -> deferrableExpression left && deferrableExpression right
@@ -66,6 +67,7 @@ worthDeferring expression = case expression of
     BinaryExpression _ operator left right _ ->
         operator `elem` [Divide, FloorDivide, Remainder] || worthDeferring left || worthDeferring right
     MemberAccessExpression _ receiver _ _ -> worthDeferring receiver
+    MethodReferenceExpression _ receiver _ _ -> worthDeferring receiver
     UnaryExpression _ _ value _ -> worthDeferring value
     IsPatternExpression _ subject _ _ -> worthDeferring subject
     ConditionalExpression _ condition first second _ -> any worthDeferring [condition, first, second]
@@ -76,6 +78,7 @@ expressionNames :: Expression name annotation -> [(name, annotation)]
 expressionNames expression = case expression of
     NameExpression _ name annotation -> [(name, annotation)]
     MemberAccessExpression _ receiver _ _ -> expressionNames receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionNames receiver
     CallExpression _ callee arguments _ -> concatMap expressionNames (callee : arguments)
     UnaryExpression _ _ value _ -> expressionNames value
     BinaryExpression _ _ left right _ -> expressionNames left ++ expressionNames right
@@ -91,6 +94,8 @@ renameNames rename expression = case expression of
     NameExpression spanValue name annotation -> NameExpression spanValue (rename name) annotation
     MemberAccessExpression spanValue receiver member annotation ->
         MemberAccessExpression spanValue (renameNames rename receiver) member annotation
+    MethodReferenceExpression spanValue receiver member annotation ->
+        MethodReferenceExpression spanValue (renameNames rename receiver) member annotation
     CallExpression spanValue callee arguments annotation ->
         CallExpression spanValue (renameNames rename callee) (map (renameNames rename) arguments) annotation
     UnaryExpression spanValue operator value annotation ->
@@ -125,6 +130,7 @@ alwaysReads :: (Eq name) => ArgumentNeeds name -> name -> Expression name annota
 alwaysReads needs name expression = case expression of
     NameExpression _ found _ -> found == name
     MemberAccessExpression _ receiver _ _ -> always receiver
+    MethodReferenceExpression _ receiver _ _ -> always receiver
     CallExpression _ (NameExpression _ callee _) arguments _
         | Just flags <- needs callee
         , length flags == length arguments ->
@@ -171,6 +177,7 @@ neededTwice needs deferred expression
         nameReads value = case value of
             NameExpression _ name _ -> [(name, value)]
             MemberAccessExpression _ receiver _ _ -> nameReads receiver
+            MethodReferenceExpression _ receiver _ _ -> nameReads receiver
             CallExpression _ callee arguments _ -> concatMap nameReads (callee : arguments)
             UnaryExpression _ _ operand _ -> nameReads operand
             BinaryExpression _ _ left right _ -> nameReads left ++ nameReads right

@@ -139,6 +139,7 @@ neverCompletingOperand expression = case break doesNotComplete (alwaysEvaluated 
     where
         alwaysEvaluated value = case value of
             MemberAccessExpression _ receiver _ _ -> [receiver]
+            MethodReferenceExpression _ receiver _ _ -> [receiver]
             CallExpression _ callee arguments _ -> callee : arguments
             UnaryExpression _ _ operand _ -> [operand]
             BinaryExpression _ operator left right _
@@ -246,6 +247,7 @@ expressionTransfers expression = case expression of
     NameExpression {} -> []
     LiteralExpression {} -> []
     MemberAccessExpression _ receiver _ _ -> expressionTransfers receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionTransfers receiver
     CallExpression _ callee arguments _ -> concatMap expressionTransfers (callee : arguments)
     UnaryExpression _ _ value _ -> expressionTransfers value
     BinaryExpression _ _ left right _ -> expressionTransfers left ++ expressionTransfers right

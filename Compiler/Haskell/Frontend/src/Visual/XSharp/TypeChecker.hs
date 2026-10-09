@@ -707,6 +707,21 @@ checkExpressionExpectedWith context environment expected expression = case expre
         let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
             memberProblems = [problem spanValue "VXT0034" "member selection is currently supported only as a type-qualified method call"]
          in (MemberAccessExpression spanValue typedReceiver member ErrorType, ErrorType, receiverProblems ++ memberProblems)
+    -- @Type::Method@ is the static method as a callable value.
+    MethodReferenceExpression spanValue (NameExpression _ name _) member _
+        | resolvedSymbol name `elem` map fst (catalogTypes (templateCatalog context)) ->
+            methodValue context expected spanValue (resolvedSymbol name) member
+    -- A reference through a value is a method bound to that value, which
+    -- needs the methods of values.
+    MethodReferenceExpression spanValue receiver member _ ->
+        let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
+            memberProblems =
+                [ problem
+                    spanValue
+                    "VXT0081"
+                    "a method reference is currently supported only for a static method named through its type"
+                ]
+         in (MethodReferenceExpression spanValue typedReceiver member ErrorType, ErrorType, receiverProblems ++ memberProblems)
     CallExpression spanValue callee arguments _ ->
         case callee of
             MemberAccessExpression _ receiver member _ ->
@@ -817,10 +832,14 @@ checkExpressionExpectedWith context environment expected expression = case expre
                 (True, True) -> (voidType, ErrorType, [])
                 (True, False) -> (secondType, secondType, [])
                 (False, True) -> (firstType, firstType, [])
-                (False, False) ->
-                    let (valueType, problems) =
-                            selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
-                     in (valueType, valueType, problems)
+                -- A string is selected like a scalar: one of the two is
+                -- the value, and the other is never made.
+                (False, False)
+                    | firstType == stringType && secondType == stringType -> (stringType, stringType, [])
+                    | otherwise ->
+                        let (valueType, problems) =
+                                selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
+                         in (valueType, valueType, problems)
          in ( ConditionalExpression spanValue typedCondition typedFirst typedSecond annotation
             , resultType
             , conditionProblems ++ conditionMismatch ++ firstProblems ++ secondProblems ++ resultProblems
@@ -1097,6 +1116,37 @@ checkOrdinaryCall context environment spanValue callee arguments =
         , calleeProblems ++ concatMap (\(_, _, ps) -> ps) checkedArguments ++ callProblems
         )
 
+{- | A static method referred to through its type, @Type::Method@: the
+method as a callable value, like its bare name inside the type.
+
+A name with one static method that is accessible is that method. A name
+with several is the one whose signature the place expects; where the place
+expects none of them, or nothing, the reference does not say which is meant.
+-}
+methodValue ::
+    TemplateContext -> Maybe Type -> SourceSpan -> SymbolId -> Identifier -> (Expression ResolvedName Type, Type, [Diagnostic])
+methodValue context expected spanValue owner member = case chosen of
+    [declaration] ->
+        let valueType = signature context declaration
+         in (NameExpression spanValue (declarationName declaration) valueType, valueType, [])
+    _ -> (NameExpression spanValue (ResolvedName (SymbolId (-1)) member) ErrorType, ErrorType, [failure])
+    where
+        candidates = overloadsFor context owner member
+        static = [candidate | candidate@(MethodCandidate _ FunctionDeclaration {declarationIsStatic = True}) <- candidates]
+        visible = map candidateDeclaration (filter (candidateVisibleFrom context) static)
+        chosen = case visible of
+            [_] -> visible
+            _ -> [declaration | declaration <- visible, Just (signature context declaration) == expected]
+        failure
+            | null candidates = problem spanValue "VXT0029" "no method with this name is declared on the selected type"
+            | null static = problem spanValue "VXT0031" "an instance method cannot be referred to through a type name"
+            | null visible = problem spanValue "VXT0033" "the selected method is not accessible from this declaration"
+            | otherwise =
+                problem
+                    spanValue
+                    "VXT0080"
+                    "the method name has several overloads and the place does not expect the type of one of them"
+
 typeQualifiedReceiver :: Expression ResolvedName () -> Maybe ResolvedName
 typeQualifiedReceiver (NameExpression _ name _) = Just name
 typeQualifiedReceiver _ = Nothing
@@ -1167,6 +1217,7 @@ sourceSpanOf expression = case expression of
     NameExpression spanValue _ _ -> spanValue
     LiteralExpression spanValue _ _ -> spanValue
     MemberAccessExpression spanValue _ _ _ -> spanValue
+    MethodReferenceExpression spanValue _ _ _ -> spanValue
     CallExpression spanValue _ _ _ -> spanValue
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue

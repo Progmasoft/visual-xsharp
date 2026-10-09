@@ -350,6 +350,7 @@ firstCallIn :: Expression Identifier () -> Maybe (Expression Identifier ())
 firstCallIn expression = case expression of
     call@CallExpression {} -> Just call
     MemberAccessExpression _ receiver _ _ -> firstCallIn receiver
+    MethodReferenceExpression _ receiver _ _ -> firstCallIn receiver
     UnaryExpression _ _ value _ -> firstCallIn value
     BinaryExpression _ _ left right _ -> firstJust [firstCallIn left, firstCallIn right]
     _ -> Nothing
@@ -413,6 +414,7 @@ selectorPath :: Expression Identifier annotation -> [Identifier]
 selectorPath expression = case expression of
     NameExpression _ name _ -> [name]
     MemberAccessExpression _ receiver member _ -> selectorPath receiver ++ [member]
+    MethodReferenceExpression _ receiver member _ -> selectorPath receiver ++ [member]
     CallExpression _ callee _ _ -> selectorPath callee
     _ -> []
 
@@ -428,6 +430,7 @@ spanOf expression = case expression of
     NameExpression spanValue _ _ -> spanValue
     LiteralExpression spanValue _ _ -> spanValue
     MemberAccessExpression spanValue _ _ _ -> spanValue
+    MethodReferenceExpression spanValue _ _ _ -> spanValue
     CallExpression spanValue _ _ _ -> spanValue
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue

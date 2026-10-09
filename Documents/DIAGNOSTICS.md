@@ -218,7 +218,7 @@ The type checker reports:
 | `VXT0036` | a conditional test is neither `bool` nor numeric |
 | `VXT0037` | the two results of a conditional have different types |
 | `VXT0038` | the two operands of truthy coalescing have different types |
-| `VXT0039` | the result of a conditional form is neither `bool`, numeric nor an enum; other result types are not lowered yet |
+| `VXT0039` | the result of a conditional form is not `bool`, numeric, an enum or, for `? :`, a `String`; other result types are not lowered yet |
 
 A compound assignment otherwise reuses the assignment and operator
 diagnostics: `VXT0003` for an immutable target and `VXT0012` for operands the
@@ -561,6 +561,10 @@ function takes, and that the call has the type the function returns.
 
 These cannot be reached from source either. What a program can get wrong about the console and about strings is reported
 by the type checker, with `VXT0071` to `VXT0079`; [Console output and strings](CONSOLE-IO.md) lists them.
+
+A method reference `Type::Method` reports `VXT0080` when the method has several overloads and the place does not expect
+the type of exactly one of them, and `VXT0081` when its receiver is a value and not a type;
+[Static member resolution](STATIC-MEMBER-RESOLUTION.md) lists the forms.
 
 ## Safe output behavior
 
