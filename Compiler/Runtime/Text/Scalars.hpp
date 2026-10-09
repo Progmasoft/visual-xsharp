@@ -34,7 +34,7 @@ namespace Visual::XSharp::Runtime::Text
         ~Scalars()
         {
             if (data_ != inline_)
-                delete[] data_;
+                ::operator delete(data_);
         }
 
         [[nodiscard]] auto
@@ -115,13 +115,19 @@ namespace Visual::XSharp::Runtime::Text
             auto capacity = capacity_ * 2U;
             if (capacity < size_ + more)
                 capacity = size_ + more;
-            auto *grown = new (std::nothrow) char32_t[capacity];
+            // The allocation function is called by name, as the ownership
+            // runtime calls it for an object: what comes back is storage or
+            // null, and null is the only report of failure there is in a
+            // runtime built without exceptions. `capacity` is at most twice
+            // `kLimit`, so the size in bytes does not wrap.
+            auto *grown = static_cast<char32_t *>(
+                ::operator new(capacity * sizeof(char32_t), std::nothrow));
             if (grown == nullptr)
                 Platform::Fail();
             for (std::size_t index = 0U; index < size_; ++index)
                 grown[index] = data_[index];
             if (data_ != inline_)
-                delete[] data_;
+                ::operator delete(data_);
             data_ = grown;
             capacity_ = capacity;
         }

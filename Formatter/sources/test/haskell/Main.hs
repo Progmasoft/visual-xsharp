@@ -33,6 +33,10 @@ main = do
     check "block formatting reaches a fixed point" formattingIsIdempotent
     check "pattern combinators remain intact while their block is indented" formatsPatternCombinators
     check "match arms, value blocks and nested blocks are indented by their braces" formatsBranchingForms
+    check "method references and names through the namespace are kept as written" formatsMethodReferences
+    check "a conditional over strings keeps its strings and its colon" formatsStringConditional
+    check "console formats keep their percent signs and their braces" formatsConsoleFormats
+    check "a source with the forms of 0.5.0 reaches a fixed point" currentFormsAreIdempotent
     checkIO "encoding conversion follows explicit input and output settings" encodingRoundTrip
     checkIO "UTF-8 input rejects malformed byte sequences" rejectsMalformedUtf8
 
@@ -312,3 +316,118 @@ rejectsOptions :: FormatOptions -> Bool
 rejectsOptions options = case formatSource options (CompilerInput "Program.vxs" "class Program {}") of
     Left [problem] -> diagnosticCode problem == "VXF0001"
     _ -> False
+
+-- `::` is one token of the language; the formatter must neither split it
+-- nor take a part of a qualified name for something to lay out.
+formatsMethodReferences :: Bool
+formatsMethodReferences =
+    formats
+        defaultFormatOptions
+        ( concat
+            [ "namespace Demo;\n"
+            , "public class Program {\n"
+            , "public static int Log(_ int v) { return v; }\n"
+            , "public static int Run(_ (int) -> int f) {\n"
+            , "return f(3);\n"
+            , "}\n"
+            , "public static void Main() {\n"
+            , "auto held = Program::Log;\n"
+            , "int first = Run(Demo.Program::Log);\n"
+            , "int second = Demo.Program.Log(1);\n"
+            , "}\n"
+            , "}\n"
+            ]
+        )
+        ( concat
+            [ "namespace Demo;\n"
+            , "public class Program {\n"
+            , "    public static int Log(_ int v) { return v; }\n"
+            , "    public static int Run(_ (int) -> int f) {\n"
+            , "        return f(3);\n"
+            , "    }\n"
+            , "    public static void Main() {\n"
+            , "        auto held = Program::Log;\n"
+            , "        int first = Run(Demo.Program::Log);\n"
+            , "        int second = Demo.Program.Log(1);\n"
+            , "    }\n"
+            , "}\n"
+            ]
+        )
+
+formatsStringConditional :: Bool
+formatsStringConditional =
+    formats
+        defaultFormatOptions
+        ( concat
+            [ "class Program {\n"
+            , "static String Kind(_ int count) {\n"
+            , "String kind = count > 0 ? \"some { \" : \"none } \";\n"
+            , "return count > 9\n"
+            , "? kind + \"!\"\n"
+            , ": kind;\n"
+            , "}\n"
+            , "}\n"
+            ]
+        )
+        ( concat
+            [ "class Program {\n"
+            , "    static String Kind(_ int count) {\n"
+            , "        String kind = count > 0 ? \"some { \" : \"none } \";\n"
+            , "        return count > 9\n"
+            , "        ? kind + \"!\"\n"
+            , "        : kind;\n"
+            , "    }\n"
+            , "}\n"
+            ]
+        )
+
+formatsConsoleFormats :: Bool
+formatsConsoleFormats =
+    formats
+        defaultFormatOptions
+        ( concat
+            [ "class Program {\n"
+            , "static void Main() {\n"
+            , "Console.Printfn(\"{%05d} %'d %-8s| %.2f %%\", 42, 1234567, \"ab\", 3.14159);\n"
+            , "String made = Console.Format(\"%*d}\", 5, 42);\n"
+            , "Console.Errorln(made + \"{\");\n"
+            , "}\n"
+            , "}\n"
+            ]
+        )
+        ( concat
+            [ "class Program {\n"
+            , "    static void Main() {\n"
+            , "        Console.Printfn(\"{%05d} %'d %-8s| %.2f %%\", 42, 1234567, \"ab\", 3.14159);\n"
+            , "        String made = Console.Format(\"%*d}\", 5, 42);\n"
+            , "        Console.Errorln(made + \"{\");\n"
+            , "    }\n"
+            , "}\n"
+            ]
+        )
+
+currentFormsAreIdempotent :: Bool
+currentFormsAreIdempotent =
+    case formatSource defaultFormatOptions (CompilerInput "Program.vxs" source) of
+        Right first -> case formatSource defaultFormatOptions (CompilerInput "Program.vxs" (formattedSource first)) of
+            Right second -> formattingChanged first && not (formattingChanged second)
+            Left _ -> False
+        Left _ -> False
+    where
+        source =
+            concat
+                [ "namespace Demo;\n"
+                , "enum Color { Red, Green }\n"
+                , "public class Program {\n"
+                , "public static int Log(_ int v) { Console.Println(v); return v; }\n"
+                , "public static void Main() {\n"
+                , "auto held = Demo.Program::Log;\n"
+                , "String kind = held(1) > 0 ? \"some\" : \"none\";\n"
+                , "Color chosen = match (held(2)) {\n"
+                , "0 -> Demo.Color.Red,\n"
+                , "_ -> .Green\n"
+                , "};\n"
+                , "Console.Printfn(\"%s %b\", kind, chosen == Color.Green);\n"
+                , "}\n"
+                , "}\n"
+                ]

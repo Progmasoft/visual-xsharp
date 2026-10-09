@@ -315,6 +315,11 @@ published; the number is skipped, not withdrawn.
   the host over 44 400 fields of deterministic pseudo-random values, and
   `%f` over 3000 numbers drawn from every exponent and 80 020 that lie on
   or beside a rounding tie.
+- Visual Formatter and Visual Linter are 0.1.1. Neither has a new rule:
+  both are rebuilt with this compiler, so they accept the forms above, and
+  their tests now hold them. The formatter keeps `::`, qualified names,
+  string conditionals and console formats as written while it indents; the
+  linter reports the new diagnostics under its `compiler` check.
 - `QualifiedNameTests.hs` runs programs that name declarations through
   their namespace and methods through `::`, before and after optimization,
   and holds the forms that must be rejected. The leak-checked smoke program
