@@ -130,8 +130,10 @@ as before, in the same program.
 
 The answer errs on the side of an effect. A method that creates a callable
 that writes is taken for writing, and a call through a callable value is taken
-to write when any method that creates a callable does. A program without
-console output is unaffected.
+to write when the body of any callable of the program writes or calls a
+method that does, or when a method that writes is used as a value. A program
+in which no callable writes keeps its calls through callables by need, and a
+program without console output is unaffected altogether.
 
 The Core optimizer treats a console write like a call of a function it knows
 nothing about: it is kept, kept once, and kept where it stands. The other

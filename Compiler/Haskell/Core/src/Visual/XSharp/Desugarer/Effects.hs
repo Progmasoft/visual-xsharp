@@ -18,10 +18,11 @@ another function as a suspended computation.
 The answer errs on the side of an effect. A method acts when a call anywhere
 in its body acts, in a callable it creates as well as in its own statements:
 creating a callable that writes is taken for writing. A call through a
-callable value acts when any method that creates a callable acts, because
-which callable a value holds is not followed. A program without console
-output is unaffected: nothing in it acts, and everything is deferred that
-was deferred before.
+callable value acts when the body of any callable of the program holds a
+call that acts, or when a method that acts is used as a value, because
+which callable a value holds is not followed. A program in which no
+callable writes keeps its calls through callables by need, and a program
+without console output is unaffected altogether.
 -}
 module Visual.XSharp.Desugarer.Effects
     ( Effects
@@ -63,17 +64,39 @@ programEffects :: [[Declaration ResolvedName Type]] -> Effects
 programEffects trees = settle noEffects {effectsMethods = Map.map (const False) bodies}
     where
         bodies = Map.map (blockExpressions . methodBody) (Map.unions (map methodDeclarations trees))
-        createsCallable = Map.map (any isCallable) bodies
+        -- Every expression of the body of every callable the program
+        -- creates, in whatever method.
+        callableBodies =
+            [ case body of
+                CallableExpressionBody result -> within result
+                CallableBlockBody block -> blockExpressions block
+            | expressions <- Map.elems bodies
+            , CallableExpression _ _ _ _ body _ <- expressions
+            ]
+        -- The methods that are used as a value somewhere: named more often
+        -- than they are called by name.
+        heldMethods =
+            Map.keys
+                ( Map.filter
+                    (> 0)
+                    ( Map.unionWith
+                        (+)
+                        (occurrences 1 [name | NameExpression _ name _ <- everything])
+                        (occurrences (-1) [name | CallExpression _ (NameExpression _ name _) _ _ <- everything])
+                    )
+                )
+        everything = concat (Map.elems bodies)
+        occurrences :: Int -> [ResolvedName] -> Map SymbolId Int
+        occurrences weight names =
+            Map.fromListWith (+) [(resolvedSymbol name, weight) | name <- names, Map.member (resolvedSymbol name) bodies]
         settle current =
-            let methods = Map.map (any (callActsIn current)) bodies
-                next =
+            let next =
                     Effects
-                        methods
-                        (or (Map.elems (Map.intersectionWith (&&) methods createsCallable)))
+                        (Map.map (any (callActsIn current)) bodies)
+                        ( any (any (callActsIn current)) callableBodies
+                            || any (\held -> Map.findWithDefault False held (effectsMethods current)) heldMethods
+                        )
              in if next == current then current else settle next
-        isCallable expression = case expression of
-            CallableExpression {} -> True
-            _ -> False
 
 -- | Whether a call of the given name may act.
 callActs :: Effects -> ResolvedName -> Bool

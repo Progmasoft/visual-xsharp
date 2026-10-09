@@ -25,7 +25,7 @@ library
         base >=4.20 && <4.23,
         bytestring >=0.12 && <0.13,
         text >=2.1 && <2.3,
-        visual-xsharp-compiler >=0.4.0 && <0.5
+        visual-xsharp-compiler >=0.5.0 && <0.6
     default-language: GHC2024
 
 executable vfmt

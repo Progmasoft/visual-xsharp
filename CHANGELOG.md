@@ -5,7 +5,29 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-10-09
+
+### Why 0.5.0 and not 0.4.2
+
+The third component of the version is for a release that a program and its
+build artifacts written for the one before still work with. This release is
+not one:
+
+- The language changed what existing programs mean. Evaluation is by need,
+  so a value nothing reads is no longer computed, and `==` on two strings
+  compares their characters where it compared the objects.
+- `match`, `guard` and `enum` became reserved words.
+- Every serialized stage changed incompatibly: Core went from version 8 to
+  10, CorePrep to 8, Xpp and Xmm to 7. No artifact of 0.4.1 is read.
+- A native executable is now linked with a runtime library that ships
+  beside the compiler, so an installation of 0.4.1 cannot be updated by
+  replacing the compiler alone.
+- The Haskell packages of the formatter, linter and analyzer bound the
+  compiler below 0.5 on purpose, and their bounds move with this release.
+
+The language also grew by more than a patch carries: evaluation by need,
+`match`, enums, constant expressions and console output. 0.4.2 was never
+published; the number is skipped, not withdrawn.
 
 ### Language
 
@@ -266,6 +288,17 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Verification and tooling
 
+- `EffectTests.hs` holds the inference of which calls write from both
+  sides: programs whose writes lie one and two calls down, in mutual
+  recursion, in callables and in methods used as values must write in the
+  order they say, and programs that only compute must keep their deferred
+  bindings and suspended arguments. `FormatSweepTests.hs` writes every
+  combination of flags, width and precision for every conversion, 5184
+  formats, and compares the reader with the rules stated a second time.
+  `TextRuntimeTests.cpp` compares `%d`, `%u` and `%x` with the C library of
+  the host over 44 400 fields of deterministic pseudo-random values, and
+  `%f` over 3000 numbers drawn from every exponent and 80 020 that lie on
+  or beside a rounding tie.
 - `ConsoleTests.hs` runs some 180 programs that write in the reference Core
   evaluator, before and after optimization, against text written by hand,
   and holds about a hundred programs that must be rejected. The evaluator's
@@ -499,6 +532,10 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 ### Upgrading from 0.4.1
 
+- A method that writes and is used as a value, `auto f = Log;` or
+  `Run(Log)`, writes where its call stands, like a callable expression that
+  writes. No release behaved otherwise; it is listed because the rule in
+  `Documents/CONSOLE-IO.md` names it.
 - A program that relied on an unused value being computed, for its failure
   or for the time it takes, no longer gets either: a value nothing reads is
   not computed. That now includes an argument the method does not read.
@@ -512,6 +549,13 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 - Rename anything called `match`, `guard` or `enum`.
 - `if (auto name = value)` and the same form in `while` now report `VXP0035`
   instead of a generic syntax error. They were not accepted before either.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the CLI, Bazel module, Kotlin
+  project model, and compiler project version to 0.5.0, and the bounds of
+  the formatter, linter and analyzer packages on the compiler to
+  `>=0.5.0 && <0.6`.
 
 ## 0.4.1 - 2026-10-03
 

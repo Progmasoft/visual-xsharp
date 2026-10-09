@@ -82,7 +82,7 @@ the normal workflow:
 
 ```powershell
 go run ./helpers/cmd/develop doctor
-go run ./helpers/cmd/develop version 0.4.1
+go run ./helpers/cmd/develop version 0.5.0
 go run ./helpers/cmd/develop build
 go run ./helpers/cmd/develop test
 go run ./helpers/cmd/develop benchmark

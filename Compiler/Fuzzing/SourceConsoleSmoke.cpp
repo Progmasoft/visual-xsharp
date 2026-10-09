@@ -194,6 +194,55 @@ namespace
           " + Console.Format(\"%x\", 255));",
           "00042ff",
           "" },
+        // Strings that callables take, capture, make and return.
+        { "auto greet = \\(String who) -> \"Hi \" + who;"
+          " Console.Println(greet(\"Ada\"));",
+          "Hi Ada\n",
+          "" },
+        { "String prefix = Name() + \": \";"
+          " auto label = \\(int n) -> prefix + n;"
+          " Console.Println(label(1)); Console.Println(label(2));",
+          "Visual X#: 1\nVisual X#: 2\n",
+          "" },
+        { "auto twice = \\(int v) -> { Console.Printf(\"%d,\", v);"
+          " return v * 2; }; Console.Println(twice(twice(1)));",
+          "1,2,4\n",
+          "" },
+        { "auto make = \\(int n) -> Console.Format(\"<%03d>\", n);"
+          " String all = \"\"; for (int i = 0; i < 3; i += 1)"
+          " { all += make(i); } Console.Println(all);",
+          "<000><001><002>\n",
+          "" },
+        // A callable that is made and never called leaves nothing behind.
+        { "String kept = Twice(\"ab\");"
+          " auto never = \\(int n) -> kept + n; Console.Println(\"x\");",
+          "x\n",
+          "" },
+        // A method is a callable value: it writes where its call stands.
+        { "auto f = Log; int x = f(1); Console.Println(9);", "1\n9\n", "" },
+        // Appending makes a new string; another name keeps the old one.
+        { "String s = \"a\"; String t = s; s += \"b\";"
+          " Console.Println(s + t);",
+          "aba\n",
+          "" },
+        { "String s = \"\"; for (int i = 0; i < 5; i += 1)"
+          " { String old = s; s += i; if (old == s) { s += \"!\"; } }"
+          " Console.Println(s);",
+          "01234\n",
+          "" },
+        // String operations in arguments that are and are not needed.
+        { "Console.Println(Pick(1, Half(8)) + Name());", "4Visual X#\n", "" },
+        { "String made = Twice(Name() + \"!\");"
+          " Console.Println(Pick(0, 8 / Zero()));",
+          "7\n",
+          "" },
+        { "Console.Println(Console.Format(\"[%s]\","
+          " Console.Format(\"%5s\", Console.Format(\"%d\", 42))));",
+          "[   42]\n",
+          "" },
+        { "Console.Println(Twice(Twice(\"ab\")) == \"abababab\");",
+          "true\n",
+          "" },
         // A string that is made and never written is released as well.
         { "String t = Console.Format(\"%d\", 1); Console.Println(\"x\");",
           "x\n",

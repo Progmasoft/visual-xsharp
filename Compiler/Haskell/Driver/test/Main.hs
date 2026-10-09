@@ -27,6 +27,8 @@ import IntegerFlowTests (integerFlowTests)
 import IterationTests (iterationTests)
 import LazyEvaluationTests (lazyEvaluationTests)
 import ConsoleTests (consoleTests)
+import EffectTests (effectTests)
+import FormatSweepTests (formatSweepTests)
 import RuntimeCallTests (runtimeCallTests)
 import FallThroughTests (fallThroughTests)
 import MemoizeTests (memoizeTests)
@@ -190,6 +192,8 @@ main = do
     mapM_ (uncurry check) fallThroughTests
     mapM_ (uncurry check) runtimeCallTests
     mapM_ (uncurry check) consoleTests
+    mapM_ (uncurry check) effectTests
+    mapM_ (uncurry check) formatSweepTests
     mapM_ (uncurry check) branchingOracleTests
     mapM_ (uncurry check) branchingDiagnosticTests
     mapM_ (uncurry check) nestingLimitTests

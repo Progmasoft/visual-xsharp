@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -112,6 +113,88 @@ namespace
         REQUIRE(static_cast<std::size_t>(written) < buffer.size());
         buffer.resize(static_cast<std::size_t>(written));
         return Wide(buffer);
+    }
+
+    /// Writes one integer with the C library of the host: the buffer, its
+    /// size, a width and the value.
+    template<typename Integer>
+    using HostPrint = int (*)(char *, std::size_t, int, Integer);
+
+    /// A row of a comparison with the host: the flags the runtime is given
+    /// and the conversion of the C library that means the same. The format
+    /// is a literal where it is used, so the compiler checks it.
+#define HOST_ROW(Integer, flags, format)                                       \
+    { (flags),                                                                 \
+      (format),                                                                \
+      [](char *buffer, std::size_t size, int width, Integer value) {           \
+          return std::snprintf(buffer, size, (format), width, value);          \
+      } }
+
+    template<typename Integer>
+    struct HostRow final
+    {
+        std::int64_t flags;
+        const char *format;
+        HostPrint<Integer> print;
+    };
+
+    /// What the C library of the host writes for one integer conversion.
+    template<typename Integer>
+    [[nodiscard]] auto
+    HostInteger(HostPrint<Integer> print, int width, Integer value)
+        -> std::u32string
+    {
+        std::string buffer(128U, '\0');
+        const auto written = print(buffer.data(), buffer.size(), width, value);
+        REQUIRE(written > 0);
+        REQUIRE(static_cast<std::size_t>(written) < buffer.size());
+        buffer.resize(static_cast<std::size_t>(written));
+        return Wide(buffer);
+    }
+
+    /// A sequence of 64-bit values that is the same on every run.
+    class Sequence final
+    {
+    public:
+        [[nodiscard]] auto
+        Next() noexcept -> std::uint64_t
+        {
+            state += 0x9e3779b97f4a7c15ULL;
+            auto value = state;
+            value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
+            value = (value ^ (value >> 27U)) * 0x94d049bb133111ebULL;
+            return value ^ (value >> 31U);
+        }
+
+    private:
+        std::uint64_t state{ 0x5eedULL };
+    };
+
+    /// Values of every magnitude: each draw is cut to a number of bits that
+    /// is drawn as well, so that small numbers are as frequent as large.
+    [[nodiscard]] auto
+    Magnitudes(std::size_t count) -> std::vector<std::uint64_t>
+    {
+        Sequence sequence;
+        std::vector<std::uint64_t> values{
+            0U,
+            1U,
+            9U,
+            10U,
+            999U,
+            1000U,
+            std::numeric_limits<std::uint64_t>::max(),
+            static_cast<std::uint64_t>(
+                std::numeric_limits<std::int64_t>::max()),
+            static_cast<std::uint64_t>(
+                std::numeric_limits<std::int64_t>::min()),
+        };
+        while (values.size() < count)
+        {
+            const auto bits = 1U + static_cast<unsigned>(sequence.Next() % 64U);
+            values.push_back(sequence.Next() >> (64U - bits));
+        }
+        return values;
     }
 
     /// The bytes one sink received, by stream.
@@ -507,6 +590,208 @@ TEST_CASE("%f agrees with the host over a sweep of binary exponents")
         {
             CAPTURE(exponent, precision);
             CHECK(Floating(value, precision) == HostFixed(value, precision));
+        }
+    }
+}
+
+TEST_CASE("%d agrees with the C library of the host over many values")
+{
+    const HostRow<long long> kRows[] = {
+        HOST_ROW(long long, 0, "%*lld"),
+        HOST_ROW(long long, VXS_TEXT_FLAG_LEFT, "%-*lld"),
+        HOST_ROW(long long, VXS_TEXT_FLAG_ZERO, "%0*lld"),
+        HOST_ROW(long long, VXS_TEXT_FLAG_PLUS, "%+*lld"),
+        HOST_ROW(long long, VXS_TEXT_FLAG_SPACE, "% *lld"),
+        HOST_ROW(long long, VXS_TEXT_FLAG_PLUS | VXS_TEXT_FLAG_ZERO, "%+0*lld"),
+        HOST_ROW(long long,
+                 VXS_TEXT_FLAG_SPACE | VXS_TEXT_FLAG_ZERO,
+                 "% 0*lld"),
+        HOST_ROW(long long, VXS_TEXT_FLAG_PLUS | VXS_TEXT_FLAG_LEFT, "%-+*lld"),
+        HOST_ROW(long long,
+                 VXS_TEXT_FLAG_SPACE | VXS_TEXT_FLAG_LEFT,
+                 "%- *lld"),
+    };
+    std::size_t compared = 0U;
+    for (const auto magnitude : Magnitudes(400U))
+    {
+        const auto value = static_cast<std::int64_t>(magnitude);
+        for (const auto &row : kRows)
+        {
+            for (const int width : { 0, 1, 7, 19, 20, 21, 40 })
+            {
+                const auto written = Signed(value, row.flags, width);
+                const auto expected
+                    = HostInteger(row.print,
+                                  width,
+                                  static_cast<long long>(value));
+                if (written != expected)
+                {
+                    CAPTURE(value);
+                    CAPTURE(row.format);
+                    CAPTURE(width);
+                    CHECK(written == expected);
+                }
+                ++compared;
+            }
+        }
+    }
+    CHECK(compared == std::size_t{ 25200U });
+}
+
+TEST_CASE("%u and %x agree with the C library of the host over many values")
+{
+    const HostRow<unsigned long long> kRows[] = {
+        HOST_ROW(unsigned long long, 0, "%*llu"),
+        HOST_ROW(unsigned long long, VXS_TEXT_FLAG_LEFT, "%-*llu"),
+        HOST_ROW(unsigned long long, VXS_TEXT_FLAG_ZERO, "%0*llu"),
+        HOST_ROW(unsigned long long, VXS_TEXT_FLAG_HEXADECIMAL, "%*llx"),
+        HOST_ROW(unsigned long long,
+                 VXS_TEXT_FLAG_HEXADECIMAL | VXS_TEXT_FLAG_LEFT,
+                 "%-*llx"),
+        HOST_ROW(unsigned long long,
+                 VXS_TEXT_FLAG_HEXADECIMAL | VXS_TEXT_FLAG_ZERO,
+                 "%0*llx"),
+    };
+    std::size_t compared = 0U;
+    for (const auto value : Magnitudes(400U))
+    {
+        for (const auto &row : kRows)
+        {
+            for (const int width : { 0, 1, 7, 16, 17, 20, 21, 40 })
+            {
+                const auto written = Unsigned(value, row.flags, width);
+                const auto expected
+                    = HostInteger(row.print,
+                                  width,
+                                  static_cast<unsigned long long>(value));
+                if (written != expected)
+                {
+                    CAPTURE(value);
+                    CAPTURE(row.format);
+                    CAPTURE(width);
+                    CHECK(written == expected);
+                }
+                ++compared;
+            }
+        }
+    }
+    CHECK(compared == std::size_t{ 19200U });
+}
+
+TEST_CASE("grouping only adds apostrophes, every third digit from the right")
+{
+    for (const auto value : Magnitudes(400U))
+    {
+        const auto plain = Unsigned(value);
+        const auto grouped = Unsigned(value, VXS_TEXT_FLAG_GROUP);
+        std::u32string rebuilt;
+        for (std::size_t index = 0U; index < plain.size(); ++index)
+        {
+            if (index != 0U && (plain.size() - index) % 3U == 0U)
+                rebuilt.push_back(U'\'');
+            rebuilt.push_back(plain[index]);
+        }
+        if (grouped != rebuilt)
+        {
+            CAPTURE(value);
+            CHECK(grouped == rebuilt);
+        }
+        // A sign stands before the first group and is not counted in it.
+        const auto negative = -static_cast<std::int64_t>(value >> 1U);
+        if (negative != 0)
+        {
+            const auto signedGrouped = Signed(negative, VXS_TEXT_FLAG_GROUP);
+            const auto magnitude = Unsigned(value >> 1U, VXS_TEXT_FLAG_GROUP);
+            if (signedGrouped != U"-" + magnitude)
+            {
+                CAPTURE(negative);
+                CHECK(signedGrouped == U"-" + magnitude);
+            }
+        }
+    }
+}
+
+TEST_CASE("%f agrees with the host over numbers drawn from every exponent")
+{
+    // Any bit pattern that is a finite number: the sign, the exponent and
+    // the fraction are all drawn, so subnormal numbers, numbers with
+    // hundreds of digits before the point and numbers with hundreds of
+    // zeros after it all occur.
+    Sequence sequence;
+    std::size_t compared = 0U;
+    while (compared < 3000U)
+    {
+        const auto bits = sequence.Next();
+        double value = 0.0;
+        static_assert(sizeof(value) == sizeof(bits));
+        std::memcpy(&value, &bits, sizeof(value));
+        if (!std::isfinite(value))
+            continue;
+        const auto precision = static_cast<int>(sequence.Next() % 25U);
+        const auto written = Floating(value, precision);
+        const auto expected = HostFixed(value, precision);
+        if (written != expected)
+        {
+            CAPTURE(bits);
+            CAPTURE(precision);
+            CHECK(written == expected);
+        }
+        ++compared;
+    }
+    CHECK(compared == 3000U);
+}
+
+TEST_CASE("%f agrees with the host on numbers a digit decides the rounding "
+          "of")
+{
+    // Multiples of a power of two small enough to be exact: half of them
+    // lie exactly between two numbers of the precision that is asked for.
+    std::size_t compared = 0U;
+    for (int numerator = -2000; numerator <= 2000; ++numerator)
+    {
+        for (const double denominator : { 2.0, 8.0, 32.0, 1024.0 })
+        {
+            const auto value = static_cast<double>(numerator) / denominator;
+            for (int precision = 0; precision <= 4; ++precision)
+            {
+                const auto written = Floating(value, precision);
+                const auto expected = HostFixed(value, precision);
+                if (written != expected)
+                {
+                    CAPTURE(numerator);
+                    CAPTURE(denominator);
+                    CAPTURE(precision);
+                    CHECK(written == expected);
+                }
+                ++compared;
+            }
+        }
+    }
+    CHECK(compared == std::size_t{ 80020U });
+}
+
+TEST_CASE("a field is never shorter than its width and never loses a digit")
+{
+    for (const auto magnitude : Magnitudes(200U))
+    {
+        const auto value = static_cast<std::int64_t>(magnitude);
+        const auto plain = Signed(value);
+        for (std::int64_t width = 0; width <= 48; width += 3)
+        {
+            for (const auto flags :
+                 { INT64_C(0), VXS_TEXT_FLAG_LEFT, VXS_TEXT_FLAG_ZERO })
+            {
+                const auto field = Signed(value, flags, width);
+                const auto least = static_cast<std::size_t>(width);
+                if (field.size()
+                    != (plain.size() > least ? plain.size() : least))
+                {
+                    CAPTURE(value);
+                    CAPTURE(width);
+                    CAPTURE(flags);
+                    CHECK(field.size() == least);
+                }
+            }
         }
     }
 }

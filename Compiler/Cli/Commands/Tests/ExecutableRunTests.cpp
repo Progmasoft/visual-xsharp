@@ -556,6 +556,118 @@ TEST_CASE("an executable releases the strings it makes")
     std::filesystem::remove_all(Directory());
 }
 
+TEST_CASE("an executable calls a method held as a value where the call "
+          "stands")
+{
+    // A method is a callable value. Nothing reads what the calls return,
+    // and both write all the same.
+    const auto outcome = RunCapturing(
+        "Held",
+        "    public static int Log(_ int v) { Console.Println(v);"
+        " return v; }\n"
+        "    public static int Run(_ (int) -> int f) { return f(3); }\n"
+        "    public static void Main() {\n"
+        "        auto f = Log;\n"
+        "        int first = f(1);\n"
+        "        int second = Run(Log);\n"
+        "        Console.Println(9);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "1\r\n3\r\n9\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable passes strings through callables")
+{
+    const auto outcome = RunCapturing(
+        "Callables",
+        "    public static String Name() { return \"Visual X#\"; }\n"
+        "    public static void Main() {\n"
+        "        String prefix = Name() + \": \";\n"
+        "        auto label = \\(int n) -> prefix + n;\n"
+        "        auto twice = \\(int v) -> { Console.Printf(\"%d,\", v);"
+        " return v * 2; };\n"
+        "        Console.Println(label(1));\n"
+        "        Console.Println(label(twice(twice(1))));\n"
+        "        String all = \"\";\n"
+        "        for (int i = 0; i < 1000; i += 1) { all += label(i % 10); }\n"
+        "        Console.Println(all == \"\");\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "Visual X#: 1\r\n1,2,Visual X#: 4\r\nfalse\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable that appends keeps the string another name holds")
+{
+    const auto outcome
+        = RunCapturing("Append",
+                       "    public static void Main() {\n"
+                       "        String s = \"a\";\n"
+                       "        String t = s;\n"
+                       "        s += \"b\";\n"
+                       "        s += 7;\n"
+                       "        Console.Println(s + \"|\" + t);\n"
+                       "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "ab7|a\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable that shifts by the width of the type stops")
+{
+    const auto outcome
+        = RunCapturing("Shift",
+                       "    public static void Main() {\n"
+                       "        Console.Println(1 << (Zero(3) + 63) < 0);\n"
+                       "        int k = 1 << (Zero(3) + 64);\n"
+                       "        Console.Println(k);\n"
+                       "        Console.Println(\"after\");\n"
+                       "    }\n");
+    CHECK(outcome.status == kStopped);
+    CHECK(outcome.output == "true\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("an executable that only reports writes nothing to standard "
+          "output")
+{
+    const auto outcome
+        = RunCapturing("Report",
+                       "    public static void Main() {\n"
+                       "        Console.Errorfn(\"%s: %d\", \"code\", 7);\n"
+                       "        Console.Error(\"done\");\n"
+                       "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output.empty());
+    CHECK(outcome.error == "code: 7\r\ndone");
+    std::filesystem::remove_all(Directory());
+}
+
+TEST_CASE("a link leaves only the executable beside the source")
+{
+    // The import library and the list of names it is made from are made
+    // for one link and removed after it.
+    REQUIRE(Drive("build",
+                  "Tidy",
+                  "    public static void Main() {"
+                  " Console.Println(\"x\"); }\n")
+            == 0);
+    std::size_t executables = 0U;
+    for (const auto &entry : std::filesystem::directory_iterator(Directory()))
+    {
+        const auto extension = entry.path().extension().string();
+        CHECK(extension != ".def");
+        CHECK(extension != ".lib");
+        CHECK(extension != ".obj");
+        CHECK(extension != ".o");
+        if (extension == ".vxse")
+            ++executables;
+    }
+    CHECK(executables == 1U);
+    std::filesystem::remove_all(Directory());
+}
+
 TEST_CASE("an executable writes many lines")
 {
     const auto outcome
