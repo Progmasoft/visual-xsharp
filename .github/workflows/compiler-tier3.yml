@@ -5,7 +5,11 @@ name: Compiler Tier 3
 
 on:
   pull_request:
+  # The default branch only. A branch that has a pull request is tested by
+  # the pull request; testing its pushes as well ran every job twice.
   push:
+    branches:
+      - main
 
 permissions:
   contents: read

@@ -2,24 +2,47 @@
 # SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 version: 2
+
+# Each ecosystem brings its updates in one pull request. Every pull request
+# is rebased when the default branch moves and runs the whole test matrix
+# again, so one pull request per dependency, and for Gradle per directory as
+# well, filled the runner queue for hours after every merge.
+#
+# A release is taken a week after it is published, not on the day: a release
+# that turns out to be broken or malicious is usually withdrawn within days.
 updates:
   - package-ecosystem: gomod
     directory: /helpers
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      go-helpers:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
 
   - package-ecosystem: bazel
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      bazel-modules:
+        patterns: ["*"]
 
   - package-ecosystem: gradle
     directories:
@@ -30,12 +53,22 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      gradle-plugins:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /Analyzer/vscode
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      vscode-extension:
+        patterns: ["*"]
     ignore:
       # The type definitions must not be newer than the Node.js runtime the
       # extension runs on: the VS Code versions it supports and the Node.js
