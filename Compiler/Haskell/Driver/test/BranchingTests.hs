@@ -372,8 +372,28 @@ typeTests =
         , rejectedWith "VXT0050" (body "auto text = match (left) { 1 -> \"a\", _ -> 2 }; return 0;")
         )
     ,
-        ( "a string subject is not lowered yet"
-        , rejectedWith "VXT0058" (body "match (\"a\") { _ -> { } } return 0;")
+        ( "a string is a match subject"
+        , accepted (body "match (\"a\") { \"a\" -> { }, _ -> { } } return 0;")
+        )
+    ,
+        ( "a callable subject is not lowered yet"
+        , rejectedWith "VXT0058" (body "match (\\(int v) -> v) { _ -> { } } return 0;")
+        )
+    ,
+        ( "a string subject is not matched by a number"
+        , rejectedWith "VXT0054" (body "match (\"a\") { 1 -> { }, _ -> { } } return 0;")
+        )
+    ,
+        ( "a numeric subject is not matched by a string"
+        , rejectedWith "VXT0054" (body "match (left) { \"a\" -> { }, _ -> { } } return 0;")
+        )
+    ,
+        ( "string patterns alone do not cover every string"
+        , rejectedWith "VXT0052" (body "int r = match (\"a\") { \"a\" -> 1, \"b\" -> 2 }; return r;")
+        )
+    ,
+        ( "a string pattern written twice can never be selected"
+        , rejectedWith "VXT0053" (body "int r = match (\"a\") { \"a\" -> 1, \"a\" -> 2, _ -> 3 }; return r;")
         )
     ,
         ( "an arm with too few patterns is rejected"

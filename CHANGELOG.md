@@ -13,6 +13,22 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   `String kind = match (code) { 0 -> "none", _ -> "some" };`. Only the
   selected result is evaluated, as for the conditional expression. A
   callable result is still not lowered and reports `VXT0051` or `VXT0044`.
+- A string is a subject of `match`:
+  `match (name) { "none" -> 0, "some" -> 1, _ -> 2 }`. A string pattern
+  accepts a subject that holds the same characters, as `==` does. String
+  patterns never cover every string, so such a match needs an arm that
+  accepts the rest, and a pattern written twice is reported as one that can
+  never be selected. A number is not a pattern of a string subject, nor a
+  string of a numeric one (`VXT0054`).
+
+### Fixed
+
+- `value is "text"` compared the two string objects in native code and not
+  their characters, so it was false for every string made at run time, also
+  under `not`, `or` and `and` and written as `is == "text"`. The reference
+  evaluator of the test suite compared characters and hid it. The pattern
+  now lowers to the comparison `==` uses, and the evaluator refuses the
+  equality primitive on two strings so that a lowering to it fails a test.
 
 ## 0.5.0 - 2026-10-10
 

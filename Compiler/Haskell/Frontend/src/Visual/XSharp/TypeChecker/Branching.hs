@@ -157,11 +157,12 @@ checkMatch checker use environment expected spanValue subjects arms =
                 ++ [ problem
                         (expressionSpanOf typed)
                         "VXT0058"
-                        "match subjects currently support only bool, numeric and enum values"
+                        "match subjects currently support only bool, numeric, enum and string values"
                    | (typed, valueType) <- zip typedSubjects subjectTypes
                    , valueType /= ErrorType
                    , not (acceptsBooleanContext valueType)
                    , Nothing <- [enumUnderlyingType valueType]
+                   , valueType /= stringType
                    ]
         (typedArms, armTypes, returns, armProblems) = checkArms subjectTypes expected arms
         -- An arm that does not complete produces no value; the arms that
@@ -287,6 +288,15 @@ checkMatchPattern ::
     BranchChecker loops -> Type -> MatchPattern ResolvedName () -> (MatchPattern ResolvedName Type, [Diagnostic])
 checkMatchPattern checker subjectType patternValue = case patternValue of
     MatchWildcardPattern spanValue _ -> (MatchWildcardPattern spanValue subjectType, [])
+    -- A string is matched by the characters it holds, like @==@ on two
+    -- strings, and by nothing that is not a string.
+    MatchLiteralPattern spanValue literal@(StringLiteral _) _
+        | subjectType == stringType -> (MatchLiteralPattern spanValue literal stringType, [])
+    MatchLiteralPattern spanValue literal _
+        | subjectType == stringType ->
+            ( MatchLiteralPattern spanValue literal ErrorType
+            , [problem spanValue "VXT0054" "a pattern of a string subject is a string literal"]
+            )
     MatchLiteralPattern spanValue literal _ ->
         let (literalType, literalProblems) = branchLiteral checker spanValue (contextOf subjectType) literal
             rule = binaryNumericRule Equal subjectType literalType

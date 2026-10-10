@@ -102,7 +102,7 @@ positionTests =
         )
     ,
         ( "a subject of an unsupported type is reported at the subject"
-        , reportedAt "VXT0058" (3, 16) ["match (left), (\"text\") {", "(_), (_) -> { }", "}", "return 0;"]
+        , reportedAt "VXT0058" (3, 16) ["match (left), (\\(int v) -> v) {", "(_), (_) -> { }", "}", "return 0;"]
         )
     ,
         ( "a duplicate pattern binding is reported at the second pattern"

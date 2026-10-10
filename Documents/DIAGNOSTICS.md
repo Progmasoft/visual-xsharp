@@ -331,7 +331,7 @@ The type checker reports:
 | `VXT0055` | a `null` pattern; reference subjects are not supported in `match` yet |
 | `VXT0056` | an enum case pattern such as `.Ready` for a subject that is not of an enum type |
 | `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
-| `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
+| `VXT0058` | a match subject is not `bool`, numeric, an enum or a `String`; other subject types are not lowered yet |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
 | `VXT0062` | the `return` statements of a method or callable whose result type is inferred carry values of different types |

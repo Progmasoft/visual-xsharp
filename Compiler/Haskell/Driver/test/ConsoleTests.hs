@@ -52,6 +52,11 @@ consoleTests =
            , -- A program that writes nothing has no runtime call in it.
              ("a program without output has no runtime call", not (mentions "CoreRuntimeCall" artifactCore "int x = 1;"))
            , ("a write is a runtime call", mentions "CoreRuntimeCall" artifactCore "Console.Print(\"a\");")
+           -- The equality primitive on two strings would compare objects.
+           , ("a string pattern of is is not the equality primitive", not (mentions "CoreEqual" artifactCore "Console.Println(Name() is \"x\");"))
+           , ("a string pattern of match is not the equality primitive", not (mentions "CoreEqual" artifactCore "Console.Println(match (Name()) { \"x\" -> 1, _ -> 2 });"))
+           , ("a string is not ordered by a pattern", rejectedWith "VXT0023" "bool b = Name() is > \"A\";")
+           , ("a string is not matched by a number in is", rejectedWith "VXT0021" "bool b = Name() is 5;")
            , -- The optimizer may not drop a write whose result nothing uses:
              -- the write is the point.
              ("the optimizer keeps a write", mentions "CoreRuntimeCall" artifactOptimizedCore "Console.Print(\"a\");")
@@ -298,6 +303,22 @@ outputs =
     , ("String s = \"\"; for (int i = 0; i < 4; i += 1) { s += match (i % 3) { 0 -> \"a\", 1 -> \"b\", _ -> \"c\" }; } Console.Println(s);", "abca\n")
     , ("Greet(match (Zero()) { 0 -> Name(), _ -> \"nobody\" });", "Hello, Visual X#!\n")
     , ("String s = match (Zero()) { 0 -> match (Half(2)) { 1 -> \"inner\", _ -> \"other\" }, _ -> \"outer\" }; Console.Println(s);", "inner\n")
+    , -- A string is a subject of match and of `is`. It is matched by the
+      -- characters it holds: none of these subjects is the object of the
+      -- literal it is compared with.
+      ("Console.Println(match (Name()) { \"x\" -> 1, \"Visual X#\" -> 2, _ -> 3 });", "2\n")
+    , ("Console.Println(match (Twice(\"ab\")) { \"ab\" -> 1, \"abab\" -> 2, _ -> 3 });", "2\n")
+    , ("Console.Println(match (Fizz(15)) { \"Fizz\" -> 3, \"Buzz\" -> 5, \"FizzBuzz\" -> 15, _ -> 0 });", "15\n")
+    , ("Console.Println(match (Name()) { \"x\" -> \"no\", String other if other == Twice(\"a\") -> \"twice\", String other -> \"is \" + other });", "is Visual X#\n")
+    , ("match (Fizz(3)), (Fizz(5)) { (\"Fizz\"), (\"Buzz\") -> { Console.Println(\"both\"); }, _, _ -> { Console.Println(\"none\"); } }", "both\n")
+    , ("match (Fizz(3)), (Fizz(7)) { (\"Fizz\"), (\"Buzz\") -> { Console.Println(\"both\"); }, _, _ -> { Console.Println(\"none\"); } }", "none\n")
+    , ("int t = 0; for (int i = 1; i < 16; i += 1) { t += match (Fizz(i)) { \"Fizz\" -> 1, \"Buzz\" -> 10, \"FizzBuzz\" -> 100, _ -> 0 }; } Console.Println(t);", "124\n")
+    , ("Console.Println(Name() is \"Visual X#\");", "true\n")
+    , ("Console.Println(Name() is not \"Visual X#\");", "false\n")
+    , ("Console.Println(Twice(\"ab\") is \"ab\" or \"abab\");", "true\n")
+    , ("Console.Println(Twice(\"ab\") is \"ab\" or \"ba\");", "false\n")
+    , ("Console.Println(Name() is == \"Visual X#\"); Console.Println(Name() is \\= \"Visual X#\");", "true\nfalse\n")
+    , ("String s = Fizz(3); if (s is \"Fizz\" && Name() is not \"x\") { Console.Println(\"ok\"); }", "ok\n")
     ]
 
 -- | Programs and what they write to standard error.

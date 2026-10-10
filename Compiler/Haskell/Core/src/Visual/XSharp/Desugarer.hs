@@ -25,7 +25,7 @@ import Visual.XSharp.Desugarer.Sequencing
 import Visual.XSharp.Desugarer.Symbols
 import Visual.XSharp.Desugarer.Workers
 import Visual.XSharp.Diagnostic (Diagnostic (..), DiagnosticSeverity (Error), DiagnosticStage (DesugarerStage))
-import Visual.XSharp.RuntimeCall (runtimeFunctionIdentity, runtimeFunctionOfName)
+import Visual.XSharp.RuntimeCall (RuntimeFunction (TextEquals), runtimeFunctionIdentity, runtimeFunctionOfName)
 
 -- | Pluggable desugaring pass from typed source semantics into Core IR.
 newtype Desugarer = Desugarer
@@ -1335,6 +1335,15 @@ lowerPattern :: CoreExpression -> Type -> Pattern ResolvedName Type -> CoreExpre
 lowerPattern subject subjectType patternValue = case patternValue of
     WildcardPattern {} -> CoreLiteral (CoreBoolean True) boolType
     NullPattern {} -> CorePrimitive CoreEqual [subject, CoreLiteral CoreNull subjectType] boolType
+    -- A string is compared by the characters it holds, which the runtime
+    -- decides. The equality primitive on two strings would compare the
+    -- objects, and a literal is never the object of the subject.
+    LiteralPattern _ literal literalType
+        | literalType == stringType -> textEquals literal
+    RelationalPattern _ PatternEqual literal literalType
+        | literalType == stringType -> textEquals literal
+    RelationalPattern _ PatternNotEqual literal literalType
+        | literalType == stringType -> CorePrimitive CoreLogicalNot [textEquals literal] boolType
     LiteralPattern _ literal literalType ->
         CorePrimitive CoreEqual [subject, CoreLiteral (lowerLiteral literalType literal) literalType] boolType
     TypePattern _ _ targetType ->
@@ -1352,6 +1361,15 @@ lowerPattern subject subjectType patternValue = case patternValue of
         CorePrimitive CoreLogicalAnd [lowerPattern subject subjectType left, lowerPattern subject subjectType right] boolType
     OrPattern _ left right _ ->
         CorePrimitive CoreLogicalOr [lowerPattern subject subjectType left, lowerPattern subject subjectType right] boolType
+    where
+        textEquals literal =
+            CorePrimitive
+                CoreRuntimeCall
+                [ CoreLiteral (CoreInteger (runtimeFunctionIdentity TextEquals)) intType
+                , subject
+                , CoreLiteral (lowerLiteral stringType literal) stringType
+                ]
+                boolType
 
 lowerRelationalPattern :: RelationalPatternOperator -> CorePrimitive
 lowerRelationalPattern operator = case operator of
