@@ -57,5 +57,16 @@
       matchUpdateTypes: ["major"],
       enabled: false,
     },
+
+    // The type definitions of the VS Code API must be those of the oldest
+    // VS Code the extension says it supports, `engines.vscode` in its
+    // package.json. Newer ones let the code use an API that version does
+    // not have, and the packaging tool refuses the mismatch. They are raised
+    // by hand, together with `engines.vscode`.
+    {
+      matchManagers: ["npm"],
+      matchPackageNames: ["@types/vscode"],
+      enabled: false,
+    },
   ],
 }
