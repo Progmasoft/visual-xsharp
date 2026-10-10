@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+name: HLint
+
+# HLint suggests simpler ways to write Haskell. Its hints are shown on the
+# pull request and never fail the job: they are advice, and the sources were
+# not written against it.
+
+on:
+  pull_request:
+    paths:
+      - '**.hs'
+      - '.github/workflows/hlint.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '**.hs'
+      - '.github/workflows/hlint.yml'
+
+permissions: {}
+
+concurrency:
+  group: hlint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hlint:
+    name: HLint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install HLint
+        uses: haskell-actions/hlint-setup@fe9cd1cd1af94a23900c06738e73f6ddb092966a # v2.4.10
+
+      - name: Run HLint
+        uses: haskell-actions/hlint-run@eaca4cfbf4a69f4eb875df38b6bc3e1657020378 # v2.4.10
+        with:
+          path: '["Compiler/Haskell/", "Analyzer/", "Formatter/", "Linter/"]'
+          fail-on: never

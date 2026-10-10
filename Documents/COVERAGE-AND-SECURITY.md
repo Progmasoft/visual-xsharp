@@ -28,11 +28,15 @@ completed, not that the code is free of vulnerabilities. Review alerts in the re
 
 ## Dependency and additional quality analysis
 
-[Dependabot](../.github/dependabot.yml) checks GitHub Actions, Bazel module dependencies, and all four Gradle builds
-weekly. It proposes reviewable pull requests; it does not auto-merge them. The Go tooling module lives in
-`helpers/`; Cobra and its transitive dependencies are version-pinned with module checksums. Dependabot also
-scans `/helpers`. Cabal packages and pinned submodules need manual dependency review.
-Dependabot does not replace CodeQL.
+[Renovate](../.github/renovate.json5) proposes version updates for GitHub Actions, Bazel module dependencies, all four
+Gradle builds, the Go tooling module in `helpers/` and the VS Code extension. It looks once a week, takes a release a
+week after it is published, opens one pull request for each kind of dependency, and rebases a pull request only when it
+conflicts. It proposes reviewable pull requests; it does not auto-merge them. Cobra and its transitive dependencies
+are version-pinned with module checksums. Cabal packages and pinned submodules need manual dependency review.
+
+Dependabot no longer proposes version updates here, so that two bots do not open the same pull request. Its alerts
+and its security updates stay enabled in the repository settings: a dependency with a known vulnerability is still
+reported, and its fix is still proposed, by Dependabot. Neither bot replaces CodeQL.
 
 [Codacy configuration](../.codacy.yml) excludes third-party and generated output while retaining project-owned
 implementation, tests, and CI. Codacy's GitHub application must be connected to the Progmasoft organization and this

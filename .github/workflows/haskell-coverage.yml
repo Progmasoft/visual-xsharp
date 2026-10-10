@@ -5,7 +5,11 @@ name: Haskell Coverage
 
 on:
   pull_request:
+  # The default branch only. A branch that has a pull request is tested by
+  # the pull request; testing its pushes as well ran every job twice.
   push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -21,6 +25,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Update Hackage package index
         shell: pwsh

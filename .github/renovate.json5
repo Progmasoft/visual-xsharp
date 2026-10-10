@@ -1,0 +1,72 @@
+// SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+// SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+
+// Renovate proposes the version updates of this repository. Dependabot keeps
+// its alerts and its security updates, which are repository settings; its
+// version updates are off, so that two bots do not open the same pull
+// request.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended", "helpers:pinGitHubActionDigests"],
+
+  timezone: "Europe/Istanbul",
+  // Once a week, before the working day.
+  schedule: ["before 6am on monday"],
+
+  // A release is taken a week after it is published: one that turns out to
+  // be broken or malicious is usually withdrawn within days.
+  minimumReleaseAge: "7 days",
+
+  // A pull request is rebased when it conflicts, not whenever the default
+  // branch moves. Every rebase runs the whole test matrix again, and
+  // rebasing every open update after every merge filled the runner queue.
+  rebaseWhen: "conflicted",
+  prConcurrentLimit: 2,
+  prHourlyLimit: 2,
+
+  // One issue lists what is pending, so an update need not be a pull request
+  // to be seen.
+  dependencyDashboard: true,
+
+  // Security fixes come from Dependabot security updates. Renovate does not
+  // open its own for the same advisory.
+  vulnerabilityAlerts: { enabled: false },
+
+  // The vendored test framework has its own repository and its own updates.
+  ignorePaths: ["third_party/**", "**/node_modules/**"],
+
+  // What Dependabot watched here, and nothing more for now. The Haskell
+  // packages bound each other and the compiler on purpose and are updated by
+  // hand.
+  enabledManagers: ["github-actions", "bazel-module", "gradle", "gradle-wrapper", "gomod", "npm"],
+
+  packageRules: [
+    // One pull request for each kind of dependency.
+    { matchManagers: ["github-actions"], groupName: "GitHub Actions" },
+    { matchManagers: ["bazel-module"], groupName: "Bazel modules" },
+    { matchManagers: ["gradle", "gradle-wrapper"], groupName: "Gradle plugins and libraries" },
+    { matchManagers: ["gomod"], groupName: "Go helpers" },
+    { matchManagers: ["npm"], groupName: "VS Code extension" },
+
+    // The type definitions must not be newer than the Node.js runtime the
+    // extension runs on: the VS Code versions it supports and the Node.js
+    // version CI uses. A major update is made by hand together with those.
+    {
+      matchManagers: ["npm"],
+      matchPackageNames: ["@types/node"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+
+    // The type definitions of the VS Code API must be those of the oldest
+    // VS Code the extension says it supports, `engines.vscode` in its
+    // package.json. Newer ones let the code use an API that version does
+    // not have, and the packaging tool refuses the mismatch. They are raised
+    // by hand, together with `engines.vscode`.
+    {
+      matchManagers: ["npm"],
+      matchPackageNames: ["@types/vscode"],
+      enabled: false,
+    },
+  ],
+}

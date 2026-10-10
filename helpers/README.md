@@ -153,7 +153,7 @@ Tests inject process runners, so argument-validation tests do not install
 packages, compile the compiler, or invoke destructive cleanup.
 
 Cobra and its transitive modules are pinned in `go.mod` and `go.sum`.
-Dependabot scans this module; CodeQL builds all packages for Go extraction.
+Renovate proposes its version updates and Dependabot reports its vulnerabilities; CodeQL builds all packages for Go extraction.
 Coverage measures the entire module in one profile, including internal logic.
 Use a standalone module gate when checking a dependency upgrade, and commit
 the updated module manifest and checksum file together.
