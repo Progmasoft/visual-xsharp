@@ -6,9 +6,22 @@ package main
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// emptyHome points the home directory of the process at a new, empty
+// directory. The installer looks for rustup under the home directory when it
+// is not on PATH, and a machine that runs these tests may well have one
+// there; what the tests assert must not depend on it.
+func emptyHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	return home
+}
 
 func release(text string) func() (string, error) {
 	return func() (string, error) { return text, nil }
@@ -188,6 +201,7 @@ func TestLinuxLeavesAnInstalledPackageAlone(t *testing.T) {
 }
 
 func TestLinuxSetsRustupUpWithoutAToolchain(t *testing.T) {
+	emptyHome(t)
 	rust := optionalPackages[5]
 	// The distribution packages the installer only: rustup-init appears,
 	// rustup does not, and the installer is told to select no toolchain.
@@ -212,6 +226,34 @@ func TestLinuxSetsRustupUpWithoutAToolchain(t *testing.T) {
 	// papered over.
 	if err == nil || !strings.Contains(err.Error(), "not visible") {
 		t.Fatalf("error = %v, want one that says rustup is not visible yet", err)
+	}
+}
+
+func TestLinuxFindsRustupUnderTheHomeDirectoryAfterItsInstaller(t *testing.T) {
+	home := emptyHome(t)
+	// The installer puts rustup under the home directory and leaves PATH
+	// alone, so this process finds it there and nowhere else.
+	directory := filepath.Join(home, ".cargo", "bin")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatalf("create the cargo directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "rustup"), []byte("stand-in"), 0o700); err != nil {
+		t.Fatalf("write the stand-in for rustup: %v", err)
+	}
+	rust := optionalPackages[5]
+	runner := &fakePackageRunner{paths: map[string][]string{
+		"apt-get": {"apt-get"}, "sudo": {"sudo"}, "rustup-init": {"rustup-init"},
+	}}
+	err := installRustComponentsForOS(runner, rust, platformUbuntu)
+	// rustup was found, and it has no toolchain: the command says so and
+	// creates none.
+	if err == nil || !strings.Contains(err.Error(), "never installs toolchains") {
+		t.Fatalf("error = %v, want a refusal to create a toolchain", err)
+	}
+	for _, line := range commandLines(runner) {
+		if strings.Contains(line, "component add") || strings.Contains(line, "toolchain install") {
+			t.Fatalf("a host without a toolchain ran %q", line)
+		}
 	}
 }
 
