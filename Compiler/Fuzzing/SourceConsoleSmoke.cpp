@@ -317,6 +317,41 @@ namespace
           " Console.Println(\"x\");",
           "x\n",
           "" },
+        // A string is a subject of match and of `is`, matched by the
+        // characters it holds; the subject is released after the match.
+        { "Console.Println(match (Name()) { \"x\" -> 1,"
+          " \"Visual X#\" -> 2, _ -> 3 });",
+          "2\n",
+          "" },
+        { "Console.Println(match (Twice(\"ab\")) { \"ab\" -> 1,"
+          " \"abab\" -> 2, _ -> 3 });",
+          "2\n",
+          "" },
+        { "Console.Println(match (Name()) { \"x\" -> \"no\","
+          " String other -> \"is \" + other });",
+          "is Visual X#\n",
+          "" },
+        { "match (Fizz(3)), (Fizz(5)) { (\"Fizz\"), (\"Buzz\") ->"
+          " { Console.Println(\"both\"); },"
+          " _, _ -> { Console.Println(\"none\"); } }",
+          "both\n",
+          "" },
+        { "int t = 0; for (int i = 1; i < 16; i += 1) { t += match (Fizz(i))"
+          " { \"Fizz\" -> 1, \"Buzz\" -> 10, \"FizzBuzz\" -> 100,"
+          " _ -> 0 }; } Console.Println(t);",
+          "124\n",
+          "" },
+        { "Console.Println(Name() is \"Visual X#\");"
+          " Console.Println(Name() is not \"Visual X#\");",
+          "true\nfalse\n",
+          "" },
+        { "Console.Println(Twice(\"ab\") is \"ab\" or \"abab\");",
+          "true\n",
+          "" },
+        { "String s = Fizz(3); if (s is \"Fizz\" && Name() is not \"x\")"
+          " { Console.Println(\"ok\"); }",
+          "ok\n",
+          "" },
         // Names written through the namespace and the type.
         { "Console.Println(Fuzz.Program.Half(8));", "4\n", "" },
         { "auto f = Program::Log; int x = f(1); Console.Println(9);",

@@ -24,6 +24,7 @@ import Visual.XSharp.AST
 import Visual.XSharp.Completion
 import Visual.XSharp.Core
 import Visual.XSharp.Desugarer.Sequencing
+import Visual.XSharp.RuntimeCall (RuntimeFunction (TextEquals), runtimeFunctionIdentity)
 
 -- | The parts of the main desugarer that the branching forms are built on.
 data BranchLowering lower = BranchLowering
@@ -242,6 +243,18 @@ patternTests ::
 patternTests lowering patternValue subject = case patternValue of
     MatchWildcardPattern {} -> []
     MatchTypePattern {} -> []
+    -- Two strings are equal when they hold the same characters, which the
+    -- runtime decides: the comparison is the call that `==` is.
+    MatchLiteralPattern _ literal literalType
+        | literalType == stringType ->
+            [ CorePrimitive
+                CoreRuntimeCall
+                [ CoreLiteral (CoreInteger (runtimeFunctionIdentity TextEquals)) intType
+                , subject
+                , CoreLiteral (branchLiteral lowering stringType literal) stringType
+                ]
+                boolType
+            ]
     MatchLiteralPattern _ literal literalType ->
         let loweredType = branchType lowering literalType
          in [CorePrimitive CoreEqual [subject, CoreLiteral (branchLiteral lowering loweredType literal) loweredType] boolType]

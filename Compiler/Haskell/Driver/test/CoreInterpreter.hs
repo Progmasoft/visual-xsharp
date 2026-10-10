@@ -457,6 +457,14 @@ applyPrimitive primitive valueType values = case (primitive, values) of
     (CoreLessEqual, [IntegerValue left, IntegerValue right]) -> Just (BooleanValue (left <= right))
     (CoreGreaterThan, [IntegerValue left, IntegerValue right]) -> Just (BooleanValue (left > right))
     (CoreGreaterEqual, [IntegerValue left, IntegerValue right]) -> Just (BooleanValue (left >= right))
+    -- On two strings the equality primitive compares the objects, which
+    -- this evaluator does not model: two strings with the same characters
+    -- may or may not be one object. Equal characters are the runtime
+    -- function's to decide, so a program that reaches here with two
+    -- strings was lowered wrongly, and it fails instead of getting the
+    -- answer the native code would not give.
+    (CoreEqual, [TextValue _, TextValue _]) -> Nothing
+    (CoreNotEqual, [TextValue _, TextValue _]) -> Nothing
     (CoreEqual, [left, right]) -> Just (BooleanValue (left == right))
     (CoreNotEqual, [left, right]) -> Just (BooleanValue (left /= right))
     (CoreLogicalNot, [operand]) -> BooleanValue . not <$> truth operand

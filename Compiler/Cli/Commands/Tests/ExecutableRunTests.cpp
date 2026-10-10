@@ -720,6 +720,36 @@ TEST_CASE("an executable yields strings from match, if and loops")
     std::filesystem::remove_all(Directory());
 }
 
+TEST_CASE("an executable matches strings by the characters they hold")
+{
+    // No subject here is the object of the literal it is compared with:
+    // each is made at run time. A comparison of objects would select the
+    // last arm every time.
+    const auto outcome = RunCapturing(
+        "Subjects",
+        "    public static String Word(_ int n) {\n"
+        "        return match (n % 3) { 0 -> \"zero\", 1 -> \"one\","
+        " _ -> \"two\" } + \"\";\n"
+        "    }\n"
+        "    public static void Main() {\n"
+        "        Console.Println(match (Word(1)) { \"zero\" -> 0,"
+        " \"one\" -> 1, _ -> 9 });\n"
+        "        Console.Println(Word(0) is \"zero\");\n"
+        "        Console.Println(Word(0) is not \"zero\");\n"
+        "        Console.Println(Word(2) is \"zero\" or \"two\");\n"
+        "        int total = 0;\n"
+        "        for (int n = 0; n < 300000; n += 1) {\n"
+        "            total += match (Word(n)) { \"zero\" -> 1,"
+        " \"one\" -> 10, String other if other is \"two\" -> 100,"
+        " _ -> 100000 };\n"
+        "        }\n"
+        "        Console.Println(total);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "1\r\ntrue\r\nfalse\r\ntrue\r\n11100000\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
 TEST_CASE("an executable names methods through the namespace and the type")
 {
     const auto outcome = RunCapturing(
