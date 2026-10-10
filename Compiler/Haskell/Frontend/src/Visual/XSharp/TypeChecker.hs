@@ -998,8 +998,8 @@ checkExpressionExpectedWith context environment expected expression = case expre
 {- | Result type of a loop expression from the types of its break values.
 
 The value is materialized in one storage slot, like the result of a
-conditional expression, so all break values have one type, and only bool and
-numeric results are lowered today.
+conditional expression, so all break values have one type. Bool, numeric,
+enum and string results are lowered today.
 -}
 loopValueType :: SourceSpan -> [Type] -> (Type, [Diagnostic])
 loopValueType spanValue breakTypes = case filter (/= ErrorType) breakTypes of
@@ -1011,8 +1011,11 @@ loopValueType spanValue breakTypes = case filter (/= ErrorType) breakTypes of
         | any (/= first) remaining ->
             (first, [problem spanValue "VXT0043" "the break values of a loop used as an expression must have the same type"])
         | not (booleanContextType first)
-        , not (isEnumType first) ->
-            (first, [problem spanValue "VXT0044" "loop expressions currently support only bool, numeric and enum results"])
+        , not (isEnumType first)
+        , first /= stringType ->
+            ( first
+            , [problem spanValue "VXT0044" "loop expressions currently support only bool, numeric, enum and string results"]
+            )
         | otherwise -> (first, [])
 
 -- | Whether the loop can finish by its condition becoming false.

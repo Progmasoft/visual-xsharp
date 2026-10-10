@@ -258,7 +258,7 @@ reports:
 | `VXT0041` | the condition of a loop used as an expression is not the constant `true` (or, for `for`, absent), so the loop could end without a value |
 | `VXT0042` | a loop used as an expression has no `break` that carries a value |
 | `VXT0043` | the `break` values of one loop have different types |
-| `VXT0044` | the loop value is neither `bool`, numeric nor an enum; other result types are not lowered yet |
+| `VXT0044` | the loop value is not `bool`, numeric, an enum or a `String`; other result types are not lowered yet |
 
 A `return` inside a loop used as an expression leaves the method. A loop that
 no `break` leaves and that returns never yields a value, which is valid; a
@@ -324,7 +324,7 @@ The type checker reports:
 | `VXT0048` | a match arm does not have exactly one pattern for each subject |
 | `VXT0049` | a match guard is neither `bool` nor numeric |
 | `VXT0050` | the arms of a match used as an expression have different types |
-| `VXT0051` | the result of a match is neither `bool` nor numeric; other result types are not lowered yet |
+| `VXT0051` | the result of a match is not `bool`, numeric, an enum or a `String`; other result types are not lowered yet |
 | `VXT0052` | a match used as an expression may accept no arm |
 | `VXT0053` | a match arm can never be selected because an earlier arm accepts everything it accepts |
 | `VXT0054` | a literal pattern cannot be compared with its subject |

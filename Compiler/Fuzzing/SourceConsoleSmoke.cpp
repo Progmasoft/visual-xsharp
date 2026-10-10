@@ -279,6 +279,44 @@ namespace
           " Console.Println(\"x\");",
           "x\n",
           "" },
+        // A match, an if used as a value and a loop yield strings; what is
+        // not selected is never made, and what is replaced is released.
+        { "String s = match (Zero()) { 0 -> \"zero\", 1 -> \"one\","
+          " _ -> \"many\" }; Console.Println(s);",
+          "zero\n",
+          "" },
+        { "String s = match (Half(8)) { 0 -> \"zero\","
+          " int n if n > 3 -> \"big \" + n, _ -> \"small\" };"
+          " Console.Println(s);",
+          "big 4\n",
+          "" },
+        { "String s = if (Zero() > 0) { \"pos\" } else { Name() + \"!\" };"
+          " Console.Println(s);",
+          "Visual X#!\n",
+          "" },
+        { "int i = 0; String s = while (true) { i += 1;"
+          " if (i > 2) { break \"done\" + i; } }; Console.Println(s);",
+          "done3\n",
+          "" },
+        { "String s = \"k\"; s = match (Zero()) { 1 -> \"lost\", _ -> s };"
+          " Console.Println(s);",
+          "k\n",
+          "" },
+        { "String s = \"\"; for (int i = 0; i < 4; i += 1) { s += match"
+          " (i % 3) { 0 -> \"a\", 1 -> \"b\", _ -> \"c\" }; }"
+          " Console.Println(s);",
+          "abca\n",
+          "" },
+        { "String s = match (Zero()) { 0 -> match (Half(2)) {"
+          " 1 -> \"inner\", _ -> \"other\" }, _ -> \"outer\" };"
+          " Console.Println(s);",
+          "inner\n",
+          "" },
+        // A selected string nothing reads is released all the same.
+        { "String s = match (Zero()) { 0 -> Twice(\"ab\"), _ -> Name() };"
+          " Console.Println(\"x\");",
+          "x\n",
+          "" },
         // Names written through the namespace and the type.
         { "Console.Println(Fuzz.Program.Half(8));", "4\n", "" },
         { "auto f = Program::Log; int x = f(1); Console.Println(9);",

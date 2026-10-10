@@ -212,8 +212,16 @@ typeTests =
         , rejectedWith "VXT0043" (body "long wide = 3; int r = while (true) { if (flag) { break wide; } break left; }; return r;")
         )
     ,
-        ( "a string loop value is not lowered yet"
-        , rejectedWith "VXT0044" (body "int n = 0; auto text = while (true) { break \"done\"; }; return n;")
+        ( "a loop yields a string"
+        , accepted (body "int n = 0; auto text = while (true) { break \"done\"; }; return n;")
+        )
+    ,
+        ( "a callable loop value is not lowered yet"
+        , rejectedWith "VXT0044" (body "int n = 0; auto pick = while (true) { break \\(int v) -> v + 1; }; return n;")
+        )
+    ,
+        ( "a string and a number are not values of one loop"
+        , rejectedWith "VXT0043" (body "int n = 0; auto text = while (true) { if (n > 0) { break \"done\"; } break 1; }; return n;")
         )
     ,
         ( "a return inside a loop expression leaves the method"
