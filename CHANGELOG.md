@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
-## 0.5.0 - 2026-10-09
+## 0.5.0 - 2026-10-10
 
 ### Why 0.5.0 and not 0.4.2
 
