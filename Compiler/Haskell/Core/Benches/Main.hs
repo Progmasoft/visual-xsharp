@@ -56,6 +56,10 @@ main = do
                 bgroup "ContradictoryIntegerPaths" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- flowSizes]
             , env (pure (CoreModules (loopFixtures flowSizes))) $ \modules ->
                 bgroup "LoopIntegerFacts" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- flowSizes]
+            , env (verifiedFixtures makeNestedLoopModule loopDepths) $ \modules ->
+                bgroup "NestedLoopIntegerFacts" [benchAt size integerOptimizeDigest (coreModuleAt size modules) | size <- loopDepths]
+            , env (verifiedFixtures makeChainModule chainSizes) $ \modules ->
+                bgroup "EncodeChain" [benchAt size encodeDigest (coreModuleAt size modules) | size <- chainSizes]
             ]
         , bgroup
             "CorePrep"
@@ -69,6 +73,14 @@ main = do
                 bgroup "Encode" [benchAt size encodePrepDigest (corePrepModuleAt size modules) | size <- sizes]
             , env (traverse preparedDocument sizes) $ \documents ->
                 bgroup "Decode" [benchAt size decodePrepDigest (documentAt size documents) | size <- sizes]
+            , env (verifiedFixtures makeChainModule chainSizes) $ \modules ->
+                bgroup "PrepareChain" [benchAt size prepareDigest (coreModuleAt size modules) | size <- chainSizes]
+            , env (verifiedFixtures makeSequenceModule chainSizes) $ \modules ->
+                bgroup "PrepareSequence" [benchAt size prepareDigest (coreModuleAt size modules) | size <- chainSizes]
+            , env (CorePrepModules <$> traverse (preparedFrom makeChainModule) chainSizes) $ \modules ->
+                bgroup "VerifyChain" [benchAt size verifyPrepDigest (corePrepModuleAt size modules) | size <- chainSizes]
+            , env (CorePrepModules <$> traverse (preparedFrom makeSequenceModule) chainSizes) $ \modules ->
+                bgroup "VerifySequence" [benchAt size verifyPrepDigest (corePrepModuleAt size modules) | size <- chainSizes]
             ]
         ]
     where
@@ -77,6 +89,13 @@ main = do
         floatingSizes = [8, 32, 128, 512]
         integerSizes = [8, 32, 128, 512, 1024, 2048]
         flowSizes = [8, 32, 128, 512, 1024]
+        -- Levels of loops nested in each other. The loop analysis once
+        -- repeated the analysis of an inner loop for every pass over the
+        -- loop around it, so each level multiplied the time.
+        loopDepths = [2, 4, 8, 12, 16]
+        -- Links of an `else if` chain and statements of a sequence of `if`
+        -- statements. Each doubling should double the time.
+        chainSizes = [256, 512, 1024, 2048]
 
 benchAt :: Int -> (a -> Int) -> a -> Benchmark
 benchAt size measure input = bench (show size) (whnf measure input)
@@ -144,6 +163,92 @@ makeLoopModule count =
                     , CoreReturn value
                     ]
              in CoreFunction functionName [] intType body
+
+{- | Fixtures that must verify: a benchmark of a rejected module would time
+the rejection.
+-}
+verifiedFixtures :: (Int -> CoreModule) -> [Int] -> IO CoreModules
+verifiedFixtures make requested = CoreModules <$> traverse verified requested
+    where
+        verified size = case verifyCore (make size) of
+            Left diagnostics -> fail (show diagnostics)
+            Right value -> pure (size, value)
+
+preparedFrom :: (Int -> CoreModule) -> Int -> IO (Int, CorePrepModule)
+preparedFrom make size = case prepareCore (make size) of
+    Left diagnostics -> fail (show diagnostics)
+    Right value -> case verifyCorePrep value of
+        Left diagnostics -> fail (show diagnostics)
+        Right verified -> pure (size, verified)
+
+{- | Loops nested to the given depth, each counting to a parameter, around
+one statement: the workload of the loop fixed point of the integer analysis.
+-}
+makeNestedLoopModule :: Int -> CoreModule
+makeNestedLoopModule depth =
+    CoreModule
+        (QualifiedName [Identifier "NestedLoopBenchmark"])
+        [ CoreFunction
+            (name 1 "Count")
+            [(limitName, intType)]
+            intType
+            (CoreBind (CoreBinding totalName intType True (integer 0)) : loopAt 0 ++ [CoreReturn total])
+        ]
+    where
+        limitName = name 2 "limit"
+        totalName = name 3 "total"
+        total = CoreVariable totalName intType
+        counterName level = name (4 + level) "counter"
+        counter level = CoreVariable (counterName level) intType
+        increment value = CorePrimitive CoreAdd [value, integer 1] intType
+        loopAt level
+            | level == depth = [CoreAssign totalName (increment total)]
+            | otherwise =
+                [ CoreBind (CoreBinding (counterName level) intType True (integer 0))
+                , CoreWhile
+                    (CorePrimitive CoreLessThan [counter level, CoreVariable limitName intType] boolType)
+                    (CoreAssign (counterName level) (increment (counter level)) : loopAt (level + 1))
+                ]
+
+{- | An `else if` chain: every false branch holds the next link, so the
+statements nest as deep as the chain is long.
+-}
+makeChainModule :: Int -> CoreModule
+makeChainModule links =
+    CoreModule
+        (QualifiedName [Identifier "ChainBenchmark"])
+        [CoreFunction (name 1 "Pick") [(valueName, intType)] intType (chainFrom 0)]
+    where
+        valueName = name 2 "value"
+        chainFrom index
+            | index == links = [CoreReturn (integer 0)]
+            | otherwise =
+                [ CoreIf
+                    (CorePrimitive CoreEqual [CoreVariable valueName intType, integer (toInteger index)] boolType)
+                    [CoreReturn (integer (toInteger index * 3 + 1))]
+                    (chainFrom (index + 1))
+                ]
+
+-- | The same tests as a sequence of `if` statements, which do not nest.
+makeSequenceModule :: Int -> CoreModule
+makeSequenceModule count =
+    CoreModule
+        (QualifiedName [Identifier "SequenceBenchmark"])
+        [ CoreFunction
+            (name 1 "Sum")
+            [(valueName, intType)]
+            intType
+            (CoreBind (CoreBinding totalName intType True (integer 0)) : map test [0 .. count - 1] ++ [CoreReturn total])
+        ]
+    where
+        valueName = name 2 "value"
+        totalName = name 3 "total"
+        total = CoreVariable totalName intType
+        test index =
+            CoreIf
+                (CorePrimitive CoreEqual [CoreVariable valueName intType, integer (toInteger index)] boolType)
+                [CoreAssign totalName (CorePrimitive CoreAdd [total, integer (toInteger index)] intType)]
+                []
 
 inlineFixtures :: [Int] -> [(Int, CoreModule)]
 inlineFixtures = map (\size -> (size, makeInlineModule size))

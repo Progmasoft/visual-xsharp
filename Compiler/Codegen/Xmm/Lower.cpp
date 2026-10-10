@@ -116,6 +116,10 @@ namespace visual_xsharp::xmm
                     return Opcode::BitwiseNot;
                 case xpp::Opcode::TypeIs:
                     return Opcode::TypeIs;
+                case xpp::Opcode::Memoize:
+                    return Opcode::Memoize;
+                case xpp::Opcode::RuntimeCall:
+                    return Opcode::RuntimeCall;
                 case xpp::Opcode::MakeClosure:
                     return Opcode::MakeClosure;
                 case xpp::Opcode::RetainStrong:

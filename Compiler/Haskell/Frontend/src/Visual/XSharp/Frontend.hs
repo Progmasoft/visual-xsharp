@@ -20,6 +20,7 @@ module Visual.XSharp.Frontend
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.Lexer
+import Visual.XSharp.NestingLimits
 import Visual.XSharp.Parser
 import Visual.XSharp.Resolver.NameResolution
 import Visual.XSharp.Resolver.Renamer
@@ -70,6 +71,12 @@ analyzeSemantics input = syntaxParsedAST <$> analyzeSyntax input >>= analyzePars
 -- | Run semantic passes on an existing parsed AST without lexing or parsing.
 analyzeParsedSemantics :: ParsedAST -> Either [Diagnostic] SemanticArtifacts
 analyzeParsedSemantics parsed = do
+    -- Every later pass, and every stage after the frontend, recurses along
+    -- the nesting of the tree. A tree that nests beyond the limits is
+    -- rejected here, with the place where it becomes too deep.
+    case nestingProblems parsed of
+        [] -> pure ()
+        problems -> Left problems
     renamed <- runRenamer defaultRenamer parsed
     resolved <- runNameResolution defaultNameResolution renamed
     typed <- runTypeChecker defaultTypeChecker resolved

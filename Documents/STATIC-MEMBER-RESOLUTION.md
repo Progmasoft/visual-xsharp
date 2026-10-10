@@ -61,8 +61,12 @@ owned by the current type. The following forms are deliberately not implied by t
 | `Current()` inside `Counter` | Supported for the current type's method family | The lexical method spelling is associated with its declaring type before overload selection. |
 | `counter.Current()` | Rejected | The receiver denotes a value; instance-member dispatch and its ABI are not part of this vertical slice. |
 | `Counter.Create().Current()` | Rejected | A call-result receiver is a value expression, not a type name. |
-| `Counter.Current` | Rejected | A bare method group does not yet have a first-class member-group type. |
-| `System.Math.Math.Sqrt(x)` | Not connected | Cross-namespace type lookup and qualified namespace paths are a separate frontend seam. |
+| `Counter.Current` | Rejected | A selector with a dot is not a method reference; the reference is written `Counter::Current`. |
+| `Counter::Current` | Supported | The static method as a callable value. With overloads, the type the place expects selects one. |
+| `counter::Current` | Rejected | A reference through a value is a bound method, which needs instance members. |
+| `Demo.Counter.Current()` inside namespace `Demo` | Supported | A declaration of the namespace being compiled may be named through that namespace, as a receiver of `.` and of `::`. |
+| `Demo.Counter value` | Not connected | A type written through its namespace in a type position is not yet the same type as its bare name. |
+| `System.Math.Math.Sqrt(x)` | Not connected | Cross-namespace type lookup is a separate frontend seam; only the namespace being compiled is known. |
 | `Counter.Nested.Current()` | Not connected | Nested-type catalog lookup is not part of this top-level type catalog. |
 | `counter.Field` or `counter.Property` | Not connected | Field/property resolution and instance layout are separate from static method binding. |
 | Extension member lookup | Not connected | Extension discovery and real-member precedence remain separate work. |
@@ -219,6 +223,8 @@ All diagnostics below originate in the Type Checker unless otherwise noted.
 | `VXT0032` | The selector receiver is not a declared type name. |
 | `VXT0033` | Matching candidates exist but are not accessible from the call site. |
 | `VXT0034` | A member selector is used without a supported direct method call. |
+| `VXT0080` | A method reference names a method with several overloads, and the place does not expect the type of exactly one of them. |
+| `VXT0081` | A method reference whose receiver is not a type: bound method references need instance members. |
 
 The checker preserves a source span on member-call diagnostics. An unresolved receiver remains a Name Resolution failure
 instead of being replaced by a fabricated Type Checker error. This makes the phase boundary visible to the CLI, analyzer,

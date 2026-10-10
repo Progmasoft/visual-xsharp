@@ -15,6 +15,7 @@ should not run is observed as a wrong result.
 -}
 module BranchingTests (branchingTests) where
 
+import BranchingEvaluationCases (evaluationCases)
 import CoreInterpreter
 import Data.List (isInfixOf, isPrefixOf)
 import Visual.XSharp.AST
@@ -97,12 +98,42 @@ parserTests =
     , ("the comma after a block body is optional", parses (body "match (left) { 1 -> { } 2 -> { } } return 0;"))
     , ("the comma after the last arm is optional", parses (body "return match (left) { 1 -> 10, _ -> 20, };"))
     , ("a match without arms parses", parses (body "match (left) { } return 0;"))
+    , ("the comma after an expression body is optional", parses (body "return match (left) { 1 -> 10 2 -> 20 _ -> 30 };"))
     ,
-        ( "an expression body must be separated from the next arm"
-        , parseFailsWith "VXP0038" (body "return match (left) { 1 -> 10 _ -> 20 };")
+        ( "a parenthesized pattern after an expression body without a comma is read as a call"
+        , parseFailsWith "VXP0038" (body "return match (left) { 1 -> Twice (2) -> 20, _ -> 30 };")
+        )
+    , ("a comma keeps a parenthesized pattern apart from the body before it", parses (body "return match (left) { 1 -> Twice(left), (2) -> 20, _ -> 30 };"))
+    , ("an if in last position of a value block is the value of the block", nestedIfIsValue)
+    , ("a match in last position of a value block is the value of the block", nestedMatchIsValue)
+    , ("an if that is not last in a value block is a statement", ifInsideValueBlockIsStatement)
+    , ("a match that is not last in a value block is a statement", matchInsideValueBlockIsStatement)
+    ,
+        ( "a statement block inside a value block may end with a match"
+        , parses (body "int r = if (flag) { if (other) { match (left) { 1 -> { Twice(left); } } } 1 } else { 2 }; return r;")
+        )
+    ,
+        ( "a value in a block that is not used as a value needs its semicolon"
+        , parseFailsWith "VXP0006" (body "int r = if (flag) { if (other) { 1 } 2 } else { 3 }; return r;")
         )
     , ("a bare name is not a pattern", parseFailsWith "VXP0036" (body "match (left) { right -> { } } return 0;"))
-    , ("a negative literal is not a pattern", parseFailsWith "VXP0036" (body "match (left) { -1 -> { } } return 0;"))
+    , ("a minus sign and a numeric literal are a pattern", parses (body "match (left) { -1 -> { } } return 0;"))
+    , ("a negative pattern may stand in parentheses", parses (body "match (left), (right) { (-1), (- 2) -> { } } return 0;"))
+    , ("a negative floating literal is a pattern", parses (body "double d = 1.5; return match (d) { -1.5 -> 1, _ -> 0 };"))
+    , ("a minus sign before a name is not a pattern", parseFailsWith "VXP0036" (body "match (left) { -right -> { } } return 0;"))
+    , ("a minus sign before a Boolean literal is not a pattern", parseFailsWith "VXP0036" (body "match (left) { -true -> { } } return 0;"))
+    , ("a minus sign before a parenthesis is not a pattern", parseFailsWith "VXP0036" (body "match (left) { -(1) -> { } } return 0;"))
+    , ("two minus signs are not a pattern", parseFailsWith "VXP0036" (body "match (left) { - -1 -> { } } return 0;"))
+    , ("an arithmetic expression is not a pattern", not (parses (body "match (left) { 1 + 1 -> { } } return 0;")))
+    , ("a plus sign before a literal is not a pattern", not (parses (body "match (left) { +1 -> { } } return 0;")))
+    ,
+        ( "an if whose first block leaves is the value of a value block it ends"
+        , parses (body "int r = match (left) { 0 -> { if (flag) { return 9; } else { 4 } }, _ -> 1 }; return r;")
+        )
+    , -- The body of a method is not a block used as a value.
+        ( "an if in last position of a method body stays a statement"
+        , parseFailsWith "VXP0006" (body "if (flag) { 1 } else { 2 }")
+        )
     , ("an unterminated match is reported", not (parses (body "match (left) { 1 -> { }")))
     , ("an if in operand position is a conditional over two value blocks", ifExpressionParses)
     , ("an if at the start of a statement stays an if statement", ifStatementKeepsItsNode)
@@ -238,6 +269,33 @@ nestedBlockParses = case firstStatements (body "int a = 1; { int b = 2; a = b; }
     Just [BindingStatement {}, BlockStatement _ (Block [BindingStatement {}, AssignmentStatement {}]), ReturnStatement {}] -> True
     _ -> False
 
+-- The statements of the first block of `int r = if (flag) { ... } else { 0 };`.
+innerBlock :: String -> Maybe [Statement Identifier ()]
+innerBlock inner = case firstStatements (body ("int r = if (flag) { " ++ inner ++ " } else { 0 }; return r;")) of
+    Just (BindingStatement _ _ _ _ () (ConditionalExpression _ _ (BlockExpression _ (Block statements) ()) _ ()) : _) ->
+        Just statements
+    _ -> Nothing
+
+nestedIfIsValue :: Bool
+nestedIfIsValue = case innerBlock "if (other) { 1 } else { 2 }" of
+    Just [ExpressionStatement _ (ConditionalExpression _ _ (BlockExpression {}) (BlockExpression {}) ()) False] -> True
+    _ -> False
+
+nestedMatchIsValue :: Bool
+nestedMatchIsValue = case innerBlock "match (left) { 1 -> 10, _ -> 20 }" of
+    Just [ExpressionStatement _ (MatchExpression {}) False] -> True
+    _ -> False
+
+ifInsideValueBlockIsStatement :: Bool
+ifInsideValueBlockIsStatement = case innerBlock "if (other) { Twice(left); } else { Twice(right); } 1" of
+    Just [IfStatement _ _ (Block [ExpressionStatement _ _ True]) (Just (Block [ExpressionStatement _ _ True])), ExpressionStatement _ _ False] -> True
+    _ -> False
+
+matchInsideValueBlockIsStatement :: Bool
+matchInsideValueBlockIsStatement = case innerBlock "match (left) { 1 -> { Twice(left); } } 1" of
+    Just [ExpressionStatement _ (MatchExpression {}) True, ExpressionStatement _ _ False] -> True
+    _ -> False
+
 guardParses :: Bool
 guardParses = case firstStatements (body "guard (left > 0) else { return 0; } return 1;") of
     Just [GuardStatement _ (BinaryExpression _ GreaterThan _ _ ()) (Block [ReturnStatement {}]), _] -> True
@@ -347,6 +405,44 @@ typeTests =
         ( "a type pattern must name the type of its subject"
         , rejectedWith "VXT0057" (body "match (left) { long value -> { } } return 0;")
         )
+    , -- No numeric conversion is applied to a type pattern.
+        ( "a wider scalar type pattern does not make a match complete by conversion"
+        , rejectedWith "VXT0057" (body "return match (left) { long value -> 1 };")
+        )
+    ,
+        ( "a narrower scalar type pattern is rejected as well"
+        , rejectedWith "VXT0057" (body "return match (left) { short value -> 1, _ -> 0 };")
+        )
+    , ("a type pattern of the subject's own type accepts every value", accepted (body "return match (left) { int value -> value };"))
+    , -- Negative constants are checked against the type of the subject.
+      ("the most negative value of a type is a pattern", accepted (body "return match (left) { -9223372036854775808 -> 1, _ -> 0 };"))
+    ,
+        ( "a negative literal below the range of the subject is rejected"
+        , rejectedWith "VXT0016" (body "return match (left) { -9223372036854775809 -> 1, _ -> 0 };")
+        )
+    ,
+        ( "a positive literal above the range of the subject is still rejected"
+        , rejectedWith "VXT0016" (body "return match (left) { 9223372036854775808 -> 1, _ -> 0 };")
+        )
+    , ("the range of a narrow signed subject includes its minimum", accepted (body "byte small = 1; return match (small) { -128 -> 1, 127 -> 2, _ -> 0 };"))
+    ,
+        ( "a negative literal below the range of a narrow subject is rejected"
+        , rejectedWith "VXT0016" (body "byte small = 1; return match (small) { -129 -> 1, _ -> 0 };")
+        )
+    ,
+        ( "a positive literal above the range of a narrow subject is rejected"
+        , rejectedWith "VXT0016" (body "byte small = 1; return match (small) { 128 -> 1, _ -> 0 };")
+        )
+    ,
+        ( "a negative literal is outside every unsigned type"
+        , rejectedWith "VXT0016" (body "ubyte small = 1; return match (small) { -1 -> 1, _ -> 0 };")
+        )
+    , ("a second arm for the same negative value is unreachable", rejectedWith "VXT0053" (body "return match (left) { -1 -> 1, -1 -> 2, _ -> 0 };"))
+    , ("minus zero is the value zero", rejectedWith "VXT0053" (body "return match (left) { 0 -> 1, -0 -> 2, _ -> 0 };"))
+    ,
+        ( "a negative literal does not make a match complete"
+        , rejectedWith "VXT0052" (body "return match (left) { -1 -> 1, 0 -> 2, 1 -> 3 };")
+        )
     , ("a literal pattern of another type is rejected", rejectedWith "VXT0054" (body "match (left) { \"a\" -> { } } return 0;"))
     , ("a guard must be bool or numeric", rejectedWith "VXT0049" (body "match (left) { 1 if \"x\" -> { } } return 0;"))
     , ("a numeric guard is accepted", accepted (body "match (left) { 1 if right -> { } } return 0;"))
@@ -358,7 +454,23 @@ typeTests =
         ( "an effectful expression body in a statement match is accepted"
         , accepted (body "int r = 0; match (left) { 1 -> r = 5, _ -> r = Twice(left) } return r;")
         )
-    , ("a pattern binding is immutable", rejectedWith "VXT0003" (body "match (left) { int value -> { value = 5; } } return 0;"))
+    , ("a pattern binding may be assigned", accepted (body "match (left) { int value -> { value = 5; return value; } } return 0;"))
+    ,
+        ( "a nested if in last position supplies the value of its block"
+        , accepted (body "int r = if (flag) { if (other) { 1 } else { 2 } } else { 3 }; return r;")
+        )
+    ,
+        ( "a match in last position supplies the value of its block"
+        , accepted (body "int r = if (flag) { match (left) { 1 -> 10, _ -> 20 } } else { 3 }; return r;")
+        )
+    ,
+        ( "a match in last position of a value block must accept every value"
+        , rejectedWith "VXT0052" (body "int r = if (flag) { match (left) { 1 -> 10 } } else { 3 }; return r;")
+        )
+    ,
+        ( "a match in last position of a statement arm is a statement"
+        , accepted (body "match (left) { 1 -> { match (right) { 2 -> { return 2; } } } } return 0;")
+        )
     ,
         ( "a pattern binding is in scope in its guard"
         , accepted (body "return match (left) { int value if value > 3 -> value, _ -> 0 };")
@@ -396,20 +508,282 @@ typeTests =
         )
     , ("an empty value block has no value", rejectedWith "VXT0046" (body "int r = if (flag) { } else { 2 }; return r;"))
     ,
-        ( "a return inside a value block is rejected"
-        , rejectedWith "VXT0047" (body "int r = if (flag) { return 1; 2 } else { 3 }; return r;")
+        ( "a value block may return from the method"
+        , accepted (body "int r = if (flag) { return 1; } else { 3 }; return r;")
         )
     ,
-        ( "a return nested inside a value block is rejected"
-        , rejectedWith "VXT0047" (body "int r = match (left) { 1 -> { if (flag) { return 1; } 2 }, _ -> 3 }; return r;")
+        ( "a return nested inside a value block is accepted"
+        , accepted (body "int r = match (left) { 1 -> { if (flag) { return 1; } 2 }, _ -> 3 }; return r;")
         )
     ,
-        ( "a break cannot leave a value block"
-        , rejectedWith "VXT0059" (body "while (true) { int r = if (flag) { break; 1 } else { 2 }; } return 0;")
+        ( "a return in a value block must carry the return type of the method"
+        , rejectedWith "VXT0005" (body "int r = if (flag) { return true; } else { 3 }; return r;")
         )
     ,
-        ( "a continue cannot leave a value block"
-        , rejectedWith "VXT0059" (body "while (flag) { int r = match (left) { 1 -> { continue; 1 }, _ -> 2 }; } return 0;")
+        ( "a value block that leaves gives the if expression the type of the other block"
+        , rejectedWith "VXT0002" (body "bool r = if (flag) { return 1; } else { left }; return 0;")
+        )
+    ,
+        ( "an if expression whose blocks both leave is valid"
+        , accepted (body "int r = if (flag) { return 1; } else { return 2; }; return r;")
+        )
+    ,
+        ( "a match expression whose arms all leave is valid"
+        , accepted (body "int r = match (left) { 1 -> { return 1; }, _ -> { return 2; } }; return r;")
+        )
+    ,
+        ( "an expression that never completes is not held to the type of its receiver"
+        , accepted (body "bool r = if (flag) { return 1; } else { return 2; }; return r ? 1 : 0;")
+        )
+    ,
+        ( "an inferred binding may be initialized by an expression that never completes"
+        , accepted (body "auto r = if (flag) { return 1; } else { return 2; }; return 0;")
+        )
+    ,
+        ( "the returns of an expression that never completes are still checked"
+        , rejectedWith "VXT0005" (body "int r = if (flag) { return true; } else { return 2; }; return r;")
+        )
+    ,
+        ( "the statements after an expression that never completes are still checked"
+        , rejectedWith "VXT0012" (body "int r = if (flag) { return 1; } else { return 2; }; int s = r + true; return s;")
+        )
+    ,
+        ( "a match whose arms all leave must still be exhaustive"
+        , rejectedWith "VXT0052" (body "int r = match (left) { 1 -> { return 1; } }; return r;")
+        )
+    ,
+        ( "an expression that never completes may be an operand"
+        , accepted (body "int r = 1 + (if (flag) { return 1; } else { return 2; }); return r;")
+        )
+    ,
+        ( "an expression that never completes may be a condition"
+        , accepted (body "if (if (flag) { return 1; } else { return 2; }) { return 3; } return 4;")
+        )
+    ,
+        ( "a block that ends with an expression that never completes leaves"
+        , accepted (body "int r = if (left > 0) { 5 } else { if (flag) { return 1; } else { return 2; } }; return r;")
+        )
+    ,
+        ( "a right operand of && that never completes does not end the statement"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { bool b = flag && (if (other) { return 1; } else { return 2; }); } return 5;")
+        )
+    ,
+        ( "a right operand of || that never completes does not end the statement"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { bool b = flag || (if (other) { return 1; } else { return 2; }); } return 5;")
+        )
+    ,
+        ( "a conditional result that never completes does not end the statement"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { int q = flag ? 1 : (if (other) { return 1; } else { return 2; }); } return 5;")
+        )
+    ,
+        ( "a coalescing fallback that never completes does not end the statement"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { int q = right ?: (if (other) { return 1; } else { return 2; }); } return 5;")
+        )
+    ,
+        ( "a left operand of && that never completes ends the statement"
+        , accepted (body "guard (left > 0) else { bool b = (if (other) { return 1; } else { return 2; }) && flag; } return 5;")
+        )
+    ,
+        ( "an argument that never completes ends the statement"
+        , accepted (body "guard (left > 0) else { int q = Twice(if (other) { return 1; } else { return 2; }); } return 5;")
+        )
+    ,
+        ( "a match whose only leaving arm is guarded completes"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { match (right) { _ if flag -> { return 1; } } } return 5;")
+        )
+    ,
+        ( "a match with a guarded arm and a catch-all that both leave does not complete"
+        , accepted (body "guard (left > 0) else { match (right) { 1 if flag -> { return 1; }, _ -> { return 2; } } } return 5;")
+        )
+    ,
+        ( "an if without an else whose block leaves completes"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { if (flag) { return 1; } } return 5;")
+        )
+    ,
+        ( "a loop with a condition completes even when its body leaves"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { while (flag) { return 1; } } return 5;")
+        )
+    ,
+        ( "a break of an inner loop expression does not leave the endless loop around it"
+        , accepted (body "guard (left > 0) else { while (true) { int q = while (true) { break 1; }; } } return 5;")
+        )
+    ,
+        ( "a break in a value block of an inner loop does not leave the endless loop around it"
+        , accepted (body "guard (left > 0) else { while (true) { while (flag) { int q = if (other) { break; } else { 1 }; } } } return 5;")
+        )
+    ,
+        ( "a break in a match arm leaves the endless loop it stands in"
+        , rejectedWith "VXT0061" (body "guard (left > 0) else { while (true) { match (right) { 1 -> { break; }, _ -> { } } } } return 5;")
+        )
+    , -- The statements kept and dropped around an operand that never completes.
+        ( "the operands before one that never completes keep their effects and the ones after it are dropped"
+        , case loweredBody (body "int t = 0; int r = Twice(t += 3) + (if (flag) { return t; } else { return 2; }) + Twice(9); return r;") of
+            Just [CoreBind _, CoreAssign _ _, CoreEvaluate (CoreApply _ _ _), CoreIf _ [CoreReturn _] [CoreReturn _]] -> True
+            _ -> False
+        )
+    ,
+        ( "a right operand of && that never completes lowers to a conditional without a slot"
+        , case loweredBody (body "bool b = flag && (if (other) { return 1; } else { return 2; }); return b ? 3 : 4;") of
+            Just (CoreIf _ [CoreIf _ [CoreReturn _] [CoreReturn _]] [] : rest) -> not (any bindsResultSlot rest)
+            _ -> False
+        )
+    ,
+        ( "a guard block may leave through an initializer that never completes"
+        , accepted (body "guard (left > 0) else { int q = if (flag) { return 1; } else { return 2; }; } return 5;")
+        )
+    , -- Nothing is stored for a value that does not exist: no slot, no
+      -- binding, and none of the statements that are never reached.
+        ( "an initializer that never completes lowers to its branches alone"
+        , case loweredBody (body "int r = if (flag) { return 1; } else { return 2; }; return r;") of
+            Just [CoreIf _ [CoreReturn _] [CoreReturn _]] -> True
+            _ -> False
+        )
+    ,
+        ( "a returned expression that never completes lowers to its branches alone"
+        , case loweredBody (body "return Twice(if (flag) { return 1; } else { return 2; });") of
+            Just [CoreIf _ [CoreReturn _] [CoreReturn _]] -> True
+            _ -> False
+        )
+    ,
+        ( "a match that never completes lowers without a result slot"
+        , case loweredBody (body "int r = match (left) { 1 -> { return 1; }, _ -> { return 2; } }; return r;") of
+            Just statements -> not (any bindsResultSlot statements)
+            Nothing -> False
+        )
+    ,
+        ( "a value block that can complete must end with its value"
+        , rejectedWith "VXT0046" (body "int r = if (flag) { if (other) { return 1; } } else { 3 }; return r;")
+        )
+    ,
+        ( "an arm that leaves does not make a match complete"
+        , rejectedWith "VXT0052" (body "int r = match (left) { 1 -> { return 1; }, 2 -> 5 }; return r;")
+        )
+    ,
+        ( "a value block may break out of the loop around its expression"
+        , accepted (body "while (true) { int r = if (flag) { break; } else { 2 }; } return 0;")
+        )
+    ,
+        ( "a value block may continue the loop around its expression"
+        , accepted (body "while (flag) { int r = match (left) { 1 -> { continue; }, _ -> 2 }; } return 0;")
+        )
+    , ("a break in a value block needs a loop", rejectedWith "VXT0025" (body "int r = if (flag) { break; } else { 2 }; return r;"))
+    , ("a continue in a value block needs a loop", rejectedWith "VXT0027" (body "int r = if (flag) { continue; } else { 2 }; return r;"))
+    ,
+        ( "a break in a value block does not leave a loop from inside a closure"
+        , not (accepted (body "while (flag) { auto f = \\() -> { int r = if (other) { break; } else { 2 }; return r; }; } return 0;"))
+        )
+    ,
+        ( "a break in the condition of a loop leaves that loop"
+        , accepted (body "int n = 0; while (if (n > left) { break; } else { true }) { n += 1; } return n;")
+        )
+    , ("a break in the condition of a loop needs no loop around it", accepted (body "while (if (flag) { break; } else { true }) { } return 0;"))
+    ,
+        ( "a continue in the update of a loop is accepted"
+        , accepted (body "int t = 0; for (int i = 0; i < 3; i += if (t > 9) { t = 0; continue; } else { 1 }) { t += 5; } return t;")
+        )
+    ,
+        ( "a value block may carry a value out of the loop expression around it"
+        , accepted (body "int r = while (true) { int q = if (flag) { break 1; } else { 2 }; break q; }; return r;")
+        )
+    ,
+        ( "a value block may return from a loop expression"
+        , accepted (body "int r = while (true) { int q = if (flag) { return 1; } else { 2 }; break q; }; return r;")
+        )
+    , -- Real misuse of the same forms.
+        ( "a break that leaves a statement loop from a value block carries no value"
+        , rejectedWith "VXT0026" (body "while (flag) { int q = if (other) { break 1; } else { 2 }; } return 0;")
+        )
+    ,
+        ( "a break that leaves a loop expression from a value block must carry a value"
+        , rejectedWith "VXT0040" (body "int r = while (true) { int q = if (flag) { break; } else { 2 }; break q; }; return r;")
+        )
+    ,
+        ( "the values carried out of value blocks must have the type of the other break values"
+        , rejectedWith "VXT0043" (body "long wide = 3; int r = while (true) { int q = if (flag) { break wide; } else { 2 }; break q; }; return r;")
+        )
+    ,
+        ( "a break in the condition of a statement loop carries no value"
+        , rejectedWith "VXT0026" (body "while (if (flag) { break 1; } else { true }) { } return 0;")
+        )
+    ,
+        ( "a return in a value block of a loop expression carries the return type of the method"
+        , rejectedWith "VXT0005" (body "int r = while (true) { int q = if (flag) { return true; } else { 2 }; break q; }; return r;")
+        )
+    ,
+        ( "a break in a value block inside a closure does not reach a loop expression around the closure"
+        , not (accepted (body "int r = while (true) { auto f = \\() -> { int q = if (flag) { break 1; } else { 2 }; return q; }; break f(); }; return r;"))
+        )
+    , -- The condition of a loop expression is the constant true, so a break
+      -- cannot stand in it.
+        ( "a loop expression whose condition is not the constant true is still rejected"
+        , rejectedWith "VXT0041" (body "int t = 0; int r = while (if (t > left) { break t; } else { true }) { t += 1; }; return r;")
+        )
+    , -- Return types are inferred through expressions, and not across the
+      -- edge of a nested callable.
+        ( "a callable infers its result from a return in a value block"
+        , accepted (body "auto f = \\(int v) -> { int q = if (v > 0) { return 1; } else { 2 }; return q; }; return f(left);")
+        )
+    ,
+        ( "the returns of a callable with an inferred result must agree, also through a value block"
+        , rejectedWith "VXT0062" (body "auto f = \\(int v) -> { int q = if (v > 0) { return true; } else { 2 }; return q; }; return 0;")
+        )
+    ,
+        ( "the returns of a callable do not count for the method that creates it"
+        , accepted (body "auto g = \\(int w) -> { bool b = if (w > 0) { return true; } else { false }; return b; }; return g(left) ? 1 : 2;")
+        )
+    ,
+        ( "the returns of a nested callable do not count for the callable around it"
+        , "VXT0062"
+            `notElem` codesOf
+                (body "auto f = \\(int v) -> { auto g = \\(int w) -> { return w > 0; }; int q = if (v > 0) { return 1; } else { 2 }; return q; }; return f(left);")
+        )
+    ,
+        ( "a method with an inferred return type infers it from a return in a value block"
+        , accepted
+            ( unlines
+                [ "class Program {"
+                , "    public static auto Pick(_ int v) { int q = if (v > 0) { return 1; } else { 2 }; return q; }"
+                , "}"
+                ]
+            )
+        )
+    , -- Callables are compiled and verified, through Core and CorePrep, but
+      -- not run: neither the reference evaluator nor the JIT of the native
+      -- smoke program executes closures.
+        ( "a callable that returns from a loop expression is accepted"
+        , accepted (body "auto f = \\(int v) -> { int q = while (true) { if (v > 3) { return 7; } break 2; }; return q + v; }; return f(left);")
+        )
+    ,
+        ( "a callable every path of which returns from a value block is accepted"
+        , accepted (body "auto f = \\(int v) -> { int q = if (v > 0) { return v * 2; } else { return 0 - v; }; return q; }; return f(left);")
+        )
+    ,
+        ( "a break in a value block does not leave a loop from inside a callable in that loop"
+        , rejectedWith "VXT0025" (body "while (flag) { auto f = \\(int v) -> { int q = if (v > 0) { break; } else { 2 }; return q; }; } return 0;")
+        )
+    ,
+        ( "a continue in a value block does not reach a loop from inside a callable in that loop"
+        , rejectedWith "VXT0027" (body "while (flag) { auto f = \\(int v) -> { int q = if (v > 0) { continue; } else { 2 }; return q; }; } return 0;")
+        )
+    ,
+        ( "a continue in the condition of a loop is accepted"
+        , accepted (body "int n = 0; while (if ((n += 1) < left) { continue; } else { n < right }) { } return n;")
+        )
+    ,
+        ( "a break in the update of a loop is accepted"
+        , accepted (body "for (int i = 0; i < 3; i += if (flag) { break; } else { 1 }) { } return 0;")
+        )
+    ,
+        ( "a break in the update of a loop statement carries no value"
+        , rejectedWith "VXT0026" (body "for (int i = 0; i < 3; i += if (flag) { break 1; } else { 1 }) { } return 0;")
+        )
+    ,
+        ( "a break in the update of a loop expression carries a value"
+        , rejectedWith "VXT0040" (body "int r = for (int i = 0; ; i += if (flag) { break; } else { 1 }) { break 2; }; return r;")
+        )
+    ,
+        ( "a continue in the condition of a loop needs that loop and no other"
+        , rejectedWith "VXT0027" (body "int q = if (flag) { continue; } else { 2 }; return q;")
         )
     ,
         ( "a loop inside a value block may still be left"
@@ -436,6 +810,41 @@ typeTests =
         )
     , ("a guard cannot break outside a loop", rejectedWith "VXT0025" (body "guard (flag) else { break; } return 0;"))
     , ("a guard block may end with a nested block that leaves", accepted (body "guard (flag) else { { return 1; } } return 0;"))
+    , -- The rule is about control flow, not about the last statement.
+      ("a guard block may leave before its last statement", accepted (body "int n = left; guard (flag) else { return 1; n += 1; } return n;"))
+    , ("a guard block that never ends is accepted", accepted (body "guard (flag) else { while (true) { } } return 0;"))
+    , ("a guard block with an endless for loop is accepted", accepted (body "guard (flag) else { for (int i = 0; ; i += 1) { } } return 0;"))
+    ,
+        ( "a guard block whose loop can be left is rejected"
+        , rejectedWith "VXT0061" (body "guard (flag) else { while (true) { if (other) { break; } } } return 0;")
+        )
+    ,
+        ( "a guard block whose loop is left from a value block is rejected"
+        , rejectedWith "VXT0061" (body "guard (flag) else { while (true) { int q = if (other) { break; } else { 1 }; } } return 0;")
+        )
+    ,
+        ( "a break of an inner loop does not leave the outer endless loop"
+        , accepted (body "guard (flag) else { while (true) { while (other) { break; } } } return 0;")
+        )
+    ,
+        ( "a guard block whose loop has a condition is rejected"
+        , rejectedWith "VXT0061" (body "guard (flag) else { while (other) { } } return 0;")
+        )
+    ,
+        ( "a guard block may end with a match all of whose arms leave"
+        , accepted (body "guard (flag) else { match (other) { true -> { return 1; }, false -> { return 2; } } } return 0;")
+        )
+    ,
+        ( "a guard block that ends with a match that may select no arm is rejected"
+        , rejectedWith "VXT0061" (body "guard (flag) else { match (left) { 1 -> { return 1; } } } return 0;")
+        )
+    ,
+        ( "a guard block that ends with a match one arm of which completes is rejected"
+        , rejectedWith "VXT0061" (body "guard (flag) else { match (left) { 1 -> { return 1; }, _ -> { } } } return 0;")
+        )
+    , ("a guard may continue a loop", accepted (body "int n = 0; while (n < left) { n += 1; guard (n > 1) else { continue; } } return n;"))
+    , ("a guard cannot continue outside a loop", rejectedWith "VXT0027" (body "guard (flag) else { continue; } return 0;"))
+    , ("a binding in a guard condition is recognized and not implemented", parseFailsWith "VXP0035" (body "guard (auto n = left) else { return 0; } return 1;"))
     , ("a nested block sees the names declared before it", accepted (body "int a = left; { a += 1; } return a;"))
     ,
         ( "a name declared in a nested block ends with the block"
@@ -468,17 +877,17 @@ loweringTests =
     , ("a statement match lowers without a result slot", matchStatementLowers)
     , ("a catch-all arm ends the chain without a test", catchAllEndsChain)
     , ("patterns for several subjects are tested together", severalSubjectsLower)
-    , ("a guard after a literal is decided in its own slot", guardedLiteralLowers)
+    , ("a guard after a literal is the last operand of the arm's test", guardedLiteralLowers)
+    , ("a guard that stores is decided in its own slot", storingGuardLowers)
     , ("a guard on a catch-all is the test itself", guardedCatchAllLowers)
     , ("a pattern binding is bound to the subject before its guard", bindingLowers)
     , ("an if expression over pure blocks is one lazy conditional", pureIfExpressionLowers)
     , ("an if expression whose block has statements selects into a slot", ifExpressionWithStatementsLowers)
     , ("a guard runs its block when the condition is false", guardLowers)
     , ("the statements of a nested block join the enclosing sequence", nestedBlockLowers)
-    , ("a match within the nesting bound has no taken slot", not (usesTakenSlot (wideMatch 16)))
-    , ("a match beyond the nesting bound records the taken arm in a slot", usesTakenSlot (wideMatch 17))
-    , ("a wide match nests no deeper than one group", all ((<= 18) . nestingOf . wideMatch) [17, 40, 200])
-    , ("a wide match is split into groups in one sequence", wideMatchIsGrouped)
+    , ("a match of any width is one chain of conditionals", all (isOneChain . wideMatch) [2, 17, 40, 200])
+    , ("a chain of arms is as deep as one arm", all ((== 1) . nestingOf . wideMatch) [2, 17, 40, 200])
+    , ("the names of all arms are bound before the chain", bindingsPrecedeChain)
     ]
 
 -- | A match expression with the given number of literal arms and a catch-all.
@@ -490,41 +899,51 @@ wideMatch count =
             ++ "_ -> 0 };"
         )
 
-usesTakenSlot :: String -> Bool
-usesTakenSlot text = case loweredBody text of
-    Just statements -> or [generated "$taken" name | CoreBind (CoreBinding name _ _ _) <- statements]
-    Nothing -> False
+-- | Whether the body is a subject, a result slot, one chain of conditionals and a return.
+isOneChain :: String -> Bool
+isOneChain text = case loweredBody text of
+    Just [CoreBind _, CoreBind _, chain@CoreIf {}, CoreReturn _] -> linksOnly chain
+    _ -> False
+    where
+        -- Every false branch is the next link until the body of the catch-all.
+        linksOnly statement = case statement of
+            CoreIf _ [CoreAssign _ _] [next@CoreIf {}] -> linksOnly next
+            CoreIf _ [CoreAssign _ _] [CoreAssign _ _] -> True
+            _ -> False
 
--- | The deepest nesting of conditional statements in the lowered body.
+{- | The deepest nesting of conditional statements in the lowered body, where
+the links of a chain share one level: a false branch that is exactly one
+conditional continues the chain, as it does in every stage after Core.
+-}
 nestingOf :: String -> Int
 nestingOf text = maybe 0 depth (loweredBody text)
     where
         depth :: [CoreStatement] -> Int
         depth statements = maximum (0 : map statementDepth statements)
         statementDepth statement = case statement of
+            CoreIf _ whenTrue [next@CoreIf {}] -> max (1 + depth whenTrue) (statementDepth next)
             CoreIf _ whenTrue whenFalse -> 1 + max (depth whenTrue) (depth whenFalse)
             _ -> 0
 
--- Forty arms are three groups: the first chain, then two guarded groups.
-wideMatchIsGrouped :: Bool
-wideMatchIsGrouped = case loweredBody (wideMatch 40) of
+bindingsPrecedeChain :: Bool
+bindingsPrecedeChain = case loweredBody (body "return match (left) { int low if low < 3 -> low, int high if high > 9 -> high, _ -> 0 };") of
     Just
         [ CoreBind (CoreBinding subject _ False _)
+            , CoreBind (CoreBinding first _ True (CoreVariable firstSource _))
+            , CoreBind (CoreBinding second _ True (CoreVariable secondSource _))
             , CoreBind (CoreBinding slot _ True _)
-            , CoreBind (CoreBinding taken _ True (CoreLiteral (CoreBoolean False) _))
-            , CoreIf _ [CoreAssign firstTaken _, CoreAssign firstStore _] _
-            , CoreIf (CoreVariable secondTest _) [] [CoreIf {}]
-            , CoreIf (CoreVariable thirdTest _) [] [CoreIf {}]
-            , CoreReturn (CoreVariable result _)
+            , CoreIf _ [CoreAssign _ _] [CoreIf _ [CoreAssign _ _] [CoreAssign _ _]]
+            , CoreReturn _
             ] ->
-        generated "$subject" subject
+        map spelling [first, second] == ["low", "high"]
+            && all (== subject) [firstSource, secondSource]
             && generated "$matched" slot
-            && generated "$taken" taken
-            && firstTaken == taken
-            && firstStore == slot
-            && secondTest == taken
-            && thirdTest == taken
-            && result == slot
+    _ -> False
+
+-- | Whether a statement binds the result slot of a match or of a choice.
+bindsResultSlot :: CoreStatement -> Bool
+bindsResultSlot statement = case statement of
+    CoreBind binding -> any (`isPrefixOf` identifierText (resolvedSpelling (coreBindingName binding))) ["$matched", "$selected"]
     _ -> False
 
 loweredBody :: String -> Maybe [CoreStatement]
@@ -576,8 +995,9 @@ matchStatementLowers = case loweredBody (body "match (left) { 1 -> { return 1; }
     _ -> False
 
 catchAllEndsChain :: Bool
+-- The match never completes, so the statement after it is not lowered.
 catchAllEndsChain = case loweredBody (body "match (left) { _ -> { return 7; } } return 0;") of
-    Just [CoreBind (CoreBinding subject _ False _), CoreReturn _, CoreReturn _] -> generated "$subject" subject
+    Just [CoreBind (CoreBinding subject _ False _), CoreReturn _] -> generated "$subject" subject
     _ -> False
 
 severalSubjectsLower :: Bool
@@ -591,18 +1011,33 @@ severalSubjectsLower = case loweredBody (body "match (left), (right) { (1), (2) 
         comparesWith first 1 firstTest && comparesWith second 2 secondTest && comparesWith second 3 laterTest
     _ -> False
 
+-- The guard is the last operand of the arm's test, behind the short-circuit
+-- conjunction, so it is evaluated only when the comparison holds.
 guardedLiteralLowers :: Bool
 guardedLiteralLowers = case loweredBody (body "match (left) { 1 if flag -> { return 1; } } return 0;") of
     Just
         [ CoreBind (CoreBinding subject _ False _)
+            , CoreIf (CorePrimitive CoreLogicalAnd [test, CoreVariable guard _] _) [CoreReturn _] []
+            , CoreReturn _
+            ] ->
+        comparesWith subject 1 test && spelling guard == "flag"
+    _ -> False
+
+-- A guard that stores into a local runs as statements, and only when the
+-- comparison holds: the decision is taken in a slot of its own.
+storingGuardLowers :: Bool
+storingGuardLowers = case loweredBody (body "int hits = 0; match (left) { 1 if (hits += 1) > 0 -> { return 1; } } return hits;") of
+    Just
+        [ _
+            , CoreBind (CoreBinding subject _ False _)
             , CoreBind (CoreBinding decision _ True (CoreLiteral (CoreBoolean False) _))
-            , CoreIf test [CoreIf (CoreVariable guard _) [CoreAssign decided _] []] []
+            , CoreIf test [CoreAssign stored _, CoreIf _ [CoreAssign decided _] []] []
             , CoreIf (CoreVariable taken _) [CoreReturn _] []
             , CoreReturn _
             ] ->
         generated "$accepted" decision
             && comparesWith subject 1 test
-            && spelling guard == "flag"
+            && spelling stored == "hits"
             && decided == decision
             && taken == decision
     _ -> False
@@ -616,7 +1051,7 @@ bindingLowers :: Bool
 bindingLowers = case loweredBody (body "match (left) { int value if value > 3 -> { return value; } } return 0;") of
     Just
         [ CoreBind (CoreBinding subject _ False _)
-            , CoreBind (CoreBinding bound _ False (CoreVariable source _))
+            , CoreBind (CoreBinding bound _ True (CoreVariable source _))
             , CoreIf (CorePrimitive CoreGreaterThan [CoreVariable tested _, _] _) [CoreReturn (CoreVariable returned _)] []
             , CoreReturn _
             ] ->
@@ -651,123 +1086,6 @@ nestedBlockLowers = case loweredBody (body "int a = left; { int b = a + 1; a = b
     _ -> False
 
 -- ------------------------------------------------------------- evaluation
-
--- | Source bodies, the arguments to run them on, and the value each run must return.
-evaluationCases :: [(String, [((Bool, Bool, Integer, Integer), Integer)])]
-evaluationCases =
-    [ ("return match (left) { 1 -> 10, 2 -> 20, _ -> 30 };", [(plain 1 0, 10), (plain 2 0, 20), (plain 5 0, 30)])
-    ,
-        ( "int r = 0; match (left) { 1 -> { r = 10; }, 2 -> { r = 20; } } return r;"
-        , [(plain 1 0, 10), (plain 2 0, 20), (plain 7 0, 0)]
-        )
-    ,
-        ( "return match (left) { int n if n > 10 -> n * 2, int n if n > 5 -> n + 1, _ -> 0 };"
-        , [(plain 20 0, 40), (plain 7 0, 8), (plain 3 0, 0)]
-        )
-    ,
-        ( "return match (left), (right) { (1), (1) -> 11, (1), (_) -> 10, (_), (1) -> 1, (_), (_) -> 0 };"
-        , [(plain 1 1, 11), (plain 1 5, 10), (plain 4 1, 1), (plain 4 4, 0)]
-        )
-    , ("return match (flag) { true -> 1, false -> 2 };", [(flags True False 0 0, 1), (flags False False 0 0, 2)])
-    , -- Two bool subjects covered without a catch-all arm.
-        ( "return match (flag), (other) { (true), (_) -> 1, (false), (true) -> 2, (false), (false) -> 3 };"
-        , [(flags True True 0 0, 1), (flags True False 0 0, 1), (flags False True 0 0, 2), (flags False False 0 0, 3)]
-        )
-    ,
-        ( "return match (flag), (other) { (true), (true) -> 3, (true), (_) -> 2, (_), (true) -> 1, (_), (_) -> 0 };"
-        , [(flags True True 0 0, 3), (flags True False 0 0, 2), (flags False True 0 0, 1), (flags False False 0 0, 0)]
-        )
-    , -- The subject is evaluated once, whichever arm accepts.
-        ( "int n = left; int r = match (n += 1) { 1 -> 100, 2 -> 200, _ -> 300 }; return r + n;"
-        , [(plain 0 0, 101), (plain 1 0, 202), (plain 5 0, 306)]
-        )
-    , -- Subjects are evaluated left to right, before any arm is tested.
-        ( "int n = left; return match (n += 1), (n * 10) { (2), (20) -> 1, (_), (_) -> 0 };"
-        , [(plain 1 0, 1), (plain 2 0, 0)]
-        )
-    , -- A guard runs only when the patterns of its arm accept.
-        ( "int calls = 0; int r = match (left) { 1 if (calls += 1) > 0 -> 10, 2 if (calls += 10) > 0 -> 20, _ -> 30 }; return r * 100 + calls;"
-        , [(plain 1 0, 1001), (plain 2 0, 2010), (plain 3 0, 3000)]
-        )
-    , -- A guard that is false passes the value on to the arms after it.
-        ( "return match (left) { 1 if flag -> 1, 1 -> 2, _ -> 3 };"
-        , [(flags True False 1 0, 1), (flags False False 1 0, 2), (flags True False 9 0, 3)]
-        )
-    , -- A numeric guard is tested in Boolean context.
-        ( "return match (left) { 1 if right -> 1, _ -> 0 };"
-        , [(plain 1 5, 1), (plain 1 0, 0), (plain 2 5, 0)]
-        )
-    , -- Only the body of the accepting arm runs.
-        ( "int n = 0; int r = match (left) { 1 -> (n += 1), 2 -> (n += 10), _ -> (n += 100) }; return r * 1000 + n;"
-        , [(plain 1 0, 1001), (plain 2 0, 10010), (plain 3 0, 100100)]
-        )
-    , ("return match (Twice(left)) { 4 -> 1, 6 -> 2, _ -> 0 };", [(plain 2 0, 1), (plain 3 0, 2), (plain 4 0, 0)])
-    , ("long wide = 5; return match (wide) { 5 -> 1, _ -> 0 };", [(plain 0 0, 1)])
-    , ("long wide = match (left) { 1 -> 10, _ -> 20 }; return wide > 15 ? 1 : 0;", [(plain 1 0, 0), (plain 2 0, 1)])
-    , ("int r = 0; match (left) { 1 -> r = 5, _ -> r = Twice(left) } return r;", [(plain 1 0, 5), (plain 4 0, 8)])
-    ,
-        ( "return match (left) { 1 -> if (flag) { 5 } else { 6 }, _ -> match (right) { 0 -> 7, _ -> 8 } };"
-        , [(flags True False 1 0, 5), (flags False False 1 0, 6), (plain 2 0, 7), (plain 2 3, 8)]
-        )
-    ,
-        ( "return match (left) { 1 -> { int t = right * 2; t + 1 }, _ -> { int t = right * 3; t - 1 } };"
-        , [(plain 1 4, 9), (plain 2 4, 11)]
-        )
-    , -- A statement arm may continue or leave the enclosing loop.
-        ( "int total = 0; for (int i = 0; i < left; i++) { match (i) { 2 -> { continue; }, 5 -> { break; }, _ -> { total += i; } } } return total;"
-        , [(plain 10 0, 8), (plain 3 0, 1), (plain 0 0, 0)]
-        )
-    , -- A statement arm may supply the value of an enclosing loop expression.
-        ( "int n = 0; int r = while (true) { n += 1; match (n) { 4 -> { break n * 10; }, _ -> { } } }; return r;"
-        , [(plain 0 0, 40)]
-        )
-    , ("match (left) { 1 -> { return 100; }, _ -> { } } return 5;", [(plain 1 0, 100), (plain 2 0, 5)])
-    , ("match (left) { } return 5;", [(plain 1 0, 5)])
-    , ("int r = if (left > right) { left } else { right }; return r;", [(plain 3 5, 5), (plain 9 2, 9)])
-    ,
-        ( "int r = if (flag) { int t = left * 2; t + 1 } else { int t = right * 3; t - 1 }; return r;"
-        , [(flags True False 4 0, 9), (flags False False 0 5, 14)]
-        )
-    , -- Only the selected block of an if expression runs.
-        ( "int n = 0; int r = if (flag) { n += 1; 10 } else { n += 100; 20 }; return r * 1000 + n;"
-        , [(flags True False 0 0, 10001), (flags False False 0 0, 20100)]
-        )
-    ,
-        ( "return (if (flag) { left } else { right }) + (if (other) { 100 } else { 200 });"
-        , [(flags True True 1 2, 101), (flags False False 1 2, 202)]
-        )
-    , ("guard (left > 0) else { return 0 - 1; } return left * 2;", [(plain 3 0, 6), (plain 0 0, -1)])
-    ,
-        ( "int total = 0; for (int i = 0; i < left; i++) { guard (i % 2 == 0) else { continue; } total += i; } return total;"
-        , [(plain 6 0, 6), (plain 1 0, 0)]
-        )
-    ,
-        ( "int n = 0; while (true) { guard (n < left) else { break; } n += 1; } return n;"
-        , [(plain 4 0, 4), (plain 0 0, 0)]
-        )
-    ,
-        ( "int total = 0; { int part = left * 2; total += part; } { int part = right * 3; total += part; } return total;"
-        , [(plain 2 3, 13), (plain 0 0, 0)]
-        )
-    ,
-        ( "int n = 0; while (true) { { n += 1; if (n > left) { break; } } } { { return n * 10; } }"
-        , [(plain 3 0, 40), (plain 0 0, 10)]
-        )
-    ,
-        ( "int total = 0; for (int i = 0; i < left; i++) { { if (i == 1) { continue; } } { int step = i * 2; total += step; } } return total;"
-        , [(plain 4 0, 10), (plain 1 0, 0)]
-        )
-    , -- A guard condition with a store runs once, before the block decision.
-        ( "int n = left; guard ((n += 1) > 3) else { return n * 10; } return n;"
-        , [(plain 5 0, 6), (plain 1 0, 20)]
-        )
-    ]
-
-plain :: Integer -> Integer -> (Bool, Bool, Integer, Integer)
-plain = flags False False
-
-flags :: Bool -> Bool -> Integer -> Integer -> (Bool, Bool, Integer, Integer)
-flags flag other left right = (flag, other, left, right)
 
 evaluationTests :: [(String, Bool)]
 evaluationTests =

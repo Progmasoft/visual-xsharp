@@ -33,6 +33,7 @@ namespace Visual::XSharp::Fuzzing
             limits.maximumOperands = 32U;
             limits.maximumTypeDepth = 16U;
             limits.maximumExpressionDepth = 32U;
+            limits.maximumStatementDepth = 32U;
             limits.maximumNumericBytes = 128U;
             return limits;
         }

@@ -370,6 +370,37 @@ enum Value = int {
 }
 
 -- ============================================================================
+-- Example 316: 7.2 Member Values
+-- Demonstrates: The value of a member is a constant integer expression: integer literals and earlier members
+--   of the same enum, joined by the arithmetic, shift and bitwise operators. Inside the declaration of its
+--   enum the name of a member stands for its number; this is where the numbers behind the names are defined.
+--   The expression is computed in the underlying type, and a member without a value follows the computed one.
+
+enum Access = ubyte {
+    READ = 1,
+    WRITE = READ << 1,              -- 2
+    EXECUTE = WRITE * 2,            -- 4
+    ALL = READ | WRITE | EXECUTE,   -- 7
+    NEXT,                           -- 8
+    REST = !(EXECUTE + 1),          -- 250: the complement of 5 in ubyte
+}
+
+-- ============================================================================
+-- Example 317: 7.2 Member Values
+-- Demonstrates: A member value names earlier members only, of its own enum only, and is nothing but integer
+--   arithmetic. Outside the declaration a member is a value of the enum and never a number.
+-- Expected result: compile-time rejection; each INVALID marker is normative.
+
+enum Order {
+    FIRST = SECOND,          -- INVALID: SECOND is declared later
+    SECOND = SECOND + 1,     -- INVALID: a member does not name itself
+    THIRD = Access.READ,     -- INVALID: a member of another enum is not a number here
+    FOURTH = Compute(),      -- INVALID: a call is not a constant
+    FIFTH = 4 / 0,           -- INVALID: a constant division by zero
+    SIXTH = 1 < 2,           -- INVALID: a comparison is not an integer
+}
+
+-- ============================================================================
 -- Example 41: 7.3 Duplicate Numeric Values
 -- Demonstrates: Different enum members may have the same numeric value.
 
@@ -396,6 +427,50 @@ match (status) {
     .UNKNOWN -> { ... }, -- INVALID: same runtime value as .NONE
     .READY -> { ... },
 }
+
+-- ============================================================================
+-- Example 311: 7.4 Operations on Enum Values
+-- Demonstrates: The values of a classic enum are compared with == and \=, with values of the same enum.
+--   Two members with the same numeric value are equal.
+
+Status.READY == status  -- bool
+status \= Status.NONE   -- bool
+
+-- ============================================================================
+-- Example 312: 7.4 Operations on Enum Values
+-- Demonstrates: A classic enum has no order and no arithmetic. Its members are names for values, and the
+--   numeric value behind a name is not a quantity.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+Status.NONE < Status.READY   -- INVALID: enum values are not ordered
+Status.NONE + Status.READY   -- INVALID: enum values are not added
+Status.NONE == Level.LOW     -- INVALID: values of different enums
+
+-- ============================================================================
+-- Example 313: 7.5 Enums and Integers
+-- Demonstrates: A classic enum is a type of its own. There is no implicit conversion between an enum and an
+--   integer in either direction, whatever its underlying type is.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+int code = Status.READY;  -- INVALID: an enum value is not an integer
+Status status = 1;        -- INVALID: an integer is not an enum value
+Status.NONE == 0          -- INVALID: an enum value is not compared with an integer
+
+-- ============================================================================
+-- Example 314: 7.6 Access to Members
+-- Demonstrates: The target-typed .Member spelling is the same for a classic enum as for an enum class: it
+--   names a member of the enum that the context expects, in a match pattern and in an expression whose
+--   target type is known.
+
+Status first = Status.READY;
+Status second = .READY;
+
+-- ============================================================================
+-- Example 315: 7.6 Access to Members
+-- Demonstrates: Target-typed .Member syntax requires a known target type, for a classic enum as well.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+auto status = .READY; -- INVALID
 
 -- ============================================================================
 -- Example 44: 8. enum class
@@ -1861,6 +1936,142 @@ else {
 };
 
 -- ============================================================================
+-- Example 295: 31. if and guard Bindings
+-- Demonstrates: A guard may also test a plain condition. The else block runs when the condition is false.
+
+guard (count > 0) else {
+    return 0;
+}
+
+Use(count);
+
+-- ============================================================================
+-- Example 296: 31. if and guard Bindings
+-- Demonstrates: The else block of a guard must leave the enclosing scope on every path, so the statements
+--   after the guard run only when the condition held.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+guard (ready) else {
+    Log("not ready"); -- INVALID: the block can complete normally
+}
+
+guard (ready) else {
+    if (strict) {
+        return;
+    }
+    -- INVALID: when strict is false the block completes normally
+}
+
+-- ============================================================================
+-- Example 297: 31. if and guard Bindings
+-- Demonstrates: Whether the else block leaves is decided by its control flow, not by the spelling of its last
+--   statement. return leaves the method; break and continue leave or continue the enclosing loop and are valid
+--   only where they have one; a loop that cannot end, a match all of whose arms leave and one of which always
+--   matches, and a call that is known never to return also do not complete.
+-- Context note: Fail is known never to return.
+
+while (HasNext()) {
+    auto item = Next();
+
+    guard (item.valid) else {
+        continue;
+    }
+
+    guard (item.size < limit) else {
+        break;
+    }
+
+    guard (item.kind \= 0) else {
+        if (strict) {
+            return;
+        }
+        else {
+            Fail("unknown kind");
+        }
+    }
+
+    Use(item);
+}
+
+-- ============================================================================
+-- Example 298: 31.1 if Expressions
+-- Demonstrates: A block of an if expression may leave instead of producing a value. return leaves the
+--   enclosing method and break and continue target the enclosing loop, under the rules those statements have
+--   anywhere else. A block that leaves produces no value; the expression has the type of the block that
+--   completes.
+
+auto size = if (item.valid) {
+    item.size
+}
+else {
+    return 0;
+};
+
+while (HasNext()) {
+    total += if (Next().skip) {
+        continue;
+    }
+    else {
+        1
+    };
+}
+
+-- ============================================================================
+-- Example 310: 31.1 if Expressions
+-- Demonstrates: An if or match expression none of whose branches completes normally is valid. It never
+--   produces a value, so whatever would have received the value is never evaluated and the statements after
+--   it are not reached. Each return is still checked against the return type of the method, and break and
+--   continue still need a loop.
+
+int Classify(bool known, int code) {
+    int result = if (known) {
+        return code;
+    }
+    else {
+        return 0;
+    };
+
+    return result; -- never reached
+}
+
+-- ============================================================================
+-- Example 299: 31.1 if Expressions
+-- Demonstrates: A block that can complete normally must end with its value.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+auto value = if (condition) {
+    Log("first"); -- INVALID: the block completes without a value
+}
+else {
+    2
+};
+
+auto other = if (condition) {
+    break; -- INVALID outside a loop: break needs a loop to leave
+}
+else {
+    2
+};
+
+-- ============================================================================
+-- Example 300: 31.1 if Expressions
+-- Demonstrates: Where a block ends with an expression that is its value, an if with an else or a match in
+--   that position is that value; no parentheses are needed. This applies to blocks used as values. It does
+--   not give a method body an implicit return: the return rules of methods are unchanged.
+
+auto sign = if (value < 0) {
+    -1
+}
+else {
+    if (value > 0) {
+        1
+    }
+    else {
+        0
+    }
+};
+
+-- ============================================================================
 -- Example 194: 32. match
 -- Demonstrates: Single-target form:
 -- Context note: ellipses denote declarations intentionally omitted from this focused fragment.
@@ -1892,6 +2103,165 @@ match (a), (b) {
     (Type x), (_) -> {
         ...
     },
+}
+
+-- ============================================================================
+-- Example 301: 32. match
+-- Demonstrates: When no arm of a match statement matches, execution continues with the statement after it,
+--   like an if without an else.
+
+match (number) {
+    1 -> {
+        HandleOne();
+    },
+}
+
+Continue(); -- reached for every number, also when it is not 1
+
+-- ============================================================================
+-- Example 302: 32. match
+-- Demonstrates: A match used as an expression must be exhaustive: some arm must match whatever the targets
+--   are.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+auto text = match (number) { -- INVALID: no arm for other numbers
+    1 -> "one",
+    2 -> "two",
+};
+
+-- ============================================================================
+-- Example 303: 32. match
+-- Demonstrates: Exhaustiveness is established by a wildcard, by a type pattern that matches every possible
+--   value of its target, or by arms that cover both values of a bool target. An arm with a guard never
+--   counts, because its guard may be false.
+-- Expected result: the last match is rejected; the INVALID marker is normative.
+
+auto a = match (number) {
+    1 -> 10,
+    _ -> 0,
+};
+
+auto b = match (number) {
+    int n -> n * 2, -- every value of number is an int
+};
+
+auto c = match (flag) {
+    true -> 1,
+    false -> 0,
+};
+
+auto d = match (number) { -- INVALID: the only catch-all arm has a guard
+    _ if enabled -> 1,
+};
+
+-- ============================================================================
+-- Example 304: 32. match
+-- Demonstrates: A match over an enum is exhaustive when its arms cover every member; no wildcard is needed and
+--   the enum does not have to be marked [Exhaustive]. When the target may be null, null must be covered as
+--   well.
+-- Context note: Status has exactly the members NONE and READY.
+-- Expected result: the last match is rejected; the INVALID marker is normative.
+
+auto a = match (status) {
+    .NONE -> 0,
+    .READY -> 1,
+};
+
+auto b = match (maybeStatus) {
+    .NONE -> 0,
+    .READY -> 1,
+    null -> 2,
+};
+
+auto c = match (maybeStatus) { -- INVALID: null is not covered
+    .NONE -> 0,
+    .READY -> 1,
+};
+
+-- ============================================================================
+-- Example 305: 32. match
+-- Demonstrates: The comma after an arm is optional. An expression body is read like every expression, so a
+--   parenthesized pattern that follows it without a comma is read as the argument list of a call of the body.
+--   The compiler reports that reading and asks for the comma; it does not require commas elsewhere.
+-- Expected result: the second match is rejected; the INVALID marker is normative.
+
+auto a = match (number) {
+    0 -> 10
+    1 -> 20
+    _ -> 30
+};
+
+auto b = match (number) {
+    0 -> Twice
+    (1) -> 20 -- INVALID: read as Twice(1) -> 20; write `0 -> Twice,`
+    _ -> 30
+};
+
+-- ============================================================================
+-- Example 306: 32. match
+-- Demonstrates: The block of an arm of a match expression may leave instead of producing a value, like a
+--   block of an if expression. The match has the type of the arms that complete.
+
+auto size = match (kind) {
+    0 -> {
+        return 0;
+    },
+    int other -> other * 2,
+};
+
+-- ============================================================================
+-- Example 307: 32.1 Pattern Forms
+-- Demonstrates: A numeric constant pattern may be negative: a minus sign directly before a numeric literal is
+--   part of the constant. The constant must be a value of the type of its target, so the most negative value
+--   of a signed type is a valid pattern.
+-- Context note: small is a byte and code is a ubyte.
+
+match (number) {
+    -1 -> { ... },
+    0 -> { ... },
+}
+
+match (small) {
+    -128 -> { ... }, -- the least byte
+    127 -> { ... },
+}
+
+-- ============================================================================
+-- Example 308: 32.1 Pattern Forms
+-- Demonstrates: The minus sign belongs to a numeric literal only. It is not an operator, and no other
+--   expression is a pattern.
+-- Context note: small is a byte and code is a ubyte.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+match (number) {
+    -limit -> { ... }, -- INVALID: a name is not a numeric literal
+    1 + 1 -> { ... },  -- INVALID: an expression is not a pattern
+    -(1) -> { ... },   -- INVALID
+}
+
+match (small) {
+    -129 -> { ... }, -- INVALID: not a value of byte
+    128 -> { ... },  -- INVALID: not a value of byte
+}
+
+match (code) {
+    -1 -> { ... }, -- INVALID: not a value of ubyte
+}
+
+-- ============================================================================
+-- Example 309: 32.1 Pattern Forms
+-- Demonstrates: A type pattern applies no implicit numeric conversion: over a scalar target it matches only
+--   the type of the target itself. This does not restrict type patterns over reference types, which match
+--   the dynamic type of the target and its subtypes.
+-- Context note: number is an int.
+-- Expected result: the second match is rejected; the INVALID marker is normative.
+
+match (number) {
+    int n -> { Use(n); },
+}
+
+match (number) {
+    long n -> { Use(n); }, -- INVALID: an int is not matched as a long
 }
 
 -- ============================================================================

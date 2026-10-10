@@ -133,6 +133,7 @@ walkDeclaration state declaration = case declaration of
     -- relationships before and after concrete declaration instantiation.
     TemplateTypeDeclaration {typeMembers = members} -> foldl walkDeclaration state members
     FunctionDeclaration {declarationBody = body} -> walkBlock Nothing state body
+    EnumDeclaration {} -> state
 
 walkBlock :: Maybe ClosureId -> WalkState -> Block ResolvedName Type -> WalkState
 walkBlock parent state block = foldStatements parent (blockStatements block) state
@@ -174,6 +175,7 @@ walkExpression parent state expression = case expression of
     NameExpression {} -> state
     LiteralExpression {} -> state
     MemberAccessExpression _ receiver _ _ -> walkExpression parent state receiver
+    MethodReferenceExpression _ receiver _ _ -> walkExpression parent state receiver
     CallExpression _ callee arguments _ ->
         foldl (walkExpression parent) (walkExpression parent state callee) arguments
     UnaryExpression _ _ value _ -> walkExpression parent state value
@@ -301,6 +303,7 @@ expressionFacts expression = case expression of
     NameExpression _ name valueType -> BodyFacts [(name, valueType)] [] []
     LiteralExpression {} -> emptyFacts
     MemberAccessExpression _ receiver _ _ -> expressionFacts receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionFacts receiver
     CallExpression _ callee arguments _ ->
         foldl appendFacts (expressionFacts callee) (map expressionFacts arguments)
     UnaryExpression _ _ value _ -> expressionFacts value
@@ -435,6 +438,7 @@ expressionContainsCall :: Expression name annotation -> Bool
 expressionContainsCall expression = case expression of
     CallExpression {} -> True
     MemberAccessExpression _ receiver _ _ -> expressionContainsCall receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionContainsCall receiver
     UnaryExpression _ _ value _ -> expressionContainsCall value
     BinaryExpression _ _ left right _ -> expressionContainsCall left || expressionContainsCall right
     IsPatternExpression _ subject _ _ -> expressionContainsCall subject

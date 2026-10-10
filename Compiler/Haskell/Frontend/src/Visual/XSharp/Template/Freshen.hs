@@ -120,6 +120,8 @@ freshDeclaration declaration = case declaration of
         -- A nested template introduces a separate substitution/freshening
         -- environment. It will be selected independently when demanded.
         pure declaration
+    -- An enum has no body and no template parameter in it.
+    EnumDeclaration {} -> pure declaration
 
 reserveDeclarationName :: Declaration ResolvedName Type -> Fresh ()
 reserveDeclarationName declaration = case declaration of
@@ -129,6 +131,7 @@ reserveDeclarationName declaration = case declaration of
         -- Nested templates own a separate specialization environment and must
         -- not leak definitions into the enclosing concrete type's map.
         pure ()
+    EnumDeclaration {} -> pure ()
 
 freshParameterDefinition :: Parameter ResolvedName Type -> Fresh (Parameter ResolvedName Type)
 freshParameterDefinition parameter = do
@@ -206,6 +209,8 @@ freshExpression expression = case expression of
         LiteralExpression spanValue literal <$> freshType annotation
     MemberAccessExpression spanValue receiver member annotation ->
         MemberAccessExpression spanValue <$> freshExpression receiver <*> pure member <*> freshType annotation
+    MethodReferenceExpression spanValue receiver member annotation ->
+        MethodReferenceExpression spanValue <$> freshExpression receiver <*> pure member <*> freshType annotation
     CallExpression spanValue callee arguments annotation ->
         CallExpression spanValue
             <$> freshExpression callee
@@ -321,6 +326,7 @@ declarationSymbols declaration = case declaration of
             : typeSymbols annotation
             ++ concatMap templateParameterSymbols parameters
             ++ concatMap declarationSymbols members
+    EnumDeclaration _ name annotation _ _ -> nameSymbol name : typeSymbols annotation
 
 templateParameterSymbols :: TemplateParameter ResolvedName Type -> [Int]
 templateParameterSymbols parameter =
@@ -363,6 +369,7 @@ expressionSymbols expression = case expression of
     NameExpression _ name annotation -> nameSymbol name : typeSymbols annotation
     LiteralExpression _ _ annotation -> typeSymbols annotation
     MemberAccessExpression _ receiver _ annotation -> expressionSymbols receiver ++ typeSymbols annotation
+    MethodReferenceExpression _ receiver _ annotation -> expressionSymbols receiver ++ typeSymbols annotation
     CallExpression _ callee arguments annotation ->
         expressionSymbols callee ++ concatMap expressionSymbols arguments ++ typeSymbols annotation
     UnaryExpression _ _ value annotation -> expressionSymbols value ++ typeSymbols annotation

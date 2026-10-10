@@ -46,9 +46,10 @@ is no decrement operator; `--` always starts a comment. A `while` or classic `fo
 with literal, wildcard and binding patterns and guards; `if` is also an expression over two value blocks;
 `guard (condition) else { ... }` runs its block when the condition is false; and a `{ ... }` at the start of a
 statement is a nested block with its own scope. Null coalescing `??` and `??=`, storage
-targets other than a named local, loop, conditional and match values that are not `bool` or numeric, `return` inside a
-loop expression, `return`, `break` and `continue` out of a block used as a value, the `null` and enum case patterns, type
-patterns over class hierarchies, and bindings in conditions are not implemented.
+targets other than a named local, loop, conditional and match values that are not `bool`, numeric or an enum, the
+`null` pattern, type patterns over class hierarchies, and bindings in conditions are not implemented. `return`,
+`break` and `continue` out of a block used as a value are implemented, in loop bodies, loop headers and loops used as
+expressions; "Pending branching and loop forms" below lists what is still owed.
 It does not yet implement the complete language catalog in `Spec/`.
 
 Core optimization is connected, verifier-guarded, and fixed-point driven. It performs immutable literal propagation,
@@ -79,6 +80,39 @@ The connected frontend is strongest around scalar expressions, local control flo
 CorePrep, namespace merging, and entry validation. Fixed-width integer/radix/separator behavior, character packing, numeric
 boolean context, source `void`, stable `SymbolId` identity, and constant range checks are represented before Core emission.
 
+### Pending branching and loop forms
+
+These are parts of the specified language that the frontend recognizes and
+rejects with a diagnostic that says so, or that fail in a later stage. They
+are owed work, not rules: none of them is a restriction of the language, and
+the specification is not changed to match them.
+
+| Pending | Specified by | Today | Needs |
+| --- | --- | --- | --- |
+| a binding in the condition of `if`, `guard` or `while`, as in `guard (auto user = Find()) else { return; }` | `Spec/Language/Decls.vxs`, examples 190 to 192 | `VXP0035` | optional values |
+| evaluation by need beyond local bindings of scalar type: arguments, results, other types, assigned and captured variables | `Spec/Language/Evaluation.vxs` | computed where they are written; see [Evaluation by need](EVALUATION.md) | thunks as values in the IR and the runtime |
+| a call that does not return as a way of leaving a `guard` block or a block used as a value | example 297 | every call is assumed to return, so the block is taken to complete: `VXT0061` or `VXT0046` | a way to know that a call does not return; how that is expressed in the language is not decided here |
+| a `match` over a subject that may be null | example 304 | `VXT0055` | nullable subjects |
+| an enum declared inside a class | the nested declarations of section 9 | `VXP0006` | qualified type names |
+| `enum class`, the enum with payloads | section 8 | not parsed | the object model |
+| type patterns over class hierarchies | examples 198 to 203 | `VXT0057` | class hierarchies |
+
+Implemented and verified through native execution, unoptimized and
+optimized: `return`, `break` and `continue` out of a block used as a value,
+in loop bodies; `break` and `continue` in a loop condition; `break` and
+`continue` in a `for` update clause; a `break` that carries a value out of a
+block used as a value to a loop used as an expression; `return` out of a
+loop used as an expression, directly and from a block used as a value; an
+`if` or `match` expression none of whose branches completes; classic enums,
+with their numbering, member values computed from earlier members, their
+comparison and `match` over them, complete
+without a catch-all arm when every value is named; calls of
+methods whose return type is inferred, in the same class, in another class,
+through chains of such methods and through mutual recursion; the inference
+of a callable's return type from returns inside its expressions; and
+callables created inside callables, called, returned and kept, with the
+AARC runtime that owns them.
+
 The full `Spec/` catalog is not implemented. Object/value layout, the complete standard-library surface, cross-namespace
 imports, template declaration cloning and constraint selection, exception lowering, ownership runtime operations, generators, FFI, assembly, and
 many advanced declaration forms require additional semantic and native work. Unsupported forms must produce frontend or
@@ -99,6 +133,7 @@ The repository contains:
 - Xpp control-flow, self-copy, and liveness-based dead `Define Copy` optimization;
 - shared directional worklist scheduling, dense definite-initialization facts, and packed AARC ownership states;
 - an Xpp-owned verifier for module/function identity, storage declarations, typed operands, and CFG targets;
+- Xpp ownership placement: explicit retains and releases for every AARC value, and closures for methods used as values;
 - Xpp-to-Xmm lowering; and
 - Xmm virtual-register move and dead materialization optimization;
 - an Xmm-owned verifier with register, signature, call, operand, result, and control-flow diagnostics, exposed through the
@@ -111,7 +146,7 @@ The repository contains:
 - in-memory LLVM IR and bitcode serialization with explicit `.ll`/`.bc` writers.
 
 The production frontend boundary uses public `VXCR` Core. The internal `VXCP` codec remains tested for in-process and golden
-contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v5 codecs now own public Xpp/Xmm disk
+contract coverage, but the CLI does not expose CorePrep. Bounded `VXPP` and `VXMM` v7 codecs now own public Xpp/Xmm disk
 artifacts and forward-only pipeline resumption. LLVM target-machine emission and typed C++20 LLD invocation produce `.o`,
 `.asm`, and `.vxse` artifacts. Project object and assembly requests produce one flattened output per source in the selected
 entry namespace; each owner boundary verifies the source catalog, and the driver replaces the set through a recoverable
@@ -122,7 +157,7 @@ unit.
 
 | Capability | Status | Boundary |
 | --- | --- | --- |
-| bounded VXCR v6 decode | connected | C++20 Core reader, closure records, template arguments, source ownership, and scalar payload validation |
+| bounded VXCR v10 decode | connected | C++20 Core reader, closure records, template arguments, source ownership, and scalar payload validation |
 | native Core semantic verification | connected | `Compiler/Core` |
 | Core-to-CorePrep atomization/CFG | connected | dedicated adapter |
 | CorePrep structural/semantic verification | connected | native CorePrep verifier |
@@ -133,8 +168,13 @@ unit.
 | target object and assembly output | connected for supported values | target machine |
 | `.vxse` link | connected for supported values | entry bridge plus typed LLD driver |
 | closure object ABI | connected | Xpp/Xmm, LLVM, and AARC runtime boundary |
+| callable that remembers its result | connected | Core, CorePrep, Xpp, Xmm and LLVM carry `Memoize`; the frontend produces it for arguments passed by need |
+| runtime calls | connected | one operation with a catalog of functions in Core, CorePrep, Xpp, Xmm and LLVM |
+| console output, string concatenation and equality | connected | `Console.Print`, `Println`, `Printf`, `Printfn`, the four `Error` forms and `Format`; see [Console output and strings](CONSOLE-IO.md) |
+| the runtime in a native executable | connected | `vxs-runtime.lib`, the ownership and text runtime without a C runtime, linked with every executable |
+| integer division by zero and shifts outside the width | connected | a check before the instruction stops the program |
 | recursive constructed-type classification | Haskell/native semantic models complete, process connection pending | frontend and Core nominal catalogs |
-| Xpp/Xmm disk codecs | connected | bounded v5 `VXPP`/`VXMM` readers and writers |
+| Xpp/Xmm disk codecs | connected | bounded v7 `VXPP`/`VXMM` readers and writers |
 | project per-source object/assembly emission | connected for the selected namespace | source ownership through CorePrep, Xpp, and Xmm |
 | VXCI `-Header` | registered and rejected explicitly | export/ABI semantics and a header writer are not connected |
 

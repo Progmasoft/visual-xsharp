@@ -244,9 +244,28 @@ update list, including inside a `CoreIf` there, is rejected with `VXC1066`:
 it has no later point of the same iteration to reach, and lowering it would
 jump back to the start of the update without testing the condition. A loop
 nested inside an update list has its own body and continuation point, so
-`CoreContinue` is valid again inside it. Source code cannot produce this form
-because a `for` update is a list of expressions; the rule protects Core built
-or transformed by other means.
+`CoreContinue` is valid again inside it. A source `continue` in an update
+clause ends the update, and the frontend lowers it without `CoreContinue`:
+an update clause that holds one becomes a loop that runs once, its
+statements followed by `CoreBreak`, and the `continue` becomes a `CoreBreak`
+of that loop. A source `break` in an update clause is the Core `CoreBreak`
+there; in an update clause that is wrapped it sets a flag bound before the
+loop, and the loop is left after the wrapper when the flag is set. A source
+`continue` in the condition of a `for` must not run the update, which the
+Core `CoreContinue` of the loop would: such a condition is evaluated in a
+loop of its own, which the `continue` repeats and which is left once the
+condition has a result. In a `while` or `do`/`while` loop the condition
+already stands at the top of the Core loop body, where `CoreContinue` does
+what the source asks. The rule protects Core built or transformed by other
+means.
+
+A function that returns a value must not fall off the end of its body
+(`VXC1005`). A body does not when every path returns or runs into a loop
+that cannot be left: one whose condition is the literal `true` and that no
+`CoreBreak` of its own body or update list leaves. A `CoreBreak` in a loop
+nested inside it leaves only that loop. The Haskell and the native verifier
+apply the same rule, and the native one decides it without recursing along
+an `else if` chain.
 
 Optimizer passes preserve the explicit loop form unless their rewrite proves
 the replacement semantics, including effects and transfer edges. In
@@ -349,21 +368,25 @@ The statements run where the source evaluates the expression:
   conjunction of `subject == literal` comparisons, the first branch is the
   body, and the second branch holds the arms after it. A pattern that accepts
   every value contributes no comparison, so a catch-all arm is its body
-  without a test and ends the chain. A name bound by a type pattern is an
-  immutable local initialized from its subject before the test of its arm.
-- A guard on an arm with comparisons is decided in a `$accepted` slot by the
-  rule of `&&` with a storing right operand: the guard and its statements run
-  only when the comparisons hold. A guard on an arm without comparisons is
-  the test itself.
+  without a test and ends the chain. A name bound by a type pattern is a
+  mutable local initialized from its subject. All such locals are bound
+  after the subjects and before the first test: binding an evaluated scalar
+  has no effect of its own, every local has its own symbol, and the chain
+  then holds nothing but tests and bodies.
+- A guard is the last operand of the short-circuit conjunction that tests
+  its arm, so it is evaluated only when the comparisons hold. A guard that
+  stores into a local needs statements of its own; it is decided in a
+  `$accepted` slot by the rule of `&&` with a storing right operand, and its
+  statements stand before the conditional of its arm, inside the false
+  branch of the arm before it.
 - A match used as an expression binds a mutable `$matched` slot and every
   body assigns it. The statement form has no slot; its block bodies are
   statement blocks of the enclosing body, so a `break value;` in them stores
   into the slot of the enclosing loop expression.
-- A match with more than 16 arms is lowered in groups of 16. The groups
-  follow each other in one statement sequence; a mutable `$taken` slot is
-  set by every body before it runs, and each group after the first is the
-  else branch of a test of that slot. The nesting of the lowered statements
-  is therefore bounded by one group, whatever the number of arms.
+- The arms form one chain: each arm is the false branch of the arm before
+  it, which is the shape of an `else if` chain. Every stage walks that shape
+  in a loop, so the lowering of a match is as deep as one arm, whatever the
+  number of arms.
 - `guard (condition) else { ... }` is `if (condition) { } else { ... }`.
 - A block statement has no Core form: its statements join the enclosing
   sequence. Every local has its own symbol, so the names of the block cannot
@@ -377,8 +400,42 @@ links in a loop instead of recursing, because recursion would use stack in
 proportion to the length of the chain. The encoding, the verifier's checks
 and the block numbering of CorePrep are those of the nested formulation; the
 Haskell CorePrep lowering and the native adapter are compared on such chains
-like on any other program. Other deep nesting is still walked recursively,
-and the wire format has no statement depth limit yet.
+like on any other program.
+
+Three shapes of expression nest as deep as an expression is long: a chain
+of operators nests in the first operand of each primitive, a chain of
+conditional expressions in each false arm, and a sequence of bindings in
+each let body. The native wire reader walks all three in a loop; the Core
+verifier and the adapter walk operator chains in a loop, and the adapter
+also let bodies and conditional chains. The symbols, the blocks and the
+checks are those of the nested formulation.
+
+Other nesting is walked recursively, one level of recursion per level of
+nesting, in the wire codec, the verifier and the adapter. The functions on
+those paths are written to keep their frames small: a statement holds two
+expressions by value and is large, so it is read into its place and built
+by functions that return before the next level is entered, and diagnostics
+and instructions are built outside the functions that recurse. Releasing a
+module does not recurse along a chain either: the destructors of an
+expression and of a statement move their operands and nested statements to a
+list and release them from there. Copying a module still recurses once per
+level; the pipeline copies only the bodies of closures.
+
+Two bounds keep the recursion within the stack. The frontend rejects a
+function body that nests statements more than 256 levels or expressions more
+than 1024 levels deep, with a source position, before Core exists. The
+native wire reader and writer bound statement bodies and expressions at 4096
+levels each, so Core from a file is bounded as well. `vxs`, `vxsi` and the
+fuzz programs run the pipeline on a thread with 256 MiB of reserved stack,
+`Visual/XSharp/Support/CompilerStack.hpp`, instead of the stack the
+operating system gives the process, which is one megabyte on Windows. A
+program that hosts the pipeline on another thread must give it enough stack
+or accept a lower depth. The stack each stage uses per level is measured
+with `//Compiler/Fuzzing:source_stack_probe`, which compiles a source file
+and reports the stack the compilation committed, and
+with `//Compiler/Support/Tests:stack_probe`, which runs one stage on a stack
+of a chosen size; the measurements are recorded in
+`Benchmarks/2026-10-04-Nesting-And-Chains.md`.
 
 `Visual.XSharp.Desugarer.Sequencing` and `Visual.XSharp.Desugarer.Branching`
 hold these rules. Result slots are
@@ -388,7 +445,7 @@ initialized with a neutral literal of their type that no path can observe.
 `CoreInterpreter.hs`, on the unoptimized and on the optimized Core against
 hand-written results. `BranchingOracleTests.hs` additionally compares
 generated matches with the `if` chains they stand for. The same programs run
-through CorePrep, Xpp, Xmm, LLVM and the ORC JIT in `source_fuzz_smoke`.
+through CorePrep, Xpp, Xmm, LLVM and the ORC JIT in `source_execution_smoke`.
 
 ## Expressions
 
@@ -435,6 +492,61 @@ must already be complete.
 Arithmetic operands must be numeric and use the same type. Comparisons return
 `bool`. Logical operands accept bool or numeric context and return `bool`.
 Unary primitives take one operand; other primitives take two.
+
+An integer quotient or remainder by zero, and a shift by an amount that is
+negative or not less than the width of its left operand, have no value. Core
+says nothing about them; the optimizer does not fold them, and generated code
+stops when it reaches one. `EVALUATION.md` has the details.
+
+#### Memoize
+
+`CoreMemoize` is a unary primitive whose operand is a callable. It is how a
+value by need is handed from one function to another; `EVALUATION.md` says
+when the frontend produces it.
+
+- The operand is a callable without parameters whose result is `bool` or
+  numeric.
+- The result is a callable of the same type. The first call of it calls the
+  operand and remembers what it returned; every later call returns the
+  remembered value and does not call the operand again.
+- The result is a value like any other callable: it may be bound, passed,
+  captured and returned, and every copy shares the one remembered value.
+
+#### Runtime call
+
+`CoreRuntimeCall` is a call of a function of the runtime: joining two
+strings, a conversion of the output format grammar, a console write. It is
+the one primitive whose arity depends on its first operand.
+
+- The first operand is an integer literal of type `int`, the identity of the
+  function in the runtime catalog. It is never a value that is computed: what
+  a program calls is fixed when the program is compiled.
+- The operands after it are the arguments, in the order the function takes
+  them, and they are evaluated in that order.
+- The type of the expression is the one the function returns: `String`,
+  `bool` or no value.
+
+The catalog is `Visual.XSharp.RuntimeCall` in the frontend and
+`Visual/XSharp/Core/RuntimeCall.hpp` in the native stages; `ARTIFACT-WIRE.md`
+lists its rows. A call that names no function, has the wrong number of
+arguments, an argument of a type its function does not take, or a type other
+than the function's result is rejected: `VXC1075` by the Core verifiers,
+`VXC0026` by the Haskell and `VXC1076` by the native CorePrep verifier,
+`VXP1048` by Xpp and `VXL1054` by Xmm.
+
+A console write is an effect. The optimizer treats it as a call of a function
+it knows nothing about: it is not removed when nothing uses its result, not
+repeated and not moved. The other runtime calls compute a string and nothing
+else. The frontend produces the
+primitive for `System.Console` and for `+`, `==` and `\=` on strings;
+`CONSOLE-IO.md` says how.
+
+The Core verifiers reject any other operand of a remembering callable with `VXC1073`. The native
+CorePrep verifier reports `VXC1074` and the Haskell one `VXC0025`, the Xpp
+verifier `VXP1047` and the Xmm verifier `VXL1053`; each of the last four also
+requires the result to have the operand's type. The optimizer does not fold
+the primitive, and `MemoizeTests.hs` pins that it neither repeats a remembered
+computation nor turns one remembering callable into two.
 
 ### Let
 

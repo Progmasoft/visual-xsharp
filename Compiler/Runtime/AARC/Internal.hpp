@@ -32,4 +32,9 @@ namespace Visual::XSharp::Runtime::Aarc
         std::atomic<void *> object{};
         void *allocation{};
     };
+
+    // Create a string from scalars of either spelling of the ABI.
+    template<typename Scalar>
+    [[nodiscard]] auto
+    MakeStringFrom(const Scalar *scalars, std::size_t count) noexcept -> void *;
 } // namespace Visual::XSharp::Runtime::Aarc

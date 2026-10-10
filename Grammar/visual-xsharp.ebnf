@@ -231,8 +231,8 @@ match-expression = "match", match-targets, "{", { match-arm }, "}" ;
 match-targets = "(", expression, ")", { ",", "(", expression, ")" } ;
 match-arm = match-patterns, [ "if", expression ], "->", ( block | expression ), [ "," ] ;
 match-patterns = match-pattern, { ",", match-pattern } ;
-match-pattern = [ "(" ], ( literal | "null" | "_" | ".", identifier
-        | type, ( identifier | "_" ) ), [ ")" ] ;
+match-pattern = [ "(" ], ( literal | "-", number-literal | "null" | "_"
+        | ".", identifier | type, ( identifier | "_" ) ), [ ")" ] ;
 
 while-statement = "while", "(", condition, ")", block ;
 do-while-statement = "do", block, "while", "(", expression, ")", ";" ;

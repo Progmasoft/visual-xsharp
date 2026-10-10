@@ -100,12 +100,31 @@ CreateClosureThunk(llvm::StructType *payload,
     return thunk;
 }
 
+/// Whether destroying a closure has anything to release: a strong capture
+/// of an object, or a weak or unowned handle. A closure over numbers and
+/// Booleans alone owns nothing.
+[[nodiscard]] static auto
+ClosureOwnsCaptures(const xmm::Instruction &instruction,
+                    const std::vector<llvm::Type *> &captureTypes) -> bool
+{
+    for (std::size_t index = 0; index < instruction.operands.size(); ++index)
+        if (instruction.capture_modes[index] != core::CaptureMode::Strong
+            || captureTypes[index]->isPointerTy())
+            return true;
+    return false;
+}
+
+/// The destructor of a closure, or null for a closure that owns nothing.
+/// The runtime runs no destructor for an object whose metadata names none,
+/// so such a closure costs no function of its own.
 [[nodiscard]] auto
 CreateClosureDestructor(llvm::StructType *payload,
                         const xmm::Instruction &instruction,
                         const std::vector<llvm::Type *> &captureTypes)
     -> llvm::Function *
 {
+    if (!ClosureOwnsCaptures(instruction, captureTypes))
+        return nullptr;
     auto *pointer = llvm::PointerType::get(context, 0);
     auto *type = llvm::FunctionType::get(llvm::Type::getVoidTy(context),
                                          { pointer },
@@ -151,6 +170,233 @@ CreateClosureDestructor(llvm::StructType *payload,
     return destructor;
 }
 
+/// The LLVM type of the metadata record an allocation is described by; it
+/// mirrors `VxsAarcTypeMetadata` of the public runtime ABI.
+[[nodiscard]] auto
+ObjectMetadataType() -> llvm::StructType *
+{
+    auto *pointer = llvm::PointerType::get(context, 0);
+    auto *sizeType = llvm::Triple(module.getTargetTriple()).isArch64Bit()
+                         ? llvm::Type::getInt64Ty(context)
+                         : llvm::Type::getInt32Ty(context);
+    std::array<llvm::Type *, 7U> fields{ llvm::Type::getInt32Ty(context),
+                                         llvm::Type::getInt32Ty(context),
+                                         llvm::Type::getInt64Ty(context),
+                                         sizeType,
+                                         sizeType,
+                                         pointer,
+                                         pointer };
+    return llvm::StructType::get(context, fields, false);
+}
+
+/// Allocates an AARC object with the given payload and destructor.
+///
+/// TypeMetadata mirrors the public runtime ABI. Size is expressed as an
+/// LLVM constant expression so the target data layout, not the host
+/// compiler, determines the payload size. A null destructor describes an
+/// object that owns nothing. A metadata record that the module already
+/// holds under the given name is used again.
+[[nodiscard]] auto
+AllocateObject(llvm::IRBuilder<> &builder,
+               llvm::StructType *payload,
+               llvm::Function *destructor,
+               const std::string &metadataName,
+               const char *valueName) -> llvm::Value *
+{
+    auto *pointer = llvm::PointerType::get(context, 0);
+    if (auto *known = module.getNamedGlobal(metadataName))
+        return builder.CreateCall(
+            RuntimeFunction("vxs_aarc_allocate", pointer, { pointer }),
+            { known },
+            valueName);
+    auto *sizeType = llvm::Triple(module.getTargetTriple()).isArch64Bit()
+                         ? llvm::Type::getInt64Ty(context)
+                         : llvm::Type::getInt32Ty(context);
+    auto *metadataType = ObjectMetadataType();
+    auto *payloadSize = llvm::ConstantExpr::getSizeOf(payload);
+    if (payloadSize->getType() != sizeType)
+    {
+        const auto sourceWidth
+            = llvm::cast<llvm::IntegerType>(payloadSize->getType())
+                  ->getBitWidth();
+        const auto targetWidth
+            = llvm::cast<llvm::IntegerType>(sizeType)->getBitWidth();
+        payloadSize = llvm::ConstantExpr::getCast(
+            sourceWidth < targetWidth ? llvm::Instruction::ZExt
+                                      : llvm::Instruction::Trunc,
+            payloadSize,
+            sizeType);
+    }
+    std::array<llvm::Constant *, 7U> metadataValues{
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 2U),
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0U),
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0U),
+        payloadSize,
+        llvm::ConstantInt::get(sizeType, 16U),
+        destructor != nullptr ? static_cast<llvm::Constant *>(destructor)
+                              : static_cast<llvm::Constant *>(
+                                    llvm::ConstantPointerNull::get(pointer)),
+        llvm::ConstantPointerNull::get(pointer)
+    };
+    auto *metadata = new llvm::GlobalVariable(
+        module,
+        metadataType,
+        true,
+        llvm::GlobalValue::PrivateLinkage,
+        llvm::ConstantStruct::get(metadataType, metadataValues),
+        metadataName);
+    return builder.CreateCall(
+        RuntimeFunction("vxs_aarc_allocate", pointer, { pointer }),
+        { metadata },
+        valueName);
+}
+
+/// Lowers a callable that remembers its result.
+///
+/// The value is an object of its own around the callable that computes the
+/// result. Like every closure it starts with its invoke entry, so a call
+/// site calls it as it calls any callable. Behind the entry it keeps
+/// whether it has a result, the result, and the callable. The entry calls
+/// the callable when there is no result yet, keeps what it returned, and
+/// returns the kept result from then on. Every holder of the object sees
+/// the same result, which is what lets a caller and the method it calls
+/// share one computation.
+///
+/// The object owns the callable and releases it when it is destroyed. The
+/// result owns nothing: the verifiers admit only Bool and numeric results.
+/// A call that does not return leaves the object without a result.
+///
+/// Nothing in the object's code depends on which computation it holds, so a
+/// module has one payload type, one entry, one destructor and one metadata
+/// record for each result type, however many values it suspends.
+[[nodiscard]] auto
+LowerMemoize(llvm::IRBuilder<> &builder,
+             FunctionState &state,
+             const xmm::Instruction &instruction) -> llvm::Value *
+{
+    const auto signature
+        = ::Visual::XSharp::Core::Callable::Decompose(instruction.result_type);
+    if (!signature || !signature->parameters.empty()
+        || instruction.operands.size() != 1U)
+        return nullptr;
+    auto *resultType = types.Lower(signature->result);
+    if (resultType == nullptr || resultType->isVoidTy())
+        return nullptr;
+    auto *computation = LoadValue(builder, state, instruction.operands.front());
+    if (computation == nullptr || !computation->getType()->isPointerTy())
+        return nullptr;
+
+    constexpr unsigned kInvoke = 0U;
+    constexpr unsigned kKnown = 1U;
+    constexpr unsigned kResult = 2U;
+    constexpr unsigned kComputation = 3U;
+    std::string index;
+    {
+        llvm::raw_string_ostream spelling(index);
+        resultType->print(spelling);
+    }
+    auto *pointer = llvm::PointerType::get(context, 0);
+    auto *flagType = llvm::Type::getInt8Ty(context);
+    auto *payload
+        = llvm::StructType::getTypeByName(context,
+                                          ".vxs.aarc.memo.payload." + index);
+    if (payload == nullptr)
+        payload = llvm::StructType::create(
+            context,
+            { pointer, flagType, resultType, pointer },
+            ".vxs.aarc.memo.payload." + index);
+
+    auto *invokeType = llvm::FunctionType::get(resultType, { pointer }, false);
+    auto *invoke = module.getFunction(".vxs.aarc.memo.invoke." + index);
+    if (invoke == nullptr)
+    {
+        invoke = llvm::Function::Create(invokeType,
+                                        llvm::GlobalValue::InternalLinkage,
+                                        ".vxs.aarc.memo.invoke." + index,
+                                        module);
+        auto *entry = llvm::BasicBlock::Create(context, "entry", invoke);
+        auto *compute = llvm::BasicBlock::Create(context, "compute", invoke);
+        auto *done = llvm::BasicBlock::Create(context, "done", invoke);
+        auto *self = invoke->getArg(0U);
+        llvm::IRBuilder<> body(entry);
+        auto *known
+            = body.CreateLoad(flagType,
+                              body.CreateStructGEP(payload, self, kKnown),
+                              "memo.known");
+        body.CreateCondBr(
+            body.CreateICmpNE(known, llvm::ConstantInt::get(flagType, 0U)),
+            done,
+            compute);
+
+        body.SetInsertPoint(compute);
+        auto *held
+            = body.CreateLoad(pointer,
+                              body.CreateStructGEP(payload, self, kComputation),
+                              "memo.computation");
+        // The callable is a closure: its payload begins with its own invoke
+        // entry, which takes the closure and returns the result.
+        auto *target = body.CreateLoad(pointer, held, "memo.target");
+        auto *computed
+            = body.CreateCall(invokeType, target, { held }, "memo.computed");
+        body.CreateStore(computed,
+                         body.CreateStructGEP(payload, self, kResult));
+        body.CreateStore(llvm::ConstantInt::get(flagType, 1U),
+                         body.CreateStructGEP(payload, self, kKnown));
+        body.CreateBr(done);
+
+        body.SetInsertPoint(done);
+        body.CreateRet(
+            body.CreateLoad(resultType,
+                            body.CreateStructGEP(payload, self, kResult),
+                            "memo.result"));
+    }
+
+    auto *destructor = module.getFunction(".vxs.aarc.memo.destroy." + index);
+    if (destructor == nullptr)
+    {
+        destructor = llvm::Function::Create(
+            llvm::FunctionType::get(llvm::Type::getVoidTy(context),
+                                    { pointer },
+                                    false),
+            llvm::GlobalValue::InternalLinkage,
+            ".vxs.aarc.memo.destroy." + index,
+            module);
+        llvm::IRBuilder<> body(
+            llvm::BasicBlock::Create(context, "entry", destructor));
+        auto *held
+            = body.CreateLoad(pointer,
+                              body.CreateStructGEP(payload,
+                                                   destructor->getArg(0U),
+                                                   kComputation));
+        body.CreateCall(RuntimeFunction("vxs_aarc_release_strong",
+                                        llvm::Type::getVoidTy(context),
+                                        { pointer }),
+                        { held });
+        body.CreateRetVoid();
+    }
+
+    auto *object = AllocateObject(builder,
+                                  payload,
+                                  destructor,
+                                  ".vxs.aarc.memo.metadata." + index,
+                                  "memo");
+    builder.CreateStore(invoke,
+                        builder.CreateStructGEP(payload, object, kInvoke));
+    builder.CreateStore(llvm::ConstantInt::get(flagType, 0U),
+                        builder.CreateStructGEP(payload, object, kKnown));
+    builder.CreateStore(llvm::Constant::getNullValue(resultType),
+                        builder.CreateStructGEP(payload, object, kResult));
+    // The operand stays with its own owner; the object takes a reference
+    // of its own.
+    auto *owned = builder.CreateCall(
+        RuntimeFunction("vxs_aarc_retain_strong", pointer, { pointer }),
+        { computation },
+        "memo.owned");
+    builder.CreateStore(owned,
+                        builder.CreateStructGEP(payload, object, kComputation));
+    return object;
+}
+
 [[nodiscard]] auto
 LowerClosure(llvm::IRBuilder<> &builder,
              FunctionState &state,
@@ -186,60 +432,15 @@ LowerClosure(llvm::IRBuilder<> &builder,
                                      target->second);
     auto *destructor
         = CreateClosureDestructor(payload, instruction, captureTypes);
-    if (thunk == nullptr || destructor == nullptr)
+    if (thunk == nullptr)
         return nullptr;
 
-    // TypeMetadata mirrors the public runtime ABI. Size is
-    // expressed as an LLVM constant expression so the target data
-    // layout, not the host compiler, determines the closure payload
-    // size.
-    auto *sizeType = llvm::Triple(module.getTargetTriple()).isArch64Bit()
-                         ? llvm::Type::getInt64Ty(context)
-                         : llvm::Type::getInt32Ty(context);
-    std::array<llvm::Type *, 7U> metadataFields{
-        llvm::Type::getInt32Ty(context),
-        llvm::Type::getInt32Ty(context),
-        llvm::Type::getInt64Ty(context),
-        sizeType,
-        sizeType,
-        pointer,
-        pointer
-    };
-    auto *metadataType = llvm::StructType::get(context, metadataFields, false);
-    auto *payloadSize = llvm::ConstantExpr::getSizeOf(payload);
-    if (payloadSize->getType() != sizeType)
-    {
-        const auto sourceWidth
-            = llvm::cast<llvm::IntegerType>(payloadSize->getType())
-                  ->getBitWidth();
-        const auto targetWidth
-            = llvm::cast<llvm::IntegerType>(sizeType)->getBitWidth();
-        payloadSize = llvm::ConstantExpr::getCast(
-            sourceWidth < targetWidth ? llvm::Instruction::ZExt
-                                      : llvm::Instruction::Trunc,
-            payloadSize,
-            sizeType);
-    }
-    std::array<llvm::Constant *, 7U> metadataValues{
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 2U),
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0U),
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0U),
-        payloadSize,
-        llvm::ConstantInt::get(sizeType, 16U),
-        destructor,
-        llvm::ConstantPointerNull::get(pointer)
-    };
-    auto *metadata = new llvm::GlobalVariable(
-        module,
-        metadataType,
-        true,
-        llvm::GlobalValue::PrivateLinkage,
-        llvm::ConstantStruct::get(metadataType, metadataValues),
-        ".vxs.aarc.closure.metadata." + std::to_string(closure_index++));
-    auto *object = builder.CreateCall(
-        RuntimeFunction("vxs_aarc_allocate", pointer, { pointer }),
-        { metadata },
-        "closure");
+    auto *object = AllocateObject(builder,
+                                  payload,
+                                  destructor,
+                                  ".vxs.aarc.closure.metadata."
+                                      + std::to_string(closure_index++),
+                                  "closure");
     builder.CreateStore(thunk, builder.CreateStructGEP(payload, object, 0U));
 
     for (std::size_t index = 0; index < instruction.operands.size(); ++index)
@@ -273,11 +474,238 @@ LowerClosure(llvm::IRBuilder<> &builder,
     return object;
 }
 
+// Values that cannot be computed.
+//
+// An integer quotient or remainder by zero, and a shift by an amount that is
+// negative or not less than the width of the shifted value, have no value.
+// A program that needs one fails: it stops there. LLVM gives the same
+// instructions no meaning at all, so without a check an optimizer may remove
+// the computation, or the code after it, as if the program had never needed
+// the value. Each such instruction is therefore preceded by a check that
+// stops the program, and the instruction itself only ever runs on operands
+// it has a value for.
+
+/// The function that stops the program when its two operands are equal or,
+/// with `below` unset, when the first is not below the second as unsigned
+/// numbers. It is small and always inlined, so that the check costs a
+/// comparison where the operand is not known and nothing where it is.
+[[nodiscard]] auto
+ComputabilityCheck(llvm::IntegerType *type, bool below) -> llvm::Function *
+{
+    const auto name
+        = std::string(below ? ".vxs.check.below.i" : ".vxs.check.differs.i")
+          + std::to_string(type->getBitWidth());
+    if (auto *existing = module.getFunction(name))
+        return existing;
+    auto *function = llvm::Function::Create(
+        llvm::FunctionType::get(llvm::Type::getVoidTy(context),
+                                { type, type },
+                                false),
+        llvm::GlobalValue::InternalLinkage,
+        name,
+        module);
+    function->addFnAttr(llvm::Attribute::AlwaysInline);
+    function->addFnAttr(llvm::Attribute::NoUnwind);
+    auto *entry = llvm::BasicBlock::Create(context, "entry", function);
+    auto *fails = llvm::BasicBlock::Create(context, "fails", function);
+    auto *computable
+        = llvm::BasicBlock::Create(context, "computable", function);
+    llvm::IRBuilder<> body(entry);
+    auto *holds
+        = below ? body.CreateICmpULT(function->getArg(0U), function->getArg(1U))
+                : body.CreateICmpNE(function->getArg(0U), function->getArg(1U));
+    body.CreateCondBr(holds, computable, fails);
+    body.SetInsertPoint(fails);
+    body.CreateCall(
+        llvm::Intrinsic::getOrInsertDeclaration(&module,
+                                                llvm::Intrinsic::trap));
+    body.CreateUnreachable();
+    body.SetInsertPoint(computable);
+    body.CreateRetVoid();
+    return function;
+}
+
+/// Stops the program when an integer divisor is zero, and gives the divisor
+/// the division is carried out with.
+///
+/// The least value of a signed type divided by minus one has a quotient one
+/// above the greatest value of the type. That is a result that does not fit,
+/// not a value that cannot be computed, and generated code lets every other
+/// integer result that does not fit wrap. Wrapped, the quotient is the least
+/// value again and the remainder is zero, which is what dividing by one
+/// gives; the division is carried out with one. The processor's own
+/// instruction would stop the program instead.
+[[nodiscard]] auto
+ComputableDivisor(llvm::IRBuilder<> &builder,
+                  llvm::Value *dividend,
+                  llvm::Value *divisor,
+                  bool isSigned) -> llvm::Value *
+{
+    auto *type = llvm::cast<llvm::IntegerType>(divisor->getType());
+    builder.CreateCall(ComputabilityCheck(type, false),
+                       { divisor, llvm::ConstantInt::get(type, 0U) });
+    if (!isSigned)
+        return divisor;
+    auto *least = llvm::ConstantInt::get(
+        type,
+        llvm::APInt::getSignedMinValue(type->getBitWidth()));
+    auto *wraps = builder.CreateAnd(
+        builder.CreateICmpEQ(dividend, least),
+        builder.CreateICmpEQ(divisor, llvm::ConstantInt::getSigned(type, -1)),
+        "quotient.wraps");
+    return builder.CreateSelect(wraps,
+                                llvm::ConstantInt::get(type, 1U),
+                                divisor,
+                                "divisor");
+}
+
+/// Stops the program when a shift amount is negative or not less than the
+/// width of the shifted value.
+void
+RequireShiftAmount(llvm::IRBuilder<> &builder, llvm::Value *amount)
+{
+    auto *type = llvm::cast<llvm::IntegerType>(amount->getType());
+    builder.CreateCall(
+        ComputabilityCheck(type, true),
+        { amount, llvm::ConstantInt::get(type, type->getBitWidth()) });
+}
+
+/// Lowers a call of a function of the runtime.
+///
+/// The verifiers have checked the call against its row of the catalog. An
+/// argument that the row gives a family of types is widened here to the one
+/// representation the runtime function is written for: a signed integer is
+/// sign-extended and an unsigned one zero-extended to sixty-four bits, and a
+/// floating-point number is extended to a `double`. None of these changes
+/// the value. A string result arrives with a reference the caller owns; when
+/// nothing takes it, it is released here. A Boolean result arrives as the
+/// byte the C ABI returns and is narrowed to the one bit a Bool is here.
+[[nodiscard]] auto
+LowerRuntimeCall(llvm::IRBuilder<> &builder,
+                 FunctionState &state,
+                 const xmm::Instruction &instruction) -> bool
+{
+    namespace runtime = core::runtime;
+    if (instruction.operands.empty()
+        || instruction.operands.front().kind != xmm::Value::Kind::Immediate)
+        return false;
+    const auto identity
+        = runtime::IdentityOf(instruction.operands.front().immediate,
+                              instruction.operands.front().type);
+    const auto *signature = identity ? runtime::Find(*identity) : nullptr;
+    if (signature == nullptr
+        || instruction.operands.size() != signature->parameters.size() + 1U)
+        return false;
+
+    auto *pointer = llvm::PointerType::get(context, 0);
+    auto *word = llvm::Type::getInt64Ty(context);
+    std::vector<llvm::Type *> parameterTypes;
+    std::vector<llvm::Value *> arguments;
+    parameterTypes.reserve(signature->parameters.size());
+    arguments.reserve(signature->parameters.size());
+    for (std::size_t index = 0U; index < signature->parameters.size(); ++index)
+    {
+        auto *value
+            = LoadValue(builder, state, instruction.operands[index + 1U]);
+        if (value == nullptr)
+            return false;
+        llvm::Type *expected = word;
+        switch (signature->parameters[index])
+        {
+            case runtime::Parameter::Signed:
+            case runtime::Parameter::Count:
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value
+                    = builder.CreateSExtOrTrunc(value, word, "runtime.signed");
+                break;
+            case runtime::Parameter::Unsigned:
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value = builder.CreateZExtOrTrunc(value,
+                                                  word,
+                                                  "runtime.unsigned");
+                break;
+            case runtime::Parameter::Floating:
+                expected = llvm::Type::getDoubleTy(context);
+                if (!value->getType()->isFloatingPointTy())
+                    return false;
+                if (value->getType() != expected)
+                    value = builder.CreateFPExt(value,
+                                                expected,
+                                                "runtime.floating");
+                break;
+            case runtime::Parameter::Bool:
+                // The C ABI passes a `bool` as a byte that is zero or one.
+                expected = llvm::Type::getInt8Ty(context);
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value = builder.CreateZExtOrTrunc(value,
+                                                  expected,
+                                                  "runtime.bool");
+                break;
+            case runtime::Parameter::Char:
+                expected = llvm::Type::getInt32Ty(context);
+                if (!value->getType()->isIntegerTy())
+                    return false;
+                value = builder.CreateZExtOrTrunc(value,
+                                                  expected,
+                                                  "runtime.char");
+                break;
+            case runtime::Parameter::Text:
+                expected = pointer;
+                if (!value->getType()->isPointerTy())
+                    return false;
+                break;
+        }
+        parameterTypes.push_back(expected);
+        arguments.push_back(value);
+    }
+
+    const auto yieldsText = signature->result == runtime::Result::Text;
+    const auto yieldsTruth = signature->result == runtime::Result::Truth;
+    auto callee = module.getOrInsertFunction(
+        std::string(signature->symbol),
+        llvm::FunctionType::get(yieldsText    ? pointer
+                                : yieldsTruth ? llvm::Type::getInt8Ty(context)
+                                              : llvm::Type::getVoidTy(context),
+                                parameterTypes,
+                                false));
+    auto *result = builder.CreateCall(callee,
+                                      arguments,
+                                      yieldsText    ? "runtime.text"
+                                      : yieldsTruth ? "runtime.truth"
+                                                    : "");
+    if (yieldsTruth)
+    {
+        if (instruction.has_result)
+            builder.CreateStore(
+                builder.CreateICmpNE(
+                    result,
+                    llvm::ConstantInt::get(result->getType(), 0U),
+                    "runtime.bool"),
+                state.slots.at(instruction.destination));
+        return true;
+    }
+    if (!yieldsText)
+        return true;
+    if (instruction.has_result)
+        builder.CreateStore(result, state.slots.at(instruction.destination));
+    else
+        builder.CreateCall(RuntimeFunction("vxs_aarc_release_strong",
+                                           llvm::Type::getVoidTy(context),
+                                           { pointer }),
+                           { result });
+    return true;
+}
+
 [[nodiscard]] auto
 LowerInstruction(llvm::IRBuilder<> &builder,
                  FunctionState &state,
                  const xmm::Instruction &instruction) -> bool
 {
+    if (instruction.opcode == xmm::Opcode::RuntimeCall)
+        return LowerRuntimeCall(builder, state, instruction);
     if (instruction.opcode == xmm::Opcode::Call)
     {
         auto *result = LowerCall(builder, state, instruction);
@@ -288,9 +716,12 @@ LowerInstruction(llvm::IRBuilder<> &builder,
                                 state.slots.at(instruction.destination));
         return true;
     }
-    if (instruction.opcode == xmm::Opcode::MakeClosure)
+    if (instruction.opcode == xmm::Opcode::MakeClosure
+        || instruction.opcode == xmm::Opcode::Memoize)
     {
-        auto *result = LowerClosure(builder, state, instruction);
+        auto *result = instruction.opcode == xmm::Opcode::Memoize
+                           ? LowerMemoize(builder, state, instruction)
+                           : LowerClosure(builder, state, instruction);
         if (result == nullptr)
             return false;
         if (instruction.has_result)
@@ -298,11 +729,11 @@ LowerInstruction(llvm::IRBuilder<> &builder,
                                 state.slots.at(instruction.destination));
         else
         {
-            // Closure construction retains every strong capture.  A
-            // discarded source closure still performs those
-            // observable ownership actions, but its temporary owner
-            // must be released immediately or a dead expression
-            // leaks both the environment and its captured values.
+            // Closure construction retains every strong capture, and a
+            // remembering callable retains its computation.  A discarded
+            // one still performs those observable ownership actions, but
+            // its temporary owner must be released immediately or a dead
+            // expression leaks both the object and what it holds.
             builder.CreateCall(
                 RuntimeFunction("vxs_aarc_release_strong",
                                 llvm::Type::getVoidTy(context),
@@ -331,6 +762,24 @@ LowerInstruction(llvm::IRBuilder<> &builder,
     const auto unsignedInteger
         = core::is_unsigned_integer(operandType)
           || operandType.kind == core::Type::Kind::Character;
+    switch (instruction.opcode)
+    {
+        case xmm::Opcode::Divide:
+        case xmm::Opcode::FloorDivide:
+        case xmm::Opcode::Remainder:
+            if (!floating)
+                operands[1] = ComputableDivisor(builder,
+                                                operands[0],
+                                                operands[1],
+                                                !unsignedInteger);
+            break;
+        case xmm::Opcode::ShiftLeft:
+        case xmm::Opcode::ShiftRight:
+            RequireShiftAmount(builder, operands[1]);
+            break;
+        default:
+            break;
+    }
     switch (instruction.opcode)
     {
         case xmm::Opcode::LoadImmediate:
@@ -497,6 +946,8 @@ LowerInstruction(llvm::IRBuilder<> &builder,
             break;
         case xmm::Opcode::Call:
         case xmm::Opcode::MakeClosure:
+        case xmm::Opcode::Memoize:
+        case xmm::Opcode::RuntimeCall:
         case xmm::Opcode::RetainStrong:
         case xmm::Opcode::ReleaseStrong:
         case xmm::Opcode::MakeWeak:

@@ -189,17 +189,122 @@ documents. It runs independently of libFuzzer and does not claim guided
 coverage. `source_fuzz_smoke` checks valid-source lowering and then runs the
 differential oracle on every generated program shape at trip counts 0 through
 11, once with a zero and once with a nonzero generated expression, before
-mutation campaigns begin. It also runs the programs of
-`ExpressionExecutionCases.cpp` and `BranchingExecutionCases.cpp`: assignments,
+mutation campaigns begin. `source_execution_smoke` runs the programs of
+`BranchingExecutionCases.cpp`, and `source_expression_smoke` those of
+`ExpressionExecutionCases.cpp` and
+`LeavingExecutionCases.cpp`: assignments,
 increments and loops used as values, and `match`, `if` expressions and
 `guard`, each with a hand-written result that both native pipeline modes must
 return. Those tables are transcribed from the evaluation tables of
 `AssignmentExpressionTests.hs`, `LoopExpressionTests.hs` and
 `BranchingTests.hs`, where the same programs are checked against a reference
 Core evaluator. `BranchingExecutionCases.cpp` also runs a match of 200 arms on
-subjects at the start, at both sides of a group boundary of the lowering, deep
-in later groups and in the catch-all, and an `else if` chain of 300 links,
-which the native stages after Core walk in a loop.
+seven subjects, from its first arm to the catch-all, an `else if` chain of
+300 links, which the native stages after Core walk in a loop, on five
+subjects, and programs at the nesting limits of the frontend: 255 nested
+`if` statements, entered and not entered, 1023 calls nested in each other's
+arguments, and a sum of 1024 operands. The nested calls are the shape that
+costs most compiler stack for each level. `source_execution_smoke` ends by
+printing `compiler stack committed: N KiB`, the stack its compiler thread
+committed for all of its programs, so that the figure can be read from the
+log of any platform that reports it: Windows, Linux and macOS.
+
+A body that several runs share is compiled once, and up to eight small
+bodies share a program. `ExecutionCases.cpp` puts each body in a method of
+its own and calls it once for each run from one further method, which
+compares every result with its expected value and returns a distinct bit for
+each run that differs; the program must return zero from both
+pipeline modes, and a result that is not zero names the runs that failed.
+Compiling dominates the cost of these cases under sanitizers, and the smoke
+program has a process watchdog, so the runs of a body are not worth a
+compilation each.
+
+`source_feature_smoke` runs the tables that are written by hand for single
+features: methods with inferred return types, evaluation by need, arguments
+passed by need and classic enums. A program that passes an argument by need
+creates objects of the runtime, so each of those runs alone under the
+allocation check described below. It also compiles programs that own
+closures while control leaves through a block used as a value, so that the
+ownership verifiers of Xpp and Xmm see those paths, and runs a hand-written
+table of closures: created, called, nested, returned and alive across loop
+transfers. A closure calls the AARC runtime, and the JIT resolves a runtime
+symbol in the process that hosts it, so this program links the runtime and
+exports its entry points. The other fuzz programs do not link it. Each
+closure program runs alone, and the runtime must hold no more allocations
+after it than before it, so a closure or a capture that is not released
+fails the program that leaked on every platform, not only where a leak
+sanitizer runs.
+
+The branching and leaving tables are generated. Their cases are written in
+`Compiler/Fuzzing/Cases/Selection.cases` and `Leaving.cases`: a body, its
+runs and the value each run must return, written by hand from the language
+rules. `go -C helpers run ./cmd/execution-cases generate` writes the rows
+under `Compiler/Fuzzing/Generated` and the Haskell module
+`BranchingEvaluationCases.hs` from them, and `check` fails when a committed
+table differs; the helper tests and CI run that check. One source keeps the
+two tables equal. It does not make them independent: a wrong expectation in
+a case file is wrong in both. The independent checks are the hand-written
+tables that do not come from these files, `ExpressionExecutionCases.cpp` and
+the inferred-return table of `SourceFeatureSmoke.cpp`, the oracle tests of
+`BranchingOracleTests.hs`, which compare each `match` with the `if` chain it
+stands for, and the differential generator with its host model.
+
+The tables are a program of their own because each smoke program is one
+deterministic check under one process watchdog. As one program, in the
+fuzzing configuration, the tables took 107 seconds and the differential
+sweep 107 seconds of a 221 second run, which left no margin under the 240
+second watchdog on a loaded machine; a passing second attempt was not a
+fix. The watchdog is unchanged, and no case was removed. Measured on the
+same Windows machine in the same configuration after the split, three runs
+each: `source_execution_smoke` takes 77 to 110 seconds, of which in the run
+that was broken down 23 were the expression table, 35 the branching table,
+17 the leaving table and 2 the ownership programs; `source_fuzz_smoke` takes
+100 to 105 seconds, of which 98 are the differential sweep. Other work ran
+on the machine during these runs, so the spread is not the programs' own.
+In an ordinary build each takes about 7 seconds.
+
+The feature tables became a third program for the same reason. With the
+tables for evaluation by need and enums, `source_execution_smoke` ran past
+the watchdog in the fuzzing configuration. Apart, on the same Windows
+machine in that configuration with nothing else running,
+`source_execution_smoke` takes 91 seconds, of which 24 are the expression
+table, 45 the branching table and 22 the leaving table, and
+`source_feature_smoke` takes 45 seconds, of which 28 are the closure
+programs. The watchdog is unchanged, and no case was removed.
+
+`source_console_smoke` runs programs that write: console output, the
+conversions of a format, and the joining and comparing of strings. Each is
+compiled from source in both pipeline modes and run under the JIT with the
+runtime library this program links, whose output goes to a sink instead of
+the streams of the process. What a program wrote is compared with text
+written by hand, and the runtime must hold no more allocations after a
+program than before it, because every string is one of its objects.
+
+The expression and leaving tables became a fourth program,
+`source_expression_smoke`, when arguments came to be passed by need. Every
+run of a body passes its inputs as calls, so that no stage can fold them, and
+each such argument is now a suspended computation: two objects, a function
+for its body and an entry it is called through. The programs of the three
+tables grew with that. In an ordinary build they took 27 seconds together
+where they had taken 7, and 344 seconds in the fuzzing configuration, past
+the watchdog with every case passing. Three changes brought the ordinary
+build to 21 seconds: a module has one entry, one destructor and one metadata
+record for the callables that remember a result of one type, where it had
+them for each such callable; a closure that owns nothing has no destructor;
+and the native Core verifier no longer copies every visible definition for
+each branch and each closure, which had made its time grow with the square
+of a function's size. That was not enough for the fuzzing configuration, so
+the tables are two programs. The watchdog is unchanged, and no case was
+removed. What an argument by need costs in generated code is a cost of the
+current lowering, listed in `EVALUATION.md`.
+
+The source fuzz targets and the source smoke programs run the compiler on the
+compiler stack, as `vxs` does, because an input nested up to the frontend's
+limits does not fit on the default stack of a process. `Corpus/source` has
+permanent seeds for deep nesting, for nesting at and one level beyond each
+limit, for long `else if` and operator chains, which are not nesting, for
+negative constant patterns, and for blocks used as values that leave with
+`return`, `break` and `continue`.
 
 The differential generator selects one of fourteen program shapes from the
 byte after its generated expression, modulo the shape count. Adding a shape

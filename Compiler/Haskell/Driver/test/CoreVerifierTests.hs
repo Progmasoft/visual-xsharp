@@ -20,6 +20,26 @@ coreVerifierTests =
     , ("Core verifier rejects an unresolved function result", rejectedWith "VXC1003" unresolvedFunctionResult)
     , ("Core verifier rejects duplicate parameter symbols", rejectedWith "VXC1004" duplicateParameters)
     , ("Core verifier rejects a missing value return", rejectedWith "VXC1005" missingValueReturn)
+    , -- A loop that cannot be left never falls through to the end.
+      ("Core verifier accepts a body that ends in a loop that cannot be left", accepted (endsInLoop (CoreWhile trueValue [])))
+    , ("Core verifier accepts an endless do/while at the end of a body", accepted (endsInLoop (CoreDoWhile [] trueValue)))
+    , ("Core verifier accepts an endless for at the end of a body", accepted (endsInLoop (CoreFor trueValue [] [])))
+    ,
+        ( "Core verifier rejects a body that ends in a loop a break leaves"
+        , rejectedWith "VXC1005" (endsInLoop (CoreWhile trueValue [CoreIf trueValue [CoreBreak] []]))
+        )
+    ,
+        ( "Core verifier rejects a body that ends in a for loop whose update breaks"
+        , rejectedWith "VXC1005" (endsInLoop (CoreFor trueValue [] [CoreBreak]))
+        )
+    ,
+        ( "Core verifier rejects a body that ends in a loop with a condition"
+        , rejectedWith "VXC1005" (endsInLoop (CoreWhile (CoreLiteral (CoreBoolean False) boolType) []))
+        )
+    ,
+        ( "a break of a nested loop does not leave the loop around it"
+        , accepted (endsInLoop (CoreWhile trueValue [CoreWhile trueValue [CoreBreak]]))
+        )
     , ("Core verifier rejects a zero function symbol", rejectedWith "VXC1006" zeroFunctionSymbol)
     , ("Core verifier rejects a negative parameter symbol", rejectedWith "VXC1006" negativeParameterSymbol)
     , ("Core verifier rejects an unresolved parameter type", rejectedWith "VXC1007" unresolvedParameterType)
@@ -156,6 +176,13 @@ duplicateParameters =
 
 missingValueReturn :: CoreModule
 missingValueReturn = coreModule [function mainName [] intType []]
+
+-- | A function that returns a value and whose body is the given loop alone.
+endsInLoop :: CoreStatement -> CoreModule
+endsInLoop loop = coreModule [function mainName [] intType [loop]]
+
+trueValue :: CoreExpression
+trueValue = CoreLiteral (CoreBoolean True) boolType
 
 zeroFunctionSymbol :: CoreModule
 zeroFunctionSymbol = coreModule [unitFunction (resolved 0 "Main") []]

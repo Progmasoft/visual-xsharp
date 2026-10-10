@@ -144,8 +144,12 @@ compileSemanticToCorePrep semantic = do
             templateSpecializationDiagnostics
             (planTemplateSpecializations defaultTemplateSpecializationLimits typed (discoveredTemplateDemands templateDiscovery))
             >>= mapLeft templatePlanDiagnostics . verifyTemplateSpecializationPlan
-    ordinaryCore <- runDesugarer defaultDesugarer typed >>= verifyCore
-    specializationCore <- runDesugarer defaultDesugarer (specializationTypedAST templatePlan) >>= verifyCore
+    -- The two trees are one program: which calls have an effect is
+    -- decided from both.
+    let specializations = specializationTypedAST templatePlan
+        desugarer = desugarerWithin [typed, specializations]
+    ordinaryCore <- runDesugarer desugarer typed >>= verifyCore
+    specializationCore <- runDesugarer desugarer specializations >>= verifyCore
     let core =
             CoreModuleWithSources
                 (coreModuleName ordinaryCore)

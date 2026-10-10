@@ -65,6 +65,7 @@ jobs:
           go run ./helpers/cmd/verify-helpers
           go run ./helpers/cmd/verify-examples
           go run ./helpers/cmd/verify-benchmarks
+          go run ./helpers/cmd/execution-cases check
 
       - name: Build and run native compiler suites
         shell: bash

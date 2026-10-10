@@ -218,7 +218,7 @@ The type checker reports:
 | `VXT0036` | a conditional test is neither `bool` nor numeric |
 | `VXT0037` | the two results of a conditional have different types |
 | `VXT0038` | the two operands of truthy coalescing have different types |
-| `VXT0039` | the result of a conditional form is neither `bool` nor numeric; other result types are not lowered yet |
+| `VXT0039` | the result of a conditional form is not `bool`, numeric, an enum or, for `? :`, a `String`; other result types are not lowered yet |
 
 A compound assignment otherwise reuses the assignment and operator
 diagnostics: `VXT0003` for an immutable target and `VXT0012` for operands the
@@ -258,8 +258,11 @@ reports:
 | `VXT0041` | the condition of a loop used as an expression is not the constant `true` (or, for `for`, absent), so the loop could end without a value |
 | `VXT0042` | a loop used as an expression has no `break` that carries a value |
 | `VXT0043` | the `break` values of one loop have different types |
-| `VXT0044` | the loop value is neither `bool` nor numeric; other result types are not lowered yet |
-| `VXT0045` | `return` inside a loop used as an expression, which is not supported yet |
+| `VXT0044` | the loop value is neither `bool`, numeric nor an enum; other result types are not lowered yet |
+
+A `return` inside a loop used as an expression leaves the method. A loop that
+no `break` leaves and that returns never yields a value, which is valid; a
+loop that neither breaks nor returns is `VXT0042`.
 
 A `break` always leaves the innermost loop, so a value-carrying `break` inside
 a loop statement nested in a loop expression is still `VXT0026`. The value of
@@ -293,15 +296,19 @@ The parser reports:
 | `VXP0033` | an `if` used as an expression has no `else` branch |
 | `VXP0034` | the `else` branch of an `if` used as an expression is another `if` instead of a block |
 | `VXP0035` | the condition of an `if`, `guard` or `while` is a binding such as `auto user = Find()`, which requires optional values |
-| `VXP0036` | a match arm does not start with a pattern: a literal, `_`, `null`, `.Case`, or a type followed by a name or `_` |
+| `VXP0036` | a match arm does not start with a pattern: a literal, a `-` and a numeric literal, `_`, `null`, `.Case`, or a type followed by a name or `_`; or a `-` in a pattern is not followed by a numeric literal |
 | `VXP0037` | `guard (condition)` is not followed by `else` |
-| `VXP0038` | a match arm with an expression body is followed by neither `,` nor `}` |
+| `VXP0038` | the pattern of a match arm was read as part of the expression body of the arm before it |
 
 A bare name is not a pattern, so `value -> ...` is `VXP0036`: a binding always
-states its type, as in `int value -> ...`. A literal pattern has no sign.
-The comma after a block body is optional; after an expression body it is
-required unless the arm is the last one, because the parenthesized pattern of
-the next arm would otherwise continue the expression as a call. An unterminated
+states its type, as in `int value -> ...`. A numeric literal may be preceded
+by `-`, which makes the constant negative; no other expression is a pattern.
+The constant is checked against the type of its subject like every literal
+(`VXT0016`), so `-128` is a pattern for a `byte` and `-129`, `128` and any
+negative constant for an unsigned subject are not.
+The comma after an arm is optional. Without it, a parenthesized pattern after
+an expression body continues that expression as a call, and the `->` that
+follows cannot; `VXP0038` is reported at that arrow. An unterminated
 match reports `VXP0002`.
 
 The renamer reports `VXR0008` when a pattern binds a name that is already in
@@ -313,8 +320,7 @@ The type checker reports:
 
 | Code | Meaning |
 | --- | --- |
-| `VXT0046` | a block used as a value does not end with an expression that has no semicolon |
-| `VXT0047` | `return` inside a block used as a value, which is not supported yet |
+| `VXT0046` | a block used as a value can complete normally and does not end with an expression that has no semicolon |
 | `VXT0048` | a match arm does not have exactly one pattern for each subject |
 | `VXT0049` | a match guard is neither `bool` nor numeric |
 | `VXT0050` | the arms of a match used as an expression have different types |
@@ -323,12 +329,56 @@ The type checker reports:
 | `VXT0053` | a match arm can never be selected because an earlier arm accepts everything it accepts |
 | `VXT0054` | a literal pattern cannot be compared with its subject |
 | `VXT0055` | a `null` pattern; reference subjects are not supported in `match` yet |
-| `VXT0056` | an enum case pattern such as `.Ready`; enum declarations are not implemented |
+| `VXT0056` | an enum case pattern such as `.Ready` for a subject that is not of an enum type |
 | `VXT0057` | a type pattern names another type than its subject's; class hierarchies are not implemented |
 | `VXT0058` | a match subject is neither `bool` nor numeric; other subject types are not lowered yet |
-| `VXT0059` | `break` or `continue` would leave a block that is used as a value |
 | `VXT0060` | a guard condition is neither `bool` nor numeric |
 | `VXT0061` | the `else` block of a guard can complete normally instead of leaving the enclosing scope |
+| `VXT0062` | the `return` statements of a method or callable whose result type is inferred carry values of different types |
+| `VXT0063` | the return type of a method declared with `auto` cannot be inferred: every result is a call that depends on the method itself |
+| `VXT0064` | an enum has no member of the given name, in `Enum.Member` or in a case pattern |
+| `VXT0065` | an operation on a value of an enum other than `==` or `\=` with a value of the same enum |
+| `VXT0066` | the underlying type of an enum is not an integer type |
+| `VXT0067` | an enum names a member twice |
+| `VXT0068` | the value of an enum member does not fit the underlying type of the enum |
+| `VXT0069` | a target-typed `.Member` stands where no enum type is expected: the type of the place is inferred, or is not an enum |
+| `VXT0070` | the value written for an enum member is not a constant integer expression, names something that is not an earlier member of the same enum, or has no value, as a division by zero has none |
+
+A block used as a value may leave instead of yielding a value: `return`
+leaves the enclosing method and is checked against its return type
+(`VXT0005`), also from inside a loop used as an expression, and `break` and
+`continue` target the nearest loop around the expression and need one
+(`VXT0025`, `VXT0027`). A `break` follows the rules of that loop: it carries
+a value to a loop used as an expression (`VXT0040` without one) and none to a
+loop statement (`VXT0026`). The condition and the update clause of a loop
+belong to the loop: a `break` in a block used as a value there leaves that
+loop, a `continue` in the condition evaluates the condition again, and a
+`continue` in the update clause of a `for` ends the update. A callable is
+not inside the loops around the place that creates it, so a `break` or
+`continue` in its body is `VXT0025` or `VXT0027` unless a loop of its own
+encloses it. The returns of a callable whose
+result type is inferred are collected through expressions as well and must
+agree (`VXT0062`); the returns of a nested callable are its own. A method
+declared with `auto` is inferred the same way before its callers are
+checked, wherever it is declared; calls of methods that are not inferred yet
+take no part, so a recursive method is inferred from its base case, and a
+method all of whose results depend on itself is `VXT0063`. A block that cannot complete normally
+needs no final expression and gives its expression no type; the blocks that
+complete do. When no block completes, the expression never yields a value.
+That is valid: the place that would have received the value is not held to a
+type, because it is never reached, and nothing is stored for it. The
+statements after it are still checked.
+
+Whether a block can complete normally, for `VXT0046` and `VXT0061`, is decided
+from its control flow. A statement cannot complete when it is a `return`, a
+`break` or a `continue`; an `if` with an `else` whose two blocks both cannot;
+a nested block that cannot; a loop whose condition is the literal `true`, or
+absent in a `for`, and that no `break` leaves, also from a block used as a
+value; a statement `match` one arm of which always matches and all arms of
+which are blocks that cannot; or any statement an expression of which is
+always evaluated and never yields a value. A block cannot complete when any
+of its statements cannot. A call is assumed to return: calls whose result is `never`
+are not recognized yet.
 
 A match used as an expression is complete, so that `VXT0052` is not reported,
 when an arm without a guard has only `_` and type patterns, or when every
@@ -341,7 +391,7 @@ literal.
 An arm made only of untyped numeric literals takes its type from the context
 that receives the match, and without one from the first arm that has a type.
 A literal pattern is typed as the other operand of a comparison with its
-subject. A pattern binding is immutable, so assigning it is `VXT0003`. An
+subject. A pattern binding is an ordinary local and may be assigned. An
 expression body in a statement match must have an effect, like any expression
 statement; a pure one is `VXT0013`.
 
@@ -357,6 +407,48 @@ A `{` at the start of a statement opens a nested block. It has no diagnostics
 of its own: an unterminated block is `VXP0002`, a name it declares is unknown
 after it, and declaring a name that is already in scope is `VXR0003`, as for
 any local. Two blocks side by side may declare the same name.
+
+### Nesting limits
+
+The stages after Core recurse once per level of real nesting, so the
+frontend bounds how deep a function body may nest and reports the place where
+it becomes too deep. The check runs before any analysis of the body. The two
+values are resource limits of this implementation, chosen against the
+measured cost of a level in every native stage; the specification states no
+nesting limit, and they are not language rules. They are the limits this
+version of the compiler ships with, together with a compiler stack
+reservation of 256 MiB. A program at the expression limit commits about
+2.5 MiB of that stack in an ordinary build on Windows, Linux and macOS, and
+at most 5.5 MiB in a sanitizer build; the measurements are in
+`Benchmarks/2026-10-04-Nesting-And-Chains.md`:
+
+| Code | Meaning |
+| --- | --- |
+| `VXP0039` | a statement is nested more than 256 levels deep in other statements |
+| `VXP0040` | an expression is nested more than 1024 levels deep in other expressions |
+
+`VXP0041` is no longer reported. It refused a value of an enum member that
+was not an integer literal; a member value is now any constant integer
+expression, and `VXT0070` reports one that is not.
+
+The statements of a function body are at level 1, and an expression that is
+not an operand is at level 1. A block, a branch, a loop body, a `guard`
+block, a block used as a value and a closure body are each one statement
+level below what holds them. The links of an `else if` chain are all at the
+level of the first `if`, and so are the `if` statements of `else { if ... }`.
+The body of a `match` arm is one level below its match, however many arms
+the match has. Expressions inside a statement that is itself inside
+an expression keep counting from that expression. Each function reports each
+code at most once, at the first node in source order that is one level
+beyond the limit, and nothing below that node is examined.
+
+A chain of a binary operator is not nesting either. The left operand of a
+binary operator is at the level of the operator, so `a + b + c + ...` and
+`a && b && c && ...` are at one level however long they are: every stage
+walks such a chain in a loop, and a sum of 50000 operands compiles. A right
+operand, a call argument, a conditional result and the operand of a unary
+operator are one level below the expression that holds them, so
+`a + (b + (c + ...))` nests one level per addition.
 
 ### Supplied token streams
 
@@ -439,6 +531,40 @@ document bytes. Relevant categories include:
 Xpp and Xmm have bounded public readers. Malformed artifacts report framing, version, tag, scalar, or resource-limit failures
 at decode. Structurally valid but semantically invalid artifacts report the owning Xpp or Xmm verifier failure before
 optimization or lowering.
+
+A callable that remembers its result is checked by every stage that carries it. Each stage reports under its own code
+that the operand is not a callable without parameters whose result is `bool` or numeric, or that the result does not
+have the operand's type:
+
+| Code | Stage |
+| --- | --- |
+| `VXC1073` | Core, in the Haskell and the native verifier |
+| `VXC0025` | CorePrep, in the Haskell verifier |
+| `VXC1074` | CorePrep, in the native verifier |
+| `VXP1047` | Xpp |
+| `VXL1053` | Xmm |
+
+None of them can be reached from source: the frontend produces the operation only in a form that passes. They report a
+malformed artifact or a defect of a stage.
+
+A call of a runtime function is checked the same way, by every stage, against the runtime catalog: that its first operand
+is a literal that names a function, that it has that function's number of arguments, that each argument has a type the
+function takes, and that the call has the type the function returns.
+
+| Code | Stage |
+| --- | --- |
+| `VXC1075` | Core, in the Haskell and the native verifier |
+| `VXC0026` | CorePrep, in the Haskell verifier |
+| `VXC1076` | CorePrep, in the native verifier |
+| `VXP1048` | Xpp |
+| `VXL1054` | Xmm |
+
+These cannot be reached from source either. What a program can get wrong about the console and about strings is reported
+by the type checker, with `VXT0071` to `VXT0079`; [Console output and strings](CONSOLE-IO.md) lists them.
+
+A method reference `Type::Method` reports `VXT0080` when the method has several overloads and the place does not expect
+the type of exactly one of them, and `VXT0081` when its receiver is a value and not a type;
+[Static member resolution](STATIC-MEMBER-RESOLUTION.md) lists the forms.
 
 ## Safe output behavior
 

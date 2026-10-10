@@ -69,8 +69,12 @@ following vocabulary:
 - [Template monomorphization](MONOMORPHIZATION.md) defines concrete specialization identity, placement, demand discovery, and current limits.
 - [Numeric types](NUMERIC-TYPES.md) records fixed scalar widths and the gap between frontend semantics and the current Core
   transport.
-- [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, Core wire v8, Xpp, Xmm, and LLVM.
+- [Scalar pipeline](SCALAR-PIPELINE.md) follows fixed-width values through verification, Core wire v10, Xpp, Xmm, and LLVM.
 - [Artifact wire](ARTIFACT-WIRE.md) defines the bounded internal Core and CorePrep transport contracts.
+- [Console output and strings](CONSOLE-IO.md) covers `System.Console`, the output format grammar, the runtime calls
+  it compiles to and the runtime library a native executable is linked with.
+- [Evaluation by need](EVALUATION.md) says how much of the lazy evaluation of the language the compiler implements,
+  how a value is deferred, and what is pending.
 - [Match, if expressions, guard and nested blocks](BRANCHING.md) describes the implemented subset of those forms, their
   evaluation order and their limits.
 - [Control-flow safety](CONTROL-FLOW-SAFETY.md) defines short-circuit lowering and the shared Xpp/Xmm

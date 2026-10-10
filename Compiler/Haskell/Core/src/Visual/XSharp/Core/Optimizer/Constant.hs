@@ -167,10 +167,15 @@ simplifyExpressionUsing environment facts expression = case expression of
             (map (simplifyExpressionUsing environment facts) arguments)
             valueType
     CorePrimitive primitive arguments valueType ->
+        -- The facts are consulted for Boolean results only. Asking them
+        -- about every node would evaluate the whole operand tree again at
+        -- each level of an operator chain, which is quadratic in its length.
         let simplified = foldPrimitive primitive (map (simplifyExpressionUsing environment facts) arguments) valueType
-         in case conditionTruthFromFacts facts simplified of
-                Just truth | valueType == boolType -> CoreLiteral (CoreBoolean truth) boolType
-                _ -> simplified
+         in if valueType /= boolType || not (withinFactQueryBudget simplified)
+                then simplified
+                else case conditionTruthFromFacts facts simplified of
+                    Just truth -> CoreLiteral (CoreBoolean truth) boolType
+                    Nothing -> simplified
     CoreLet name bindingType value body valueType ->
         let simplifiedValue = simplifyExpressionUsing environment facts value
             bodyEnvironment =
@@ -212,6 +217,37 @@ simplifyExpressionUsing environment facts expression = case expression of
     where
         simplifyCapture capture =
             capture {coreCaptureValue = simplifyExpressionWithFacts environment facts (coreCaptureValue capture)}
+
+{- | The largest condition, in expression nodes, whose truth is looked up in
+the integer facts while it is simplified.
+
+The lookup walks the condition, and it is made at every Boolean node from
+the leaves up, so on a chain of @&&@ or @||@ its cost grows with a power of
+the length of the chain: 200 comparisons took 47 seconds. A condition of
+ordinary size is far below the budget. A longer one is still simplified by
+folding; only the facts are not asked about its larger parts.
+-}
+factQueryNodeBudget :: Int
+factQueryNodeBudget = 256
+
+{- | Whether an expression has at most 'factQueryNodeBudget' nodes; the
+count stops as soon as the budget is exceeded.
+-}
+withinFactQueryBudget :: CoreExpression -> Bool
+withinFactQueryBudget root = go factQueryNodeBudget [root]
+    where
+        go _ [] = True
+        go remaining (expression : pending)
+            | remaining <= 0 = False
+            | otherwise = go (remaining - 1) (children expression ++ pending)
+        children expression = case expression of
+            CoreVariable {} -> []
+            CoreLiteral {} -> []
+            CoreApply callee arguments _ -> callee : arguments
+            CorePrimitive _ arguments _ -> arguments
+            CoreLet _ _ value body _ -> [value, body]
+            CoreConditional condition whenTrue whenFalse _ -> [condition, whenTrue, whenFalse]
+            CoreClosure captures _ _ _ _ -> map coreCaptureValue captures
 
 foldPrimitive :: CorePrimitive -> [CoreExpression] -> Type -> CoreExpression
 foldPrimitive primitive arguments valueType =

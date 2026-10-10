@@ -589,7 +589,19 @@ namespace
                        PathText(executable));
             return 1;
         }
-        const int status = RunInstalledTool(PathText(executable), arguments);
+        // The artifact is named relative to the working directory, and a
+        // name without a directory would be looked for on PATH, where the
+        // program just built is not. Start it by its absolute path.
+        const auto absolute = std::filesystem::absolute(executable, error);
+        if (error)
+        {
+            fmt::print(stderr,
+                       "vxs: could not resolve native executable '{}': {}\n",
+                       PathText(executable),
+                       error.message());
+            return 1;
+        }
+        const int status = RunInstalledTool(PathText(absolute), arguments);
         if (status == -1)
         {
             fmt::print(

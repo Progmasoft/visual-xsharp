@@ -8,6 +8,7 @@ module Visual.XSharp.Resolver.NameResolution (NameResolution (..), defaultNameRe
 
 import Visual.XSharp.AST
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.RuntimeCall (builtinConsoleSymbol, builtinSystemSymbol)
 
 -- | Pluggable name-resolution pass over a fully renamed syntax tree.
 newtype NameResolution = NameResolution
@@ -49,6 +50,9 @@ resolveDeclaration declaration = case declaration of
                 (map fst resolvedMembers)
             , snd name ++ concatMap snd parameters ++ concatMap snd resolvedMembers
             )
+    EnumDeclaration spanValue sourceName _ underlying cases ->
+        let name = resolveName spanValue sourceName
+         in (EnumDeclaration spanValue (fst name) () underlying cases, snd name)
     FunctionDeclaration spanValue sourceName _ returnSyntax sourceParameters sourceBody isStatic access ->
         let name = resolveName spanValue sourceName
             parameters = map resolveParameter sourceParameters
@@ -152,6 +156,9 @@ resolveExpression expression = case expression of
     MemberAccessExpression spanValue receiver member _ ->
         let (resolvedReceiver, problems) = resolveExpression receiver
          in (MemberAccessExpression spanValue resolvedReceiver member (), problems)
+    MethodReferenceExpression spanValue receiver member _ ->
+        let (resolvedReceiver, problems) = resolveExpression receiver
+         in (MethodReferenceExpression spanValue resolvedReceiver member (), problems)
     CallExpression spanValue callee arguments _ ->
         let (resolvedCallee, firstProblems) = resolveExpression callee; values = map resolveExpression arguments
          in (CallExpression spanValue resolvedCallee (map fst values) (), firstProblems ++ concatMap snd values)
@@ -267,6 +274,9 @@ resolveCallableBody body = case body of
 resolveName :: SourceSpan -> RenamedName -> (ResolvedName, [Diagnostic])
 resolveName spanValue name
     | renamedUnique name > 0 = (ResolvedName (SymbolId (renamedUnique name)) (renamedSpelling name), [])
+    -- The names the language declares for every program.
+    | SymbolId (renamedUnique name) `elem` [builtinSystemSymbol, builtinConsoleSymbol] =
+        (ResolvedName (SymbolId (renamedUnique name)) (renamedSpelling name), [])
     | renamedUnique name == 0 =
         ( ResolvedName (SymbolId 0) (renamedSpelling name)
         ,

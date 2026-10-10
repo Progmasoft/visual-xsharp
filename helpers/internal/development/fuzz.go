@@ -53,7 +53,7 @@ func fuzzBuildArguments(configuration, sanitizerConfiguration, macRuntime string
 	if macRuntime != "" {
 		campaign = append(campaign, "--linkopt="+macRuntime)
 	}
-	smoke = append(smoke, "//Compiler/Fuzzing:wire_fuzz_smoke", "//Compiler/Fuzzing:source_fuzz_smoke")
+	smoke = append(smoke, "//Compiler/Fuzzing:wire_fuzz_smoke", "//Compiler/Fuzzing:source_fuzz_smoke", "//Compiler/Fuzzing:source_execution_smoke", "//Compiler/Fuzzing:source_expression_smoke", "//Compiler/Fuzzing:source_feature_smoke", "//Compiler/Fuzzing:source_console_smoke")
 	for _, target := range nativeFuzzTargets() {
 		campaign = append(campaign, target.label)
 	}
@@ -166,6 +166,24 @@ func runFuzzCampaign(repository string, currentHost host, runner commandRunner, 
 	}
 	if err := runner.Run(repository, selectedEnvironment, smokeSource); err != nil {
 		return fmt.Errorf("source-to-LLVM differential smoke failed; preserved %q: %w", work, err)
+	}
+	// The programs with hand-written results stand in the same directory,
+	// beside the frontend library staged above.
+	smokeExecution := filepath.Join(filepath.Dir(smokeSource), "source_execution_smoke"+currentHost.executable)
+	if err := runner.Run(repository, selectedEnvironment, smokeExecution); err != nil {
+		return fmt.Errorf("source execution smoke failed; preserved %q: %w", work, err)
+	}
+	smokeExpression := filepath.Join(filepath.Dir(smokeSource), "source_expression_smoke"+currentHost.executable)
+	if err := runner.Run(repository, selectedEnvironment, smokeExpression); err != nil {
+		return fmt.Errorf("source expression smoke failed; preserved %q: %w", work, err)
+	}
+	smokeFeature := filepath.Join(filepath.Dir(smokeSource), "source_feature_smoke"+currentHost.executable)
+	if err := runner.Run(repository, selectedEnvironment, smokeFeature); err != nil {
+		return fmt.Errorf("source feature smoke failed; preserved %q: %w", work, err)
+	}
+	smokeConsole := filepath.Join(filepath.Dir(smokeSource), "source_console_smoke"+currentHost.executable)
+	if err := runner.Run(repository, selectedEnvironment, smokeConsole); err != nil {
+		return fmt.Errorf("source console smoke failed; preserved %q: %w", work, err)
 	}
 	// Run smoke tests before changing Bazel's instrumentation configuration and
 	// staging the campaign binaries into the same host output tree.

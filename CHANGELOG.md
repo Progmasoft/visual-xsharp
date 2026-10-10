@@ -5,10 +5,112 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-10-09
+
+### Why 0.5.0 and not 0.4.2
+
+The third component of the version is for a release that a program and its
+build artifacts written for the one before still work with. This release is
+not one:
+
+- The language changed what existing programs mean. Evaluation is by need,
+  so a value nothing reads is no longer computed, and `==` on two strings
+  compares their characters where it compared the objects.
+- `match`, `guard` and `enum` became reserved words.
+- Every serialized stage changed incompatibly: Core went from version 8 to
+  10, CorePrep to 8, Xpp and Xmm to 7. No artifact of 0.4.1 is read.
+- A native executable is now linked with a runtime library that ships
+  beside the compiler, so an installation of 0.4.1 cannot be updated by
+  replacing the compiler alone.
+- The Haskell packages of the formatter, linter and analyzer bound the
+  compiler below 0.5 on purpose, and their bounds move with this release.
+
+The language also grew by more than a patch carries: evaluation by need,
+`match`, enums, constant expressions and console output. 0.4.2 was never
+published; the number is skipped, not withdrawn.
 
 ### Language
 
+- A method reference `Type::Method` is the static method as a callable
+  value: `auto f = Counter::Next;`, `Apply(Counter::Next)`. Where the method
+  has overloads, the type the place expects selects one, and `VXT0080`
+  reports a place that selects none. A reference through a value,
+  `counter::Next`, reports `VXT0081` until values have members. A selector
+  with a dot and no call, `Counter.Next`, stays rejected with `VXT0034`.
+- A declaration may be named through the namespace it is declared in:
+  inside `namespace Demo;`, `Demo.Program.Run()` is `Program.Run()`,
+  `Demo.Color.Red` is `Color.Red` and `Demo.Program::Run` is
+  `Program::Run`. A namespace of several parts is written whole. A name of
+  the program spelled like the first part hides the namespace. Other
+  namespaces, and a qualified name in a type position, are not connected.
+- The conditional expression selects strings:
+  `String kind = count > 0 ? "some" : "none";`. Only the selected operand
+  is evaluated. `?:` is unchanged, because its left operand is also its
+  test and a string is not one.
+- Visual X# is a lazy language with call-by-need evaluation, and the
+  specification now says so in `Spec/Language/Evaluation.vxs`: a value is
+  computed when it is first needed and at most once, a value that is never
+  needed is never computed, effects happen where they are written, and
+  neither thunks nor effects have any notation in the source. The compiler
+  implements the first part of it: a local binding of `bool`, numeric or
+  enum type whose initializer has no effect is computed by its first read
+  and not at all when nothing reads it, so `int x = left / right; return 5;`
+  no longer divides. That holds in the body of a callable as in the body of
+  a method. An expression written as a statement, and a value assigned to
+  the discard, are evaluated. Results, other types and assigned
+  or captured variables are still computed where they are written;
+  `Documents/EVALUATION.md` lists what is pending.
+- Arguments are passed by need. An argument of `bool`, numeric or enum type
+  that has no effect is computed when the method first needs it, at most
+  once however often the method reads it and however many methods it is
+  handed through, and not at all when no method needs it:
+  `Choose(true, 1, left / right)` no longer divides when `Choose` returns
+  its second parameter. A value the caller needs as well is computed once
+  for both. An argument of a call through a callable, an argument a closure
+  of the method captures, and arguments of other types are still computed
+  at the call.
+- Programs write to the console. `Console.Print` and `Console.Println` write
+  a value, `Console.Printf` and `Console.Printfn` a format with its
+  conversions applied, `Console.Error`, `Errorln`, `Errorf` and `Errorfn` do
+  the same to standard error, and `Console.Format` returns the string and
+  writes nothing. `System` is imported implicitly, so `Console` needs no
+  qualification; `System.Console` is accepted. The example
+  `Examples/HelloWorld/HelloWorld.vxs` compiles to a native executable and
+  runs.
+- A format is a string literal and is checked when the program is compiled.
+  The conversions are `%d`, `%u`, `%x`, `%f`, `%s`, `%c` and `%b`, with `%n`
+  for the line terminator of the platform and `%%` for a percent sign; the
+  flags are `-`, `0`, `+`, space, `#` and `'`; a width or a precision may be
+  written as `*` and is then an `int` argument before the value. A
+  conversion that does not exist, a flag a conversion does not take, a
+  missing or a surplus argument and an argument of the wrong type are
+  errors, `VXT0071` to `VXT0079`. Examples 69 to 85 of
+  `Spec/StandardLibrary/IO/ConsoleIO.vxs` state what the specification left
+  open: which flags each conversion takes, that `%b` writes a `bool`, that
+  `%f` rounds the exact value with a tie to the even digit, and that a line
+  ends with the terminator of the platform.
+- `+` joins two strings, and writes a value that is not a string as text
+  first when the other side is one: an integer in decimal, a `bool` as
+  `true` or `false`, a `char` as itself. `+=` appends to a string variable.
+  `==` and `\=` on two strings compare the characters they hold; before,
+  they compared where the strings were kept. Examples 86 to 89 of
+  `Spec/Language/Operators.vxs`.
+- Output is an effect, and effects are not lazy: an expression that writes,
+  itself or through a method it calls, is evaluated where it is written and
+  in the order it is written, whether or not its value is ever needed. A
+  value that only computes is still computed by need in the same program.
+  Examples 15 and 16 of `Spec/Language/Evaluation.vxs`.
+- An integer quotient or remainder by zero and a shift by an amount that is
+  negative or not less than the width of the shifted value have no value,
+  and a program that needs one stops. Example 14 of
+  `Spec/Language/Evaluation.vxs` states the rule. Before, generated code gave
+  these operations no meaning and an optimized program could run on past
+  them with a result that was never computed.
+- When one statement needs several values that cannot be computed, which
+  failure the program meets is not determined, and a value that runs without
+  end counts as one that cannot be computed. Whether the program fails is
+  determined, and so is the order of statements and of effects. Example 13
+  of `Spec/Language/Evaluation.vxs` states the rule.
 - Added `match`. The statement `match (subject) { pattern -> body, ... }` runs
   the first arm whose patterns and guard accept the subject, and does nothing
   when no arm accepts. In operand position `match` is an expression: every
@@ -16,14 +118,19 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   subject is. Several subjects are written `match (a), (b)` with one pattern
   for each in every arm. The subjects are evaluated once, left to right.
 - A pattern is a literal, `_`, or a type followed by a name or `_`. A type
-  pattern binds the subject for the guard and the body of its arm; the
-  binding is immutable. An arm may have a guard, `pattern if condition ->`,
+  pattern binds the value of the subject for the guard and the body of its
+  arm, as an ordinary local that may be assigned. An arm may have a guard, `pattern if condition ->`,
   which is evaluated only when the patterns of that arm accept.
 - An arm that can never be selected is an error: a second arm for the same
   literals, or any arm after one that accepts every value without a guard.
 - Added `if` as an expression: `int larger = if (a > b) { a } else { b };`.
   Both blocks are required and each ends with an expression that has no
-  semicolon. Only the selected block runs.
+  semicolon. Only the selected block runs. As the last item of a block that
+  is used as a value, an `if` with two such blocks and a `match` are the
+  value of that block.
+- The comma after a match arm is optional, as in the grammar. A
+  parenthesized pattern that follows an expression body without a comma is
+  read as a call of that body; `VXP0038` is reported at the arrow after it.
 - Added `guard (condition) else { ... }`. The block runs when the condition is
   false and must leave the enclosing scope with `return`, `break` or
   `continue`.
@@ -37,8 +144,76 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   such as `.Ready`, type patterns that name another type than their
   subject's, and a binding in the condition of `if`, `guard` or `while` are
   recognized and rejected with dedicated diagnostics until reference
-  subjects, enums, class hierarchies and optional values exist. `return`,
-  `break` and `continue` cannot leave a block that is used as a value.
+  subjects, enums, class hierarchies and optional values exist.
+- A numeric constant pattern may be negative: `-1 -> ...`. The minus sign
+  belongs to the numeric literal; no other expression is a pattern. The
+  constant is checked against the type of its subject, so the most negative
+  value of a signed type is a pattern and a negative constant for an
+  unsigned subject is rejected.
+- A block used as a value may leave instead of yielding a value. `return`
+  leaves the enclosing method and `break` and `continue` target the loop
+  around the expression, under the rules they have anywhere else. A block
+  that leaves has no value; the expression has the type of the blocks that
+  complete. An expression none of whose blocks completes is valid: it never
+  yields a value, what would have received the value is not lowered, and no
+  result slot or placeholder is created for it.
+- Such a block may stand in a loop header and in a loop used as an
+  expression. The condition and the update clause belong to their loop: a
+  `break` in either leaves that loop; a `continue` in the condition
+  evaluates the condition again without running the body or the update; a
+  `continue` in the update clause of a `for` ends the update, and the
+  condition is tested next; a `break` may carry a value to the loop
+  expression around the block. A callable is not inside the loops around
+  the place that creates it. `Spec/Language/Iteration.vxs` gains examples
+  79 to 83 for these rules, and `VXT0059` is retired.
+- Added classic enums: `enum Name { A, B = 2, C }`, with an optional
+  underlying integer type written `enum Name = byte { ... }`. Members are
+  numbered from zero, a member without a value follows the one before it,
+  and two members may share a value. `Name.Member` is a value of the enum.
+  Values are compared with `==` and `\=` with values of the same enum and
+  take part in no other operation; there is no conversion between an enum
+  and an integer in either direction. `match` over an enum uses `.Member`
+  patterns and needs no catch-all arm when every value is named; a second
+  arm for the same value is unreachable. `Spec/Language/Decls.vxs` gains
+  examples 311 to 315 for the operations, the absence of conversions and
+  the target-typed `.Member` spelling. `enum` is now a reserved word.
+  The value of a member is a constant integer expression over integer
+  literals and earlier members of the same enum, as in `WRITE = READ << 1`
+  and `ALL = READ | WRITE`: inside its own declaration the name of a member
+  stands for its number, and nowhere else. The expression is computed in
+  the underlying type by the constant evaluator of the language; examples
+  316 and 317 specify it, and `VXT0070` reports a value that is not such an
+  expression. `VXP0041`, which allowed only an integer literal, is retired.
+  `.Member` is accepted in an expression wherever an enum type is expected:
+  a declared type, a parameter, a return type, the right operand of a
+  comparison, the variable assigned to; elsewhere it is `VXT0069`. A
+  conditional, an `if` expression, a `match` and a loop expression may
+  yield an enum.
+- A method declared with `auto` can be called. Return types are inferred
+  before any caller is checked, across classes and against declaration
+  order, through chains and mutual recursion; a method with no result
+  independent of itself is `VXT0063`, and one whose returns disagree is
+  `VXT0062`. Such calls used to pass the frontend and fail in the Core
+  verifier with `VXC1018`.
+- A callable may be created inside a callable. The outer one captures what
+  the inner one reads from further out, and nothing that belongs to the
+  inner one; it used to capture the inner parameters and fail in the Core
+  verifier with `VXC1020`.
+- `return` is accepted inside a loop used as an expression, and a loop
+  expression that returns and never breaks is valid. `VXT0045` and `VXT0047`
+  are retired.
+- The return type of a callable is inferred from the returns inside its
+  expressions as well, up to nested callables. Returns of different types
+  are `VXT0062`.
+- The `else` block of a `guard` is checked by its control flow instead of by
+  its last statement: a loop that cannot end and a statement `match` that
+  always selects an arm and all of whose arms leave are accepted, and a
+  block that leaves before its last statement is as well.
+- A type pattern over a scalar applies no numeric conversion: `long n` does
+  not match an `int`.
+- `Spec/Language/Decls.vxs` gains examples 295 to 310 for these rules, for
+  exhaustiveness and for the statement `match` that selects no arm, and the
+  grammar allows `-` before a numeric literal in a match pattern.
 
 ### Compiler pipeline
 
@@ -47,10 +222,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   expression, `guard` to an `if` with an empty first branch, and a block
   statement to its statements in the enclosing sequence. Core, its wire
   format, the optimizer, CorePrep and the native pipeline are unchanged.
-- A match with more than 16 arms is lowered in groups of 16 that follow each
-  other in one statement sequence, with a Boolean slot that records the taken
-  arm, so the nesting of the lowered Core does not grow with the number of
-  arms. Matches of 200 and of 2000 arms compile.
+- The arms of a match are lowered to one chain, each arm in the false branch
+  of the one before it, which is the shape of an `else if` chain and is
+  walked in a loop by every stage. The names the arms bind are bound before
+  the chain, and a guard is the last operand of the test of its arm. Matches
+  of 200 and of 2000 arms compile.
 - Fixed a stack overflow that ended the compiler without a diagnostic on an
   `else if` chain of about 150 links. Such a chain reaches Core as one level
   of nesting per link, and the native Core wire reader and writer, the Core
@@ -62,15 +238,169 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   statement. Closure
   analysis, template discovery, instantiation, freshening, member
   reachability and the specialization verifier handle them.
+- Ownership placement. The compiler created AARC objects and never released
+  them: no stage wrote a retain or a release. A new Xpp pass gives every AARC
+  value an owner and writes the operations: parameters are borrowed, results
+  are owned, a local is released after its last use on each path, including
+  on the edge of a branch on which it dies, a copy retains or takes over the
+  reference, and a closure owns its captures. The ownership verifiers of Xpp
+  and Xmm check its output.
+- A method used as a value is a closure without captures. Before, the value
+  was the address of the method's code, and calling it read an invoke
+  pointer out of that code.
+
+- Core has a new primitive, `Memoize`: a callable without parameters whose
+  result is `bool` or numeric becomes a callable of the same type that calls
+  it at most once and remembers the result. It is how a value by need
+  reaches another function. CorePrep, Xpp and Xmm carry it under their own
+  names, each verifier checks its rule, and LLVM lowers it to an AARC object
+  with an invoke thunk and a destructor of its own. The wire versions are
+  now Core 9, CorePrep 7, Xpp 6 and Xmm 6; artifacts of earlier versions are
+  rejected at the version field and have to be produced again.
+- Core has a second new primitive, the runtime call: a call of a function of
+  the Visual X# runtime, named by a literal first operand that is the
+  function's identity in a catalog of thirteen. CorePrep, Xpp and Xmm carry
+  it, every verifier checks a call against the catalog (`VXC1075`,
+  `VXC0026`, `VXC1076`, `VXP1048`, `VXL1054`), and LLVM lowers it to a call
+  of the function's symbol, widening an integer or a floating-point argument
+  to 64 bits. The wire versions are now Core 10, CorePrep 8, Xpp 7 and
+  Xmm 7.
+- The type checker rewrites a console call and the string operators into
+  runtime calls, so no stage after it knows what a format is. The frontend
+  infers which methods may write, from all methods of a program together,
+  and evaluates an expression that calls one where it stands.
+- A native executable is linked with `vxs-runtime.lib`, the ownership
+  runtime and the new text and console runtime as one object that needs no
+  C runtime. It replaces the ownership functions the compiler generated into
+  each executable, and with them their limits: memory comes from the heap of
+  the process, and weak and unowned references, strings and type tests link.
+  The library stands beside the compiler, where the development helper and
+  the release bundle put it. It imports seven functions of kernel32, for
+  which the linker makes the import library from a list of names.
+- Fixed a leak: a string literal passed directly as an argument was never
+  released. Ownership placement now gives such a literal a symbol of its
+  own.
+- A method with a parameter that is passed by need has a second function
+  that takes suspended computations in place of those parameters. The
+  method's own function is unchanged, and a call that has nothing worth
+  suspending still uses it.
+- Fixed native executables that stopped instead of ending. A method without
+  a result whose body ended without a `return` was closed with an
+  unreachable marker by both Core-to-CorePrep adapters, so a `Main` written
+  without a final `return;` executed an invalid instruction. Reaching the
+  end of such a body now returns.
+- Fixed native executables that did not link. An executable is linked
+  without any library, and code that creates a closure calls the ownership
+  runtime. The module that holds the entry now defines allocation, retain
+  and release itself, over a 64 MiB arena whose released blocks are reused.
+  Weak and unowned handles, strings and type tests still need the runtime
+  library and do not link in an executable.
+- Fixed `vxs run -File Name.vxs` with a relative path: the executable it had
+  just built was looked for on `PATH` and not found.
+- Integer division, remainder and shifts are preceded by a check that stops
+  the program when the operation has no value. The least value of a signed
+  type divided by minus one is carried out so that it wraps like a sum that
+  does not fit, where the processor's instruction would stop the program.
 
 ### Verification and tooling
 
+- `EffectTests.hs` holds the inference of which calls write from both
+  sides: programs whose writes lie one and two calls down, in mutual
+  recursion, in callables and in methods used as values must write in the
+  order they say, and programs that only compute must keep their deferred
+  bindings and suspended arguments. `FormatSweepTests.hs` writes every
+  combination of flags, width and precision for every conversion, 5184
+  formats, and compares the reader with the rules stated a second time.
+  `TextRuntimeTests.cpp` compares `%d`, `%u` and `%x` with the C library of
+  the host over 44 400 fields of deterministic pseudo-random values, and
+  `%f` over 3000 numbers drawn from every exponent and 80 020 that lie on
+  or beside a rounding tie.
+- Visual Formatter and Visual Linter are 0.1.1. Neither has a new rule:
+  both are rebuilt with this compiler, so they accept the forms above, and
+  their tests now hold them. The formatter keeps `::`, qualified names,
+  string conditionals and console formats as written while it indents; the
+  linter reports the new diagnostics under its `compiler` check.
+- `QualifiedNameTests.hs` runs programs that name declarations through
+  their namespace and methods through `::`, before and after optimization,
+  and holds the forms that must be rejected. The leak-checked smoke program
+  and the tests that run a linked executable select strings in a loop of a
+  million passes and call methods through references.
+- `ConsoleTests.hs` runs some 180 programs that write in the reference Core
+  evaluator, before and after optimization, against text written by hand,
+  and holds about a hundred programs that must be rejected. The evaluator's
+  text functions are a second implementation, in `RuntimeText.hs`.
+  `RuntimeCallTests.hs` pins the runtime catalog and the reading of formats.
+- `text_runtime_tests` calls the runtime library as generated code does and
+  compares the digits of `%f` with those of the host's C library.
+  `RuntimeCallPipelineTests.cpp` and `RuntimeCallVerifierTests.cpp` break a
+  runtime call in each way it can be broken at each native stage.
+- `source_console_smoke` compiles 83 programs that write through LLVM and
+  the JIT in both pipeline modes, reads their output through a sink, and
+  requires each to leave no object of the runtime behind.
+  `executable_run_tests` now runs executables with their standard streams
+  sent to files and compares the bytes.
+- The expression and leaving tables run in a program of their own,
+  `source_expression_smoke`. With arguments passed by need the programs of
+  the three execution tables together ran past the 240 second watchdog under
+  the sanitizers. The watchdog is unchanged and no case was removed.
+- `executable_run_tests` builds programs into native executables and runs
+  them as processes, which no test did before: every other execution test
+  runs generated code inside the compiler's process. It covers a `Main`
+  that ends without a return, arguments by need, closures, a quotient by
+  zero that is needed and one that is not, and two million objects created
+  and released in a loop. The linker is the Windows one, so these cases run
+  on Windows.
+- `MemoizeTests.hs`, `MemoizePipelineTests.cpp`, `FallThroughTests.hs`,
+  `FallThroughTests.cpp` and `ComputabilityExecutionTests.cpp` cover the
+  remembering callable at every stage, the end of a body without a result
+  in both adapters, and the checks before division and shifts.
+  `source_feature_smoke` runs 23 programs that pass arguments by need
+  through LLVM in both pipeline modes and requires each to leave no object
+  of the runtime behind.
+- `OwnershipPlacementTests.cpp` runs every placed function on an independent
+  reference-count model along all of its paths. `source_feature_smoke`
+  runs 26 closure programs through LLVM and the AARC runtime, one at a time,
+  and fails a program that leaves an allocation behind; the runtime counts
+  its live allocations for that purpose.
 - `ConditionalChainTests.cpp` pins the native handling of `else if` chains:
   wire round trips and a constant byte step per link, rejection of every
   truncated prefix, the verifier's checks in late links, the return analysis,
   and the block numbering of the adapter, at lengths up to 600 links.
   `source_fuzz_smoke` runs a chain of 300 links and a match of 200 arms
   through both pipeline modes.
+- `NestingLimitTests.hs` nests every construct that holds statements or
+  operands to the limit and one level beyond, checks the position of the
+  diagnostic, and runs the accepted programs. `NestingLimitTests.cpp` pins
+  the wire statement depth limit and walks 1500 levels and a chain of 3000
+  links through the native Core stages on the compiler stack.
+  `source_fuzz_smoke` runs 255 nested `if` statements
+  and a sum of 1024 operands through both pipeline modes, and the source
+  corpus has permanent seeds at and beyond both limits.
+- `source_fuzz_smoke` compiles each distinct body of its execution tables
+  once, up to eight small bodies in a program, and checks all runs of a body
+  in that program, instead of compiling a program for every run. No run was
+  removed. Under sanitizers the program takes 160 seconds where it took 291
+  on the same machine.
+- The execution tables are a smoke program of their own,
+  `source_execution_smoke`, beside `source_fuzz_smoke`, each under the
+  unchanged process watchdog of 240 seconds. In the fuzzing configuration
+  the single program had grown to 221 seconds; apart, each takes 77 to 110
+  seconds on the same machine. The new program also compiles and verifies
+  programs that own closures while control leaves through a value block.
+- The tables written by hand for single features, which are inferred return
+  types, evaluation by need, enums and closures, are a third smoke program,
+  `source_feature_smoke`. With them `source_execution_smoke` ran past the
+  unchanged watchdog in the fuzzing configuration; no case was removed.
+- An expression that is certain to read a value by need more than once
+  computes it once ahead of itself. Each read carried the whole computation,
+  so the Core of a chain of bindings that each read the one before twice
+  doubled with every link; it now grows with the length of the chain.
+- The branching and leaving tables of both harnesses are generated from the
+  case files under `Compiler/Fuzzing/Cases` by the new Go helper
+  `execution-cases`, whose `check` command and tests fail on a stale table.
+  The reference Core evaluator of the frontend tests runs closures, and
+  `source_feature_smoke` links the AARC runtime and runs closures through
+  LLVM: created, called, nested, returned and alive across loop transfers.
 - `BranchingTests.hs` pins the grammar, every typing rule, the lowered shapes
   and the values of 83 program runs on the unoptimized and the optimized
   Core. `BranchingOracleTests.hs` generates 36 families of arm lists, writes
@@ -91,21 +421,167 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   extension. The type definitions must match the Node.js runtime the
   extension runs on, so that update is made by hand.
 
+### Nesting limits
+
+- Deep nesting no longer ends the compiler with a stack overflow. Before
+  this change a sum of 100 operands, 100 nested parentheses, an `if` nested
+  100 levels deep and an `else if` chain of about 1500 links each overflowed
+  the one-megabyte stack a process starts with on Windows, with no
+  diagnostic.
+- `vxs` and `vxsi` now run the compiler on a thread whose stack they choose
+  themselves, 256 MiB of reserved address space, so that how deep a program
+  may nest is the same on every platform and does not depend on the stack
+  the operating system gives the process. Pages are committed as they are
+  used. The fuzz targets and the smoke program use the same stack. Starting
+  that thread costs a few milliseconds per run: `vxs check` on small
+  programs measured 3 to 8 ms slower than before on Windows, and a program
+  of 300 statements measured the same.
+- The frontend rejects a function body that nests statements more than 256
+  levels deep (`VXP0039`) or expressions more than 1024 levels deep
+  (`VXP0040`), at the first node that is too deep. An `else if` chain is not
+  nesting, and the body of a `match` arm is one level below its match
+  however many arms the match has. A chain of a binary operator is not
+  nesting either: the left operand of a binary operator is at the level of
+  the operator, so `a + b + c + ...` is one level however long it is, and a
+  sum of 50000 operands compiles. The Core wire formats count the first
+  operand of a primitive at the level of the primitive for the same reason.
+- Releasing a Core module no longer recurses along a chain of operators or
+  an `else if` chain: the destructors of the native Core expression and
+  statement release their operands and nested statements from a list. The
+  native wire writer walks operator chains in a loop like the reader.
+- The native stages use far less stack per level of nesting. The Core wire
+  reader, the Core verifier and the Core-to-CorePrep adapter no longer hold
+  statements, instructions or diagnostic texts in the frames of the
+  functions that recurse, and they walk chains of operators, of conditional
+  expressions and of let bindings in a loop. Measured with the new
+  `stack_probe` program, the whole native pipeline went from 14.9 KiB to
+  0.67 KiB of stack per statement level and from 7.1 KiB to 1.9 KiB per
+  level of nested operands; a sanitizer build uses 1.67 KiB and 3.4 KiB.
+  Chains of operators and `else if` chains use none per link. Whole
+  compilations at the frontend's limits commit at most 0.8 MiB of stack for
+  nested statements and 2.5 MiB for nested expressions, and 1.3 MiB and
+  4.6 MiB in a sanitizer build, measured as committed stack, which is an
+  upper bound to the page and not an exact count of bytes in use, with the
+  new `source_stack_probe` program. The reservation of 256 MiB costs address space only: the commit
+  of a compilation is the same with and without it. The measurements,
+  including what the lowering adds to a nest and what was not measured, are
+  in `Benchmarks/2026-10-04-Nesting-And-Chains.md`.
+- The native Core wire reader and writer bound the nesting of statement
+  bodies at 4096 levels, as they already bounded expression depth. A `.core`
+  file nested deeper is rejected as exceeding a limit instead of being
+  walked.
+- The Core-to-CorePrep adapter no longer copies every function before
+  preparing it. Copying nested statements recurses once per level, which is
+  what overflowed the stack on long `else if` chains; chains of 5000 links
+  now compile.
+
+### Compile time
+
+- The native Core verifier no longer copies every visible definition when it
+  enters a branch, a loop body, a let or a closure. It did, so its time grew
+  with the square of a function's size: a function of 400 calls that each
+  pass four suspended arguments took 2.05 seconds to verify and takes 0.04.
+- Nested loops no longer multiply the time of the integer analysis. It
+  repeated the fixed point of an inner loop on every pass over the loop
+  around it, so 14 nested loops took a second and 50 did not finish. It now
+  iterates only loops that hold at most one further level of loops and
+  treats what a deeper loop assigns as unknown; 255 nested loops compile in
+  under four seconds.
+- The Haskell Core wire encoder, the Haskell CorePrep lowering and the
+  CorePrep verifier no longer copy what they have produced once per level
+  of nesting or per block. On an `else if` chain of 2048 links, encoding
+  went from 4.9 seconds to 60 milliseconds, lowering from 2.2 seconds to 20
+  milliseconds and verification from 0.75 seconds to 15 milliseconds.
+- `Compiler/Haskell/Core/Benches` has benchmarks for nested loops, `else if`
+  chains and sequences of `if` statements.
+- Long chains of operators no longer take quadratic time or worse. Constant
+  propagation asked the integer facts about every node of an expression,
+  which re-evaluated the operands at each level, and the CorePrep lowering
+  collected symbol identities by appending lists. A sum of 20000 operands
+  went from 30 seconds to 4.6, and one of 50000 from 198 seconds to 9.4.
+  The truth of a condition is now looked up in the facts only while the
+  condition has at most 256 nodes; a chain of 200 comparisons joined by `&&`
+  went from 47 seconds to 1.1, on `main` as well as on this branch.
+
+- A class with many methods no longer compiles in time with the square of
+  their number. 1000 small methods took 4.3 seconds, 2000 took 16 and 4000
+  took 73; they now take 1.4, 2.9 and 4.8 seconds, and 8000 take 10. The
+  native CorePrep verifier built a table of every function of the module,
+  with the function type of each, once for every function, and searched the
+  module for capturing closures as often; it collects both once. The
+  renamer kept the names in scope as a list of pairs and now keeps a map.
+  The type checker compared a method with every earlier member to find a
+  duplicate overload and now compares it with the methods of its name. The
+  Haskell Core verifier searched a list of source owners for every
+  function, and the CorePrep lowering re-wrapped the list of waiting
+  functions once for every function. What each stage accepts and reports is
+  unchanged. `Benchmarks/2026-10-07-Many-Methods.md` has the measurements,
+  `CorePrepVerifierTests.cpp` pins what a function sees of its module, and
+  the CorePrep benchmarks have a case by number of functions.
+
 ### Known limitations
 
-- An `else if` chain of about 2000 links still overflows the native stack,
-  now while a stage copies the nested Core statements, and so do statements
-  nested in any other way, such as an `if` inside the first branch of an `if`,
-  repeated: 60 levels compile and 100 do not. The compiler then ends without a
-  diagnostic. Neither is new in this version, and `match` is not affected.
-  The Core wire format bounds type and expression depth but has no statement
-  depth limit yet.
+- An argument passed by need costs two objects of the runtime and two
+  functions of generated code where it is suspended. A program whose calls
+  pass many arguments that are themselves calls compiles to several times
+  the code it did before and takes correspondingly longer to compile.
+- A program that stops because it needs a value that cannot be computed
+  ends with the status of a process that executed an invalid instruction.
+  It reports nothing about which value or where.
+- Console input, the stream objects `Console.Stdout()` and its siblings,
+  `%A` and `%O`, a text form of a floating-point number outside `%f`, and
+  128-bit numbers as text are specified and not implemented; each reports
+  `VXT0079`. `Documents/CONSOLE-IO.md` lists them.
+- A string has `+`, `+=`, `==` and `\=` and nothing else yet: no length, no
+  indexing and no ordering.
+- Native executables are linked on Windows only.
+- Compile time still grows faster than the program on very long functions:
+  from 2000 to 4000 `else if` links the time of `vxs check` grows from 3.3
+  to 10.4 seconds, and from 2000 to 4000 sequential `if` statements from 2.8
+  to 7.1 seconds. Nothing bounds the number of statements of a function.
+- Copying a native Core module recurses once per level of nesting; the
+  pipeline copies only closure bodies.
+- Parts of the specified language are recognized and rejected as not
+  implemented. They are pending work, listed with their diagnostics under
+  "Pending branching and loop forms" in `Documents/IMPLEMENTATION.md`: a
+  binding in the condition of `if`, `guard` or `while`, which needs optional
+  values, a call that does not return as a way of leaving, enums declared
+  inside a class, and `enum class`.
+- The nesting limits of 256 and 1024 and the compiler stack reservation of
+  256 MiB are the limits this version ships with. `CommittedStackBytes`
+  reports on Linux and macOS as well, from the resident pages of the stack
+  mapping, and `source_execution_smoke` prints the figure after compiling a
+  program of 1023 nested calls. Measured in CI: about 2.5 MiB in an ordinary
+  build on Windows, Linux and macOS, and at most 5.5 MiB under a sanitizer.
+- The statements after a statement that never completes are checked but no
+  longer lowered to Core.
 
 ### Upgrading from 0.4.1
 
-- Rename anything called `match` or `guard`.
+- A method that writes and is used as a value, `auto f = Log;` or
+  `Run(Log)`, writes where its call stands, like a callable expression that
+  writes. No release behaved otherwise; it is listed because the rule in
+  `Documents/CONSOLE-IO.md` names it.
+- A program that relied on an unused value being computed, for its failure
+  or for the time it takes, no longer gets either: a value nothing reads is
+  not computed. That now includes an argument the method does not read.
+- Core, CorePrep, Xpp and Xmm artifacts written by an earlier compiler are
+  rejected. Build them again from source.
+- `==` on two strings now compares their characters. A program that relied
+  on two equal strings comparing unequal because they were two objects
+  compares them equal.
+- A program named a class `Console` or `System` keeps its own: the names the
+  language declares stand outside the program's.
+- Rename anything called `match`, `guard` or `enum`.
 - `if (auto name = value)` and the same form in `while` now report `VXP0035`
   instead of a generic syntax error. They were not accepted before either.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the CLI, Bazel module, Kotlin
+  project model, and compiler project version to 0.5.0, and the bounds of
+  the formatter, linter and analyzer packages on the compiler to
+  `>=0.5.0 && <0.6`.
 
 ## 0.4.1 - 2026-10-03
 

@@ -136,6 +136,8 @@ discoverTop catalog namespace state declaration = case declaration of
         -- grammar, but keeping this traversal total makes hand-built TypedAST
         -- fixtures and future declaration categories deterministic.
         discoverFunction catalog namespace (declarationName declaration) Nothing declaration state
+    -- An enum uses no template: its underlying type is a scalar.
+    EnumDeclaration {} -> state
 
 discoverMember ::
     TemplateCatalog ->
@@ -151,6 +153,7 @@ discoverMember catalog namespace owner state member = case member of
             afterType = discoverType catalog namespace origin annotation state
          in foldl' (discoverMember catalog namespace owner) afterType members
     TemplateTypeDeclaration {} -> state {stateSkippedTemplates = stateSkippedTemplates state + 1}
+    EnumDeclaration {} -> state
 
 discoverFunction ::
     TemplateCatalog ->
@@ -276,6 +279,8 @@ discoverExpression catalog namespace origin expression state = case expression o
     NameExpression _ _ annotation -> discoverType catalog namespace origin annotation state
     LiteralExpression _ _ annotation -> discoverType catalog namespace origin annotation state
     MemberAccessExpression _ receiver _ annotation ->
+        discoverExpression catalog namespace origin receiver (discoverType catalog namespace origin annotation state)
+    MethodReferenceExpression _ receiver _ annotation ->
         discoverExpression catalog namespace origin receiver (discoverType catalog namespace origin annotation state)
     CallExpression _ callee arguments annotation ->
         let afterType = discoverType catalog namespace origin annotation state

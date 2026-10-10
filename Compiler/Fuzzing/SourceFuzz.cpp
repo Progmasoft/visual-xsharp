@@ -15,6 +15,7 @@
 #include "SourceFuzz.hpp"
 #include "Visual/XSharp/Backend/LLVM.hpp"
 #include "Visual/XSharp/Pipeline.hpp"
+#include "Visual/XSharp/Runtime/AARC.hpp"
 
 namespace Visual::XSharp::Fuzzing
 {
@@ -637,6 +638,14 @@ namespace Visual::XSharp::Fuzzing
         Invoke(const Llvm::Artifact &artifact, std::string_view identifier)
             -> std::int64_t
         {
+            // A compiled program may call the AARC runtime: a closure does,
+            // and so does an argument that is passed by need. The JIT finds
+            // the runtime in this process. The call also keeps the runtime
+            // in the program where the linker would otherwise leave an
+            // unreferenced library out.
+            if (vxs_aarc_abi_version() != VXS_AARC_ABI_VERSION)
+                llvm::report_fatal_error(llvm::Twine(
+                    "the linked AARC runtime has another ABI version"));
             // Each oracle variant owns an isolated ORC session so equal source
             // symbols in optimized and reference modules cannot collide.
             Llvm::JitSession session;

@@ -1,3 +1,4 @@
+load("//Compiler/Runtime:host.bzl", "RUNTIME_HOST_DEPS", "RUNTIME_HOST_LINKOPTS")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
@@ -43,10 +44,14 @@ cc_library(
     deps = ["//Compiler/Headers/Visual/XSharp/Core:core"],
 )
 
+# A compiled program calls the runtime, and the JIT resolves a runtime symbol
+# in the process that hosts it. The options and libraries are those of every
+# such host; see //Compiler/Runtime:host.bzl.
 cc_library(
     name = "source_fuzz_harness",
     srcs = ["SourceFuzz.cpp"],
     hdrs = ["SourceFuzz.hpp"],
+    linkopts = RUNTIME_HOST_LINKOPTS,
     deps = [
         ":coreprep_parity",
         "//Compiler/Backend/LLVM:llvm_backend",
@@ -55,18 +60,80 @@ cc_library(
         "//Compiler/Driver:pipeline",
         "//Compiler/Headers/Visual/XSharp/Core:core",
         "//Compiler/Headers/Visual/XSharp/Core:coreprep_wire",
-    ],
+        "//Compiler/Support:compiler_stack",
+    ] + RUNTIME_HOST_DEPS,
 )
 
 cc_binary(
     name = "source_fuzz_smoke",
     srcs = [
-        "BranchingExecutionCases.cpp",
-        "BranchingExecutionCases.hpp",
-        "ExpressionExecutionCases.cpp",
-        "ExpressionExecutionCases.hpp",
         "SourceFuzzSmoke.cpp",
     ],
+    deps = [":source_fuzz_harness"],
+)
+
+# The large tables of programs with hand-written results: the branching
+# table here, the expression and leaving tables in source_expression_smoke.
+# Programs of their own, so that each smoke program runs under one process
+# watchdog.
+cc_binary(
+    name = "source_execution_smoke",
+    srcs = [
+        "BranchingExecutionCases.cpp",
+        "BranchingExecutionCases.hpp",
+        "ExecutionCases.cpp",
+        "ExecutionCases.hpp",
+        "Generated/SelectionCases.inc",
+        "SourceExecutionSmoke.cpp",
+    ],
+    deps = [":source_fuzz_harness"],
+)
+
+cc_binary(
+    name = "source_expression_smoke",
+    srcs = [
+        "ExecutionCases.cpp",
+        "ExecutionCases.hpp",
+        "ExpressionExecutionCases.cpp",
+        "ExpressionExecutionCases.hpp",
+        "Generated/LeavingCases.inc",
+        "LeavingExecutionCases.cpp",
+        "LeavingExecutionCases.hpp",
+        "SourceExpressionSmoke.cpp",
+    ],
+    deps = [":source_fuzz_harness"],
+)
+
+# The tables written by hand for single features: inferred return types,
+# evaluation by need, enums and closures.
+cc_binary(
+    name = "source_feature_smoke",
+    srcs = [
+        "ExecutionCases.cpp",
+        "ExecutionCases.hpp",
+        "SourceFeatureSmoke.cpp",
+    ],
+    deps = [
+        ":source_fuzz_harness",
+        "//Compiler/Headers/Visual/XSharp/Runtime:aarc_api",
+        "//Compiler/Runtime/AARC:aarc",
+    ],
+)
+
+# Programs that write to the console, with the text each must write. The
+# harness links the runtime the generated code calls; its output is read
+# through a sink.
+cc_binary(
+    name = "source_console_smoke",
+    srcs = ["SourceConsoleSmoke.cpp"],
+    deps = [":source_fuzz_harness"] + RUNTIME_HOST_DEPS,
+)
+
+# A measuring instrument, not a test: it compiles one source file on a stack
+# of a chosen size and prints the stack the compilation committed.
+cc_binary(
+    name = "source_stack_probe",
+    srcs = ["SourceStackProbe.cpp"],
     deps = [":source_fuzz_harness"],
 )
 

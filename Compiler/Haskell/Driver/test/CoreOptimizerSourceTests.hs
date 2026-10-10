@@ -3,6 +3,7 @@
 
 module CoreOptimizerSourceTests (coreOptimizerSourceTests) where
 
+import CoreInterpreter
 import Visual.XSharp.AST
 import Visual.XSharp.Compiler
 import Visual.XSharp.Core
@@ -40,7 +41,7 @@ coreOptimizerSourceTests =
     , ("source immutable helper locals inline", sourceInlineLocal)
     , ("source dependent helper locals inline", sourceInlineDependentLocals)
     , ("source primitive arguments remain single evaluations", sourceInlinePrimitiveArgument)
-    , ("source failing unused arguments remain explicit", sourceInlineFailingArgument)
+    , ("source failing unused arguments are never computed", sourceUnusedFailingArgument)
     , ("source argument order survives generated lets", sourceInlineArgumentOrder)
     , ("source mutable helper bodies retain calls", sourceRejectsMutableHelper)
     , ("source branching helper bodies retain calls", sourceRejectsBranchHelper)
@@ -297,15 +298,16 @@ sourceInlinePrimitiveArgument = case compiledProgram members of
             , "int Value() { return Identity(20 + 22); }"
             ]
 
-sourceInlineFailingArgument :: Bool
-sourceInlineFailingArgument = case compiledProgram members of
-    Just artifacts -> case lastReturn artifacts of
-        Just (CoreLet _ bindingType value result resultType) ->
-            bindingType == intType
-                && value == CorePrimitive CoreDivide [integer 1, integer 0] intType
-                && result == integer 42
-                && resultType == intType
-        _ -> False
+{- | An argument the method never needs is never computed. The call yields
+the method's result, in the Core the Desugarer produced and in the Core the
+optimizer left: no division is carried out on the way.
+-}
+sourceUnusedFailingArgument :: Bool
+sourceUnusedFailingArgument = case compiledProgram members of
+    Just artifacts ->
+        all
+            (\core -> runFunction core "Value" [] == Just (IntegerValue 42))
+            [artifactCore artifacts, artifactOptimizedCore artifacts]
     Nothing -> False
     where
         members =
@@ -500,7 +502,7 @@ prepFunctionCalls value = any blockCalls (CorePrep.corePrepFunctionBlocks value)
 
 sourceGuardedDeadDivision :: Bool
 sourceGuardedDeadDivision =
-    case compiledProgram ["void Guarded(_ int divisor) { if (divisor \\= 0) { int result = 10 / divisor; } }"] of
+    case compiledProgram ["void Guarded(_ int divisor) { if (divisor \\= 0) { int result = 10 / divisor; if (result > 0) { } } }"] of
         Just artifacts ->
             case coreModuleFunctions (artifactOptimizedCore artifacts) of
                 [function] -> not (containsIntegerDivision (coreFunctionBody function))
@@ -509,7 +511,7 @@ sourceGuardedDeadDivision =
 
 sourceUnguardedDeadDivision :: Bool
 sourceUnguardedDeadDivision =
-    case compiledProgram ["void Guarded(_ int divisor) { int result = 10 / divisor; }"] of
+    case compiledProgram ["void Guarded(_ int divisor) { int result = 10 / divisor; if (result > 0) { } }"] of
         Just artifacts ->
             case coreModuleFunctions (artifactOptimizedCore artifacts) of
                 [function] -> containsIntegerDivision (coreFunctionBody function)
@@ -519,7 +521,7 @@ sourceUnguardedDeadDivision =
 sourceAssignmentReplacesGuard :: Bool
 sourceAssignmentReplacesGuard =
     case compiledProgram
-        ["void Guarded(_ int input) { int divisor = input; if (divisor \\= 0) { divisor = 0; int result = 10 / divisor; } }"] of
+        ["void Guarded(_ int input) { int divisor = input; if (divisor \\= 0) { divisor = 0; int result = 10 / divisor; if (result > 0) { } } }"] of
         Just artifacts ->
             case coreModuleFunctions (artifactOptimizedCore artifacts) of
                 [function] -> containsIntegerDivision (coreFunctionBody function)
@@ -544,13 +546,13 @@ sourceVariableEqualityGuard :: Bool
 sourceVariableEqualityGuard =
     sourceDivisionExpectation
         False
-        ["void Guarded(_ int known, _ int divisor) { if (known \\= 0 && divisor == known) { int unused = 24 / divisor; } }"]
+        ["void Guarded(_ int known, _ int divisor) { if (known \\= 0 && divisor == known) { int probed = 24 / divisor; if (probed > 0) { } } }"]
 
 sourceVariableOrderingGuard :: Bool
 sourceVariableOrderingGuard =
     sourceDivisionExpectation
         False
-        [ "void Guarded(_ int lowerBound, _ int divisor) { if (lowerBound >= 0 && divisor > lowerBound) { int unused = 24 / divisor; } }"
+        [ "void Guarded(_ int lowerBound, _ int divisor) { if (lowerBound >= 0 && divisor > lowerBound) { int probed = 24 / divisor; if (probed > 0) { } } }"
         ]
 
 sourceFalseDisjunctionGuard :: Bool
@@ -559,7 +561,7 @@ sourceFalseDisjunctionGuard =
         False
         [ "void Guarded(_ int divisor, _ int other) {"
         , "  if (divisor == 0 || other == 0) { return; }"
-        , "  int unused = 24 / divisor;"
+        , "  int probed = 24 / divisor; if (probed > 0) { }"
         , "}"
         ]
 
@@ -570,7 +572,7 @@ sourceProductRangeGuard =
         [ "void Guarded(_ int value) {"
         , "  if (value > 0 && value < 5) {"
         , "    int divisor = value * 2;"
-        , "    int unused = 24 / divisor;"
+        , "    int probed = 24 / divisor; if (probed > 0) { }"
         , "  }"
         , "}"
         ]
@@ -582,7 +584,7 @@ sourceDifferenceRangeGuard =
         [ "void Guarded(_ int value) {"
         , "  if (value >= 8) {"
         , "    int divisor = value - 5;"
-        , "    int unused = 24 / divisor;"
+        , "    int probed = 24 / divisor; if (probed > 0) { }"
         , "  }"
         , "}"
         ]
@@ -595,7 +597,7 @@ sourceNonzeroBranchJoin =
         , "  if (input \\= 0) {"
         , "    int divisor = input;"
         , "    if (choose) { divisor = 7; } else { divisor = -1; }"
-        , "    int unused = 24 / divisor;"
+        , "    int probed = 24 / divisor; if (probed > 0) { }"
         , "  }"
         , "}"
         ]
@@ -608,7 +610,7 @@ sourceConflictingBranchJoin =
         , "  if (input \\= 0) {"
         , "    int divisor = input;"
         , "    if (choose) { divisor = 7; } else { divisor = 0; }"
-        , "    int unused = 24 / divisor;"
+        , "    int probed = 24 / divisor; if (probed > 0) { }"
         , "  }"
         , "}"
         ]
@@ -669,7 +671,7 @@ sourceComparisonCase index (operator, boundary, trueEdge, reversed) =
             if reversed
                 then (show boundary, "value")
                 else ("value", show boundary)
-        selectedBody = " int unused = 24 / value; "
+        selectedBody = " int probed = 24 / value; if (probed > 0) { } "
         trueBody = if trueEdge then selectedBody else ""
         falseBody = if trueEdge then "" else selectedBody
 

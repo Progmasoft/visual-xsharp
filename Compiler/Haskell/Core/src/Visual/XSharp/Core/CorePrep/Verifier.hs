@@ -6,12 +6,14 @@ Verification is required after decoding artifacts and before native lowering.
 -}
 module Visual.XSharp.Core.CorePrep.Verifier (verifyCorePrep) where
 
-import Data.List (nub)
+import Data.IntSet qualified as IntSet
+import Data.Set qualified as Set
 import Visual.XSharp.AST
 import Visual.XSharp.Core qualified as Core
 import Visual.XSharp.Core.CorePrep
 import Visual.XSharp.Core.Template
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.RuntimeCall
 
 -- | Return the unchanged module when valid, or every discovered invariant error.
 verifyCorePrep :: CorePrepModule -> Either [Diagnostic] CorePrepModule
@@ -36,7 +38,7 @@ verifyFunction function =
             ++ duplicateIds "VXC0003" "duplicate CorePrep block id" blockIds
             ++ duplicateIds "VXC0004" "duplicate CorePrep parameter symbol" parameterIds
             ++ duplicateIds "VXC0005" "CorePrep symbol is defined more than once" (parameterIds ++ definitionIds)
-            ++ concatMap (verifyBlock blockIds) blocks
+            ++ concatMap (verifyBlock (IntSet.fromList blockIds)) blocks
     where
         verifyParameterType = verifyType "function parameter"
         missingEntry ids =
@@ -47,7 +49,7 @@ verifyFunction function =
 blockDefinitions :: CorePrepBlock -> [SymbolId]
 blockDefinitions block = [resolvedSymbol name | CorePrepBind name _ _ _ <- corePrepBlockInstructions block]
 
-verifyBlock :: [Int] -> CorePrepBlock -> [Diagnostic]
+verifyBlock :: IntSet.IntSet -> CorePrepBlock -> [Diagnostic]
 verifyBlock blockIds block =
     concatMap verifyInstruction (corePrepBlockInstructions block)
         ++ verifyTerminator blockIds (corePrepBlockTerminator block)
@@ -97,12 +99,22 @@ verifyCapture (CorePrepCapture mode name valueType atom) =
             _ -> False
 
 verifyPrimitive :: Core.CorePrimitive -> [CorePrepAtom] -> Type -> [Diagnostic]
+verifyPrimitive Core.CoreRuntimeCall atoms resultType =
+    -- The first atom names the function; the rest are its arguments.
+    case runtimeCallDefect named (map atomType (drop 1 atoms)) resultType of
+        Just defect -> [problem "VXC0026" ("CorePrep " ++ runtimeDefectText defect)]
+        Nothing -> []
+    where
+        named = case atoms of
+            CorePrepLiteral (Core.CoreInteger identity) valueType : _ | valueType == intType -> runtimeFunctionOf identity
+            _ -> Nothing
 verifyPrimitive primitive atoms resultType
     | length atoms /= expectedArity = [problem "VXC0007" "CorePrep primitive has the wrong arity"]
     | any ((== ErrorType) . atomType) atoms = [problem "VXC0008" "CorePrep primitive contains an unresolved type"]
     | otherwise = operandProblems ++ resultProblems
     where
-        expectedArity = if primitive `elem` [Core.CoreNegate, Core.CoreLogicalNot, Core.CoreBitwiseNot] then 1 else 2
+        expectedArity =
+            if primitive `elem` [Core.CoreNegate, Core.CoreLogicalNot, Core.CoreBitwiseNot, Core.CoreMemoize] then 1 else 2
         comparisonOrLogical =
             if primitive
                 `elem` [ Core.CoreLessThan
@@ -141,6 +153,13 @@ verifyPrimitive primitive atoms resultType
                     | referenceLike subjectType && typeSpelling identityType == "uint" -> []
                     | otherwise -> [problem "VXC0024" "CorePrep type test requires a reference subject and uint identity"]
                 _ -> []
+            | primitive == Core.CoreMemoize = case operandTypes of
+                [FunctionType [] result] | result == boolType || isNumericType result -> []
+                _ ->
+                    [ problem
+                        "VXC0025"
+                        "CorePrep memoization requires a callable without parameters whose result is bool or numeric"
+                    ]
             | not operandsAgree = [problem "VXC0019" "CorePrep primitive operand types do not agree"]
             | logical && not booleanContext = [problem "VXC0020" "CorePrep logical primitive requires bool or numeric operands"]
             | integerOnly && not integer = [problem "VXC0022" "CorePrep bitwise primitive requires integer operands"]
@@ -164,14 +183,17 @@ verifyPrimitive primitive atoms resultType
             NamedType _ _ -> not (isNumericType valueType) && valueType /= unitType
             _ -> False
 
-verifyTerminator :: [Int] -> CorePrepTerminator -> [Diagnostic]
+verifyTerminator :: IntSet.IntSet -> CorePrepTerminator -> [Diagnostic]
 verifyTerminator blockIds terminator = case terminator of
     CorePrepReturn atom -> verifyAtom atom
     CorePrepBranch atom trueTarget falseTarget -> verifyAtom atom ++ requireBool atom ++ targets [trueTarget, falseTarget]
     CorePrepJump target -> targets [target]
     CorePrepUnreachable -> []
     where
-        targets values = [problem "VXC0010" "CorePrep terminator targets a missing block" | any (`notElem` blockIds) values]
+        targets values =
+            [ problem "VXC0010" "CorePrep terminator targets a missing block"
+            | any (`IntSet.notMember` blockIds) values
+            ]
         requireBool atom = [problem "VXC0011" "CorePrep branch condition must be bool" | atomType atom /= boolType]
 
 verifyAtom :: CorePrepAtom -> [Diagnostic]
@@ -279,8 +301,11 @@ verifyType context valueType = map templateProblem (validateTemplateType 128 val
         renderPath [] = "the type root"
         renderPath indexes = "argument " ++ concatMap (\index -> "[" ++ show index ++ "]") indexes
 
-duplicateIds :: (Eq a) => String -> String -> [a] -> [Diagnostic]
-duplicateIds code message values = [problem code message | length values /= length (nub values)]
+-- A function may have tens of thousands of blocks and symbols, so the
+-- distinct values are counted through a set rather than by comparing every
+-- pair.
+duplicateIds :: (Ord a) => String -> String -> [a] -> [Diagnostic]
+duplicateIds code message values = [problem code message | length values /= Set.size (Set.fromList values)]
 
 problem :: String -> String -> Diagnostic
 problem code message = Diagnostic CorePrepStage Error code Nothing message

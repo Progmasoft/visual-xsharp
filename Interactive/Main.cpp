@@ -9,6 +9,7 @@
 #include "Visual/XSharp/Interactive/Arguments.hpp"
 #include "Visual/XSharp/Interactive/ReplInput.hpp"
 #include "Visual/XSharp/Interactive/Session.hpp"
+#include "Visual/XSharp/Support/CompilerStack.hpp"
 
 namespace
 {
@@ -104,34 +105,52 @@ namespace
     }
 } // namespace
 
+namespace
+{
+    auto
+    RunMain(int argc, char **argv) -> int;
+} // namespace
+
 auto
 main(int argc, char **argv) -> int
 {
-    using namespace Visual::XSharp::Interactive;
-    const auto request = ParseArguments(argc, argv);
-    switch (request.kind)
-    {
-        case RequestKind::Repl:
-            return Repl();
-        case RequestKind::Help:
-            PrintHelp();
-            return 0;
-        case RequestKind::Error:
-            fmt::print(stderr, "vxsi: {}\n", request.diagnostic);
-            return 2;
-        case RequestKind::Evaluate:
-        {
-            Session session;
-            const auto result = session.Evaluate(request.expression);
-            if (result.status != CellStatus::Value
-                && result.status != CellStatus::Void)
-            {
-                fmt::print(stderr, "vxsi: {}\n", result.text);
-                return 1;
-            }
-            fmt::print("{}\n", result.text);
-            return 0;
-        }
-    }
-    return 2;
+    // Cells are compiled on the compiler stack, as sources are in `vxs`.
+    return Visual::XSharp::Support::RunOnCompilerStack([argc, argv] {
+        return RunMain(argc, argv);
+    });
 }
+
+namespace
+{
+    auto
+    RunMain(int argc, char **argv) -> int
+    {
+        using namespace Visual::XSharp::Interactive;
+        const auto request = ParseArguments(argc, argv);
+        switch (request.kind)
+        {
+            case RequestKind::Repl:
+                return Repl();
+            case RequestKind::Help:
+                PrintHelp();
+                return 0;
+            case RequestKind::Error:
+                fmt::print(stderr, "vxsi: {}\n", request.diagnostic);
+                return 2;
+            case RequestKind::Evaluate:
+            {
+                Session session;
+                const auto result = session.Evaluate(request.expression);
+                if (result.status != CellStatus::Value
+                    && result.status != CellStatus::Void)
+                {
+                    fmt::print(stderr, "vxsi: {}\n", result.text);
+                    return 1;
+                }
+                fmt::print("{}\n", result.text);
+                return 0;
+            }
+        }
+        return 2;
+    }
+} // namespace

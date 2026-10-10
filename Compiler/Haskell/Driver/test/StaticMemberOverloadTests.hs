@@ -265,6 +265,7 @@ methodDeclarations (TypedAST (SyntaxTree _ declarations)) = concatMap membersOf 
         membersOf declaration@TypeDeclaration {} = declaration : concatMap membersOf (typeMembers declaration)
         membersOf declaration@TemplateTypeDeclaration {} = declaration : concatMap membersOf (typeMembers declaration)
         membersOf declaration@FunctionDeclaration {} = [declaration]
+        membersOf EnumDeclaration {} = []
 
 findCall :: TypedAST -> Maybe (Expression ResolvedName Type)
 findCall (TypedAST (SyntaxTree _ declarations)) = find isSelected (concatMap callsInDeclaration declarations)
@@ -277,6 +278,7 @@ callsInDeclaration declaration = case declaration of
     TypeDeclaration {typeMembers = members} -> concatMap callsInDeclaration members
     TemplateTypeDeclaration {typeMembers = members} -> concatMap callsInDeclaration members
     FunctionDeclaration {declarationBody = body} -> callsInBlock body
+    EnumDeclaration {} -> []
 
 callsInBlock :: Block ResolvedName Type -> [Expression ResolvedName Type]
 callsInBlock (Block statements) = concatMap callsInStatement statements
@@ -309,6 +311,7 @@ callsInExpression expression = case expression of
     NameExpression {} -> []
     LiteralExpression {} -> []
     MemberAccessExpression _ receiver _ _ -> callsInExpression receiver
+    MethodReferenceExpression _ receiver _ _ -> callsInExpression receiver
     CallExpression _ callee arguments _ ->
         [expression | isSelectedCall expression]
             ++ callsInExpression callee

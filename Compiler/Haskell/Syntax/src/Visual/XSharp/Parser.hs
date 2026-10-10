@@ -71,7 +71,41 @@ manyUntilEof parser = do
 parseDeclaration :: P (Declaration Identifier ())
 parseDeclaration = do
     isTemplate <- peekText "template"
-    if isTemplate then parseTemplateDeclaration else parseOrdinaryTypeDeclaration
+    isEnum <- peekText "enum"
+    if isTemplate
+        then parseTemplateDeclaration
+        else if isEnum then parseEnumDeclaration else parseOrdinaryTypeDeclaration
+
+{- | Parse a classic enum: @enum Name { A, B = 2, C }@, with an optional
+underlying type written as @enum Name = byte { ... }@. A comma separates the
+members and may follow the last one. The value of a member is read as an
+integer literal with an optional minus sign; other constant expressions are
+not implemented yet.
+-}
+parseEnumDeclaration :: P (Declaration Identifier ())
+parseEnumDeclaration = do
+    start <- keyword "enum"
+    (name, _) <- identifier
+    hasUnderlying <- optionalSymbol "="
+    underlying <- if hasUnderlying then Just <$> parseTypeSyntax else pure Nothing
+    _ <- symbol "{"
+    cases <- parseCases
+    close <- symbol "}"
+    pure (EnumDeclaration (mergeSpan (tokenSpan start) (tokenSpan close)) name () underlying cases)
+    where
+        parseCases = do
+            done <- peekText "}"
+            if done
+                then pure []
+                else do
+                    (caseName, caseSpan) <- identifier
+                    hasValue <- optionalSymbol "="
+                    -- A value is an expression without assignment; which
+                    -- expressions are constant is the type checker's rule.
+                    value <- if hasValue then Just <$> parseConditional else pure Nothing
+                    comma <- optionalSymbol ","
+                    remaining <- if comma then parseCases else pure []
+                    pure (EnumCase caseSpan caseName value : remaining)
 
 parseOrdinaryTypeDeclaration :: P (Declaration Identifier ())
 parseOrdinaryTypeDeclaration = do
@@ -378,6 +412,7 @@ requireTemplateValue :: Expression Identifier () -> P TemplateValueSyntax
 requireTemplateValue expression = case expression of
     NameExpression spanValue name _ -> pure (TemplateNameSyntax spanValue (QualifiedName [name]))
     MemberAccessExpression spanValue _ _ _ -> unsupported spanValue
+    MethodReferenceExpression spanValue _ _ _ -> unsupported spanValue
     LiteralExpression spanValue literal _ -> case literal of
         IntegerLiteral value -> pure (TemplateIntegerSyntax spanValue value)
         CharacterLiteral value -> pure (TemplateCharacterSyntax spanValue value)
@@ -401,8 +436,22 @@ requireTemplateValue expression = case expression of
         unsupported spanValue =
             failAt spanValue "VXP0018" "template value arguments must be compile-time scalar expressions"
 
+{- | What the last item of a block may be.
+
+Every block may end with a statement. A callable body may also end with an
+expression that has no semicolon, which is its result. A value block, the
+block of an @if@ expression or of a @match@ arm, is one whose last item is
+its value: there an @if@ with an @else@ and a @match@ in last position are
+expressions as well, as the grammar's @final-expression@ allows.
+-}
+data BlockMode = StatementBlock | CallableBlock | ValueBlock
+    deriving stock (Eq)
+
 parseBlock :: Bool -> P (Block Identifier ())
-parseBlock allowFinalExpression = do _ <- symbol "{"; statements <- go; _ <- symbol "}"; pure (Block statements)
+parseBlock allowFinalExpression = parseBlockIn (if allowFinalExpression then CallableBlock else StatementBlock)
+
+parseBlockIn :: BlockMode -> P (Block Identifier ())
+parseBlockIn mode = do _ <- symbol "{"; statements <- go; _ <- symbol "}"; pure (Block statements)
     where
         go = do
             done <- peekText "}"
@@ -412,7 +461,7 @@ parseBlock allowFinalExpression = do _ <- symbol "{"; statements <- go; _ <- sym
                 else
                     if eof
                         then failCurrent "VXP0002" "unterminated block"
-                        else (:) <$> parseStatement allowFinalExpression <*> go
+                        else (:) <$> parseStatementIn mode <*> go
 
 blockSpan :: Block name annotation -> SourceSpan -> SourceSpan
 blockSpan (Block []) fallback = fallback
@@ -440,18 +489,21 @@ statementSpan statement = case statement of
 -- The branching forms of "Visual.XSharp.Parser.Match" are built from the
 -- expression, block, and type grammar of this module.
 branchGrammar :: BranchGrammar
-branchGrammar = BranchGrammar parseExpression (parseBlock True) (parseBlock False) parseTypeSyntax parsePatternLiteral
+branchGrammar = BranchGrammar parseExpression (parseBlockIn ValueBlock) (parseBlock False) parseTypeSyntax parsePatternLiteral
 
-parseStatement :: Bool -> P (Statement Identifier ())
-parseStatement allowFinalExpression =
+parseStatementIn :: BlockMode -> P (Statement Identifier ())
+parseStatementIn mode =
     do
+        let allowFinalExpression = mode /= StatementBlock
         tokens <- peekTokens 3
         -- Compound types make a fixed token-count heuristic incorrect. Probe
         -- the complete declaration prefix without consuming it, then commit to
         -- that grammar branch so a later initializer error remains precise.
         case tokens of
             first : _ | tokenKind first == KeywordToken && tokenText first == "return" -> parseReturn
-            first : _ | tokenKind first == KeywordToken && tokenText first == "if" -> parseIf
+            first : _
+                | tokenKind first == KeywordToken && tokenText first == "if" ->
+                    if mode == ValueBlock then parseIfInValueBlock else parseIf
             first : _ | tokenKind first == KeywordToken && tokenText first == "while" -> parseWhile
             first : _ | tokenKind first == KeywordToken && tokenText first == "do" -> parseDoWhile
             first : _ | tokenKind first == KeywordToken && tokenText first == "for" -> parseFor
@@ -465,9 +517,11 @@ parseStatement allowFinalExpression =
                 pure (BlockStatement spanValue block)
             -- A `match` that starts a statement is the statement form: it
             -- needs no terminator and its arms need not cover every value.
+            -- As the last item of a value block it is the value of the block.
             first : _ | tokenKind first == KeywordToken && tokenText first == "match" -> do
                 value <- parseMatchExpression branchGrammar
-                pure (ExpressionStatement (expressionSpan value) value True)
+                closesBlock <- peekText "}"
+                pure (ExpressionStatement (expressionSpan value) value (not (mode == ValueBlock && closesBlock)))
             _ | startsIncrement tokens -> parseIncrementStatement
             _ | startsCompoundAssignment tokens -> parseCompoundAssignmentStatement
             _ | startsDiscard tokens -> parseDiscard
@@ -505,6 +559,86 @@ parseIf = do
             if chained then Block . (: []) <$> parseIf else parseBlock False
         pure (condition, trueBlock, falseBlock)
     pure (IfStatement spanValue condition trueBlock falseBlock)
+
+{- | An @if@ at the start of an item of a value block.
+
+Whether it is the statement or the expression is known only after it: it is
+the value of the block when it is the last item, has an @else@ block, and
+one of its blocks ends with a value; the other block then either ends with a
+value as well or leaves the block, which the type checker decides. Its blocks are therefore parsed once,
+as value blocks, and the statement form is recovered from them when the @if@
+turns out to be a statement. Parsing it twice instead would double the work
+at every level of nested value blocks.
+-}
+parseIfInValueBlock :: P (Statement Identifier ())
+parseIfInValueBlock = do
+    ((condition, first, second, chained), spanValue) <- withSpan $ do
+        _ <- keyword "if"
+        _ <- symbol "("
+        condition <- parseCondition branchGrammar "an if"
+        _ <- symbol ")"
+        first <- withSpan (parseBlockIn ValueBlock)
+        hasElse <- peekText "else"
+        if not hasElse
+            then pure (condition, first, Nothing, Nothing)
+            else do
+                _ <- keyword "else"
+                chain <- peekText "if"
+                if chain
+                    then do
+                        next <- parseIf
+                        pure (condition, first, Nothing, Just next)
+                    else do
+                        second <- withSpan (parseBlockIn ValueBlock)
+                        pure (condition, first, Just second, Nothing)
+    closesBlock <- peekText "}"
+    case (second, chained) of
+        (Just (secondBlock, secondSpan), Nothing)
+            | closesBlock && (blockEndsWithValue (fst first) || blockEndsWithValue secondBlock) ->
+                pure
+                    ( ExpressionStatement
+                        spanValue
+                        ( ConditionalExpression
+                            spanValue
+                            condition
+                            (BlockExpression (snd first) (fst first) ())
+                            (BlockExpression secondSpan secondBlock ())
+                            ()
+                        )
+                        False
+                    )
+        _ -> do
+            whenTrue <- statementBlock (fst first)
+            whenFalse <- case (second, chained) of
+                (Just (secondBlock, _), _) -> Just <$> statementBlock secondBlock
+                (Nothing, Just next) -> pure (Just (Block [next]))
+                (Nothing, Nothing) -> pure Nothing
+            pure (IfStatement spanValue condition whenTrue whenFalse)
+
+-- | Whether the last item of a block is an expression without a semicolon.
+blockEndsWithValue :: Block name annotation -> Bool
+blockEndsWithValue (Block statements) = case reverse statements of
+    ExpressionStatement _ _ False : _ -> True
+    _ -> False
+
+{- | The statement form of a block that was parsed as a value block.
+
+An @if@ or a @match@ in last position was read as the value of the block;
+as statements they need no terminator, so they become statements again. Any
+other expression in last position is missing its semicolon.
+-}
+statementBlock :: Block Identifier () -> P (Block Identifier ())
+statementBlock (Block statements) = case reverse statements of
+    ExpressionStatement spanValue value False : before -> do
+        final <- case value of
+            MatchExpression {} -> pure (ExpressionStatement spanValue value True)
+            ConditionalExpression _ condition (BlockExpression _ first _) (BlockExpression _ second _) _ ->
+                IfStatement spanValue condition <$> statementBlock first <*> (Just <$> statementBlock second)
+            _ -> failAt (endOf spanValue) "VXP0006" "expected \";\""
+        pure (Block (reverse (final : before)))
+    _ -> pure (Block statements)
+    where
+        endOf spanValue = spanValue {sourceStart = sourceEnd spanValue}
 
 -- Loops are retained as structured syntax until the Desugarer. Keeping their
 -- delimiters and header clauses explicit lets the type checker validate loop
@@ -1033,6 +1167,11 @@ parsePostfix = parsePrimary >>= calls
                     (member, memberSpan) <- identifier
                     let selected = MemberAccessExpression (mergeSpan (expressionSpan callee) memberSpan) callee member ()
                     calls selected
+                -- `::` names a method without calling it.
+                Just token | tokenText token == "::" -> do
+                    _ <- symbol "::"
+                    (member, memberSpan) <- identifier
+                    calls (MethodReferenceExpression (mergeSpan (expressionSpan callee) memberSpan) callee member ())
                 Just token | tokenText token == "(" -> do
                     _ <- symbol "("
                     arguments <- separated "," parseExpression
@@ -1053,6 +1192,19 @@ parsePrimary = do
     next <- peekToken
     case next of
         Just token | tokenKind token == SymbolToken && tokenText token `elem` ["\\", "["] -> parseCallable
+        -- `.Member` names a member of the enum that the context expects.
+        -- It is a member selection without a receiver; the place of the
+        -- receiver holds the unit literal, which no source can write.
+        Just token | tokenKind token == SymbolToken && tokenText token == "." -> do
+            _ <- takeToken
+            (member, memberSpan) <- identifier
+            pure
+                ( MemberAccessExpression
+                    (mergeSpan (tokenSpan token) memberSpan)
+                    (LiteralExpression (tokenSpan token) UnitLiteral ())
+                    member
+                    ()
+                )
         -- A loop in operand position is a loop expression: its value is
         -- supplied by `break value;`. The statement parsers are reused, so
         -- both forms have exactly one grammar.
@@ -1263,6 +1415,7 @@ expressionSpan expression = case expression of
     NameExpression value _ _ -> value
     LiteralExpression value _ _ -> value
     MemberAccessExpression value _ _ _ -> value
+    MethodReferenceExpression value _ _ _ -> value
     CallExpression value _ _ _ -> value
     UnaryExpression value _ _ _ -> value
     BinaryExpression value _ _ _ _ -> value

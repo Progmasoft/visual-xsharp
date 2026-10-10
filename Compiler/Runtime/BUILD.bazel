@@ -1,0 +1,3 @@
+# The runtime libraries have packages of their own; this package holds what
+# they share with the programs that link them.
+exports_files(["host.bzl"])

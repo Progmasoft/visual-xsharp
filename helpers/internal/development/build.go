@@ -21,6 +21,7 @@ var nativeTargets = []string{
 	"//Compiler/Cli/Tests:cli_parser_tests",
 	"//Compiler/Cli/Commands/Tests:execution_status_tests",
 	"//Compiler/Cli/Commands/Tests:cli_command_tests",
+	"//Compiler/Cli/Commands/Tests:executable_run_tests",
 	"//Compiler/Core/Tests:callable_contract_tests",
 	"//Compiler/Core/Tests:core_pipeline_tests",
 	"//Compiler/Diagnostic/Tests:diagnostic_protocol_tests",
@@ -32,7 +33,12 @@ var nativeTargets = []string{
 	"//Compiler/Codegen/Xpp/Tests:xpp_verifier_tests",
 	"//Compiler/Runtime/AARC/Tests:aarc_runtime_tests",
 	"//Compiler/Runtime/AARC/Tests:aarc_c_abi_tests",
+	"//Compiler/Runtime/Text/Tests:text_runtime_tests",
 	"//Compiler/Fuzzing:source_fuzz_smoke",
+	"//Compiler/Fuzzing:source_execution_smoke",
+	"//Compiler/Fuzzing:source_expression_smoke",
+	"//Compiler/Fuzzing:source_feature_smoke",
+	"//Compiler/Fuzzing:source_console_smoke",
 	"//Compiler/Fuzzing/Tests:coreprep_parity_tests",
 	"//Compiler/ProjectSystem/Bridge/Tests:project_registry_tests",
 	"//Interactive/Tests:interactive_tests",
@@ -78,6 +84,9 @@ func buildTargets(repository string, runner commandRunner, config string, extra 
 	arguments = append(arguments, "//Compiler/Cli:vxs")
 	arguments = append(arguments, "//Interactive:vxsi")
 	arguments = append(arguments, nativeTargets...)
+	if runtimeLibraryTarget != "" {
+		arguments = append(arguments, runtimeLibraryTarget)
+	}
 	arguments = append(arguments, extra...)
 	fmt.Printf("Building compiler and %d native suites...\n", len(nativeTargets))
 	if err := runner.Run(repository, nil, bazel, cachedBuild(arguments)...); err != nil {
@@ -85,6 +94,44 @@ func buildTargets(repository string, runner commandRunner, config string, extra 
 	}
 	if err := stageFrontendForBuildOutputs(repository, frontendLibrary); err != nil {
 		return err
+	}
+	return stageRuntimeForBuildOutputs(repository)
+}
+
+// The runtime library a native executable is linked with. The compiler looks
+// for it beside its own executable under the name it is installed by. Native
+// executables are linked on Windows only, so the library exists there only.
+const runtimeLibraryName = "vxs-runtime.lib"
+
+var runtimeLibraryTarget = func() string {
+	if runtime.GOOS == "windows" {
+		return "//Compiler/Runtime/Freestanding:vxs_runtime"
+	}
+	return ""
+}()
+
+// builtRuntimeLibrary is where Bazel leaves the archive of runtimeLibraryTarget.
+func builtRuntimeLibrary(repository string) string {
+	return filepath.Join(repository, "bazel-bin", "Compiler", "Runtime", "Freestanding", "vxs_runtime.lib")
+}
+
+// stageRuntimeForBuildOutputs puts the runtime library beside every program
+// that may link a native executable: the compiler, and the suites that drive
+// it in their own process.
+func stageRuntimeForBuildOutputs(repository string) error {
+	if runtimeLibraryTarget == "" {
+		return nil
+	}
+	library := builtRuntimeLibrary(repository)
+	if _, err := os.Stat(library); err != nil {
+		return fmt.Errorf("Bazel did not produce the runtime library: %w", err)
+	}
+	executablePaths := append([]string{"Compiler/Cli/vxs", "Interactive/vxsi"}, nativePrograms...)
+	for _, relative := range executablePaths {
+		directory := filepath.Dir(filepath.Join(repository, "bazel-bin", filepath.FromSlash(relative)))
+		if err := copyFile(library, filepath.Join(directory, runtimeLibraryName), 0o644); err != nil {
+			return fmt.Errorf("cannot stage the runtime library beside %s: %w", relative, err)
+		}
 	}
 	return nil
 }

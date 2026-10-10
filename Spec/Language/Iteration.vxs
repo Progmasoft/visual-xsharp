@@ -454,6 +454,60 @@ for (auto value : CountTo(5)) {
 }
 
 -- ============================================================================
+-- Example 79: 14. break and continue
+-- Demonstrates: The condition of a loop belongs to that loop. A break in a block used as a value in
+--   the condition leaves the loop whose condition it is, not a loop around it. What the condition
+--   evaluated before the break has happened, once; the body does not run again.
+
+while (Outer()) {
+    while (if (Done()) { break; } else { true }) {
+        Step();
+    }
+
+    AfterInner(); -- reached: the break left the inner loop only
+}
+
+-- ============================================================================
+-- Example 80: 14. break and continue
+-- Demonstrates: A continue in the condition of a loop abandons the rest of that evaluation and
+--   evaluates the condition of the same loop again. The body does not run in between, and in a
+--   for loop neither does the update. The same holds for the condition of a do/while loop.
+--   A condition that continues on every evaluation never ends: that is an endless loop, as written.
+
+for (int index = 0; if (Busy()) { continue; } else { index < limit }; index += 1) {
+    Use(index); -- index advances only after a completed condition and body
+}
+
+-- ============================================================================
+-- Example 81: 14. break and continue
+-- Demonstrates: A continue in the update of a for loop skips the rest of the update and goes on to
+--   the condition. It does not start the update again, and what the update did before it stays done.
+
+for (int index = 0; index < limit; index += 1, total += if (Odd(index)) { continue; } else { index }) {
+    Use(index);
+}
+
+-- ============================================================================
+-- Example 82: 14. break and continue
+-- Demonstrates: A break in the update of a for loop leaves that loop. The rest of the update and
+--   the condition are not evaluated. In a loop used as an expression it carries the value of the
+--   loop, like any other break of that loop.
+
+for (int index = 0; index < limit; index += if (Full()) { break; } else { 1 }) {
+    Use(index);
+}
+
+-- ============================================================================
+-- Example 83: 14. break and continue
+-- Demonstrates: A callable is not inside the loops around the place that creates it. break and
+--   continue in its body, also in a block used as a value there, do not reach such a loop.
+-- Expected result: compile-time rejection; the INVALID marker is normative.
+
+while (Ready()) {
+    auto stop = \() -> { break; }; -- INVALID: no loop encloses the body of the callable
+}
+
+-- ============================================================================
 -- Example 44: 15. Value-Carrying break
 -- Demonstrates: Visual X# supports:
 

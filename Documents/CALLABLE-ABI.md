@@ -156,9 +156,12 @@ with opaque pointers.
 ## Current limits
 
 This slice provides native indirect invocation for closure values already
-present in CorePrep. It does not complete whole-program escape analysis,
-retain/release placement for every local, cross-module callable ABI stability,
-exception cleanup around upgraded captures, or the future cycle collector.
+present in CorePrep, and for methods used as values, which become closures
+without captures in Xpp. A callable parameter is borrowed and a callable
+result is owned; the placement pass of [Ownership flow](OWNERSHIP-FLOW.md)
+writes the retains and releases. It does not complete whole-program escape
+analysis, cross-module callable ABI stability, exception cleanup around
+upgraded captures, or the future cycle collector.
 
 The planned cycle collector combines concurrent Bacon–Rajan processing with
 trial deletion and remains disabled by default. Callable environments preserve

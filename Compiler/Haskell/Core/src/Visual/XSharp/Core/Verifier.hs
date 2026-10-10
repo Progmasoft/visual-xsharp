@@ -9,11 +9,13 @@ module Visual.XSharp.Core.Verifier (verifyCore) where
 
 import Data.List (group, sort)
 import Data.Map.Strict qualified as Map
+import Data.Set qualified as Set
 import Visual.XSharp.AST
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Scalar
 import Visual.XSharp.Core.Template
 import Visual.XSharp.Diagnostic
+import Visual.XSharp.RuntimeCall
 
 type Environment = Map.Map SymbolId (Type, Bool)
 
@@ -41,14 +43,19 @@ moduleProblems moduleValue =
                 ++ duplicates "VXC1032" "duplicate Core function source owner" (map fst sourceOwners)
                 ++ [ problem "VXC1033" "Core function source owner is absent from the module source catalog"
                    | (_, path) <- sourceOwners
-                   , path `notElem` sourceFiles
+                   , path `Set.notMember` sourceFileSet
                    ]
                 ++ [ problem "VXC1034" "Core function has no source owner"
                    | not (null sourceFiles)
                    , function <- functions
                    , let identifier = symbolIdValue (resolvedSymbol (coreFunctionName function))
-                   , identifier `notElem` map fst sourceOwners
+                   , identifier `Set.notMember` ownedFunctions
                    ]
+        -- Sets, because both checks run once for every function: against
+        -- lists, a module of thousands of functions was verified in time
+        -- with the square of their number.
+        sourceFileSet = Set.fromList sourceFiles
+        ownedFunctions = Set.fromList (map fst sourceOwners)
         invalidPath path = null path || '\0' `elem` path
         functionEnvironment =
             Map.fromList
@@ -282,12 +289,22 @@ callProblems callee arguments resultType = case expressionType callee of
     _ -> [problem "VXC1025" "Core call target is not a function"]
 
 primitiveProblems :: CorePrimitive -> [CoreExpression] -> Type -> [Diagnostic]
+primitiveProblems CoreRuntimeCall arguments resultType =
+    -- The first operand names the function and the rest are checked against
+    -- the row of the catalog that function has.
+    case runtimeCallDefect named (map expressionType (drop 1 arguments)) resultType of
+        Just defect -> [problem "VXC1075" ("Core " ++ runtimeDefectText defect)]
+        Nothing -> []
+    where
+        named = case arguments of
+            CoreLiteral (CoreInteger identity) valueType : _ | valueType == intType -> runtimeFunctionOf identity
+            _ -> Nothing
 primitiveProblems primitive arguments resultType =
     [problem "VXC1026" "Core primitive has the wrong operand count" | length arguments /= arity]
         ++ operandProblems
         ++ typeMismatch "VXC1028" "Core primitive result has the wrong type" expectedResult resultType
     where
-        unary = primitive `elem` [CoreNegate, CoreLogicalNot, CoreBitwiseNot]
+        unary = primitive `elem` [CoreNegate, CoreLogicalNot, CoreBitwiseNot, CoreMemoize]
         logical = primitive `elem` [CoreLogicalAnd, CoreLogicalOr, CoreLogicalNot]
         integerOnly = primitive `elem` [CoreShiftLeft, CoreShiftRight, CoreBitwiseAnd, CoreBitwiseXor, CoreBitwiseOr, CoreBitwiseNot]
         comparison = primitive `elem` [CoreLessThan, CoreLessEqual, CoreGreaterThan, CoreGreaterEqual, CoreEqual, CoreNotEqual]
@@ -304,6 +321,14 @@ primitiveProblems primitive arguments resultType =
                     | isReferenceLike subjectType && identityType == namedType "uint" -> []
                     | otherwise -> [problem "VXC1044" "Core type test requires a reference subject and uint identity"]
                 _ -> []
+            -- A remembered result lives in the callable itself, in a slot
+            -- that owns nothing: only a result without ownership is kept.
+            | primitive == CoreMemoize = case argumentTypes of
+                [FunctionType [] result]
+                    | result == boolType || isCoreNumericType result -> []
+                    | otherwise -> [memoizeProblem]
+                [_] -> [memoizeProblem]
+                _ -> []
             | logical && not operandsBoolean = [problem "VXC1027" "Core logical primitive requires bool or numeric operands"]
             | integerOnly && not operandsInteger = [problem "VXC1027" "Core bitwise primitive requires integer operands"]
             | primitive `elem` [CoreEqual, CoreNotEqual]
@@ -317,6 +342,8 @@ primitiveProblems primitive arguments resultType =
             | logical || comparison || primitive == CoreTypeIs = boolType
             | primitive == CoreFloorDivide && isCoreFloatingType firstType = intType
             | otherwise = firstType
+        memoizeProblem =
+            problem "VXC1073" "Core memoization requires a callable without parameters whose result is bool or numeric"
         isReferenceLike valueType = case valueType of
             FunctionType _ _ -> True
             NamedType _ _ -> not (isCoreNumericType valueType) && valueType /= unitType
@@ -338,6 +365,13 @@ literalProblems literal valueType =
             NamedType _ _ -> not (isCoreNumericType value) && value /= unitType
             _ -> False
 
+{- | Whether control can never fall off the end of the statements.
+
+That is so when they return on every path, and also when they hold a loop
+that cannot be left: its condition is the literal true and no @break@
+leaves it. Such a loop ends only through a @return@ inside it, or not at
+all, so nothing after it is reached.
+-}
 statementsAlwaysReturn :: [CoreStatement] -> Bool
 statementsAlwaysReturn [] = False
 statementsAlwaysReturn (statement : remaining) = case statement of
@@ -345,7 +379,24 @@ statementsAlwaysReturn (statement : remaining) = case statement of
     CoreIf _ trueBranch falseBranch ->
         (not (null falseBranch) && statementsAlwaysReturn trueBranch && statementsAlwaysReturn falseBranch)
             || statementsAlwaysReturn remaining
+    CoreWhile condition body
+        | cannotBeLeft condition body -> True
+    CoreDoWhile body condition
+        | cannotBeLeft condition body -> True
+    CoreFor condition body update
+        | cannotBeLeft condition (body ++ update) -> True
     _ -> statementsAlwaysReturn remaining
+    where
+        cannotBeLeft condition body = isLiteralTrue condition && not (leftByBreak body)
+        isLiteralTrue expression = case expression of
+            CoreLiteral (CoreBoolean True) _ -> True
+            _ -> False
+        -- A break in a nested loop leaves that loop.
+        leftByBreak = any breaks
+        breaks nested = case nested of
+            CoreBreak -> True
+            CoreIf _ trueBranch falseBranch -> leftByBreak trueBranch || leftByBreak falseBranch
+            _ -> False
 
 emptyName :: QualifiedName -> [Diagnostic]
 emptyName (QualifiedName parts) =

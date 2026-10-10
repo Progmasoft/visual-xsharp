@@ -29,6 +29,7 @@ import Visual.XSharp.AST (ResolvedName, SymbolId, resolvedSymbol)
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Optimizer.IntegerFacts
 import Visual.XSharp.Core.Scalar (isCoreFloatingType, isCoreIntegerType)
+import Visual.XSharp.RuntimeCall (runtimeFunctionOf, runtimeObservable)
 
 -- Effect ordering is deliberately conservative. The optimizer currently needs
 -- one decisive property: only PureEffect may disappear when its value is dead.
@@ -169,6 +170,16 @@ caller, so proving a divisor nonzero cannot erase a call in an operand.
 -}
 primitiveEffectWithProvenNonzeroDivisor :: Bool -> CorePrimitive -> [CoreExpression] -> Effect
 primitiveEffectWithProvenNonzeroDivisor provenNonzero primitive arguments
+    -- A runtime call that writes to the console is observed by whoever
+    -- reads the output: it is kept, kept once, and kept where it stands,
+    -- like a call of a function that nothing is known about. The others
+    -- compute a string and do nothing else.
+    | primitive == CoreRuntimeCall = case arguments of
+        CoreLiteral (CoreInteger identity) _ : _
+            | Just function <- runtimeFunctionOf identity
+            , not (runtimeObservable function) ->
+                AllocationEffect
+        _ -> CallEffect
     | primitive `elem` [CoreDivide, CoreFloorDivide, CoreRemainder]
     , firstTypeIsInteger arguments
     , not (knownNonzeroDivisor arguments || provenNonzero) =

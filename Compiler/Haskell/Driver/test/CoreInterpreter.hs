@@ -11,37 +11,90 @@ shares no lowering or rewriting code with the compiler.
 
 The subset is the one the tests need: integer and Boolean values, the
 arithmetic, comparison, bitwise and logical primitives, expression-local
-bindings, conditional expressions, direct calls of module functions and all
-statement forms. Integers are unbounded; a test that depends on overflow
+bindings, conditional expressions, direct calls of module functions,
+closures, callables that remember their result, strings, the runtime calls
+for text and the console, and all statement forms. What a program writes to
+the console is kept and returned with its result. Integers are unbounded; a test that depends on overflow
 belongs to the native execution tests instead. Anything outside the subset,
 and any run that exceeds its step budget, yields 'Nothing' rather than a
 guess.
 -}
 module CoreInterpreter
     ( Value (..)
+    , Written (..)
     , runFunction
     , runFunctionWithBudget
+    , runFunctionWriting
     ) where
 
 import Data.Bits (complement, shiftL, shiftR, xor, (.&.), (.|.))
+import Data.Char (chr, isDigit)
+import Data.Ratio ((%))
+import RuntimeText
 import Visual.XSharp.AST
 import Visual.XSharp.Core
+import Visual.XSharp.RuntimeCall
 
 -- | A runtime value of the supported subset.
 data Value
     = IntegerValue Integer
     | BooleanValue Bool
     | UnitValue
-    deriving (Eq, Ord, Show)
+    | {- | A closure: the values its captures had when it was created, the
+      symbols of its parameters, and its body. A capture initializer is
+      evaluated once, where the closure is created.
+      -}
+      ClosureValue [(Int, Value)] [Int] [CoreStatement]
+    | {- | A callable that remembers its result: the cell that holds the
+      result once there is one, and the callable that computes it. Copies of
+      the value name the same cell, which is how they share the result.
+      -}
+      MemoValue Int Value
+    | -- | A string.
+      TextValue String
+    | {- | A floating-point number: whether it is negative zero, and its exact
+      value, which is that of the binary number its type holds.
+      -}
+      FloatingValue Bool Rational
+    deriving (Eq, Show)
+
+-- | What a run wrote to the console, in the order it was written.
+data Written = Written
+    { writtenOutput :: String
+    -- ^ Standard output.
+    , writtenError :: String
+    -- ^ Standard error.
+    }
+    deriving (Eq, Show)
 
 -- Local values keyed by symbol identity. Core symbols are unique within a
 -- function, so one flat table is a faithful model of its locals.
 type Locals = [(Int, Value)]
 
--- Remaining statement and call budget. It bounds every run, so a lowering
--- error that turns a loop into an endless one fails the test instead of
--- hanging the suite.
-type Budget = Int
+{- | What a run carries from step to step besides its locals.
+
+The steps left bound every run, so a lowering error that turns a loop into
+an endless one fails the test instead of hanging the suite. The cells hold
+the results that callables have remembered; they belong to the run and not
+to a function, because a callable is passed between functions and must find
+its result wherever it is called.
+-}
+data Budget = Budget
+    { stepsLeft :: Int
+    , cells :: [(Int, Value)]
+    , nextCell :: Int
+    , writes :: [(Bool, String)]
+    -- ^ Every console write, latest first: whether it went to standard
+    -- error, and the text.
+    }
+
+-- | Whether no step is left.
+exhausted :: Budget -> Bool
+exhausted budget = stepsLeft budget <= 0
+
+-- | The budget after one step.
+step :: Budget -> Budget
+step budget = budget {stepsLeft = stepsLeft budget - 1}
 
 data Flow
     = Proceed
@@ -56,10 +109,24 @@ runFunction = runFunctionWithBudget 200000
 {- | Run a function by name; 'Nothing' when it is missing, leaves the
 supported subset, or exhausts the budget.
 -}
-runFunctionWithBudget :: Budget -> CoreModule -> String -> [Value] -> Maybe Value
-runFunctionWithBudget budget moduleValue name arguments = do
+runFunctionWithBudget :: Int -> CoreModule -> String -> [Value] -> Maybe Value
+runFunctionWithBudget steps moduleValue name arguments = fst <$> runFunctionWriting steps moduleValue name arguments
+
+{- | Run a function by name and return what it wrote to the console with its
+result. Nothing is returned for a run that does not finish: what such a run
+wrote before it stopped is not a result a test may rely on here.
+-}
+runFunctionWriting :: Int -> CoreModule -> String -> [Value] -> Maybe (Value, Written)
+runFunctionWriting steps moduleValue name arguments = do
     function <- firstJust [function | function <- coreModuleFunctions moduleValue, functionSpelling function == name]
-    fst <$> call moduleValue budget function arguments
+    (value, budget) <- call moduleValue (Budget steps [] 0 []) function arguments
+    let inOrder = reverse (writes budget)
+    Just
+        ( value
+        , Written
+            (concat [written | (False, written) <- inOrder])
+            (concat [written | (True, written) <- inOrder])
+        )
 
 functionSpelling :: CoreFunction -> String
 functionSpelling = identifierText . resolvedSpelling . coreFunctionName
@@ -74,11 +141,11 @@ symbolOf = symbolIdValue . resolvedSymbol
 
 call :: CoreModule -> Budget -> CoreFunction -> [Value] -> Maybe (Value, Budget)
 call moduleValue budget function arguments
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | length arguments /= length (coreFunctionParameters function) = Nothing
     | otherwise = do
         let locals = zip (map (symbolOf . fst) (coreFunctionParameters function)) arguments
-        (flow, _, remaining) <- executeAll moduleValue (budget - 1) locals (coreFunctionBody function)
+        (flow, _, remaining) <- executeAll moduleValue (step budget) locals (coreFunctionBody function)
         case flow of
             ReturnValue value -> Just (value, remaining)
             Proceed -> Just (UnitValue, remaining)
@@ -94,7 +161,7 @@ executeAll moduleValue budget locals (statement : remaining) = do
 
 execute :: CoreModule -> Budget -> Locals -> CoreStatement -> Maybe (Flow, Locals, Budget)
 execute moduleValue budget locals statement
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | otherwise = case statement of
         CoreBind binding -> do
             (value, afterLocals, afterBudget) <- evaluate moduleValue spent locals (coreBindingValue binding)
@@ -121,7 +188,7 @@ execute moduleValue budget locals statement
         CoreBreak -> Just (BreakLoop, locals, spent)
         CoreContinue -> Just (ContinueLoop, locals, spent)
     where
-        spent = budget - 1
+        spent = step budget
 
 {- | Run one structured loop.
 
@@ -139,7 +206,7 @@ loop ::
     Bool ->
     Maybe (Flow, Locals, Budget)
 loop moduleValue budget locals condition body update testFirst
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | testFirst = do
         (enter, afterLocals, afterBudget) <- test budget locals
         if enter then iteration afterBudget afterLocals else Just (Proceed, afterLocals, afterBudget)
@@ -152,7 +219,7 @@ loop moduleValue budget locals condition body update testFirst
                 selected <- truth value
                 Just (selected, afterLocals, afterBudget)
         iteration currentBudget currentLocals = do
-            (flow, afterBody, bodyBudget) <- executeAll moduleValue (currentBudget - 1) currentLocals body
+            (flow, afterBody, bodyBudget) <- executeAll moduleValue (step currentBudget) currentLocals body
             case flow of
                 BreakLoop -> Just (Proceed, afterBody, bodyBudget)
                 ReturnValue _ -> Just (flow, afterBody, bodyBudget)
@@ -160,9 +227,13 @@ loop moduleValue budget locals condition body update testFirst
                     (updateFlow, afterUpdate, updateBudget) <- executeAll moduleValue bodyBudget afterBody update
                     case updateFlow of
                         Proceed -> loop moduleValue updateBudget afterUpdate condition body update True
-                        -- Leaving the loop from its update clause has no
-                        -- defined meaning in this evaluator.
-                        _ -> Nothing
+                        -- A break in the update clause leaves the loop,
+                        -- and a return leaves the function.
+                        BreakLoop -> Just (Proceed, afterUpdate, updateBudget)
+                        ReturnValue _ -> Just (updateFlow, afterUpdate, updateBudget)
+                        -- The Core verifier rejects a continue placed
+                        -- directly in an update clause.
+                        ContinueLoop -> Nothing
 
 store :: Int -> Value -> Locals -> Locals
 store symbol value locals = (symbol, value) : filter ((/= symbol) . fst) locals
@@ -172,14 +243,31 @@ truth value = case value of
     BooleanValue flag -> Just flag
     IntegerValue number -> Just (number /= 0)
     UnitValue -> Nothing
+    ClosureValue {} -> Nothing
+    MemoValue {} -> Nothing
+    TextValue {} -> Nothing
+    FloatingValue {} -> Nothing
 
 evaluate :: CoreModule -> Budget -> Locals -> CoreExpression -> Maybe (Value, Locals, Budget)
 evaluate moduleValue budget locals expression
-    | budget <= 0 = Nothing
+    | exhausted budget = Nothing
     | otherwise = case expression of
-        CoreVariable name _ -> do
-            value <- lookup (symbolOf name) locals
-            Just (value, locals, budget)
+        CoreVariable name _ -> case lookup (symbolOf name) locals of
+            Just value -> Just (value, locals, budget)
+            -- A method named where a value is expected is a closure
+            -- without captures.
+            Nothing -> do
+                method <-
+                    firstJust
+                        [ candidate
+                        | candidate <- coreModuleFunctions moduleValue
+                        , symbolOf (coreFunctionName candidate) == symbolOf name
+                        ]
+                Just
+                    ( ClosureValue [] (map (symbolOf . fst) (coreFunctionParameters method)) (coreFunctionBody method)
+                    , locals
+                    , budget
+                    )
         CoreLiteral literal valueType -> do
             value <- literalValue literal valueType
             Just (value, locals, budget)
@@ -192,23 +280,73 @@ evaluate moduleValue budget locals expression
             evaluate moduleValue afterBudget afterLocals (if selected then whenTrue else whenFalse)
         CorePrimitive CoreLogicalAnd [left, right] _ -> shortCircuit False left right
         CorePrimitive CoreLogicalOr [left, right] _ -> shortCircuit True left right
+        -- Remembering takes a cell that no other callable has. Nothing is
+        -- computed here: the callable is not called.
+        CorePrimitive CoreMemoize [operand] _ -> do
+            (target, afterLocals, afterBudget) <- evaluate moduleValue budget locals operand
+            case target of
+                ClosureValue _ [] _ ->
+                    Just
+                        ( MemoValue (nextCell afterBudget) target
+                        , afterLocals
+                        , afterBudget {nextCell = nextCell afterBudget + 1}
+                        )
+                _ -> Nothing
+        -- A runtime call: the function its first operand names, applied
+        -- to the values of the operands after it.
+        CorePrimitive CoreRuntimeCall (CoreLiteral (CoreInteger identity) _ : operands) _ -> do
+            function <- runtimeFunctionOf identity
+            (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals operands
+            (value, afterCall) <- applyRuntime function values afterBudget
+            Just (value, afterLocals, afterCall)
         CorePrimitive primitive operands valueType -> do
             (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals operands
             value <- applyPrimitive primitive valueType values
             Just (value, afterLocals, afterBudget)
-        CoreApply (CoreVariable callee _) arguments _ -> do
-            function <-
-                firstJust
-                    [ candidate
-                    | candidate <- coreModuleFunctions moduleValue
-                    , symbolOf (coreFunctionName candidate) == symbolOf callee
-                    ]
-            (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals arguments
-            (value, callBudget) <- call moduleValue afterBudget function values
+        CoreApply (CoreVariable callee _) arguments _
+            | function : _ <-
+                [ candidate
+                | candidate <- coreModuleFunctions moduleValue
+                , symbolOf (coreFunctionName candidate) == symbolOf callee
+                ] -> do
+                (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals arguments
+                (value, callBudget) <- call moduleValue afterBudget function values
+                Just (value, afterLocals, callBudget)
+        -- The callee is evaluated before the arguments, like any operand.
+        CoreApply callee arguments _ -> do
+            (target, calleeLocals, calleeBudget) <- evaluate moduleValue budget locals callee
+            (values, afterLocals, afterBudget) <- evaluateMany moduleValue calleeBudget calleeLocals arguments
+            (value, callBudget) <- callClosure target values afterBudget
             Just (value, afterLocals, callBudget)
-        CoreApply {} -> Nothing
-        CoreClosure {} -> Nothing
+        CoreClosure captures parameters _ body _ -> do
+            (values, afterLocals, afterBudget) <- evaluateMany moduleValue budget locals (map coreCaptureValue captures)
+            Just
+                ( ClosureValue (zip (map (symbolOf . coreCaptureName) captures) values) (map (symbolOf . fst) parameters) body
+                , afterLocals
+                , afterBudget
+                )
     where
+        -- A closure runs on its captures and its arguments alone: it sees
+        -- no local of the function that calls it.
+        callClosure target values currentBudget = case target of
+            ClosureValue captured parameters body
+                | not (exhausted currentBudget) && length parameters == length values -> do
+                    (flow, _, remaining) <-
+                        executeAll moduleValue (step currentBudget) (zip parameters values ++ captured) body
+                    case flow of
+                        ReturnValue value -> Just (value, remaining)
+                        Proceed -> Just (UnitValue, remaining)
+                        _ -> Nothing
+            -- The first call computes the result and keeps it in the cell;
+            -- every later call, of any copy, reads the cell. A call that
+            -- does not finish leaves the cell empty.
+            MemoValue cell computation
+                | not (exhausted currentBudget) && null values -> case lookup cell (cells currentBudget) of
+                    Just remembered -> Just (remembered, step currentBudget)
+                    Nothing -> do
+                        (value, remaining) <- callClosure computation [] (step currentBudget)
+                        Just (value, remaining {cells = (cell, value) : cells remaining})
+            _ -> Nothing
         -- The right operand runs only when the left one does not decide.
         shortCircuit decidingValue left right = do
             (leftValue, afterLeft, leftBudget) <- evaluate moduleValue budget locals left
@@ -234,9 +372,72 @@ literalValue literal valueType = case literal of
         | otherwise -> Just (IntegerValue number)
     CoreBoolean flag -> Just (BooleanValue flag)
     CoreUnit -> Just UnitValue
-    CoreFloating _ -> Nothing
-    CoreString _ -> Nothing
+    CoreFloating spelling -> floatingValue valueType spelling
+    CoreString value -> Just (TextValue value)
     CoreNull -> Nothing
+
+{- | The value a floating-point literal has in its type: the decimal number
+that was written, rounded to the nearest number the type holds. Only the
+plain decimal spellings the tests use are read.
+-}
+floatingValue :: Type -> String -> Maybe Value
+floatingValue valueType spelling = do
+    written <- decimal (filter (/= '_') spelling)
+    case valueType of
+        NamedType (QualifiedName [Identifier "float"]) [] ->
+            Just (FloatingValue False (toRational (fromRational written :: Double)))
+        NamedType (QualifiedName [Identifier "lfloat"]) [] ->
+            Just (FloatingValue False (toRational (fromRational written :: Float)))
+        _ -> Nothing
+    where
+        decimal value =
+            let (whole, afterWhole) = span isDigit value
+                (fraction, afterFraction) = case afterWhole of
+                    '.' : rest -> span isDigit rest
+                    _ -> ("", afterWhole)
+                mantissa = read ('0' : whole ++ fraction) :: Integer
+                scaled = mantissa % (10 ^ length fraction)
+             in case afterFraction of
+                    [] | not (null whole) -> Just scaled
+                    'e' : exponentText -> scaleBy scaled exponentText
+                    'E' : exponentText -> scaleBy scaled exponentText
+                    _ -> Nothing
+        scaleBy scaled exponentText = case exponentText of
+            '-' : digits | all isDigit digits, not (null digits) -> Just (scaled / (10 ^ (read digits :: Integer)))
+            '+' : digits | all isDigit digits, not (null digits) -> Just (scaled * (10 ^ (read digits :: Integer)))
+            digits | all isDigit digits, not (null digits) -> Just (scaled * (10 ^ (read digits :: Integer)))
+            _ -> Nothing
+
+{- | Apply a function of the runtime. The text functions are those of
+"RuntimeText"; a console write adds to what the run has written.
+-}
+applyRuntime :: RuntimeFunction -> [Value] -> Budget -> Maybe (Value, Budget)
+applyRuntime function values budget = case (function, values) of
+    (TextConcat, [TextValue left, TextValue right]) -> text (left ++ right)
+    (TextEquals, [TextValue left, TextValue right]) -> Just (BooleanValue (left == right), budget)
+    (TextFromSigned, [IntegerValue value]) -> text (textOfSigned value)
+    (TextFromUnsigned, [IntegerValue value]) -> text (textOfSigned value)
+    (TextFromBool, [BooleanValue value]) -> text (textOfBool value)
+    (TextFromChar, [IntegerValue value]) -> text [chr (fromInteger value)]
+    (TextFormatSigned, [IntegerValue flags, IntegerValue width, IntegerValue precision, IntegerValue value]) ->
+        text (formatInteger (Conversion flags width precision) value)
+    (TextFormatUnsigned, [IntegerValue flags, IntegerValue width, IntegerValue precision, IntegerValue value]) ->
+        text (formatInteger (Conversion flags width precision) value)
+    (TextFormatFloating, [IntegerValue flags, IntegerValue width, IntegerValue precision, FloatingValue negativeZero value]) ->
+        text (formatFloating (Conversion flags width precision) negativeZero value)
+    (TextFormatString, [IntegerValue flags, IntegerValue width, IntegerValue precision, TextValue value]) ->
+        text (formatText (Conversion flags width precision) value)
+    (TextFormatChar, [IntegerValue flags, IntegerValue width, IntegerValue _, IntegerValue value]) ->
+        text (formatText (Conversion flags width absent) [chr (fromInteger value)])
+    (TextNewline, []) -> text lineTerminator
+    (ConsoleWrite, [TextValue value, IntegerValue target])
+        | target `elem` [consoleOutput, consoleOutputLine, consoleError, consoleErrorLine] ->
+            let toError = target `elem` [consoleError, consoleErrorLine]
+                ended = if target `elem` [consoleOutputLine, consoleErrorLine] then value ++ lineTerminator else value
+             in Just (UnitValue, budget {writes = (toError, ended) : writes budget})
+    _ -> Nothing
+    where
+        text value = Just (TextValue value, budget)
 
 applyPrimitive :: CorePrimitive -> Type -> [Value] -> Maybe Value
 applyPrimitive primitive valueType values = case (primitive, values) of
@@ -259,6 +460,8 @@ applyPrimitive primitive valueType values = case (primitive, values) of
     (CoreEqual, [left, right]) -> Just (BooleanValue (left == right))
     (CoreNotEqual, [left, right]) -> Just (BooleanValue (left /= right))
     (CoreLogicalNot, [operand]) -> BooleanValue . not <$> truth operand
+    -- Remembering needs the cells of the run; 'evaluate' handles it.
+    (CoreMemoize, _) -> Nothing
     _ -> Nothing
     where
         -- A primitive whose result type is bool yields a Boolean even when

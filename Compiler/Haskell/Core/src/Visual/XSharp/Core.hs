@@ -88,6 +88,25 @@ data CorePrimitive
       CoreBitwiseNot
     | -- | Runtime type-membership predicate.
       CoreTypeIs
+    | {- | A callable that remembers its result.
+
+      The operand is a callable without parameters. The result is a callable
+      of the same type that calls the operand the first time it is called,
+      keeps what the operand returned, and returns that again on every later
+      call without calling the operand. Every copy of the result shares the
+      one remembered value. This is the suspended computation of evaluation
+      by need: a value that is computed when it is first needed, at most
+      once, wherever the need arises.
+      -}
+      CoreMemoize
+    | {- | A call of a function of the runtime.
+
+      The first operand is an integer literal, the identity of the function
+      in the catalog of "Visual.XSharp.RuntimeCall"; the operands after it
+      are the arguments. The function is fixed when the program is compiled:
+      the first operand is never a value that is computed.
+      -}
+      CoreRuntimeCall
     deriving (Eq, Ord, Read, Show)
 
 -- | Typed expression graph consumed by Core verification and optimization.

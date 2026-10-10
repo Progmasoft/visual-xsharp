@@ -33,7 +33,7 @@ newtype CoreWireVersion = CoreWireVersion {coreWireVersionNumber :: Word16}
 
 -- | Schema version emitted by the current Core writer.
 currentCoreWireVersion :: CoreWireVersion
-currentCoreWireVersion = CoreWireVersion 8
+currentCoreWireVersion = CoreWireVersion 10
 
 -- | Finite bounds for total bytes, recursion, and individual collections.
 data CoreWireLimits = CoreWireLimits
@@ -89,15 +89,43 @@ data CoreWireError = CoreWireError
     }
     deriving (Eq, Ord, Read, Show)
 
-type Encoder = Either CoreWireError [Word8]
+{- | Bytes under construction.
+
+An encoded module is assembled from the encodings of its parts, and a part
+may hold nearly all of the module: the body of a deeply nested statement, or
+the rest of an @else if@ chain. Appending lists would copy such a part once
+for every level around it, which makes encoding quadratic in the nesting
+depth. A function that prepends its bytes to whatever follows is composed in
+constant time, and the list is produced once, at the end.
+-}
+newtype Bytes = Bytes ([Word8] -> [Word8])
+
+instance Semigroup Bytes where
+    Bytes first <> Bytes second = Bytes (first . second)
+
+instance Monoid Bytes where
+    mempty = Bytes id
+
+tagByte :: Word8 -> Bytes
+tagByte value = Bytes (value :)
+
+rawBytes :: [Word8] -> Bytes
+rawBytes values = Bytes (values ++)
+
+runBytes :: Bytes -> [Word8]
+runBytes (Bytes prepend) = prepend []
+
+type Encoder = Either CoreWireError Bytes
 
 -- | Encode one Core module under explicit resource limits.
 encodeCore :: CoreWireLimits -> CoreModule -> Either CoreWireError [Word8]
 encodeCore limits moduleValue = do
     payload <- encodeModule limits moduleValue
-    let bytes = magic ++ word16 (coreWireVersionNumber currentCoreWireVersion) ++ word16 0 ++ payload
-    requireEncode limits "wire byte length" (maximumCoreWireBytes limits) (length bytes)
-    pure bytes
+    let output =
+            runBytes
+                (rawBytes magic <> rawBytes (word16 (coreWireVersionNumber currentCoreWireVersion)) <> rawBytes (word16 0) <> payload)
+    requireEncode limits "wire byte length" (maximumCoreWireBytes limits) (length output)
+    pure output
 
 encodeModule :: CoreWireLimits -> CoreModule -> Encoder
 encodeModule limits moduleValue = do
@@ -117,7 +145,7 @@ encodeModule limits moduleValue = do
             (maximumCoreFunctions limits)
             (encodeFunction limits owners)
             (coreModuleFunctions moduleValue)
-    pure (name ++ sources ++ functions)
+    pure (name <> sources <> functions)
 
 encodeFunction :: CoreWireLimits -> Map.Map Int FilePath -> CoreFunction -> Encoder
 encodeFunction limits owners function = do
@@ -142,11 +170,11 @@ encodeFunction limits owners function = do
             (maximumCoreStatements limits)
             (encodeStatement limits)
             (coreFunctionBody function)
-    pure (name ++ source ++ parameters ++ result ++ body)
+    pure (name <> source <> parameters <> result <> body)
 
 encodeParameter :: CoreWireLimits -> (ResolvedName, Type) -> Encoder
 encodeParameter limits (name, valueType) =
-    (++)
+    (<>)
         <$> encodeResolvedName limits "parameter symbol" name
         <*> encodeType limits 0 valueType
 
@@ -156,12 +184,12 @@ encodeStatement limits statement = case statement of
         name <- encodeResolvedName limits "binding symbol" (coreBindingName binding)
         valueType <- encodeType limits 0 (coreBindingType binding)
         value <- encodeExpression limits 0 (coreBindingValue binding)
-        pure ([0] ++ name ++ valueType ++ encodeBool (coreBindingMutable binding) ++ value)
+        pure (tagByte 0 <> name <> valueType <> rawBytes (encodeBool (coreBindingMutable binding)) <> value)
     CoreAssign name expression ->
         taggedExpression 1
             <$> encodeResolvedName limits "assignment symbol" name
             <*> encodeExpression limits 0 expression
-    CoreReturn expression -> (2 :) <$> encodeExpression limits 0 expression
+    CoreReturn expression -> (tagByte 2 <>) <$> encodeExpression limits 0 expression
     CoreIf condition trueBranch falseBranch -> do
         encodedCondition <- encodeExpression limits 0 condition
         encodedTrue <-
@@ -178,8 +206,8 @@ encodeStatement limits statement = case statement of
                 (maximumCoreStatements limits)
                 (encodeStatement limits)
                 falseBranch
-        pure ([3] ++ encodedCondition ++ encodedTrue ++ encodedFalse)
-    CoreEvaluate expression -> (4 :) <$> encodeExpression limits 0 expression
+        pure (tagByte 3 <> encodedCondition <> encodedTrue <> encodedFalse)
+    CoreEvaluate expression -> (tagByte 4 <>) <$> encodeExpression limits 0 expression
     CoreWhile condition body -> do
         encodedCondition <- encodeExpression limits 0 condition
         encodedBody <-
@@ -189,7 +217,7 @@ encodeStatement limits statement = case statement of
                 (maximumCoreStatements limits)
                 (encodeStatement limits)
                 body
-        pure ([5] ++ encodedCondition ++ encodedBody)
+        pure (tagByte 5 <> encodedCondition <> encodedBody)
     CoreDoWhile body condition -> do
         encodedBody <-
             encodeVector
@@ -199,7 +227,7 @@ encodeStatement limits statement = case statement of
                 (encodeStatement limits)
                 body
         encodedCondition <- encodeExpression limits 0 condition
-        pure ([6] ++ encodedBody ++ encodedCondition)
+        pure (tagByte 6 <> encodedBody <> encodedCondition)
     CoreFor condition body update -> do
         encodedCondition <- encodeExpression limits 0 condition
         encodedBody <-
@@ -216,11 +244,11 @@ encodeStatement limits statement = case statement of
                 (maximumCoreStatements limits)
                 (encodeStatement limits)
                 update
-        pure ([7] ++ encodedCondition ++ encodedBody ++ encodedUpdate)
-    CoreBreak -> pure [8]
-    CoreContinue -> pure [9]
+        pure (tagByte 7 <> encodedCondition <> encodedBody <> encodedUpdate)
+    CoreBreak -> pure (tagByte 8)
+    CoreContinue -> pure (tagByte 9)
     where
-        taggedExpression tag left right = [tag] ++ left ++ right
+        taggedExpression tag left right = tagByte tag <> left <> right
 
 encodeExpression :: CoreWireLimits -> Int -> CoreExpression -> Encoder
 encodeExpression limits depth expression
@@ -229,11 +257,11 @@ encodeExpression limits depth expression
         CoreVariable name valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedName <- encodeResolvedName limits "variable symbol" name
-            pure ([0] ++ encodedType ++ encodedName)
+            pure (tagByte 0 <> encodedType <> encodedName)
         CoreLiteral literal valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedLiteral <- encodeLiteral limits literal
-            pure ([1] ++ encodedType ++ encodedLiteral)
+            pure (tagByte 1 <> encodedType <> encodedLiteral)
         CoreApply callee arguments valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedCallee <- encodeExpression limits (depth + 1) callee
@@ -244,7 +272,10 @@ encodeExpression limits depth expression
                     (maximumCoreOperands limits)
                     (encodeExpression limits (depth + 1))
                     arguments
-            pure ([2] ++ encodedType ++ encodedCallee ++ encodedArguments)
+            pure (tagByte 2 <> encodedType <> encodedCallee <> encodedArguments)
+        -- The first operand of a primitive is at the depth of the
+        -- primitive: a chain of operators nests in it, as deep as the chain
+        -- is long, and every stage walks that chain in a loop.
         CorePrimitive primitive arguments valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedArguments <-
@@ -252,9 +283,9 @@ encodeExpression limits depth expression
                     limits
                     "primitive operand count"
                     (maximumCoreOperands limits)
-                    (encodeExpression limits (depth + 1))
-                    arguments
-            pure ([3, primitiveTag primitive] ++ encodedType ++ encodedArguments)
+                    (\(position, argument) -> encodeExpression limits (depth + position) argument)
+                    (zip (0 : repeat 1) arguments)
+            pure (rawBytes [3, primitiveTag primitive] <> encodedType <> encodedArguments)
         CoreClosure captures parameters returnType body valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedCaptures <-
@@ -279,27 +310,27 @@ encodeExpression limits depth expression
                     (maximumCoreStatements limits)
                     (encodeStatement limits)
                     body
-            pure ([4] ++ encodedType ++ encodedCaptures ++ encodedParameters ++ encodedReturn ++ encodedBody)
+            pure (tagByte 4 <> encodedType <> encodedCaptures <> encodedParameters <> encodedReturn <> encodedBody)
         CoreLet name bindingType value body valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedName <- encodeResolvedName limits "let symbol" name
             encodedBindingType <- encodeType limits 0 bindingType
             encodedValue <- encodeExpression limits (depth + 1) value
             encodedBody <- encodeExpression limits (depth + 1) body
-            pure ([5] ++ encodedType ++ encodedName ++ encodedBindingType ++ encodedValue ++ encodedBody)
+            pure (tagByte 5 <> encodedType <> encodedName <> encodedBindingType <> encodedValue <> encodedBody)
         CoreConditional condition whenTrue whenFalse valueType -> do
             encodedType <- encodeType limits 0 valueType
             encodedCondition <- encodeExpression limits (depth + 1) condition
             encodedTrue <- encodeExpression limits (depth + 1) whenTrue
             encodedFalse <- encodeExpression limits (depth + 1) whenFalse
-            pure ([6] ++ encodedType ++ encodedCondition ++ encodedTrue ++ encodedFalse)
+            pure (tagByte 6 <> encodedType <> encodedCondition <> encodedTrue <> encodedFalse)
 
 encodeCoreCapture :: CoreWireLimits -> Int -> CoreCapture -> Encoder
 encodeCoreCapture limits depth capture = do
     encodedName <- encodeResolvedName limits "closure capture symbol" (coreCaptureName capture)
     encodedType <- encodeType limits 0 (coreCaptureType capture)
     encodedValue <- encodeExpression limits (depth + 1) (coreCaptureValue capture)
-    pure (captureModeTag (coreCaptureMode capture) : encodedName ++ encodedType ++ encodedValue)
+    pure (tagByte (captureModeTag (coreCaptureMode capture)) <> encodedName <> encodedType <> encodedValue)
 
 captureModeTag :: CaptureMode -> Word8
 captureModeTag mode = case mode of
@@ -309,21 +340,21 @@ captureModeTag mode = case mode of
 
 encodeLiteral :: CoreWireLimits -> CoreLiteral -> Encoder
 encodeLiteral limits literal = case literal of
-    CoreUnit -> pure [0]
-    CoreBoolean value -> pure (1 : encodeBool value)
-    CoreInteger value -> (4 :) <$> encodeInteger limits value
-    CoreFloating spelling -> (5 :) <$> encodeAscii limits "floating literal" spelling
-    CoreString value -> (3 :) <$> encodeText limits "string literal" value
-    CoreNull -> pure [6]
+    CoreUnit -> pure (tagByte 0)
+    CoreBoolean value -> pure (tagByte 1 <> rawBytes (encodeBool value))
+    CoreInteger value -> (tagByte 4 <>) <$> encodeInteger limits value
+    CoreFloating spelling -> (tagByte 5 <>) <$> encodeAscii limits "floating literal" spelling
+    CoreString value -> (tagByte 3 <>) <$> encodeText limits "string literal" value
+    CoreNull -> pure (tagByte 6)
 
 encodeType :: CoreWireLimits -> Int -> Type -> Encoder
 encodeType limits depth valueType
     | depth > maximumCoreTypeDepth limits = failure CoreLimitExceeded "type" "type nesting exceeds limit"
-    | valueType == unitType = pure [0]
-    | valueType == boolType = pure [1]
-    | valueType == intType = pure [2]
-    | valueType == stringType = pure [3]
-    | Just scalarTag <- scalarTypeTag valueType = pure [scalarTag]
+    | valueType == unitType = pure (tagByte 0)
+    | valueType == boolType = pure (tagByte 1)
+    | valueType == intType = pure (tagByte 2)
+    | valueType == stringType = pure (tagByte 3)
+    | Just scalarTag <- scalarTypeTag valueType = pure (tagByte scalarTag)
     | NamedType name arguments <- valueType = do
         encodedName <- encodeQualifiedName limits name
         encodedArguments <-
@@ -333,7 +364,7 @@ encodeType limits depth valueType
                 (maximumCoreOperands limits)
                 (encodeTemplateArgument limits (depth + 1))
                 arguments
-        pure ([4] ++ encodedName ++ encodedArguments)
+        pure (tagByte 4 <> encodedName <> encodedArguments)
     | FunctionType parameters result <- valueType = do
         encodedParameters <-
             encodeVector
@@ -343,28 +374,28 @@ encodeType limits depth valueType
                 (encodeType limits (depth + 1))
                 parameters
         encodedResult <- encodeType limits (depth + 1) result
-        pure ([5] ++ encodedParameters ++ encodedResult)
-    | TypeVariable name <- valueType = (6 :) <$> encodeResolvedName limits "type variable symbol" name
+        pure (tagByte 5 <> encodedParameters <> encodedResult)
+    | TypeVariable name <- valueType = (tagByte 6 <>) <$> encodeResolvedName limits "type variable symbol" name
     | ErrorType <- valueType = failure CoreUnsupportedType "type" "ErrorType cannot cross the Core boundary"
 
 encodeTemplateArgument :: CoreWireLimits -> Int -> TemplateArgument -> Encoder
 encodeTemplateArgument limits depth argument = case argument of
-    TypeTemplateArgument valueType -> (0 :) <$> encodeType limits depth valueType
+    TypeTemplateArgument valueType -> (tagByte 0 <>) <$> encodeType limits depth valueType
     ValueTemplateArgument value -> encodeTemplateValue limits value
 
 encodeTemplateValue :: CoreWireLimits -> TemplateValue -> Encoder
 encodeTemplateValue limits value = case value of
-    IntegerTemplateValue integer -> (1 :) <$> encodeInteger limits integer
-    BooleanTemplateValue boolean -> pure [2, if boolean then 1 else 0]
-    CharacterTemplateValue scalar -> (3 :) <$> encodeInteger limits scalar
-    TemplateValueParameter name -> (4 :) <$> encodeResolvedName limits "template value parameter" name
+    IntegerTemplateValue integer -> (tagByte 1 <>) <$> encodeInteger limits integer
+    BooleanTemplateValue boolean -> pure (rawBytes [2, if boolean then 1 else 0])
+    CharacterTemplateValue scalar -> (tagByte 3 <>) <$> encodeInteger limits scalar
+    TemplateValueParameter name -> (tagByte 4 <>) <$> encodeResolvedName limits "template value parameter" name
 
 encodeResolvedName :: CoreWireLimits -> String -> ResolvedName -> Encoder
 encodeResolvedName limits context name
     | symbolIdValue (resolvedSymbol name) <= 0 = failure CoreInvalidSymbol context "symbol id must be positive"
     | otherwise = do
         spelling <- encodeText limits (context ++ " spelling") (identifierText (resolvedSpelling name))
-        pure (word64 (fromIntegral (symbolIdValue (resolvedSymbol name))) ++ spelling)
+        pure (rawBytes (word64 (fromIntegral (symbolIdValue (resolvedSymbol name)))) <> spelling)
 
 encodeQualifiedName :: CoreWireLimits -> QualifiedName -> Encoder
 encodeQualifiedName limits (QualifiedName parts) =
@@ -379,18 +410,18 @@ encodeVector :: CoreWireLimits -> String -> Int -> (a -> Encoder) -> [a] -> Enco
 encodeVector limits context maximumValue encode values = do
     requireEncode limits context maximumValue (length values)
     encoded <- traverse encode values
-    pure (word32 (fromIntegral (length values)) ++ concat encoded)
+    pure (rawBytes (word32 (fromIntegral (length values))) <> mconcat encoded)
 
 encodeText :: CoreWireLimits -> String -> String -> Encoder
 encodeText limits context value = do
     requireEncode limits context (maximumCoreTextScalars limits) (length value)
     codePoints <- traverse encodeScalar value
-    pure (word32 (fromIntegral (length value)) ++ concat codePoints)
+    pure (rawBytes (word32 (fromIntegral (length value))) <> mconcat codePoints)
     where
         encodeScalar character
             | code >= 0xd800 && code <= 0xdfff = failure CoreInvalidScalar context "surrogate is not a Unicode scalar"
             | code > 0x10ffff = failure CoreInvalidScalar context "code point exceeds Unicode range"
-            | otherwise = pure (word32 (fromIntegral code))
+            | otherwise = pure (rawBytes (word32 (fromIntegral code)))
             where
                 code = ord character
 
@@ -419,7 +450,7 @@ encodeInteger :: CoreWireLimits -> Integer -> Encoder
 encodeInteger limits value = do
     let magnitude = integerMagnitude (abs value)
     requireEncode limits "integer magnitude" (maximumCoreNumericBytes limits) (length magnitude)
-    pure (encodeBool (value < 0) ++ word32 (fromIntegral (length magnitude)) ++ magnitude)
+    pure (rawBytes (encodeBool (value < 0)) <> rawBytes (word32 (fromIntegral (length magnitude))) <> rawBytes magnitude)
 
 integerMagnitude :: Integer -> [Word8]
 integerMagnitude 0 = []
@@ -431,8 +462,8 @@ integerMagnitude value = reverse (unfoldr step value)
 encodeAscii :: CoreWireLimits -> String -> String -> Encoder
 encodeAscii limits context value = do
     requireEncode limits context (maximumCoreNumericBytes limits) (length value)
-    bytes <- traverse ascii value
-    pure (word32 (fromIntegral (length bytes)) ++ bytes)
+    characters <- traverse ascii value
+    pure (rawBytes (word32 (fromIntegral (length characters))) <> rawBytes characters)
     where
         ascii character
             | ord character <= 0x7f = Right (fromIntegral (ord character))
@@ -561,7 +592,18 @@ decodeExpression depth = do
         3 -> do
             primitive <- readWord8 "primitive tag" >>= decodePrimitive
             valueType <- decodeType 0
-            arguments <- decodeVector "primitive operand count" maximumCoreOperands (decodeExpression (depth + 1))
+            count <- readWord32 "primitive operand count"
+            requireDecode
+                (toInteger count <= toInteger (maximumCoreOperands limits))
+                CoreLimitExceeded
+                "primitive operand count"
+                "count exceeds configured limit"
+            -- The first operand is at the depth of the primitive.
+            arguments <-
+                sequence
+                    [ decodeExpression (depth + position)
+                    | position <- take (fromIntegral count) (0 : repeat 1)
+                    ]
             pure (CorePrimitive primitive arguments valueType)
         4 -> do
             valueType <- decodeType 0
@@ -777,6 +819,8 @@ decodePrimitive tag = case drop (fromIntegral tag) primitives of
             , CoreBitwiseOr
             , CoreBitwiseNot
             , CoreTypeIs
+            , CoreMemoize
+            , CoreRuntimeCall
             ]
 
 primitiveTag :: CorePrimitive -> Word8
@@ -807,6 +851,8 @@ primitiveTag primitive = fromIntegral (index primitive primitives)
             , CoreBitwiseOr
             , CoreBitwiseNot
             , CoreTypeIs
+            , CoreMemoize
+            , CoreRuntimeCall
             ]
         index :: CorePrimitive -> [CorePrimitive] -> Int
         index value (candidate : remaining) = if value == candidate then 0 else 1 + index value remaining

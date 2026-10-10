@@ -4,7 +4,10 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "coreprep_model",
-    hdrs = ["CorePrep.hpp"],
+    hdrs = [
+        "CorePrep.hpp",
+        "RuntimeCall.hpp",
+    ],
     strip_include_prefix = "/Compiler/Headers",
     deps = ["//Compiler/Headers/Visual/XSharp:namespace"],
 )

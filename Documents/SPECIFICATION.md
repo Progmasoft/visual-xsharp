@@ -24,6 +24,7 @@ The complete linked catalog is maintained in [`Spec/README.md`](../Spec/README.m
 | --- | --- |
 | declarations and type forms | `Language/Decls.vxs` |
 | attributes | `Language/Attributes.vxs` |
+| evaluation by need and effects | `Language/Evaluation.vxs` |
 | operators and precedence | `Language/Operators.vxs` |
 | optionals and null behavior | `Language/Optional.vxs` |
 | strings, scalars, escapes, and source text | `Language/String.vxs` |

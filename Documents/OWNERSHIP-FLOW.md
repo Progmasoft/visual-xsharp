@@ -114,16 +114,70 @@ Before LLVM lowering, a successful Xpp/Xmm ownership check guarantees:
 - a join cannot hide a release performed on only some paths; and
 - block serialization order cannot select an ownership outcome.
 
-The pass does not yet prove global leak freedom, infer missing retain/release
-operations, or decide whether a source-level object graph contains a cycle.
-Those are separate responsibilities. Automatic retain/release insertion must
-eventually produce explicit Xpp operations that satisfy this verifier.
+The verifier does not prove leak freedom or decide whether a source-level
+object graph contains a cycle. Writing the retains and releases is the job of
+ownership placement, described next, whose output this verifier checks.
 Concurrent Bacon-Rajan with trial deletion remains a future optional cycle
 collector and does not weaken deterministic AARC verification.
 
+## Ownership placement
+
+CorePrep names values and does not say who releases them.
+`Visual::XSharp::Xpp::PlaceOwnership` runs once, on the Xpp form lowered from
+CorePrep and after the Xpp optimizer when that is enabled, and makes ownership
+explicit. An Xpp artifact read from disk already carries the result and is not
+placed again.
+
+The convention is local to a function, so functions agree without looking at
+each other:
+
+| Value | Owner |
+| --- | --- |
+| parameter | the caller, for the duration of the call; the callee never releases it |
+| result | the caller, which receives one reference and releases it |
+| local | the function, from the definition to the last use on each path |
+| strong capture | the closure, which takes its own reference when it is created and releases it in its destructor |
+| computation of a callable that remembers its result | that callable, which takes its own reference when it is created and releases it in its destructor |
+
+From that follow the operations the pass writes:
+
+- a value is released after the instruction that uses it last, and directly
+  after the instruction that defines it when nothing uses it;
+- a value that dies on one edge of a branch and lives on another is released
+  on the edge: at the top of the target when the target has no other
+  predecessor, otherwise in a block of its own on that edge;
+- a copy of a value that is used again becomes `RetainStrong`; a copy of a
+  value that is not used again stays a copy and takes over the reference;
+- a returned local leaves with its reference; a returned parameter is retained
+  first, because the caller receives an owned result;
+- a call whose owned result is discarded defines a symbol, so that the result
+  can be released;
+- an instruction that reads the symbol it writes reads the old value from a
+  symbol of its own, which is released after the new value is stored;
+- a parameter that the body assigns is copied into a local at a new entry
+  block, with a reference of its own, so that a symbol is either borrowed or
+  owned for the whole function.
+
+A value is released after its last use rather than at the end of a source
+scope. Xpp has no scopes, and a value that is live at a point has been defined
+on every path to that point, so no release has to test whether there is
+anything to release. Liveness is computed for the owned symbols alone, with
+the analysis the optimizer uses.
+
+A method that is named where a value is expected, rather than called, has no
+closure object to point to. The pass creates a closure without captures at
+that use; the callee of a direct call stays a method. Before this pass such a
+value was the address of the method's code, and calling it read an invoke
+pointer out of that code.
+
+What the pass does not do: it does not break reference cycles, it keeps a
+value alive until its last use and no longer, which is earlier than the end of
+its source scope, and it knows no weak or unowned locals, because the frontend
+produces those only as capture modes of a closure.
+
 ## Testing
 
-Three layers protect the contract:
+Five layers protect the contract:
 
 1. Compiler/Analysis/Tests/OwnershipFlowTests.cpp tests the reusable state
    lattice, fixed point, malformed CFG handling, loops, joins, and deterministic
@@ -134,6 +188,18 @@ Three layers protect the contract:
 3. Compiler/Codegen/Xmm/Tests/OwnershipVerifierTests.cpp repeats the boundary
    cases for typed virtual registers and confirms the main Xmm verifier
    publishes ownership failures.
+4. Compiler/Codegen/Xpp/Tests/OwnershipPlacementTests.cpp runs the placed
+   function on a reference-count model that knows nothing of the pass: along
+   every path, taking each loop around once more than it must be entered, each
+   reference must be released exactly once and nothing may be used after its
+   last release. The model is first shown to reject a leak, a double release
+   and a use after release.
+5. `source_feature_smoke` runs closure programs through LLVM with the AARC
+   runtime, one program at a time, and requires the runtime to hold no more
+   allocations after a program than before it, in both pipeline modes. Without
+   the placement pass that check fails on the first program. The programs
+   that pass arguments by need are held to the same check: each suspended
+   computation is two objects, one of which owns the other.
 
 Tests construct a complete operation sequence. Merely asserting that an opcode
 exists does not prove its handle precondition, result representation, or

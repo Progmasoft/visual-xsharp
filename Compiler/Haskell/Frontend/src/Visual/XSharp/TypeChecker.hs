@@ -9,13 +9,18 @@ used as a substitute for symbol identity.
 -}
 module Visual.XSharp.TypeChecker (TypeChecker (..), defaultTypeChecker, runTypeChecker) where
 
+import Data.Map.Strict qualified as Map
 import Visual.XSharp.AST
 import Visual.XSharp.BuiltinTypes
-import Visual.XSharp.ConstantEvaluation
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
-import Visual.XSharp.TemplateValue
 import Visual.XSharp.TypeChecker.Branching
+import Visual.XSharp.TypeChecker.Console
+import Visual.XSharp.TypeChecker.Context
+import Visual.XSharp.TypeChecker.Enums
+import Visual.XSharp.TypeChecker.Literals
+import Visual.XSharp.TypeChecker.Loops
+import Visual.XSharp.TypeChecker.Returns
 
 -- | A resolved-tree checker that produces a typed tree only when checking succeeds.
 newtype TypeChecker = TypeChecker {checkResolvedAST :: ResolvedAST -> Either [Diagnostic] TypedAST}
@@ -28,41 +33,12 @@ runTypeChecker = checkResolvedAST
 defaultTypeChecker :: TypeChecker
 defaultTypeChecker = TypeChecker checkTree
 
-type TypeEnvironment = [(SymbolId, (Type, Bool))]
-
--- The type checker owns a whole source-set catalog before it checks any body.
--- That permits calls to later-declared classes without making parsing depend
--- on declaration order or mutating the Renamer's lexical environment.
-data MethodCandidate = MethodCandidate
-    { candidateOwner :: SymbolId
-    , candidateDeclaration :: Declaration ResolvedName ()
-    }
-
-data TypeCatalog = TypeCatalog
-    { catalogTypes :: [(SymbolId, ResolvedName)]
-    , catalogMethods :: [MethodCandidate]
-    }
-
--- Type syntax deliberately keeps source spellings.  This side environment is
--- the bridge from those spellings to the SymbolIds assigned by the renamer.
--- Type and value parameters are separate because `T` in a type position and
--- `N` in `[T; N]` have different semantic representations.
-data TemplateContext = TemplateContext
-    { templateTypeNames :: [(Identifier, ResolvedName)]
-    , templateValueNames :: [(Identifier, ResolvedName)]
-    , templateCatalog :: TypeCatalog
-    , templateCurrentType :: Maybe SymbolId
-    }
-
-emptyTemplateContext :: TypeCatalog -> Maybe SymbolId -> TemplateContext
-emptyTemplateContext catalog owner = TemplateContext [] [] catalog owner
-
 {- | Type-check every top-level declaration and collect independent diagnostics.
 No partially typed AST escapes when any declaration has an error.
 -}
 checkTree :: ResolvedAST -> Either [Diagnostic] TypedAST
 checkTree (ResolvedAST (SyntaxTree namespace declarations)) =
-    let catalog = catalogDeclarations declarations
+    let catalog = inferAutoReturns declarations (catalogDeclarations declarations)
         checked = map (checkTopDeclaration catalog) declarations
         problems = concatMap snd checked
      in if null problems then Right (TypedAST (SyntaxTree namespace (map fst checked))) else Left problems
@@ -80,6 +56,8 @@ catalogDeclarations declarations =
         , member <- typeMembersOf owner
         , case member of FunctionDeclaration {} -> True; _ -> False
         ]
+        (enumInfos declarations)
+        []
     where
         isTypeDeclaration TypeDeclaration {} = True
         isTypeDeclaration TemplateTypeDeclaration {} = True
@@ -88,39 +66,107 @@ catalogDeclarations declarations =
         typeMembersOf TemplateTypeDeclaration {typeMembers = members} = members
         typeMembersOf _ = []
 
+{- | Infer the return types of the methods declared with @auto@ before any
+caller is checked against them.
+
+A method's return type comes from its own returns, and those may be calls of
+other such methods, in any class and declared later. The bodies are therefore
+checked in rounds. In a round, a call of a method whose type is not known yet
+has no type and takes no part in the inference, so a method is inferred as
+soon as one of its returns is independent of the methods still unknown: a
+recursive method from its base case, and a chain of methods from its end
+towards its start. A round that learns nothing ends the inference; every
+round before it resolves at least one method, so there are at most as many
+rounds as methods. A method that is still unknown then has no independent
+result, which is reported when its declaration is checked. The diagnostics
+of the rounds are dropped: every body is checked once more against the
+final catalog.
+-}
+inferAutoReturns :: [Declaration ResolvedName ()] -> TypeCatalog -> TypeCatalog
+inferAutoReturns declarations = rounds (length inferable)
+    where
+        inferable =
+            [ (owner, member)
+            | owner <- declarations
+            , member <- membersOf owner
+            , FunctionDeclaration {declarationReturnSyntax = AutoType} <- [member]
+            ]
+        membersOf declaration = case declaration of
+            TypeDeclaration {typeMembers = members} -> members
+            TemplateTypeDeclaration {typeMembers = members} -> members
+            _ -> []
+        rounds :: Int -> TypeCatalog -> TypeCatalog
+        rounds remaining catalog
+            | remaining <= 0 || learned == catalogInferredReturns catalog = catalog
+            | otherwise = rounds (remaining - 1) catalog {catalogInferredReturns = learned}
+            where
+                learned =
+                    [ (inferredReturnKey member, result)
+                    | (owner, member) <- inferable
+                    , let (context, globals) = memberScope catalog owner
+                    , FunctionDeclaration {declarationAnnotation = FunctionType _ result} <-
+                        [fst (checkDeclarationWith context globals member)]
+                    , result /= ErrorType
+                    ]
+
+-- | What identifies a method declaration among its overloads.
+inferredReturnKey :: Declaration ResolvedName annotation -> (SymbolId, SourceSpan)
+inferredReturnKey declaration = (resolvedSymbol (declarationName declaration), declarationSpan declaration)
+
+{- | The context and the names in scope of the members of a type: the
+signatures of its members and, for a template, its value parameters.
+-}
+memberScope :: TypeCatalog -> Declaration ResolvedName () -> (TemplateContext, TypeEnvironment)
+memberScope catalog declaration = case declaration of
+    TemplateTypeDeclaration _ name _ parameters members ->
+        let context = templateContext catalog (Just (resolvedSymbol name)) parameters
+            templateValues =
+                [ (resolvedSymbol (templateParameterName parameter), (templateParameterAnnotation parameter, False))
+                | parameter <- map (typeTemplateParameter context) parameters
+                , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
+                ]
+         in (context, templateValues ++ signaturesOf context members)
+    TypeDeclaration _ name _ members ->
+        let context = emptyTemplateContext catalog (Just (resolvedSymbol name))
+         in (context, signaturesOf context members)
+    _ -> (emptyTemplateContext catalog Nothing, [])
+    where
+        signaturesOf context members =
+            [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
+
 signature :: TemplateContext -> Declaration ResolvedName () -> Type
 signature context declaration = case declaration of
     FunctionDeclaration _ _ _ returnSyntax parameters _ _ _ ->
         FunctionType
             (map (syntaxTypeIn context . parameterTypeSyntax) parameters)
-            (syntaxTypeIn context returnSyntax)
+            ( case returnSyntax of
+                AutoType ->
+                    maybe ErrorType id (lookup (inferredReturnKey declaration) (catalogInferredReturns (templateCatalog context)))
+                _ -> syntaxTypeIn context returnSyntax
+            )
     TypeDeclaration _ name _ _ -> NamedType (QualifiedName [resolvedSpelling name]) []
     TemplateTypeDeclaration _ name _ parameters _ ->
         NamedType
             (QualifiedName [resolvedSpelling name])
             (map templateParameterAsArgument parameters)
+    EnumDeclaration _ name _ _ _ -> enumTypeOf (templateCatalog context) name
+
+-- | The type of the values of a declared enum.
+enumTypeOf :: TypeCatalog -> ResolvedName -> Type
+enumTypeOf catalog name = maybe ErrorType enumInfoType (enumBySymbol (catalogEnums catalog) (resolvedSymbol name))
 
 checkTopDeclaration :: TypeCatalog -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
 checkTopDeclaration catalog declaration = case declaration of
     TypeDeclaration spanValue name _ members ->
-        let owner = resolvedSymbol name
-            context = emptyTemplateContext catalog (Just owner)
-            signatures = [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
+        let (context, signatures) = memberScope catalog declaration
             checked = map (checkDeclarationWith context signatures) members
             overloadProblems = duplicateOverloadProblems context members
             valueType = NamedType (QualifiedName [resolvedSpelling name]) []
          in (TypeDeclaration spanValue name valueType (map fst checked), overloadProblems ++ concatMap snd checked)
     TemplateTypeDeclaration spanValue name _ parameters members ->
-        let owner = resolvedSymbol name
-            context = (templateContext catalog (Just owner) parameters)
+        let (context, scope) = memberScope catalog declaration
             typedTemplateParameters = map (typeTemplateParameter context) parameters
-            templateValues =
-                [ (resolvedSymbol (templateParameterName parameter), (templateParameterAnnotation parameter, False))
-                | parameter <- typedTemplateParameters
-                , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
-                ]
-            signatures = [(resolvedSymbol (declarationName member), (signature context member, False)) | member <- members]
-            checked = map (checkDeclarationWith context (templateValues ++ signatures)) members
+            checked = map (checkDeclarationWith context scope) members
             parameterProblems = validateTemplateParameters context parameters
             overloadProblems = duplicateOverloadProblems context members
             valueType =
@@ -131,157 +177,10 @@ checkTopDeclaration catalog declaration = case declaration of
             , parameterProblems ++ overloadProblems ++ concatMap snd checked
             )
     FunctionDeclaration {} -> checkDeclarationWith (emptyTemplateContext catalog Nothing) [] declaration
-
-{- | Keep type and value parameters in separate lookup tables.
-Identical source spelling in the two categories must not collapse their roles.
--}
-templateContext :: TypeCatalog -> Maybe SymbolId -> [TemplateParameter ResolvedName annotation] -> TemplateContext
-templateContext catalog owner parameters =
-    TemplateContext
-        [ (resolvedSpelling name, name)
-        | parameter <- parameters
-        , case templateParameterKind parameter of
-            TemplateTypeParameter -> True
-            TemplateTemplateParameter _ -> True
-            _ -> False
-        , let name = templateParameterName parameter
-        ]
-        [ (resolvedSpelling name, name)
-        | parameter <- parameters
-        , case templateParameterKind parameter of TemplateValueParameterKind _ -> True; _ -> False
-        , let name = templateParameterName parameter
-        ]
-        catalog
-        owner
-
-templateParameterAsArgument :: TemplateParameter ResolvedName annotation -> TemplateArgument
-templateParameterAsArgument parameter = case templateParameterKind parameter of
-    TemplateValueParameterKind _ -> ValueTemplateArgument (TemplateValueParameter (templateParameterName parameter))
-    _ -> TypeTemplateArgument (TypeVariable (templateParameterName parameter))
-
-syntaxTypeIn :: TemplateContext -> TypeSyntax -> Type
-syntaxTypeIn _ AutoType = ErrorType
-syntaxTypeIn context (QualifiedTypeSyntax name arguments) =
-    case name of
-        QualifiedName [identifier] | Just resolved <- lookup identifier (templateTypeNames context) -> TypeVariable resolved
-        _ -> NamedType name (map (syntaxTemplateArgumentIn context) arguments)
-syntaxTypeIn context (BuiltinArrayTypeSyntax element) =
-    -- `[]T` is a language type, not a public class invented by the compiler.
-    -- Its structural spelling keeps that distinction visible through Core
-    -- until ownership-aware lowering assigns the final runtime layout.
-    NamedType (QualifiedName [Identifier "[]"]) [TypeTemplateArgument (syntaxTypeIn context element)]
-syntaxTypeIn context (ArrayTypeSyntax element) =
-    NamedType
-        (QualifiedName [Identifier "System", Identifier "Array"])
-        [TypeTemplateArgument (syntaxTypeIn context element)]
-syntaxTypeIn context (FixedArrayTypeSyntax element size) =
-    NamedType
-        (QualifiedName [Identifier "System", Identifier "Array"])
-        [TypeTemplateArgument (syntaxTypeIn context element), ValueTemplateArgument (syntaxTemplateValueIn context size)]
-syntaxTypeIn context (DictionaryTypeSyntax key value) =
-    NamedType
-        (QualifiedName [Identifier "System", Identifier "Dictionary"])
-        [TypeTemplateArgument (syntaxTypeIn context key), TypeTemplateArgument (syntaxTypeIn context value)]
-syntaxTypeIn context (CallableTypeSyntax parameters result) = FunctionType (map (syntaxTypeIn context) parameters) (syntaxTypeIn context result)
-syntaxTypeIn context (ExplicitType identifier@(Identifier name)) = case lookup identifier (templateTypeNames context) of
-    Just resolved -> TypeVariable resolved
-    Nothing -> case name of
-        "String" -> stringType
-        "unit" -> unitType
-        "void" -> voidType
-        _ -> maybe (NamedType (QualifiedName [Identifier name]) []) scalarTypeToType (lookupScalar name)
-    where
-        lookupScalar spelling = lookup spelling [(scalarTypeName scalar, scalar) | scalar <- scalarTypes]
-
-syntaxTemplateArgumentIn :: TemplateContext -> TemplateArgumentSyntax -> TemplateArgument
-syntaxTemplateArgumentIn context argument = case argument of
-    TemplateTypeSyntax valueType -> TypeTemplateArgument (syntaxTypeIn context valueType)
-    TemplateValueArgumentSyntax value -> ValueTemplateArgument (syntaxTemplateValueIn context value)
-
--- Parser construction guarantees the expression tree is side-effect free.
--- Exact evaluation here gives every concrete specialization one canonical
--- identity. Invalid arithmetic becomes a sentinel and is diagnosed by the
--- type-syntax validation pass before Core can be emitted.
-
-{- | Canonicalize a template argument before it contributes to specialization identity.
-The fallback value is only a recovery sentinel; validation reports the original
-invalid expression before a specialization plan is emitted.
--}
-syntaxTemplateValueIn :: TemplateContext -> TemplateValueSyntax -> TemplateValue
-syntaxTemplateValueIn context value = case value of
-    TemplateNameSyntax _ (QualifiedName [identifier])
-        | Just resolved <- lookup identifier (templateValueNames context) -> TemplateValueParameter resolved
-    _ -> case evaluateTemplateValue value of
-        Right result -> result
-        _ -> IntegerTemplateValue 0
-
-typeTemplateParameter :: TemplateContext -> TemplateParameter ResolvedName () -> TemplateParameter ResolvedName Type
-typeTemplateParameter context parameter =
-    TemplateParameter
-        (templateParameterSpan parameter)
-        (templateParameterName parameter)
-        annotation
-        (templateParameterKind parameter)
-        (templateParameterIsPack parameter)
-        (templateParameterDefault parameter)
-    where
-        annotation = case templateParameterKind parameter of
-            TemplateValueParameterKind valueType -> syntaxTypeIn context valueType
-            _ -> TypeVariable (templateParameterName parameter)
-
-validateTemplateParameters :: TemplateContext -> [TemplateParameter ResolvedName ()] -> [Diagnostic]
-validateTemplateParameters context = concatMap validate
-    where
-        validate parameter =
-            kindProblems parameter
-                ++ defaultProblems parameter
-                ++ packDefaultProblems parameter
-        kindProblems parameter = case templateParameterKind parameter of
-            TemplateTypeParameter -> []
-            TemplateValueParameterKind valueType -> typeSyntaxProblemsIn context valueType
-            TemplateTemplateParameter shapes -> concatMap shapeProblems shapes
-        shapeProblems shape = case templateParameterShapeKind shape of
-            TemplateTypeParameterShape -> []
-            TemplateValueParameterShape valueType -> typeSyntaxProblemsIn context valueType
-            TemplateTemplateParameterShape shapes -> concatMap shapeProblems shapes
-        defaultProblems parameter = case templateParameterDefault parameter of
-            Nothing -> []
-            Just (TemplateTypeDefault valueType) -> typeSyntaxProblemsIn context valueType
-            Just (TemplateValueDefault value) -> templateValueProblemsIn context "VXT0020" value
-        packDefaultProblems parameter
-            | templateParameterIsPack parameter
-            , Just _ <- templateParameterDefault parameter =
-                [problem (templateParameterSpan parameter) "VXT0019" "a template parameter pack cannot have a default"]
-            | otherwise = []
-
-typeSyntaxProblemsIn :: TemplateContext -> TypeSyntax -> [Diagnostic]
-typeSyntaxProblemsIn context syntax = case syntax of
-    ExplicitType _ -> []
-    AutoType -> []
-    BuiltinArrayTypeSyntax element -> typeSyntaxProblemsIn context element
-    ArrayTypeSyntax element -> typeSyntaxProblemsIn context element
-    DictionaryTypeSyntax key value -> typeSyntaxProblemsIn context key ++ typeSyntaxProblemsIn context value
-    CallableTypeSyntax parameters result -> concatMap (typeSyntaxProblemsIn context) parameters ++ typeSyntaxProblemsIn context result
-    QualifiedTypeSyntax _ arguments -> concatMap (templateArgumentProblemsIn context) arguments
-    FixedArrayTypeSyntax element size ->
-        typeSyntaxProblemsIn context element
-            ++ case syntaxTemplateValueIn context size of
-                TemplateValueParameter _ -> []
-                _ -> case evaluateFixedArraySize size of
-                    Left issue -> [problem (templateValueSyntaxSpan size) "VXT0016" (renderTemplateValueError issue)]
-                    Right _ -> []
-
-templateArgumentProblemsIn :: TemplateContext -> TemplateArgumentSyntax -> [Diagnostic]
-templateArgumentProblemsIn context argument = case argument of
-    TemplateTypeSyntax valueType -> typeSyntaxProblemsIn context valueType
-    TemplateValueArgumentSyntax value -> templateValueProblemsIn context "VXT0017" value
-
-templateValueProblemsIn :: TemplateContext -> String -> TemplateValueSyntax -> [Diagnostic]
-templateValueProblemsIn context code value = case syntaxTemplateValueIn context value of
-    TemplateValueParameter _ -> []
-    _ -> case evaluateTemplateValue value of
-        Left issue -> [problem (templateValueSyntaxSpan value) code (renderTemplateValueError issue)]
-        Right _ -> []
+    EnumDeclaration spanValue name _ underlying cases ->
+        ( EnumDeclaration spanValue name (enumTypeOf catalog name) underlying cases
+        , enumDeclarationProblems declaration
+        )
 
 checkDeclarationWith ::
     TemplateContext -> TypeEnvironment -> Declaration ResolvedName () -> (Declaration ResolvedName Type, [Diagnostic])
@@ -291,21 +190,37 @@ checkDeclarationWith context globals declaration@FunctionDeclaration {} =
             | parameter <- declarationParameters declaration
             ]
         expected = syntaxTypeIn context (declarationReturnSyntax declaration)
-        (body, _, explicitReturns, problems) = checkBlockWith context (parameters ++ globals) expected outsideLoops (declarationBody declaration)
+        (body, _, _, problems) = checkBlockWith context (parameters ++ globals) expected outsideLoops (declarationBody declaration)
         finalReturn = finalExpressionType body
-        returns = explicitReturns ++ maybe [] (: []) finalReturn
+        -- Every return of the body counts, also one reached through an
+        -- expression; the returns of a nested callable are its own.
+        returns = blockReturnTypes body ++ maybe [] (: []) finalReturn
         inferred = inferReturn expected returns
-        returnProblems =
-            if expected /= ErrorType && any (not . compatible expected) returns
-                then
-                    [ Diagnostic
-                        TypeCheckerStage
-                        Error
-                        "VXT0001"
-                        (Just (declarationSpan declaration))
-                        "return expression does not match the declared function type"
-                    ]
-                else []
+        isInferred = case declarationReturnSyntax declaration of AutoType -> True; _ -> False
+        returnProblems
+            | expected /= ErrorType && any (not . compatible expected) returns =
+                [ Diagnostic
+                    TypeCheckerStage
+                    Error
+                    "VXT0001"
+                    (Just (declarationSpan declaration))
+                    "return expression does not match the declared function type"
+                ]
+            | isInferred && any (not . compatible inferred) returns =
+                [ problem
+                    (declarationSpan declaration)
+                    "VXT0062"
+                    "the return statements of this method carry values of different types"
+                ]
+            -- Every result of the method is a call that depends on the
+            -- method itself: nothing gives it a type.
+            | isInferred && inferred == ErrorType && null problems =
+                [ problem
+                    (declarationSpan declaration)
+                    "VXT0063"
+                    "the return type of this method cannot be inferred: no result is independent of the method itself"
+                ]
+            | otherwise = []
         typedParameters = map (typeParameterWith context) (declarationParameters declaration)
         signatureProblems =
             typeSyntaxProblemsIn context (declarationReturnSyntax declaration)
@@ -324,6 +239,7 @@ checkDeclarationWith context globals declaration@FunctionDeclaration {} =
         )
 checkDeclarationWith context _ declaration@TypeDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
 checkDeclarationWith context _ declaration@TemplateTypeDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
+checkDeclarationWith context _ declaration@EnumDeclaration {} = checkTopDeclaration (templateCatalog context) declaration
 
 -- A method overload is distinguished only by its ordered parameter types.
 -- Access, return type, and static-ness intentionally do not rescue duplicate
@@ -331,28 +247,29 @@ checkDeclarationWith context _ declaration@TemplateTypeDeclaration {} = checkTop
 duplicateOverloadProblems :: TemplateContext -> [Declaration ResolvedName ()] -> [Diagnostic]
 duplicateOverloadProblems context members = reverse problems
     where
-        (_, problems) = foldl inspect ([], []) members
+        -- The signatures seen so far are kept by method name, so that a
+        -- method is compared with its own overloads only. Comparing it with
+        -- every earlier member made a type with thousands of methods take
+        -- time with the square of their number.
+        (_, problems) = foldl inspect (Map.empty, []) members
         inspect (seen, diagnostics) declaration@FunctionDeclaration {} =
-            let duplicate = any (sameSignature declaration) seen
+            let spelling = resolvedSpelling (declarationName declaration)
+                parameterTypes = methodParameterTypes declaration
+                duplicate = parameterTypes `elem` Map.findWithDefault [] spelling seen
                 currentDiagnostics =
                     if duplicate
                         then
                             [ problem
                                 (declarationSpan declaration)
                                 "VXT0028"
-                                ( "method overload has a duplicate parameter signature: "
-                                    ++ identifierText (resolvedSpelling (declarationName declaration))
-                                )
+                                ("method overload has a duplicate parameter signature: " ++ identifierText spelling)
                             ]
                         else []
-             in (declaration : seen, reverse currentDiagnostics ++ diagnostics)
+             in (Map.insertWith (++) spelling [parameterTypes] seen, reverse currentDiagnostics ++ diagnostics)
         inspect state _ = state
-        sameSignature current previous =
-            resolvedSpelling (declarationName previous) == resolvedSpelling (declarationName current)
-                && methodParameterTypes context previous == methodParameterTypes context current
-        methodParameterTypes valueContext FunctionDeclaration {declarationParameters = parameters} =
-            map (syntaxTypeIn valueContext . parameterTypeSyntax) parameters
-        methodParameterTypes _ _ = []
+        methodParameterTypes FunctionDeclaration {declarationParameters = parameters} =
+            map (syntaxTypeIn context . parameterTypeSyntax) parameters
+        methodParameterTypes _ = []
 
 typeParameterWith :: TemplateContext -> Parameter ResolvedName () -> Parameter ResolvedName Type
 typeParameterWith context parameter =
@@ -372,39 +289,15 @@ compatible ErrorType _ = True
 compatible _ ErrorType = True
 compatible left right = left == right
 
--- | How a loop is used, which decides what its @break@ statements carry.
-data LoopKind
-    = -- | A loop statement: @break@ carries no value.
-      StatementLoop
-    | {- | A loop used as an expression: every @break@ carries the loop's
-      value, typed in the context that receives it.
-      -}
-      ExpressionLoop (Maybe Type)
-    | {- | Not a loop: the edge of a block used as a value. A @break@ or
-      @continue@ inside it would have to leave the block before its value
-      exists, so neither may cross this edge.
-      -}
-      ValueBlockEdge
+-- | The context inside a block used as a value at the given place.
+insideValueBlock :: TemplateContext -> LoopContext
+insideValueBlock context = LoopContext StatementLoop (ValueBlockEdge : enclosingLoops (contextLoops context))
 
-{- | The loops around a statement, innermost first, and the kind of the loop
-statement that is about to be checked. A loop expression checks its loop
-statement with the pending kind set; every loop moves the pending kind onto
-the stack for its own body.
+{- | The context of the condition of the loop that is about to be checked in
+the given context: a transfer there reaches that loop.
 -}
-data LoopContext = LoopContext
-    { pendingLoop :: LoopKind
-    , enclosingLoops :: [LoopKind]
-    }
-
-outsideLoops :: LoopContext
-outsideLoops = LoopContext StatementLoop []
-
-enterLoop :: LoopContext -> LoopContext
-enterLoop loops = LoopContext StatementLoop (pendingLoop loops : enclosingLoops loops)
-
--- | The context inside a block used as a value, whatever surrounds it.
-insideValueBlock :: LoopContext
-insideValueBlock = LoopContext StatementLoop [ValueBlockEdge]
+inLoopCondition :: LoopContext -> TemplateContext -> TemplateContext
+inLoopCondition loops context = context {contextLoops = loopCondition loops}
 
 {- | The checker for expressions and statements as the branching rules of
 "Visual.XSharp.TypeChecker.Branching" receive it: applied to the template
@@ -419,8 +312,9 @@ branchChecker context expected =
              in (typed, final, returns, problems)
         , branchType = \syntax -> (syntaxTypeIn context syntax, typeSyntaxProblemsIn context syntax)
         , branchLiteral = literalTypeInContext
+        , branchEnumMember = enumMemberValue (catalogEnums (templateCatalog context))
         , branchHasEffect = effectCapable
-        , branchValueLoops = insideValueBlock
+        , branchValueLoops = insideValueBlock context
         }
 
 -- | The context of a statement that belongs to a loop header, not its body.
@@ -450,7 +344,18 @@ checkStatementWith ::
     LoopContext ->
     Statement ResolvedName () ->
     (Statement ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
-checkStatementWith context environment expected loops statement = case statement of
+checkStatementWith outer environment expected loops =
+    checkStatementIn (outer {contextReturn = expected, contextLoops = loops}) environment expected loops
+
+-- The context already names the return type and the loops of the statement.
+checkStatementIn ::
+    TemplateContext ->
+    TypeEnvironment ->
+    Type ->
+    LoopContext ->
+    Statement ResolvedName () ->
+    (Statement ResolvedName Type, TypeEnvironment, [Type], [Diagnostic])
+checkStatementIn context environment expected loops statement = case statement of
     BindingStatement spanValue kind syntax name _ value ->
         let declared = syntaxTypeIn context syntax
             target = if declared == ErrorType then Nothing else Just declared
@@ -497,7 +402,7 @@ checkStatementWith context environment expected loops statement = case statement
             , conditionProblems ++ conditionMismatch ++ trueProblems ++ falseProblems
             )
     WhileStatement spanValue condition body ->
-        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+        let (typedCondition, conditionType, conditionProblems) = checkExpressionWith (inLoopCondition loops context) environment condition
             conditionProblems' =
                 if booleanContextType conditionType
                     then []
@@ -510,7 +415,7 @@ checkStatementWith context environment expected loops statement = case statement
             )
     DoWhileStatement spanValue body condition ->
         let (typedBody, _, returns, bodyProblems) = checkBlockWith context environment expected (enterLoop loops) body
-            (typedCondition, conditionType, conditionProblems) = checkExpressionWith context environment condition
+            (typedCondition, conditionType, conditionProblems) = checkExpressionWith (inLoopCondition loops context) environment condition
             conditionProblems' =
                 if booleanContextType conditionType
                     then []
@@ -529,14 +434,14 @@ checkStatementWith context environment expected loops statement = case statement
             (typedCondition, conditionType, conditionProblems) = case condition of
                 Nothing -> (Nothing, boolType, [])
                 Just value ->
-                    let (typed, valueType, problems) = checkExpressionWith context loopEnvironment value
+                    let (typed, valueType, problems) = checkExpressionWith (inLoopCondition loops context) loopEnvironment value
                      in (Just typed, valueType, problems)
             conditionProblems' =
                 if booleanContextType conditionType
                     then []
                     else [problem spanValue "VXT0020" "for condition must be bool or numeric"]
             (typedBody, _, returns, bodyProblems) = checkBlockWith context loopEnvironment expected (enterLoop loops) body
-            (typedUpdates, updateProblems) = checkStatementsWith context loopEnvironment expected (enterLoop loops) updates
+            (typedUpdates, updateProblems) = checkStatementsWith context loopEnvironment expected (loopUpdate loops) updates
          in ( ForStatement spanValue typedInitializer typedCondition typedUpdates typedBody
             , environment
             , returns
@@ -570,6 +475,20 @@ checkStatementWith context environment expected loops statement = case statement
                     then []
                     else [problem spanValue "VXT0024" "increment target must have a numeric type"]
          in (IncrementStatement spanValue name targetType, environment, [], writableProblems ++ numericProblems)
+    CompoundAssignmentStatement spanValue Add name _ value
+        | Just (targetType, writable) <- lookup (resolvedSymbol name) environment
+        , targetType == stringType ->
+            -- `text += value` is `text = text + value`: the value is
+            -- written as text and joined to what the target holds.
+            let (typedValue, valueType, problems) = checkExpressionWith context environment value
+                (joined, _, joinProblems) =
+                    concatenation spanValue (NameExpression spanValue name stringType, stringType) (typedValue, valueType)
+                immutable = [problem spanValue "VXT0003" "cannot assign to an immutable binding" | not writable]
+             in ( AssignmentStatement spanValue name stringType joined
+                , environment
+                , []
+                , problems ++ immutable ++ joinProblems
+                )
     CompoundAssignmentStatement spanValue operator name _ value ->
         -- `target op= value` has the typing of `target = target op value`:
         -- the operator rule is applied to the target type and the result
@@ -600,28 +519,33 @@ checkStatementWith context environment expected loops statement = case statement
         -- A break leaves the innermost loop. Whether it may, or must, carry
         -- a value is decided by how that loop is used; the value takes its
         -- context from the place that receives the loop's value.
-        let innermost = case enclosingLoops loops of
-                kind : _ -> Just kind
-                [] -> Nothing
-            valueExpected = case innermost of
-                Just (ExpressionLoop target) -> target
+        let target = transferTarget loops
+            valueExpected = case target of
+                Just (ExpressionLoop expectedValue) -> expectedValue
+                Just (LoopCondition (ExpressionLoop expectedValue)) -> expectedValue
+                Just (LoopUpdate (ExpressionLoop expectedValue)) -> expectedValue
                 _ -> Nothing
             (typedValue, _, valueProblems) = checkOptionalExpectedWith context environment valueExpected value
-            placementProblems = case (innermost, value) of
-                (Nothing, _) -> [problem spanValue "VXT0025" "break is only valid inside a loop"]
-                (Just StatementLoop, Just _) ->
+            placement kind = case (kind, value) of
+                (StatementLoop, Just _) ->
                     [problem spanValue "VXT0026" "a value-carrying break is only valid in a loop used as an expression"]
-                (Just (ExpressionLoop _), Nothing) ->
+                (ExpressionLoop _, Nothing) ->
                     [problem spanValue "VXT0040" "a loop used as an expression must be left by a break that carries a value"]
-                (Just ValueBlockEdge, _) ->
-                    [problem spanValue "VXT0059" "break cannot leave a block that is used as a value"]
+                -- A break in the condition or the update clause of a loop
+                -- leaves that loop.
+                (LoopCondition loop, _) -> placement loop
+                (LoopUpdate loop, _) -> placement loop
                 _ -> []
+            placementProblems = case target of
+                Nothing -> [problem spanValue "VXT0025" "break is only valid inside a loop"]
+                Just kind -> placement kind
          in (BreakStatement spanValue typedValue, environment, [], placementProblems ++ valueProblems)
     ContinueStatement spanValue ->
-        let problems = case enclosingLoops loops of
-                [] -> [problem spanValue "VXT0027" "continue is only valid inside a loop"]
-                ValueBlockEdge : _ ->
-                    [problem spanValue "VXT0059" "continue cannot leave a block that is used as a value"]
+        -- A continue in the condition of a loop evaluates that condition
+        -- again, and one in the update clause ends the update: the
+        -- condition of the loop is tested next.
+        let problems = case transferTarget loops of
+                Nothing -> [problem spanValue "VXT0027" "continue is only valid inside a loop"]
                 _ -> []
          in (ContinueStatement spanValue, environment, [], problems)
     GuardStatement spanValue condition block ->
@@ -676,24 +600,6 @@ finalExpressionType :: Block ResolvedName Type -> Maybe Type
 finalExpressionType (Block statements) = case reverse statements of
     ExpressionStatement _ expression False : _ -> Just (typedExpressionType expression)
     _ -> Nothing
-
-typedExpressionType :: Expression name Type -> Type
-typedExpressionType expression = case expression of
-    NameExpression _ _ valueType -> valueType
-    LiteralExpression _ _ valueType -> valueType
-    MemberAccessExpression _ _ _ valueType -> valueType
-    CallExpression _ _ _ valueType -> valueType
-    UnaryExpression _ _ _ valueType -> valueType
-    BinaryExpression _ _ _ _ valueType -> valueType
-    IsPatternExpression _ _ _ valueType -> valueType
-    ConditionalExpression _ _ _ _ valueType -> valueType
-    CoalesceExpression _ _ _ valueType -> valueType
-    AssignmentExpression _ _ _ _ valueType -> valueType
-    IncrementExpression _ _ _ valueType -> valueType
-    LoopExpression _ _ valueType -> valueType
-    BlockExpression _ _ valueType -> valueType
-    MatchExpression _ _ _ valueType -> valueType
-    CallableExpression _ _ _ _ _ valueType -> valueType
 
 effectCapable :: Expression name annotation -> Bool
 effectCapable CallExpression {} = True
@@ -754,10 +660,68 @@ checkExpressionExpectedWith context environment expected expression = case expre
     LiteralExpression spanValue literal _ ->
         let (valueType, problems) = literalTypeInContext spanValue expected literal
          in (LiteralExpression spanValue literal valueType, valueType, problems)
+    -- @Enum.Member@ is the value of that member. It is a constant of the
+    -- enum's type, and it is kept as the integer literal it stands for.
+    MemberAccessExpression spanValue (NameExpression _ name _) member _
+        | Just info <- enumBySymbol (catalogEnums (templateCatalog context)) (resolvedSymbol name) ->
+            let valueType = enumInfoType info
+             in case lookup member (enumInfoMembers info) of
+                    Just value -> (LiteralExpression spanValue (IntegerLiteral value) valueType, valueType, [])
+                    Nothing ->
+                        ( LiteralExpression spanValue (IntegerLiteral 0) valueType
+                        , ErrorType
+                        ,
+                            [ problem
+                                spanValue
+                                "VXT0064"
+                                ( "the enum "
+                                    ++ identifierText (resolvedSpelling name)
+                                    ++ " has no member named "
+                                    ++ identifierText member
+                                )
+                            ]
+                        )
+    -- @.Member@ is the member of that name of the enum the place expects.
+    -- Without an expected enum type there is nothing to select from.
+    MemberAccessExpression spanValue (LiteralExpression _ UnitLiteral _) member _ ->
+        let enums = catalogEnums (templateCatalog context)
+         in case [valueType | Just valueType <- [expected], isEnumType valueType] of
+                valueType : _ -> case enumMemberValue enums valueType member of
+                    Just value -> (LiteralExpression spanValue (IntegerLiteral value) valueType, valueType, [])
+                    Nothing ->
+                        ( LiteralExpression spanValue (IntegerLiteral 0) valueType
+                        , ErrorType
+                        , [problem spanValue "VXT0064" ("the expected enum has no member named " ++ identifierText member)]
+                        )
+                [] ->
+                    ( LiteralExpression spanValue (IntegerLiteral 0) ErrorType
+                    , ErrorType
+                    ,
+                        [ problem
+                            spanValue
+                            "VXT0069"
+                            "a target-typed .Member needs a place whose type is known to be an enum"
+                        ]
+                    )
     MemberAccessExpression spanValue receiver member _ ->
         let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
             memberProblems = [problem spanValue "VXT0034" "member selection is currently supported only as a type-qualified method call"]
          in (MemberAccessExpression spanValue typedReceiver member ErrorType, ErrorType, receiverProblems ++ memberProblems)
+    -- @Type::Method@ is the static method as a callable value.
+    MethodReferenceExpression spanValue (NameExpression _ name _) member _
+        | resolvedSymbol name `elem` map fst (catalogTypes (templateCatalog context)) ->
+            methodValue context expected spanValue (resolvedSymbol name) member
+    -- A reference through a value is a method bound to that value, which
+    -- needs the methods of values.
+    MethodReferenceExpression spanValue receiver member _ ->
+        let (typedReceiver, _, receiverProblems) = checkExpressionWith context environment receiver
+            memberProblems =
+                [ problem
+                    spanValue
+                    "VXT0081"
+                    "a method reference is currently supported only for a static method named through its type"
+                ]
+         in (MethodReferenceExpression spanValue typedReceiver member ErrorType, ErrorType, receiverProblems ++ memberProblems)
     CallExpression spanValue callee arguments _ ->
         case callee of
             MemberAccessExpression _ receiver member _ ->
@@ -779,8 +743,13 @@ checkExpressionExpectedWith context environment expected expression = case expre
         let operandExpected = if operator == LogicalNot then Nothing else expected
             (typedValue, valueType, problems) = checkExpressionExpectedWith context environment operandExpected value
             rule = unaryNumericRule operator valueType
-            mismatch = ruleProblems spanValue "VXT0011" rule
-         in (UnaryExpression spanValue operator typedValue (numericRuleType rule), numericRuleType rule, problems ++ mismatch)
+            -- An operand without a type was reported already, or never
+            -- yields a value; either way the operator has nothing to check.
+            (resultType, mismatch) =
+                if valueType == ErrorType
+                    then (ErrorType, [])
+                    else (numericRuleType rule, ruleProblems spanValue "VXT0011" rule)
+         in (UnaryExpression spanValue operator typedValue resultType, resultType, problems ++ mismatch)
     BinaryExpression spanValue operator left right _ ->
         -- A Boolean result does not imply Boolean operands: pushing the return
         -- context into 1 == 2 would convert both literals to true. Comparisons
@@ -796,15 +765,48 @@ checkExpressionExpectedWith context environment expected expression = case expre
                 (FloorDivide, _) -> checkExpressionWith context environment left
                 _ -> checkExpressionExpectedWith context environment (if booleanResult operator then Nothing else expected) left
             (typedLeft, leftType, leftProblems) = leftResult
-            rightExpected = if operator `elem` [LogicalAnd, LogicalOr] then Nothing else Just leftType
+            -- The other side of a string is whatever it is by itself: `+`
+            -- writes it as text, so it does not borrow the string's type.
+            rightExpected =
+                if operator `elem` [LogicalAnd, LogicalOr] || leftType == stringType then Nothing else Just leftType
             (typedRight, rightType, rightProblems) = checkExpressionExpectedWith context environment rightExpected right
             rule = binaryNumericRule operator leftType rightType
-            resultType = numericRuleType rule
-            mismatch = ruleProblems spanValue "VXT0012" rule
-         in ( BinaryExpression spanValue operator typedLeft typedRight resultType
-            , resultType
-            , leftProblems ++ rightProblems ++ mismatch
-            )
+            typed = leftType /= ErrorType && rightType /= ErrorType
+            -- `+` with a string on either side joins the two as text, and
+            -- `==` and `\=` on two strings compare their characters.
+            joins = typed && operator == Add && (leftType == stringType || rightType == stringType)
+            comparesText = typed && operator `elem` [Equal, NotEqual] && leftType == stringType && rightType == stringType
+            -- An operand without a type was reported already, or never
+            -- yields a value; either way the operator has nothing to check.
+            -- Values of an enum are compared for equality with values of
+            -- the same enum, and take part in no other operation.
+            (resultType, mismatch)
+                | leftType == ErrorType || rightType == ErrorType =
+                    (if booleanResult operator then boolType else ErrorType, [])
+                | isEnumType leftType || isEnumType rightType =
+                    if operator `elem` [Equal, NotEqual] && leftType == rightType
+                        then (boolType, [])
+                        else
+                            ( if booleanResult operator then boolType else ErrorType
+                            ,
+                                [ problem
+                                    spanValue
+                                    "VXT0065"
+                                    "values of an enum are only compared, with == and \\=, with values of the same enum"
+                                ]
+                            )
+                | otherwise = (numericRuleType rule, ruleProblems spanValue "VXT0012" rule)
+            withOperands (value, valueType, problems) = (value, valueType, leftProblems ++ rightProblems ++ problems)
+         in if joins
+                then withOperands (concatenation spanValue (typedLeft, leftType) (typedRight, rightType))
+                else
+                    if comparesText
+                        then withOperands (textEquality spanValue (operator == Equal) typedLeft typedRight)
+                        else
+                            ( BinaryExpression spanValue operator typedLeft typedRight resultType
+                            , resultType
+                            , leftProblems ++ rightProblems ++ mismatch
+                            )
     IsPatternExpression spanValue subject patternValue _ ->
         let (typedSubject, subjectType, subjectProblems) = checkExpressionWith context environment subject
             (typedPattern, patternProblems) = checkPatternWith context subjectType patternValue
@@ -821,9 +823,24 @@ checkExpressionExpectedWith context environment expected expression = case expre
                 ]
             ((typedFirst, firstType, firstProblems), (typedSecond, secondType, secondProblems)) =
                 checkOperandPair context environment expected first second
-            (resultType, resultProblems) =
-                selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
-         in ( ConditionalExpression spanValue typedCondition typedFirst typedSecond resultType
+            -- A block that leaves instead of completing has no value, so
+            -- the other block alone gives the expression its type.
+            -- When neither completes, the expression never yields a value:
+            -- it is annotated void, and what receives it is not held to a
+            -- type, because that place is never reached.
+            (annotation, resultType, resultProblems) = case (doesNotComplete typedFirst, doesNotComplete typedSecond) of
+                (True, True) -> (voidType, ErrorType, [])
+                (True, False) -> (secondType, secondType, [])
+                (False, True) -> (firstType, firstType, [])
+                -- A string is selected like a scalar: one of the two is
+                -- the value, and the other is never made.
+                (False, False)
+                    | firstType == stringType && secondType == stringType -> (stringType, stringType, [])
+                    | otherwise ->
+                        let (valueType, problems) =
+                                selectedValueType spanValue "VXT0037" "conditional results must have the same type" firstType secondType
+                         in (valueType, valueType, problems)
+         in ( ConditionalExpression spanValue typedCondition typedFirst typedSecond annotation
             , resultType
             , conditionProblems ++ conditionMismatch ++ firstProblems ++ secondProblems ++ resultProblems
             )
@@ -857,6 +874,16 @@ checkExpressionExpectedWith context environment expected expression = case expre
             , targetType
             , problems ++ immutable ++ mismatch
             )
+    AssignmentExpression spanValue (Just Add) name value _
+        | target@(Just (targetType, _)) <- lookup (resolvedSymbol name) environment
+        , targetType == stringType ->
+            let (typedValue, valueType, problems) = checkExpressionWith context environment value
+                (joined, _, joinProblems) =
+                    concatenation spanValue (NameExpression spanValue name stringType, stringType) (typedValue, valueType)
+             in ( AssignmentExpression spanValue Nothing name joined stringType
+                , stringType
+                , problems ++ immutableTargetProblems spanValue target ++ joinProblems
+                )
     AssignmentExpression spanValue (Just operator) name value _ ->
         let target = lookup (resolvedSymbol name) environment
             targetType = maybe ErrorType fst target
@@ -897,8 +924,21 @@ checkExpressionExpectedWith context environment expected expression = case expre
     -- leaves it carries a value.
     LoopExpression spanValue loop _ ->
         let loops = LoopContext (ExpressionLoop expected) []
-            (typedLoop, _, _, loopProblems) = checkStatementWith context environment ErrorType loops loop
-            (resultType, resultProblems) = loopValueType spanValue (loopBreakTypes typedLoop)
+            (typedLoop, _, _, loopProblems) = checkStatementWith context environment (contextReturn context) loops loop
+            breakTypes = loopBreakTypes typedLoop
+            -- A loop that no break leaves never yields a value; it leaves
+            -- through a return or does not end. That is a fact about its
+            -- control flow, so it is annotated void and what receives it is
+            -- not held to a type.
+            -- A loop that only runs forever is still reported as lacking
+            -- a value: it is far more likely a forgotten break.
+            neverYields =
+                null breakTypes
+                    && not (null (blockReturnTypes (Block [typedLoop])))
+                    && doesNotComplete (LoopExpression spanValue typedLoop voidType)
+            (annotation, resultType, resultProblems)
+                | neverYields = (voidType, ErrorType, [])
+                | otherwise = let (valueType, problems) = loopValueType spanValue breakTypes in (valueType, valueType, problems)
             endProblems =
                 [ problem
                     spanValue
@@ -906,19 +946,15 @@ checkExpressionExpectedWith context environment expected expression = case expre
                     "a loop used as an expression can end without a value; its condition must be the constant true"
                 | loopMayEndWithoutValue typedLoop
                 ]
-            returnProblems =
-                [ problem spanValue "VXT0045" "return inside a loop used as an expression is not supported"
-                | statementReturns typedLoop
-                ]
-         in ( LoopExpression spanValue typedLoop resultType
+         in ( LoopExpression spanValue typedLoop annotation
             , resultType
-            , loopProblems ++ endProblems ++ returnProblems ++ resultProblems
+            , loopProblems ++ endProblems ++ resultProblems
             )
     BlockExpression spanValue block _ ->
-        checkValueBlock (branchChecker context ErrorType) environment expected spanValue block
+        checkValueBlock (branchChecker context (contextReturn context)) environment expected spanValue block
     MatchExpression spanValue subjects arms _ ->
         let (typedMatch, resultType, _, problems) =
-                checkMatch (branchChecker context ErrorType) MatchValue environment expected spanValue subjects arms
+                checkMatch (branchChecker context (contextReturn context)) MatchValue environment expected spanValue subjects arms
          in (typedMatch, resultType, problems)
     CallableExpression spanValue explicit captures parameters body _ ->
         let checkedCaptures = checkCapturesWith context environment captures
@@ -934,6 +970,18 @@ checkExpressionExpectedWith context environment expected expression = case expre
             callableEnvironment = parameterEnvironment ++ captureEnvironment ++ environment
             (typedBody, resultType, bodyProblems) = checkCallableBodyWith context callableEnvironment body
             callableType = FunctionType (map parameterAnnotation typedParameters) resultType
+            -- The result type is inferred from the returns of the body,
+            -- which are read through expressions as well; they must agree,
+            -- or the callable has no one type to return.
+            returnProblems = case typedBody of
+                CallableBlockBody block ->
+                    [ problem
+                        spanValue
+                        "VXT0062"
+                        "the return statements of this callable carry values of different types"
+                    | any (not . compatible resultType) (blockReturnTypes block)
+                    ]
+                CallableExpressionBody _ -> []
             captureProblems = concatMap captureDiagnostics checkedCaptures
             parameterProblems = concatMap (typeSyntaxProblemsIn context . parameterTypeSyntax) parameters
          in ( CallableExpression
@@ -944,27 +992,8 @@ checkExpressionExpectedWith context environment expected expression = case expre
                 typedBody
                 callableType
             , callableType
-            , captureProblems ++ parameterProblems ++ bodyProblems
+            , captureProblems ++ parameterProblems ++ bodyProblems ++ returnProblems
             )
-
-{- | Types of the values carried by the breaks that leave this loop itself.
-Breaks of nested loops leave those loops, so nested loops are not entered.
--}
-loopBreakTypes :: Statement ResolvedName Type -> [Type]
-loopBreakTypes loop = case loop of
-    WhileStatement _ _ body -> blockBreaks body
-    ForStatement _ _ _ _ body -> blockBreaks body
-    _ -> []
-    where
-        blockBreaks (Block statements) = concatMap statementBreaks statements
-        statementBreaks statement = case statement of
-            BreakStatement _ (Just value) -> [typedExpressionType value]
-            IfStatement _ _ trueBlock falseBlock -> blockBreaks trueBlock ++ maybe [] blockBreaks falseBlock
-            GuardStatement _ _ block -> blockBreaks block
-            BlockStatement _ block -> blockBreaks block
-            ExpressionStatement _ (MatchExpression _ _ arms _) _ ->
-                concat [blockBreaks block | BlockExpression _ block _ <- map matchArmBody arms]
-            _ -> []
 
 {- | Result type of a loop expression from the types of its break values.
 
@@ -981,8 +1010,9 @@ loopValueType spanValue breakTypes = case filter (/= ErrorType) breakTypes of
     first : remaining
         | any (/= first) remaining ->
             (first, [problem spanValue "VXT0043" "the break values of a loop used as an expression must have the same type"])
-        | not (booleanContextType first) ->
-            (first, [problem spanValue "VXT0044" "loop expressions currently support only bool and numeric results"])
+        | not (booleanContextType first)
+        , not (isEnumType first) ->
+            (first, [problem spanValue "VXT0044" "loop expressions currently support only bool, numeric and enum results"])
         | otherwise -> (first, [])
 
 -- | Whether the loop can finish by its condition becoming false.
@@ -995,24 +1025,6 @@ loopMayEndWithoutValue loop = case loop of
         isConstantTrue expression = case expression of
             LiteralExpression _ (BooleanLiteral True) _ -> True
             _ -> False
-
--- | Whether a statement contains a return outside any closure.
-statementReturns :: Statement name annotation -> Bool
-statementReturns statement = case statement of
-    ReturnStatement {} -> True
-    IfStatement _ _ trueBlock falseBlock -> blockReturns trueBlock || maybe False blockReturns falseBlock
-    WhileStatement _ _ body -> blockReturns body
-    DoWhileStatement _ body _ -> blockReturns body
-    ForStatement _ initializer _ updates body ->
-        maybe False statementReturns initializer || any statementReturns updates || blockReturns body
-    ForEachStatement _ _ _ _ _ _ body -> blockReturns body
-    GuardStatement _ _ block -> blockReturns block
-    BlockStatement _ block -> blockReturns block
-    ExpressionStatement _ (MatchExpression _ _ arms _) _ ->
-        or [blockReturns block | BlockExpression _ block _ <- map matchArmBody arms]
-    _ -> False
-    where
-        blockReturns (Block statements) = any statementReturns statements
 
 immutableTargetProblems :: SourceSpan -> Maybe (Type, Bool) -> [Diagnostic]
 immutableTargetProblems spanValue target = case target of
@@ -1068,9 +1080,10 @@ selectedValueType spanValue mismatchCode mismatchMessage firstType secondType
     | firstType == ErrorType = (secondType, [])
     | secondType == ErrorType = (firstType, [])
     | firstType /= secondType = (firstType, [problem spanValue mismatchCode mismatchMessage])
-    | not (booleanContextType firstType) =
+    | not (booleanContextType firstType)
+    , not (isEnumType firstType) =
         ( firstType
-        , [problem spanValue "VXT0039" "conditional expressions currently support only bool and numeric results"]
+        , [problem spanValue "VXT0039" "conditional expressions currently support only bool, numeric and enum results"]
         )
     | otherwise = (firstType, [])
 
@@ -1103,6 +1116,37 @@ checkOrdinaryCall context environment spanValue callee arguments =
         , calleeProblems ++ concatMap (\(_, _, ps) -> ps) checkedArguments ++ callProblems
         )
 
+{- | A static method referred to through its type, @Type::Method@: the
+method as a callable value, like its bare name inside the type.
+
+A name with one static method that is accessible is that method. A name
+with several is the one whose signature the place expects; where the place
+expects none of them, or nothing, the reference does not say which is meant.
+-}
+methodValue ::
+    TemplateContext -> Maybe Type -> SourceSpan -> SymbolId -> Identifier -> (Expression ResolvedName Type, Type, [Diagnostic])
+methodValue context expected spanValue owner member = case chosen of
+    [declaration] ->
+        let valueType = signature context declaration
+         in (NameExpression spanValue (declarationName declaration) valueType, valueType, [])
+    _ -> (NameExpression spanValue (ResolvedName (SymbolId (-1)) member) ErrorType, ErrorType, [failure])
+    where
+        candidates = overloadsFor context owner member
+        static = [candidate | candidate@(MethodCandidate _ FunctionDeclaration {declarationIsStatic = True}) <- candidates]
+        visible = map candidateDeclaration (filter (candidateVisibleFrom context) static)
+        chosen = case visible of
+            [_] -> visible
+            _ -> [declaration | declaration <- visible, Just (signature context declaration) == expected]
+        failure
+            | null candidates = problem spanValue "VXT0029" "no method with this name is declared on the selected type"
+            | null static = problem spanValue "VXT0031" "an instance method cannot be referred to through a type name"
+            | null visible = problem spanValue "VXT0033" "the selected method is not accessible from this declaration"
+            | otherwise =
+                problem
+                    spanValue
+                    "VXT0080"
+                    "the method name has several overloads and the place does not expect the type of one of them"
+
 typeQualifiedReceiver :: Expression ResolvedName () -> Maybe ResolvedName
 typeQualifiedReceiver (NameExpression _ name _) = Just name
 typeQualifiedReceiver _ = Nothing
@@ -1134,6 +1178,9 @@ checkTypeQualifiedCall ::
     Identifier ->
     [Expression ResolvedName ()] ->
     (Expression ResolvedName Type, Type, [Diagnostic])
+checkTypeQualifiedCall context environment _ callSpan receiver member arguments
+    | consoleReceiver receiver =
+        checkConsoleCall (checkExpressionExpectedWith context environment) callSpan member arguments
 checkTypeQualifiedCall context environment expected callSpan receiver member arguments =
     case typeQualifiedReceiver receiver of
         Just typeName
@@ -1170,6 +1217,7 @@ sourceSpanOf expression = case expression of
     NameExpression spanValue _ _ -> spanValue
     LiteralExpression spanValue _ _ -> spanValue
     MemberAccessExpression spanValue _ _ _ -> spanValue
+    MethodReferenceExpression spanValue _ _ _ -> spanValue
     CallExpression spanValue _ _ _ -> spanValue
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue
@@ -1374,67 +1422,24 @@ checkCallableBodyWith ::
     TypeEnvironment ->
     CallableBody ResolvedName () ->
     (CallableBody ResolvedName Type, Type, [Diagnostic])
-checkCallableBodyWith context environment body = case body of
+checkCallableBodyWith outer environment body = case body of
     CallableExpressionBody expression ->
-        let (typed, valueType, problems) = checkExpressionWith context environment expression
+        -- A callable is a function of its own: nothing in its body returns
+        -- from, or leaves a loop of, the function that creates it.
+        let context = outer {contextReturn = ErrorType, contextLoops = outsideLoops}
+            (typed, valueType, problems) = checkExpressionWith context environment expression
          in (CallableExpressionBody typed, valueType, problems)
     CallableBlockBody block ->
-        let (typed, _, returns, problems) = checkBlockWith context environment ErrorType outsideLoops block
-            finalType = maybe (inferReturn ErrorType returns) id (finalExpressionType typed)
+        let (typed, _, _, problems) = checkBlockWith outer environment ErrorType outsideLoops block
+            finalType = maybe (inferReturn ErrorType (blockReturnTypes typed)) id (finalExpressionType typed)
          in (CallableBlockBody typed, finalType, problems)
 
+-- An expression without a type was reported already, or never yields a
+-- value; a condition of either kind has nothing to check.
 booleanContextType :: Type -> Bool
-booleanContextType = acceptsBooleanContext
-
-literalTypeInContext :: SourceSpan -> Maybe Type -> Literal -> (Type, [Diagnostic])
-literalTypeInContext spanValue expected literal = case literal of
-    IntegerLiteral value -> integerLiteralType spanValue expected value
-    FloatingLiteral _ -> floatingLiteralType expected
-    CharacterLiteral _ -> (scalarTypeToType CharacterScalar, [])
-    BooleanLiteral _ -> (boolType, [])
-    StringLiteral _ -> (stringType, [])
-    UnitLiteral -> (unitType, [])
-
-integerLiteralType :: SourceSpan -> Maybe Type -> Integer -> (Type, [Diagnostic])
-integerLiteralType spanValue expected value =
-    let context = maybe NoNumericContext targetContext expected
-        rule = integerLiteralRule context value
-        code = case numericRuleError rule of Just (UntargetedIntegerOutsideInt _) -> "VXT0017"; _ -> "VXT0016"
-     in (numericRuleType rule, ruleProblems spanValue code rule)
-    where
-        targetContext target | target == boolType = BooleanNumericContext
-        targetContext target = TargetNumericType target
-
-floatingLiteralType :: Maybe Type -> (Type, [Diagnostic])
-floatingLiteralType expected =
-    let context = maybe NoNumericContext TargetNumericType expected
-        rule = floatingLiteralRule context
-     in (numericRuleType rule, [])
-
-ruleProblems :: SourceSpan -> String -> NumericRuleResult -> [Diagnostic]
-ruleProblems spanValue code rule = case numericRuleError rule of
-    Nothing -> []
-    Just issue -> [problem spanValue code (renderNumericRuleError issue)]
-
-constantRangeProblems :: SourceSpan -> Type -> Expression ResolvedName Type -> [Diagnostic]
-constantRangeProblems spanValue target expression = case evaluateConstantInteger expression of
-    Left issue -> [problem spanValue "VXT0019" (renderConstantIntegerError issue)]
-    Right (Just value) -> case typeToScalarType target of
-        Just scalar
-            | scalarTypeFamily scalar `elem` [SignedIntegerFamily, UnsignedIntegerFamily]
-            , not (integerFits scalar value) ->
-                [ problem
-                    spanValue
-                    "VXT0018"
-                    ("constant expression result " ++ show value ++ " does not fit " ++ scalarTypeName scalar)
-                ]
-        _ -> []
-    Right Nothing -> []
+booleanContextType valueType = valueType == ErrorType || acceptsBooleanContext valueType
 
 safeIndex :: [a] -> Int -> Maybe a
 safeIndex values index
     | index < 0 = Nothing
     | otherwise = case drop index values of value : _ -> Just value; [] -> Nothing
-
-problem :: SourceSpan -> String -> String -> Diagnostic
-problem spanValue code message = Diagnostic TypeCheckerStage Error code (Just spanValue) message

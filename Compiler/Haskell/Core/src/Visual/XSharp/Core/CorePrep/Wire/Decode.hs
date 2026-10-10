@@ -362,6 +362,8 @@ tagPrimitive tag = case tag of
     24 -> Just CoreBitwiseOr
     25 -> Just CoreBitwiseNot
     26 -> Just CoreTypeIs
+    27 -> Just CoreMemoize
+    28 -> Just CoreRuntimeCall
     _ -> Nothing
 
 invalidTag :: String -> Word8 -> Decoder a

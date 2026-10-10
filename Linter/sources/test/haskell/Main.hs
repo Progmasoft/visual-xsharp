@@ -16,6 +16,12 @@ main = do
     check "safe fixes reach an idempotent result" safeFixesAreIdempotent
     check "malformed source remains a compiler diagnostic after a failed fix" malformedSourceRemainsVisible
     check "check catalog exposes stable command output" checkCatalog
+    check "a source with the forms of 0.5.0 is clean" currentFormsAreClean
+    check "a selector with a dot and no call is a compiler diagnostic" dottedSelectorIsReported
+    check "a method reference the place does not select is a compiler diagnostic" ambiguousReferenceIsReported
+    check "a method reference through a value is a compiler diagnostic" boundReferenceIsReported
+    check "a format that does not match its arguments is a compiler diagnostic" formatMismatchIsReported
+    check "safe fixes keep a method reference as written" safeFixesKeepReferences
 
 check :: String -> Bool -> IO ()
 check label passed = if passed then putStrLn ("PASS: " ++ label) else putStrLn ("FAIL: " ++ label) >> exitFailure
@@ -64,3 +70,60 @@ checkCatalog =
            , "format.mixedLineEndings"
            , "format.missingFinalNewline"
            ]
+
+-- The body of @Main@ in a program that declares what the cases below use.
+currentProgram :: String -> String
+currentProgram body =
+    unlines
+        [ "namespace Demo;"
+        , "enum Color { Red, Green }"
+        , "public class Other {"
+        , "    public static int Pick(_ int v) { return v + 10; }"
+        , "    public static int Pick(_ int v, _ int w) { return v + w; }"
+        , "}"
+        , "public class Program {"
+        , "    public static int Log(_ int v) { Console.Println(v); return v; }"
+        , "    public static int Run(_ (int) -> int f) { return f(3); }"
+        , "    public static void Main() {"
+        , "        " ++ body
+        , "    }"
+        , "}"
+        ]
+
+ruleIdsOf :: String -> [String]
+ruleIdsOf body = map lintRuleId (lintSource (CompilerInput "Program.vxs" (currentProgram body)))
+
+currentFormsAreClean :: Bool
+currentFormsAreClean =
+    null
+        ( ruleIdsOf
+            ( concat
+                [ "auto held = Demo.Program::Log; "
+                , "int first = Run(Program::Log) + Run(Other::Pick) + Demo.Program.Log(1); "
+                , "String kind = held(first) > 0 ? \"some\" : \"none\"; "
+                , "Color chosen = Demo.Color.Green; "
+                , "Console.Printfn(\"%s %b %05d\", kind, chosen == Color.Green, first);"
+                ]
+            )
+        )
+
+dottedSelectorIsReported :: Bool
+dottedSelectorIsReported = "compiler.VXT0034" `elem` ruleIdsOf "auto held = Program.Log;"
+
+ambiguousReferenceIsReported :: Bool
+ambiguousReferenceIsReported = "compiler.VXT0080" `elem` ruleIdsOf "auto held = Other::Pick;"
+
+boundReferenceIsReported :: Bool
+boundReferenceIsReported = "compiler.VXT0081" `elem` ruleIdsOf "int value = 1; auto held = value::Pick;"
+
+formatMismatchIsReported :: Bool
+formatMismatchIsReported = any (`elem` ruleIdsOf "Console.Printf(\"%d\", \"text\");") ["compiler.VXT0077", "compiler.VXT0078"]
+
+safeFixesKeepReferences :: Bool
+safeFixesKeepReferences =
+    case applySafeFixes (CompilerInput "Program.vxs" (currentProgram "auto held = Demo.Program::Log;   ")) of
+        Right result ->
+            formattingChanged result
+                && lines (formattedSource result) !! 10 == "        auto held = Demo.Program::Log;"
+                && null (lintSource (CompilerInput "Program.vxs" (formattedSource result)))
+        Left _ -> False

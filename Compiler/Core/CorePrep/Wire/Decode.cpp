@@ -451,7 +451,7 @@ namespace visual_xsharp::core::wire
             operation_tag() -> Operation
             {
                 const auto tag = byte("operation tag");
-                if (tag > static_cast<std::uint8_t>(Operation::TypeIs))
+                if (tag > static_cast<std::uint8_t>(Operation::RuntimeCall))
                 {
                     fail(ErrorKind::InvalidTag,
                          "operation tag",

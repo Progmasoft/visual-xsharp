@@ -125,9 +125,12 @@ parseArms grammar = do
 
 {- | One arm: @patterns [if guard] -> body [,]@.
 
-The comma after a block body is optional. After an expression body it is
-required unless the arm is the last one: without it, the parenthesized
-pattern of the next arm would continue the expression as a call.
+The comma is optional after every body, as in the grammar. An expression
+body is parsed like any expression, so a parenthesized pattern that follows
+it without a comma is read as the argument list of a call of the body. That
+reading is the grammar's own: the arrow that then follows cannot continue an
+expression, and the diagnostic for it says what happened instead of naming
+the arrow as unexpected.
 -}
 parseArm :: BranchGrammar -> P (MatchArm Identifier ())
 parseArm grammar = do
@@ -144,10 +147,13 @@ parseArm grammar = do
         blockBody <- peekText "{"
         body <- if blockBody then valueBlock grammar else grammarExpression grammar
         separated <- optionalSymbol ","
-        closes <- peekText "}"
-        if blockBody || separated || closes
-            then pure ()
-            else failCurrent "VXP0038" "a match arm with an expression body must be followed by ',' or '}'"
+        swallowed <- peekText "->"
+        if not blockBody && not separated && swallowed
+            then
+                failCurrent
+                    "VXP0038"
+                    "the pattern of this arm was read as part of the previous arm's body; write ',' after that body"
+            else pure ()
         pure (patterns, guard, body)
     pure (MatchArm spanValue patterns guard body)
 
@@ -161,6 +167,10 @@ parsePatterns grammar = do
 
 A bare name is not a pattern: a binding always states its type, as in
 @int value@, so a name can never be mistaken for a constant to compare with.
+A numeric literal may be preceded by a minus sign, which makes the constant
+negative; the range of the constant is checked against the subject's type by
+the type checker, so the most negative value of a signed type is a pattern
+although its magnitude alone is not a value of that type.
 -}
 parseMatchPattern :: BranchGrammar -> P (MatchPattern Identifier ())
 parseMatchPattern grammar = do
@@ -189,6 +199,17 @@ parseBarePattern grammar = do
             | isLiteralStart token -> do
                 (literal, _) <- grammarLiteral grammar
                 pure (\spanValue -> MatchLiteralPattern spanValue literal ())
+            -- A minus sign belongs to the numeric literal that follows it.
+            -- It is part of the constant, not an operator: no other
+            -- expression is a pattern.
+            | tokenKind token == SymbolToken && tokenText token == "-" -> do
+                _ <- takeToken
+                numeric <- peekToken
+                case numeric of
+                    Just following | tokenKind following `elem` [IntegerToken, FloatingToken] -> do
+                        (literal, _) <- grammarLiteral grammar
+                        pure (\spanValue -> MatchLiteralPattern spanValue (negated literal) ())
+                    _ -> failCurrent "VXP0036" "a '-' in a match pattern must be followed by a numeric literal"
         _ -> do
             typed <- matchesAhead (grammarType grammar >> identifierToken)
             if not typed
@@ -202,6 +223,10 @@ parseBarePattern grammar = do
                     let binding = if isWildcard name then Nothing else Just (Identifier (tokenText name))
                     pure (\spanValue -> MatchTypePattern spanValue syntax binding ())
     where
+        negated literal = case literal of
+            IntegerLiteral value -> IntegerLiteral (negate value)
+            FloatingLiteral spelling -> FloatingLiteral ('-' : spelling)
+            other -> other
         isWildcard token = tokenKind token == IdentifierToken && tokenText token == "_"
         isLiteralStart token =
             tokenKind token `elem` [IntegerToken, FloatingToken, CharacterToken, StringToken]

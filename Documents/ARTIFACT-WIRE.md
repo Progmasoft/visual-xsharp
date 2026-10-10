@@ -11,10 +11,10 @@ compiler artifacts rather than source formats. Core, Xpp, and Xmm are public
 
 | Contract | Magic | Current version | Producer | Consumer |
 | --- | --- | ---: | --- | --- |
-| Core | `VXCR` | 7 | Haskell frontend | native Core reader |
-| CorePrep | `VXCP` | 6 | CorePrep adapter | native pipeline tools |
-| Xpp | `VXPP` | 5 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
-| Xmm | `VXMM` | 5 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
+| Core | `VXCR` | 10 | Haskell frontend | native Core reader |
+| CorePrep | `VXCP` | 8 | CorePrep adapter | native pipeline tools |
+| Xpp | `VXPP` | 7 | verified CorePrep-to-Xpp lowering | Xmm lowering or artifact tools |
+| Xmm | `VXMM` | 7 | verified Xpp-to-Xmm lowering | LLVM backend or artifact tools |
 
 The contracts have related scalar encodings but separate structural schemas.
 Their magic values must never be treated as aliases.
@@ -91,7 +91,7 @@ the bit pattern is identical.
 
 ### Core scalar tags (introduced in v5)
 
-The native and Haskell Core codecs retain these assignments in version 8. This
+The native and Haskell Core codecs retain these assignments in version 10. This
 table is an implementation-maintenance aid, not a user extension API.
 
 | Tag | Type | Tag | Type |
@@ -115,7 +115,7 @@ declared scalar type.
 ### CorePrep scalar tags (introduced in v5)
 
 CorePrep retains historical `int` and `long` positions before the extended
-catalog. Version 6 adds provenance without changing these tags; assignments
+catalog. Versions 6 and 7 change none of these tags; assignments
 must therefore not be copied blindly from Core:
 
 | Tag | Type | Tag | Type |
@@ -228,20 +228,99 @@ payload follows in the order shown.
 
 Core wire v8 added tag 6. Its three children have fixed positions, so the
 record carries no count: a shorter payload is a truncation, never a smaller
-conditional. Each child counts one level against the expression depth limit,
-exactly like a primitive operand. The reader does not check that the arms
+conditional. Each child counts one level against the expression depth limit.
+Among the operands of a primitive only those after the first do: the first
+operand is at the level of the primitive, so a chain of operators, which
+nests in that operand as deep as it is long, is one level, and the readers
+and the writers walk it in a loop. The reader does not check that the arms
 agree with the result type; that is the Core verifier's rule and runs on every
 decoded module.
+
+The native reader and writer also bound the nesting of statement bodies, with
+the same default of 4096 levels. A function body is level 1, and a branch, a
+loop body and a closure body are each one level below the statement or
+expression that holds them. A false branch that holds exactly one conditional
+statement is an `else if`: the reader and the writer walk such a chain in a
+loop, and its links share one level. An empty body costs no level. Input that
+nests deeper is rejected with a limit error before it is walked. The limit is
+a property of the reader, not of the format: it changes no byte of a valid
+document, and the Haskell codec, whose stack grows on demand, does not need
+it.
 
 CorePrep, Xpp, and Xmm have no conditional-expression record. The expression
 is lowered to blocks, a branch, and assignments to one slot before CorePrep is
 serialized, so their versions did not change.
 
+### The remembering operation
+
+Core v9, CorePrep v7, Xpp v6 and Xmm v6 add one operation: a callable that
+remembers its result, `Memoize`. It is not a new record. It is one more value
+of the operation field every stage already writes, with one operand and a
+result, and it takes the next free tag of each catalog:
+
+| Contract | Field | Tag |
+| --- | --- | ---: |
+| Core | primitive | 24 |
+| CorePrep | operation | 27 |
+| Xpp | opcode | next after the type test |
+| Xmm | opcode | next after the type test |
+
+A reader of an earlier version does not know the tag, which is why all four
+versions changed together: a document that holds the operation must not be
+read as one that cannot. The readers check only that the tag is known. That
+the operand is a callable without parameters whose result is `bool` or
+numeric, and that the result has the operand's type, is the rule of each
+stage's verifier, which runs on every decoded module.
+
+### The runtime call
+
+Core v10, CorePrep v8, Xpp v7 and Xmm v7 add one more operation: a call of a
+function of the runtime. Like the remembering operation it is a value of the
+operation field every stage already writes, and it takes the next free tag:
+
+| Contract | Field | Tag |
+| --- | --- | ---: |
+| Core | primitive | 25 |
+| CorePrep | operation | 28 |
+| Xpp | opcode | next after the remembering operation |
+| Xmm | opcode | next after the remembering operation |
+
+The operation has no field of its own. Its first operand is an integer
+literal of type `int`, the identity of the function; the operands after it
+are the arguments. The identities are those of the runtime catalog:
+
+| Identity | Function | Arguments | Result |
+| ---: | --- | --- | --- |
+| 1 | join two strings | `String`, `String` | `String` |
+| 2 | a signed integer as text | signed integer | `String` |
+| 3 | an unsigned integer as text | unsigned integer | `String` |
+| 4 | a Boolean as text | `bool` | `String` |
+| 5 | a character as text | `char` | `String` |
+| 6 | `%d` and `%x` of a signed integer | flags, width, precision, signed integer | `String` |
+| 7 | `%u` and `%x` of an unsigned integer | flags, width, precision, unsigned integer | `String` |
+| 8 | `%f` | flags, width, precision, floating-point number | `String` |
+| 9 | `%s` | flags, width, precision, `String` | `String` |
+| 10 | `%c` | flags, width, precision, `char` | `String` |
+| 11 | the line terminator of the platform | none | `String` |
+| 12 | write to the console | `String`, target | none |
+| 13 | whether two strings are equal | `String`, `String` | `bool` |
+
+Flags, a width, a precision and a target are of type `int`. A signed or an
+unsigned integer argument is of any width up to 64 bits, and a floating-point
+argument of any up to 64. An identity is never reused or renumbered: a new
+function takes the next number, and the document versions change with it,
+because an older reader does not know the function.
+
+The readers check that the tag is known and decode the operands as they
+decode any others. That the first operand names a function, and that the
+arguments and the result are the ones that function has, is the rule of each
+stage's verifier.
+
 ### Version transition
 
 Versions are strict, not feature-negotiated. Core readers accept only version
-8, CorePrep readers accept only version 6, and Xpp/Xmm readers accept only
-version 5. Every older or future version fails at the version field before
+10, CorePrep readers accept only version 8, and Xpp/Xmm readers accept only
+version 7. Every older or future version fails at the version field before
 body decoding. The compiler does not
 guess whether a document happens to contain only fields from an older schema.
 Recompile the owning source or regenerate the intermediate artifact with the
@@ -382,7 +461,7 @@ when written; decoding never recreates a host-width alternative.
 
 ## Xpp document order
 
-An Xpp v5 document contains:
+An Xpp v7 document contains:
 
 1. `VXPP`, version, and zero reserved flags;
 2. qualified module name;
@@ -404,7 +483,7 @@ dedicated symbol field rather than an untyped extra operand.
 
 ## Xmm document order
 
-An Xmm v5 document contains:
+An Xmm v7 document contains:
 
 1. `VXMM`, version, and zero reserved flags;
 2. qualified module name;
@@ -449,11 +528,14 @@ verified again before serialization or forward lowering.
 The version field describes the entire schema. Core v6 and CorePrep v6 added
 project source catalogs and per-function ownership; Core v7 additionally added
 structured `while`, `do/while`, classic `for`, `break`, and `continue` records,
-and Core v8 adds the conditional expression record.
+Core v8 adds the conditional expression record, and Core v9 with CorePrep v7
+adds the remembering operation.
 Xpp/Xmm began independently at
-version 1; their current version 5 retains the explicit ownership operations,
+version 1; version 5 retains the explicit ownership operations,
 template values, and type-test operation, and adds source catalogs and function
-owners. The intermediate versions remain strict historical contracts; their
+owners, version 6 adds the remembering operation, and their current
+version 7, with Core v10 and CorePrep v8, adds the runtime call.
+The intermediate versions remain strict historical contracts; their
 documents are not guessed or accepted by the current readers. Every current
 reader rejects earlier and future versions for its own magic.
 

@@ -2,7 +2,7 @@ cabal-version: 3.12
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 name: visual-linter
-version: 0.1.0
+version: 0.1.1
 synopsis: Compiler-backed static analysis for Visual X#
 description:
     Provides compiler diagnostics, source hygiene checks, safe fixes, and the
@@ -20,7 +20,7 @@ library
     build-depends:
         base >=4.20 && <4.23,
         visual-formatter >=0.1 && <0.2,
-        visual-xsharp-compiler >=0.4.0 && <0.5
+        visual-xsharp-compiler >=0.5.0 && <0.6
     default-language: GHC2024
 
 executable vlint

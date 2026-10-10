@@ -2,7 +2,7 @@ cabal-version: 3.12
 -- SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
 -- SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 name: visual-xsharp-compiler
-version: 0.4.1
+version: 0.5.0
 synopsis: Target-independent Visual X# compiler driver
 license: MPL-2.0
 author: Progmasoft
@@ -22,8 +22,10 @@ library
         visual-xsharp-syntax:Visual.XSharp.Diagnostic.Protocol,
         visual-xsharp-syntax:Visual.XSharp.FloatingLiteral,
         visual-xsharp-syntax:Visual.XSharp.Lexer,
+        visual-xsharp-syntax:Visual.XSharp.NestingLimits,
         visual-xsharp-syntax:Visual.XSharp.NumericLiteral,
         visual-xsharp-syntax:Visual.XSharp.Parser,
+        visual-xsharp-syntax:Visual.XSharp.RuntimeCall,
         visual-xsharp-syntax:Visual.XSharp.SourceText,
         visual-xsharp-syntax:Visual.XSharp.SourceWarnings,
         visual-xsharp-frontend:Visual.XSharp.Frontend,
@@ -133,16 +135,28 @@ test-suite visual-xsharp-compiler-tests
         CoreOptimizerSourceTests
         CoreVerifierTests
         CompileTimeParityTests
+        EnumTests
         FloatingOptimizerTests
         IntegerEvaluationTests
+        InferredReturnTests
         IntegerFlowTests
         AssignmentExpressionTests
         ConditionalExpressionTests
         CoreInterpreter
         IterationTests
         BranchingDiagnosticTests
+        BranchingEvaluationCases
         BranchingOracleTests
         BranchingTests
+        LazyEvaluationTests
+        ConsoleTests
+        EffectTests
+        QualifiedNameTests
+        FormatSweepTests
+        FallThroughTests
+        RuntimeCallTests
+        RuntimeText
+        MemoizeTests
         LoopExpressionTests
         LoopFlowTests
         LoopFlowOracleTests
@@ -151,6 +165,7 @@ test-suite visual-xsharp-compiler-tests
         NumericTests
         PatternTests
         MonomorphizationTests
+        NestingLimitTests
         ParserContractTests
         ScalarWireTests
         ShortCircuitTests

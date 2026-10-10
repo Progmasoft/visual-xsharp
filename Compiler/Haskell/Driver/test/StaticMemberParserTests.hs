@@ -34,7 +34,7 @@ staticMemberParserTests =
     , ("call span includes its closing parenthesis", callSpanIncludesClose)
     , ("selector after a parenthesized receiver parses", parenthesizedReceiver)
     , ("a trailing dot without a member is rejected", trailingDotRejected)
-    , ("a dot without a receiver is rejected", leadingDotRejected)
+    , ("a dot without a receiver is a target-typed member selection", leadingDotIsTargetTyped)
     , ("two dots without a component are rejected", repeatedDotRejected)
     , ("a numeric token cannot be a member name", numericMemberRejected)
     , ("a keyword cannot be a member name", keywordMemberRejected)
@@ -186,8 +186,13 @@ parenthesizedReceiver =
 trailingDotRejected :: Bool
 trailingDotRejected = parseSource "class Program { void Run() { Counter.; return; } }" `isLeft` True
 
-leadingDotRejected :: Bool
-leadingDotRejected = parseSource "class Program { void Run() { .Current(); return; } }" `isLeft` True
+-- `.Member` selects from the enum that the context expects. The parser keeps
+-- the missing receiver as the unit literal, which no source can write; whether
+-- there is an enum to select from is the type checker's question.
+leadingDotIsTargetTyped :: Bool
+leadingDotIsTargetTyped = case firstExpression "class Program { void Run() { .Current(); return; } }" of
+    Just (CallExpression _ (MemberAccessExpression _ (LiteralExpression _ UnitLiteral _) (Identifier "Current") _) [] _) -> True
+    _ -> False
 
 repeatedDotRejected :: Bool
 repeatedDotRejected = parseSource "class Program { void Run() { Counter..Current(); return; } }" `isLeft` True
@@ -345,6 +350,7 @@ firstCallIn :: Expression Identifier () -> Maybe (Expression Identifier ())
 firstCallIn expression = case expression of
     call@CallExpression {} -> Just call
     MemberAccessExpression _ receiver _ _ -> firstCallIn receiver
+    MethodReferenceExpression _ receiver _ _ -> firstCallIn receiver
     UnaryExpression _ _ value _ -> firstCallIn value
     BinaryExpression _ _ left right _ -> firstJust [firstCallIn left, firstCallIn right]
     _ -> Nothing
@@ -408,6 +414,7 @@ selectorPath :: Expression Identifier annotation -> [Identifier]
 selectorPath expression = case expression of
     NameExpression _ name _ -> [name]
     MemberAccessExpression _ receiver member _ -> selectorPath receiver ++ [member]
+    MethodReferenceExpression _ receiver member _ -> selectorPath receiver ++ [member]
     CallExpression _ callee _ _ -> selectorPath callee
     _ -> []
 
@@ -423,6 +430,7 @@ spanOf expression = case expression of
     NameExpression spanValue _ _ -> spanValue
     LiteralExpression spanValue _ _ -> spanValue
     MemberAccessExpression spanValue _ _ _ -> spanValue
+    MethodReferenceExpression spanValue _ _ _ -> spanValue
     CallExpression spanValue _ _ _ -> spanValue
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue

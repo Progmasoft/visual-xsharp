@@ -27,7 +27,7 @@ module Visual.XSharp.Desugarer.Sequencing
     , decideLogical
     ) where
 
-import Visual.XSharp.AST (ResolvedName (..), SymbolId, Type, boolType)
+import Visual.XSharp.AST (ResolvedName (..), SymbolId, Type, boolType, stringType)
 import Visual.XSharp.Core
 import Visual.XSharp.Core.Scalar (isCoreFloatingType)
 
@@ -84,6 +84,7 @@ neutralValue :: Type -> CoreExpression
 neutralValue valueType
     | valueType == boolType = CoreLiteral (CoreBoolean False) valueType
     | isCoreFloatingType valueType = CoreLiteral (CoreFloating "0") valueType
+    | valueType == stringType = CoreLiteral (CoreString "") valueType
     | otherwise = CoreLiteral (CoreInteger 0) valueType
 
 -- | Leave the innermost loop unless the condition holds.

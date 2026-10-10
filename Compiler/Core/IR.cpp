@@ -15,6 +15,49 @@ namespace Visual::XSharp::Core
                && type == other.type && equalValue;
     }
 
+    Expression::~Expression()
+    {
+        if (operands.empty())
+            return;
+        std::vector<Expression> pending = std::move(operands);
+        while (!pending.empty())
+        {
+            // The operands of the expression taken from the list join the
+            // list, so that it is released without any of its own.
+            Expression next = std::move(pending.back());
+            pending.pop_back();
+            for (auto &operand : next.operands)
+                pending.push_back(std::move(operand));
+            next.operands.clear();
+        }
+    }
+
+    Statement::~Statement()
+    {
+        if (trueBranch.empty() && falseBranch.empty() && loopBody.empty()
+            && loopUpdate.empty())
+            return;
+        std::vector<Statement> pending;
+        const auto take = [&pending](std::vector<Statement> &statements) {
+            for (auto &statement : statements)
+                pending.push_back(std::move(statement));
+            statements.clear();
+        };
+        take(trueBranch);
+        take(falseBranch);
+        take(loopBody);
+        take(loopUpdate);
+        while (!pending.empty())
+        {
+            Statement next = std::move(pending.back());
+            pending.pop_back();
+            take(next.trueBranch);
+            take(next.falseBranch);
+            take(next.loopBody);
+            take(next.loopUpdate);
+        }
+    }
+
     auto
     Expression::Variable(SymbolName name, Type valueType) -> Expression
     {

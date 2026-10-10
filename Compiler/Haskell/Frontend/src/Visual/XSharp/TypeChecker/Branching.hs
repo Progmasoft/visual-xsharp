@@ -17,9 +17,12 @@ module Visual.XSharp.TypeChecker.Branching
     , checkMatch
     , guardBlockProblems
     , matchArmsAlwaysAccept
+    , blockCannotComplete
+    , doesNotComplete
     ) where
 
 import Visual.XSharp.AST
+import Visual.XSharp.Completion
 import Visual.XSharp.Diagnostic
 import Visual.XSharp.NumericSemantics
 
@@ -46,11 +49,13 @@ data BranchChecker loops = BranchChecker
     -- ^ Resolve a type written in source.
     , branchLiteral :: SourceSpan -> Maybe Type -> Literal -> (Type, [Diagnostic])
     -- ^ Type a literal in the context of an expected type.
+    , branchEnumMember :: Type -> Identifier -> Maybe Integer
+    -- ^ The value of a member of the enum with the given type.
     , branchHasEffect :: Expression ResolvedName () -> Bool
     -- ^ Whether evaluating an expression can do more than produce a value.
     , branchValueLoops :: loops
-    {- ^ The loop context inside a block used as a value: @break@ and
-    @continue@ cannot leave such a block.
+    {- ^ The loop context inside a block used as a value: the loops around
+    the expression the block belongs to, seen across the edge of the block.
     -}
     }
 
@@ -71,9 +76,21 @@ problem spanValue code message = Diagnostic TypeCheckerStage Error code (Just sp
 {- | Check a block used as a value.
 
 Its value is its final expression, written without a semicolon, and that
-expression is typed in the context that receives the value. A @return@ would
-leave the function from the middle of an expression; that is not supported,
-and neither is leaving the block with @break@ or @continue@.
+expression is typed in the context that receives the value. A block may
+instead leave: with @return@ it leaves the enclosing function, with @break@
+or @continue@ the enclosing loop, under the rules those statements have
+anywhere else. A block that cannot complete normally produces no value and
+needs no final expression, and a block whose final expression never
+completes produces none either. Whether a block completes is a fact about
+its control flow, kept apart from its type: 'doesNotComplete' answers it from
+the typed tree, the annotation of such a block is @void@, and the form that
+holds it takes its type from the blocks that do complete. A block that can
+complete normally must end with its value.
+
+A @return@ in such a block is checked against the declared return type of
+the enclosing function like any other. Where that type is inferred, the
+returns of the body are read from its typed tree afterwards, through
+expressions as well ("Visual.XSharp.TypeChecker.Returns").
 -}
 checkValueBlock ::
     BranchChecker loops ->
@@ -86,28 +103,33 @@ checkValueBlock checker environment expected spanValue (Block statements) =
     let (leading, final) = case reverse statements of
             ExpressionStatement finalSpan value False : before -> (reverse before, Just (finalSpan, value))
             _ -> (statements, Nothing)
-        (typedLeading, inner, returns, leadingProblems) =
+        (typedLeading, inner, _, leadingProblems) =
             branchStatements checker environment (branchValueLoops checker) leading
-        returnProblems =
-            [ problem spanValue "VXT0047" "return inside a block used as a value is not supported"
-            | not (null returns)
-            ]
      in case final of
-            Nothing ->
-                ( BlockExpression spanValue (Block typedLeading) ErrorType
-                , ErrorType
-                , leadingProblems
-                    ++ returnProblems
-                    ++ [problem spanValue "VXT0046" "a block used as a value must end with an expression that has no semicolon"]
-                )
+            Nothing
+                | blockCannotComplete (Block typedLeading) ->
+                    (BlockExpression spanValue (Block typedLeading) voidType, voidType, leadingProblems)
+                | otherwise ->
+                    ( BlockExpression spanValue (Block typedLeading) ErrorType
+                    , ErrorType
+                    , leadingProblems
+                        ++ [ problem
+                                spanValue
+                                "VXT0046"
+                                "a block used as a value must end with an expression that has no semicolon, or leave on every path"
+                           ]
+                    )
             Just (finalSpan, value) ->
                 let (typedValue, valueType, valueProblems) = branchExpression checker inner expected value
+                    -- A final expression that never completes gives the
+                    -- block no value and therefore no type.
+                    blockType = if doesNotComplete typedValue then voidType else valueType
                  in ( BlockExpression
                         spanValue
                         (Block (typedLeading ++ [ExpressionStatement finalSpan typedValue False]))
-                        valueType
+                        blockType
                     , valueType
-                    , leadingProblems ++ returnProblems ++ valueProblems
+                    , leadingProblems ++ valueProblems
                     )
 
 {- | Check a @match@.
@@ -135,15 +157,25 @@ checkMatch checker use environment expected spanValue subjects arms =
                 ++ [ problem
                         (expressionSpanOf typed)
                         "VXT0058"
-                        "match subjects currently support only bool and numeric values"
+                        "match subjects currently support only bool, numeric and enum values"
                    | (typed, valueType) <- zip typedSubjects subjectTypes
                    , valueType /= ErrorType
                    , not (acceptsBooleanContext valueType)
+                   , Nothing <- [enumUnderlyingType valueType]
                    ]
         (typedArms, armTypes, returns, armProblems) = checkArms subjectTypes expected arms
-        (resultType, resultProblems) = case use of
-            MatchStatement _ -> (voidType, [])
-            MatchValue -> matchValueType spanValue armTypes
+        -- An arm that does not complete produces no value; the arms that
+        -- complete give the match its type. When none completes, the match
+        -- never yields a value: it is annotated void, like the statement
+        -- form it is lowered as, and what receives it is not held to a
+        -- type, because that place is never reached.
+        valueTypes = [armType | (arm, armType) <- zip typedArms armTypes, not (doesNotComplete (matchArmBody arm))]
+        noArmCompletes = null valueTypes && not (null typedArms)
+        (annotation, resultType, resultProblems) = case use of
+            MatchStatement _ -> (voidType, voidType, [])
+            MatchValue
+                | noArmCompletes -> (voidType, ErrorType, [])
+                | otherwise -> let (valueType, problems) = matchValueType spanValue valueTypes in (valueType, valueType, problems)
         coverageProblems = case use of
             MatchStatement _ -> []
             MatchValue ->
@@ -153,7 +185,7 @@ checkMatch checker use environment expected spanValue subjects arms =
                     "a match used as an expression must accept every value of its subjects; add a '_' arm"
                 | not (matchArmsAlwaysAccept subjectTypes typedArms)
                 ]
-     in ( MatchExpression spanValue typedSubjects typedArms resultType
+     in ( MatchExpression spanValue typedSubjects typedArms annotation
         , resultType
         , returns
         , subjectProblems ++ armProblems ++ unreachableArmProblems typedArms ++ resultProblems ++ coverageProblems
@@ -195,8 +227,10 @@ checkArm checker use environment expected subjectTypes (MatchArm spanValue patte
         checkedPatterns = zipWith (checkMatchPattern checker) (subjectTypes ++ repeat ErrorType) patterns
         typedPatterns = map fst checkedPatterns
         patternProblems = concatMap snd checkedPatterns
+        -- A pattern binding is an ordinary local: it may be assigned, like
+        -- every binding that is not declared final.
         armEnvironment =
-            [ (resolvedSymbol name, (matchPatternAnnotation patternValue, False))
+            [ (resolvedSymbol name, (matchPatternAnnotation patternValue, True))
             | patternValue <- reverse typedPatterns
             , Just name <- [matchPatternBinding patternValue]
             ]
@@ -212,10 +246,12 @@ checkArm checker use environment expected subjectTypes (MatchArm spanValue patte
                         ]
                  in (Just typed, problems ++ mismatch)
         (typedBody, bodyType, returns, bodyProblems) = case (use, body) of
-            -- The block of a statement arm is an ordinary statement block.
+            -- The block of a statement arm is an ordinary statement block. A
+            -- match in its last position was parsed as the value of the
+            -- block; here nothing takes that value, so it is a statement.
             (MatchStatement loops, BlockExpression blockSpan (Block statements) _) ->
                 let (typedStatements, _, blockReturns, problems) =
-                        branchStatements checker armEnvironment loops statements
+                        branchStatements checker armEnvironment loops (lastMatchAsStatement statements)
                  in (BlockExpression blockSpan (Block typedStatements) voidType, voidType, blockReturns, problems)
             (MatchStatement _, expression) ->
                 let (typed, _, problems) = branchExpression checker armEnvironment Nothing expression
@@ -232,6 +268,12 @@ checkArm checker use environment expected subjectTypes (MatchArm spanValue patte
         , returns
         , arityProblems ++ patternProblems ++ guardProblems ++ bodyProblems
         )
+
+lastMatchAsStatement :: [Statement name annotation] -> [Statement name annotation]
+lastMatchAsStatement statements = case reverse statements of
+    ExpressionStatement spanValue value@MatchExpression {} False : before ->
+        reverse (ExpressionStatement spanValue value True : before)
+    _ -> statements
 
 {- | Check one pattern against the type of its subject.
 
@@ -256,10 +298,23 @@ checkMatchPattern checker subjectType patternValue = case patternValue of
         ( MatchNullPattern spanValue subjectType
         , [problem spanValue "VXT0055" "a null pattern requires a reference subject, which match does not support yet"]
         )
-    MatchCasePattern spanValue name _ ->
-        ( MatchCasePattern spanValue name subjectType
-        , [problem spanValue "VXT0056" "enum case patterns require enum declarations, which are not implemented"]
-        )
+    -- @.Member@ names a member of the subject's enum. It accepts the value
+    -- of that member, so it is kept as the literal pattern of that value:
+    -- two members with one value are then one pattern, and the second of
+    -- them can never be selected.
+    MatchCasePattern spanValue name _ -> case (enumUnderlyingType subjectType, branchEnumMember checker subjectType name) of
+        (Just _, Just value) -> (MatchLiteralPattern spanValue (IntegerLiteral value) subjectType, [])
+        (Just _, Nothing) ->
+            ( MatchCasePattern spanValue name subjectType
+            , [problem spanValue "VXT0064" ("the enum of the subject has no member named " ++ identifierText name)]
+            )
+        (Nothing, _) ->
+            ( MatchCasePattern spanValue name subjectType
+            ,
+                [ problem spanValue "VXT0056" "an enum case pattern requires a subject of an enum type"
+                | subjectType /= ErrorType
+                ]
+            )
     MatchTypePattern spanValue syntax name _ ->
         let (namedTypeValue, syntaxProblems) = branchType checker syntax
             relationProblems =
@@ -287,54 +342,10 @@ matchValueType spanValue armTypes = case filter (/= ErrorType) armTypes of
     first : remaining
         | any (/= first) remaining ->
             (first, [problem spanValue "VXT0050" "the arms of a match used as an expression must have the same type"])
-        | not (acceptsBooleanContext first) ->
-            (first, [problem spanValue "VXT0051" "match expressions currently support only bool and numeric results"])
+        | not (acceptsBooleanContext first)
+        , Nothing <- enumUnderlyingType first ->
+            (first, [problem spanValue "VXT0051" "match expressions currently support only bool, numeric and enum results"])
         | otherwise -> (first, [])
-
--- | Whether a pattern accepts every value of its subject.
-acceptsEveryValue :: MatchPattern name annotation -> Bool
-acceptsEveryValue patternValue = case patternValue of
-    MatchWildcardPattern {} -> True
-    MatchTypePattern {} -> True
-    _ -> False
-
-{- | Whether some arm is certain to accept, whatever the subjects are.
-
-That is the case when an arm without a guard has only patterns that accept
-every value. It is also the case when every subject is a @bool@ and the arms
-without guards accept each combination of @true@ and @false@ between them;
-the combinations are enumerated, which is bounded by 'maximumBoolSubjects'.
-Nothing else is recognized: a guard may be false, and the literals of a wider
-type are never listed in full.
--}
-matchArmsAlwaysAccept :: [Type] -> [MatchArm name annotation] -> Bool
-matchArmsAlwaysAccept subjectTypes arms = any catchAll unguarded || coversBooleans
-    where
-        unguarded = filter isUnguarded arms
-        catchAll arm = all acceptsEveryValue (matchArmPatterns arm)
-        coversBooleans =
-            not (null subjectTypes)
-                && length subjectTypes <= maximumBoolSubjects
-                && all (== boolType) subjectTypes
-                && all (\values -> any (`acceptsBooleans` values) unguarded) (combinations (length subjectTypes))
-        combinations :: Int -> [[Bool]]
-        combinations count = sequence (replicate count [True, False])
-
-{- | The most @bool@ subjects whose combinations are enumerated to decide
-whether a match accepts every value. A match with more is complete only
-through a catch-all arm; the bound keeps the check linear in practice.
--}
-maximumBoolSubjects :: Int
-maximumBoolSubjects = 8
-
--- | Whether an arm's patterns accept the given values of @bool@ subjects.
-acceptsBooleans :: MatchArm name annotation -> [Bool] -> Bool
-acceptsBooleans arm values =
-    length (matchArmPatterns arm) == length values && and (zipWith accepts (matchArmPatterns arm) values)
-    where
-        accepts patternValue value = case patternValue of
-            MatchLiteralPattern _ (BooleanLiteral literal) _ -> literal == value
-            _ -> acceptsEveryValue patternValue
 
 {- | Arms that can never be selected because an earlier arm without a guard
 accepts everything they accept: pattern by pattern, the earlier one accepts
@@ -360,42 +371,27 @@ unreachableArmProblems = go []
             (MatchLiteralPattern _ left _, MatchLiteralPattern _ right _) -> left == right
             _ -> acceptsEveryValue first
 
-isUnguarded :: MatchArm name annotation -> Bool
-isUnguarded arm = case matchArmGuard arm of
-    Nothing -> True
-    Just _ -> False
-
 {- | Problems of the else block of a @guard@.
 
 The statements after a guard rely on its condition, so the block must not
-complete normally: its last statement returns, leaves a loop, continues one,
-or is an @if@ whose two branches both do, or a nested block that does.
+complete normally on any path. That is decided from its control flow by
+'blockCannotComplete', not from the spelling of its last statement.
 -}
-guardBlockProblems :: SourceSpan -> Block name annotation -> [Diagnostic]
+guardBlockProblems :: SourceSpan -> Block name Type -> [Diagnostic]
 guardBlockProblems spanValue block =
     [ problem
         spanValue
         "VXT0061"
-        "the else block of a guard must end by leaving the enclosing scope with return, break, or continue"
-    | not (blockLeaves block)
+        "the else block of a guard can complete normally; every path through it must leave the enclosing scope"
+    | not (blockCannotComplete block)
     ]
-    where
-        blockLeaves (Block statements) = case reverse statements of
-            final : _ -> statementLeaves final
-            [] -> False
-        statementLeaves statement = case statement of
-            ReturnStatement {} -> True
-            BreakStatement {} -> True
-            ContinueStatement {} -> True
-            IfStatement _ _ whenTrue (Just whenFalse) -> blockLeaves whenTrue && blockLeaves whenFalse
-            BlockStatement _ nested -> blockLeaves nested
-            _ -> False
 
 expressionSpanOf :: Expression name annotation -> SourceSpan
 expressionSpanOf expression = case expression of
     NameExpression spanValue _ _ -> spanValue
     LiteralExpression spanValue _ _ -> spanValue
     MemberAccessExpression spanValue _ _ _ -> spanValue
+    MethodReferenceExpression spanValue _ _ _ -> spanValue
     CallExpression spanValue _ _ _ -> spanValue
     UnaryExpression spanValue _ _ _ -> spanValue
     BinaryExpression spanValue _ _ _ _ -> spanValue

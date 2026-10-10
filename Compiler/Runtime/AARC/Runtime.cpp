@@ -67,6 +67,11 @@ namespace Visual::XSharp::Runtime::Aarc
             return false;
         }
 
+        // Allocations made and not yet reclaimed. The count orders nothing:
+        // it is read only where no allocation is in flight.
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+        std::atomic<std::uint64_t> liveAllocations{ 0U };
+
         void
         ReleaseControl(ObjectHeader *header) noexcept
         {
@@ -74,6 +79,7 @@ namespace Visual::XSharp::Runtime::Aarc
                 || header->weakCount.fetch_sub(1U, std::memory_order_acq_rel)
                        != 1U)
                 return;
+            liveAllocations.fetch_sub(1U, std::memory_order_relaxed);
 
             // The acquire side of the final decrement observes the destructor
             // and all preceding handle releases before reclaiming the combined
@@ -105,6 +111,12 @@ namespace Visual::XSharp::Runtime::Aarc
     } // namespace
 
     auto
+    LiveAllocations() noexcept -> std::uint64_t
+    {
+        return liveAllocations.load(std::memory_order_relaxed);
+    }
+
+    auto
     Allocate(const TypeMetadata &metadata) noexcept -> void *
     {
         if (metadata.abiVersion != kAbiVersion || metadata.instanceSize == 0U
@@ -128,6 +140,7 @@ namespace Visual::XSharp::Runtime::Aarc
         auto *header = new (allocation) ObjectHeader{};
         header->metadata = &metadata;
         header->allocation = allocation;
+        liveAllocations.fetch_add(1U, std::memory_order_relaxed);
 
         // Advance to the next multiple of the alignment without turning an
         // integer back into a pointer, which would discard provenance.
@@ -239,6 +252,59 @@ namespace Visual::XSharp::Runtime::Aarc
                && header->metadata != nullptr
                && header->metadata->typeIdentity == typeIdentity;
     }
+
+    auto
+    ViewString(const void *string) noexcept -> StringScalars
+    {
+        if (!IsExactType(string, kStringMetadata.typeIdentity))
+            return {};
+        const auto *object = static_cast<const StringObject *>(string);
+        return { object->scalars, static_cast<std::size_t>(object->count) };
+    }
+
+    auto
+    MakeString(const char32_t *scalars, const std::size_t count) noexcept
+        -> void *
+    {
+        return MakeStringFrom(scalars, count);
+    }
+
+    // The C side of the ABI spells a scalar `uint32_t` and this side
+    // `char32_t`. The two have one representation and are still two types,
+    // so the scalars are copied through whichever was given.
+    template<typename Scalar>
+    auto
+    MakeStringFrom(const Scalar *scalars, const std::size_t count) noexcept
+        -> void *
+    {
+        if ((scalars == nullptr && count != 0U)
+            || count == std::numeric_limits<std::size_t>::max())
+            return nullptr;
+        for (std::size_t index = 0; index < count; ++index)
+            if (scalars[index] > 0x10ffffU
+                || (scalars[index] >= 0xd800U && scalars[index] <= 0xdfffU))
+                return nullptr;
+        auto *object = static_cast<StringObject *>(Allocate(kStringMetadata));
+        if (object == nullptr)
+            return nullptr;
+        object->scalars = new (std::nothrow) char32_t[count + 1U];
+        if (object->scalars == nullptr)
+        {
+            ReleaseStrong(object);
+            return nullptr;
+        }
+        object->count = count;
+        for (std::size_t index = 0; index < count; ++index)
+            object->scalars[index] = static_cast<char32_t>(scalars[index]);
+        object->scalars[count] = U'\0';
+        return object;
+    }
+
+    template auto
+    MakeStringFrom<char32_t>(const char32_t *, std::size_t) noexcept -> void *;
+    template auto
+    MakeStringFrom<std::uint32_t>(const std::uint32_t *, std::size_t) noexcept
+        -> void *;
 } // namespace Visual::XSharp::Runtime::Aarc
 
 extern "C"
@@ -343,28 +409,7 @@ extern "C"
     vxs_aarc_string_literal(const std::uint32_t *scalars,
                             std::size_t count) noexcept -> void *
     {
-        using namespace Visual::XSharp::Runtime::Aarc;
-        if ((scalars == nullptr && count != 0U)
-            || count == std::numeric_limits<std::size_t>::max())
-            return nullptr;
-        for (std::size_t index = 0; index < count; ++index)
-            if (scalars[index] > 0x10ffffU
-                || (scalars[index] >= 0xd800U && scalars[index] <= 0xdfffU))
-                return nullptr;
-        auto *object = static_cast<StringObject *>(Allocate(kStringMetadata));
-        if (object == nullptr)
-            return nullptr;
-        object->scalars = new (std::nothrow) char32_t[count + 1U];
-        if (object->scalars == nullptr)
-        {
-            ReleaseStrong(object);
-            return nullptr;
-        }
-        object->count = count;
-        for (std::size_t index = 0; index < count; ++index)
-            object->scalars[index] = static_cast<char32_t>(scalars[index]);
-        object->scalars[count] = U'\0';
-        return object;
+        return Visual::XSharp::Runtime::Aarc::MakeStringFrom(scalars, count);
     }
 
     auto

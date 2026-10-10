@@ -113,12 +113,37 @@ positionTests =
         , reportedAt "VXT0046" (3, 19) ["int r = if (flag) { } else { 2 };", "return r;"]
         )
     ,
-        ( "a return in a value block is reported at the block"
-        , reportedAt "VXT0047" (3, 19) ["int r = if (flag) { return 1; 2 } else { 3 };", "return r;"]
+        ( "a return of the wrong type in a value block is reported at the return"
+        , reportedAt "VXT0005" (3, 21) ["int r = if (flag) { return true; } else { 3 };", "return r;"]
         )
     ,
-        ( "a break out of a value block is reported at the break"
-        , reportedAt "VXT0059" (4, 21) ["while (true) {", "int r = if (flag) { break; 1 } else { 2 };", "}", "return 0;"]
+        ( "a break without a loop in a value block is reported at the break"
+        , reportedAt "VXT0025" (3, 21) ["int r = if (flag) { break; } else { 2 };", "return r;"]
+        )
+    ,
+        ( "a return of the wrong type in a value block of a loop expression is reported at the return"
+        , reportedAt
+            "VXT0005"
+            (4, 21)
+            ["int r = while (true) {", "int q = if (flag) { return true; } else { 2 };", "break q;", "};", "return r;"]
+        )
+    ,
+        ( "a break without a value out of a loop expression is reported at the break"
+        , reportedAt
+            "VXT0040"
+            (4, 21)
+            ["int r = while (true) {", "int q = if (flag) { break; } else { 2 };", "break q;", "};", "return r;"]
+        )
+    ,
+        ( "a continue inside a callable in a loop is reported at the continue"
+        , reportedAt
+            "VXT0027"
+            (4, 37)
+            ["while (flag) {", "auto f = \\(int v) -> { if (v > 0) { continue; } return v; };", "}", "return 0;"]
+        )
+    ,
+        ( "a value-carrying break in the update of a loop statement is reported at the break"
+        , reportedAt "VXT0026" (3, 41) ["for (int i = 0; i < 3; i += if (flag) { break 1; } else { 1 }) { }", "return 0;"]
         )
     ,
         ( "a guard block that does not leave is reported at the guard"
@@ -145,7 +170,7 @@ specimen =
         , "guard (left >= 0) else { return 0; }"
         , "{ int scoped = left; }"
         , "int kind = match (left), (flag) { (0), (_) -> 10, (1), (true) -> 20,"
-        , "(int low), (_) if low < 5 -> { int doubled = low * 2; doubled }, (_), (_) -> 30 };"
+        , "(int low), (_) if low < 5 -> { int doubled = low * 2; doubled } (_), (_) -> 30 };"
         , "int total = 0;"
         , "for (int index = 0; index < right; index++) {"
         , "match (index % 3) { 0 -> { continue; }, 1 -> total += 10, _ -> { total += index; } }"

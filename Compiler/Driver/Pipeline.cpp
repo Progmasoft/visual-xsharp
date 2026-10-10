@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include "Visual/XSharp/Pipeline.hpp"
+#include "Visual/XSharp/Xpp/OwnershipPlacement.hpp"
 
 namespace
 {
@@ -85,10 +86,11 @@ namespace visual_xsharp
         auto lowered_xpp = xpp::lower(*result.core_prep);
         // Optimization toggles select identity-vs-optimized forms; they never
         // skip a stage. Xmm therefore receives the same typed Xpp contract in
-        // debug and release modes.
-        result.xpp = options.optimize_xpp
-                         ? xpp::optimize(std::move(lowered_xpp))
-                         : std::move(lowered_xpp);
+        // debug and release modes. Ownership is placed last, on the form
+        // that is kept: it is part of that contract in either mode.
+        result.xpp = ::Visual::XSharp::Xpp::PlaceOwnership(
+            options.optimize_xpp ? xpp::optimize(std::move(lowered_xpp))
+                                 : std::move(lowered_xpp));
         ContinueFromXpp(result, options);
         return result;
     }
@@ -127,9 +129,12 @@ namespace Visual::XSharp::Pipeline
             return result;
 
         auto loweredXpp = ::visual_xsharp::xpp::lower(*result.core_prep);
-        result.xpp = options.optimize_xpp
-                         ? ::visual_xsharp::xpp::optimize(std::move(loweredXpp))
-                         : std::move(loweredXpp);
+        // Ownership is placed once, here: an Xpp artifact read from disk
+        // already carries its retains and releases.
+        result.xpp = Xpp::PlaceOwnership(
+            options.optimize_xpp
+                ? ::visual_xsharp::xpp::optimize(std::move(loweredXpp))
+                : std::move(loweredXpp));
         ContinueFromXpp(result, options);
         return result;
     }

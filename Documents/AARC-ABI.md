@@ -115,7 +115,7 @@ reference.
 
 ## Xpp, Xmm, and LLVM
 
-Xpp and Xmm wire version 5 preserve `RetainStrong`, `ReleaseStrong`, `MakeWeak`,
+Xpp and Xmm wire version 7 preserve `RetainStrong`, `ReleaseStrong`, `MakeWeak`,
 `LockWeak`, `ReleaseWeak`, `MakeUnowned`, `LoadUnowned`, and `ReleaseUnowned`.
 Producing operations preserve the operand's language type. Release operations
 have no destination and carry `Unit` as the result marker. Both stage verifiers
@@ -130,17 +130,65 @@ for the duration of a call because the closure keeps them alive. Weak and
 unowned captures are upgraded to temporary strong references and released after
 the lifted call. The generated destructor balances every owning/control slot.
 
+`Memoize` creates an object of the same kind for a callable that remembers
+its result. Its payload is an invoke-thunk pointer, a byte that says whether
+the result is known, the result, and the computation:
+
+```text
+{ ptr invoke, i8 known, T result, ptr computation }
+```
+
+The thunk has the signature of a closure without parameters, so the object is
+called exactly as a closure is and a caller cannot tell the two apart. It
+returns the result when the byte is set; otherwise it calls the computation
+through that object's own thunk, stores the result, sets the byte and returns.
+The byte is set after the computation returns. The object takes a strong reference of its own to the
+computation when it is created, and its destructor releases it. The result
+slot holds a `bool` or a number and owns nothing.
+
 String constants keep `i32` Unicode-scalar storage and call
 `vxs_aarc_string_literal`, which creates a `System.String` AARC object without
 introducing UTF-8 storage.
 
 ## Current boundary
 
-This slice does not yet insert whole-program retain/release placement for every
-source binding, package the runtime into every final native link, or collect
-cycles. It establishes the checked IR vocabulary, concrete object ABI, runtime
-primitives, String and first-class closure invocation lowering, and regression
-coverage that those later passes target. The future concurrent Bacon–Rajan plus
+Retains and releases are placed for every AARC value of a function by the Xpp
+ownership placement pass, described in [Ownership flow](OWNERSHIP-FLOW.md).
+This slice does not collect cycles. A native executable is linked with the
+runtime library; see "Native executables" below.
+`Visual::XSharp::Runtime::Aarc::LiveAllocations` counts the
+allocations whose storage has not been reclaimed; it is a C++ entry point for
+tests and is not part of the C ABI. The future concurrent Bacon–Rajan plus
 trial-deletion collector remains opt-in with `-Cycle-Collector true`. The
 ordinary acyclic path must not pay its cost when disabled, and no trial begins
 when no candidate exists or the program has already broken the candidate cycle.
+
+## Native executables
+
+A native executable is linked without a C runtime. What its code calls of the
+runtime, it finds in `vxs-runtime.lib`, which the compiler links from the
+directory of its own executable: the ownership runtime of this document and
+the text and console runtime, as one object.
+
+That object is built from the sources a host process links,
+`Compiler/Runtime/AARC` and `Compiler/Runtime/Text`, in one translation unit
+with the few things those sources take from a C runtime when there is one:
+the non-throwing allocation functions, over the heap of the process, the
+memory functions a compiler may call for a loop or an initialization, and the
+tag object of the non-throwing forms. It is compiled without stack cookies
+and without instrumentation of any kind, in a sanitizer build of the compiler
+as well, because the programs it is linked into are not sanitizer builds.
+
+An executable therefore has the whole ownership ABI: strong, weak and unowned
+references, strings and type tests, counted with the same atomic operations
+as in a host. It imports seven functions of kernel32 and nothing else. The
+linker makes the import library for them from a list of names, so that
+linking a program needs neither the libraries of a C runtime nor those of a
+Windows SDK.
+
+A program that calls nothing of the runtime takes nothing from the library.
+When the library is not installed beside the compiler, such a program still
+links, and any other fails with a diagnostic that names the library.
+
+The native linker is the Windows one; executables on Linux and macOS are
+pending, and with them the same library for those systems.

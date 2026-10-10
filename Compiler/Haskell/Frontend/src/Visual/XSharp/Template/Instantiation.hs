@@ -85,6 +85,7 @@ instantiateMember binding declaration = case declaration of
         -- outer binding blindly would capture same-spelled inner parameters.
         -- Nested instantiation will be selected independently by the planner.
         pure declaration
+    EnumDeclaration {} -> pure declaration
 
 -- | Instantiate one parameter annotation while preserving its source syntax.
 instantiateParameter ::
@@ -179,6 +180,10 @@ instantiateExpression binding expression = case expression of
         closedReceiver <- instantiateExpression binding receiver
         closedAnnotation <- instantiateType binding annotation
         pure (MemberAccessExpression spanValue closedReceiver member closedAnnotation)
+    MethodReferenceExpression spanValue receiver member annotation -> do
+        closedReceiver <- instantiateExpression binding receiver
+        closedAnnotation <- instantiateType binding annotation
+        pure (MethodReferenceExpression spanValue closedReceiver member closedAnnotation)
     CallExpression spanValue callee arguments annotation -> do
         closedCallee <- instantiateExpression binding callee
         closedArguments <- traverse (instantiateExpression binding) arguments

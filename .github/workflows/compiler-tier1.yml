@@ -87,6 +87,7 @@ jobs:
           go run ./helpers/cmd/verify-helpers
           go run ./helpers/cmd/verify-examples
           go run ./helpers/cmd/verify-benchmarks
+          go run ./helpers/cmd/execution-cases check
 
       - name: Verify project C++ formatting
         shell: pwsh
@@ -198,6 +199,7 @@ jobs:
           go run ./helpers/cmd/verify-helpers
           go run ./helpers/cmd/verify-examples
           go run ./helpers/cmd/verify-benchmarks
+          go run ./helpers/cmd/execution-cases check
 
       - name: Test native compiler
         shell: bash

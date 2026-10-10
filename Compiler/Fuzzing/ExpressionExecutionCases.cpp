@@ -2,13 +2,10 @@
 // SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 #include <array>
-#include <cstdint>
-#include <llvm/Support/raw_ostream.h>
-#include <string>
 #include <string_view>
 
+#include "ExecutionCases.hpp"
 #include "ExpressionExecutionCases.hpp"
-#include "SourceFuzz.hpp"
 
 // Executable regressions for expressions that store into locals:
 // assignments and increments used as values, and loops used as expressions.
@@ -25,17 +22,7 @@ namespace Visual::XSharp::Fuzzing
 {
     namespace
     {
-        struct Case final
-        {
-            bool flag;
-            bool other;
-            int left;
-            int right;
-            std::int64_t expected;
-            std::string_view body;
-        };
-
-        constexpr std::array<Case, 122U> kCases{ {
+        constexpr std::array<ExecutionCase, 122U> kCases{ {
             { false,
               false,
               3,
@@ -777,48 +764,21 @@ namespace Visual::XSharp::Fuzzing
               "0;" },
         } };
 
-        [[nodiscard]] auto
-        Truth(bool value) -> std::string
-        {
-            // `Id` is recursive, so the optimizer cannot fold the arguments
-            // away and the body really executes on run-time values.
-            return value ? "Id(1) > 0" : "Id(0) > 0";
-        }
-
-        [[nodiscard]] auto
-        Program(const Case &entry) -> std::string
-        {
-            return "namespace Fuzz;\n"
-                   "class Program {\n"
-                   "    public static int Id(_ int n) { return n > 0 ? 1 + "
-                   "Id(n - 1) : 0; }\n"
-                   "    public static int Next() { return 7; }\n"
-                   "    public static int Twice(_ int value) { return value + "
-                   "value; }\n"
-                   "    public static int Minus(_ int first, _ int second) { "
-                   "return first - second; }\n"
-                   "    public static int Pick(_ int first, _ int second, _ "
-                   "int "
-                   "third) { return first * 100 + second * 10 + third; }\n"
-                   "    public static void Touch() { }\n"
-                   "    public static int Run(_ bool flag, _ bool other, _ int "
-                   "left, _ int right) {\n        "
-                   + std::string(entry.body)
-                   + "\n    }\n"
-                     "    public static int Evaluate() { return Run("
-                   + Truth(entry.flag) + ", " + Truth(entry.other) + ", Id("
-                   + std::to_string(entry.left) + "), Id("
-                   + std::to_string(entry.right) + ")); }\n}\n";
-        }
+        // The methods a body may call besides `Run` itself.
+        constexpr std::string_view kHelpers
+            = "    public static int Next() { return 7; }\n"
+              "    public static int Twice(_ int value) { return value + "
+              "value; }\n"
+              "    public static int Minus(_ int first, _ int second) { "
+              "return first - second; }\n"
+              "    public static int Pick(_ int first, _ int second, _ int "
+              "third) { return first * 100 + second * 10 + third; }\n"
+              "    public static void Touch() { }\n";
     } // namespace
 
     void
     ExerciseExpressionCases()
     {
-        for (const auto &entry : kCases)
-        {
-            llvm::errs() << "Expression execution: " << entry.body << '\n';
-            ExerciseExpectedValue(Program(entry), entry.expected);
-        }
+        ExerciseExecutionCases("Expression execution", kCases, kHelpers);
     }
 } // namespace Visual::XSharp::Fuzzing

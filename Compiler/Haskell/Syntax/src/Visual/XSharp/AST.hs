@@ -13,6 +13,10 @@ module Visual.XSharp.AST
     , SourceSpan (..)
     , SyntaxTree (..)
     , Declaration (..)
+    , EnumCase (..)
+    , enumType
+    , enumUnderlyingType
+    , enumMemberValues
     , TemplateParameter (..)
     , TemplateParameterKind (..)
     , TemplateParameterShape (..)
@@ -30,6 +34,8 @@ module Visual.XSharp.AST
     , matchPatternSpan
     , matchPatternAnnotation
     , matchPatternBinding
+    , statementSourceSpan
+    , expressionSourceSpan
     , traverseMatchArm
     , traverseMatchPattern
     , CallableBody (..)
@@ -147,6 +153,31 @@ data Declaration name annotation
         , declarationTemplateParameters :: [TemplateParameter name annotation]
         , typeMembers :: [Declaration name annotation]
         }
+    | {- | A classic enum: a value type whose members are named integers.
+      The underlying type is absent when the source does not write one.
+      -}
+      EnumDeclaration
+        { declarationSpan :: SourceSpan
+        , declarationName :: name
+        , declarationAnnotation :: annotation
+        , enumUnderlying :: Maybe TypeSyntax
+        , enumCases :: [EnumCase]
+        }
+    deriving stock (Eq, Ord, Read, Show)
+
+{- | A member of a classic enum. A member without a written value takes the
+value after that of the member before it, and the first takes zero.
+
+A written value is a constant integer expression. It is kept as it was
+parsed in every stage: the names in it are earlier members of the same enum,
+which are named by their spelling and take no symbols, so no later stage has
+anything to add to it. The type checker computes its value.
+-}
+data EnumCase = EnumCase
+    { enumCaseSpan :: SourceSpan
+    , enumCaseName :: Identifier
+    , enumCaseValue :: Maybe (Expression Identifier ())
+    }
     deriving stock (Eq, Ord, Read, Show)
 
 {- | Generic parameter with its declaration span, category, pack flag, and default.
@@ -291,6 +322,10 @@ data Expression name annotation
       -- the checker knows whether the receiver denotes a type or a value. The
       -- current executable subset accepts only type-qualified method calls.
       MemberAccessExpression SourceSpan (Expression name annotation) Identifier annotation
+    | -- @Receiver::Member@: the method of that name as a callable value,
+      -- without a call of it. The checker replaces a reference it can
+      -- resolve with the name of the method, so no later stage sees one.
+      MethodReferenceExpression SourceSpan (Expression name annotation) Identifier annotation
     | CallExpression SourceSpan (Expression name annotation) [Expression name annotation] annotation
     | UnaryExpression SourceSpan UnaryOperator (Expression name annotation) annotation
     | BinaryExpression SourceSpan BinaryOperator (Expression name annotation) (Expression name annotation) annotation
@@ -376,6 +411,46 @@ data MatchPattern name annotation
     | -- | @.Case@ names an enum case of the subject's type.
       MatchCasePattern SourceSpan Identifier annotation
     deriving stock (Eq, Ord, Read, Show)
+
+-- | Source range of a statement.
+statementSourceSpan :: Statement name annotation -> SourceSpan
+statementSourceSpan statement = case statement of
+    BindingStatement value _ _ _ _ _ -> value
+    AssignmentStatement value _ _ _ -> value
+    ReturnStatement value _ -> value
+    IfStatement value _ _ _ -> value
+    WhileStatement value _ _ -> value
+    DoWhileStatement value _ _ -> value
+    ForStatement value _ _ _ _ -> value
+    ForEachStatement value _ _ _ _ _ _ -> value
+    IncrementStatement value _ _ -> value
+    CompoundAssignmentStatement value _ _ _ _ -> value
+    DiscardStatement value _ -> value
+    BreakStatement value _ -> value
+    ContinueStatement value -> value
+    GuardStatement value _ _ -> value
+    BlockStatement value _ -> value
+    ExpressionStatement value _ _ -> value
+
+-- | Source range of an expression.
+expressionSourceSpan :: Expression name annotation -> SourceSpan
+expressionSourceSpan expression = case expression of
+    NameExpression value _ _ -> value
+    LiteralExpression value _ _ -> value
+    MemberAccessExpression value _ _ _ -> value
+    MethodReferenceExpression value _ _ _ -> value
+    CallExpression value _ _ _ -> value
+    UnaryExpression value _ _ _ -> value
+    BinaryExpression value _ _ _ _ -> value
+    IsPatternExpression value _ _ _ -> value
+    ConditionalExpression value _ _ _ _ -> value
+    CoalesceExpression value _ _ _ -> value
+    AssignmentExpression value _ _ _ _ -> value
+    IncrementExpression value _ _ _ -> value
+    LoopExpression value _ _ -> value
+    BlockExpression value _ _ -> value
+    MatchExpression value _ _ _ -> value
+    CallableExpression value _ _ _ _ _ -> value
 
 -- | The guard, when present, and the body of an arm, in evaluation order.
 matchArmExpressions :: MatchArm name annotation -> [Expression name annotation]
@@ -566,6 +641,35 @@ namedType value = NamedType (QualifiedName [Identifier value]) []
 -- | Canonical built-in Boolean type.
 boolType :: Type
 boolType = namedType "bool"
+
+{- | The type of a classic enum.
+
+An enum is a type of its own, and it is a value of its underlying integer
+type with a closed set of values. Both facts are needed after type checking:
+the lowering stores an enum as its underlying type, and a @match@ over an
+enum is complete when its arms name every value. The type therefore carries
+them: its name under the reserved root @enum@, which no source can spell
+because @enum@ is a keyword, then the underlying type, then the distinct
+values of its members in ascending order.
+-}
+enumType :: Identifier -> Type -> [Integer] -> Type
+enumType name underlying values =
+    NamedType
+        (QualifiedName [Identifier "enum", name])
+        (TypeTemplateArgument underlying : map (ValueTemplateArgument . IntegerTemplateValue) values)
+
+-- | The underlying integer type of an enum type, and nothing for any other type.
+enumUnderlyingType :: Type -> Maybe Type
+enumUnderlyingType valueType = case valueType of
+    NamedType (QualifiedName [Identifier "enum", _]) (TypeTemplateArgument underlying : _) -> Just underlying
+    _ -> Nothing
+
+-- | The distinct member values of an enum type, and nothing for any other type.
+enumMemberValues :: Type -> Maybe [Integer]
+enumMemberValues valueType = case valueType of
+    NamedType (QualifiedName [Identifier "enum", _]) (TypeTemplateArgument _ : values) ->
+        Just [value | ValueTemplateArgument (IntegerTemplateValue value) <- values]
+    _ -> Nothing
 
 -- | Canonical built-in signed integer type used by the current frontend.
 intType :: Type

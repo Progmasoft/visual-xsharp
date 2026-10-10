@@ -16,7 +16,9 @@ cc_library(
         "Scalar.cpp",
         "Template.cpp",
         "Verifier.cpp",
-        "Wire.cpp",
+        "Wire/Decode.cpp",
+        "Wire/Encode.cpp",
+        "Wire/Magic.hpp",
     ],
     deps = [
         "//Compiler/Artifact:source_path",

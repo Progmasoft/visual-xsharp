@@ -4,8 +4,13 @@ package(default_visibility = ["//visibility:private"])
 
 cc_binary(
     name = "closure_pipeline_tests",
-    srcs = ["ClosurePipelineTests.cpp"],
+    srcs = [
+        "ClosurePipelineTests.cpp",
+        "MemoizePipelineTests.cpp",
+        "RuntimeCallPipelineTests.cpp",
+    ],
     deps = [
+        "//Compiler/Backend/LLVM:llvm_backend",
         "//Compiler/Codegen/Xmm:xmm",
         "//Compiler/Codegen/Xpp:xpp",
         "//Compiler/Core:core",

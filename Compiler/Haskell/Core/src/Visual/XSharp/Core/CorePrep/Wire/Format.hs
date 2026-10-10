@@ -26,7 +26,7 @@ newtype WireVersion
 
 -- | Schema version emitted by current CorePrep encoders.
 currentWireVersion :: WireVersion
-currentWireVersion = WireVersion 6
+currentWireVersion = WireVersion 8
 
 -- | Four-byte ASCII identifier at the start of each CorePrep document.
 wireMagic :: [Word8]

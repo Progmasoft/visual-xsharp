@@ -92,12 +92,19 @@ func watchedCommandWithin(seconds int, name string, arguments []string) (*exec.C
 // an ordinary build and about 78 seconds under AddressSanitizer and
 // UndefinedBehaviorSanitizer on a hosted Windows runner. The former bound of 90
 // seconds left that run 12 seconds of headroom, and a slower machine exceeded it
-// with every case passing.
+// with every case passing. The execution tables are a program of their own,
+// source_execution_smoke: with them, source_fuzz_smoke ran 221 seconds in the
+// fuzzing configuration on a developer machine. Apart, each ran 77 to 110
+// seconds there, so the bound did not have to grow with the tables. The tables
+// of single features are source_feature_smoke for the same reason, and so are
+// the expression and leaving tables, source_expression_smoke: once arguments
+// were passed by need, the programs of the three tables together ran 344
+// seconds under the sanitizers there.
 const smokeProcessSeconds = 240
 
 func fuzzProcessSeconds(name string, arguments []string) int {
 	binary := strings.TrimSuffix(filepath.Base(name), ".exe")
-	if binary == "source_fuzz_smoke" || binary == "wire_fuzz_smoke" {
+	if binary == "source_fuzz_smoke" || binary == "source_execution_smoke" || binary == "source_expression_smoke" || binary == "source_feature_smoke" || binary == "source_console_smoke" || binary == "wire_fuzz_smoke" {
 		return smokeProcessSeconds
 	}
 	if binary == "frontend-fuzz" && len(arguments) >= 2 {

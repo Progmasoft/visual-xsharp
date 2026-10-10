@@ -1,0 +1,317 @@
+# SPDX-FileCopyrightText: 2026 Progmasoft <support@progmasoft.com>
+# SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
+#
+# Expressions that leave instead of yielding a value: `return`, `break` and
+# `continue` out of blocks used as values, in loop bodies, loop headers and
+# loop expressions.
+#
+# This file is the source of the cases. `go -C helpers run ./cmd/execution-cases
+# generate` writes them into the Haskell and the C++ test tables, and
+# `check` fails when a table is not what this file generates.
+#
+# A case is the body of `int Run(bool flag, bool other, int left, int right)`
+# and its runs. The expected value of every run is written by hand from the
+# language rules, never taken from a compiler.
+#
+#     body: <one line of source>
+#     run: plain <left> <right> -> <expected>
+#     run: flags <flag> <other> <left> <right> -> <expected>
+#
+# Lines that start with `#` before a body are its comment.
+
+# An expression every branch of which leaves never yields a value.
+body: int r = if (flag) { return 1; } else { return 2; }; return r + 50;
+run: flags true false 0 0 -> 1
+run: plain 0 0 -> 2
+
+body: int r = match (left) { 0 -> { return 10; }, _ -> { return 20; } }; return r + 1;
+run: plain 0 0 -> 10
+run: plain 5 0 -> 20
+
+body: return Twice(if (flag) { return 7; } else { return 9; });
+run: flags true false 0 0 -> 7
+run: plain 0 0 -> 9
+
+body: int r = 1 + (if (flag) { return 1; } else { return 2; }); return r;
+run: flags true false 0 0 -> 1
+run: plain 0 0 -> 2
+
+body: int t = 0; int i = 0; while (i < 5) { i += 1; int q = if (i > left) { break; } else { continue; }; t += q; } return t * 10 + i;
+run: plain 2 0 -> 3
+run: plain 9 0 -> 5
+
+body: bool b = flag && (if (left > 0) { return 1; } else { return 2; }); return b ? 3 : 4;
+run: flags true false 5 0 -> 1
+run: flags true false 0 0 -> 2
+run: plain 5 0 -> 4
+
+body: bool b = flag || (if (left > 0) { return 1; } else { return 2; }); return b ? 3 : 4;
+run: flags true false 5 0 -> 3
+run: plain 5 0 -> 1
+run: plain 0 0 -> 2
+
+body: int n = left ?: (if (flag) { return 100; } else { return 200; }); return n;
+run: plain 5 0 -> 5
+run: flags true false 0 0 -> 100
+run: plain 0 0 -> 200
+
+body: int r = if (left > 0) { 5 } else { if (flag) { return 1; } else { return 2; } }; return r;
+run: plain 3 0 -> 5
+run: flags true false 0 0 -> 1
+run: plain 0 0 -> 2
+
+body: int n = left; do { n += 1; } while (if (n > 3) { return n; } else { return 0 - n; }); return 99;
+run: plain 5 0 -> 6
+run: plain 1 0 -> -2
+
+# The condition of a do/while that never completes still runs after
+# the body and after a continue, with its effects, and is skipped by
+# a break.
+body: int t = 0; int n = 0; do { n += 1; if (n == left) { continue; } t += 10; } while (if ((t += 1) > 100) { return 1; } else { return t * 100 + n; }); return 99;
+run: plain 1 0 -> 101
+run: plain 5 0 -> 1101
+
+body: int t = 0; do { if (left > 0) { break; } t += 5; } while (if ((t += 1) > 0) { return t; } else { return 0; }); return t + 1000;
+run: plain 1 0 -> 1000
+run: plain 0 0 -> 6
+
+body: int t = 0; for (int i = 0; i < 3; i += 1) { do { t += 1; } while (if (t > left) { return t * 10 + i; } else { return t; }); } return 77;
+run: plain 0 0 -> 10
+run: plain 5 0 -> 1
+
+body: int t = 0; int i = 0; while (i < 3) { i += 1; int j = 0; do { j += 1; if (j < 3) { continue; } t += j; } while (if (i > left) { return t * 10 + i; } else { j < 4 }); } return t;
+run: plain 0 0 -> 1
+run: plain 9 0 -> 21
+
+# A transfer in a value block targets the innermost loop only.
+body: int t = 0; int i = 0; while (i < 5) { i += 1; int j = 0; while (j < 3) { j += 1; t += if (j == 2) { break; } else { 1 }; } } return t * 10 + i;
+run: plain 0 0 -> 55
+
+body: int t = 0; int i = 0; while (i < 5) { i += 1; int j = 0; while (j < 3) { j += 1; t += if (j == 2) { continue; } else { 1 }; } } return t * 10 + i;
+run: plain 0 0 -> 105
+
+body: int t = 0; while (t < 10) { t += 1; int q = while (true) { break t; }; if (q > left) { break; } } return t;
+run: plain 3 0 -> 4
+run: plain 20 0 -> 10
+
+# A short-circuit operator evaluates its left operand, with its
+# effects, and reaches a right operand that never completes only
+# when the left one does not decide.
+body: int t = 0; bool b = (t += 1) > 0 && (if (left > 0) { return t * 10; } else { return t * 100; }); return 7;
+run: plain 1 0 -> 10
+run: plain 0 0 -> 100
+
+body: int t = 0; bool b = (t += 1) > 5 && (if (left > 0) { return t * 10; } else { return t * 100; }); return t + (b ? 1000 : 0);
+run: plain 1 0 -> 1
+run: plain 0 0 -> 1
+
+body: int t = 0; bool b = (t += left) > 0 || (if (flag) { return t * 10; } else { return 50 + t; }); return b ? t + 1 : 7;
+run: plain 3 0 -> 4
+run: flags true false 0 0 -> 0
+run: plain 0 0 -> 50
+
+body: int t = 0; int q = (t += left) ? t * 2 : (if (flag) { return 0 - 1; } else { return 0 - 2; }); return q + t;
+run: plain 4 0 -> 12
+run: flags true false 0 0 -> -1
+run: plain 0 0 -> -2
+
+# Operands are evaluated left to right up to the one that never
+# completes; the ones after it are not evaluated.
+body: int t = 0; int r = (t += 1) + (if (flag) { return t * 10; } else { return t * 100; }) + (t += 50); return r;
+run: flags true false 0 0 -> 10
+run: plain 0 0 -> 100
+
+body: int t = 0; return Twice(Twice(t += 3) + (if (flag) { return t; } else { return t * 2; }));
+run: flags true false 0 0 -> 3
+run: plain 0 0 -> 6
+
+body: int t = left; t = Twice(t += 1) + (if (flag) { return t; } else { return t + 100; }); return 0 - 1;
+run: flags true false 4 0 -> 5
+run: plain 4 0 -> 105
+
+# A guard runs only when its patterns accept, and a guarded arm that
+# leaves does not make the match leave.
+body: int t = 0; int r = match (left) { 0 if (t += 1) > 5 -> { return 1; }, 0 -> { return 10 + t; }, _ -> { return 20 + t; } }; return r;
+run: plain 0 0 -> 11
+run: plain 3 0 -> 20
+
+body: int r = match (left) { _ if flag -> { return 1; }, _ -> 5 }; return r + 1;
+run: flags true false 0 0 -> 1
+run: plain 0 0 -> 6
+
+# A break in the condition of a loop leaves that loop, once, with the
+# effects of the condition up to it.
+body: int n = 0; while (if (n >= left) { break; } else { true }) { n += 1; } return n * 10 + 1;
+run: plain 3 0 -> 31
+run: plain 0 0 -> 1
+
+body: int c = 0; int n = 0; while (if ((c += 1) > left) { break; } else { true }) { n += 1; } return c * 100 + n;
+run: plain 2 0 -> 302
+run: plain 0 0 -> 100
+
+body: int n = 0; do { n += 1; } while (if (n >= left) { break; } else { true }); return n;
+run: plain 3 0 -> 3
+run: plain 0 0 -> 1
+
+body: int t = 0; for (int i = 0; if (i > left) { break; } else { i < 10 }; i += 1) { t += i; } return t;
+run: plain 2 0 -> 3
+run: plain 20 0 -> 45
+
+body: int t = 0; for (int i = 0; i < 3; i += 1) { int j = 0; while (if (j == 2) { break; } else { true }) { j += 1; t += 1; } t += 10; } return t;
+run: plain 0 0 -> 36
+
+body: int t = 0; int i = 0; while (i < 4) { i += 1; int j = 0; while (if (j >= i) { break; } else { true }) { j += 1; if (j == 2) { continue; } t += 1; } } return t * 10 + i;
+run: plain 0 0 -> 74
+
+# A continue in the update of a loop ends the update; the condition
+# is tested next, and the update is not run again for that pass.
+body: int t = 0; int skips = 0; for (int i = 0; i < 6; i += if (i == left && skips == 0) { skips += 1; continue; } else { 1 }) { t += 1; } return t * 10 + skips;
+run: plain 2 0 -> 71
+run: plain 9 0 -> 60
+
+body: int t = 0; int u = 0; for (int i = 0; i < 4; i += 1, u += if (i == left) { continue; } else { 10 }) { t += 1; } return u * 10 + t;
+run: plain 2 0 -> 304
+run: plain 9 0 -> 404
+
+body: int t = 0; for (int i = 0; i < 3; i += 1) { int c = 0; for (int j = 0; j < 4; j += if (c == 0 && j == left) { c += 1; continue; } else { 1 }) { t += 1; } t += c * 100; } return t;
+run: plain 1 0 -> 315
+run: plain 7 0 -> 12
+
+# A continue in the condition of a loop abandons the rest of the
+# condition and evaluates the condition of that loop again. The body
+# does not run in between, and neither does the update of a for.
+body: int c = 0; int n = 0; while (if ((c += 1) < left) { continue; } else { n < 2 }) { n += 1; } return c * 100 + n;
+run: plain 3 0 -> 502
+run: plain 0 0 -> 302
+
+body: int u = 0; int c = 0; int t = 0; for (int i = 0; if ((c += 1) == left) { continue; } else { i < 3 }; i += 1, u += 1) { t += 10; } return c * 1000 + u * 100 + t;
+run: plain 2 0 -> 5330
+run: plain 9 0 -> 4330
+
+body: int c = 0; int n = 0; do { n += 1; } while (if ((c += 1) < left) { continue; } else { n < 3 }); return c * 100 + n;
+run: plain 3 0 -> 503
+run: plain 0 0 -> 303
+
+# It targets the loop the condition belongs to, not one around it.
+body: int t = 0; int c = 0; for (int i = 0; i < 3; i += 1) { int j = 0; int once = 0; while (if (once == 0) { once = 1; c += 1; continue; } else { j < 2 }) { j += 1; t += 1; } t += 10; } return t * 100 + c;
+run: plain 0 0 -> 3603
+
+# A condition every path of which leaves: it repeats until it breaks.
+body: int c = 0; while (if ((c += 1) < left) { continue; } else { break; }) { c += 100; } return c;
+run: plain 4 0 -> 4
+run: plain 0 0 -> 1
+
+body: int c = 0; int u = 0; for (int i = 0; if ((c += 1) < left) { continue; } else { break; }; i += 1, u += 1) { c += 100; } return c * 10 + u;
+run: plain 4 0 -> 40
+run: plain 0 0 -> 10
+
+# A break in the update of a loop leaves that loop, with the effects
+# of the update up to it and without the rest of the update.
+body: int t = 0; for (int i = 0; i < 10; i += if (i == left) { break; } else { 1 }) { t += 1; } return t;
+run: plain 2 0 -> 3
+run: plain 20 0 -> 10
+
+body: int t = 0; int u = 0; for (int i = 0; i < 10; u += 1, i += if (i == left) { break; } else { 1 }, u += 100) { t += 1; } return u * 10 + t;
+run: plain 1 0 -> 1022
+run: plain 20 0 -> 10110
+
+# A break and a continue in one update clause.
+body: int t = 0; int s = 0; for (int i = 0; i < 10; i += if (i == left) { break; } else { 1 }, s += if (i == 2) { continue; } else { 1 }, s += 10) { t += 1; } return s * 100 + t;
+run: plain 4 0 -> 3305
+run: plain 20 0 -> 9910
+
+# It leaves the loop the update belongs to, not one around it.
+body: int t = 0; for (int a = 0; a < 3; a += 1) { for (int b = 0; b < 5; b += if (b == 1) { break; } else { 1 }) { t += 1; } t += 10; } return t;
+run: plain 0 0 -> 36
+
+# In the update of a loop used as an expression it carries the value.
+body: int r = for (int i = 0; ; i += if (i == left) { break i * 10; } else { 1 }) { if (i > 5) { break 99; } }; return r;
+run: plain 3 0 -> 30
+run: plain 9 0 -> 99
+
+# A value block may carry a value out of the loop expression around
+# it; the value goes to that loop, not to one around it.
+body: int r = while (true) { int q = if (flag) { break left + 1; } else { 2 }; break q; }; return r;
+run: flags true false 4 0 -> 5
+run: plain 4 0 -> 2
+
+body: int r = while (true) { int q = match (left) { 0 -> { break 100; }, int n -> n * 2 }; break q; }; return r;
+run: plain 0 0 -> 100
+run: plain 4 0 -> 8
+
+body: int t = 0; int r = for (int i = 0; ; i += 1) { int inner = while (true) { t += 1; int q = if (t > left) { break t * 2; } else { 0 }; t += q; }; if (inner > 0) { break inner + i; } }; return r * 10 + t;
+run: plain 2 0 -> 63
+run: plain 0 0 -> 21
+
+body: int t = 0; int r = Twice(while (true) { t += 1; int q = (t += 10) + (if (t > left) { break t; } else { 1 }); t += q; });  return r * 100 + t;
+run: plain 5 0 -> 2211
+run: plain 30 0 -> 6834
+
+# A return leaves the method from a loop expression, directly and
+# through a value block.
+body: int r = while (true) { int q = if (flag) { return 77; } else { 2 }; break q + left; }; return r;
+run: flags true false 0 0 -> 77
+run: plain 3 0 -> 5
+
+body: int r = while (true) { if (flag) { return 1; } break 2; }; return r + 10;
+run: flags true false 0 0 -> 1
+run: plain 0 0 -> 12
+
+body: int r = while (true) { return left; }; return r + 1;
+run: plain 6 0 -> 6
+
+body: int t = 0; int r = while (true) { t += 1; int q = for (int i = 0; ; i += 1) { if (i + t > left) { return i * 10 + t; } if (i == 2) { break i; } }; if (t == 3) { break q; } }; return 0 - r;
+run: plain 1 0 -> 11
+run: plain 2 0 -> 21
+run: plain 99 0 -> -2
+
+# A block used as a value may leave instead of yielding one.
+body: int r = if (left > 5) { return 100; } else { left * 2 }; return r + 1;
+run: plain 9 0 -> 100
+run: plain 3 0 -> 7
+
+body: int r = match (left) { 0 -> { return 50; }, int n -> n + 1 }; return r * 2;
+run: plain 0 0 -> 50
+run: plain 4 0 -> 10
+
+body: return Twice(if (flag) { return 7; } else { left });
+run: flags true false 4 0 -> 7
+run: plain 4 0 -> 8
+
+body: int t = 0; int i = 0; while (i < 10) { i += 1; t += if (i > left) { break; } else { i }; } return t * 100 + i;
+run: plain 3 0 -> 604
+run: plain 0 0 -> 1
+
+body: int t = 0; for (int i = 0; i < 6; i += 1) { t += match (i) { 2 -> { continue; }, int n -> { if (n == left) { continue; } else { n } } }; } return t;
+run: plain 4 0 -> 9
+run: plain 9 0 -> 13
+
+# A guard block that leaves through a match, and through continue.
+body: guard (left > 0) else { match (flag) { true -> { return 1; }, false -> { return 2; } } } return left + 10;
+run: flags true false 0 0 -> 1
+run: plain 0 0 -> 2
+run: plain 5 0 -> 15
+
+body: int t = 0; int i = 0; while (i < left) { i += 1; guard (i \= 2) else { continue; } t += i; } return t;
+run: plain 4 0 -> 8
+run: plain 1 0 -> 1
+
+body: int r = 0; match (left) { 1 -> { r = 10; }, 2 -> { r = 20; } } return r;
+run: plain 1 0 -> 10
+run: plain 2 0 -> 20
+run: plain 7 0 -> 0
+
+body: return match (left) { int n if n > 10 -> n * 2, int n if n > 5 -> n + 1, _ -> 0 };
+run: plain 20 0 -> 40
+run: plain 7 0 -> 8
+run: plain 3 0 -> 0
+
+body: return match (left), (right) { (1), (1) -> 11, (1), (_) -> 10, (_), (1) -> 1, (_), (_) -> 0 };
+run: plain 1 1 -> 11
+run: plain 1 5 -> 10
+run: plain 4 1 -> 1
+run: plain 4 4 -> 0
+
+body: return match (flag) { true -> 1, false -> 2 };
+run: flags true false 0 0 -> 1
+run: flags false false 0 0 -> 2

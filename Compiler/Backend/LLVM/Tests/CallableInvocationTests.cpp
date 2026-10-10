@@ -178,10 +178,16 @@ TEST_CASE("closure destruction remains independent from invocation")
     REQUIRE(result);
     const auto &ir = result.artifact->llvm_ir;
 
-    CHECK(Contains(ir, ".vxs.aarc.closure.destroy"));
     CHECK(Contains(ir, "@vxs_aarc_allocate"));
     // The capture is a scalar, so destruction must not invent an AARC release.
     CHECK_FALSE(Contains(ir, "call void @vxs_aarc_release_strong"));
+    // A closure that owns nothing has nothing to do when it is destroyed:
+    // its metadata names no destructor, which the runtime accepts, and the
+    // module holds no function for it. The entry it is called through is
+    // still its own.
+    CHECK_FALSE(Contains(ir, ".vxs.aarc.closure.destroy"));
+    CHECK(Contains(ir, ".vxs.aarc.closure.invoke"));
+    CHECK(Contains(ir, "i64 16, ptr null, ptr null }"));
 }
 
 TEST_CASE("Xmm preserves direct and indirect callees as different value kinds")

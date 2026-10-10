@@ -16,10 +16,12 @@ module Visual.XSharp.Desugarer.Branching
     ( BranchLowering (..)
     , lowerValueBlock
     , lowerMatch
-    , maximumNestedArms
+    , lowerSelection
+    , lowerNeverCompleting
     ) where
 
 import Visual.XSharp.AST
+import Visual.XSharp.Completion
 import Visual.XSharp.Core
 import Visual.XSharp.Desugarer.Sequencing
 
@@ -43,11 +45,90 @@ data BranchLowering lower = BranchLowering
     -- ^ The Core literal of a source literal of the given Core type.
     }
 
+{- | Lower an expression that never yields a value, as the statements that
+run until control leaves.
+
+Such an expression has no Core value, so none is made up for it: there is no
+result slot, no placeholder and nothing for a join to read. The operands
+that are evaluated before the one that never completes are evaluated for
+their effects, in order; the operands after it are never reached and are not
+lowered. A choice every branch of which leaves is a conditional statement
+over the statements of its branches.
+-}
+lowerNeverCompleting ::
+    (Monad lower) => BranchLowering lower -> Expression ResolvedName Type -> lower [CoreStatement]
+lowerNeverCompleting lowering expression = case expression of
+    BlockExpression _ (Block statements) _ -> case reverse statements of
+        ExpressionStatement _ value False : before
+            | not (blockCannotComplete (Block (reverse before))) -> do
+                leading <- branchStatements lowering (reverse before)
+                final <- lowerNeverCompleting lowering value
+                pure (leading ++ final)
+        _ -> branchStatements lowering statements
+    ConditionalExpression _ condition first second _
+        | doesNotComplete condition -> lowerNeverCompleting lowering condition
+        | otherwise -> do
+            (prefix, test) <- branchExpression lowering condition
+            whenTrue <- lowerNeverCompleting lowering first
+            whenFalse <- lowerNeverCompleting lowering second
+            pure (prefix ++ [CoreIf test whenTrue whenFalse])
+    MatchExpression _ subjects arms _
+        | not (any doesNotComplete subjects) -> fst <$> lowerMatch lowering voidType subjects arms
+    -- A loop that no break leaves: the loop statement itself.
+    LoopExpression _ loop _ -> branchStatements lowering [loop]
+    _ -> case neverCompletingOperand expression of
+        Just (before, operand) -> do
+            -- Reading a name or a literal has no effect to keep.
+            evaluated <- mapM (branchDiscarded lowering) (filter hasEvaluation before)
+            final <- lowerNeverCompleting lowering operand
+            pure (concat evaluated ++ final)
+        -- Not reached for an expression that never completes; an
+        -- expression that does is evaluated for its effects.
+        Nothing -> branchDiscarded lowering expression
+    where
+        hasEvaluation operand = case operand of
+            NameExpression {} -> False
+            LiteralExpression {} -> False
+            _ -> True
+
+{- | Lower a two-way choice exactly one of whose branches completes.
+
+The result slot is assigned only on the branch that completes. The other
+branch leaves with @return@, @break@ or @continue@, which are ordinary Core
+statements wherever they stand; it is lowered as its statements alone and
+never reaches the read of the slot.
+-}
+lowerSelection ::
+    (Monad lower) =>
+    BranchLowering lower ->
+    Type ->
+    Lowered ->
+    Expression ResolvedName Type ->
+    Expression ResolvedName Type ->
+    lower Lowered
+lowerSelection lowering valueType (conditionPrefix, condition) first second = do
+    result <- branchFresh lowering "$selected"
+    let resultType = branchType lowering valueType
+        branch value
+            | doesNotComplete value = lowerNeverCompleting lowering value
+            | otherwise = do
+                (prefix, lowered) <- branchExpression lowering value
+                pure (prefix ++ [CoreAssign result lowered])
+    whenTrue <- branch first
+    whenFalse <- branch second
+    pure
+        ( conditionPrefix
+            ++ [ CoreBind (CoreBinding result resultType True (neutralValue resultType))
+               , CoreIf condition whenTrue whenFalse
+               ]
+        , CoreVariable result resultType
+        )
+
 {- | Lower a block used as a value.
 
-The leading statements run in order; the value is the final expression. The
-type checker has established that the block ends with one and that nothing
-in it leaves the block early.
+The leading statements run in order; the value is the final expression. A
+block that does not complete has no value; the forms that hold one lower it
+through 'lowerNeverCompleting' and never ask for its value.
 -}
 lowerValueBlock :: (Monad lower) => BranchLowering lower -> Block ResolvedName Type -> lower Lowered
 lowerValueBlock lowering (Block statements) = case reverse statements of
@@ -62,18 +143,19 @@ lowerValueBlock lowering (Block statements) = case reverse statements of
 {- | Lower a @match@.
 
 The subjects are evaluated once, left to right, and each is bound to a local
-so that every arm tests the same values. The arms then nest: an arm that does
-not accept continues with the arms after it, in its else branch.
+so that every arm tests the same values. The names the arms bind are bound
+next, each to its subject: binding a scalar that was already evaluated has no
+effect of its own, and no arm can see a name of another arm. The arms then
+form one chain of conditionals, each arm in the false branch of the one
+before it. That is the shape of an @else if@ chain, which every stage walks
+in a loop, so the lowering of a match is as deep as one arm whatever the
+number of arms.
 
 A match whose type is @void@ is the statement form: its arm bodies run for
-their effects and its value is the unit literal. Otherwise every arm stores
-its value into a result slot, which the type checker guarantees is assigned
-on every path, because some arm always accepts.
-
-The nesting is bounded. A match with more than 'maximumNestedArms' arms is
-lowered in groups of that size: the groups follow each other in one statement
-sequence, a Boolean slot records that an arm was taken, and every group after
-the first runs only while the slot is still false.
+their effects and its value is the unit literal. Otherwise every arm that
+completes stores its value into a result slot, and an arm whose block leaves
+stores nothing. The type checker guarantees that the slot is assigned on
+every path that reaches its read, because some arm always accepts.
 -}
 lowerMatch ::
     (Monad lower) =>
@@ -92,103 +174,62 @@ lowerMatch lowering annotation subjects arms = do
             | (name, valueType, value) <- zip3 subjectNames subjectTypes subjectValues
             ]
         subjectReads = zipWith CoreVariable subjectNames subjectTypes
+        patternBindings =
+            [ CoreBind (CoreBinding name (expressionType subject) True subject)
+            | arm <- arms
+            , (MatchTypePattern _ _ (Just name) _, subject) <- zip (matchArmPatterns arm) subjectReads
+            ]
+        prefix = subjectPrefix ++ subjectBindings ++ patternBindings
     if annotation == voidType
         then do
-            chain <- lowerArmGroups lowering Nothing subjectReads arms
-            pure (subjectPrefix ++ subjectBindings ++ chain, CoreLiteral CoreUnit unitType)
+            chain <- lowerArms lowering Nothing subjectReads arms
+            pure (prefix ++ chain, CoreLiteral CoreUnit unitType)
         else do
             result <- branchFresh lowering "$matched"
             let resultType = branchType lowering annotation
-            chain <- lowerArmGroups lowering (Just result) subjectReads arms
+            chain <- lowerArms lowering (Just result) subjectReads arms
             pure
-                ( subjectPrefix
-                    ++ subjectBindings
-                    ++ CoreBind (CoreBinding result resultType True (neutralValue resultType))
-                    : chain
+                ( prefix ++ CoreBind (CoreBinding result resultType True (neutralValue resultType)) : chain
                 , CoreVariable result resultType
                 )
 
-{- | The most arms that are lowered as one chain of nested statements.
+{- | Lower the arms from the given one on, as the false branch of the arm
+before them.
 
-Every arm of a chain adds one level of nesting to the Core it lowers to, and
-the stages after Core walk nested statements recursively. A source with a
-few hundred arms must not turn into a few hundred levels, so longer matches
-are split into groups of this size.
--}
-maximumNestedArms :: Int
-maximumNestedArms = 16
-
-{- | Lower all arms, in groups of at most 'maximumNestedArms'.
-
-A match that fits in one group is a single chain and needs no slot. A longer
-one binds a mutable @$taken@ slot; each body sets it before it runs, and
-each group after the first is the else branch of a test of the slot.
--}
-lowerArmGroups ::
-    (Monad lower) =>
-    BranchLowering lower ->
-    Maybe ResolvedName ->
-    [CoreExpression] ->
-    [MatchArm ResolvedName Type] ->
-    lower [CoreStatement]
-lowerArmGroups lowering result subjects arms
-    | length arms <= maximumNestedArms = lowerArms lowering result Nothing subjects arms
-    | otherwise = do
-        taken <- branchFresh lowering "$taken"
-        groups <- mapM (lowerArms lowering result (Just taken) subjects) (groupsOf maximumNestedArms arms)
-        let takenRead = CoreVariable taken boolType
-            sequenced = case groups of
-                [] -> []
-                first : later -> first ++ [CoreIf takenRead [] group | group <- later]
-        pure (CoreBind (CoreBinding taken boolType True (CoreLiteral (CoreBoolean False) boolType)) : sequenced)
-
-groupsOf :: Int -> [value] -> [[value]]
-groupsOf size values = case splitAt size values of
-    ([], _) -> []
-    (group, remaining) -> group : groupsOf size remaining
-
-{- | Lower the arms from the given one on.
-
-The names an arm binds are bound before its test: binding a scalar that was
-already evaluated has no effect of its own, and the guard may read them. An
-arm that always accepts ends the chain; the type checker has rejected any arm
-after it.
+An arm that always accepts ends the chain with its body; the type checker
+has rejected any arm after it. A guard is the last operand of the arm's
+test, behind the short-circuit conjunction, so it runs only when the
+patterns accept. Only a guard that stores into a local needs statements of
+its own; they go before the conditional of its arm, inside the false branch
+of the arm before it, and that arm alone adds a level of nesting.
 -}
 lowerArms ::
     (Monad lower) =>
     BranchLowering lower ->
     Maybe ResolvedName ->
-    Maybe ResolvedName ->
     [CoreExpression] ->
     [MatchArm ResolvedName Type] ->
     lower [CoreStatement]
-lowerArms _ _ _ _ [] = pure []
-lowerArms lowering result taken subjects (arm : remaining) = do
-    let paired = zip (matchArmPatterns arm) subjects
-        bindings =
-            [ CoreBind (CoreBinding name (expressionType subject) False subject)
-            | (MatchTypePattern _ _ (Just name) _, subject) <- paired
-            ]
-        tests = concatMap (uncurry (patternTests lowering)) paired
-    armBody <- lowerArmBody lowering result (matchArmBody arm)
-    -- The slot is set before the body runs, because the body may leave the
-    -- function or the enclosing loop.
-    let body = [CoreAssign slot (CoreLiteral (CoreBoolean True) boolType) | Just slot <- [taken]] ++ armBody
-    later <- lowerArms lowering result taken subjects remaining
+lowerArms _ _ _ [] = pure []
+lowerArms lowering result subjects (arm : remaining) = do
+    let tests = concatMap (uncurry (patternTests lowering)) (zip (matchArmPatterns arm) subjects)
+    body <- lowerArmBody lowering result (matchArmBody arm)
+    later <- lowerArms lowering result subjects remaining
     case (tests, matchArmGuard arm) of
-        ([], Nothing) -> pure (bindings ++ body)
-        (_, Nothing) -> pure (bindings ++ [CoreIf (conjunction tests) body later])
-        ([], Just guard) -> do
-            (guardPrefix, guardValue) <- branchExpression lowering guard
-            pure (bindings ++ guardPrefix ++ [CoreIf guardValue body later])
-        -- The guard runs only when the patterns accept, and its statements
-        -- with it. The decision is a Boolean slot, so a numeric guard is
-        -- tested in Boolean context and never stored.
+        ([], Nothing) -> pure body
+        (_, Nothing) -> pure [CoreIf (conjunction tests) body later]
         (_, Just guard) -> do
-            loweredGuard <- branchExpression lowering guard
-            accepted <- branchFresh lowering "$accepted"
-            let (statements, decision) = decideLogical True accepted (conjunction tests) loweredGuard
-            pure (bindings ++ statements ++ [CoreIf decision body later])
+            (guardPrefix, guardValue) <- branchExpression lowering guard
+            if null guardPrefix
+                then pure [CoreIf (conjunction (tests ++ [guardValue])) body later]
+                else
+                    if null tests
+                        then pure (guardPrefix ++ [CoreIf guardValue body later])
+                        else do
+                            accepted <- branchFresh lowering "$accepted"
+                            let (statements, decision) =
+                                    decideLogical True accepted (conjunction tests) (guardPrefix, guardValue)
+                            pure (statements ++ [CoreIf decision body later])
 
 {- | The comparisons one pattern needs against its subject.
 
@@ -207,8 +248,12 @@ patternTests lowering patternValue subject = case patternValue of
     MatchNullPattern {} -> [CoreLiteral (CoreBoolean False) boolType]
     MatchCasePattern {} -> [CoreLiteral (CoreBoolean False) boolType]
 
--- Every test is a Boolean without effects, so the short-circuit primitive
--- only decides how many comparisons run.
+-- The comparisons are Booleans without effects, so for them the
+-- short-circuit primitive only decides how many run. A guard, when there is
+-- one, is the last operand and is therefore evaluated only when every
+-- comparison held; it may be numeric, which the primitive tests in Boolean
+-- context. A lone operand is used as it is: a conditional statement tests a
+-- numeric condition in Boolean context as well.
 conjunction :: [CoreExpression] -> CoreExpression
 conjunction tests = case tests of
     [] -> CoreLiteral (CoreBoolean True) boolType
@@ -224,8 +269,12 @@ its effects.
 lowerArmBody ::
     (Monad lower) => BranchLowering lower -> Maybe ResolvedName -> Expression ResolvedName Type -> lower [CoreStatement]
 lowerArmBody lowering result body = case (result, body) of
-    (Just slot, _) -> do
-        (prefix, value) <- branchExpression lowering body
-        pure (prefix ++ [CoreAssign slot value])
+    (Just slot, _)
+        | doesNotComplete body -> lowerNeverCompleting lowering body
+        | otherwise -> do
+            (prefix, value) <- branchExpression lowering body
+            pure (prefix ++ [CoreAssign slot value])
     (Nothing, BlockExpression _ (Block statements) _) -> branchStatements lowering statements
-    (Nothing, _) -> branchDiscarded lowering body
+    (Nothing, _)
+        | doesNotComplete body -> lowerNeverCompleting lowering body
+        | otherwise -> branchDiscarded lowering body

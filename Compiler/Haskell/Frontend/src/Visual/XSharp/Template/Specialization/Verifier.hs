@@ -274,6 +274,7 @@ declarationDefinitionSymbols declaration = case declaration of
             : map (resolvedSymbol . parameterName) parameters
             ++ blockDefinitionSymbols body
     TemplateTypeDeclaration {} -> []
+    EnumDeclaration _ name _ _ _ -> [resolvedSymbol name]
 
 blockDefinitionSymbols :: Block ResolvedName Type -> [SymbolId]
 blockDefinitionSymbols (Block statements) = concatMap statementDefinitionSymbols statements
@@ -308,6 +309,7 @@ statementDefinitionSymbols statement = case statement of
 expressionDefinitionSymbols :: Expression ResolvedName Type -> [SymbolId]
 expressionDefinitionSymbols expression = case expression of
     MemberAccessExpression _ receiver _ _ -> expressionDefinitionSymbols receiver
+    MethodReferenceExpression _ receiver _ _ -> expressionDefinitionSymbols receiver
     CallExpression _ callee arguments _ ->
         expressionDefinitionSymbols callee ++ concatMap expressionDefinitionSymbols arguments
     UnaryExpression _ _ value _ -> expressionDefinitionSymbols value
@@ -352,6 +354,7 @@ declarationTypes declaration = case declaration of
         annotation : map parameterAnnotation parameters ++ blockTypes body
     TemplateTypeDeclaration _ _ annotation parameters members ->
         annotation : map templateParameterAnnotation parameters ++ concatMap declarationTypes members
+    EnumDeclaration _ _ annotation _ _ -> [annotation]
 
 blockTypes :: Block ResolvedName Type -> [Type]
 blockTypes (Block statements) = concatMap statementTypes statements
@@ -385,6 +388,7 @@ expressionTypes expression = case expression of
     NameExpression _ _ annotation -> [annotation]
     LiteralExpression _ _ annotation -> [annotation]
     MemberAccessExpression _ receiver _ annotation -> annotation : expressionTypes receiver
+    MethodReferenceExpression _ receiver _ annotation -> annotation : expressionTypes receiver
     CallExpression _ callee arguments annotation ->
         annotation : expressionTypes callee ++ concatMap expressionTypes arguments
     UnaryExpression _ _ value annotation -> annotation : expressionTypes value

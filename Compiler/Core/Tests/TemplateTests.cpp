@@ -420,7 +420,7 @@ TEST_CASE("rendered identity length-prefixes qualified components")
     CHECK(second.find("1:") != std::string::npos);
 }
 
-TEST_CASE("Core v8 preserves ordered template arguments and source ownership")
+TEST_CASE("Core v10 preserves ordered template arguments and source ownership")
 {
     const auto type = Applied(U"Mix",
                               { TypeArgument(Model::Type::string()),
@@ -434,11 +434,11 @@ TEST_CASE("Core v8 preserves ordered template arguments and source ownership")
     const auto decoded = Core::Wire::Decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == module);
-    CHECK(Core::Wire::kCurrentVersion == 8U);
+    CHECK(Core::Wire::kCurrentVersion == 10U);
 }
 
 TEST_CASE(
-    "CorePrep v6 preserves ordered template arguments and source ownership")
+    "CorePrep v7 preserves ordered template arguments and source ownership")
 {
     const auto type = Applied(U"Mix",
                               { TypeArgument(Model::Type::string()),
@@ -452,7 +452,7 @@ TEST_CASE(
     const auto decoded = CorePrepWire::decode(encoded.bytes);
     REQUIRE(decoded);
     CHECK(*decoded.module == module);
-    CHECK(CorePrepWire::current_version == 6U);
+    CHECK(CorePrepWire::current_version == 8U);
 }
 
 TEST_CASE("specialization table interns identical types once")

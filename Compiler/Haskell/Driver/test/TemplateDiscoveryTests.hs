@@ -244,6 +244,7 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
                     isStatic
                     access
             TemplateTypeDeclaration {} -> declaration
+            EnumDeclaration {} -> declaration
         rewriteParameter parameter = parameter {parameterAnnotation = rewriteType (parameterAnnotation parameter)}
         rewriteBlock (Block statements) = Block (map rewriteStatement statements)
         rewriteStatement statement = case statement of
@@ -290,6 +291,8 @@ renameBoxApplication replacement (TypedAST tree) = TypedAST tree {syntaxDeclarat
             LiteralExpression spanValue literal annotation -> LiteralExpression spanValue literal (rewriteType annotation)
             MemberAccessExpression spanValue receiver member annotation ->
                 MemberAccessExpression spanValue (rewriteExpression receiver) member (rewriteType annotation)
+            MethodReferenceExpression spanValue receiver member annotation ->
+                MethodReferenceExpression spanValue (rewriteExpression receiver) member (rewriteType annotation)
             CallExpression spanValue callee arguments annotation ->
                 CallExpression spanValue (rewriteExpression callee) (map rewriteExpression arguments) (rewriteType annotation)
             UnaryExpression spanValue operator value annotation ->
