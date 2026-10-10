@@ -333,8 +333,8 @@ checkMatchPattern checker subjectType patternValue = case patternValue of
 {- | Result type of a match expression from the types of its arms.
 
 The value is materialized in one storage slot, like the result of a
-conditional expression, so every arm has the same type, and only bool and
-numeric results are lowered today.
+conditional expression, so every arm has the same type. Bool, numeric, enum
+and string results are lowered today.
 -}
 matchValueType :: SourceSpan -> [Type] -> (Type, [Diagnostic])
 matchValueType spanValue armTypes = case filter (/= ErrorType) armTypes of
@@ -343,8 +343,11 @@ matchValueType spanValue armTypes = case filter (/= ErrorType) armTypes of
         | any (/= first) remaining ->
             (first, [problem spanValue "VXT0050" "the arms of a match used as an expression must have the same type"])
         | not (acceptsBooleanContext first)
-        , Nothing <- enumUnderlyingType first ->
-            (first, [problem spanValue "VXT0051" "match expressions currently support only bool, numeric and enum results"])
+        , Nothing <- enumUnderlyingType first
+        , first /= stringType ->
+            ( first
+            , [problem spanValue "VXT0051" "match expressions currently support only bool, numeric, enum and string results"]
+            )
         | otherwise -> (first, [])
 
 {- | Arms that can never be selected because an earlier arm without a guard

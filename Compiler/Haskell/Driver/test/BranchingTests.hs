@@ -360,8 +360,16 @@ typeTests =
         , rejectedWith "VXT0050" (body "long wide = 3; long r = match (left) { 1 -> wide, _ -> left }; return 0;")
         )
     ,
-        ( "a string match result is not lowered yet"
-        , rejectedWith "VXT0051" (body "auto text = match (left) { 1 -> \"a\", _ -> \"b\" }; return 0;")
+        ( "a match selects one of several strings"
+        , accepted (body "auto text = match (left) { 1 -> \"a\", _ -> \"b\" }; return 0;")
+        )
+    ,
+        ( "a callable match result is not lowered yet"
+        , rejectedWith "VXT0051" (body "auto pick = match (left) { 1 -> \\(int v) -> v + 1, _ -> \\(int v) -> v }; return 0;")
+        )
+    ,
+        ( "a string and a number are not arms of one match"
+        , rejectedWith "VXT0050" (body "auto text = match (left) { 1 -> \"a\", _ -> 2 }; return 0;")
         )
     ,
         ( "a string subject is not lowered yet"

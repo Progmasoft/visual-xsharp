@@ -5,6 +5,15 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
+## Unreleased
+
+### Language
+
+- `match`, `if` used as a value and a loop used as a value yield strings:
+  `String kind = match (code) { 0 -> "none", _ -> "some" };`. Only the
+  selected result is evaluated, as for the conditional expression. A
+  callable result is still not lowered and reports `VXT0051` or `VXT0044`.
+
 ## 0.5.0 - 2026-10-10
 
 ### Why 0.5.0 and not 0.4.2

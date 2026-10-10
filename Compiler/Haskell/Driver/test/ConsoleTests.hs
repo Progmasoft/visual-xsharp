@@ -286,6 +286,18 @@ outputs =
     , ("Console.Println(\"<\" + (Zero() == 0 ? \"yes\" : \"no\") + \">\");", "<yes>\n")
     , ("Greet(Zero() == 0 ? Name() : \"nobody\");", "Hello, Visual X#!\n")
     , ("String s = \"keep\"; s = Zero() > 0 ? \"lost\" : s; Console.Println(s);", "keep\n")
+    , -- A match, an if used as a value and a loop yield strings the same
+      -- way: one is selected, and the others are never made.
+      ("String s = match (Zero()) { 0 -> \"zero\", 1 -> \"one\", _ -> \"many\" }; Console.Println(s);", "zero\n")
+    , ("String s = match (Half(8)) { 0 -> \"zero\", int n if n > 3 -> \"big \" + n, _ -> \"small\" }; Console.Println(s);", "big 4\n")
+    , ("String s = if (Zero() > 0) { \"pos\" } else { Name() + \"!\" }; Console.Println(s);", "Visual X#!\n")
+    , ("int i = 0; String s = while (true) { i += 1; if (i > 2) { break \"done\" + i; } }; Console.Println(s);", "done3\n")
+    , ("Console.Println(match (Zero()) { 0 -> Name(), _ -> \"x\" } + (if (Zero() == 0) { \"a\" } else { \"b\" }));", "Visual X#a\n")
+    , ("String s = \"k\"; s = match (Zero()) { 1 -> \"lost\", _ -> s }; Console.Println(s);", "k\n")
+    , ("String s = match (Zero()) { 0 -> \"\" + Log(1), _ -> \"\" + Log(2) }; Console.Println(s);", "1\n1\n")
+    , ("String s = \"\"; for (int i = 0; i < 4; i += 1) { s += match (i % 3) { 0 -> \"a\", 1 -> \"b\", _ -> \"c\" }; } Console.Println(s);", "abca\n")
+    , ("Greet(match (Zero()) { 0 -> Name(), _ -> \"nobody\" });", "Hello, Visual X#!\n")
+    , ("String s = match (Zero()) { 0 -> match (Half(2)) { 1 -> \"inner\", _ -> \"other\" }, _ -> \"outer\" }; Console.Println(s);", "inner\n")
     ]
 
 -- | Programs and what they write to standard error.

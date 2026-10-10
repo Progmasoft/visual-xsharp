@@ -691,6 +691,35 @@ TEST_CASE("an executable selects one of two strings")
     std::filesystem::remove_all(Directory());
 }
 
+TEST_CASE("an executable yields strings from match, if and loops")
+{
+    // The loop replaces the string of the pass before; a million passes
+    // would exhaust a process that released none.
+    const auto outcome = RunCapturing(
+        "Yield",
+        "    public static void Main() {\n"
+        "        String kind = match (Zero(3)) { 0 -> \"zero\","
+        " _ -> \"other\" };\n"
+        "        String sign = if (Zero(3) > 0) { \"pos\" }"
+        " else { \"not \" + kind };\n"
+        "        int i = 0;\n"
+        "        String found = while (true) { i += 1;"
+        " if (i > 2) { break \"at \" + i; } };\n"
+        "        Console.Println(kind + \"|\" + sign + \"|\" + found);\n"
+        "        int threes = 0;\n"
+        "        for (int n = 0; n < 1000000; n += 1) {\n"
+        "            String word = match (n % 3) { 0 -> \"three \" + n,"
+        " 1 -> \"one\", _ -> \"two\" };\n"
+        "            if (word \\= \"one\" && word \\= \"two\")"
+        " { threes += 1; }\n"
+        "        }\n"
+        "        Console.Println(threes);\n"
+        "    }\n");
+    CHECK(outcome.status == 0);
+    CHECK(outcome.output == "zero|not zero|at 3\r\n333334\r\n");
+    std::filesystem::remove_all(Directory());
+}
+
 TEST_CASE("an executable names methods through the namespace and the type")
 {
     const auto outcome = RunCapturing(
