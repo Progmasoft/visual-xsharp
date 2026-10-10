@@ -5,12 +5,14 @@ name: CodeQL
 
 on:
   pull_request:
-  # Branches only. A tag names a commit that was analysed when it was pushed
-  # to its branch; analysing it again under the tag adds nothing and leaves a
-  # second record that can fail on its own.
+  # The default branch only. A branch that has a pull request is analysed by
+  # the pull request; analysing its pushes as well ran every job twice. A tag
+  # names a commit that was analysed when it reached the default branch;
+  # analysing it again under the tag adds nothing and leaves a second record
+  # that can fail on its own.
   push:
     branches:
-      - '**'
+      - main
   schedule:
     - cron: '23 4 * * 1'
 
