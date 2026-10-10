@@ -5,7 +5,14 @@ name: CodeQL
 
 on:
   pull_request:
+  # The default branch only. A branch that has a pull request is analysed by
+  # the pull request; analysing its pushes as well ran every job twice. A tag
+  # names a commit that was analysed when it reached the default branch;
+  # analysing it again under the tag adds nothing and leaves a second record
+  # that can fail on its own.
   push:
+    branches:
+      - main
   schedule:
     - cron: '23 4 * * 1'
 
@@ -72,10 +79,21 @@ jobs:
         if: matrix.language == 'java-kotlin'
         shell: pwsh
         run: |
+          # The build downloads its Gradle plugins, and the repositories
+          # sometimes refuse a runner for a moment (403, or a POM that cannot
+          # be read). Such a failure is not one of this repository, so the
+          # build is tried again after a pause. A failure of the sources
+          # fails every attempt and is reported after the last.
           foreach ($component in @('ProjectSystem', 'Analyzer', 'Formatter', 'Linter')) {
-            gradle -p $component classes --rerun-tasks --no-build-cache
-            if ($LASTEXITCODE -ne 0) {
-              throw "CodeQL Kotlin extraction build failed for $component"
+            $attempts = 3
+            for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+              gradle -p $component classes --rerun-tasks --no-build-cache
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq $attempts) {
+                throw "CodeQL Kotlin extraction build failed for $component after $attempts attempts"
+              }
+              Write-Host "::warning::Gradle build of $component failed (attempt $attempt of $attempts); trying again."
+              Start-Sleep -Seconds (30 * $attempt)
             }
           }
 
