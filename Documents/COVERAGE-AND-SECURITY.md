@@ -58,6 +58,12 @@ Coverage uploads carry separate flags so one component's result cannot be mistak
 | `kotlin-linter` | Linter Gradle tests | JaCoCo XML |
 | `go-tools` | All helper command and internal package tests | Go cover profiles |
 
+Each language has a status of its own on a pull request, for the whole of its sources and for the lines the pull request
+changes: `haskell-frontend`, `native-cpp`, `kotlin` (the four Kotlin flags together) and `go-tools`, beside the figure
+for the repository as a whole. [`codecov.yml`](../codecov.yml) gives each flag the paths it answers for, so a file is
+never measured by a suite that does not own it. The statuses are informational: they show a fall and do not fail a
+pull request. A flag whose suite did not run for a commit keeps its last figure.
+
 The [Haskell coverage workflow](../.github/workflows/haskell-coverage.yml) still owns HPC conversion. The
 [component coverage workflow](../.github/workflows/coverage.yml) owns the remaining reports. Both upload through
 Codecov's GitHub OIDC path without a repository token. The native report is generated from the same native suite matrix as
