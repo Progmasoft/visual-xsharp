@@ -15,7 +15,7 @@
 #include "TableLibrary.hpp"
 
 #ifndef VXS_PROJECT_VERSION
-#    define VXS_PROJECT_VERSION "0.5.0"
+#    define VXS_PROJECT_VERSION "0.5.1"
 #endif
 
 namespace

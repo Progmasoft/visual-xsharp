@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
 
 # Changelog
 
-## Unreleased
+## 0.5.1 - 2026-10-10
 
 ### Language
 
@@ -29,6 +29,11 @@ SPDX-License-Identifier: MPL-2.0 WITH AdditionRef-Progmasoft-Exception-1.1
   evaluator of the test suite compared characters and hid it. The pattern
   now lowers to the comparison `==` uses, and the evaluator refuses the
   equality primitive on two strings so that a lowering to it fails a test.
+
+### Release
+
+- Advanced compiler-owned Haskell packages, the CLI, Bazel module, Kotlin
+  project model, and compiler project version to 0.5.1.
 
 ## 0.5.0 - 2026-10-10
 
